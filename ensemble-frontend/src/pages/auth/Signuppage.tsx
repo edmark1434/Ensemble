@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { GoogleAuth } from "./Oauth";
+import axios from "axios";
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
   bg:        "#080a12",
@@ -346,15 +347,42 @@ export default function SignupPage({
     return e;
   };
 
-  const handleSignUp = () => {
+  const handleSignUp = async () => {
+    console.log("Signup button clicked:", form);
+
     const e = validate();
-    if (Object.keys(e).length) { setErrors(e); return; }
+    if (Object.keys(e).length) {
+      console.log("Signup blocked by validation:", e);
+      setErrors(e);
+      return;
+    }
+
     setErrors({});
     setLoading(true);
-    setTimeout(() => {
+
+    try {
+      const res = await axios.post('/api/users/signup', {
+        firstName: form.firstName,
+        lastName: form.lastName,
+        email: form.email,
+        password: form.password,
+      });
+
+      console.log("Signup response:", res.data);
+      if (res.data.success) {
+        if (onSuccess) onSuccess();
+        navigate('/dashboard');
+      } else {
+        setErrors({ email: res.data.message || "Signup failed. Please try again." });
+      }
+    } catch (err: any) {
+      console.error("Signup request failed:", err);
+      if (err.response?.data?.message) {
+        setErrors({ email: err.response.data.message });
+      }
+    } finally {
       setLoading(false);
-      onSuccess?.();
-    }, 1500);
+    }
   };
 
   return (
