@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
 import { GoogleAuth } from "./Oauth";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
@@ -239,22 +240,33 @@ export default function LoginPage({
   const navigate = useNavigate();
   const validate = () => {
     const e: LoginErrors = {};
-    if (!email)    e.email    = "Email is required.";
-    else if (!/\S+@\S+\.\S+/.test(email)) e.email = "Enter a valid email.";
+    if (!email)    e.email    = "Email or Username is required.";
     if (!password) e.password = "Password is required.";
     return e;
   };
 
-  const handleSignIn = () => {
+  const handleSignIn = async() => {
     const e = validate();
     if (Object.keys(e).length) { setErrors(e); return; }
     setErrors({});
     setLoading(true);
-    // Simulate async sign-in
-    setTimeout(() => {
+    try{
+      const result = await axios.post(`${import.meta.env.VITE_BASE_URL}/api/users/login`, { email, password });
+      if(result.status === 200 && result.data.success){
+        onSuccess?.();
+      }else{
+        setErrors({ password: result.data.message || "Login failed. Please try again." });
+      }
+    }catch(err){
       setLoading(false);
-      onSuccess?.();
-    }, 1400);
+      if (axios.isAxiosError(err)) {
+        setErrors({ password: err.response?.data?.message || "An error occurred. Please try again." });
+      } else {
+        setErrors({ password: "An error occurred. Please try again." });
+      }
+    }finally{
+      setLoading(false);
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => { if (e.key === "Enter") handleSignIn(); };
@@ -328,9 +340,9 @@ export default function LoginPage({
           {/* Form */}
           <div onKeyDown={handleKeyDown}>
             <Input
-              label="Email address"
-              type="email"
-              placeholder="you@studio.com"
+              label="Email or Username"
+              type="text"
+              placeholder="Enter your email or username"
               value={email}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
               error={errors.email}

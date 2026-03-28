@@ -307,6 +307,7 @@ export default function SignupPage({
   interface FormData {
     firstName: string;
     lastName: string;
+    username: string;
     email: string;
     password: string;
     confirm: string;
@@ -314,6 +315,7 @@ export default function SignupPage({
   interface Errors {
     firstName?: string;
     lastName?: string;
+    username?: string;
     email?: string;
     password?: string;
     confirm?: string;
@@ -322,6 +324,7 @@ export default function SignupPage({
   const [form, setForm] = useState<FormData>({
     firstName: "",
     lastName: "",
+    username: "",
     email: "",
     password: "",
     confirm: "",
@@ -337,6 +340,8 @@ export default function SignupPage({
     const e: Errors = {};
     if (!form.firstName.trim()) e.firstName = "First name is required.";
     if (!form.lastName.trim())  e.lastName  = "Last name is required.";
+    if (!form.username.trim()) e.username = "Username is required.";
+    else if (!/^[a-zA-Z0-9_]{3,20}$/.test(form.username)) e.username = "Use 3-20 letters, numbers, or underscores.";
     if (!form.email)            e.email     = "Email is required.";
     else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = "Enter a valid email.";
     if (!form.password)         e.password  = "Password is required.";
@@ -361,9 +366,10 @@ export default function SignupPage({
     setLoading(true);
 
     try {
-      const res = await axios.post('/api/users/signup', {
+      const res = await axios.post(`${import.meta.env.VITE_BASE_URL}/api/users/signup`, {
         firstName: form.firstName,
         lastName: form.lastName,
+        username: form.username,
         email: form.email,
         password: form.password,
       });
@@ -371,7 +377,7 @@ export default function SignupPage({
       console.log("Signup response:", res.data);
       if (res.data.success) {
         if (onSuccess) onSuccess();
-        navigate('/dashboard');
+        navigate(`/verify-email?email=${encodeURIComponent(form.email)}`);
       } else {
         setErrors({ email: res.data.message || "Signup failed. Please try again." });
       }
@@ -480,6 +486,14 @@ export default function SignupPage({
             value={form.email}
             onChange={update("email")}
             error={errors.email}
+          />
+
+          <Input
+            label="Username"
+            placeholder="your_handle"
+            value={form.username}
+            onChange={update("username")}
+            error={errors.username}
           />
 
           <Input

@@ -43,7 +43,7 @@ async function createAccount({
                 deleted_at
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING *`,
+            RETURNING account_id`,
             [
                 displayName,
                 handle,
@@ -62,8 +62,18 @@ async function createAccount({
     }
 }
 
+async function getAccountByHandle(handle) {
+    try{
+        const result = await client.query('SELECT handle FROM accounts WHERE handle = $1', [handle]);
+        return result.rows[0];
+    } catch (err) {
+        console.error(`Error fetching account with handle ${handle}:`, err);
+        throw err;
+    }
+}
 module.exports = {
     getAllAccounts,
     getAccountById,
-    createAccount
+    createAccount,
+    getAccountByHandle
 };
