@@ -1,5 +1,6 @@
 const client = require('../lib/database');
 
+// User repository functions for interacting with the users table in the database
 async function getAllUsers() {
     try {
         const result = await client.query('SELECT * FROM users');
@@ -10,6 +11,7 @@ async function getAllUsers() {
     }
 }
 
+// Fetch a user by their unique user ID
 async function getUserById(userId) {
     try {
         const result = await client.query('SELECT * FROM users WHERE user_id = $1', [userId]);
@@ -20,7 +22,7 @@ async function getUserById(userId) {
     }
 }
 
-
+// Create a new user in the database with the provided details and return the created user
 async function createUser({
     accountId = null,
     firstName = null,
@@ -59,7 +61,7 @@ async function createUser({
         throw err;
     }
 }
-
+// Fetch a user by their email address, returning the email and Firebase UUID if found
 async function getUserByEmail(email) {
     try{
         const result = await client.query('SELECT email_address,firebase_user_uuid FROM users WHERE email_address = $1', [email]);
@@ -69,11 +71,11 @@ async function getUserByEmail(email) {
         throw err;
     }
 }
-
+// Fetch a user by their email address, returning the email and password hash if found
 async function getEmailandPasswordHashByEmail(email) {
     try{
         const result = await client.query(
-            `SELECT u.email_address, u.password_hash , a.handle, a.account_id, a.display_name
+            `SELECT u.user_id, u.email_address, u.password_hash , a.handle, a.account_id, a.display_name
              FROM users u
              INNER JOIN accounts a ON a.account_id = u.account_id
              WHERE u.email_address = $1`,
@@ -85,10 +87,11 @@ async function getEmailandPasswordHashByEmail(email) {
         throw err;
     }
 }
+// Fetch a user by their username (account handle), returning the email and password hash if found
 async function getEmailandPasswordHashByUsername(username) {
     try{
         const result = await client.query(
-            `SELECT u.email_address, u.password_hash , a.handle, a.account_id, a.display_name
+            `SELECT u.user_id, u.email_address, u.password_hash , a.handle, a.account_id, a.display_name
              FROM users u
              INNER JOIN accounts a ON a.account_id = u.account_id
              WHERE a.handle = $1`,
@@ -100,6 +103,7 @@ async function getEmailandPasswordHashByUsername(username) {
         throw err;
     }
 }
+// Update the Firebase user UUID for a user identified by their email address, returning the updated user ID
 async function updateFirebaseUserUuid(email, firebaseUserUuid) {
     try {
         const result = await client.query(
@@ -112,7 +116,7 @@ async function updateFirebaseUserUuid(email, firebaseUserUuid) {
         throw err;
     }
 }
-
+//exports all the repository functions for use in other parts of the application
 module.exports = {
     getAllUsers,
     getUserById,

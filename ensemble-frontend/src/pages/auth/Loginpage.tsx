@@ -251,8 +251,13 @@ export default function LoginPage({
     setErrors({});
     setLoading(true);
     try{
-      const result = await axios.post(`${import.meta.env.VITE_BASE_URL}/api/users/login`, { email, password });
+      const result = await axios.post(
+        `${import.meta.env.VITE_BASE_URL}/api/users/login`,
+        { email, password },
+        { withCredentials: true }
+      );
       if(result.status === 200 && result.data.success){
+        localStorage.setItem('accessToken', result.data.accessToken);
         onSuccess?.();
       }else{
         setErrors({ password: result.data.message || "Login failed. Please try again." });

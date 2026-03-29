@@ -4,6 +4,8 @@ const {
     findUserByEmail,
     registerUser,
     LoginUserOrEmail,
+    AccessTokens,
+    RefreshTokens,
 } = require('../services/UserServices');
 
 async function getAllUsers(req, res) {
@@ -16,16 +18,32 @@ async function getAllUsers(req, res) {
     }
 }
 
+async function setupCookie(res,result){
+        res.cookie(
+            'refreshToken',
+            await RefreshTokens({ userId: result.user_id, email: result.user?.email_address }),
+            {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+            }
+        );
+}
+
 async function signup(req, res) {
     try {
         const result = await registerUser(req.body);
         const statusCode = result.user ? 201 : 200;
+        await setupCookie(res, result);
+        const accessToken = await AccessTokens({ userId: result.user_id, email: result.user?.email_address });
         return res.status(statusCode).json({
             success: true,
             message: result.message || 'User and account created successfully',
             user: result.user || null,
             accountId: result.accountId || null,
+            accessToken,
         });
+        
     } catch (err) {
         if (err instanceof ServiceError) {
             return res.status(err.statusCode).json({
@@ -85,9 +103,12 @@ async function loginCredentials(req, res) {
 
     try {
         const credentials = await LoginUserOrEmail(resolvedIdentifier, password);
+        const accessToken = await AccessTokens({ userId: credentials.user_id, email: credentials.email_address });
+        await setupCookie(res, credentials);
         res.json({
             success: true,
             message: 'Login successful',
+            accessToken,
             credentials:{
                 email: credentials.email_address,
                 username: credentials.handle,
@@ -111,10 +132,34 @@ async function loginCredentials(req, res) {
     }
 }
 
+async function refreshToken(req, res) {
+    const { refreshToken } = req.cookies;
+    if (!refreshToken) {
+        return res.status(401).json({
+            success: false,
+            message: 'Refresh token is required',
+        });
+    }
+    try{
+        const accessToken = await AccessTokens({ userId: refreshToken.userId, email: refreshToken.email });
+        return res.json({
+            success: true,
+            accessToken,
+        });
+    }catch(err){
+        console.error('Error refreshing token:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+        });
+    }
+
+}
 
 module.exports = {
     getAllUsers,
     signup,
     getUserByEmail,
     loginCredentials,
+    refreshToken
 };

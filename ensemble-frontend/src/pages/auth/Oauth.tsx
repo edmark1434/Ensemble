@@ -23,11 +23,13 @@ export const GoogleAuth = async () => {
 
     const response = await axios.post(
       `${import.meta.env.VITE_BASE_URL}/api/users/signup`,
-      payload
+      payload,
+      { withCredentials: true }
     );
 
     if (response.data.success) {
       console.log('OAuth signup/login successful:', response.data);
+      localStorage.setItem('accessToken', response.data.accessToken);
       window.location.href = '/dashboard';
     } else {
       console.error('OAuth signup failed:', response.data.message);

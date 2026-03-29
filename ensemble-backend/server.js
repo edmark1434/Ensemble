@@ -9,8 +9,14 @@ const app = express();
 const httpServer = createServer(app);
 initSocket(httpServer);
 
-//middleware
-app.use(cors());
+//origin URL allowed to access the backend, can be set via environment variable FRONTEND_URL, defaults to localhost:5173 for development
+const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+//middleware for cors policy and parsing JSON bodies
+app.use(cors({
+  origin: allowedOrigin,
+  credentials: true,
+}));
 app.use(express.json());
 
 //api routes

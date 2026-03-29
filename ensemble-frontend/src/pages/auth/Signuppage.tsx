@@ -366,16 +366,21 @@ export default function SignupPage({
     setLoading(true);
 
     try {
-      const res = await axios.post(`${import.meta.env.VITE_BASE_URL}/api/users/signup`, {
-        firstName: form.firstName,
-        lastName: form.lastName,
-        username: form.username,
-        email: form.email,
-        password: form.password,
-      });
+      const res = await axios.post(
+        `${import.meta.env.VITE_BASE_URL}/api/users/signup`,
+        {
+          firstName: form.firstName,
+          lastName: form.lastName,
+          username: form.username,
+          email: form.email,
+          password: form.password,
+        },
+        { withCredentials: true }
+      );
 
       console.log("Signup response:", res.data);
       if (res.data.success) {
+        localStorage.setItem('accessToken', res.data.accessToken);
         if (onSuccess) onSuccess();
         navigate(`/verify-email?email=${encodeURIComponent(form.email)}`);
       } else {
