@@ -12,6 +12,7 @@
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
     "@shadcn/ui": "^0.0.4",
+    "@shotstack/shotstack-studio": "^2.4.4",
     "@tailwindcss/vite": "^4.2.2",
     "axios": "^1.13.6",
     "class-variance-authority": "^0.7.1",
