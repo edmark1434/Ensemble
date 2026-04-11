@@ -1,36 +1,43 @@
-import { getAuth, signInWithPopup, GoogleAuthProvider,getAdditionalUserInfo } from "firebase/auth";
-import app from "../firebase";
-export const GoogleAuth = () => {
-  const auth = getAuth(app);
-  const provider = new GoogleAuthProvider(); // <-- define provider
+import { signInWithPopup, GoogleAuthProvider, getAdditionalUserInfo } from "firebase/auth";
+import {auth} from "../firebase";
+import axios from "axios";
 
-  signInWithPopup(auth, provider)
-    .then((result) => {
-      // Google Access Token
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      const token = credential?.accessToken;
+export const GoogleAuth = async () => {
+  const provider = new GoogleAuthProvider();
 
-      // Signed-in user info
-      const user = result.user;
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
+    const additionalInfo = getAdditionalUserInfo(result);
 
-      // Additional info (like new user)
-      const additionalInfo = getAdditionalUserInfo(result);
+    console.log("Firebase User:", user);
+    console.log("Is New User:", additionalInfo?.isNewUser);
 
-      console.log("User:", user);
-      console.log("Token:", token);
-      console.log("Additional Info:", additionalInfo);
+    const payload = {
+      email: user.email,
+      firebase_user_uuid: user.uid,
+      firstName: user.displayName?.split(' ')[0] || 'User',
+      lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
+      signUpWithOAuth: true,
+    };
 
-      // Here you can send token to your backend for DB storage
-    })
-    .catch((error) => {
-      const errorCode = error.code;
-      const errorMessage = error.message;
-      const email = error.customData?.email; // optional chaining
-      const credential = GoogleAuthProvider.credentialFromError(error);
+    const response = await axios.post(
+      `${import.meta.env.VITE_BASE_URL}/api/users/signup`,
+      payload,
+      { withCredentials: true }
+    );
 
-      console.error("Error code:", errorCode);
-      console.error("Error message:", errorMessage);
-      console.error("Email:", email);
-      console.error("Credential:", credential);
-    });
+    if (response.data.success) {
+      console.log('OAuth signup/login successful:', response.data);
+      localStorage.setItem('accessToken', response.data.accessToken);
+      window.location.href = '/dashboard';
+    } else {
+      console.error('OAuth signup failed:', response.data.message);
+    }
+  } catch (error) {
+    console.error('OAuth error:', error);
+    if (axios.isAxiosError(error)) {
+      console.error('Backend error:', error.response?.data?.message);
+    }
+  }
 };
