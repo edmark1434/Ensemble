@@ -75,7 +75,7 @@ async function getUserByEmail(email) {
 async function getEmailandPasswordHashByEmail(email) {
     try{
         const result = await client.query(
-            `SELECT u.user_id, u.email_address, u.password_hash , a.handle, a.account_id, a.display_name
+            `SELECT u.user_id, u.email_address, u.password_hash , a.handle, a.account_id, a.display_name, a.type
              FROM users u
              INNER JOIN accounts a ON a.account_id = u.account_id
              WHERE u.email_address = $1`,
@@ -91,7 +91,7 @@ async function getEmailandPasswordHashByEmail(email) {
 async function getEmailandPasswordHashByUsername(username) {
     try{
         const result = await client.query(
-            `SELECT u.user_id, u.email_address, u.password_hash , a.handle, a.account_id, a.display_name
+            `SELECT u.user_id, u.email_address, u.password_hash, a.type, a.handle, a.account_id, a.display_name
              FROM users u
              INNER JOIN accounts a ON a.account_id = u.account_id
              WHERE a.handle = $1`,

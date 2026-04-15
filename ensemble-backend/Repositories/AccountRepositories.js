@@ -26,7 +26,7 @@ async function createAccount({
     avatarFileId = null,
     tagline = null,
     description = null,
-    type = 'personal',
+    type = 'User',
     status = 'active',
     deletedAt = null,
 } = {}) {
@@ -43,7 +43,7 @@ async function createAccount({
                 deleted_at
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING account_id`,
+            RETURNING account_id, type, handle, status`,
             [
                 displayName,
                 handle,

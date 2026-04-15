@@ -5,6 +5,7 @@ const { initSocket } = require('./lib/websocket');
 const apiRoutes = require('./Route/api');
 
 const app = express();
+app.set('trust proxy', 1);
 //websocket server setup
 const httpServer = createServer(app);
 initSocket(httpServer);
