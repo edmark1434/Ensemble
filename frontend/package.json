@@ -14,7 +14,7 @@
     "@shadcn/ui": "^0.0.4",
     "@shotstack/shotstack-studio": "^2.4.4",
     "@tailwindcss/vite": "^4.2.2",
-    "axios": "1.13.6",
+    "axios": "^1.15.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "firebase": "^12.11.0",
