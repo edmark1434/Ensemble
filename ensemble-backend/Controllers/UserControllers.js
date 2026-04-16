@@ -93,6 +93,10 @@ async function getUserByEmail(req, res) {
 async function loginCredentials(req, res) {
     const { loginIdentifier, email, username, password } = req.body;
     const resolvedIdentifier = loginIdentifier ?? email ?? username;
+    const requestContext = {
+        ip: req.ip,
+        userAgent: req.get('user-agent') || 'unknown',
+    };
 
     if (!resolvedIdentifier || !password) {
         return res.status(400).json({
@@ -102,7 +106,7 @@ async function loginCredentials(req, res) {
     }
 
     try {
-        const credentials = await LoginUserOrEmail(resolvedIdentifier, password);
+        const credentials = await LoginUserOrEmail(resolvedIdentifier, password, requestContext);
         const accessToken = await AccessTokens({ userId: credentials.user_id, email: credentials.email_address });
         await setupCookie(res, credentials);
         res.json({
@@ -113,7 +117,9 @@ async function loginCredentials(req, res) {
                 email: credentials.email_address,
                 username: credentials.handle,
                 accountId: credentials.account_id,
-                displayName: credentials.display_name
+                type: credentials.type,
+                role: credentials.role,
+                staffId: credentials.staff_id
             },
         });
     } catch (err) {
@@ -121,6 +127,7 @@ async function loginCredentials(req, res) {
             return res.status(err.statusCode).json({
                 success: false,
                 message: err.message,
+                details: err.details || null,
             });
         }
 
