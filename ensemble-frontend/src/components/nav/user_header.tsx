@@ -1,5 +1,6 @@
 import { Bell, ChevronDown, Settings, LogOut, User, CircleDollarSign } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 interface UserHeaderProps {
   pageTitle: string;
@@ -14,8 +15,8 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   credits = 1250,
   userName = "John Paul Mahilom",
   userAvatar = "https://i.pravatar.cc/150?u=john",
-  onTopUp,
-}) => {
+                                               }) => {
+  const navigate = useNavigate();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -31,12 +32,8 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   }, []);
 
   const handleTopUp = () => {
-    if (onTopUp) {
-      onTopUp();
-    } else {
-      // Default top-up action - you can replace with your navigation or modal
-      console.log("Top up credits");
-    }
+    // Navigate to credit shop page
+    navigate("/credits");
   };
 
   return (
@@ -78,7 +75,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
               {/* Top-up hint that appears on hover */}
               {isHovered && (
                 <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] text-white shadow-lg animate-fade-in">
-                  Click to add credits
+                  Go to Credit Shop
                   <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45" />
                 </span>
               )}

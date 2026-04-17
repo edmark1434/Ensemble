@@ -4,6 +4,7 @@ import LoginPage from './pages/auth/Loginpage'
 import SignupPage from './pages/auth/Signuppage'
 import EmailVerification from './pages/EmailVerification'
 import NotFound from "@/pages/user/0_config/NotFound.tsx";
+import CreditShop from "@/pages/user/0_config/CreditsShop.tsx";
 
 import Layout from './components/ui/Layout.tsx'
 
@@ -40,6 +41,7 @@ function App() {
         {/* User Dashboard Routes - All wrapped in Layout */}
         <Route element={<Layout />}>
           <Route path='/home' element={<Home />} />
+            <Route path='/credits' element={<CreditShop />} />
           <Route path='/projects' element={<Projects />} />
             <Route path='/projects/select' element={<Projects_Selection />} />
           <Route path='/forums' element={<Forums />} />
