@@ -419,7 +419,7 @@ const Home: React.FC = () => {
         {/* Sticky Action Buttons Container */}
         <div
           ref={actionsRef}
-          className={`sticky top-[73px] z-40 transition-all duration-300 ${
+          className={`sticky top-[78px] z-40 transition-all duration-300 ${
             isActionsSticky
               ? "rounded-xl border border-white/10 bg-[#080a12]/50 px-1 py-1 backdrop-blur-md shadow-lg"
               : ""
