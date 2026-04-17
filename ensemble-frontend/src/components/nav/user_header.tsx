@@ -1,4 +1,4 @@
-import { Bell, Wallet, ChevronDown, Settings, LogOut, User, CircleDollarSign } from "lucide-react";
+import { Bell, ChevronDown, Settings, LogOut, User, CircleDollarSign } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 
 interface UserHeaderProps {
