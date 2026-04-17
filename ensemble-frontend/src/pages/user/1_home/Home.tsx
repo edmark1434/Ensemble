@@ -34,6 +34,7 @@ interface Asset {
 }
 
 const suggestedAssets: Asset[] = [
+  // ... (keep your existing asset data)
   {
     id: 1,
     title: "Sound Effects Library - Ultimate",
@@ -398,13 +399,13 @@ const Home: React.FC = () => {
           <div className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full bg-yellow-500/20 blur-3xl animate-breathing group-hover:animate-breathing-fast" />
           <div className="absolute -bottom-20 -left-20 h-48 w-48 rounded-full bg-purple-500/30 blur-3xl animate-float-pulse-delayed group-hover:animate-float-pulse-fast-delayed" />
 
-          <h1 className="mb-2 text-3xl font-bold text-white md:text-4xl animate-slide-right-subtle group-hover:animate-slide-right-fast">
+          <h1 className="mb-2 text-3xl font-bold text-white md:text-4xl animate-slide-right-subtle group-hover:animate-slide-right-fast" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
             Welcome, User!
           </h1>
-          <p className="text-2xl font-semibold text-white md:text-3xl animate-slide-right-subtle-delayed group-hover:animate-slide-right-fast-delayed">
+          <p className="text-2xl font-semibold text-white md:text-3xl animate-slide-right-subtle-delayed group-hover:animate-slide-right-fast-delayed" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
             Your Complete Video Editing<br />Ecosystem
           </p>
-          <p className="mt-4 max-w-2xl text-sm text-zinc-400 animate-slide-right-subtle-more-delayed group-hover:animate-slide-right-fast-more-delayed">
+          <p className="mt-4 max-w-2xl text-sm text-zinc-400 animate-slide-right-subtle-more-delayed group-hover:animate-slide-right-fast-more-delayed" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
             Find job posts or services, buy assets, collaborate and connect with talented video editors or clients.
           </p>
 
@@ -430,37 +431,37 @@ const Home: React.FC = () => {
             <button className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-blue-500/50 hover:bg-blue-500/10 hover:shadow-lg hover:shadow-blue-500/20">
               <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/10 to-blue-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               <Play className="relative h-4 w-4 text-blue-400 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" />
-              <span className="relative text-sm font-medium text-white">Start Project</span>
+              <span className="relative text-sm font-medium text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Start Project</span>
             </button>
 
             <button className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-green-500/50 hover:bg-green-500/10 hover:shadow-lg hover:shadow-green-500/20">
               <div className="absolute inset-0 bg-gradient-to-r from-green-500/0 via-green-500/10 to-green-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               <Search className="relative h-4 w-4 text-green-400 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" />
-              <span className="relative text-sm font-medium text-white">Find Services</span>
+              <span className="relative text-sm font-medium text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Find Services</span>
             </button>
 
             <button className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-orange-500/50 hover:bg-orange-500/10 hover:shadow-lg hover:shadow-orange-500/20">
               <div className="absolute inset-0 bg-gradient-to-r from-orange-500/0 via-orange-500/10 to-orange-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               <FileText className="relative h-4 w-4 text-orange-400 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" />
-              <span className="relative text-sm font-medium text-white">Post a Job</span>
+              <span className="relative text-sm font-medium text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Post a Job</span>
             </button>
 
             <button className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-purple-500/50 hover:bg-purple-500/10 hover:shadow-lg hover:shadow-purple-500/20">
               <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/10 to-purple-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               <Briefcase className="relative h-4 w-4 text-purple-400 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" />
-              <span className="relative text-sm font-medium text-white">Look for a Job</span>
+              <span className="relative text-sm font-medium text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Look for a Job</span>
             </button>
 
             <button className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-pink-500/50 hover:bg-pink-500/10 hover:shadow-lg hover:shadow-pink-500/20">
               <div className="absolute inset-0 bg-gradient-to-r from-pink-500/0 via-pink-500/10 to-pink-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               <Wrench className="relative h-4 w-4 text-pink-400 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" />
-              <span className="relative text-sm font-medium text-white">Create Service</span>
+              <span className="relative text-sm font-medium text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Create Service</span>
             </button>
 
             <button className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-cyan-500/50 hover:bg-cyan-500/10 hover:shadow-lg hover:shadow-cyan-500/20">
               <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/0 via-cyan-500/10 to-cyan-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               <Upload className="relative h-4 w-4 text-cyan-400 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" />
-              <span className="relative text-sm font-medium text-white">Upload Asset</span>
+              <span className="relative text-sm font-medium text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Upload Asset</span>
             </button>
           </div>
 
@@ -469,13 +470,13 @@ const Home: React.FC = () => {
             <button className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-blue-500/50 hover:bg-blue-500/10 hover:shadow-lg hover:shadow-blue-500/20 sm:w-[calc(33.333%-0.75rem)] md:w-[calc(25%-0.75rem)] lg:w-[calc(16.666%-0.75rem)]">
               <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/10 to-blue-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               <Users className="relative h-4 w-4 text-blue-400 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" />
-              <span className="relative text-sm font-medium text-white">Join a Team</span>
+              <span className="relative text-sm font-medium text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Join a Team</span>
             </button>
 
             <button className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-yellow-500/50 hover:bg-yellow-500/10 hover:shadow-lg hover:shadow-yellow-500/20 sm:w-[calc(33.333%-0.75rem)] md:w-[calc(25%-0.75rem)] lg:w-[calc(16.666%-0.75rem)]">
               <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/10 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               <MessageCircle className="relative h-4 w-4 text-yellow-400 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" />
-              <span className="relative text-sm font-medium text-white">Group Discussions</span>
+              <span className="relative text-sm font-medium text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Group Discussions</span>
             </button>
           </div>
         </div>
@@ -484,12 +485,12 @@ const Home: React.FC = () => {
         <div ref={assetsSectionRef} className="mt-8">
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-white">
+              <h2 className="text-xl font-semibold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                 Suggested Assets
               </h2>
-              <p className="text-xs text-zinc-500">Recommended based on your activity</p>
+              <p className="text-xs text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Recommended based on your activity</p>
             </div>
-            <button className="text-sm text-blue-400 hover:text-blue-300 transition">
+            <button className="text-sm text-blue-400 hover:text-blue-300 transition" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
               View More on Asset Library →
             </button>
           </div>
@@ -499,6 +500,7 @@ const Home: React.FC = () => {
             <button
               onClick={() => setIsFilterVisible(!isFilterVisible)}
               className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-zinc-400 transition hover:border-white/30 hover:text-white"
+              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
             >
               <Filter className="h-4 w-4" />
               {isFilterVisible ? "Hide Filters" : "Show Filters"}
@@ -507,7 +509,7 @@ const Home: React.FC = () => {
 
             {activeFiltersCount > 0 && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-zinc-500">{activeFiltersCount} active filter(s)</span>
+                <span className="text-xs text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{activeFiltersCount} active filter(s)</span>
                 <button
                   onClick={() => {
                     setSelectedCategory("All");
@@ -515,6 +517,7 @@ const Home: React.FC = () => {
                     setSelectedRating("All");
                   }}
                   className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300"
+                  style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 >
                   <X className="h-3 w-3" />
                   Clear all
@@ -529,7 +532,7 @@ const Home: React.FC = () => {
               <div className="lg:w-64 animate-slide-in">
                 <div className="sticky top-48 rounded-xl border border-white/10 bg-white/5 p-4">
                   <div className="mb-4">
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">Category</p>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Category</p>
                     <div className="flex flex-wrap gap-2">
                       {categories.map((category) => (
                         <button
@@ -540,6 +543,7 @@ const Home: React.FC = () => {
                               ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
                               : "border border-white/15 bg-white/5 text-zinc-400 hover:border-white/30 hover:text-white"
                           }`}
+                          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                         >
                           {category}
                         </button>
@@ -550,7 +554,7 @@ const Home: React.FC = () => {
                   <div className="h-px bg-white/10 my-4" />
 
                   <div className="mb-4">
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">Price Range</p>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Price Range</p>
                     <div className="flex flex-wrap gap-2">
                       {priceRanges.map((range) => (
                         <button
@@ -561,6 +565,7 @@ const Home: React.FC = () => {
                               ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
                               : "border border-white/15 bg-white/5 text-zinc-400 hover:border-white/30 hover:text-white"
                           }`}
+                          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                         >
                           {range}
                         </button>
@@ -571,7 +576,7 @@ const Home: React.FC = () => {
                   <div className="h-px bg-white/10 my-4" />
 
                   <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">Rating</p>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Rating</p>
                     <div className="flex flex-wrap gap-2">
                       {ratings.map((rating) => (
                         <button
@@ -582,6 +587,7 @@ const Home: React.FC = () => {
                               ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
                               : "border border-white/15 bg-white/5 text-zinc-400 hover:border-white/30 hover:text-white"
                           }`}
+                          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                         >
                           {rating !== "All" && <Star className="h-3 w-3 fill-current" />}
                           {rating}
@@ -595,7 +601,7 @@ const Home: React.FC = () => {
 
             {/* Assets Grid */}
             <div className={`flex-1 transition-all duration-300 ${isFilterVisible ? "" : "lg:ml-0"}`}>
-              <p className="mb-4 text-sm text-zinc-500">
+              <p className="mb-4 text-sm text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                 Showing {filteredAssets.length} of {suggestedAssets.length} assets
               </p>
 
@@ -616,7 +622,7 @@ const Home: React.FC = () => {
                       <div className="absolute inset-0 bg-gradient-to-t from-[#080a12] via-transparent to-transparent" />
 
                       <div className="absolute left-3 top-3">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${getTypeColor(asset.type)}`}>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${getTypeColor(asset.type)}`} style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                           {getTypeIcon(asset.type)}
                           <span className="capitalize">{asset.type}</span>
                         </span>
@@ -629,31 +635,31 @@ const Home: React.FC = () => {
 
                     <div className="p-4">
                       <div className="mb-2 flex items-center justify-between">
-                        <span className="text-[10px] text-zinc-500">{asset.category}</span>
+                        <span className="text-[10px] text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{asset.category}</span>
                         {renderStars(asset.rating)}
                       </div>
 
                       <div className="mb-2 flex items-baseline gap-1">
-                        <span className="text-xl font-bold text-white">{asset.credits}</span>
-                        <span className="text-xs text-zinc-500">Credits</span>
+                        <span className="text-xl font-bold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{asset.credits}</span>
+                        <span className="text-xs text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Credits</span>
                       </div>
 
-                      <h3 className="mb-2 text-sm font-semibold text-white leading-tight line-clamp-2">
+                      <h3 className="mb-2 text-sm font-semibold text-white leading-tight line-clamp-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                         {asset.title}
                       </h3>
 
-                      <p className="mb-3 text-xs text-zinc-400 line-clamp-2">
+                      <p className="mb-3 text-xs text-zinc-400 line-clamp-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                         {asset.description}
                       </p>
 
                       <div className="flex items-center justify-between border-t border-white/10 pt-3">
                         <div className="flex items-center gap-2">
                           <div className="h-5 w-5 rounded-full bg-gradient-to-br from-blue-500 to-purple-500" />
-                          <span className="text-xs text-zinc-500 hover:text-blue-400 transition cursor-pointer">
+                          <span className="text-xs text-zinc-500 hover:text-blue-400 transition cursor-pointer" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                             {asset.author}
                           </span>
                         </div>
-                        <button className="flex items-center gap-1 rounded-lg bg-blue-500/20 px-2.5 py-1 text-xs font-medium text-blue-400 transition hover:bg-blue-500/30">
+                        <button className="flex items-center gap-1 rounded-lg bg-blue-500/20 px-2.5 py-1 text-xs font-medium text-blue-400 transition hover:bg-blue-500/30" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                           <Download className="h-3 w-3" />
                           Get
                         </button>
@@ -669,7 +675,7 @@ const Home: React.FC = () => {
 
               {filteredAssets.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <p className="text-zinc-400">No assets found matching your filters.</p>
+                  <p className="text-zinc-400" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>No assets found matching your filters.</p>
                   <button
                     onClick={() => {
                       setSelectedCategory("All");
@@ -677,6 +683,7 @@ const Home: React.FC = () => {
                       setSelectedRating("All");
                     }}
                     className="mt-4 text-sm text-blue-400 hover:text-blue-300"
+                    style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                   >
                     Clear all filters
                   </button>
