@@ -73,3 +73,10 @@ export default defineConfig([
   },
 ])
 ```
+ROOT
+-- npm install lucide-react
+-- npm install -D @types/react-router-dom
+
+cd ensemble_frontend
+-- npm install 
+-- npm run dev
