@@ -1,5 +1,5 @@
 import { Outlet } from "react-router-dom";
-import UserNav from "@/components/nav/user_nav";
+import UserNav from "@/components/nav/user_nav.tsx";
 import { useState, useEffect } from "react";
 
 const Layout = () => {

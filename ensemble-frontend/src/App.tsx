@@ -3,9 +3,9 @@ import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/auth/Loginpage'
 import SignupPage from './pages/auth/Signuppage'
 import EmailVerification from './pages/EmailVerification'
-import NotFound from "@/pages/user/NotFound.tsx";
+import NotFound from "@/pages/user/0_config/NotFound.tsx";
 
-import Layout from './pages/user/Layout'
+import Layout from './components/ui/Layout.tsx'
 
 import Home from './pages/user/1_home/Home.tsx'
 
@@ -13,7 +13,7 @@ import Projects from "./pages/user/2_projects/Projects.tsx"
 import Projects_Selection from "@/pages/user/2_projects/Projects_Selection.tsx";
 
 import Forums from './pages/user/4_forums/Forums.tsx'
-import SectionPlaceholder from './pages/user/SectionPlaceholder'
+import SectionPlaceholder from './pages/user/0_config/SectionPlaceholder.tsx'
 
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'

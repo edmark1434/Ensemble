@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 
 interface Asset {
   id: number;
@@ -34,7 +35,6 @@ interface Asset {
 }
 
 const suggestedAssets: Asset[] = [
-  // ... (keep your existing asset data)
   {
     id: 1,
     title: "Sound Effects Library - Ultimate",
@@ -209,6 +209,7 @@ const FilterButtonSkeleton = () => (
 );
 
 const Home: React.FC = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [hoveredAsset, setHoveredAsset] = useState<number | null>(null);
   const [isFilterVisible, setIsFilterVisible] = useState(true);
@@ -428,37 +429,55 @@ const Home: React.FC = () => {
         >
           {/* Action Buttons Grid - Row 1 */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-            <button className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-blue-500/50 hover:bg-blue-500/10 hover:shadow-lg hover:shadow-blue-500/20">
+            <button
+              onClick={() => navigate("/projects/select")}
+              className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-blue-500/50 hover:bg-blue-500/10 hover:shadow-lg hover:shadow-blue-500/20"
+            >
               <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/10 to-blue-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               <Play className="relative h-4 w-4 text-blue-400 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" />
               <span className="relative text-sm font-medium text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Start Project</span>
             </button>
 
-            <button className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-green-500/50 hover:bg-green-500/10 hover:shadow-lg hover:shadow-green-500/20">
+            <button
+              onClick={() => navigate("/services")}
+              className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-green-500/50 hover:bg-green-500/10 hover:shadow-lg hover:shadow-green-500/20"
+            >
               <div className="absolute inset-0 bg-gradient-to-r from-green-500/0 via-green-500/10 to-green-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               <Search className="relative h-4 w-4 text-green-400 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" />
               <span className="relative text-sm font-medium text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Find Services</span>
             </button>
 
-            <button className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-orange-500/50 hover:bg-orange-500/10 hover:shadow-lg hover:shadow-orange-500/20">
+            <button
+              onClick={() => navigate("/jobs")}
+              className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-orange-500/50 hover:bg-orange-500/10 hover:shadow-lg hover:shadow-orange-500/20"
+            >
               <div className="absolute inset-0 bg-gradient-to-r from-orange-500/0 via-orange-500/10 to-orange-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               <FileText className="relative h-4 w-4 text-orange-400 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" />
               <span className="relative text-sm font-medium text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Post a Job</span>
             </button>
 
-            <button className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-purple-500/50 hover:bg-purple-500/10 hover:shadow-lg hover:shadow-purple-500/20">
+            <button
+              onClick={() => navigate("/my-proposals")}
+              className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-purple-500/50 hover:bg-purple-500/10 hover:shadow-lg hover:shadow-purple-500/20"
+            >
               <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/10 to-purple-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               <Briefcase className="relative h-4 w-4 text-purple-400 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" />
               <span className="relative text-sm font-medium text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Look for a Job</span>
             </button>
 
-            <button className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-pink-500/50 hover:bg-pink-500/10 hover:shadow-lg hover:shadow-pink-500/20">
+            <button
+              onClick={() => navigate("/gigs")}
+              className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-pink-500/50 hover:bg-pink-500/10 hover:shadow-lg hover:shadow-pink-500/20"
+            >
               <div className="absolute inset-0 bg-gradient-to-r from-pink-500/0 via-pink-500/10 to-pink-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               <Wrench className="relative h-4 w-4 text-pink-400 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" />
               <span className="relative text-sm font-medium text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Create Service</span>
             </button>
 
-            <button className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-cyan-500/50 hover:bg-cyan-500/10 hover:shadow-lg hover:shadow-cyan-500/20">
+            <button
+              onClick={() => navigate("/assets")}
+              className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-cyan-500/50 hover:bg-cyan-500/10 hover:shadow-lg hover:shadow-cyan-500/20"
+            >
               <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/0 via-cyan-500/10 to-cyan-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               <Upload className="relative h-4 w-4 text-cyan-400 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" />
               <span className="relative text-sm font-medium text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Upload Asset</span>
@@ -467,13 +486,19 @@ const Home: React.FC = () => {
 
           {/* Action Buttons Grid - Row 2 */}
           <div className="mt-3 flex flex-wrap justify-center gap-4">
-            <button className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-blue-500/50 hover:bg-blue-500/10 hover:shadow-lg hover:shadow-blue-500/20 sm:w-[calc(33.333%-0.75rem)] md:w-[calc(25%-0.75rem)] lg:w-[calc(16.666%-0.75rem)]">
+            <button
+              onClick={() => navigate("/teams")}
+              className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-blue-500/50 hover:bg-blue-500/10 hover:shadow-lg hover:shadow-blue-500/20 sm:w-[calc(33.333%-0.75rem)] md:w-[calc(25%-0.75rem)] lg:w-[calc(16.666%-0.75rem)]"
+            >
               <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/10 to-blue-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               <Users className="relative h-4 w-4 text-blue-400 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" />
               <span className="relative text-sm font-medium text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Join a Team</span>
             </button>
 
-            <button className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-yellow-500/50 hover:bg-yellow-500/10 hover:shadow-lg hover:shadow-yellow-500/20 sm:w-[calc(33.333%-0.75rem)] md:w-[calc(25%-0.75rem)] lg:w-[calc(16.666%-0.75rem)]">
+            <button
+              onClick={() => navigate("/forums")}
+              className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-full border border-white/15 bg-white/5 px-4 py-2.5 transition-all duration-300 hover:border-yellow-500/50 hover:bg-yellow-500/10 hover:shadow-lg hover:shadow-yellow-500/20 sm:w-[calc(33.333%-0.75rem)] md:w-[calc(25%-0.75rem)] lg:w-[calc(16.666%-0.75rem)]"
+            >
               <div className="absolute inset-0 bg-gradient-to-r from-yellow-500/0 via-yellow-500/10 to-yellow-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               <MessageCircle className="relative h-4 w-4 text-yellow-400 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" />
               <span className="relative text-sm font-medium text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Group Discussions</span>

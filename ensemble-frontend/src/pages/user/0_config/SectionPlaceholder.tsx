@@ -1,5 +1,5 @@
 import { Construction } from "lucide-react";
-import UserHeader from "@/components/nav/user_header";
+import UserHeader from "@/components/nav/user_header.tsx";
 
 type SectionPlaceholderProps = {
   title: string;
