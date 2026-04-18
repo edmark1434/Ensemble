@@ -77,6 +77,6 @@ ROOT
 -- npm install lucide-react
 -- npm install -D @types/react-router-dom
 
-cd ensemble_frontend
+cd frontend
 -- npm install 
 -- npm run dev
