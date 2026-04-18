@@ -13,13 +13,16 @@ import {
     ChevronDown,
     Share2,
     Edit,
-    ChevronLeft,
-    ChevronRight,
     Folder,
-    FileVideo, User,
+    FileVideo,
+    User,
+    Grid3x3,
+    List,
+    FileCheck,
+    DollarSign,
 } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 
 interface Project {
   id: number;
@@ -30,6 +33,8 @@ interface Project {
   lastUpdated: string;
   sharedBy?: string;
   thumbnail: string;
+  progress?: number;
+  contractAmount?: string;
 }
 
 interface TeamProject {
@@ -100,8 +105,8 @@ const personalProjects: Project[] = [
   },
 ];
 
-// Recent Projects (mix of personal and shared)
-const recentProjects: Project[] = [
+// Shared Projects (videos shared with you)
+const sharedProjects: Project[] = [
   {
     id: 7,
     name: "YT-Vid v5 Minecraft",
@@ -119,6 +124,7 @@ const recentProjects: Project[] = [
     size: "25MB",
     duration: "00:45",
     lastUpdated: "8 mins ago",
+    sharedBy: "Jadei Pacibe",
     thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Untitled(2).mp4"
   },
   {
@@ -141,12 +147,198 @@ const recentProjects: Project[] = [
     sharedBy: "Sarah Chen",
     thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Team+Alpha"
   },
+  {
+    id: 11,
+    name: "Documentary Rough Cut",
+    type: "video",
+    size: "3.2GB",
+    duration: "01:23:45",
+    lastUpdated: "3 hours ago",
+    sharedBy: "Marcus Thompson",
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Documentary"
+  },
+];
+
+// With Contract Projects (projects with active contracts and progress)
+const contractProjects: Project[] = [
+  {
+    id: 12,
+    name: "Corporate Video - Tech Startup",
+    type: "video",
+    size: "1.8GB",
+    duration: "05:30",
+    lastUpdated: "2 days ago",
+    sharedBy: "Sarah Chen",
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Corporate+Video",
+    progress: 75,
+    contractAmount: "₱15,000"
+  },
+  {
+    id: 13,
+    name: "Music Video - Indie Band",
+    type: "video",
+    size: "2.3GB",
+    duration: "04:15",
+    lastUpdated: "5 days ago",
+    sharedBy: "Emma Watson",
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Music+Video",
+    progress: 45,
+    contractAmount: "₱25,000"
+  },
+  {
+    id: 14,
+    name: "Documentary - Nature",
+    type: "video",
+    size: "4.5GB",
+    duration: "45:00",
+    lastUpdated: "1 week ago",
+    sharedBy: "Marcus Thompson",
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Nature+Doc",
+    progress: 90,
+    contractAmount: "₱50,000"
+  },
+  {
+    id: 15,
+    name: "Commercial - Product Launch",
+    type: "video",
+    size: "1.2GB",
+    duration: "00:30",
+    lastUpdated: "3 days ago",
+    sharedBy: "Jessica Martinez",
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Commercial",
+    progress: 30,
+    contractAmount: "₱8,000"
+  },
+];
+
+// Recent Projects (mix of personal, shared, and team projects - most recently accessed)
+const recentProjects: Project[] = [
+  {
+    id: 1,
+    name: "YT-Vid v5 Minecraft",
+    type: "video",
+    size: "503MB",
+    duration: "22:15",
+    lastUpdated: "2 mins ago",
+    sharedBy: "Edmark Talingting",
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Minecraft"
+  },
+  {
+    id: 2,
+    name: "Summer Vacation Reel",
+    type: "video",
+    size: "450MB",
+    duration: "05:23",
+    lastUpdated: "2 hours ago",
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Summer+Vacation"
+  },
+  {
+    id: 3,
+    name: "Corporate Video - Tech Startup",
+    type: "video",
+    size: "1.8GB",
+    duration: "05:30",
+    lastUpdated: "2 days ago",
+    sharedBy: "Sarah Chen",
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Corporate+Video",
+    progress: 75,
+    contractAmount: "₱15,000"
+  },
+  {
+    id: 4,
+    name: "Team Alpha - Commercial",
+    type: "video",
+    size: "2.1GB",
+    duration: "45:20",
+    lastUpdated: "1 hour ago",
+    sharedBy: "Sarah Chen",
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Team+Alpha"
+  },
+  {
+    id: 5,
+    name: "Untitled(2).mp4",
+    type: "video",
+    size: "25MB",
+    duration: "00:45",
+    lastUpdated: "8 mins ago",
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Untitled(2).mp4"
+  },
+  {
+    id: 6,
+    name: "01:58",
+    type: "video",
+    size: "140MB",
+    duration: "01:58",
+    lastUpdated: "8 mins ago",
+    sharedBy: "Jadei Pacibe",
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=01:58"
+  },
+  {
+    id: 7,
+    name: "Music Video - Indie Band",
+    type: "video",
+    size: "2.3GB",
+    duration: "04:15",
+    lastUpdated: "5 days ago",
+    sharedBy: "Emma Watson",
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Music+Video",
+    progress: 45,
+    contractAmount: "₱25,000"
+  },
+  {
+    id: 8,
+    name: "Documentary - Nature",
+    type: "video",
+    size: "4.5GB",
+    duration: "45:00",
+    lastUpdated: "1 week ago",
+    sharedBy: "Marcus Thompson",
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Nature+Doc",
+    progress: 90,
+    contractAmount: "₱50,000"
+  },
+  {
+    id: 9,
+    name: "Product Review Final",
+    type: "video",
+    size: "280MB",
+    duration: "03:45",
+    lastUpdated: "Yesterday",
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Product+Review"
+  },
+  {
+    id: 10,
+    name: "Tutorial Part 1",
+    type: "video",
+    size: "620MB",
+    duration: "12:18",
+    lastUpdated: "2 days ago",
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Tutorial+Part+1"
+  },
+  {
+    id: 11,
+    name: "Wedding Highlights",
+    type: "video",
+    size: "1.2GB",
+    duration: "08:42",
+    lastUpdated: "3 days ago",
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Wedding+Highlights"
+  },
+  {
+    id: 12,
+    name: "Gaming Montage",
+    type: "video",
+    size: "890MB",
+    duration: "15:30",
+    lastUpdated: "5 days ago",
+    thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Gaming+Montage"
+  },
 ];
 
 // Team Projects - Folders
 const teamProjects: TeamProject[] = [
   {
-    id: 11,
+    id: 16,
     name: "Team Alpha - Commercial",
     sharedBy: "Sarah Chen",
     lastUpdated: "1 hour ago",
@@ -155,7 +347,7 @@ const teamProjects: TeamProject[] = [
     videoCount: 12
   },
   {
-    id: 12,
+    id: 17,
     name: "Documentary Project",
     sharedBy: "Marcus Thompson",
     lastUpdated: "3 hours ago",
@@ -164,7 +356,7 @@ const teamProjects: TeamProject[] = [
     videoCount: 8
   },
   {
-    id: 13,
+    id: 18,
     name: "Music Video - Indie Band",
     sharedBy: "Emma Watson",
     lastUpdated: "Yesterday",
@@ -174,22 +366,34 @@ const teamProjects: TeamProject[] = [
   },
 ];
 
-type TabType = "recent" | "personal" | "team";
+type TabType = "recent" | "personal" | "shared" | "contract" | "team";
+type ViewType = "grid" | "compact";
 
 // Skeleton Components
-const ProjectCardSkeleton = () => (
-  <div className="w-[280px] flex-shrink-0 rounded-xl border border-white/10 bg-white/5 p-4">
-    <div className="mb-3 h-36 w-full animate-pulse rounded-lg bg-white/10" />
-    <div className="h-5 w-3/4 animate-pulse rounded-lg bg-white/10" />
-    <div className="mt-2 flex gap-3">
-      <div className="h-4 w-16 animate-pulse rounded-lg bg-white/5" />
-      <div className="h-4 w-12 animate-pulse rounded-lg bg-white/5" />
+const ProjectCardSkeleton = ({ view = "grid" }: { view?: ViewType }) => (
+  view === "compact" ? (
+    <div className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-3">
+      <div className="h-16 w-24 animate-pulse rounded-lg bg-white/10" />
+      <div className="flex-1">
+        <div className="h-4 w-32 animate-pulse rounded bg-white/10" />
+        <div className="mt-1 h-3 w-24 animate-pulse rounded bg-white/5" />
+      </div>
+      <div className="h-8 w-20 animate-pulse rounded-full bg-white/10" />
     </div>
-    <div className="mt-3 flex gap-2">
-      <div className="h-8 w-8 animate-pulse rounded-lg bg-white/5" />
-      <div className="h-8 w-8 animate-pulse rounded-lg bg-white/5" />
+  ) : (
+    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <div className="mb-3 h-36 w-full animate-pulse rounded-lg bg-white/10" />
+      <div className="h-5 w-3/4 animate-pulse rounded-lg bg-white/10" />
+      <div className="mt-2 flex gap-3">
+        <div className="h-4 w-16 animate-pulse rounded-lg bg-white/5" />
+        <div className="h-4 w-12 animate-pulse rounded-lg bg-white/5" />
+      </div>
+      <div className="mt-3 flex gap-2">
+        <div className="h-8 w-8 animate-pulse rounded-lg bg-white/5" />
+        <div className="h-8 w-8 animate-pulse rounded-lg bg-white/5" />
+      </div>
     </div>
-  </div>
+  )
 );
 
 const Projects: React.FC = () => {
@@ -198,9 +402,7 @@ const Projects: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>("recent");
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [showLeftArrow, setShowLeftArrow] = useState(false);
-  const [showRightArrow, setShowRightArrow] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewType>("grid");
 
   // Simulate loading
   useEffect(() => {
@@ -226,45 +428,55 @@ const Projects: React.FC = () => {
     }
   };
 
-  const scroll = (direction: "left" | "right") => {
-    if (scrollContainerRef.current) {
-      const scrollAmount = 300;
-      const newScrollLeft = scrollContainerRef.current.scrollLeft + (direction === "left" ? -scrollAmount : scrollAmount);
-      scrollContainerRef.current.scrollTo({ left: newScrollLeft, behavior: "smooth" });
-    }
-  };
-
-  const handleScroll = () => {
-    if (scrollContainerRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
-      setShowLeftArrow(scrollLeft > 0);
-      setShowRightArrow(scrollLeft + clientWidth < scrollWidth - 10);
-    }
-  };
-
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (container) {
-      container.addEventListener("scroll", handleScroll);
-      handleScroll();
-      return () => container.removeEventListener("scroll", handleScroll);
-    }
-  }, [activeTab]);
-
   const tabs = [
     { id: "recent" as TabType, label: "Recent", icon: <Clock className="h-4 w-4" /> },
     { id: "personal" as TabType, label: "Personal", icon: <User className="h-4 w-4" /> },
+    { id: "shared" as TabType, label: "Shared", icon: <Share2 className="h-4 w-4" /> },
+    { id: "contract" as TabType, label: "With Contract", icon: <FileCheck className="h-4 w-4" /> },
     { id: "team" as TabType, label: "Team", icon: <Users className="h-4 w-4" /> },
   ];
 
+  const getContent = () => {
+    switch (activeTab) {
+      case "recent": return recentProjects;
+      case "personal": return personalProjects;
+      case "shared": return sharedProjects;
+      case "contract": return contractProjects;
+      case "team": return teamProjects;
+      default: return [];
+    }
+  };
+
+  const getTabTitle = () => {
+    switch (activeTab) {
+      case "recent": return "Recent Projects";
+      case "personal": return "Personal Projects";
+      case "shared": return "Shared With You";
+      case "contract": return "Projects Under Contract";
+      case "team": return "Team Projects";
+      default: return "Projects";
+    }
+  };
+
+  const getTabDescription = () => {
+    switch (activeTab) {
+      case "recent": return "Recently accessed projects";
+      case "personal": return "Your private workspace";
+      case "shared": return "Videos shared with you by collaborators";
+      case "contract": return "Projects with active contracts and progress tracking";
+      case "team": return "Collaborative workspace folders";
+      default: return "";
+    }
+  };
+
+  // Render Project Card (Grid View) - 4 columns layout
   const renderProjectCard = (project: Project) => (
     <div
       key={project.id}
-      className="group relative w-[280px] flex-shrink-0 overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent transition-all duration-300 hover:border-white/20 hover:bg-white/10 hover:scale-[1.02]"
+      className="group relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent transition-all duration-300 hover:border-white/20 hover:bg-white/10 hover:scale-[1.02]"
       onMouseEnter={() => setHoveredProject(project.id)}
       onMouseLeave={() => setHoveredProject(null)}
     >
-      {/* Thumbnail */}
       <div className="relative h-36 w-full overflow-hidden bg-gradient-to-br from-[#1a1f2e] to-[#0d0f1a]">
         <img
           src={project.thumbnail}
@@ -273,47 +485,66 @@ const Projects: React.FC = () => {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#080a12] via-transparent to-transparent" />
 
-        {/* Type Badge */}
         <div className="absolute left-3 top-3">
-          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${getTypeColor(project.type)}`} style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${getTypeColor(project.type)}`}>
             {getTypeIcon(project.type)}
             <span className="capitalize">{project.type}</span>
           </span>
         </div>
 
-        {/* Duration Badge */}
         {project.duration && (
           <div className="absolute bottom-3 right-3">
-            <span className="inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-zinc-300 backdrop-blur-sm" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+            <span className="inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-zinc-300 backdrop-blur-sm">
               <Clock className="h-2.5 w-2.5" />
               {project.duration}
             </span>
           </div>
         )}
 
-        {/* Shared By Badge */}
         {project.sharedBy && (
           <div className="absolute bottom-3 left-3">
-            <span className="inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-zinc-300 backdrop-blur-sm" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+            <span className="inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] text-zinc-300 backdrop-blur-sm">
               <Users className="h-3 w-3" />
               {project.sharedBy.split(" ")[0]}
             </span>
           </div>
         )}
 
-        {/* More Options Button */}
         <button className="absolute right-3 top-3 rounded-full bg-black/50 p-1.5 text-zinc-400 transition hover:text-white backdrop-blur-sm">
           <MoreVertical className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      {/* Content */}
       <div className="p-4">
-        <h3 className="mb-2 text-sm font-semibold text-white truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+        <h3 className="mb-2 text-sm font-semibold text-white truncate">
           {project.name}
         </h3>
 
-        <div className="flex items-center justify-between text-xs text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+        {/* Progress Bar for Contract Projects */}
+        {activeTab === "contract" && project.progress !== undefined && (
+          <div className="mb-2">
+            <div className="flex items-center justify-between text-xs text-zinc-500 mb-1">
+              <span>Progress</span>
+              <span>{project.progress}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-blue-500 to-purple-500"
+                style={{ width: `${project.progress}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Contract Amount */}
+        {activeTab === "contract" && project.contractAmount && (
+          <div className="mb-2 flex items-center gap-1 text-xs text-green-400">
+            <DollarSign className="h-3 w-3" />
+            <span>{project.contractAmount}</span>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between text-xs text-zinc-500">
           <div className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
             <span>{project.lastUpdated}</span>
@@ -321,7 +552,6 @@ const Projects: React.FC = () => {
           <div>{project.size}</div>
         </div>
 
-        {/* Action Buttons */}
         <div className="mt-3 flex items-center gap-2 border-t border-white/10 pt-3">
           <button className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/10 hover:text-white">
             <Share2 className="h-3.5 w-3.5" />
@@ -332,28 +562,85 @@ const Projects: React.FC = () => {
         </div>
       </div>
 
-      {/* Hover Glow Effect */}
       {hoveredProject === project.id && (
         <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-pink-500/5 pointer-events-none" />
       )}
     </div>
   );
 
+  // Render Project Card (Compact View)
+  const renderCompactProjectCard = (project: Project) => (
+    <div
+      key={project.id}
+      className="flex items-center gap-4 rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-3 transition-all duration-300 hover:border-white/20 hover:bg-white/10"
+    >
+      <div className="relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-gradient-to-br from-[#1a1f2e] to-[#0d0f1a]">
+        <img
+          src={project.thumbnail}
+          alt={project.name}
+          className="h-full w-full object-cover"
+        />
+        {project.duration && (
+          <div className="absolute bottom-1 right-1 rounded bg-black/60 px-1 py-0.5 text-[8px] text-white">
+            {project.duration}
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <h3 className="text-sm font-semibold text-white truncate">{project.name}</h3>
+        <div className="flex items-center gap-3 mt-1 text-xs text-zinc-500">
+          <div className="flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            <span>{project.lastUpdated}</span>
+          </div>
+          <div>{project.size}</div>
+          {project.sharedBy && (
+            <span className="text-zinc-400">by {project.sharedBy.split(" ")[0]}</span>
+          )}
+        </div>
+
+        {/* Progress Bar for Contract Projects in Compact View */}
+        {activeTab === "contract" && project.progress !== undefined && (
+          <div className="mt-2">
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-1 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-blue-500 to-purple-500"
+                  style={{ width: `${project.progress}%` }}
+                />
+              </div>
+              <span className="text-xs text-zinc-500">{project.progress}%</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-1">
+        <button className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/10 hover:text-white">
+          <Share2 className="h-3.5 w-3.5" />
+        </button>
+        <button className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/10 hover:text-white">
+          <Edit className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+
+  // Render Team Folder Card (Grid View)
   const renderTeamFolderCard = (project: TeamProject) => (
     <div
       key={project.id}
-      className="group relative w-[280px] flex-shrink-0 overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent transition-all duration-300 hover:border-white/20 hover:bg-white/10 hover:scale-[1.02] cursor-pointer"
+      className="group relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent transition-all duration-300 hover:border-white/20 hover:bg-white/10 hover:scale-[1.02] cursor-pointer"
       onMouseEnter={() => setHoveredProject(project.id + 200)}
       onMouseLeave={() => setHoveredProject(null)}
       onClick={() => navigate(`/projects/team/${project.id}`)}
     >
-      {/* Folder Thumbnail */}
       <div className="relative h-36 w-full overflow-hidden bg-gradient-to-br from-blue-500/20 to-purple-500/20">
         <div className="absolute inset-0 flex items-center justify-center">
           <Folder className="h-20 w-20 text-blue-400/30" />
         </div>
 
-        {/* Video Previews */}
         <div className="absolute bottom-2 right-2 flex -space-x-2">
           <div className="h-8 w-8 rounded-md bg-black/60 backdrop-blur-sm flex items-center justify-center">
             <FileVideo className="h-4 w-4 text-blue-400" />
@@ -362,19 +649,17 @@ const Projects: React.FC = () => {
             <FileVideo className="h-4 w-4 text-blue-400" />
           </div>
           <div className="h-8 w-8 rounded-md bg-black/60 backdrop-blur-sm flex items-center justify-center">
-            <span className="text-[10px] text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>+{project.videoCount}</span>
+            <span className="text-[10px] text-white">+{project.videoCount}</span>
           </div>
         </div>
 
-        {/* Team Badge */}
         <div className="absolute left-3 top-3">
-          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] font-medium text-blue-400" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] font-medium text-blue-400">
             <Users className="h-3 w-3" />
             Team Project
           </span>
         </div>
 
-        {/* More Options Button */}
         <button
           className="absolute right-3 top-3 rounded-full bg-black/50 p-1.5 text-zinc-400 transition hover:text-white backdrop-blur-sm"
           onClick={(e) => e.stopPropagation()}
@@ -383,17 +668,10 @@ const Projects: React.FC = () => {
         </button>
       </div>
 
-      {/* Content */}
       <div className="p-4">
-        <h3 className="mb-1 text-sm font-semibold text-white truncate" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-          {project.name}
-        </h3>
-
-        <p className="text-xs text-zinc-500 mb-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-          Shared by {project.sharedBy.split(" ")[0]}
-        </p>
-
-        <div className="flex items-center justify-between text-xs text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+        <h3 className="mb-1 text-sm font-semibold text-white truncate">{project.name}</h3>
+        <p className="text-xs text-zinc-500 mb-2">Shared by {project.sharedBy.split(" ")[0]}</p>
+        <div className="flex items-center justify-between text-xs text-zinc-500">
           <div className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
             <span>{project.lastUpdated}</span>
@@ -405,78 +683,92 @@ const Projects: React.FC = () => {
           <div>{project.size}</div>
         </div>
 
-        {/* Action Buttons */}
         <div className="mt-3 flex items-center gap-2 border-t border-white/10 pt-3">
-          <button
-            className="flex items-center gap-1 rounded-lg bg-purple-500/20 px-2.5 py-1 text-xs font-medium text-purple-400 transition hover:bg-purple-500/30"
-            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/projects/team/${project.id}`);
-            }}
-          >
+          <button className="flex items-center gap-1 rounded-lg bg-purple-500/20 px-2.5 py-1 text-xs font-medium text-purple-400 transition hover:bg-purple-500/30">
             <FolderKanban className="h-3 w-3" />
             Open Folder
           </button>
-          <button
-            className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/10 hover:text-white"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <button className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/10 hover:text-white">
             <Share2 className="h-3.5 w-3.5" />
           </button>
-          <button
-            className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/10 hover:text-white"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <button className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/10 hover:text-white">
             <Users className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Hover Glow Effect */}
       {hoveredProject === project.id + 200 && (
         <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-pink-500/5 pointer-events-none" />
       )}
     </div>
   );
 
+  // Render Team Folder Card (Compact View)
+  const renderCompactTeamFolderCard = (project: TeamProject) => (
+    <div
+      key={project.id}
+      className="flex items-center gap-4 rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-3 transition-all duration-300 hover:border-white/20 hover:bg-white/10 cursor-pointer"
+      onClick={() => navigate(`/projects/team/${project.id}`)}
+    >
+      <div className="relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
+        <Folder className="h-8 w-8 text-blue-400/50" />
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <h3 className="text-sm font-semibold text-white truncate">{project.name}</h3>
+        <p className="text-xs text-zinc-500">Shared by {project.sharedBy.split(" ")[0]}</p>
+        <div className="flex items-center gap-3 mt-1 text-xs text-zinc-500">
+          <div className="flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            <span>{project.lastUpdated}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <FileVideo className="h-3 w-3" />
+            <span>{project.videoCount} videos</span>
+          </div>
+          <div>{project.size}</div>
+        </div>
+      </div>
+
+      <button className="flex items-center gap-1 rounded-lg bg-purple-500/20 px-3 py-1.5 text-xs font-medium text-purple-400 transition hover:bg-purple-500/30">
+        <FolderKanban className="h-3 w-3" />
+        Open
+      </button>
+    </div>
+  );
+
   const renderContent = () => {
-    switch (activeTab) {
-      case "recent":
-        return recentProjects.map(renderProjectCard);
-      case "personal":
-        return personalProjects.map(renderProjectCard);
-      case "team":
-        return teamProjects.map(renderTeamFolderCard);
-      default:
-        return null;
-    }
-  };
+    const content = getContent();
 
-  const getTabTitle = () => {
-    switch (activeTab) {
-      case "recent":
-        return "Recent Projects";
-      case "personal":
-        return "Personal Projects";
-      case "team":
-        return "Team Projects";
-      default:
-        return "Projects";
+    if (activeTab === "team") {
+      if (viewMode === "compact") {
+        return (
+          <div className="space-y-3">
+            {(teamProjects as TeamProject[]).map(renderCompactTeamFolderCard)}
+          </div>
+        );
+      }
+      return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {(teamProjects as TeamProject[]).map(renderTeamFolderCard)}
+        </div>
+      );
     }
-  };
 
-  const getTabDescription = () => {
-    switch (activeTab) {
-      case "recent":
-        return "Recently accessed projects";
-      case "personal":
-        return "Your private workspace";
-      case "team":
-        return "Collaborative workspace folders";
-      default:
-        return "";
+    if (viewMode === "compact") {
+      return (
+        <div className="space-y-3">
+          {(content as Project[]).map(renderCompactProjectCard)}
+        </div>
+      );
     }
+
+    // Grid view - 4 columns
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {(content as Project[]).map(renderProjectCard)}
+      </div>
+    );
   };
 
   if (loading) {
@@ -491,16 +783,27 @@ const Projects: React.FC = () => {
               <div className="h-10 w-24 animate-pulse rounded-full bg-white/5" />
             </div>
           </div>
-          <div className="mb-6 flex gap-2 border-b border-white/10 pb-2">
-            {[1, 2, 3].map((i) => (
+          <div className="mb-6 flex flex-wrap gap-2 border-b border-white/10 pb-2">
+            {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="h-10 w-24 animate-pulse rounded-lg bg-white/10" />
             ))}
           </div>
-          <div className="flex gap-5 overflow-x-auto pb-2">
-            {[1, 2, 3, 4].map((i) => (
-              <ProjectCardSkeleton key={i} />
-            ))}
+          <div className="flex justify-end mb-4">
+            <div className="h-10 w-20 animate-pulse rounded-full bg-white/10" />
           </div>
+          {viewMode === "compact" ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map((i) => (
+                <ProjectCardSkeleton key={i} view="compact" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                <ProjectCardSkeleton key={i} view="grid" />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -508,15 +811,12 @@ const Projects: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#080a12]">
-      {/* Top Header */}
       <UserHeader pageTitle="Projects" credits={1250} />
 
-      {/* Main Content */}
       <div className="mx-auto max-w-7xl p-6 md:p-8">
 
         {/* Action Bar */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          {/* Create Project Button */}
           <button
             onClick={() => navigate("/projects/select")}
             className="group flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl active:scale-95 active:bg-gradient-to-r active:from-cyan-500 active:via-yellow-500 active:to-purple-600 active:text-white"
@@ -525,7 +825,6 @@ const Projects: React.FC = () => {
             <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Create a Project</span>
           </button>
 
-          {/* Search and Filter */}
           <div className="flex gap-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
@@ -535,10 +834,9 @@ const Projects: React.FC = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="rounded-full border border-white/15 bg-white/5 pl-9 pr-4 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
-                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               />
             </div>
-            <button className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-zinc-400 transition hover:border-white/30 hover:text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+            <button className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-zinc-400 transition hover:border-white/30 hover:text-white">
               <Filter className="h-4 w-4" />
               Filter
               <ChevronDown className="h-3.5 w-3.5" />
@@ -547,7 +845,7 @@ const Projects: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="mb-6 flex gap-1 border-b border-white/10">
+        <div className="mb-6 flex flex-wrap gap-1 border-b border-white/10">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -557,7 +855,6 @@ const Projects: React.FC = () => {
                   ? "text-blue-400 border-b-2 border-blue-500 bg-blue-500/5"
                   : "text-zinc-400 hover:text-white hover:bg-white/5"
               }`}
-              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
             >
               {tab.icon}
               {tab.label}
@@ -565,62 +862,79 @@ const Projects: React.FC = () => {
           ))}
         </div>
 
-        {/* Section Header */}
+        {/* View Toggle and Header */}
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{getTabTitle()}</h2>
-            <p className="text-xs text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{getTabDescription()}</p>
+            <h2 className="text-lg font-semibold text-white">{getTabTitle()}</h2>
+            <p className="text-xs text-zinc-500">{getTabDescription()}</p>
           </div>
-          <div className="flex items-center gap-2">
+
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-1 rounded-lg border border-white/15 bg-white/5 p-1">
             <button
-              onClick={() => scroll("left")}
-              disabled={!showLeftArrow}
-              className={`rounded-full border border-white/15 bg-black/50 p-1.5 backdrop-blur-sm transition-all duration-300 ${
-                showLeftArrow 
-                  ? "hover:bg-white/20 text-white cursor-pointer" 
-                  : "opacity-30 cursor-not-allowed"
+              onClick={() => setViewMode("grid")}
+              className={`rounded-md p-1.5 transition-all duration-200 ${
+                viewMode === "grid"
+                  ? "bg-blue-500 text-white"
+                  : "text-zinc-400 hover:text-white hover:bg-white/10"
               }`}
+              title="Grid View"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <Grid3x3 className="h-4 w-4" />
             </button>
             <button
-              onClick={() => scroll("right")}
-              disabled={!showRightArrow}
-              className={`rounded-full border border-white/15 bg-black/50 p-1.5 backdrop-blur-sm transition-all duration-300 ${
-                showRightArrow 
-                  ? "hover:bg-white/20 text-white cursor-pointer" 
-                  : "opacity-30 cursor-not-allowed"
+              onClick={() => setViewMode("compact")}
+              className={`rounded-md p-1.5 transition-all duration-200 ${
+                viewMode === "compact"
+                  ? "bg-blue-500 text-white"
+                  : "text-zinc-400 hover:text-white hover:bg-white/10"
               }`}
+              title="Compact View"
             >
-              <ChevronRight className="h-4 w-4" />
+              <List className="h-4 w-4" />
             </button>
           </div>
         </div>
 
-        {/* Horizontal Scroll Container */}
-        <div
-          ref={scrollContainerRef}
-          className="flex gap-5 overflow-x-auto pb-4"
-          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-        >
+        {/* Content - Vertical Scrollable */}
+        <div className="max-h-[calc(100vh-300px)] overflow-y-auto pr-2 custom-scrollbar">
           {renderContent()}
         </div>
+
+        {/* Empty State */}
+        {getContent().length === 0 && (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-white/10 bg-white/5 p-12 text-center">
+            <FolderKanban className="mb-3 h-12 w-12 text-zinc-500" />
+            <h3 className="text-lg font-semibold text-white">No projects found</h3>
+            <p className="mt-1 text-sm text-zinc-400">
+              {activeTab === "contract"
+                ? "No active contracts yet. Start collaborating to create contracts."
+                : "Create your first project to get started"}
+            </p>
+            <button
+              onClick={() => navigate("/projects/select")}
+              className="mt-4 rounded-full bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-600"
+            >
+              Create Project
+            </button>
+          </div>
+        )}
       </div>
 
       <style>{`
-        /* Hide scrollbar completely */
-        div[ref] {
-          scrollbar-width: none;
-          -ms-overflow-style: none;
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
         }
-        
-        div[ref]::-webkit-scrollbar {
-          display: none;
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 3px;
         }
-        
-        /* Smooth scrolling */
-        div[ref] {
-          scroll-behavior: smooth;
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.15);
+          border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.25);
         }
       `}</style>
     </div>
