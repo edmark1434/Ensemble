@@ -355,7 +355,7 @@ function Divider() {
 // ─── LoginPage ────────────────────────────────────────────────────────────────
 export default function LoginPage({
   onSuccess,
-  onForgotPassword,
+  // onForgotPassword,
   onBack,
 }: {
   onSuccess?: () => void;
@@ -692,7 +692,7 @@ export default function LoginPage({
           {/* Forgot password */}
           <div className="fade-in-up delay-500" style={{ textAlign: "right", marginBottom: 24 }}>
             <button
-              onClick={onForgotPassword}
+              onClick={() => navigate("/forgot-password")}
               style={{
                 background: "none",
                 border: "none",
