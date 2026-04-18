@@ -1,23 +1,27 @@
 const express = require('express');
 const router = express.Router();
-const requireAuth = require('../middleware/requireAuth');
+const {requireAuth} = require('../middleware/requireAuth');
+const checkSession = require('../middleware/checkSession');
 const {
     getAllUsers,
     signup,
     getUserByEmail,
     loginCredentials,
-    refreshToken
+    refreshToken,
+    LogoutUsers
 } = require('../controllers/UserControllers');
 
-router.get('/', requireAuth, getAllUsers);
+router.get('/', [checkSession, requireAuth], getAllUsers);
 
 router.post('/signup', signup);
 
-router.get('/:email', requireAuth, getUserByEmail);
+router.get('/:email', [checkSession, requireAuth], getUserByEmail);
 
 router.post('/login', loginCredentials);
 
-router.post('/refresh-token', refreshToken);
+router.post('/refresh-token',checkSession, refreshToken);
+
+router.get('/logout', [checkSession, requireAuth], LogoutUsers);
 
 
 module.exports = router;

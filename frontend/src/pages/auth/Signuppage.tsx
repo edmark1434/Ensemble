@@ -5,8 +5,9 @@
 import { useState } from "react";
 import type { ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { GoogleAuth } from "./Oauth";
+import { useGoogleAuth } from "./Oauth";
 import axios from "axios";
+import useGlobalState from "@/lib/global_state";
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
   bg:        "#080a12",
@@ -204,9 +205,10 @@ function PrimaryBtn({ children, onClick, loading = false, fullWidth = false }: {
 
 // ─── Google button ────────────────────────────────────────────────────────────
 function GoogleBtn() {
+  const handleGoogleSignIn = useGoogleAuth();
   return (
     <button
-      onClick={GoogleAuth}
+      onClick={handleGoogleSignIn}
       style={{
         width: "100%",
         padding: "11px 16px",
@@ -332,6 +334,7 @@ export default function SignupPage({
   const [agreed, setAgreed]   = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors]   = useState<Errors>({});
+  const { setUser, setIsAuthenticated, setAccessToken } = useGlobalState();
   const navigate = useNavigate();
 
   const update = (key: keyof FormData) => (e: ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -353,11 +356,9 @@ export default function SignupPage({
   };
 
   const handleSignUp = async () => {
-    console.log("Signup button clicked:", form);
 
     const e = validate();
     if (Object.keys(e).length) {
-      console.log("Signup blocked by validation:", e);
       setErrors(e);
       return;
     }
@@ -377,12 +378,11 @@ export default function SignupPage({
         },
         { withCredentials: true }
       );
-
-      console.log("Signup response:", res.data);
-      if (res.data.success) {
-        localStorage.setItem('accessToken', res.data.accessToken);
-        if (onSuccess) onSuccess();
-        navigate(`/verify-email?email=${encodeURIComponent(form.email)}`);
+      if (res.status === 200 && res.data.success) {
+        setAccessToken(res.data.accessToken);
+        setUser(res.data.user);
+        setIsAuthenticated(true);
+        onSuccess?.();
       } else {
         setErrors({ email: res.data.message || "Signup failed. Please try again." });
       }

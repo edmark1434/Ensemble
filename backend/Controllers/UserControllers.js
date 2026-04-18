@@ -6,8 +6,11 @@ const {
     LoginUserOrEmail,
     AccessTokens,
     RefreshTokens,
+    createSessionId,
+    logout,
+    getCredentials
 } = require('../services/UserServices');
-
+const jwt = require('jsonwebtoken');
 async function getAllUsers(req, res) {
     try {
         const users = await fetchAllUsers();
@@ -18,29 +21,38 @@ async function getAllUsers(req, res) {
     }
 }
 
-async function setupCookie(res,result){
+async function setupRefreshTokenCookie(res,result){
         res.cookie(
             'refreshToken',
-            await RefreshTokens({ userId: result.user_id, email: result.user?.email_address }),
+            await RefreshTokens({ email: result.email}),
             {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
-                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+                maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
             }
         );
 }
-
+async function createSessionIdCookie(res,credentials){
+    const sessionId = await createSessionId(credentials);
+    res.cookie('sessionId', sessionId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    });
+}
 async function signup(req, res) {
     try {
         const result = await registerUser(req.body);
         const statusCode = result.user ? 201 : 200;
-        await setupCookie(res, result);
-        const accessToken = await AccessTokens({ userId: result.user_id, email: result.user?.email_address });
+        await Promise.all([
+            setupRefreshTokenCookie(res, result.credentials),
+            createSessionIdCookie(res, result.credentials)
+        ]);
+        const accessToken = await AccessTokens(result.credentials);
         return res.status(statusCode).json({
-            success: true,
+            success: result.success,
             message: result.message || 'User and account created successfully',
-            user: result.user || null,
-            accountId: result.accountId || null,
+            result: result.credentials,
             accessToken,
         });
         
@@ -107,15 +119,23 @@ async function loginCredentials(req, res) {
 
     try {
         const credentials = await LoginUserOrEmail(resolvedIdentifier, password, requestContext);
-        const accessToken = await AccessTokens({ userId: credentials.user_id, email: credentials.email_address });
-        await setupCookie(res, credentials);
+        credentials.email = credentials.email_address; // Ensure email is included in the credentials for token generation
+        delete credentials.email_address; // Remove redundant email_address field
+        delete credentials.password_hash; // Ensure password hash is not included in the access token payload
+        credentials.username = credentials.handle;
+        delete credentials.handle; // Remove handle if it's redundant with username
+        const accessToken = await AccessTokens(credentials);
+        await Promise.all([
+            setupRefreshTokenCookie(res, credentials),
+            createSessionIdCookie(res, credentials)
+        ]);
         res.json({
             success: true,
             message: 'Login successful',
             accessToken,
             credentials:{
-                email: credentials.email_address,
-                username: credentials.handle,
+                email: credentials.email,
+                username: credentials.username,
                 accountId: credentials.account_id,
                 type: credentials.type,
                 role: credentials.role,
@@ -147,8 +167,16 @@ async function refreshToken(req, res) {
             message: 'Refresh token is required',
         });
     }
+    if (!process.env.REFRESH_TOKEN_JWT_SECRET) {
+        return res.status(500).json({
+            success: false,
+            message: 'Refresh token secret is not configured',
+        });
+    }
     try{
-        const accessToken = await AccessTokens({ userId: refreshToken.userId, email: refreshToken.email });
+        const credentials = await getCredentials(refreshToken.email);
+        delete credentials.password_hash; // Ensure password hash is not included in the access token payload
+        const accessToken = await AccessTokens(credentials);
         return res.json({
             success: true,
             accessToken,
@@ -162,11 +190,23 @@ async function refreshToken(req, res) {
     }
 
 }
-
+async function LogoutUsers(req, res) {
+    const sessionId = req.cookies?.sessionId;
+    if (sessionId) {
+        await logout(sessionId);
+        res.clearCookie('sessionId');
+    }
+    res.clearCookie('refreshToken');
+    res.json({
+        success: true,
+        message: 'Logged out successfully',
+    });
+}
 module.exports = {
     getAllUsers,
     signup,
     getUserByEmail,
     loginCredentials,
-    refreshToken
+    refreshToken,
+    LogoutUsers
 };
