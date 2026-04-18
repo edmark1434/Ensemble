@@ -13,6 +13,9 @@ import Home from './pages/user/1_home/Home.tsx'
 import Projects from "./pages/user/2_projects/Projects.tsx"
 import Projects_Selection from "@/pages/user/2_projects/Projects_Selection.tsx";
 
+import Teams from "@/pages/user/3_teams/Teams.tsx";
+import SelectedTeam from "@/pages/user/3_teams/SelectedTeam.tsx";
+
 import Forums from './pages/user/4_forums/Forums.tsx'
 import SectionPlaceholder from './pages/user/0_config/SectionPlaceholder.tsx'
 
@@ -42,10 +45,18 @@ function App() {
         <Route element={<Layout />}>
           <Route path='/home' element={<Home />} />
             <Route path='/credits' element={<CreditShop />} />
+
           <Route path='/projects' element={<Projects />} />
             <Route path='/projects/select' element={<Projects_Selection />} />
+
           <Route path='/forums' element={<Forums />} />
-          <Route path='/teams' element={<SectionPlaceholder title='TEAMS' />} />
+
+          {/* Teams Routes - Nested structure */}
+          <Route path='/teams'>
+            <Route index element={<Teams />} />
+            <Route path=':id' element={<SelectedTeam />} />
+          </Route>
+
           <Route path='/assets' element={<SectionPlaceholder title='ASSET LIBRARY' />} />
           <Route path='/jobs' element={<SectionPlaceholder title='JOB POSTING' />} />
           <Route path='/proposals' element={<SectionPlaceholder title='INCOMING PROPOSALS' />} />
