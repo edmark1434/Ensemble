@@ -2,12 +2,13 @@
 // Ensemble — Sign Up page
 // Usage: <SignupPage onLogin={fn} onSuccess={fn} onBack={fn} />
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import type { ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useGoogleAuth } from "./Oauth";
 import axios from "axios";
 import useGlobalState from "@/lib/global_state";
+
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
   bg:        "#080a12",
@@ -298,6 +299,26 @@ function Checkbox({ checked, onChange, label }: { checked: boolean; onChange: (v
   );
 }
 
+// ─── Type definitions outside component (fixed: moved interfaces outside) ───
+interface FormData {
+  firstName: string;
+  lastName: string;
+  username: string;
+  email: string;
+  password: string;
+  confirm: string;
+}
+
+interface Errors {
+  firstName?: string;
+  lastName?: string;
+  username?: string;
+  email?: string;
+  password?: string;
+  confirm?: string;
+  agreed?: string;
+}
+
 // ─── SignupPage ───────────────────────────────────────────────────────────────
 export default function SignupPage({
   onSuccess,
@@ -306,23 +327,7 @@ export default function SignupPage({
   onSuccess?: () => void;
   onBack?: () => void;
 } = {}) {
-  interface FormData {
-    firstName: string;
-    lastName: string;
-    username: string;
-    email: string;
-    password: string;
-    confirm: string;
-  }
-  interface Errors {
-    firstName?: string;
-    lastName?: string;
-    username?: string;
-    email?: string;
-    password?: string;
-    confirm?: string;
-    agreed?: string;
-  }
+  // State declarations
   const [form, setForm] = useState<FormData>({
     firstName: "",
     lastName: "",
@@ -334,12 +339,23 @@ export default function SignupPage({
   const [agreed, setAgreed]   = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors]   = useState<Errors>({});
-  const { setUser, setIsAuthenticated, setAccessToken } = useGlobalState();
+
+  // FIX: Add error handling for useGlobalState
+  const globalState = useGlobalState();
+
+  // Safely access global state with fallback
+  const setUser = globalState?.setUser;
+  const setIsAuthenticated = globalState?.setIsAuthenticated;
+  const setAccessToken = globalState?.setAccessToken;
+
   const navigate = useNavigate();
 
-  const update = (key: keyof FormData) => (e: ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  // FIX: Wrap update function in useCallback to prevent unnecessary re-renders
+  const update = useCallback((key: keyof FormData) => (e: ChangeEvent<HTMLInputElement>) => {
+    setForm((f) => ({ ...f, [key]: e.target.value }));
+  }, []);
 
-  const validate = () => {
+  const validate = useCallback(() => {
     const e: Errors = {};
     if (!form.firstName.trim()) e.firstName = "First name is required.";
     if (!form.lastName.trim())  e.lastName  = "Last name is required.";
@@ -353,10 +369,9 @@ export default function SignupPage({
     else if (form.confirm !== form.password) e.confirm = "Passwords don't match.";
     if (!agreed)                e.agreed    = "You must accept the terms.";
     return e;
-  };
+  }, [form, agreed]);
 
-  const handleSignUp = async () => {
-
+  const handleSignUp = useCallback(async () => {
     const e = validate();
     if (Object.keys(e).length) {
       setErrors(e);
@@ -378,10 +393,12 @@ export default function SignupPage({
         },
         { withCredentials: true }
       );
+
       if (res.status === 200 && res.data.success) {
-        setAccessToken(res.data.accessToken);
-        setUser(res.data.user);
-        setIsAuthenticated(true);
+        // FIX: Check if setter functions exist before calling
+        if (setAccessToken) setAccessToken(res.data.accessToken);
+        if (setUser) setUser(res.data.user);
+        if (setIsAuthenticated) setIsAuthenticated(true);
         onSuccess?.();
       } else {
         setErrors({ email: res.data.message || "Signup failed. Please try again." });
@@ -390,11 +407,13 @@ export default function SignupPage({
       console.error("Signup request failed:", err);
       if (err.response?.data?.message) {
         setErrors({ email: err.response.data.message });
+      } else {
+        setErrors({ email: "Network error. Please try again." });
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, [form, validate, onSuccess, setAccessToken, setUser, setIsAuthenticated]);
 
   return (
     <>
