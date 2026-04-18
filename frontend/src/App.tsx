@@ -3,7 +3,12 @@ import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/auth/Loginpage'
 import SignupPage from './pages/auth/Signuppage'
 import EmailVerification from './pages/EmailVerification'
+
 import NotFound from "@/pages/user/0_config/NotFound.tsx";
+
+import ResetPasswordPage from "@/pages/auth/ResetPasswordPage.tsx";
+import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage.tsx";
+
 import CreditShop from "@/pages/user/0_config/CreditsShop.tsx";
 
 import Layout from './components/ui/Layout.tsx'
@@ -40,6 +45,8 @@ function App() {
         <Route path='/login' element={<LoginPage />} />
         <Route path='/signup' element={<SignupPage />} />
         <Route path='/verify-email' element={<EmailVerification />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
 
         {/* User Dashboard Routes - All wrapped in Layout */}
         <Route element={<Layout />}>
