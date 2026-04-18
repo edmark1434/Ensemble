@@ -17,7 +17,7 @@ async function createNewAccount(accountData) {
             accountData.avatarFileId = accountData.avatarFileId || null
             accountData.tagline = accountData.tagline || null
             accountData.description = accountData.description || null
-            accountData.type = accountData.type ||'personal'
+            accountData.type = accountData.type || 'User'
             accountData.status = accountData.status || 'active'
             accountData.deletedAt = accountData.deletedAt || null
         const newAccountId = await createAccount(accountData);

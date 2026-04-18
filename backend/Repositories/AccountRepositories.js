@@ -43,7 +43,7 @@ async function createAccount({
                 deleted_at
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING account_id, type, handle, status`,
+            RETURNING account_id, type, handle, status, display_name`,
             [
                 displayName,
                 handle,

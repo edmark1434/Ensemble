@@ -4,10 +4,10 @@
 
 import { useState } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
-import { GoogleAuth } from "./Oauth";
+import { useGoogleAuth } from "./Oauth";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-
+import useGlobalState from "@/lib/global_state";
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
   bg:        "#080a12",
@@ -168,9 +168,10 @@ function PrimaryBtn({ children, onClick, loading = false, fullWidth = false }: {
 
 // ─── Google button ────────────────────────────────────────────────────────────
 function GoogleBtn() {
+  const handleGoogleSignIn = useGoogleAuth();
   return (
     <button
-      onClick={GoogleAuth}
+      onClick={handleGoogleSignIn}
       style={{
         width: "100%",
         padding: "11px 16px",
@@ -237,6 +238,7 @@ export default function LoginPage({
   const [password, setPassword] = useState("");
   const [loading, setLoading]   = useState(false);
   const [errors, setErrors]     = useState<LoginErrors>({});
+  const { setUser, setIsAuthenticated, setAccessToken } = useGlobalState()
   const navigate = useNavigate();
   const validate = () => {
     const e: LoginErrors = {};
@@ -258,6 +260,9 @@ export default function LoginPage({
       );
       if(result.status === 200 && result.data.success){
         localStorage.setItem('accessToken', result.data.accessToken);
+        setAccessToken(result.data.accessToken);
+        setUser(result.data.user);
+        setIsAuthenticated(true);
         onSuccess?.();
       }else{
         setErrors({ password: result.data.message || "Login failed. Please try again." });

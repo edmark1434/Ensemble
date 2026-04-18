@@ -1,5 +1,5 @@
 import axios from "axios";
-
+import useGlobalState from "@/lib/global_state";
 const api = axios.create({
   baseURL: import.meta.env.VITE_BASE_URL,
   withCredentials: true, // Include cookies in requests
@@ -8,7 +8,7 @@ const api = axios.create({
 
 api.interceptors.request.use(
     (config) => {
-        const accessToken = localStorage.getItem('accessToken');
+        const accessToken = useGlobalState.getState().accessToken;
         if(accessToken){
             config.headers['Authorization'] = `Bearer ${accessToken}`;
         }
@@ -31,10 +31,10 @@ api.interceptors.response.use(
                 const refreshResponse = await axios.post(`${import.meta.env.VITE_BASE_URL}/api/users/refresh-token`, {}, { withCredentials: true });
                     if(refreshResponse.status === 200){
                         const newAccessToken = refreshResponse.data.accessToken;
-                        localStorage.setItem('accessToken', newAccessToken);
+                        useGlobalState.getState().setAccessToken(newAccessToken);
                         originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
                         return axios(originalRequest);
-                    } else {    
+                    } else {
                         window.location.href = '/login';
                         return Promise.reject(err);
                     }

@@ -29,7 +29,6 @@ async function createUser({
     lastName = null,
     emailAddress,
     passwordHash,
-    lastSeenAt = null,
     firebaseUserUuid = null,
 }) {
     try {
@@ -40,10 +39,9 @@ async function createUser({
                 last_name,
                 email_address,
                 password_hash,
-                last_seen_at,
                 firebase_user_uuid
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING user_id, first_name, last_name, email_address, firebase_user_uuid`,
             [
                 accountId,
@@ -51,7 +49,6 @@ async function createUser({
                 lastName,
                 emailAddress,
                 passwordHash,
-                lastSeenAt,
                 firebaseUserUuid,
             ]
         );
