@@ -8,6 +8,8 @@ import { useGoogleAuth } from "./Oauth";
 import axios from "axios";
 import useGlobalState from "@/lib/global_state";
 import { Eye, EyeOff, User, Mail, Lock, UserCheck } from "lucide-react";
+import TermsModal from "@/pages/auth/TermsModal";
+import PrivacyModal from "@/pages/auth/PrivacyModal";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
@@ -53,7 +55,7 @@ function AnimatedBg() {
       <div className="absolute top-1/2 right-1/3 w-80 h-80 rounded-full bg-pink-500/12 blur-3xl animate-float-gentle-very-slow" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-blue-500/8 blur-3xl animate-pulse-gentle" />
 
-      {/* Slowly Moving Gradient Border Lines */}
+      {/* Slowly Moving Gradient borderlines */}
       <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-cyan-500/30 via-yellow-500/30 to-purple-500/30 animate-gradient-gentle" />
       <div className="absolute bottom-0 left-0 w-full h-2 bg-gradient-to-r from-purple-500/30 via-yellow-500/30 to-cyan-500/30 animate-gradient-gentle-reverse" />
 
@@ -65,11 +67,11 @@ function AnimatedBg() {
           style={{
               // eslint-disable-next-line react-hooks/purity
             top: `${Math.random() * 100}%`,
-              // eslint-disable-next-line react-hooks/purity
+               // eslint-disable-next-line react-hooks/purity
             left: `${Math.random() * 100}%`,
-              // eslint-disable-next-line react-hooks/purity
+               // eslint-disable-next-line react-hooks/purity
             animationDelay: `${Math.random() * 15}s`,
-              // eslint-disable-next-line react-hooks/purity
+               // eslint-disable-next-line react-hooks/purity
             animationDuration: `${20 + Math.random() * 20}s`,
           }}
         />
@@ -472,6 +474,10 @@ export default function SignupPage({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [pageLoaded, setPageLoaded] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [, setTermsAccepted] = useState(false);
+  const [, setPrivacyAccepted] = useState(false);
 
   const globalState = useGlobalState();
   const setUser = globalState?.setUser;
@@ -759,7 +765,7 @@ export default function SignupPage({
             Create your account
           </h1>
           <p className="fade-in-up delay-400" style={{ color: T.muted, fontSize: 14, marginBottom: 32, fontFamily: T.fontBody }}>
-            Join thousands of filmmakers on Ensemble.
+            Join thousands of video editing enthusiasts on Ensemble.
           </p>
 
           {/* Name row */}
@@ -845,9 +851,25 @@ export default function SignupPage({
               label={
                 <span>
                   I agree to the{" "}
-                  <span style={{ color: T.accent, cursor: "pointer" }}>Terms of Service</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowTermsModal(true)}
+                    style={{ color: T.accent, cursor: "pointer", textDecoration: "underline", background: "none", border: "none", padding: 0 }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "#7aadde")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = T.accent)}
+                  >
+                    Terms of Service
+                  </button>
                   {" "}and{" "}
-                  <span style={{ color: T.accent, cursor: "pointer" }}>Privacy Policy</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowPrivacyModal(true)}
+                    style={{ color: T.accent, cursor: "pointer", textDecoration: "underline", background: "none", border: "none", padding: 0 }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "#7aadde")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = T.accent)}
+                  >
+                    Privacy Policy
+                  </button>
                 </span>
               }
             />
@@ -908,6 +930,19 @@ export default function SignupPage({
         </div>
 
       </div>
+
+      {/* Terms and Privacy Modals */}
+      <TermsModal
+        isOpen={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
+        onAccept={() => setTermsAccepted(true)}
+      />
+
+      <PrivacyModal
+        isOpen={showPrivacyModal}
+        onClose={() => setShowPrivacyModal(false)}
+        onAccept={() => setPrivacyAccepted(true)}
+      />
     </>
   );
 }
