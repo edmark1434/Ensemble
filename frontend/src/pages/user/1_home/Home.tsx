@@ -212,7 +212,7 @@ const Home: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [hoveredAsset, setHoveredAsset] = useState<number | null>(null);
-  const [isFilterVisible, setIsFilterVisible] = useState(true);
+  const [isFilterVisible, setIsFilterVisible] = useState(false);
   const [isActionsSticky, setIsActionsSticky] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedPriceRange, setSelectedPriceRange] = useState("All");

@@ -76,6 +76,7 @@ export default defineConfig([
 ROOT
 -- npm install lucide-react
 -- npm install -D @types/react-router-dom
+-- npm install zustand
 
 cd frontend
 -- npm install 
