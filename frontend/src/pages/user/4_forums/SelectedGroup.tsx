@@ -236,7 +236,7 @@ const ImageGallery = ({ images }: { images?: ImageAttachment[] }) => {
 
 // Reply Input Component with Image Upload
 const ReplyInput = ({
-  postId,
+  // postId,
   replyText,
   updateReplyText,
   handleReply,

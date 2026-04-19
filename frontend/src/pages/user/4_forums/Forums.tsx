@@ -393,7 +393,7 @@ const ImageGallery = ({ images }: { images?: ImageAttachment[] }) => {
 
 // Reply Input Component with Image Upload
 const ReplyInput = ({
-  postId,
+  // postId,
   replyText,
   updateReplyText,
   handleReply,
@@ -732,6 +732,7 @@ const Forums = () => {
   // Initialize selected groups to all joined groups on mount
   useEffect(() => {
     if (joinedGroups.length > 0 && selectedGroupIds.length === 0) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedGroupIds(joinedGroups.map(g => g.id));
     }
   }, [joinedGroups]);
