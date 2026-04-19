@@ -757,7 +757,7 @@ const Forums = () => {
       // Show posts created by current user
       filtered = postsList.filter(post => post.author === CURRENT_USER_NAME);
     } else if (activeTab === "saved") {
-      // TODO: Implement saved posts functionality
+      // haha buhata ni diri : Implement saved posts functionality
       filtered = postsList.slice(0, 2);
     } else {
       filtered = [];
