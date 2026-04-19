@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const { createServer } = require('http');
 const { initSocket } = require('./lib/websocket');
 const apiRoutes = require('./Route/api');
@@ -18,6 +19,7 @@ app.use(cors({
   origin: allowedOrigin,
   credentials: true,
 }));
+app.use(cookieParser());
 app.use(express.json());
 
 //api routes

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const {requireAuth} = require('../middleware/requireAuth');
+const requireAuth = require('../middleware/requireAuth');
 const checkSession = require('../middleware/checkSession');
 const {
     getAllUsers,
@@ -8,10 +8,14 @@ const {
     getUserByEmail,
     loginCredentials,
     refreshToken,
-    LogoutUsers
+    LogoutUsers,
+    getCurrentUser,
+    CheckUserRole
 } = require('../controllers/UserControllers');
 
 router.get('/', [checkSession, requireAuth], getAllUsers);
+
+router.get('/me', [checkSession],getCurrentUser);
 
 router.post('/signup', signup);
 
@@ -23,5 +27,6 @@ router.post('/refresh-token',checkSession, refreshToken);
 
 router.get('/logout', [checkSession, requireAuth], LogoutUsers);
 
+router.get('/check-user-role', [checkSession, requireAuth], CheckUserRole);
 
 module.exports = router;

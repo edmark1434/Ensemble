@@ -482,7 +482,6 @@ export default function SignupPage({
   const globalState = useGlobalState();
   const setUser = globalState?.setUser;
   const setIsAuthenticated = globalState?.setIsAuthenticated;
-  const setAccessToken = globalState?.setAccessToken;
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -534,8 +533,7 @@ export default function SignupPage({
       );
 
       if (res.status === 200 && res.data.success) {
-        if (setAccessToken) setAccessToken(res.data.accessToken);
-        if (setUser) setUser(res.data.user);
+        if (setUser) setUser(res.data.credentials);
         if (setIsAuthenticated) setIsAuthenticated(true);
         if (onSuccess) onSuccess();
         navigate(`/verify-email?email=${encodeURIComponent(form.email)}`);
@@ -552,7 +550,7 @@ export default function SignupPage({
     } finally {
       setLoading(false);
     }
-  }, [form, validate, onSuccess, setAccessToken, setUser, setIsAuthenticated, navigate]);
+  }, [form, validate, onSuccess, setUser, setIsAuthenticated, navigate]);
 
   const handleBack = () => {
     if (onBack) {

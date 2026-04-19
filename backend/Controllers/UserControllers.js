@@ -11,6 +11,15 @@ const {
     getCredentials
 } = require('../services/UserServices');
 const jwt = require('jsonwebtoken');
+
+function setAccessTokenCookie(res, accessToken) {
+    res.cookie('accessToken', accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 1000, // 1 hour
+    });
+}
 async function getAllUsers(req, res) {
     try {
         const users = await fetchAllUsers();
@@ -49,11 +58,11 @@ async function signup(req, res) {
             createSessionIdCookie(res, result.credentials)
         ]);
         const accessToken = await AccessTokens(result.credentials);
+        setAccessTokenCookie(res, accessToken);
         return res.status(statusCode).json({
             success: result.success,
             message: result.message || 'User and account created successfully',
             result: result.credentials,
-            accessToken,
         });
         
     } catch (err) {
@@ -125,6 +134,7 @@ async function loginCredentials(req, res) {
         credentials.username = credentials.handle;
         delete credentials.handle; // Remove handle if it's redundant with username
         const accessToken = await AccessTokens(credentials);
+        setAccessTokenCookie(res, accessToken);
         await Promise.all([
             setupRefreshTokenCookie(res, credentials),
             createSessionIdCookie(res, credentials)
@@ -132,7 +142,6 @@ async function loginCredentials(req, res) {
         res.json({
             success: true,
             message: 'Login successful',
-            accessToken,
             credentials:{
                 email: credentials.email,
                 username: credentials.username,
@@ -160,8 +169,8 @@ async function loginCredentials(req, res) {
 }
 
 async function refreshToken(req, res) {
-    const { refreshToken } = req.cookies;
-    if (!refreshToken) {
+    const refreshTokenValue = req.cookies?.refreshToken;
+    if (!refreshTokenValue) {
         return res.status(401).json({
             success: false,
             message: 'Refresh token is required',
@@ -174,12 +183,35 @@ async function refreshToken(req, res) {
         });
     }
     try{
-        const credentials = await getCredentials(refreshToken.email);
+        const decoded = jwt.verify(refreshTokenValue, process.env.REFRESH_TOKEN_JWT_SECRET);
+        const email = decoded?.email || req.session?.email;
+
+        if (!email) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid refresh token payload',
+            });
+        }
+
+        const credentials = await getCredentials(email);
+        if (!credentials) {
+            return res.status(401).json({
+                success: false,
+                message: 'User not found for refresh token',
+            });
+        }
+
+        credentials.email = credentials.email_address;
+        delete credentials.email_address;
+        credentials.username = credentials.handle;
+        delete credentials.handle;
         delete credentials.password_hash; // Ensure password hash is not included in the access token payload
+
         const accessToken = await AccessTokens(credentials);
+        setAccessTokenCookie(res, accessToken);
         return res.json({
             success: true,
-            accessToken,
+            message: 'Access token refreshed',
         });
     }catch(err){
         console.error('Error refreshing token:', err);
@@ -196,10 +228,32 @@ async function LogoutUsers(req, res) {
         await logout(sessionId);
         res.clearCookie('sessionId');
     }
+    res.clearCookie('accessToken');
     res.clearCookie('refreshToken');
     res.json({
         success: true,
         message: 'Logged out successfully',
+    });
+}
+
+async function getCurrentUser(req,res){
+    res.status(200).json({
+        success: true,
+        user: req.session || null,
+    });
+}
+
+async function CheckUserRole(req,res){
+    const isUser = req.session.type === 'User';
+    if(!isUser){
+        return res.status(403).json({
+            success: false,
+            message: 'Forbidden: User role required',
+        });
+    }
+    res.status(200).json({
+        success: true,
+        credentials: req.session,
     });
 }
 module.exports = {
@@ -208,5 +262,8 @@ module.exports = {
     getUserByEmail,
     loginCredentials,
     refreshToken,
-    LogoutUsers
+    LogoutUsers,
+    getCurrentUser,
+    CheckUserRole
+
 };
