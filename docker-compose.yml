@@ -1,0 +1,7 @@
+services:
+  ensemble:
+    build: .
+    container_name: ensemble-frontend
+    ports:
+      - "8000:80"
+    restart: always
