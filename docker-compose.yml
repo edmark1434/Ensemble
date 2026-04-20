@@ -2,7 +2,7 @@ version: '3.8'
 services:
   ensemble-frontend:
     build:
-      context: ./frontend
+      context: frontend
       dockerfile: Dockerfile
     container_name: ensemble-frontend
     ports:
