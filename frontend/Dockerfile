@@ -9,7 +9,7 @@ RUN npm install
 
 COPY . .
 # This is where it's failing. Adding the CI flag helps see exact errors.
-RUN npm run build
+RUN npm run dev
 
 # Stage 2: Serve with Nginx
 FROM nginx:stable-alpine
