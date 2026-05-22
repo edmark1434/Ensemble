@@ -37,6 +37,8 @@ import ForumModeratorLayout from './pages/moderator/forum-moderator/Layout'
 import MarketplaceModeratorLayout from './pages/moderator/marketplace-moderator/Layout'
 import SupportModeratorLayout from './pages/moderator/support-moderator/Layout'
 import ModeratorSectionPlaceholder from './pages/moderator/SectionPlaceholder'
+import RouteMiddleware from './lib/RouteMiddleware'
+import StaffMiddleware from './lib/StaffMiddleware'
 import './App.css'
 
 function App() {
@@ -45,6 +47,7 @@ function App() {
     <>
       <ToastProvider />
       <Routes>
+      <Route element={<RouteMiddleware />}>
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path='*' element={<NotFound/>} />
@@ -85,6 +88,9 @@ function App() {
           <Route path='/transactions' element={<SectionPlaceholder title='TRANSACTION HISTORY' />} />
           <Route path='/inbox' element={<SectionPlaceholder title='INBOX' />} />
         </Route>
+      </Route>
+
+      <Route element={<StaffMiddleware />}>
 
         {/* Admin Routes */}
         <Route path='/admin' element={<AdminLayout />}>
@@ -124,6 +130,7 @@ function App() {
           <Route path='ticket-management' element={<ModeratorSectionPlaceholder title='TICKET MANAGEMENT' />} />
           <Route path='user-team' element={<ModeratorSectionPlaceholder title='USER & TEAM' />} />
         </Route>
+      </Route>
       </Routes>
     </>
   )

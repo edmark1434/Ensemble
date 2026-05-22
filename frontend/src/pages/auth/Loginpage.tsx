@@ -372,7 +372,7 @@ export default function LoginPage({
   const [loading, setLoading]   = useState(false);
   const [errors, setErrors]     = useState<LoginErrors>({});
   const [pageLoaded, setPageLoaded] = useState(false);
-  const { setUser, setIsAuthenticated, setAccessToken } = useGlobalState()
+  const { setUser, setIsAuthenticated } = useGlobalState()
   const navigate = useNavigate();
 
   // Trigger page load animation
@@ -400,9 +400,7 @@ export default function LoginPage({
         { withCredentials: true }
       );
       if(result.status === 200 && result.data.success){
-        localStorage.setItem('accessToken', result.data.accessToken);
-        setAccessToken(result.data.accessToken);
-        setUser(result.data.user);
+        setUser(result.data.credentials ?? result.data.user);
         setIsAuthenticated(true);
         onSuccess?.();
       }else{

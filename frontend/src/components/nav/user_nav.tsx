@@ -20,15 +20,15 @@ import {
 	MicVocal,
 } from "lucide-react";
 import type { ComponentType } from "react";
-import { NavLink } from "react-router-dom";
-import { useState } from "react";
-
+import { NavLink, useNavigate } from "react-router-dom";
+import { useState,useEffect } from "react";
+import useGlobalState from "@/lib/global_state";
 type NavItem = {
 	label: string;
 	icon: ComponentType<{ className?: string }>;
 	to: string;
 };
-const primaryNav: NavItem[] = [
+let primaryNavInitial: NavItem[] = [
 	{ label: "Home", icon: Home, to: "/home" },
 	{ label: "Projects", icon: FolderKanban, to: "/projects" },
 	{ label: "Teams", icon: Users, to: "/teams" },
@@ -37,21 +37,21 @@ const primaryNav: NavItem[] = [
 ];
 
 // Jobs Section Items
-const jobsItems: NavItem[] = [
+let jobsItemsInitial: NavItem[] = [
 	{ label: "Job Posting", icon: Briefcase, to: "/jobs" },
 	{ label: "Incoming Proposals", icon: ClipboardList, to: "/proposals" },
 	{ label: "My Proposals", icon: Send, to: "/my-proposals" },
 ];
 
 // Gigs Section Items
-const gigsItems: NavItem[] = [
+let gigsItemsInitial: NavItem[] = [
 	{ label: "Gig Posting", icon: Megaphone, to: "/gigs" },
 	{ label: "Incoming Requests", icon: Inbox, to: "/requests" },
 	{ label: "My Requests", icon: Handshake, to: "/my-requests" },
 ];
 
 // Other Marketplace Items
-const otherMarketplaceItems: NavItem[] = [
+let otherMarketplaceItemsInitial: NavItem[] = [
 	{ label: "My Contracts", icon: Shield, to: "/contracts" },
 	{ label: "Transaction History", icon: Wallet, to: "/transactions" },
 	{ label: "Inbox", icon: MessageSquare, to: "/inbox" },
@@ -64,9 +64,40 @@ interface UserNavProps {
 }
 
 const UserNav: React.FC<UserNavProps> = () => {
+	const navigate = useNavigate();
 	const [isCollapsed, setIsCollapsed] = useState(false);
 	const [isJobsOpen, setIsJobsOpen] = useState(true);
 	const [isGigsOpen, setIsGigsOpen] = useState(true);
+	const [primaryNavState, setPrimaryNavState] = useState(primaryNavInitial);
+	const [jobsState, setJobsState] = useState(jobsItemsInitial);
+	const [gigsState, setGigsState] = useState(gigsItemsInitial);
+	const [otherMarketplaceState, setOtherMarketplaceState] = useState(otherMarketplaceItemsInitial);
+	const user = useGlobalState((state) => state.user);
+	const isAuthenticated = useGlobalState((state) => state.isAuthenticated);
+
+	const handleLogoClick = () => {
+		// read current Zustand state at click time to avoid stale values
+		const { user: currentUser, isAuthenticated: auth } = useGlobalState.getState();
+		if (auth && currentUser?.type === "User") {
+			navigate("/home");
+			return;
+		}
+
+		navigate("/");
+	};
+	useEffect(() => {
+		if (!isAuthenticated || user?.type !== "User") {
+			setPrimaryNavState(primaryNavInitial.filter((i) => i.label !== "Teams"));
+			setJobsState(jobsItemsInitial.filter((i) => i.label === "Job Posting"));
+			setGigsState(gigsItemsInitial.filter((i) => i.label === "Gig Posting"));
+			setOtherMarketplaceState([]);
+		} else {
+			setPrimaryNavState(primaryNavInitial);
+			setJobsState(jobsItemsInitial);
+			setGigsState(gigsItemsInitial);
+			setOtherMarketplaceState(otherMarketplaceItemsInitial);
+		}
+	}, [isAuthenticated, user?.type]);
 
 	const linkClassName = ({ isActive }: { isActive: boolean }) =>
 		`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-200 ${
@@ -88,13 +119,17 @@ const UserNav: React.FC<UserNavProps> = () => {
 				}`}
 			>
 				{/* Logo Section */}
-				<div className={`flex items-center border-b border-white/10 px-5 py-5 ${
-					isCollapsed ? "justify-center px-2" : "gap-2.5"
-				}`}>
+				<button
+					type="button"
+					onClick={handleLogoClick}
+					className={`flex items-center border-b border-white/10 px-5 py-5 text-left transition hover:bg-white/5 ${
+						isCollapsed ? "justify-center px-2" : "gap-2.5"
+					}`}
+				>
 					<img
 						src="/ensemble_lg.svg"
 						alt="Ensemble Logo"
-						className="h-9 w-9 flex-shrink-0"
+						className="h-9 w-9 shrink-0"
 					/>
 					{!isCollapsed && (
 						<div className="overflow-hidden whitespace-nowrap px-2">
@@ -103,7 +138,7 @@ const UserNav: React.FC<UserNavProps> = () => {
 							</p>
 						</div>
 					)}
-				</div>
+				</button>
 
 				{/* Navigation - Scrollable */}
 				<nav className="flex-1 overflow-y-auto px-3 py-5 scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20">
@@ -115,10 +150,10 @@ const UserNav: React.FC<UserNavProps> = () => {
 							</p>
 						)}
 						<ul className="space-y-1">
-							{primaryNav.map(({ label, icon: Icon, to }) => (
+							{primaryNavState.map(({ label, icon: Icon, to }) => (
 								<li key={label}>
 									<NavLink to={to} className={linkClassName} title={isCollapsed ? label : undefined}>
-										<Icon className="h-4 w-4 flex-shrink-0" />
+										<Icon className="h-4 w-4 shrink-0" />
 										{!isCollapsed && (
 											<span className="text-sm font-medium" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
 												{label}
@@ -145,7 +180,7 @@ const UserNav: React.FC<UserNavProps> = () => {
 									onClick={() => setIsJobsOpen(!isJobsOpen)}
 									className={sectionHeaderClassName()}
 								>
-									<BriefcaseBusiness className="h-4 w-4 flex-shrink-0" />
+									<BriefcaseBusiness className="h-4 w-4 shrink-0" />
 									<span className="flex-1 text-left text-sm font-medium">Jobs</span>
 									{isJobsOpen ? (
 										<ChevronUp className="h-3.5 w-3.5" />
@@ -155,7 +190,7 @@ const UserNav: React.FC<UserNavProps> = () => {
 								</button>
 								{isJobsOpen && (
 									<ul className="ml-6 mt-1 space-y-1 border-l border-white/10 pl-2">
-										{jobsItems.map(({ label, icon: Icon, to }) => (
+										{jobsState.map(({ label, icon: Icon, to }) => (
 											<li key={label}>
 												<NavLink
 													to={to}
@@ -168,7 +203,7 @@ const UserNav: React.FC<UserNavProps> = () => {
 													}
 													title={label}
 												>
-													<Icon className="h-3.5 w-3.5 flex-shrink-0" />
+													<Icon className="h-3.5 w-3.5 shrink-0" />
 													<span className="text-xs font-medium" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
 														{label}
 													</span>
@@ -182,7 +217,7 @@ const UserNav: React.FC<UserNavProps> = () => {
 							/* Collapsed view - show icons only */
 							<div className="mb-2">
 								<div className="flex flex-col items-center gap-1">
-									{jobsItems.map(({ label, icon: Icon, to }) => (
+									{jobsState.map(({ label, icon: Icon, to }) => (
 										<NavLink
 											key={label}
 											to={to}
@@ -209,7 +244,7 @@ const UserNav: React.FC<UserNavProps> = () => {
 									onClick={() => setIsGigsOpen(!isGigsOpen)}
 									className={sectionHeaderClassName()}
 								>
-									<MicVocal className="h-4 w-4 flex-shrink-0" />
+									<MicVocal className="h-4 w-4 shrink-0" />
 									<span className="flex-1 text-left text-sm font-medium">Gigs</span>
 									{isGigsOpen ? (
 										<ChevronUp className="h-3.5 w-3.5" />
@@ -219,7 +254,7 @@ const UserNav: React.FC<UserNavProps> = () => {
 								</button>
 								{isGigsOpen && (
 									<ul className="ml-6 mt-1 space-y-1 border-l border-white/10 pl-2">
-										{gigsItems.map(({ label, icon: Icon, to }) => (
+										{gigsState.map(({ label, icon: Icon, to }) => (
 											<li key={label}>
 												<NavLink
 													to={to}
@@ -232,7 +267,7 @@ const UserNav: React.FC<UserNavProps> = () => {
 													}
 													title={label}
 												>
-													<Icon className="h-3.5 w-3.5 flex-shrink-0" />
+													<Icon className="h-3.5 w-3.5 shrink-0" />
 													<span className="text-xs font-medium" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
 														{label}
 													</span>
@@ -246,7 +281,7 @@ const UserNav: React.FC<UserNavProps> = () => {
 							/* Collapsed view - show icons only */
 							<div className="mb-2">
 								<div className="flex flex-col items-center gap-1">
-									{gigsItems.map(({ label, icon: Icon, to }) => (
+									{gigsState.map(({ label, icon: Icon, to }) => (
 										<NavLink
 											key={label}
 											to={to}
@@ -269,10 +304,10 @@ const UserNav: React.FC<UserNavProps> = () => {
 						{/* Other Marketplace Items */}
 						{!isCollapsed ? (
 							<ul className="mt-2 space-y-1">
-								{otherMarketplaceItems.map(({ label, icon: Icon, to }) => (
+								{otherMarketplaceState.map(({ label, icon: Icon, to }) => (
 									<li key={label}>
 										<NavLink to={to} className={linkClassName} title={isCollapsed ? label : undefined}>
-											<Icon className="h-4 w-4 flex-shrink-0" />
+											<Icon className="h-4 w-4 shrink-0" />
 											<span className="text-sm font-medium" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
 												{label}
 											</span>
@@ -282,7 +317,7 @@ const UserNav: React.FC<UserNavProps> = () => {
 							</ul>
 						) : (
 							<ul className="mt-2 space-y-1">
-								{otherMarketplaceItems.map(({ label, icon: Icon, to }) => (
+								{otherMarketplaceState.map(({ label, icon: Icon, to }) => (
 									<li key={label}>
 										<NavLink
 											to={to}

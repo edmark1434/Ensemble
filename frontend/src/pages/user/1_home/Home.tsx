@@ -21,7 +21,7 @@ import {
 import UserHeader from "@/components/nav/user_header";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-
+import useGlobalState from "@/lib/global_state";
 interface Asset {
   id: number;
   title: string;
@@ -217,7 +217,7 @@ const Home: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedPriceRange, setSelectedPriceRange] = useState("All");
   const [selectedRating, setSelectedRating] = useState("All");
-
+  console.log("userInfo from global state:", useGlobalState((state) => state.user));
   const assetsSectionRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
 

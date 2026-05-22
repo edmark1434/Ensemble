@@ -48,7 +48,10 @@ async function getStaffByUsername(username){
 }
 async function getStaffEmailAndPasswordHashByEmail(email){
     try{
-        const result = await client.query("SELECT STAFF.staff_id, STAFF.email_address, STAFF.password_hash,ACCOUNTS.account_id, ACCOUNTS.handle, ACCOUNTS.type, STAFF.role FROM staff WHERE email_address = $1", [email]);
+        const result = await client.query(
+            "SELECT STAFF.staff_id, STAFF.email_address, STAFF.password_hash, ACCOUNTS.account_id, ACCOUNTS.handle, ACCOUNTS.type, STAFF.role FROM STAFF JOIN ACCOUNTS ON STAFF.account_id = ACCOUNTS.account_id WHERE STAFF.email_address = $1",
+            [email]
+        );
         return result.rows[0];
     }catch(err){
         console.error('Error fetching staff email and password hash by email:', err);
