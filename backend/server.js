@@ -4,7 +4,7 @@ const cookieParser = require('cookie-parser');
 const { createServer } = require('http');
 const { initSocket } = require('./lib/websocket');
 const apiRoutes = require('./Route/api');
-
+const { connectDB } = require('./lib/mongodb');
 const app = express();
 app.set('trust proxy', 1);
 //websocket server setup
@@ -25,8 +25,10 @@ app.use(express.json());
 //api routes
 app.use('/api', apiRoutes);
 
+//connect to MongoDB before starting the server
+connectDB();
+
 //connect to database and start server
 httpServer.listen(4000, () => {
   console.log('Server is running on port 4000');
 });
-
