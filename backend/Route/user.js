@@ -19,14 +19,14 @@ router.get('/me', [checkSession],getCurrentUser);
 
 router.post('/signup', signup);
 
-router.get('/:email', [checkSession, requireAuth], getUserByEmail);
-
 router.post('/login', loginCredentials);
 
 router.post('/refresh-token',checkSession, refreshToken);
 
-router.get('/logout', [checkSession, requireAuth], LogoutUsers);
+router.get('/logout', [requireAuth], LogoutUsers);
 
 router.get('/check-user-role', [checkSession, requireAuth], CheckUserRole);
+
+router.get('/:email', [checkSession, requireAuth], getUserByEmail);
 
 module.exports = router;

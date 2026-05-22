@@ -223,17 +223,29 @@ async function refreshToken(req, res) {
 
 }
 async function LogoutUsers(req, res) {
-    const sessionId = req.cookies?.sessionId;
-    if (sessionId) {
-        await logout(sessionId);
-        res.clearCookie('sessionId');
+    try {
+        const sessionId = req.cookies?.sessionId;
+
+        if (sessionId) {
+            await logout(sessionId);
+            res.clearCookie('sessionId');
+        }
+
+        // Clear auth cookies with same options used when creating them
+        res.clearCookie('accessToken');
+        res.clearCookie('refreshToken');
+
+        return res.status(200).json({
+            success: true,
+            message: 'Logged out successfully',
+        });
+    } catch (err) {
+        console.error('Error logging out user:', err);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+        });
     }
-    res.clearCookie('accessToken');
-    res.clearCookie('refreshToken');
-    res.json({
-        success: true,
-        message: 'Logged out successfully',
-    });
 }
 
 async function getCurrentUser(req,res){
@@ -252,8 +264,7 @@ async function CheckUserRole(req,res){
         });
     }
     res.status(200).json({
-        success: true,
-        credentials: req.session,
+        success: true
     });
 }
 module.exports = {

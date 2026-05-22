@@ -45,6 +45,7 @@ export default function RouteMiddleware() {
     const location = useLocation();
     const [resolvedUser, setResolvedUser] = useState(user);
     const [isCheckingSession, setIsCheckingSession] = useState(!user);
+    const isPublicRoute = ['/', '/login', '/signup'].includes(location.pathname);
 
     useEffect(() => {
         let cancelled = false;
@@ -65,6 +66,9 @@ export default function RouteMiddleware() {
                 }
             } catch {
                 // No active session: render nested public route.
+                if (!cancelled) {
+                    setResolvedUser(null);
+                }
             } finally {
                 if (!cancelled) {
                     setIsCheckingSession(false);
@@ -88,8 +92,8 @@ export default function RouteMiddleware() {
     }, [isCheckingSession, resolvedUser]);
 
     const shouldAutoRedirect = useMemo(() => {
-        return ['/', '/login', '/signup'].includes(location.pathname);
-    }, [location.pathname]);
+        return isPublicRoute;
+    }, [isPublicRoute]);
 
     useEffect(() => {
         if (!redirectPath || !shouldAutoRedirect) {
@@ -99,7 +103,19 @@ export default function RouteMiddleware() {
         navigate(redirectPath, { replace: true });
     }, [navigate, redirectPath, shouldAutoRedirect]);
 
-    if (isCheckingSession) {
+    useEffect(() => {
+        if (isCheckingSession || resolvedUser || isPublicRoute) {
+            return;
+        }
+
+        navigate('/', { replace: true });
+    }, [isCheckingSession, resolvedUser, isPublicRoute, navigate]);
+
+    if (isCheckingSession && !isPublicRoute) {
+        return null;
+    }
+
+    if (!resolvedUser && !isPublicRoute) {
         return null;
     }
 

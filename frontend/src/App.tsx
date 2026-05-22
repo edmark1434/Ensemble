@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router-dom'
+import {ToastProvider} from "@/components/utility/toast_provider.tsx";
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/auth/Loginpage'
 import SignupPage from './pages/auth/Signuppage'
@@ -22,6 +23,9 @@ import Teams from "@/pages/user/3_teams/Teams.tsx";
 import SelectedTeam from "@/pages/user/3_teams/SelectedTeam.tsx";
 
 import Forums from './pages/user/4_forums/Forums.tsx'
+import SelectedGroup from "@/pages/user/4_forums/SelectedGroup.tsx";
+import ExpandDiscussion from "@/pages/user/4_forums/ExpandDiscussion.tsx";
+
 import SectionPlaceholder from './pages/user/0_config/SectionPlaceholder.tsx'
 
 import AdminLayout from './pages/admin/AdminLayout'
@@ -40,7 +44,9 @@ import './App.css'
 function App() {
 
   return (
-    <Routes>
+    <>
+      <ToastProvider />
+      <Routes>
       <Route element={<RouteMiddleware />}>
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
@@ -59,7 +65,11 @@ function App() {
           <Route path='/projects' element={<Projects />} />
             <Route path='/projects/select' element={<Projects_Selection />} />
 
-          <Route path='/forums' element={<Forums />} />
+          <Route path='/forums'>
+            <Route index element={<Forums />} />
+            <Route path='group/:id' element={<SelectedGroup />} />
+            <Route path='discussion/:postId' element={<ExpandDiscussion />} />
+          </Route>
 
           {/* Teams Routes - Nested structure */}
           <Route path='/teams'>
@@ -121,7 +131,8 @@ function App() {
           <Route path='user-team' element={<ModeratorSectionPlaceholder title='USER & TEAM' />} />
         </Route>
       </Route>
-    </Routes>
+      </Routes>
+    </>
   )
 }
 
