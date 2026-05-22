@@ -1,4 +1,4 @@
-const client = require('./database'); // Assuming you use client from your config
+const pool = require('./database');
 const { faker } = require('@faker-js/faker');
 const bcrypt = require('bcrypt');
 
@@ -14,7 +14,7 @@ function buildShortEmail(prefix) {
 }
 
 async function ensurePasswordHashColumnCapacity() {
-  const result = await client.query(
+  const result = await pool.query(
     `SELECT table_name, data_type, character_maximum_length
      FROM information_schema.columns
      WHERE table_schema = 'public'
@@ -27,7 +27,7 @@ async function ensurePasswordHashColumnCapacity() {
     const isTooShortVarchar = row.data_type === 'character varying' && row.character_maximum_length && row.character_maximum_length < 60;
 
     if (isTooShortVarchar && (tableName === 'users' || tableName === 'staff')) {
-      await client.query(`ALTER TABLE ${tableName} ALTER COLUMN password_hash TYPE TEXT`);
+      await pool.query(`ALTER TABLE ${tableName} ALTER COLUMN password_hash TYPE TEXT`);
       console.log(`ℹ️ Updated ${tableName}.password_hash to TEXT for bcrypt compatibility`);
     }
   }
@@ -51,7 +51,7 @@ async function seed() {
       const staffRole = cap(roleName, 50);
       const staffEmail = buildShortEmail(staffRole);
 
-      const accountRes = await client.query(
+      const accountRes = await pool.query(
         `INSERT INTO ACCOUNTS (display_name, handle, type, merit_score, status, created_at) 
          VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING account_id`,
         [cap(roleName, 50), cap(roleName.toLowerCase().replace(/\s+/g, '_'), 50), 'Staff', 100, 'Active']
@@ -60,7 +60,7 @@ async function seed() {
       const accountId = accountRes.rows[0].account_id;
 
       // Create Staff entry
-      await client.query(
+      await pool.query(
         `INSERT INTO STAFF (firebase_staff_uuid, first_name, last_name, role, email_address, password_hash, account_id) 
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
@@ -83,7 +83,7 @@ async function seed() {
       const userHandle = cap(faker.internet.username().toLowerCase().replace(/[^a-z0-9_]/g, '_'), 50);
       const userEmail = cap(buildShortEmail(`${firstName}${lastName}`), 50);
 
-      const accountRes = await client.query(
+      const accountRes = await pool.query(
         `INSERT INTO ACCOUNTS (display_name, handle, type, merit_score, status, created_at) 
          VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING account_id`,
         [cap(`${firstName} ${lastName}`, 50), userHandle, 'User', 50, 'Active']
@@ -91,7 +91,7 @@ async function seed() {
 
       const accountId = accountRes.rows[0].account_id;
 
-      await client.query(
+      await pool.query(
         `INSERT INTO USERS (firebase_user_uuid, xendit_customer_id, first_name, last_name, email_address, password_hash, account_id) 
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [

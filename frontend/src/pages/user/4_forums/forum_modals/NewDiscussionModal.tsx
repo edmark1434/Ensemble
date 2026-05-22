@@ -139,7 +139,7 @@ const RichTextToolbar = ({ onFormat, onImageUpload }: {
 
       {/* Link Input Popup */}
       {showLinkInput && (
-        <div className="absolute mt-12 rounded-lg border border-white/10 bg-[#0d0f1a] p-3 shadow-xl z-20 min-w-[280px]">
+        <div className="absolute mt-12 rounded-lg border border-white/10 bg-[#0d0f1a] p-3 shadow-xl z-20 min-w-70">
           <p className="mb-2 text-xs text-zinc-400">Insert Link</p>
           <input
             type="text"
@@ -491,8 +491,8 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in-modal">
-      <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0d0f1a] shadow-2xl animate-scale-in">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/80 px-4 py-6 backdrop-blur-sm animate-fade-in-modal sm:items-center sm:py-8">
+      <div className="my-auto w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0d0f1a] shadow-2xl animate-scale-in max-h-[calc(100vh-3rem)] overflow-y-auto">
         <div className="flex items-center justify-between border-b border-white/10 p-4">
           <div className="flex items-center gap-2">
             <PlusCircle className="h-5 w-5 text-blue-400" />
@@ -695,7 +695,7 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
               />
             </>
           ) : (
-            <div className="rounded-lg border border-white/15 bg-white/5 p-4 min-h-[200px] max-h-[300px] overflow-y-auto">
+            <div className="rounded-lg border border-white/15 bg-white/5 p-4 min-h-50 max-h-75 overflow-y-auto">
               <div
                 className="prose prose-invert prose-sm max-w-none"
                 dangerouslySetInnerHTML={{ __html: renderMarkdownPreview() }}
@@ -762,7 +762,7 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
             <button
               onClick={handleSubmit}
               disabled={isCreating || availableGroups.length === 0 || availableTags.length === 0}
-              className="flex-1 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:scale-105 hover:shadow-lg hover:shadow-blue-500/25 disabled:opacity-50 disabled:hover:scale-100"
+              className="flex-1 rounded-full bg-linear-to-r from-blue-500 to-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:scale-105 hover:shadow-lg hover:shadow-blue-500/25 disabled:opacity-50 disabled:hover:scale-100"
             >
               {isCreating ? (
                 <div className="flex items-center justify-center gap-2">

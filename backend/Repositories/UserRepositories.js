@@ -1,9 +1,9 @@
-const client = require('../lib/database');
+const pool = require('../lib/database');
 
 // User repository functions for interacting with the users table in the database
 async function getAllUsers() {
     try {
-        const result = await client.query('SELECT * FROM users');
+        const result = await pool.query('SELECT * FROM users');
         return result.rows;
     } catch (err) {
         console.error('Error fetching users:', err);
@@ -14,7 +14,7 @@ async function getAllUsers() {
 // Fetch a user by their unique user ID
 async function getUserById(userId) {
     try {
-        const result = await client.query('SELECT * FROM users WHERE user_id = $1', [userId]);
+        const result = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
         return result.rows[0];
     } catch (err) {
         console.error(`Error fetching user with id ${userId}:`, err);
@@ -32,7 +32,7 @@ async function createUser({
     firebaseUserUuid = null,
 }) {
     try {
-        const result = await client.query(
+        const result = await pool.query(
             `INSERT INTO users (
                 account_id,
                 first_name,
@@ -61,7 +61,7 @@ async function createUser({
 // Fetch a user by their email address, returning the email and Firebase UUID if found
 async function getUserByEmail(email) {
     try{
-        const result = await client.query('SELECT email_address,firebase_user_uuid FROM users WHERE email_address = $1', [email]);
+        const result = await pool.query('SELECT email_address,firebase_user_uuid FROM users WHERE email_address = $1', [email]);
         return result.rows[0];
     } catch (err) {
         console.error(`Error fetching user with email ${email}:`, err);
@@ -71,7 +71,7 @@ async function getUserByEmail(email) {
 // Fetch a user by their email address, returning the email and password hash if found
 async function getEmailandPasswordHashByEmail(email) {
     try{
-        const result = await client.query(
+        const result = await pool.query(
             `SELECT u.user_id, u.email_address, u.password_hash , a.handle, a.account_id, a.display_name, a.type
              FROM users u
              INNER JOIN accounts a ON a.account_id = u.account_id
@@ -87,7 +87,7 @@ async function getEmailandPasswordHashByEmail(email) {
 // Fetch a user by their username (account handle), returning the email and password hash if found
 async function getEmailandPasswordHashByUsername(username) {
     try{
-        const result = await client.query(
+        const result = await pool.query(
             `SELECT u.user_id, u.email_address, u.password_hash, a.type, a.handle, a.account_id, a.display_name
              FROM users u
              INNER JOIN accounts a ON a.account_id = u.account_id
@@ -103,7 +103,7 @@ async function getEmailandPasswordHashByUsername(username) {
 // Update the Firebase user UUID for a user identified by their email address, returning the updated user ID
 async function updateFirebaseUserUuid(email, firebaseUserUuid) {
     try {
-        const result = await client.query(
+        const result = await pool.query(
             'UPDATE users SET firebase_user_uuid = $1 WHERE email_address = $2 RETURNING user_id',
             [firebaseUserUuid, email]
         );

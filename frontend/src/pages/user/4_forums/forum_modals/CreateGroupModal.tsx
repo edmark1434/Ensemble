@@ -2,22 +2,15 @@
 import { useState } from "react";
 import { X, Users, AlertCircle, Image as ImageIcon, Tag, Plus, Trash2 } from "lucide-react";
 import { showSuccessToast, showErrorToast } from "@/components/utility/toast.ts";
-
+import axios from "@/lib/axios.ts";
 interface CreateGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateGroup: (groupData: {
-    name: string;
-    description: string;
-    tags: string[];
-    coverImage?: File | null;
-  }) => void;
 }
 
 const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
   isOpen,
   onClose,
-  onCreateGroup,
 }) => {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -27,7 +20,6 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; description?: string; tags?: string }>({});
-
   if (!isOpen) return null;
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,7 +61,29 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
       handleAddTag();
     }
   };
+  async function uploadToCloudinary(coverImage:File):Promise<string|null>{
+    try{
+      const form = new FormData();
+      form.append('file', coverImage);
+      form.append('upload_preset', 'Ensemble');
 
+      const resp = await fetch('https://api.cloudinary.com/v1_1/drsansen5/image/upload', {
+        method: 'POST',
+        body: form,
+      });
+
+      const imageObject = await resp.json();
+      if (!resp.ok) {
+        console.error('Cloudinary upload failed:', imageObject);
+        throw new Error(imageObject?.error?.message || 'Cloudinary upload failed');
+      }
+
+      return imageObject.secure_url || null;
+    }catch(err){
+        console.error('Error uploading image to Cloudinary:', err);
+        throw new Error('Failed to upload cover image');
+    }
+}
   const validate = (): boolean => {
     const newErrors: { name?: string; description?: string; tags?: string } = {};
     if (!name.trim()) newErrors.name = "Group name is required";
@@ -86,32 +100,71 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const applyErrorMessageToFields = (message: string) => {
+    const nextErrors: { name?: string; description?: string; tags?: string } = {};
+    const normalizedMessage = message.toLowerCase();
+
+    if (normalizedMessage.includes("name")) {
+      nextErrors.name = message;
+    }
+
+    if (normalizedMessage.includes("description")) {
+      nextErrors.description = message;
+    }
+
+    if (normalizedMessage.includes("tag")) {
+      nextErrors.tags = message;
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors((prev) => ({ ...prev, ...nextErrors }));
+      return true;
+    }
+
+    return false;
+  };
+
+  const resetForm = ()=>{
+    setName("");
+    setDescription("");
+    setTags([]);
+    setCurrentTag("");
+    setCoverImage(null);
+    setCoverPreview(null);
+    onClose();
+  }
+  const handleSubmit = async() => {
     if (!validate()) return;
+    if (isCreating) return; // prevent double submit
 
     setIsCreating(true);
 
-    setTimeout(() => {
-      onCreateGroup({
-        name: name.trim(),
+    try {
+      const imageUrl = coverImage ? await uploadToCloudinary(coverImage) : null;
+
+      const response = await axios.post("/api/forum/create-group", {
+        groupName: name.trim(),
         description: description.trim(),
-        tags: tags,
-        coverImage,
+        tags,
+        imageUrl,
       });
 
-      // Show success toast
-      showSuccessToast(`Group "${name.trim()}" created successfully!`);
+      if (response.status === 201) {
+        showSuccessToast(response.data?.message || "Group created successfully");
+        resetForm();
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error
+        ? error.message
+        : "An unexpected error occurred while creating the group";
 
-      // Reset form after submission
-      setName("");
-      setDescription("");
-      setTags([]);
-      setCurrentTag("");
-      setCoverImage(null);
-      setCoverPreview(null);
+      const mappedToField = applyErrorMessageToFields(message);
+      if (!mappedToField) {
+        showErrorToast(message);
+      }
+    } finally {
       setIsCreating(false);
-      onClose();
-    }, 500);
+    }
   };
 
   const handleClose = () => {
@@ -131,8 +184,8 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in-modal">
-      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0d0f1a] p-6 shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/80 px-4 py-6 backdrop-blur-sm animate-fade-in-modal sm:items-center sm:py-8">
+      <div className="my-auto w-full max-w-lg rounded-2xl border border-white/10 bg-[#0d0f1a] p-6 shadow-2xl animate-scale-in max-h-[calc(100vh-3rem)] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Users className="h-5 w-5 text-blue-400" />
@@ -315,7 +368,7 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
           <button
             onClick={handleSubmit}
             disabled={isCreating}
-            className="flex-1 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:scale-105 hover:shadow-lg hover:shadow-blue-500/25 disabled:opacity-50 disabled:hover:scale-100"
+            className="flex-1 rounded-full bg-linear-to-r from-blue-500 to-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:scale-105 hover:shadow-lg hover:shadow-blue-500/25 disabled:opacity-50 disabled:hover:scale-100"
           >
             {isCreating ? (
               <div className="flex items-center justify-center gap-2">
