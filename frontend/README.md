@@ -81,3 +81,14 @@ ROOT
 cd frontend
 -- npm install 
 -- npm run dev
+
+cd backend
+-- npm install
+-- npm start
+
+if new clone
+please run 
+-- npm run seed  ##this will insert initial user
+-- npm run clean ##this will remove all the seed
+
+## please open the backend/lib/seed.js to see the credentials of seed users
