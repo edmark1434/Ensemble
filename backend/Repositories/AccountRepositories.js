@@ -1,8 +1,8 @@
-const client = require('../lib/database');
+const pool = require('../lib/database');
 
 async function getAllAccounts() {
     try {
-        const result = await client.query('SELECT * FROM accounts');
+        const result = await pool.query('SELECT * FROM accounts');
         return result.rows;
     } catch (err) {
         console.error('Error fetching accounts:', err);
@@ -12,7 +12,7 @@ async function getAllAccounts() {
 
 async function getAccountById(accountId) {
     try {
-        const result = await client.query('SELECT * FROM accounts WHERE account_id = $1', [accountId]);
+        const result = await pool.query('SELECT * FROM accounts WHERE account_id = $1', [accountId]);
         return result.rows[0];
     } catch (err) {
         console.error(`Error fetching account with id ${accountId}:`, err);
@@ -31,7 +31,7 @@ async function createAccount({
     deletedAt = null,
 } = {}) {
     try {
-        const result = await client.query(
+        const result = await pool.query(
             `INSERT INTO accounts (
                 display_name,
                 handle,
@@ -43,7 +43,7 @@ async function createAccount({
                 deleted_at
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING account_id, type, handle, status`,
+            RETURNING account_id, type, handle, status, display_name`,
             [
                 displayName,
                 handle,
@@ -64,7 +64,7 @@ async function createAccount({
 
 async function getAccountByHandle(handle) {
     try{
-        const result = await client.query('SELECT handle FROM accounts WHERE handle = $1', [handle]);
+        const result = await pool.query('SELECT handle FROM accounts WHERE handle = $1', [handle]);
         return result.rows[0];
     } catch (err) {
         console.error(`Error fetching account with handle ${handle}:`, err);

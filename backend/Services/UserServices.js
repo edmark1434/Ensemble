@@ -1,5 +1,6 @@
 //library for password hashing
 const bcrypt = require('bcrypt');
+const { v4: uuidv4 } = require('uuid');
 //import all the necessary repository functions for user and account management
 const {
     getAllUsers,
@@ -66,7 +67,7 @@ function normalizeSignupInput(payload = {}) {
         username: payload.username?.trim() || null,
         emailAddress: (payload.emailAddress ?? payload.email)?.trim()?.toLowerCase() || null,
         password: (payload.passwordHash ?? payload.password)?.trim() || null,
-        type: payload.type || 'personal',
+        type: payload.type || 'User',
         signUpWithOAuth: payload.signUpWithOAuth || false,
         firebaseUserUuid: payload.firebase_user_uuid || null,
     };
@@ -138,14 +139,24 @@ async function registerUser(signupPayload = {}) {
     //if user exists and not signing up with OAuth, throw error. If user exists and signing up with OAuth, update firebase uuid if not already set and return success message. If user does not exist, proceed to create account and user.
     if (existingUser && !signUpWithOAuth) {
         throw new ServiceError('Email already in use', 409);
-    //if user exists and signing up with OAuth, update firebase uuid if not already set and return success message
+    //if user exists and signing up with OAuth, update firebase uuid if not already set and return the user
     }else if(existingUser && signUpWithOAuth){
         if (!existingUser.firebase_user_uuid) {
             await updateFirebaseUserUuid(existingUser.email_address, firebaseUserUuid);
         }
+        // Fetch full user credentials for OAuth existing user
+        const userCredentials = await getEmailandPasswordHashByEmail(emailAddress.toLowerCase());
         return {
             success: true,
             message: 'User already exists with this email',
+            credentials: {
+                userId: userCredentials.user_id,
+                email: userCredentials.email_address,
+                username: userCredentials.handle,
+                accountId: userCredentials.account_id,
+                displayName: userCredentials.display_name,
+                type: userCredentials.type
+            }
         };
     }
     //create account and user in the database, hash the password if provided, and return the created user and account information
@@ -169,9 +180,16 @@ async function registerUser(signupPayload = {}) {
     });
     //return the created user and account information
     return {
-        user,
-        account,
-        user_id : user.user_id,
+        credentials:{
+            userId: user.user_id,
+            email: user.email_address,
+            username: account.handle,
+            accountId: account.account_id,
+            displayName: account.display_name,
+            type: account.type
+        },
+        success: true,
+        message: 'User and account created successfully',
     };
 }
 
@@ -192,18 +210,7 @@ async function LoginUserOrEmail(loginIdentifier, password, context = {}) {
     const lockoutMetaKey = `lockout_meta:${lockoutIdentifier}`;
 
     // Get credentials if the login identifier is an email, fetch by email, otherwise fetch by username. This allows users to log in using either their email address or their account handle (username). The repository functions will return the email and password hash for the provided identifier, which will be used for credential verification. If no credentials are found, it will be handled in the subsequent logic to throw an invalid credentials error.
-    let credentials = null;
-    if (isValidEmail(loginIdentifierTrimmed)) {
-        credentials = await getEmailandPasswordHashByEmail(loginIdentifierTrimmed.toLowerCase());
-        if(!credentials){
-            credentials = await getStaffEmailAndPasswordHashByEmail(loginIdentifierTrimmed.toLowerCase());
-        }
-    } else {
-        credentials = await getEmailandPasswordHashByUsername(loginIdentifierTrimmed);
-        if(!credentials){
-            credentials = await getStaffEmailAndPasswordHashByUsername(loginIdentifierTrimmed);
-        }
-    }
+    const credentials = await getCredentials(lockoutIdentifier);
 
     // Check lockout
     const ttl = await redisClient.pTTL(lockoutKey);
@@ -299,13 +306,42 @@ async function LoginUserOrEmail(loginIdentifier, password, context = {}) {
 }
 //function to generate a JSON Web Token (JWT) for authenticated users, signing the provided payload with a secret key and setting an expiration time for the token. This token can then be used for authenticating subsequent requests to protected routes in the application.
 async function AccessTokens(payload){
-    return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
+    return jwt.sign(payload, process.env.ACCESS_TOKEN_JWT_SECRET, { expiresIn: '1h' });
 }
 //function to generate a refresh token, which is a longer-lived token used to obtain new access tokens without requiring the user to re-authenticate. This function signs the provided payload with a secret key and sets a longer expiration time for the refresh token compared to the access token.
 async function RefreshTokens(payload){
-    return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
+    return jwt.sign(payload, process.env.REFRESH_TOKEN_JWT_SECRET, { expiresIn: '30d' });
+}
+async function createSessionId(credentials){
+    const sessionId = uuidv4();
+    await redisClient.set(
+        `session:${sessionId}`,
+        JSON.stringify(credentials),
+        { EX: 60 * 60 * 24 * 30 }
+    ); // Store as JSON string because Redis string values cannot be raw objects
+    return sessionId;
 }
 
+async function logout(sessionId){
+    await redisClient.del(`session:${sessionId}`);
+}
+
+async function getCredentials(loginIdentifier){
+    const normalizedIdentifier = loginIdentifier?.trim();
+    let credentials = null;
+    if (isValidEmail(normalizedIdentifier)) {
+        credentials = await getEmailandPasswordHashByEmail(normalizedIdentifier.toLowerCase());
+        if(!credentials){
+            credentials = await getStaffEmailAndPasswordHashByEmail(normalizedIdentifier.toLowerCase());
+        }
+    } else {
+        credentials = await getEmailandPasswordHashByUsername(normalizedIdentifier);
+        if(!credentials){
+            credentials = await getStaffEmailAndPasswordHashByUsername(normalizedIdentifier);
+        }
+    }
+    return credentials;
+}
 module.exports = {
     ServiceError,
     fetchAllUsers,
@@ -314,4 +350,7 @@ module.exports = {
     LoginUserOrEmail,
     AccessTokens,
     RefreshTokens,
+    createSessionId,
+    logout,
+    getCredentials
 };

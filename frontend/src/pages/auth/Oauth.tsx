@@ -1,43 +1,45 @@
-import { signInWithPopup, GoogleAuthProvider, getAdditionalUserInfo } from "firebase/auth";
-import {auth} from "../firebase";
+import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import { auth } from "../firebase";
 import axios from "axios";
+import useGlobalState from "@/lib/global_state";
 
-export const GoogleAuth = async () => {
-  const provider = new GoogleAuthProvider();
+// Custom hook for Google OAuth signup
+export const useGoogleAuth = () => {
+  const { setUser, setIsAuthenticated } = useGlobalState();
 
-  try {
-    const result = await signInWithPopup(auth, provider);
-    const user = result.user;
-    const additionalInfo = getAdditionalUserInfo(result);
+  const handleGoogleSignIn = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
 
-    console.log("Firebase User:", user);
-    console.log("Is New User:", additionalInfo?.isNewUser);
+      const payload = {
+        email: user.email,
+        firebase_user_uuid: user.uid,
+        firstName: user.displayName?.split(' ')[0] || 'User',
+        lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
+        signUpWithOAuth: true,
+      };
 
-    const payload = {
-      email: user.email,
-      firebase_user_uuid: user.uid,
-      firstName: user.displayName?.split(' ')[0] || 'User',
-      lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
-      signUpWithOAuth: true,
-    };
+      const response = await axios.post(
+        `${import.meta.env.VITE_BASE_URL}/api/users/signup`,
+        payload,
+        { withCredentials: true }
+      );
 
-    const response = await axios.post(
-      `${import.meta.env.VITE_BASE_URL}/api/users/signup`,
-      payload,
-      { withCredentials: true }
-    );
-
-    if (response.data.success) {
-      console.log('OAuth signup/login successful:', response.data);
-      localStorage.setItem('accessToken', response.data.accessToken);
-      window.location.href = '/dashboard';
-    } else {
-      console.error('OAuth signup failed:', response.data.message);
+      if (response.data.success) {
+        setUser(response.data.credentials);
+        setIsAuthenticated(true);
+      } else {
+        console.error('OAuth signup failed:', response.data.message);
+      }
+    } catch (error) {
+      console.error('OAuth error:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('Backend error:', error.response?.data?.message);
+      }
     }
-  } catch (error) {
-    console.error('OAuth error:', error);
-    if (axios.isAxiosError(error)) {
-      console.error('Backend error:', error.response?.data?.message);
-    }
-  }
+  };
+
+  return handleGoogleSignIn;
 };

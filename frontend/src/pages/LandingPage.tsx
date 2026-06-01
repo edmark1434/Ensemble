@@ -1,17 +1,9 @@
-// LandingPage.tsx
-// Ensemble — Film production platform landing page
-// Stack: React 18 + TypeScript, no external dependencies (Google Fonts via <link> in index.html)
-//
-// To use:
-//   1. Add to index.html <head>:
-//      <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-//   2. Import and render: <LandingPage />
-
 import { useState, useEffect, useRef } from "react";
 import type { CSSProperties, FC } from "react";
 import { useNavigate } from "react-router-dom";
+import ScrollToTop from "@/components/utility/scroll_to_top.tsx";
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
+// ─── Design tokens (Plus Jakarta Sans) ────────────────────────────────────────
 const T = {
   bg:          "#080a12",
   bgCard:      "#0d0f1a",
@@ -22,11 +14,14 @@ const T = {
   text:        "#ffffff",
   muted:       "#7a8499",
   dim:         "#999",
-  fontDisplay: "'Syne', sans-serif",
-  fontBody:    "'DM Sans', sans-serif",
+  fontDisplay: "'Plus Jakarta Sans', sans-serif",
+  fontBody:    "'Plus Jakarta Sans', sans-serif",
+  gold: "#eab308",
+  teal: "#2dd4bf",
+  cardBg: "rgba(13, 15, 26, 0.6)",
 } as const;
 
-// ─── Inline global styles (injected once) ────────────────────────────────────
+// ─── Inline global styles ─────────────────────────────────────────────────────
 const GLOBAL_CSS = `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
@@ -46,6 +41,34 @@ const GLOBAL_CSS = `
     0%, 100% { opacity: .18; }
     50%       { opacity: .32; }
   }
+  
+/* Sidebar Dot Navigation */
+.feature-nav {
+  position: fixed;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 1000;
+  transition: opacity 0.5s ease;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+.dot.active {
+  background: #3b82f6;
+  transform: scale(1.8);
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
+}
 `;
 
 function useGlobalStyle(css: string): void {
@@ -63,23 +86,17 @@ interface LogoProps {
 }
 
 const Logo: FC<LogoProps> = ({ size = 22 }) => {
-  const spokes: number[] = [0, 60, 120, 180, 240, 300];
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
-      <svg width={size + 6} height={size + 6} viewBox="0 0 36 36" fill="none">
-        <circle cx="18" cy="18" r="15.5" stroke="#fff" strokeWidth="1.8" />
-        <circle cx="18" cy="18" r="8.5"  stroke="#fff" strokeWidth="1.4" />
-        <circle cx="18" cy="18" r="2.8"  fill="#fff" />
-        {spokes.map((deg, i) => (
-          <line
-            key={i}
-            x1="18" y1="18"
-            x2={18 + 14 * Math.cos((deg * Math.PI) / 180)}
-            y2={18 + 14 * Math.sin((deg * Math.PI) / 180)}
-            stroke="#fff" strokeWidth=".9" opacity=".55"
-          />
-        ))}
-      </svg>
+      <img
+        src="/ensemble_lg.svg"
+        alt="Ensemble Logo"
+        style={{
+          width: size + 6,
+          height: size + 6,
+          display: "block"
+        }}
+      />
       <span style={{
         fontSize: size,
         fontWeight: 700,
@@ -92,15 +109,31 @@ const Logo: FC<LogoProps> = ({ size = 22 }) => {
   );
 };
 
-// ─── Dropdown ─────────────────────────────────────────────────────────────────
+// ─── Feature Data with IDs ─────────────────────────────────────────────────────────────
+const FEATURES_LEFT = [
+  { id: "01", title: "Seamless Collaboration", desc: "Collaborate without friction through real-time team editing. No more wasting time on rendering or sending over large files.", img: "/features/m1.png", sectionId: "seamless_collab" },
+  { id: "02", title: "A.I. Caption Navigation", desc: "Type any word or phrase and our AI will pinpoint the clip. Instantly navigate to exactly where it was spoken in your video.", img: "/features/m2.png", sectionId: "caption_nav" },
+  { id: "03", title: "Auto Dead-Air Clean Up", desc: "Remove silence with a single click to streamline your edit. Keep your viewers engaged and get your content ready for export.", img: "/features/m3.png", sectionId: "dead_air" },
+];
+
+const FEATURES_RIGHT = [
+  { id: "04", title: "Creative Marketplace", desc: "Buy or sell premium audio, templates, and assets to fuel any production. Browse our job board to hire top talent or apply for your next gig.", img: "/features/m4.png", sectionId: "creative_market" },
+  { id: "05", title: "Integrated Chat & Video Call", desc: "Conduct interviews or team meetings with high-quality video. Streamline your hiring and feedback without leaving the app.", img: "/features/m5.png", sectionId: "integrated_chatvc" },
+  { id: "06", title: "Project Progress Tracking", desc: "Monitor every milestone with an intuitive, live visual dashboard. Track task completion and ensure your content is ready for final delivery.", img: "/features/m6.png", sectionId: "progress_tracking" },
+];
+
+const ALL_FEATURES = [...FEATURES_LEFT, ...FEATURES_RIGHT];
+
 interface DropdownProps {
   label: string;
   items: string[];
   isOpen: boolean;
   onToggle: (val: boolean) => void;
+  onItemClick?: (index: number) => void;
+  scrollTargets?: string[];
 }
 
-const Dropdown: FC<DropdownProps> = ({ label, items, isOpen, onToggle }) => {
+const Dropdown: FC<DropdownProps> = ({ label, items, isOpen, onToggle, onItemClick, scrollTargets }) => {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -110,6 +143,19 @@ const Dropdown: FC<DropdownProps> = ({ label, items, isOpen, onToggle }) => {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [onToggle]);
+
+  const handleItemClick = (index: number) => {
+    if (scrollTargets && scrollTargets[index]) {
+      const targetId = scrollTargets[index];
+      const element = document.getElementById(targetId);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    } else if (onItemClick) {
+      onItemClick(index);
+    }
+    onToggle(false);
+  };
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -131,12 +177,8 @@ const Dropdown: FC<DropdownProps> = ({ label, items, isOpen, onToggle }) => {
         }}
       >
         {label}
-        <svg
-          width="10" height="10" viewBox="0 0 12 12"
-          style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform .18s" }}
-        >
-          <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.6"
-            fill="none" strokeLinecap="round" />
+        <svg width="10" height="10" viewBox="0 0 12 12" style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform .18s" }}>
+          <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" />
         </svg>
       </button>
 
@@ -149,7 +191,7 @@ const Dropdown: FC<DropdownProps> = ({ label, items, isOpen, onToggle }) => {
           border: "1px solid #252a3a",
           borderRadius: 10,
           padding: "6px 0",
-          minWidth: 195,
+          minWidth: 220,
           boxShadow: "0 18px 44px rgba(0,0,0,.72)",
           zIndex: 200,
           animation: "ens-ddIn .13s ease",
@@ -157,18 +199,19 @@ const Dropdown: FC<DropdownProps> = ({ label, items, isOpen, onToggle }) => {
           {items.map((item, i) => (
             <button
               key={i}
+              onClick={() => handleItemClick(i)}
               style={{
                 display: "block",
                 width: "100%",
                 textAlign: "left",
                 background: "none",
                 border: "none",
-                padding: "9px 16px",
+                padding: "10px 16px",
                 color: "#bbb",
                 fontSize: 13,
                 cursor: "pointer",
                 fontFamily: T.fontBody,
-                transition: "background .12s, color .12s",
+                transition: "all .12s",
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = "#1a2436";
@@ -189,8 +232,10 @@ const Dropdown: FC<DropdownProps> = ({ label, items, isOpen, onToggle }) => {
 };
 
 // ─── Navbar ───────────────────────────────────────────────────────────────────
-const NAV_FEATURES: string[]  = ["Parallel Workflow", "Real-time Collaboration", "Story Structuring", "Frame Management", "Version History"];
-const NAV_USECASES: string[]  = ["Film Production", "Documentary", "Short Films", "TV Series", "Student Projects"];
+const NAV_USECASES: string[] = ["Casual User", "Freelancer", "Client", "Asset Creator"];
+
+// Map use cases to their scroll targets
+const USECASE_SCROLL_TARGETS: string[] = ["pricing", "pricing", "pricing", "pricing"];
 
 interface NavbarProps {
   onLogin: () => void;
@@ -209,6 +254,16 @@ const Navbar: FC<NavbarProps> = ({ onLogin, onSignup }) => {
 
   const toggle = (name: string) => (val: boolean) => setOpenDD(val ? name : null);
 
+  const scrollToId = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  // Create scroll targets for features using their section IDs
+  const featureScrollTargets = ALL_FEATURES.map(f => f.sectionId);
+
   return (
     <nav style={{
       position: "fixed",
@@ -223,46 +278,50 @@ const Navbar: FC<NavbarProps> = ({ onLogin, onSignup }) => {
       borderBottom: `1px solid ${scrolled ? "rgba(255,255,255,.09)" : "rgba(255,255,255,.05)"}`,
       transition: "background .3s, border-color .3s",
     }}>
-      {/* Logo */}
-      <Logo />
+      <div onClick={() => scrollToId("hero")} style={{ cursor: "pointer" }}>
+        <Logo />
+      </div>
 
-      {/* Centre links */}
       <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+        {/* Features: Clicks scroll to specific feature sections */}
         <Dropdown
           label="Features"
-          items={NAV_FEATURES}
+          items={ALL_FEATURES.map(f => f.title)}
           isOpen={openDD === "features"}
           onToggle={toggle("features")}
+          scrollTargets={featureScrollTargets}
         />
+
+        {/* Use Cases - Scrolls to pricing section */}
         <Dropdown
           label="Use Cases"
           items={NAV_USECASES}
           isOpen={openDD === "usecases"}
           onToggle={toggle("usecases")}
+          scrollTargets={USECASE_SCROLL_TARGETS}
         />
-        {["Pricing", "Learn", "About"].map((lbl) => (
-          <button
-            key={lbl}
-            style={{
-              background: "none",
-              border: "none",
-              color: T.dim,
-              fontSize: 13,
-              cursor: "pointer",
-              padding: "5px 9px",
-              borderRadius: 6,
-              fontFamily: T.fontBody,
-              transition: "color .15s",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#fff")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = T.dim)}
-          >
-            {lbl}
-          </button>
-        ))}
+
+        {/* Pricing: Scrolls to the pricing section */}
+        <button
+          onClick={() => scrollToId("pricing")}
+          style={{
+            background: "none",
+            border: "none",
+            color: T.dim,
+            fontSize: 13,
+            cursor: "pointer",
+            padding: "5px 9px",
+            borderRadius: 6,
+            fontFamily: T.fontBody,
+            transition: "color .15s",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "#fff")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = T.dim)}
+        >
+          Pricing
+        </button>
       </div>
 
-      {/* Auth */}
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         <button
           onClick={onLogin}
@@ -312,399 +371,525 @@ const Navbar: FC<NavbarProps> = ({ onLogin, onSignup }) => {
   );
 };
 
-// ─── Hero ─────────────────────────────────────────────────────────────────────
+// ─── HeroProps interface ────────────────────────────────────────────────────────
 interface HeroProps {
   onStart: () => void;
+  editorCount?: string;
+  avatars?: string[];
 }
 
-const Hero: FC<HeroProps> = ({ onStart }) => {
+// ─── Hero Component with Multi-Color Blurs ────────────────────────────
+const Hero: FC<HeroProps> = ({
+  onStart,
+  editorCount = "300+",
+  avatars = [
+    "https://i.pravatar.cc/100?u=1",
+    "https://i.pravatar.cc/100?u=2",
+    "https://i.pravatar.cc/100?u=3"
+  ]
+}) => {
   const [mounted, setMounted] = useState<boolean>(false);
-  useEffect(() => { const t = setTimeout(() => setMounted(true), 60); return () => clearTimeout(t); }, []);
+  useEffect(() => { setMounted(true); }, []);
 
   const anim = (delay = 0): CSSProperties => ({
     opacity: mounted ? 1 : 0,
-    transform: mounted ? "translateY(0)" : "translateY(28px)",
-    transition: `opacity .85s ${delay}s cubic-bezier(.16,1,.3,1), transform .85s ${delay}s cubic-bezier(.16,1,.3,1)`,
+    transform: mounted ? "translateY(0)" : "translateY(24px)",
+    transition: `all .9s ${delay}s cubic-bezier(.16,1,.3,1)`,
   });
 
   return (
-    <section style={{
-      minHeight: "100vh",
+    <section id="hero" style={{
+      height: "100vh",
+      minHeight: "700px",
       display: "flex",
-      flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
-      textAlign: "center",
-      padding: "120px 40px 70px",
+      padding: "0 60px",
       position: "relative",
       overflow: "hidden",
+      background: T.bg,
     }}>
-      {/* Ambient glow */}
+
+      {/* ─── Abstract Color Blurs ─── */}
       <div style={{
         position: "absolute",
-        top: "32%", left: "50%",
-        transform: "translate(-50%,-50%)",
-        width: 680, height: 440,
-        background: `radial-gradient(ellipse, rgba(74,111,165,.22) 0%, transparent 68%)`,
-        pointerEvents: "none",
-        animation: "ens-pulse 5s ease-in-out infinite",
+        width: "600px",
+        height: "600px",
+        background: "rgba(34, 211, 238, 0.07)",
+        filter: "blur(120px)",
+        borderRadius: "50%",
+        top: "10%",
+        left: "-5%",
+        zIndex: 1,
+        pointerEvents: "none"
       }} />
 
-      {/* Subtle grid */}
       <div style={{
         position: "absolute",
-        inset: 0,
-        backgroundImage: `
-          linear-gradient(rgba(74,111,165,.04) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(74,111,165,.04) 1px, transparent 1px)
-        `,
-        backgroundSize: "60px 60px",
-        pointerEvents: "none",
+        width: "700px",
+        height: "700px",
+        background: "rgba(168, 85, 247, 0.08)",
+        filter: "blur(140px)",
+        borderRadius: "50%",
+        bottom: "5%",
+        right: "-10%",
+        zIndex: 1,
+        pointerEvents: "none"
       }} />
 
-      {/* Badge */}
       <div style={{
-        ...anim(0),
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 7,
-        background: "rgba(74,111,165,.12)",
-        border: "1px solid rgba(74,111,165,.3)",
-        borderRadius: 20,
-        padding: "5px 14px",
-        fontSize: 12,
-        color: "#7aadde",
-        marginBottom: 28,
-        fontWeight: 600,
-        letterSpacing: .4,
-      }}>
-        <span style={{
-          width: 6, height: 6, borderRadius: "50%",
-          background: "#4a6fa5",
-          display: "inline-block",
-          boxShadow: "0 0 6px #4a6fa5",
-        }} />
-        Now in open beta — join 2,400+ filmmakers
-      </div>
-
-      {/* Headline */}
-      <h1 style={{
-        ...anim(.08),
-        fontSize: "clamp(44px, 7vw, 88px)",
-        fontFamily: T.fontDisplay,
-        fontWeight: 800,
-        lineHeight: 1.06,
-        letterSpacing: -2,
-        maxWidth: 820,
-      }}>
-        Build the{" "}
-        <span style={{ color: T.accent }}>blueprint.</span>
-        <br />
-        Then fill the{" "}
-        <span style={{ color: T.accent }}>frames.</span>
-      </h1>
-
-      {/* Sub */}
-      <p style={{
-        ...anim(.18),
-        marginTop: 22,
-        color: T.muted,
-        fontSize: 16,
-        maxWidth: 460,
-        lineHeight: 1.74,
-      }}>
-        Move from a linear "waiting game" to a Parallel Workflow. Structure
-        your story in real-time while the cameras are still rolling.
-      </p>
-
-      {/* CTA buttons */}
-      <div style={{
-        ...anim(.28),
-        display: "flex",
-        gap: 12,
-        marginTop: 38,
-        flexWrap: "wrap",
-        justifyContent: "center",
-      }}>
-        <button
-          onClick={onStart}
-          style={{
-            background: "#fff",
-            color: "#080a12",
-            border: "none",
-            padding: "13px 30px",
-            borderRadius: 28,
-            fontWeight: 700,
-            fontSize: 15,
-            cursor: "pointer",
-            fontFamily: T.fontBody,
-            transition: "background .15s, transform .12s, box-shadow .15s",
-            boxShadow: "0 0 0 0 rgba(255,255,255,0)",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#e8edf5";
-            e.currentTarget.style.transform = "translateY(-2px)";
-            e.currentTarget.style.boxShadow = "0 8px 24px rgba(255,255,255,.12)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "#fff";
-            e.currentTarget.style.transform = "translateY(0)";
-            e.currentTarget.style.boxShadow = "0 0 0 0 rgba(255,255,255,0)";
-          }}
-        >
-          Start Project
-        </button>
-        <button
-          style={{
-            background: "transparent",
-            color: "#fff",
-            border: "1.5px solid rgba(255,255,255,.2)",
-            padding: "13px 30px",
-            borderRadius: 28,
-            fontWeight: 600,
-            fontSize: 15,
-            cursor: "pointer",
-            fontFamily: T.fontBody,
-            transition: "border-color .15s, transform .12s",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = "rgba(255,255,255,.55)";
-            e.currentTarget.style.transform = "translateY(-2px)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = "rgba(255,255,255,.2)";
-            e.currentTarget.style.transform = "translateY(0)";
-          }}
-        >
-          Explore Site
-        </button>
-      </div>
-
-      {/* Scroll hint */}
-      <div style={{
-        ...anim(.4),
         position: "absolute",
-        bottom: 36,
-        display: "flex",
-        flexDirection: "column",
+        width: "400px",
+        height: "400px",
+        background: "rgba(234, 179, 8, 0.04)",
+        filter: "blur(100px)",
+        borderRadius: "50%",
+        bottom: "-10%",
+        left: "30%",
+        zIndex: 1,
+        pointerEvents: "none"
+      }} />
+
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1.15fr",
+        gap: "60px",
+        maxWidth: "1400px",
+        width: "100%",
         alignItems: "center",
-        gap: 6,
-        opacity: .4,
+        zIndex: 2,
       }}>
-        <span style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: T.muted }}>Scroll</span>
-        <svg width="14" height="14" viewBox="0 0 14 14">
-          <path d="M3 5l4 4 4-4" stroke="#fff" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+
+        <div>
+          <h1 style={{
+            ...anim(0),
+            fontSize: "clamp(48px, 5.5vw, 60px)",
+            fontWeight: 800,
+            lineHeight: 1,
+            letterSpacing: "-0.04em",
+            marginBottom: "36px",
+            color: "#fff"
+          }}>
+            Collaborative Video Editing & Creative Marketplace
+          </h1>
+
+          <div style={{
+            ...anim(0.1),
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            marginBottom: "48px"
+          }}>
+            <div style={{ display: "flex" }}>
+              {avatars.map((url, i) => (
+                <div key={i} style={{
+                  width: 46,
+                  height: 46,
+                  borderRadius: "50%",
+                  border: `3px solid #080a12`,
+                  marginLeft: i === 0 ? 0 : -14,
+                  overflow: "hidden",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
+                }}>
+                  <img src={url} alt="user" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                </div>
+              ))}
+            </div>
+            <p style={{ color: "#a1a1aa", fontSize: 16, lineHeight: 1.4, maxWidth: 280 }}>
+              Join with <span style={{ color: "#fff", fontWeight: 700 }}>{editorCount} Video Editors</span> and start collaborating in your work today!
+            </p>
+          </div>
+
+          <button
+            onClick={onStart}
+            style={{
+              ...anim(0.2),
+              background: "#fff",
+              color: "#080a12",
+              border: "none",
+              padding: "20px 42px",
+              borderRadius: "14px",
+              fontWeight: 700,
+              fontSize: 17,
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              boxShadow: "0 10px 30px -10px rgba(255,255,255,0.2)"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-2px)";
+              e.currentTarget.style.boxShadow = "0 15px 40px -10px rgba(255,255,255,0.3)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 10px 30px -10px rgba(255,255,255,0.2)";
+            }}
+          >
+            Get Started
+          </button>
+        </div>
+
+        <div style={{
+          ...anim(0.3),
+          position: "relative",
+        }}>
+          <div style={{
+            background: "#000",
+            borderRadius: "20px",
+            border: "1px solid rgba(255,255,255,0.08)",
+            overflow: "hidden",
+            boxShadow: "0 60px 120px -20px rgba(0,0,0,0.8)",
+            lineHeight: 0,
+            position: "relative",
+            zIndex: 3
+          }}>
+            <video
+              autoPlay
+              muted
+              loop
+              playsInline
+              style={{
+                width: "100%",
+                height: "auto",
+                display: "block",
+              }}
+            >
+              <source src="/clip/side_video.mp4" type="video/mp4" />
+            </video>
+          </div>
+        </div>
+      </div>
+
+      <div style={{
+        position: "absolute",
+        bottom: "30px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        opacity: 0.4,
+        animation: "ens-pulse 2s infinite",
+        zIndex: 5
+      }}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2">
+          <path d="M7 13l5 5 5-5M7 6l5 5 5-5" />
         </svg>
       </div>
     </section>
   );
 };
 
-// ─── Feature card ─────────────────────────────────────────────────────────────
-interface FeatureCardProps {
-  icon: string;
-  title: string;
-  desc: string;
-}
-
-const FeatureCard: FC<FeatureCardProps> = ({ icon, title, desc }) => {
-  const [hov, setHov] = useState<boolean>(false);
-  return (
-    <div
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        padding: "26px 24px",
-        background: hov ? "#111524" : T.bgCard,
-        borderRadius: 14,
-        border: `1px solid ${hov ? T.borderHov : T.border}`,
-        transition: "background .2s, border-color .2s, transform .2s",
-        transform: hov ? "translateY(-5px)" : "translateY(0)",
-        cursor: "default",
-      }}
-    >
-      <div style={{ fontSize: 26, marginBottom: 14 }}>{icon}</div>
-      <div style={{
-        fontFamily: T.fontDisplay,
-        fontWeight: 700,
-        fontSize: 16,
-        marginBottom: 8,
-        color: "#fff",
-      }}>
-        {title}
-      </div>
-      <div style={{ color: T.muted, fontSize: 13, lineHeight: 1.68 }}>{desc}</div>
-    </div>
-  );
-};
-
-// ─── Features section ─────────────────────────────────────────────────────────
-interface Feature {
-  icon: string;
-  title: string;
-  desc: string;
-}
-
-const FEATURES: Feature[] = [
-  { icon: "⚡", title: "Parallel Workflow",   desc: "Work on multiple scenes simultaneously without blocking your team. No more waiting." },
-  { icon: "🎬", title: "Real-time Structure", desc: "Story scaffolding updates live as your shoot evolves on set." },
-  { icon: "🔗", title: "Team Sync",           desc: "Directors, editors, and writers share one unified source of truth." },
-  { icon: "🗂️", title: "Frame Management",   desc: "Organise, tag, and retrieve frames instantly. Your entire visual library." },
-  { icon: "🕓", title: "Version History",     desc: "Every edit is saved. Roll back to any point in your project's timeline." },
-  { icon: "☁️", title: "Cloud-native",        desc: "Access your project from any device, anywhere. Zero install. Always fast." },
-];
-
-const FeaturesSection: FC = () => {
-  return (
-    <section style={{ padding: "80px 40px", maxWidth: 1080, margin: "0 auto" }}>
-      {/* Label */}
-      <div style={{ textAlign: "center", marginBottom: 48 }}>
-        <p style={{
-          color: T.accent,
-          fontSize: 11,
-          fontWeight: 700,
-          letterSpacing: 2.5,
-          textTransform: "uppercase",
-          marginBottom: 10,
-        }}>
-          What we offer
-        </p>
-        <h2 style={{
-          fontFamily: T.fontDisplay,
-          fontWeight: 800,
-          fontSize: "clamp(26px, 4vw, 38px)",
-          letterSpacing: -.5,
-        }}>
-          Built for filmmakers,<br />by filmmakers
-        </h2>
-      </div>
-
-      {/* Grid */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-        gap: 20,
-      }}>
-        {FEATURES.map((f) => <FeatureCard key={f.title} {...f} />)}
-      </div>
-    </section>
-  );
-};
-
-// ─── Stats bar ────────────────────────────────────────────────────────────────
-interface Stat {
-  value: string;
-  label: string;
-}
-
-const STATS: Stat[] = [
-  { value: "2,400+", label: "Filmmakers" },
+// ─── Stats ────────────────────────────────────────────────────────────────────
+const STATS = [
+  { value: "2,400+", label: "Users" },
   { value: "18k+",   label: "Projects created" },
   { value: "99.9%",  label: "Uptime" },
   { value: "4.9★",   label: "Average rating" },
 ];
 
-const StatsBar: FC = () => {
+const StatsBar: FC = () => (
+  <div style={{ borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, background: T.bgCard, padding: "36px 40px" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 20, maxWidth: 960, margin: "0 auto", textAlign: "center" }}>
+      {STATS.map((s) => (
+        <div key={s.label}>
+          <div style={{ fontFamily: T.fontDisplay, fontSize: 32, fontWeight: 800, color: "#fff", letterSpacing: -1 }}>{s.value}</div>
+          <div style={{ color: T.muted, fontSize: 13, marginTop: 4 }}>{s.label}</div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+// ─── Features Section with Custom IDs ────────────────────────────────────────
+const FeaturesSection: FC = () => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isVisible, setIsVisible] = useState(false);
+  const sectionRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const sectionObserver = new IntersectionObserver(
+      ([entry]) => setIsVisible(entry.isIntersecting),
+      { threshold: 0.1 }
+    );
+    if (sectionRef.current) sectionObserver.observe(sectionRef.current);
+
+    const blockObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const index = Number(entry.target.getAttribute("data-index"));
+            setActiveIndex(index);
+            entry.target.classList.add("appeared");
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+
+    const blocks = document.querySelectorAll(".feature-block");
+    blocks.forEach((b) => blockObserver.observe(b));
+
+    return () => {
+      sectionObserver.disconnect();
+      blockObserver.disconnect();
+    };
+  }, []);
+
   return (
-    <div style={{
-      borderTop: `1px solid ${T.border}`,
-      borderBottom: `1px solid ${T.border}`,
-      background: T.bgCard,
-      padding: "36px 40px",
-    }}>
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-        gap: 20,
-        maxWidth: 960,
-        margin: "0 auto",
-        textAlign: "center",
-      }}>
-        {STATS.map((s) => (
-          <div key={s.label}>
-            <div style={{
-              fontFamily: T.fontDisplay,
-              fontSize: 32,
-              fontWeight: 800,
-              color: "#fff",
-              letterSpacing: -1,
-            }}>
-              {s.value}
-            </div>
-            <div style={{ color: T.muted, fontSize: 13, marginTop: 4 }}>{s.label}</div>
-          </div>
+    <section id="features" ref={sectionRef} style={{ background: T.bg, position: "relative", overflow: "hidden" }}>
+      <div className="feature-nav" style={{ opacity: isVisible ? 1 : 0, pointerEvents: isVisible ? "auto" : "none" }}>
+        {ALL_FEATURES.map((_, i) => (
+          <div
+            key={i}
+            className={`dot ${activeIndex === i ? "active" : ""}`}
+            onClick={() => {
+              const targetId = ALL_FEATURES[i].sectionId;
+              document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth' });
+            }}
+          />
         ))}
       </div>
-    </div>
+
+      <div style={{ textAlign: "center", paddingTop: "100px", position: "relative", zIndex: 2 }}>
+         <h2 style={{ fontSize: 14, color: "#3b82f6", fontWeight: 700, textTransform: "uppercase", letterSpacing: 4 }}>
+           Features
+         </h2>
+      </div>
+
+      {ALL_FEATURES.map((f, i) => (
+        <div
+          key={f.id}
+          id={f.sectionId}
+          data-index={i}
+          className="feature-block"
+          style={{
+            minHeight: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexDirection: i % 2 !== 0 ? "row-reverse" : "row",
+            gap: "100px",
+            maxWidth: "1300px",
+            margin: "0 auto",
+            padding: "0 40px",
+            position: "relative",
+            opacity: 0,
+            transform: "translateY(40px)",
+            transition: "all 0.8s cubic-bezier(0.16, 1, 0.3, 1)",
+          }}
+        >
+          <div style={{
+            position: "absolute",
+            width: "500px",
+            height: "500px",
+            background: i % 2 === 0 ? "rgba(59, 130, 246, 0.08)" : "rgba(168, 85, 247, 0.08)",
+            filter: "blur(120px)",
+            borderRadius: "50%",
+            zIndex: 0,
+            top: "50%",
+            left: i % 2 === 0 ? "10%" : "60%",
+            transform: "translateY(-50%)",
+            pointerEvents: "none"
+          }} />
+
+          <style>{`.appeared { opacity: 1 !important; transform: translateY(0) !important; }`}</style>
+
+          <div style={{ flex: 1.2, zIndex: 2 }}>
+            <div style={{
+              width: "100%",
+              aspectRatio: "16 / 9",
+              borderRadius: 30,
+              overflow: "hidden",
+              border: "1px solid rgba(255,255,255,0.08)",
+              boxShadow: "0 50px 100px -20px rgba(0,0,0,0.7)",
+              background: "#000"
+            }}>
+              <img src={f.img} alt={f.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            </div>
+          </div>
+
+          <div style={{ flex: 1, zIndex: 2 }}>
+            <div style={{ color: "#3b82f6", fontWeight: 800, fontSize: 16, marginBottom: 12 }}>{f.id}</div>
+            <h3 style={{ fontSize: "clamp(32px, 4vw, 56px)", fontWeight: 800, color: "#fff", marginBottom: "28px", lineHeight: 1 }}>
+              {f.title}
+            </h3>
+            <p style={{ color: "#94a3b8", fontSize: 19, lineHeight: 1.6, maxWidth: "500px" }}>
+              {f.desc}
+            </p>
+          </div>
+        </div>
+      ))}
+    </section>
   );
 };
 
-// ─── Testimonials ─────────────────────────────────────────────────────────────
-interface Testimonial {
-  quote: string;
-  name: string;
-  role: string;
-}
-
-const TESTIMONIALS: Testimonial[] = [
+const PLANS = [
   {
-    quote: "Ensemble completely changed how our production team operates. We shaved weeks off post.",
-    name: "Maya R.", role: "Director, Sundance '24",
+    name: "Default",
+    price: "FREE",
+    originalPrice: null,
+    color: "#fff",
+    features: ["720p Export", "Watermarked Export", "Basic Tools", "3 Collaborators", "3 Collaborative Projects", "1 Asset Post"],
+    buttonText: "Get Started",
+    isPrimary: false,
   },
   {
-    quote: "Finally — a tool that understands that real filmmaking is non-linear and chaotic.",
-    name: "Jordan K.", role: "Documentary filmmaker",
+    name: "PREMIUM",
+    price: "₱350",
+    originalPrice: "₱499",
+    color: T.gold,
+    features: ["1080p Export", "No Watermark", "Premium Tools + AI", "10 Collaborators", "10 Collaborative Projects", "20 Asset Posts", "Profile Visibility +30%", "Badge Display"],
+    buttonText: "Upgrade to Premium",
+    isPrimary: true,
+    icon: "",
   },
   {
-    quote: "The parallel workflow feature alone is worth every penny. Our editors are unblocked.",
-    name: "Sam T.", role: "EP, Netflix Original",
-  },
+    name: "BUSINESS",
+    price: "₱950",
+    originalPrice: "₱1,299",
+    color: T.teal,
+    features: ["2K - 4K Export", "No Watermark", "Premium Tools + AI", "20 Collaborators", "20 Collaborative Projects", "Unlimited Asset Posts", "Profile Visibility +90%", "Badge Display and More"],
+    buttonText: "Upgrade to Business",
+    isPrimary: true,
+    icon: "",
+  }
 ];
 
-const TestimonialsSection: FC = () => {
+// ─── Pricing Section ────────────────────────────────────────────
+const PricingSection: FC = () => {
   return (
-    <section style={{ padding: "80px 40px", maxWidth: 1080, margin: "0 auto" }}>
-      <div style={{ textAlign: "center", marginBottom: 48 }}>
-        <p style={{ color: T.accent, fontSize: 11, fontWeight: 700, letterSpacing: 2.5, textTransform: "uppercase", marginBottom: 10 }}>
-          Testimonials
-        </p>
-        <h2 style={{ fontFamily: T.fontDisplay, fontWeight: 800, fontSize: "clamp(24px,4vw,34px)", letterSpacing: -.5 }}>
-          Trusted on set and in the edit bay
+    <section id="pricing" style={{
+      minHeight: "100vh",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "60px 20px",
+      background: T.bg,
+      position: "relative",
+      overflow: "hidden"
+    }}>
+
+      <div style={{
+        position: "absolute",
+        width: "600px",
+        height: "600px",
+        background: "rgba(34, 211, 238, 0.05)",
+        filter: "blur(120px)",
+        borderRadius: "50%",
+        bottom: "-10%",
+        right: "5%",
+        zIndex: 1,
+        pointerEvents: "none"
+      }} />
+
+      <div style={{
+        position: "absolute",
+        width: "450px",
+        height: "450px",
+        background: "rgba(234, 179, 8, 0.05)",
+        filter: "blur(90px)",
+        borderRadius: "50%",
+        top: "40%",
+        left: "50%",
+        transform: "translate(-50%, -50%)",
+        zIndex: 1,
+        pointerEvents: "none"
+      }} />
+
+      <div style={{ textAlign: "center", marginBottom: "40px", position: "relative", zIndex: 2 }}>
+        <h2 style={{
+          fontSize: "clamp(28px, 4vw, 38px)",
+          fontWeight: 800,
+          fontFamily: T.fontDisplay,
+          letterSpacing: "-0.03em",
+          color: "#fff",
+          marginBottom: "12px"
+        }}>
+          Simple, Transparent Pricing
         </h2>
+        <p style={{ color: T.muted, fontSize: "16px", maxWidth: "500px", margin: "0 auto" }}>
+          Choose the plan that fits your production scale.
+        </p>
       </div>
 
       <div style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-        gap: 20,
+        gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+        gap: "20px",
+        maxWidth: "1100px",
+        width: "100%",
+        alignItems: "stretch",
+        position: "relative",
+        zIndex: 2
       }}>
-        {TESTIMONIALS.map((t) => (
+        {PLANS.map((plan) => (
           <div
-            key={t.name}
+            key={plan.name}
             style={{
-              padding: "28px 24px",
-              background: T.bgCard,
-              borderRadius: 14,
-              border: `1px solid ${T.border}`,
+              background: "rgba(13, 15, 26, 0.6)",
+              backdropFilter: "blur(12px)",
+              borderRadius: "24px",
+              border: `1px solid ${plan.isPrimary ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)"}`,
+              padding: "32px 28px",
+              display: "flex",
+              flexDirection: "column",
+              position: "relative",
+              transition: "all 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
+              overflow: "hidden"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-5px)";
+              e.currentTarget.style.borderColor = plan.color;
+              e.currentTarget.style.background = "rgba(13, 15, 26, 0.9)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.borderColor = plan.isPrimary ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.06)";
+              e.currentTarget.style.background = "rgba(13, 15, 26, 0.6)";
             }}
           >
-            <div style={{ color: T.accent, fontSize: 28, lineHeight: 1, marginBottom: 14 }}>"</div>
-            <p style={{ color: "#d0d6e0", fontSize: 14, lineHeight: 1.72, marginBottom: 20 }}>{t.quote}</p>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{
-                width: 36, height: 36, borderRadius: "50%",
-                background: `rgba(74,111,165,.25)`,
-                border: `1px solid rgba(74,111,165,.4)`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 13, fontWeight: 700, color: "#7aadde",
-              }}>
-                {t.name[0]}
+            <div style={{ marginBottom: "24px" }}>
+              <div style={{ color: plan.color, fontWeight: 700, fontSize: "12px", letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: "8px" }}>
+                {plan.name} {plan.icon}
               </div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>{t.name}</div>
-                <div style={{ fontSize: 11, color: T.muted }}>{t.role}</div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
+                <span style={{ fontSize: "36px", fontWeight: 800, color: "#fff" }}>{plan.price}</span>
+                {plan.originalPrice && (
+                  <span style={{ fontSize: "16px", color: "rgba(255,255,255,0.25)", textDecoration: "line-through" }}>{plan.originalPrice}</span>
+                )}
               </div>
             </div>
+
+            <div style={{ flex: 1 }}>
+              {plan.features.map((feat, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px", color: "rgba(255,255,255,0.7)", fontSize: "13.5px" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={plan.color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  {feat}
+                </div>
+              ))}
+            </div>
+
+            <button style={{
+              marginTop: "32px",
+              background: plan.isPrimary ? "#fff" : "transparent",
+              color: plan.isPrimary ? "#000" : "#fff",
+              border: plan.isPrimary ? "none" : "1px solid rgba(255,255,255,0.15)",
+              padding: "14px",
+              borderRadius: "12px",
+              fontWeight: 700,
+              fontSize: "14px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              transition: "all 0.2s ease"
+            }}>
+              {plan.buttonText}
+              <div style={{ width: "20px", height: "20px", borderRadius: "50%", background: plan.isPrimary ? "#000" : "rgba(255,255,255,0.1)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              </div>
+            </button>
           </div>
         ))}
       </div>
@@ -712,71 +897,14 @@ const TestimonialsSection: FC = () => {
   );
 };
 
-// ─── CTA Strip ────────────────────────────────────────────────────────────────
-interface CtaStripProps {
-  onStart: () => void;
-}
-
-const CtaStrip: FC<CtaStripProps> = ({ onStart }) => {
-  return (
-    <section style={{
-      padding: "80px 40px",
-      textAlign: "center",
-      position: "relative",
-      overflow: "hidden",
-      background: T.bgCard,
-      borderTop: `1px solid ${T.border}`,
-    }}>
-      <div style={{
-        position: "absolute",
-        top: "50%", left: "50%",
-        transform: "translate(-50%,-50%)",
-        width: 500, height: 300,
-        background: "radial-gradient(ellipse, rgba(74,111,165,.18) 0%, transparent 70%)",
-        pointerEvents: "none",
-      }} />
-      <h2 style={{
-        fontFamily: T.fontDisplay,
-        fontWeight: 800,
-        fontSize: "clamp(26px,4vw,40px)",
-        letterSpacing: -.5,
-        position: "relative",
-        marginBottom: 14,
-      }}>
-        Ready to build your blueprint?
-      </h2>
-      <p style={{ color: T.muted, fontSize: 15, maxWidth: 440, margin: "0 auto 32px", lineHeight: 1.7, position: "relative" }}>
-        Join thousands of filmmakers already using Ensemble to ship better stories, faster.
-      </p>
-      <button
-        onClick={onStart}
-        style={{
-          background: "#fff",
-          color: "#080a12",
-          border: "none",
-          padding: "14px 34px",
-          borderRadius: 28,
-          fontWeight: 700,
-          fontSize: 15,
-          cursor: "pointer",
-          fontFamily: T.fontBody,
-          position: "relative",
-          transition: "background .15s, transform .12s",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = "#e8edf5";
-          e.currentTarget.style.transform = "translateY(-2px)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = "#fff";
-          e.currentTarget.style.transform = "translateY(0)";
-        }}
-      >
-        Start for free →
-      </button>
-    </section>
-  );
-};
+// ─── CTA & Footer ─────────────────────────────────────────────────────────────
+const CtaStrip: FC<{ onStart: () => void }> = ({ onStart }) => (
+  <section id="cta" style={{ padding: "80px 40px", textAlign: "center", background: T.bgCard, borderTop: `1px solid ${T.border}` }}>
+    <h2 style={{ fontFamily: T.fontDisplay, fontWeight: 800, fontSize: "clamp(26px,4vw,40px)", marginBottom: 14 }}>Ready to build your blueprint?</h2>
+    <p style={{ color: T.muted, fontSize: 15, maxWidth: 440, margin: "0 auto 32px" }}>Join thousands of filmmakers already using Ensemble to ship better stories, faster.</p>
+    <button onClick={onStart} style={{ background: "#fff", color: "#080a12", border: "none", padding: "14px 34px", borderRadius: 28, fontWeight: 700, cursor: "pointer", fontFamily: T.fontBody }}>Start for free →</button>
+  </section>
+);
 
 // ─── Footer ───────────────────────────────────────────────────────────────────
 type FooterLinks = Record<string, string[]>;
@@ -789,42 +917,85 @@ const FOOTER_LINKS: FooterLinks = {
 };
 
 const Footer: FC = () => {
+  const scrollToId = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   return (
     <footer style={{
       borderTop: `1px solid ${T.border}`,
-      padding: "56px 40px 36px",
+      padding: "80px 60px 40px",
       background: "#06080f",
+      position: "relative",
+      overflow: "hidden"
     }}>
       <div style={{
-        maxWidth: 1080,
+        position: "absolute",
+        bottom: "-10%",
+        right: "5%",
+        width: "400px",
+        height: "400px",
+        background: "rgba(74, 111, 165, 0.05)",
+        filter: "blur(100px)",
+        borderRadius: "50%",
+        pointerEvents: "none"
+      }} />
+
+      <div style={{
+        maxWidth: 1400,
         margin: "0 auto",
         display: "grid",
-        gridTemplateColumns: "1.6fr repeat(4, 1fr)",
-        gap: 40,
-        marginBottom: 48,
+        gridTemplateColumns: "2fr repeat(4, 1fr)",
+        gap: 60,
+        marginBottom: 64,
+        position: "relative",
+        zIndex: 2
       }}>
-        {/* Brand */}
         <div>
-          <Logo size={20} />
-          <p style={{ color: T.muted, fontSize: 13, lineHeight: 1.7, marginTop: 14, maxWidth: 220 }}>
-            The parallel workflow platform for modern film production teams.
+          <Logo size={22} />
+          <p style={{
+            color: T.muted,
+            fontSize: 14,
+            lineHeight: 1.7,
+            marginTop: 20,
+            maxWidth: 280,
+            fontFamily: T.fontBody
+          }}>
+            The parallel workflow platform for modern film production teams and creative professionals.
           </p>
         </div>
-        {/* Link columns */}
+
         {Object.entries(FOOTER_LINKS).map(([col, links]) => (
           <div key={col}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#fff", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 16 }}>
+            <div style={{
+              fontSize: 12,
+              fontWeight: 700,
+              color: "#fff",
+              letterSpacing: 1.5,
+              textTransform: "uppercase",
+              marginBottom: 24,
+              fontFamily: T.fontDisplay
+            }}>
               {col}
             </div>
             {links.map((l) => (
               <div
                 key={l}
+                onClick={() => {
+                  if (l === "Features") scrollToId("features");
+                  else if (l === "Pricing") scrollToId("pricing");
+                  else if (l === "Use Cases") scrollToId("pricing");
+                }}
                 style={{
                   color: T.muted,
-                  fontSize: 13,
-                  marginBottom: 10,
+                  fontSize: 14,
+                  marginBottom: 12,
                   cursor: "pointer",
                   transition: "color .15s",
+                  fontFamily: T.fontBody
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = "#fff")}
                 onMouseLeave={(e) => (e.currentTarget.style.color = T.muted)}
@@ -836,47 +1007,45 @@ const Footer: FC = () => {
         ))}
       </div>
 
-      {/* Bottom bar */}
       <div style={{
-        borderTop: `1px solid ${T.border}`,
-        paddingTop: 24,
+        borderTop: `1px solid rgba(255,255,255,0.06)`,
+        paddingTop: 32,
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        maxWidth: 1080,
+        maxWidth: 1400,
         margin: "0 auto",
         flexWrap: "wrap",
         gap: 12,
+        position: "relative",
+        zIndex: 2
       }}>
-        <span style={{ color: T.muted, fontSize: 12 }}>© 2025 Ensemble, Inc. All rights reserved.</span>
-        <span style={{ color: "#3a4050", fontSize: 12 }}>Built for storytellers.</span>
+        <span style={{ color: T.muted, fontSize: 13 }}>
+          © 2026 Ensemble, RavenLabs Dev. All rights reserved.
+        </span>
+        <div style={{ display: "flex", gap: 24 }}>
+          <span style={{ color: "#3a4050", fontSize: 13, cursor: "pointer" }}>Twitter</span>
+          <span style={{ color: "#3a4050", fontSize: 13, cursor: "pointer" }}>GitHub</span>
+          <span style={{ color: "#3a4050", fontSize: 13, cursor: "pointer" }}>Discord</span>
+        </div>
       </div>
     </footer>
   );
 };
 
-// ─── Main export ──────────────────────────────────────────────────────────────
-interface LandingPageProps {
-  onLogin?: () => void;
-  onSignup?: () => void;
-}
-
-const LandingPage: FC<LandingPageProps> = ({ onLogin, onSignup }) => {
+const LandingPage: FC = () => {
   useGlobalStyle(GLOBAL_CSS);
   const navigate = useNavigate();
-  // Default no-ops if props not provided (standalone use)
-  const handleLogin  = onLogin  ?? (() => navigate("/login"));
-  const handleSignup = onSignup ?? (() => navigate("/signup"));
-
   return (
     <div style={{ background: T.bg, minHeight: "100vh" }}>
-      <Navbar onLogin={handleLogin} onSignup={handleSignup} />
-      <Hero onStart={handleSignup} />
+      <Navbar onLogin={() => navigate("/login")} onSignup={() => navigate("/signup")} />
+      <Hero onStart={() => navigate("/signup")} />
       <StatsBar />
       <FeaturesSection />
-      <TestimonialsSection />
-      <CtaStrip onStart={handleSignup} />
+      <PricingSection />
+      <CtaStrip onStart={() => navigate("/signup")} />
       <Footer />
+      <ScrollToTop />
     </div>
   );
 };
