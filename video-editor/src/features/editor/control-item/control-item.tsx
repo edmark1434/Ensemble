@@ -16,6 +16,7 @@ import BasicCaption from "./basic-caption";
 import { MenuItem } from "../menu-item";
 import useStore from "../store/use-store";
 import useLayoutStore from "../store/use-layout-store";
+import {MousePointer2} from "lucide-react";
 
 const ActiveControlItem = ({
   trackItem
@@ -66,11 +67,19 @@ export const ControlItem = () => {
   }, [activeIds, trackItemsMap, transitionsMap, setLayoutTrackItem]);
 
   if (!trackItem) {
-    return <MenuItem />;
+    // return <MenuItem />;
+    return (
+      <div className="w-full flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
+        <MousePointer2 size={32} className="opacity-50" />
+        <span className="text-sm">
+          No item selected
+        </span>
+      </div>
+    )
   }
 
   return (
-    <div className="w-full flex-none border-l border-border/80 bg-card hidden lg:block">
+    <div className="w-full flex-none bg-card hidden lg:block">
       <ActiveControlItem trackItem={trackItem} />
     </div>
   );

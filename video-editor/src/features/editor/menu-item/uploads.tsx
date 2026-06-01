@@ -110,7 +110,7 @@ export const Uploads = () => {
       <UploadPrompt />
 
       {noUploads && (
-        <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
+        <div className="h-full flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
           <Upload size={32} className="opacity-50" />
           <span className="text-sm">
             {uploads.length === 0 ? "No uploads yet" : "No matches found"}

@@ -17,15 +17,16 @@ export function formatTimelineUnit(units?: number): string {
     hours.toString(),
     minutes.toString(),
     seconds.toString(),
-    frames.toString()
+    frames.toString(),
+    (frames + seconds * 60).toString(),
   ];
 
-  if (time < 60) {
-    return `${formattedTime[3].padStart(2, "0")}f`;
+  if (frames != 0) {
+    return `${formattedTime[4].padStart(2, "0")}f`;
   }
-  if (time < 3600) {
-    return `${formattedTime[2].padStart(1, "0")}s`;
-  }
+  // if (time < 3600) {
+  //   return `${formattedTime[2].padStart(1, "0")}s`;
+  // }
   if (time < 216000) {
     return `${formattedTime[1].padStart(2, "0")}:${formattedTime[2].padStart(2, "0")}`;
   }

@@ -153,13 +153,13 @@ export const Audios = () => {
           </Button>
         )}
       </div>
-      <ScrollArea className="flex-1  max-w-full px-4">
+      <ScrollArea className="flex-1 h-full max-w-full px-4">
         {isLoading && uniqueResults.length === 0 ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="animate-spin text-muted-foreground" size={32} />
           </div>
         ) : uniqueResults.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
+          <div className="h-full flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
             <Music2 size={32} className="opacity-50" />
             <span className="text-sm">No music found</span>
           </div>

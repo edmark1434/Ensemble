@@ -57,11 +57,21 @@ const Ruler = (props: RulerProps) => {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (canvas) {
-      const context = canvas.getContext("2d");
-      setCanvasContext(context);
+    if (!canvas) return;
+
+    const context = canvas.getContext("2d");
+    setCanvasContext(context);
+
+    document.fonts.ready.then(() => {
       resize(canvas, context, scrollLeft);
-    }
+    });
+
+    const observer = new ResizeObserver(() => {
+      resize(canvas, context, scrollLeft);
+    });
+    observer.observe(canvas.offsetParent as Element);
+
+    return () => observer.disconnect();
   }, [timelineOffsetX]);
 
   const handleResize = useCallback(() => {
@@ -84,18 +94,27 @@ const Ruler = (props: RulerProps) => {
   }, [canvasContext, scrollLeft, scale, timelineOffsetX]);
 
   const resize = (
-    canvas: HTMLCanvasElement | null,
-    context: CanvasRenderingContext2D | null,
-    scrollLeft: number
+      canvas: HTMLCanvasElement | null,
+      context: CanvasRenderingContext2D | null,
+      scrollLeft: number
   ) => {
     if (!canvas || !context) return;
 
+    const dpr = window.devicePixelRatio || 1;
     const offsetParent = canvas.offsetParent as HTMLDivElement;
     const width = offsetParent?.offsetWidth ?? canvas.offsetWidth;
     const height = canvasSize.height;
 
-    canvas.width = width;
-    canvas.height = height;
+    // Set canvas internal resolution to match physical pixels
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+
+    // Keep CSS size the same
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+
+    // Scale context so all drawing coords are still in CSS pixels
+    context.scale(dpr, dpr);
 
     draw(context, scrollLeft, width, height);
     setCanvasSize({ width, height });
