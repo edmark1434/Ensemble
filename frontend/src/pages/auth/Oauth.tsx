@@ -5,7 +5,7 @@ import useGlobalState from "@/lib/global_state";
 
 // Custom hook for Google OAuth signup
 export const useGoogleAuth = () => {
-  const { setUser, setIsAuthenticated, setAccessToken } = useGlobalState();
+  const { setUser, setIsAuthenticated } = useGlobalState();
 
   const handleGoogleSignIn = async () => {
     const provider = new GoogleAuthProvider();
@@ -28,8 +28,7 @@ export const useGoogleAuth = () => {
       );
 
       if (response.data.success) {
-        setAccessToken(response.data.accessToken);
-        setUser(response.data.user);
+        setUser(response.data.credentials);
         setIsAuthenticated(true);
       } else {
         console.error('OAuth signup failed:', response.data.message);

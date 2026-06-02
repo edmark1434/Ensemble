@@ -4,7 +4,7 @@ import useStore from "../store/use-store";
 export const useResizbleTimeline = () => {
   const [isResizing, setIsResizing] = React.useState(false);
   const timelineContainerRef = React.useRef<HTMLDivElement>(null);
-  const [timelineHeight, setTimelineHeight] = React.useState(320);
+  const [timelineHeight, setTimelineHeight] = React.useState(280);
   const { timeline } = useStore();
 
   const onMouseDown = (ev: React.MouseEvent<HTMLDivElement, MouseEvent>) => {

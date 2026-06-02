@@ -94,7 +94,7 @@ export const Images = () => {
   const displayImages = pexelsImages;
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex h-full w-full flex-col min-h-0 overflow-hidden">
       <div className="flex items-center gap-2 p-4">
         <div className="relative flex-1">
           <Button
@@ -138,7 +138,7 @@ export const Images = () => {
         </div>
       )}
 
-      <ScrollArea className="flex-1 px-4 max-h-full">
+      <ScrollArea className="flex-1 px-4 h-full">
         <div className="max-h-full">
           <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
             {displayImages.map((image, index) => {

@@ -323,11 +323,13 @@ const ZoomControl = ({
           step={1}
           onValueChange={(e) => {
             setLocalValue(e[0]); // Update local state
+            const zoom = getZoomByIndex(e[0]);
+            onChangeTimelineScale(zoom);
           }}
-          onValueCommit={() => {
-            const zoom = getZoomByIndex(localValue);
-            onChangeTimelineScale(zoom); // Propagate value to parent when user commits change
-          }}
+          // onValueCommit={() => {
+          //   const zoom = getZoomByIndex(localValue);
+          //   onChangeTimelineScale(zoom); // Propagate value to parent when user commits change
+          // }}
         />
         <Button size={"icon"} variant={"ghost"} onClick={onZoomInClick}>
           <ZoomIn size={16} />

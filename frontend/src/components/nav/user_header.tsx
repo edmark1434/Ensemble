@@ -1,7 +1,10 @@
 import { Bell, ChevronDown, Settings, LogOut, User, CircleDollarSign } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-
+import useGlobalState from "@/lib/global_state";
+import axios from "@/lib/axios";
+import { signOut } from "firebase/auth";
+import { auth } from "@/pages/firebase";
 interface UserHeaderProps {
   pageTitle: string;
   credits?: number;
@@ -12,15 +15,17 @@ interface UserHeaderProps {
 
 const UserHeader: React.FC<UserHeaderProps> = ({
   pageTitle,
-  credits = 1250,
-  userName = "John Paul Mahilom",
+  credits = 0,
+  userName = "",
   userAvatar = "https://i.pravatar.cc/150?u=john",
                                                }) => {
   const navigate = useNavigate();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
+  const userInfo = useGlobalState((state) => state.user);
+                                                const [showHeader,setShowHeader] = useState(false);
+                                                const [isCheckingAccess, setIsCheckingAccess] = useState(true);
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -31,13 +36,46 @@ const UserHeader: React.FC<UserHeaderProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(()=>{
+    const checkRole = async()=>{
+      try{
+        await axios.get("/api/users/check-user-role");
+        setShowHeader(true);
+      }catch(err){
+        console.error("Error checking user role:", err);
+        setShowHeader(false);
+      } finally {
+        setIsCheckingAccess(false);
+      }
+    }
+    checkRole();
+  },[]);
   const handleTopUp = () => {
     // Navigate to credit shop page
     navigate("/credits");
   };
 
-  return (
-    <header className="sticky top-0 z-10 border-b border-white/10 bg-[#080a12]/95 backdrop-blur-md">
+  const handleLogout = async(e:any) => {
+    e.preventDefault();
+    try{
+      await axios.get("/api/users/logout");
+      await signOut(auth);
+      useGlobalState.getState().clearUser();
+    } catch (error) {
+      console.error("Error logging out:", error);
+    } finally {
+      setIsProfileOpen(false);
+      setShowHeader(false);
+      navigate("/", { replace: true });
+    }
+    
+  };
+  if (isCheckingAccess) {
+    return null;
+  }
+
+  return showHeader ? (
+    <header className="sticky top-0 z-50 border-b border-white/10 bg-[#080a12]/95 backdrop-blur-md">
       <div className="flex items-center justify-between px-6 py-4 md:px-8">
 
         {/* Left Side - Page Title */}
@@ -56,10 +94,10 @@ const UserHeader: React.FC<UserHeaderProps> = ({
               onClick={handleTopUp}
               onMouseEnter={() => setIsHovered(true)}
               onMouseLeave={() => setIsHovered(false)}
-              className="group relative flex items-center gap-2 overflow-hidden rounded-full border border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 via-amber-500/10 to-orange-500/10 px-3 py-1.5 transition-all duration-300 hover:scale-105 hover:border-yellow-500/50 hover:shadow-lg hover:shadow-yellow-500/20"
+              className="group relative flex items-center gap-2 overflow-hidden rounded-full border border-yellow-500/30 bg-linear-to-r from-yellow-500/10 via-amber-500/10 to-orange-500/10 px-3 py-1.5 transition-all duration-300 hover:scale-105 hover:border-yellow-500/50 hover:shadow-lg hover:shadow-yellow-500/20"
             >
               {/* Animated shine effect */}
-              <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+              <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-linear-to-r from-transparent via-white/20 to-transparent" />
 
               {/* Coin Icon */}
               <div className="relative">
@@ -100,7 +138,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
                 className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20"
               />
               <div className="hidden lg:block text-left">
-                <p className="text-sm font-medium text-white">{userName.split(" ")[0]}</p>
+                <p className="text-sm font-medium text-white">{userInfo?.displayName || "User"}</p>
                 <p className="text-xs text-zinc-500">Premium Member</p>
               </div>
               <ChevronDown className={`hidden lg:block h-4 w-4 text-zinc-400 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`} />
@@ -111,7 +149,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
               <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/10 bg-[#0d0f1a] shadow-2xl backdrop-blur-xl overflow-hidden animate-fade-in">
                 <div className="border-b border-white/10 p-3">
                   <p className="text-sm font-medium text-white">{userName}</p>
-                  <p className="text-xs text-zinc-500">{userName.split(" ")[0].toLowerCase()}@ensemble.com</p>
+                  <p className="text-xs text-zinc-500">{userInfo?.email || "user@ensemble.com"}</p>
                 </div>
 
                 <div className="p-2">
@@ -126,7 +164,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
                 </div>
 
                 <div className="border-t border-white/10 p-2">
-                  <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 transition hover:bg-red-500/10">
+                  <button onClick={handleLogout} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 transition hover:bg-red-500/10">
                     <LogOut className="h-4 w-4" />
                     Logout
                   </button>
@@ -153,7 +191,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
         }
       `}</style>
     </header>
-  );
+  ) : null;
 };
 
 export default UserHeader;

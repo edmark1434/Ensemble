@@ -26,22 +26,10 @@ const MENU_ITEMS = [
     ariaLabel: "Add and manage uploads"
   },
   {
-    id: "texts",
-    icon: Icons.type,
-    label: "Texts",
-    ariaLabel: "Add and edit text elements"
-  },
-  {
     id: "videos",
     icon: Icons.video,
     label: "Videos",
     ariaLabel: "Add and manage video content"
-  },
-  {
-    id: "captions",
-    icon: Icons.captions,
-    label: "Captions",
-    ariaLabel: "Add and edit captions"
   },
   {
     id: "images",
@@ -56,23 +44,35 @@ const MENU_ITEMS = [
     ariaLabel: "Add and manage audio content"
   },
   {
+    id: "texts",
+    icon: Icons.type,
+    label: "Texts",
+    ariaLabel: "Add and edit text elements"
+  },
+  {
+    id: "captions",
+    icon: Icons.captions,
+    label: "Captions",
+    ariaLabel: "Add and edit captions"
+  },
+  {
     id: "transitions",
     icon: Icons.transition, // Custom SVG for transitions
     label: "Transitions",
     ariaLabel: "Add transition effects"
   },
-  {
-    id: "ai-voice",
-    icon: Icons.volume,
-    label: "AI Voice",
-    ariaLabel: "Generate AI voice from text"
-  },
-  {
-    id: "sfx",
-    icon: Icons.sfx,
-    label: "SFX",
-    ariaLabel: "Generate SFX from text"
-  }
+  // {
+  //   id: "ai-voice",
+  //   icon: Icons.volume,
+  //   label: "AI Voice",
+  //   ariaLabel: "Generate AI voice from text"
+  // },
+  // {
+  //   id: "sfx",
+  //   icon: Icons.sfx,
+  //   label: "SFX",
+  //   ariaLabel: "Generate SFX from text"
+  // }
 ] as const;
 
 // Memoized menu button component for better performance
@@ -102,7 +102,7 @@ const MenuButton = memo<{
         <TooltipTrigger asChild>
           <IconComponent width={20} height={20} />
         </TooltipTrigger>
-        <TooltipContent side="bottom" align="center" sideOffset={8}>
+        <TooltipContent side="right" align="center" sideOffset={8}>
           {item.label}
         </TooltipContent>
       </Tooltip>
@@ -130,15 +130,20 @@ function MenuList() {
 
   const handleMenuItemClick = useCallback(
     (menuItem: string) => {
-      setActiveMenuItem(menuItem as any);
-      // Use drawer on mobile, sidebar on desktop
       if (!isLargeScreen) {
+        setActiveMenuItem(menuItem as any);
         setDrawerOpen(true);
       } else {
-        setShowMenuItem(true);
+        if (activeMenuItem === menuItem && showMenuItem) {
+          // Clicking the active item collapses the sidebar
+          setShowMenuItem(false);
+        } else {
+          setActiveMenuItem(menuItem as any);
+          setShowMenuItem(true);
+        }
       }
     },
-    [isLargeScreen, setActiveMenuItem, setDrawerOpen, setShowMenuItem]
+    [isLargeScreen, activeMenuItem, showMenuItem, setActiveMenuItem, setDrawerOpen, setShowMenuItem]
   );
 
   const handleDrawerOpenChange = useCallback(
@@ -175,7 +180,7 @@ function MenuList() {
 
   return (
     <>
-      <div className="relative flex items-center py-2 px-2 bg-primary/7">
+      <div className="relative flex items-center bg-card">
         {showLeftFade && (
           <div className="absolute left-0 top-0 bottom-0 w-8 bg-linear-to-r from-card to-transparent z-10 pointer-events-none" />
         )}
@@ -183,7 +188,7 @@ function MenuList() {
           ref={scrollRef}
           className="overflow-x-auto scrollbar-hidden! w-full"
         >
-          <div className="flex items-center gap-2 w-fit mx-auto px-4">
+          <div className="flex flex-col items-center gap-2 w-fit mx-auto px-3">
             {MENU_ITEMS.map((item) => {
               const isActive =
                 (drawerOpen && activeMenuItem === item.id) ||

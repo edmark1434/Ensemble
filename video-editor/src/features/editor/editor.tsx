@@ -17,6 +17,7 @@ import { getCompactFontData, loadFonts } from "./utils/fonts";
 import { SECONDARY_FONT, SECONDARY_FONT_URL } from "./constants/constants";
 import MenuList from "./menu-list";
 import { ControlItem } from "./control-item";
+import { MenuItem } from "./menu-item";
 import CropModal from "./crop-modal/crop-modal";
 import useDataState from "./store/use-data-state";
 import { FONTS } from "./data/fonts";
@@ -30,11 +31,13 @@ import useLayoutStore from "./store/use-layout-store";
 import ControlItemHorizontal from "./control-item-horizontal";
 import { design } from "./mock";
 import { Separator } from "@/components/ui/separator";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
+// ts not getting used
 const stateManager = new StateManager({
   size: {
-    width: 1080,
-    height: 1920,
+    width: 1920,
+    height: 1080,
   },
 });
 
@@ -46,18 +49,65 @@ const SceneContainer = ({
   loaded,
   isLargeScreen,
 }: any) => {
+
+  const { showMenuItem } = useLayoutStore();
+
   return (
     <div className="relative flex h-full w-full flex-col bg-background">
       <div className="flex-1 relative overflow-hidden w-full h-full">
         <div className="flex h-full flex-1">
-          <div className="flex-1 relative overflow-hidden w-full h-full">
-            <CropModal />
-            <Scene ref={sceneRef} stateManager={stateManager} />
+          <div className="flex w-[54px] h-full bg-card border-r border-border/80">
+            <MenuList />
+            <FloatingControl />
           </div>
+
+          <Separator orientation="vertical" />
+
+          <ResizablePanelGroup
+              direction="horizontal"
+              className="w-full h-full overflow-hidden"
+              key={showMenuItem ? "with-menu" : "without-menu"}
+          >
+
+            {showMenuItem && (
+              <>
+                <ResizablePanel
+                    defaultSize={30}
+                    minSize={30}
+                    maxSize={40}
+                >
+                  <MenuItem />
+                </ResizablePanel>
+                <ResizableHandle className="bg-border/90" />
+              </>
+            )}
+
+            <ResizablePanel
+                defaultSize={showMenuItem ? 40 : 70}
+                minSize={showMenuItem ? 30 : 50}
+                maxSize={showMenuItem ? 40 : 70}
+                className="max-w-7xl relative bg-card min-w-0 overflow-visible!"
+            >
+              <div className="flex-1 relative overflow-hidden w-full h-full">
+                <CropModal />
+                <Scene ref={sceneRef} stateManager={stateManager} />
+              </div>
+            </ResizablePanel>
+
+            <ResizableHandle className="bg-border/90" />
+            <ResizablePanel
+                defaultSize={showMenuItem ? 30 : 30}
+                minSize={showMenuItem ? 30 : 30}
+                maxSize={showMenuItem ? 40 : 50}
+                className="max-w-7xl relative bg-card min-w-0 overflow-visible!"
+            >
+              <Controls />
+            </ResizablePanel>
+          </ResizablePanelGroup>
         </div>
       </div>
 
-      <div className="w-full">
+      <div className="w-full border-t border-border/80 bg-card">
         {playerRef && <Timeline stateManager={stateManager} />}
       </div>
 
@@ -67,12 +117,30 @@ const SceneContainer = ({
   );
 };
 
-const Sidebar = () => {
+// const Sidebar = () => {
+//   const { showMenuItem } = useLayoutStore();
+//
+//   return (
+//     // h-[calc(100vh-52px)]
+//     <div className="bg-card w-full flex flex-none h-full overflow-hidden">
+//       <div className="flex w-full min-h-0 overflow-hidden">
+//         <MenuList />
+//         {showMenuItem && (
+//           <>
+//             <Separator orientation="vertical" />
+//             <MenuItem />
+//           </>
+//         )}
+//       </div>
+//     </div>
+//   );
+// };
+
+const Controls = () => {
   return (
-    <div className="bg-card w-full flex flex-none border-r border-border/80 h-[calc(100vh-52px)]">
-      <div className="flex flex-col w-full">
-        <MenuList />
-        <Separator orientation="horizontal" />
+    // h-[calc(100vh-52px)]
+    <div className="bg-card w-full flex flex-none h-full">
+      <div className="flex w-full">
         <ControlItem />
       </div>
     </div>
@@ -174,7 +242,7 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen flex-col">
+    <div className="flex h-screen w-screen flex-col bg-background">
       <Navbar
         projectName={projectName}
         user={null}
@@ -182,23 +250,23 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
         setProjectName={setProjectName}
       />
 
-      <div className="flex flex-1">
+      <div className="flex flex-1 h-[calc(100vh-52px)]">
         {isLargeScreen ? (
           <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-            <ResizablePanel
-              defaultSize={30}
-              minSize={20}
-              maxSize={40}
-              className="max-w-7xl relative bg-card min-w-0 overflow-visible!"
-            >
-              <Sidebar />
-              <FloatingControl />
-            </ResizablePanel>
+            {/*<ResizablePanel*/}
+            {/*  defaultSize={30}*/}
+            {/*  minSize={20}*/}
+            {/*  maxSize={40}*/}
+            {/*  className="max-w-7xl relative bg-card min-w-0 overflow-visible!"*/}
+            {/*>*/}
+            {/*  <Sidebar />*/}
+            {/*  <FloatingControl />*/}
+            {/*</ResizablePanel>*/}
 
-            <ResizableHandle className="bg-border/90" />
+            {/*<ResizableHandle className="bg-border/90" />*/}
 
             <ResizablePanel
-              defaultSize={70}
+              defaultSize={40}
               minSize={60}
               className="min-w-0 min-h-0"
             >
@@ -211,6 +279,18 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
                 isLargeScreen={isLargeScreen}
               />
             </ResizablePanel>
+
+            {/*<ResizableHandle className="bg-border/90" />*/}
+
+            {/*<ResizablePanel*/}
+            {/*    defaultSize={30}*/}
+            {/*    minSize={20}*/}
+            {/*    maxSize={40}*/}
+            {/*    className="max-w-7xl relative bg-card min-w-0 overflow-visible!"*/}
+            {/*>*/}
+            {/*  <Controls />*/}
+            {/*  <FloatingControl />*/}
+            {/*</ResizablePanel>*/}
           </ResizablePanelGroup>
         ) : (
           <SceneContainer

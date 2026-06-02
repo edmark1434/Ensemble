@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import type { CSSProperties, FC } from "react";
 import { useNavigate } from "react-router-dom";
-import ScrollToTop from "@/components/scroll_to_top.tsx";
+import ScrollToTop from "@/components/utility/scroll_to_top.tsx";
 
 // ─── Design tokens (Plus Jakarta Sans) ────────────────────────────────────────
 const T = {

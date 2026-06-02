@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  ensemble-frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    container_name: ensemble-frontend
+    ports:
+      - "8000:80"
+    restart: always
+
+ # ensemble-backend:
+  #  build:
+  #    context: ./backend
+  #    dockerfile: Dockerfile
+  #  container_name: ensemble-backend
+  #  ports:
+   #   - "5000:5000" # Or whatever your backend port is
+  #  restart: always
