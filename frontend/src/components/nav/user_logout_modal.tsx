@@ -11,12 +11,13 @@ const UserLogoutModal: React.FC<UserLogoutModalProps> = ({ isOpen, onClose, onCo
   const [countdown, setCountdown] = useState(3);
 
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (isOpen && countdown > 0) {
-      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-    }
-    return () => clearTimeout(timer);
-  }, [isOpen, countdown]);
+          let timer: NodeJS.Timeout;
+          if (isOpen && countdown > 0) {
+              timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+          }
+          return () => clearTimeout(timer);
+      },
+      [isOpen, countdown]);
 
   useEffect(() => {
       // eslint-disable-next-line react-hooks/set-state-in-effect
