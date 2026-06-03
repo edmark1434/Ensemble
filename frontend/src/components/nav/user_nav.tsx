@@ -85,6 +85,7 @@ const UserNav: React.FC<UserNavProps> = () => {
 
     useEffect(() => {
        if (!isAuthenticated || user?.type !== "User") {
+           // eslint-disable-next-line react-hooks/set-state-in-effect
           setPrimaryNavState(primaryNavInitial.filter((i) => i.label !== "Teams"));
           setJobsState(jobsItemsInitial.filter((i) => i.label === "Job Posting"));
           setGigsState(gigsItemsInitial.filter((i) => i.label === "Gig Posting"));
