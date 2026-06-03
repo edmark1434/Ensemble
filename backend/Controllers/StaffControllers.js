@@ -10,7 +10,8 @@ async function checkStaffRole(req,res){
     }
     res.status(200).json({
         success: true,
-        credentials: req.session,
+        role: req.session.role,
+        user: req.session,
     });
 }
 module.exports = {

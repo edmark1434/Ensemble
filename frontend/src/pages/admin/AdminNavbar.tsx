@@ -19,7 +19,7 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { label: "Dashboard", icon: LayoutDashboard, to: "/admin" },
+  { label: "Dashboard", icon: LayoutDashboard, to: "/admin/dashboard" },
   { label: "User & Team", icon: Users, to: "/admin/user-team" },
   { label: "Credit & Economy", icon: BadgeDollarSign, to: "/admin/credit-economy" },
   { label: "Moderation", icon: ShieldAlert, to: "/admin/moderation" },
@@ -52,7 +52,7 @@ const AdminNavbar = () => {
         <ul className="space-y-1.5">
           {navItems.map(({ label, icon: Icon, to }) => (
             <li key={label}>
-              <NavLink to={to} end={to === "/admin"} className={({ isActive }) => navClassName(isActive)}>
+              <NavLink to={to} end={to === "/admin/dashboard"} className={({ isActive }) => navClassName(isActive)}>
                 <Icon className="h-4 w-4" />
                 {label}
               </NavLink>
