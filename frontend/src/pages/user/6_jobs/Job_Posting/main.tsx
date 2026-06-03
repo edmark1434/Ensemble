@@ -109,6 +109,87 @@ const sampleJobs: Job[] = [
 
 type TabType = "all" | "saved" | "my-posts";
 
+// --- SKELETON LOADING COMPONENTS ---
+const SearchBarSkeleton = () => (
+  <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
+    <div className="h-11 w-36 animate-pulse rounded-full bg-white/10 shrink-0" />
+    <div className="h-11 flex-1 animate-pulse rounded-full bg-white/5" />
+  </div>
+);
+
+const TabsSkeleton = () => (
+  <div className="mb-8 flex gap-1 border-b border-white/10">
+    {[1, 2, 3].map((i) => (
+      <div key={i} className="h-11 w-32 animate-pulse border-b-2 border-transparent px-6 py-3" />
+    ))}
+  </div>
+);
+
+const SidebarSkeleton = () => (
+  <div className="space-y-6">
+    {/* Categories Card Skeleton */}
+    <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-5 backdrop-blur-sm">
+      <div className="mb-4 h-3 w-20 animate-pulse rounded bg-white/10" />
+      <div className="space-y-2">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="h-9 w-full animate-pulse rounded-xl bg-white/5" />
+        ))}
+      </div>
+    </div>
+    {/* Filter Card Skeleton */}
+    <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-5 backdrop-blur-sm space-y-4">
+      <div className="h-3 w-28 animate-pulse rounded bg-white/10" />
+      <div className="space-y-2">
+        <div className="h-4 w-24 animate-pulse rounded bg-white/5" />
+        <div className="flex gap-2">
+          <div className="h-8 flex-1 animate-pulse rounded-lg bg-white/5" />
+          <div className="h-8 flex-1 animate-pulse rounded-lg bg-white/5" />
+        </div>
+      </div>
+      <div className="space-y-2 pt-2">
+        <div className="h-4 w-16 animate-pulse rounded bg-white/5" />
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-4 w-32 animate-pulse rounded bg-white/5" />
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+const JobCardSkeleton = () => (
+  <div className="flex flex-col md:flex-row gap-6 rounded-2xl border border-white/10 bg-[#0d0f1a]/40 p-5 animate-pulse">
+    {/* Thumbnail Skeleton */}
+    <div className="h-40 w-full md:w-64 shrink-0 rounded-xl bg-white/5" />
+    {/* Content Skeleton */}
+    <div className="flex-1 flex flex-col justify-between py-1">
+      <div className="space-y-3">
+        <div className="flex gap-2">
+          <div className="h-5 w-12 rounded bg-white/10" />
+          <div className="h-5 w-16 rounded bg-white/10" />
+          <div className="h-5 w-14 rounded bg-white/5" />
+        </div>
+        <div className="h-5 w-28 rounded bg-white/10" />
+        <div className="h-6 w-3/4 rounded bg-white/10" />
+        <div className="space-y-1.5">
+          <div className="h-4 w-full rounded bg-white/5" />
+          <div className="h-4 w-5/6 rounded bg-white/5" />
+        </div>
+      </div>
+      <div className="mt-4 pt-4 border-t border-white/5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <div className="h-6 w-6 rounded-full bg-white/10" />
+          <div className="h-4 w-24 rounded bg-white/5" />
+        </div>
+        <div className="flex gap-2">
+          <div className="h-5 w-28 rounded bg-white/5" />
+          <div className="h-5 w-20 rounded bg-white/5" />
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+// --- MAIN DASHBOARD COMPONENT ---
 const JobPostingMain: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -128,18 +209,21 @@ const JobPostingMain: React.FC = () => {
   const [posSort, setPosSort] = useState<"inc" | "dec" | null>(null);
   const [ratingSort, setRatingSort] = useState<boolean>(false);
 
+  // Simulate dashboard loading sequence
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 600);
+    const timer = setTimeout(() => setLoading(false), 800);
     return () => clearTimeout(timer);
   }, []);
 
+  // Monitor URL Route parameters for detailing drawer panel view synchronization
   useEffect(() => {
     if (id) {
       const foundJob = jobsList.find((j) => j.id === id);
-        // eslint-disable-next-line react-hooks/set-state-in-effect
       if (foundJob) setSelectedJob(foundJob);
       else navigate("/jobs", { replace: true });
-    } else { setSelectedJob(null); }
+    } else {
+      setSelectedJob(null);
+    }
   }, [id, jobsList, navigate]);
 
   const toggleSaveJob = (e: React.MouseEvent, jobId: string) => {
@@ -171,8 +255,30 @@ const JobPostingMain: React.FC = () => {
     return result;
   }, [jobsList, searchQuery, activeCategoryFilter, activeTab, minPrice, maxPrice, priceSort, selectedDiffs, posValue, posSort, ratingSort]);
 
-  if (loading) return <div className="w-full min-h-screen bg-[#080a12]" />;
+  // --- SKELETON SCREEN INTERFACE ---
+  if (loading) {
+    return (
+      <div className="w-full min-h-screen bg-[#080a12] overflow-x-hidden">
+        <UserHeader pageTitle="Job Posting" credits={1250} />
+        <div className="mx-auto max-w-7xl p-6 md:p-8 w-full">
+          <SearchBarSkeleton />
+          <TabsSkeleton />
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
+            <div className="space-y-6 sticky top-24">
+              <SidebarSkeleton />
+            </div>
+            <div className="lg:col-span-3 space-y-4">
+              {[1, 2, 3].map((i) => (
+                <JobCardSkeleton key={i} />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
+  // --- ACTUAL RENDERING VIEW ---
   return (
     <div className="w-full min-h-screen bg-[#080a12] overflow-x-hidden relative">
       <UserHeader pageTitle="Job Posting" credits={1250} />
@@ -203,7 +309,7 @@ const JobPostingMain: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
-          {/* Sidebars */}
+          {/* Sidebars Panel */}
           <div className="space-y-6 sticky top-24">
             <CategoriesSidebar
               categories={[{ label: "All", count: 748 }, { label: "Social", count: 119 }, { label: "YouTube", count: 101 }, { label: "Corporate", count: 78 }, { label: "Events", count: 65 }]}
@@ -217,7 +323,7 @@ const JobPostingMain: React.FC = () => {
             />
           </div>
 
-          {/* Feed List Container */}
+          {/* Feed List Container Grid */}
           <div className="lg:col-span-3 space-y-4">
             {filteredJobs.map((job) => (
               <div
@@ -225,13 +331,13 @@ const JobPostingMain: React.FC = () => {
                 onClick={() => navigate(`/jobs/${job.id}`)}
                 className={`group flex flex-col md:flex-row gap-6 rounded-2xl border p-5 transition-all cursor-pointer ${id === job.id ? "border-blue-500 bg-blue-500/5 shadow-[0_0_30px_rgba(59,130,246,0.1)]" : "border-white/10 bg-[#0d0f1a]/40 hover:border-white/20"}`}
               >
-                {/* Thumbnail Display */}
+                {/* Thumbnail Display Box */}
                 <div className="h-40 w-full md:w-64 shrink-0 overflow-hidden rounded-xl bg-zinc-900 border border-white/5 relative">
-                  <img src={job.thumbnail} className="h-full w-full object-cover opacity-80 transition-transform group-hover:scale-105 duration-500" />
+                  <img src={job.thumbnail} alt="" className="h-full w-full object-cover opacity-80 transition-transform group-hover:scale-105 duration-500" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                 </div>
 
-                {/* Content Layout Parameters */}
+                {/* Content Layout Parameter Specs */}
                 <div className="flex-1 flex flex-col justify-between min-w-0">
                   <div>
                     <div className="flex justify-between items-start mb-2">
@@ -288,7 +394,7 @@ const JobPostingMain: React.FC = () => {
         {selectedJob && (
           <>
             <div className="relative h-64 shrink-0 bg-zinc-950 border-b border-white/5">
-              <img src={selectedJob.thumbnail} className="w-full h-full object-cover opacity-60" />
+              <img src={selectedJob.thumbnail} alt="" className="w-full h-full object-cover opacity-60" />
               <button onClick={() => navigate("/jobs")} className="absolute top-5 left-5 h-10 w-10 flex items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-md transition hover:scale-110"><X className="h-5 w-5" /></button>
               <div className="absolute inset-0 bg-gradient-to-t from-[#0d0f1a] to-transparent" />
             </div>
@@ -336,7 +442,7 @@ const JobPostingMain: React.FC = () => {
                 </div>
               </div>
 
-              {/* Restored Client Profile Segment Card */}
+              {/* Client Profile Segment Card */}
               <div className="p-4 rounded-xl border border-white/5 bg-white/[0.02] flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="h-9 w-9 rounded-full bg-zinc-800 flex items-center justify-center text-sm text-white font-bold border border-white/10">
