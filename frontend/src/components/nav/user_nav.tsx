@@ -102,7 +102,7 @@ const UserNav: React.FC<UserNavProps> = () => {
           isActive
              ? "bg-blue-500/10 text-blue-400 border-l-2 border-blue-500"
              : "text-zinc-400 hover:text-white hover:bg-white/5"
-       } ${isCollapsed ? "justify-center px-2" : ""}`;
+       } ${isCollapsed ? "justify-center px-2 border-l-0" : ""}`;
 
     const sectionHeaderClassName = () =>
        `flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 text-zinc-400 hover:text-white hover:bg-white/5 ${
@@ -141,7 +141,7 @@ const UserNav: React.FC<UserNavProps> = () => {
              {/* Navigation - Scrollable */}
              <nav className="flex-1 overflow-y-auto px-3 py-5 scrollbar-thin">
                 {/* Main Menu */}
-                <div className="mb-4">
+                <div>
                    {!isCollapsed && (
                       <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
                          Main Menu
@@ -163,8 +163,13 @@ const UserNav: React.FC<UserNavProps> = () => {
                    </ul>
                 </div>
 
+                {/* Section Separator Line - Visible only when navigation bar is collapsed */}
+                {isCollapsed && (
+                   <div className="my-4 border-t border-white/10 mx-2" />
+                )}
+
                 {/* Marketplace Section */}
-                <div>
+                <div className={isCollapsed ? "mt-0" : "mt-4"}>
                    {!isCollapsed && (
                       <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
                          Marketplace
@@ -202,6 +207,9 @@ const UserNav: React.FC<UserNavProps> = () => {
                       </div>
                    )}
 
+                   {/* Small spacing element to separate sections when collapsed */}
+                   {isCollapsed && <div className="h-2" />}
+
                    {/* Gigs Section */}
                    {!isCollapsed ? (
                       <div className="mb-2">
@@ -232,6 +240,9 @@ const UserNav: React.FC<UserNavProps> = () => {
                          ))}
                       </div>
                    )}
+
+                   {/* Small spacing element to separate sections when collapsed */}
+                   {isCollapsed && otherMarketplaceState.length > 0 && <div className="h-2" />}
 
                    {/* Other Marketplace Items */}
                    <ul className={`mt-2 space-y-1 ${isCollapsed ? "flex flex-col items-center" : ""}`}>
