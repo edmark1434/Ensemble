@@ -13,24 +13,17 @@ export function formatTimelineUnit(units?: number): string {
   const seconds = Math.trunc(time / 60) % 60;
   const minutes = Math.trunc(time / 3600) % 60;
   const hours = Math.trunc(time / 216000);
-  const formattedTime = [
-    hours.toString(),
-    minutes.toString(),
-    seconds.toString(),
-    frames.toString(),
-    (frames + seconds * 60).toString(),
-  ];
 
-  if (frames != 0) {
-    return `${formattedTime[4].padStart(1, "0")}f`;
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
   }
-  // if (time < 3600) {
-  //   return `${formattedTime[2].padStart(1, "0")}s`;
-  // }
-  if (time < 216000) {
-    return `${formattedTime[1].padStart(2, "0")}:${formattedTime[2].padStart(2, "0")}`;
+  if (minutes > 0 || seconds > 0) {
+    return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
   }
-  return `${formattedTime[0].padStart(2, "0")}:${formattedTime[1].padStart(2, "0")}:${formattedTime[2].padStart(2, "0")}`;
+  if (frames > 0) {
+    return `${frames}f`;
+  }
+  return "00:00";
 }
 
 export function formatTimeToHumanReadable(

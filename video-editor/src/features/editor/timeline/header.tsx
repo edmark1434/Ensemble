@@ -23,6 +23,7 @@ import useUpdateAnsestors from "../hooks/use-update-ansestors";
 import { ITimelineScaleState } from "@designcombo/types";
 import { useIsLargeScreen } from "@/hooks/use-media-query";
 import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
+import {timeMsToUnits} from "@designcombo/timeline";
 
 const IconPlayerPlayFilled = ({ size }: { size: number }) => (
   <svg
@@ -83,11 +84,12 @@ const IconPlayerSkipForward = ({ size }: { size: number }) => (
 );
 const Header = () => {
   const [playing, setPlaying] = useState(false);
-  const { duration, fps, scale, playerRef, activeIds } = useStore();
+  const { duration, fps, scale, playerRef, activeIds, timeline } = useStore();
   const isLargeScreen = useIsLargeScreen();
   useUpdateAnsestors({ playing, playerRef });
 
   const currentFrame = useCurrentPlayerFrame(playerRef);
+  const timelineOffsetX = useTimelineOffsetX();
 
   const doActiveDelete = () => {
     dispatch(LAYER_DELETE);
@@ -102,11 +104,25 @@ const Header = () => {
     });
   };
 
-  const changeScale = (scale: ITimelineScaleState) => {
+  const changeScale = (newScale: ITimelineScaleState) => {
+    const currentTimeMs = (currentFrame / fps) * 1000;
+    const playheadPxOld = timeMsToUnits(currentTimeMs, scale.zoom);
+
+    const currentScrollLeft = timeline
+        ? -(timeline as any).viewportTransform[4] + (timeline as any).spacing.left
+        : 0;
+
+    const playheadScreenX = playheadPxOld - currentScrollLeft;
+    const playheadPxNew = timeMsToUnits(currentTimeMs, newScale.zoom);
+    const newScrollLeft = Math.max(0, playheadPxNew - playheadScreenX);
+
     dispatch(TIMELINE_SCALE_CHANGED, {
-      payload: {
-        scale
-      }
+      payload: { scale: newScale }
+    });
+
+    // Microtask: runs after dispatch is processed but before next paint
+    Promise.resolve().then(() => {
+      timeline?.scrollTo({ scrollLeft: newScrollLeft });
     });
   };
 

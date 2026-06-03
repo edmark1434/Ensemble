@@ -151,7 +151,7 @@ const Ruler = (props: RulerProps) => {
 
       if (value < 0) continue;
 
-      const startValue = (value * zoomUnit) / zoom;
+      const startValue = Math.round((value * zoomUnit) / zoom);
       const startPos = (startValue - scrollLeft / zoom) * zoom;
 
       if (startPos < -zoomUnit || startPos >= width + zoomUnit) continue;
