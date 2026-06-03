@@ -6,7 +6,7 @@ import { PREVIEW_FRAME_WIDTH } from "../constants/constants";
  * @returns Time in format HH:MM:SS.FPS
  */
 export function formatTimelineUnit(units?: number): string {
-  if (!units) return "0";
+  if (!units) return "00:00";
   const time = units / PREVIEW_FRAME_WIDTH;
 
   const frames = Math.trunc(time) % 60;
@@ -22,7 +22,7 @@ export function formatTimelineUnit(units?: number): string {
   ];
 
   if (frames != 0) {
-    return `${formattedTime[4].padStart(2, "0")}f`;
+    return `${formattedTime[4].padStart(1, "0")}f`;
   }
   // if (time < 3600) {
   //   return `${formattedTime[2].padStart(1, "0")}s`;

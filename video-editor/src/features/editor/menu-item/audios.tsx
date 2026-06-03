@@ -131,7 +131,7 @@ export const Audios = () => {
             )}
           </Button>
           <Input
-            placeholder="Search stock audios..."
+            placeholder="Search Freesound audios..."
             value={searchQuery}
             onChange={handleSearchChange}
             onKeyPress={(e) => {
