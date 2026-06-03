@@ -1,4 +1,12 @@
-const {client } = require('../lib/mongodb');
+const { getMongoClient } = require('../lib/mongodb');
+
+function getForumDb() {
+    const client = getMongoClient();
+    if (!client) {
+        throw new Error('MongoDB is not connected. Set MONGODB_URI in backend/.env to use forum features.');
+    }
+    return client.db('ensemble');
+}
 
 async function createForumGroup({
     imageUrl = null,
@@ -8,7 +16,7 @@ async function createForumGroup({
     tags=[],
 }){
     try{
-        const db = client.db('ensemble');
+        const db = getForumDb();
         const forumGroupsCollection = db.collection('forum_groups');
         const result = await forumGroupsCollection.insertOne({
             image_url: imageUrl,
@@ -26,7 +34,7 @@ async function createForumGroup({
 
 async function getForumGroupById(groupId){
     try{
-        const db = client.db('ensemble');
+        const db = getForumDb();
         const forumGroupsCollection = db.collection('forum_groups');
         const result = await forumGroupsCollection.findOne({ _id: new ObjectId(groupId) });
         return result;
@@ -38,7 +46,7 @@ async function getForumGroupById(groupId){
 
 async function getAllForumGroups(){
     try{
-        const db = client.db('ensemble');
+        const db = getForumDb();
         const forumGroupsCollection = db.collection('forum_groups');
         const result = await forumGroupsCollection.find({}).toArray();
         return result;
@@ -50,7 +58,7 @@ async function getAllForumGroups(){
 
 async function getForumGroupsByMemberId(memberId){
     try{
-        const db = client.db('ensemble');
+        const db = getForumDb();
         const forumGroupsCollection = db.collection('forum_groups');
         const result = await forumGroupsCollection.find({ members: memberId }).toArray();
         return result;

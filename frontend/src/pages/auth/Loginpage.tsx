@@ -7,6 +7,7 @@ import { useGoogleAuth } from "./Oauth";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import useGlobalState from "@/lib/global_state";
+import { API_BASE_URL } from "@/lib/api";
 import { Eye, EyeOff } from "lucide-react";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -395,7 +396,7 @@ export default function LoginPage({
     setLoading(true);
     try{
       const result = await axios.post(
-        `${import.meta.env.VITE_BASE_URL}/api/users/login`,
+        `${API_BASE_URL}/api/users/login`,
         { email, password },
         { withCredentials: true }
       );

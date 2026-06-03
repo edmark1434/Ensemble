@@ -176,6 +176,17 @@ npm run dev
 
 Open http://localhost:5173
 
+**Staff / admin portals (dev routes; production uses subdomains):**
+
+| Portal | Login URL | After login |
+|--------|-----------|-------------|
+| Admin | http://localhost:5173/admin | http://localhost:5173/admin/dashboard |
+| Staff (moderators) | http://localhost:5173/staff | http://localhost:5173/staff/dashboard |
+
+Set `VITE_BASE_URL=http://localhost:4000` in `frontend/.env` (required for login API calls).
+
+Seeded staff password: `staff123` (see `backend/lib/seed.js` for generated emails). Admin account uses handle `admin`.
+
 **Terminal 3 — video editor (optional):**
 
 ```bash
@@ -213,6 +224,23 @@ Open http://localhost:3000
 | `pnpm start`  | Run production build     |
 
 ## Troubleshooting
+
+### `ERR_CONNECTION_REFUSED` on `localhost:4000`
+
+The backend is not running. In the backend terminal you should see `Server is running on port 4000`. If nodemon shows a crash:
+
+- **MongoDB:** `MONGODB_URI` is optional; the server starts without it (forums need Mongo later).
+- Restart: `cd backend` → `npm start`
+
+### `Redis Client Error: WRONGPASS` or login returns Internal server error
+
+Redis credentials in `backend/.env` are wrong. For local dev, add to `backend/.env`:
+
+```env
+REDIS_USE_MEMORY=true
+```
+
+Then restart the backend. Sessions and login lockout will use an in-memory store instead of Redis.
 
 ### `Redis Client Error: WRONGPASS invalid username-password pair`
 

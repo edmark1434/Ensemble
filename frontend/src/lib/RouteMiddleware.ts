@@ -2,6 +2,7 @@ import { createElement, useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import useGlobalState from "./global_state";
 import api from "./axios";
+import { getStaffHomePath } from "./staffRoutes";
 
 function getRedirectPath(user: any) {
     if (!user) {
@@ -9,27 +10,7 @@ function getRedirectPath(user: any) {
     }
 
     if (user.type === 'Staff') {
-        if (user.role === 'Admin') {
-            return '/admin';
-        }
-
-        if (user.role === 'Support Moderator') {
-            return '/moderator/support';
-        }
-
-        if (user.role === 'Jobs N Gigs Moderator') {
-            return '/moderator/forum';
-        }
-
-        if (user.role === 'Forum Moderator') {
-            return '/moderator/marketplace';
-        }
-
-        if (user.role === 'Dispute Moderator') {
-            return '/moderator/dispute';
-        }
-
-        return null;
+        return getStaffHomePath(user.role);
     }
 
     if (user.type === 'User') {
@@ -45,7 +26,7 @@ export default function RouteMiddleware() {
     const location = useLocation();
     const [resolvedUser, setResolvedUser] = useState(user);
     const [isCheckingSession, setIsCheckingSession] = useState(!user);
-    const isPublicRoute = ['/', '/login', '/signup'].includes(location.pathname);
+    const isPublicRoute = ['/', '/login', '/signup', '/admin', '/staff'].includes(location.pathname);
 
     useEffect(() => {
         let cancelled = false;

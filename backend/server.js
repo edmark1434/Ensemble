@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -11,12 +13,20 @@ app.set('trust proxy', 1);
 const httpServer = createServer(app);
 initSocket(httpServer);
 
-//origin URL allowed to access the backend, can be set via environment variable FRONTEND_URL, defaults to localhost:5173 for development
-const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
+const devOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:5173',
+  'http://localhost:5174',
+].filter(Boolean);
 
-//middleware for cors policy and parsing JSON bodies
 app.use(cors({
-  origin: allowedOrigin,
+  origin(origin, callback) {
+    if (!origin || devOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
   credentials: true,
 }));
 app.use(cookieParser());
@@ -25,10 +35,8 @@ app.use(express.json());
 //api routes
 app.use('/api', apiRoutes);
 
-//connect to MongoDB before starting the server
-connectDB();
-
-//connect to database and start server
 httpServer.listen(4000, () => {
   console.log('Server is running on port 4000');
 });
+
+void connectDB();
