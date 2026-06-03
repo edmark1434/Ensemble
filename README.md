@@ -94,7 +94,7 @@ This creates the database (if missing) and applies `backend/sql/schema.sql`.
 
 ### 5. Seed the database (optional)
 
-Populates test staff and users.
+Populates test staff and users. **Clears existing rows** in `accounts`, `users`, and `staff` first, so it is safe to run more than once.
 
 ```bash
 npm run seed

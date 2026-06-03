@@ -33,9 +33,15 @@ async function ensurePasswordHashColumnCapacity() {
   }
 }
 
+async function resetSeedTables() {
+  await pool.query('TRUNCATE TABLE staff, users, accounts RESTART IDENTITY CASCADE');
+}
+
 async function seed() {
   try {
     console.log("🌱 Starting Seeding...");
+    console.log("🗑️ Clearing existing accounts, users, and staff...");
+    await resetSeedTables();
     await ensurePasswordHashColumnCapacity();
 
     const roles = ['Admin', 'Support Moderator', 'Jobs N Gigs Moderator', 'Forum Moderator'];
