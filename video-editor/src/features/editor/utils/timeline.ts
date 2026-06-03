@@ -68,47 +68,79 @@ export const getNextZoom = (
   return nextZoom;
 };
 
+// export function getFitZoomLevel(
+//   totalLengthMs: number,
+//   zoom = 1,
+//   scrollOffset = 8 // Default fallback value
+// ): ITimelineScaleState {
+//   const getVisibleWidth = () => {
+//     const clampedScrollOffset = Math.max(0, scrollOffset);
+//
+//     const timelineCanvas = document.getElementById(
+//       "designcombo-timeline-canvas"
+//     ) as HTMLElement;
+//     const offsetWidth =
+//       timelineCanvas?.offsetWidth ?? document.body.offsetWidth;
+//
+//     // Use 1 to prevent NaN because of dividing by 0.
+//     return Math.max(1, offsetWidth - clampedScrollOffset);
+//   };
+//
+//   const getFullWidth = () => {
+//     if (typeof totalLengthMs === "number") {
+//       return timeMsToUnits(totalLengthMs, zoom);
+//     }
+//
+//     return calculateTimelineWidth(totalLengthMs, zoom);
+//   };
+//
+//   const multiplier = getVisibleWidth() / getFullWidth();
+//   const targetZoom = zoom * multiplier;
+//
+//   const fitZoomIndex = findIndex(TIMELINE_ZOOM_LEVELS, (level) => {
+//     return level.zoom > targetZoom;
+//   });
+//
+//   // const clampedIndex = clamp(fitZoomIndex, 0, TIMELINE_ZOOM_LEVELS.length - 1);
+//
+//   return {
+//     segments: 5,
+//     index: fitZoomIndex,
+//     zoom: targetZoom,
+//     unit: 1 / targetZoom
+//   };
+// }
+
 export function getFitZoomLevel(
-  totalLengthMs: number,
-  zoom = 1,
-  scrollOffset = 8 // Default fallback value
+    totalLengthMs: number,
+    zoom = 1,
+    scrollOffset = 8
 ): ITimelineScaleState {
   const getVisibleWidth = () => {
     const clampedScrollOffset = Math.max(0, scrollOffset);
-
     const timelineCanvas = document.getElementById(
-      "designcombo-timeline-canvas"
+        "designcombo-timeline-canvas"
     ) as HTMLElement;
     const offsetWidth =
-      timelineCanvas?.offsetWidth ?? document.body.offsetWidth;
-
-    // Use 1 to prevent NaN because of dividing by 0.
+        timelineCanvas?.offsetWidth ?? document.body.offsetWidth;
     return Math.max(1, offsetWidth - clampedScrollOffset);
   };
 
-  const getFullWidth = () => {
-    if (typeof totalLengthMs === "number") {
-      return timeMsToUnits(totalLengthMs, zoom);
-    }
-
-    return calculateTimelineWidth(totalLengthMs, zoom);
-  };
-
-  const multiplier = getVisibleWidth() / getFullWidth();
+  const visibleWidth = getVisibleWidth();
+  const fullWidth = timeMsToUnits(totalLengthMs, zoom);
+  const multiplier = visibleWidth / fullWidth;
   const targetZoom = zoom * multiplier;
 
-  const fitZoomIndex = findIndex(TIMELINE_ZOOM_LEVELS, (level) => {
-    return level.zoom > targetZoom;
-  });
+  // Find the largest preset zoom that still fits the whole timeline
+  const fittingLevels = TIMELINE_ZOOM_LEVELS.filter(
+      (level) => level.zoom <= targetZoom
+  );
 
-  // const clampedIndex = clamp(fitZoomIndex, 0, TIMELINE_ZOOM_LEVELS.length - 1);
+  if (fittingLevels.length === 0) return TIMELINE_ZOOM_LEVELS[0];
 
-  return {
-    segments: 5,
-    index: fitZoomIndex,
-    zoom: targetZoom,
-    unit: 1 / targetZoom
-  };
+  return fittingLevels.reduce((best, curr) =>
+      curr.zoom > best.zoom ? curr : best
+  );
 }
 
 export function timeMsToUnits(timeMs: number, zoom = 1): number {

@@ -52,8 +52,8 @@ const useStore = create<ITimelineStore>((set) => ({
   structure: [],
   setCompositions: (compositions) => set({ compositions }),
   size: {
-    width: 1080,
-    height: 1920
+    width: 2560,
+    height: 1080
   },
 
   background: {

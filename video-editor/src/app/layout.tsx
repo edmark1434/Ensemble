@@ -31,10 +31,10 @@ const outfit = Outfit({
 
 export const metadata = createMetadata({
   title: {
-    template: "%s | Combo",
-    default: "Combo",
+    template: "%s | Ensemble",
+    default: "Ensemble",
   },
-  description: "AI Video generator for the next gen web.",
+  description: "Structure-first collaborative video editor.",
   metadataBase: baseUrl,
 });
 
@@ -50,8 +50,8 @@ export default async function RootLayout({
       >
         <ThemeProvider
           attribute="class"
-          defaultTheme="light"
-          enableSystem
+          defaultTheme="dark"
+          // enableSystem
           disableTransitionOnChange
         >
           <QueryProvider>

@@ -6,30 +6,24 @@ import { PREVIEW_FRAME_WIDTH } from "../constants/constants";
  * @returns Time in format HH:MM:SS.FPS
  */
 export function formatTimelineUnit(units?: number): string {
-  if (!units) return "0";
+  if (!units) return "00:00";
   const time = units / PREVIEW_FRAME_WIDTH;
 
   const frames = Math.trunc(time) % 60;
   const seconds = Math.trunc(time / 60) % 60;
   const minutes = Math.trunc(time / 3600) % 60;
   const hours = Math.trunc(time / 216000);
-  const formattedTime = [
-    hours.toString(),
-    minutes.toString(),
-    seconds.toString(),
-    frames.toString()
-  ];
 
-  if (time < 60) {
-    return `${formattedTime[3].padStart(2, "0")}f`;
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
   }
-  if (time < 3600) {
-    return `${formattedTime[2].padStart(1, "0")}s`;
+  if (minutes > 0 || seconds > 0) {
+    return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
   }
-  if (time < 216000) {
-    return `${formattedTime[1].padStart(2, "0")}:${formattedTime[2].padStart(2, "0")}`;
+  if (frames > 0) {
+    return `${frames}f`;
   }
-  return `${formattedTime[0].padStart(2, "0")}:${formattedTime[1].padStart(2, "0")}:${formattedTime[2].padStart(2, "0")}`;
+  return "00:00";
 }
 
 export function formatTimeToHumanReadable(

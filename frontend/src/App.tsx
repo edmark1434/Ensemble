@@ -2,6 +2,8 @@ import { Routes, Route } from 'react-router-dom'
 import {ToastProvider} from "@/components/utility/toast_provider.tsx";
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/auth/Loginpage'
+import AdminLoginPage from './pages/auth/AdminLoginPage'
+import StaffLoginPage from './pages/auth/StaffLoginPage'
 import SignupPage from './pages/auth/Signuppage'
 import EmailVerification from './pages/EmailVerification'
 
@@ -28,9 +30,13 @@ import ExpandDiscussion from "@/pages/user/4_forums/ExpandDiscussion.tsx";
 
 import SectionPlaceholder from './pages/user/0_config/SectionPlaceholder.tsx'
 
+import JobPostingMain from "@/pages/user/6_jobs/Job_Posting/main.tsx";
+
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminSectionPlaceholder from './pages/admin/AdminSectionPlaceholder'
+import StaffPortalLayout from './pages/staff/StaffPortalLayout'
+import StaffDashboard from './pages/staff/StaffDashboard'
 
 import DisputeModeratorLayout from './pages/moderator/dispute-moderator/Layout'
 import ForumModeratorLayout from './pages/moderator/forum-moderator/Layout'
@@ -47,6 +53,10 @@ function App() {
     <>
       <ToastProvider />
       <Routes>
+      {/* Staff / admin portal logins (public; production: admin.ensemble / staff.ensemble) */}
+      <Route path="/admin" element={<AdminLoginPage />} />
+      <Route path="/staff" element={<StaffLoginPage />} />
+
       <Route element={<RouteMiddleware />}>
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
@@ -78,7 +88,12 @@ function App() {
           </Route>
 
           <Route path='/assets' element={<SectionPlaceholder title='ASSET LIBRARY' />} />
-          <Route path='/jobs' element={<SectionPlaceholder title='JOB POSTING' />} />
+
+          <Route path='/jobs'>
+            <Route index element={<JobPostingMain />} />
+            <Route path=':id' element={<JobPostingMain />} />
+          </Route>
+
           <Route path='/proposals' element={<SectionPlaceholder title='INCOMING PROPOSALS' />} />
           <Route path='/my-proposals' element={<SectionPlaceholder title='MY PROPOSALS' />} />
           <Route path='/gigs' element={<SectionPlaceholder title='GIG POSTING' />} />
@@ -92,9 +107,14 @@ function App() {
 
       <Route element={<StaffMiddleware />}>
 
-        {/* Admin Routes */}
+        {/* Staff portal dashboard — login is /staff */}
+        <Route path='/staff' element={<StaffPortalLayout />}>
+          <Route path='dashboard' element={<StaffDashboard />} />
+        </Route>
+
+        {/* Admin Routes — dashboard lives under /admin/dashboard; login is /admin */}
         <Route path='/admin' element={<AdminLayout />}>
-          <Route index element={<AdminDashboard />} />
+          <Route path='dashboard' element={<AdminDashboard />} />
           <Route path='user-team' element={<AdminSectionPlaceholder title='USER & TEAM' />} />
           <Route path='credit-economy' element={<AdminSectionPlaceholder title='CREDIT & ECONOMY' />} />
           <Route path='moderation' element={<AdminSectionPlaceholder title='MODERATION' />} />

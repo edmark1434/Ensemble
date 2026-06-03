@@ -8,19 +8,53 @@ import { ITimelineScaleState } from "@designcombo/types";
 class Timeline extends TimelineBase {
   public isShiftKey: boolean = false;
   constructor(
-    canvasEl: HTMLCanvasElement,
-    options: Partial<TimelineOptions> & {
-      scale: ITimelineScaleState;
-      duration: number;
-      guideLineColor?: string;
-    }
+      canvasEl: HTMLCanvasElement,
+      options: Partial<TimelineOptions> & {
+        scale: ITimelineScaleState;
+        duration: number;
+        guideLineColor?: string;
+      }
   ) {
-    super(canvasEl, options); // Call the parent class constructor
+    // Intercept the wheel listener registration before super()
+    let capturedWheelListener: EventListenerOrEventListenerObject | null = null;
+    const origAddEventListener = EventTarget.prototype.addEventListener;
+    EventTarget.prototype.addEventListener = function(type: string, listener: any, options: any) {
+      if (type === 'wheel') {
+        capturedWheelListener = listener;
+      }
+      return origAddEventListener.call(this, type, listener, options);
+    };
 
-    // Add shift keyboard listener
+    super(canvasEl, options);
+
+    // Restore immediately
+    EventTarget.prototype.addEventListener = origAddEventListener;
+
+    // Now remove it and add ours
+    if (capturedWheelListener) {
+      this.upperCanvasEl.removeEventListener('wheel', capturedWheelListener);
+    }
+    this.upperCanvasEl.addEventListener('wheel', this.handleWheel, { passive: false });
+
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
   }
+
+  private handleWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    if (e.ctrlKey) return; // block pinch
+
+    const currentScrollLeft = -this.viewportTransform[4] + this.spacing.left;
+
+    if (e.shiftKey) {
+      // shift + wheel = vertical scroll
+      const currentScrollTop = -this.viewportTransform[5];
+      this.scrollTo({ scrollTop: Math.max(0, currentScrollTop + e.deltaY) });
+    } else {
+      // normal wheel = horizontal scroll
+      this.scrollTo({ scrollLeft: Math.max(0, currentScrollLeft + e.deltaY) });
+    }
+  };
 
   private handleKeyDown = (event: KeyboardEvent) => {
     if (event.key === "Shift") {
@@ -36,10 +70,9 @@ class Timeline extends TimelineBase {
 
   public purge(): void {
     super.purge();
-
-    // Cleanup event listener for Shift key
     window.removeEventListener("keydown", this.handleKeyDown);
     window.removeEventListener("keyup", this.handleKeyUp);
+    this.upperCanvasEl.removeEventListener('wheel', this.handleWheel);
   }
 
   public setViewportPos(posX: number, posY: number) {

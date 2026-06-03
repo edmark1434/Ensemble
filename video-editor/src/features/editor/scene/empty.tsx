@@ -13,20 +13,27 @@ const SceneEmpty = () => {
 
   useEffect(() => {
     const container = containerRef.current!;
-    const PADDING = 96;
-    const containerHeight = container.clientHeight - PADDING;
-    const containerWidth = container.clientWidth - PADDING;
-    const { width, height } = size;
 
-    const desiredZoom = Math.min(
-      containerWidth / width,
-      containerHeight / height
-    );
-    setDesiredSize({
-      width: width * desiredZoom,
-      height: height * desiredZoom
-    });
-    setIsLoading(false);
+    const calculate = () => {
+      const PADDING = 30;
+      const containerHeight = container.clientHeight - PADDING;
+      const containerWidth = container.clientWidth - PADDING;
+      const { width, height } = size;
+
+      const desiredZoom = Math.min(containerWidth / width, containerHeight / height);
+      setDesiredSize({
+        width: width * desiredZoom,
+        height: height * desiredZoom
+      });
+      setIsLoading(false);
+    };
+
+    calculate();
+
+    const observer = new ResizeObserver(calculate);
+    observer.observe(container);
+
+    return () => observer.disconnect();
   }, [size]);
 
   const onSelectFiles = (files: File[]) => {
@@ -48,11 +55,16 @@ const SceneEmpty = () => {
         >
           <DroppableArea
             onDragStateChange={setIsDraggingOver}
-            className={`absolute h-[calc(100%-40px)] bg-card aspect-[9/16] left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform items-center justify-center border border-dashed text-center transition-colors duration-200 ease-in-out ${
+            style={{
+              width: desiredSize.width,
+              height: desiredSize.height,
+            }}
+            className={`absolute bg-card left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform items-center justify-center border border-dashed text-center transition-colors duration-200 ease-in-out ${
               isDraggingOver ? "border-border bg-white/10" : "border-border"
             }`}
           >
-            <div className="flex flex-col items-center justify-center gap-4 pb-12">
+            {/* i removed a pb-12 here */}
+            <div className="flex flex-col items-center justify-center gap-4">
               <div className="hover:bg-primary-dark cursor-pointer rounded-md border bg-primary p-2 text-secondary transition-colors duration-200">
                 <PlusIcon className="h-5 w-5" aria-hidden="true" />
               </div>

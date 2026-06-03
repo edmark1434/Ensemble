@@ -1,13 +1,13 @@
 const { MongoClient } = require('mongodb');
 const dotenv = require('dotenv');
-dotenv.config();
-const uri = process.env.MONGODB_URI;
-const client = new MongoClient(uri);
 
-// Keep track of the connection state so we don't connect multiple times
+dotenv.config();
+
+const uri = process.env.MONGODB_URI;
+let client = null;
 let isConnected = false;
 
-async function connectMongoDB() {
+async function connectDB() {
     if (isConnected) return client;
 
     try {

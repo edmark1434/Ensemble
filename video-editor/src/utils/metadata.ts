@@ -8,7 +8,7 @@ export function createMetadata(override: Metadata): Metadata {
       description: override.description ?? undefined,
       url: "https://designcombo.dev",
       images: "/banner.png",
-      siteName: "Combo",
+      siteName: "Ensemble",
       ...override.openGraph
     },
     twitter: {

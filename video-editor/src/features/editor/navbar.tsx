@@ -86,13 +86,13 @@ export default function Navbar({
         display: "grid",
         gridTemplateColumns: isLargeScreen ? "320px 1fr 320px" : "1fr 1fr 1fr"
       }}
-      className="bg-card pointer-events-none flex h-13 items-center border-b border-border/80 px-2"
+      className="bg-primary/12 pointer-events-none flex h-13 items-center border-b border-border/80 px-2"
     >
       <DownloadProgressModal />
 
       <div className="flex items-center gap-2">
         <div className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-md invert dark:invert-0">
-          <LogoIcons.scenify />
+          <LogoIcons.ensemble />
         </div>
 
         <div className=" pointer-events-auto flex h-10 items-center px-1.5">
@@ -139,13 +139,7 @@ export default function Navbar({
           >
             <Keyboard className="size-5" />
           </Button>
-          <Link href="https://discord.gg/Jmxsd5f2jp" target="_blank">
-            <Button className="h-8 rounded-lg" variant={"outline"}>
-              <LogoIcons.discord className="w-6 h-6" />
-              <span className="hidden md:block">Join Us</span>
-            </Button>
-          </Link>
-          <ModeToggle />
+          {/*<ModeToggle />*/}
 
           {/* <Button
             className="flex h-8 gap-1 border border-border"
@@ -189,11 +183,11 @@ const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          className="flex h-8 gap-1 border border-border rounded-full"
+          className="flex h-8 gap-1 border border-border"
           size={isMediumScreen ? "sm" : "icon"}
         >
           {/* <Download width={18} />{" "} */}
-          <span className="hidden md:block">Download</span>
+          <span className="hidden md:block font-normal">Download</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent

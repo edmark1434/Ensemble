@@ -69,14 +69,14 @@ export const TIMELINE_ZOOM_LEVELS: ITimelineScaleState[] = [
     index: 9,
     unit: 120,
     zoom: 1 / 120,
-    segments: 10
+    segments: 4
   },
   {
     // 1x distance (second 0 to second 1, 1 segment).
     index: 10,
     unit: 60,
     zoom: 1 / 60,
-    segments: 3
+    segments: 4
   },
 
   {
@@ -89,10 +89,10 @@ export const TIMELINE_ZOOM_LEVELS: ITimelineScaleState[] = [
   {
     // 1x distance (frame 0 to frame 30, 2 segments).
     index: 12,
-    unit: 30,
-    zoom: 1 / 30,
-    segments: 5
-  }
+    unit: 60,
+    zoom: 1 / 40,
+    segments: 6
+  },
   // {
   //   // 1x distance (frame 0 to frame 15, 3 segments).
   //   index: 13,
@@ -105,7 +105,7 @@ export const TIMELINE_ZOOM_LEVELS: ITimelineScaleState[] = [
   //   index: 14,
   //   unit: 10,
   //   zoom: 1 / 10,
-  //   segments: 2,
+  //   segments: 5,
   // },
   // {
   //   // 1x distance (frame 0 to frame 5, 5 segments).

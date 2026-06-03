@@ -6,7 +6,7 @@ export default function Home() {
   return (
     <>
       <Editor />
-      <InvitationModal />
+      {/*<InvitationModal />*/}
     </>
   );
 }

@@ -112,7 +112,7 @@ export const Captions = () => {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4">
+    <div className="h-full flex items-center justify-center flex-1 flex-col gap-4 p-4">
       {mediaTrackItems.length === 0 ? (
         <EmptyMediaTrackItems />
       ) : (
