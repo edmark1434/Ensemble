@@ -4,10 +4,10 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const uri = process.env.MONGODB_URI;
-let client = null;
+const client = new MongoClient(uri);
 let isConnected = false;
 
-async function connectDB() {
+async function connectMongoDB() {
     if (isConnected) return client;
 
     try {

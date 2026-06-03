@@ -13,7 +13,6 @@ async function createForumGroup({
     status = 'active',
 }){
     try{
-        const db = client.db('ensemble');
         const forumGroupsCollection = db.collection('forum_groups');
         const result = await forumGroupsCollection.insertOne({
             image_url: imageUrl,
@@ -35,7 +34,6 @@ async function createForumGroup({
 
 async function getForumGroupById(groupId){
     try{
-        const db = client.db('ensemble');
         const forumGroupsCollection = db.collection('forum_groups');
             const result = await forumGroupsCollection.findOne({ _id: new ObjectId(groupId),status: 'active' });
         return result;
@@ -47,7 +45,6 @@ async function getForumGroupById(groupId){
 
 async function getAllForumGroups(){
     try{
-        const db = client.db('ensemble');
         const forumGroupsCollection = db.collection('forum_groups');
         const result = await forumGroupsCollection.find({status: 'active'}).toArray();
         return result;
@@ -59,7 +56,6 @@ async function getAllForumGroups(){
 
 async function getForumGroupsByMemberId(memberId){
     try{
-        const db = client.db('ensemble');
         const forumGroupsCollection = db.collection('forum_groups');
         const normalizedMemberId = Number.isNaN(Number(memberId)) ? memberId : Number(memberId);
         const result = await forumGroupsCollection.find({ 'members.userId': normalizedMemberId, status: 'active' }).toArray();
