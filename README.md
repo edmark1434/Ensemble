@@ -81,9 +81,20 @@ FRONTEND_URL=http://localhost:5173
 
 Generate JWT secrets with any long random string (e.g. `openssl rand -hex 32`).
 
-### 4. Seed the database (optional)
+### 4. Create the database and tables
 
-Populates test staff and users. Requires the database schema to already exist.
+Your `DB_NAME` in `.env` must exist in PostgreSQL. If you see `database "ensemble" does not exist`, run:
+
+```bash
+cd backend
+npm run db:setup
+```
+
+This creates the database (if missing) and applies `backend/sql/schema.sql`.
+
+### 5. Seed the database (optional)
+
+Populates test staff and users. **Clears existing rows** in `accounts`, `users`, and `staff` first, so it is safe to run more than once.
 
 ```bash
 npm run seed
@@ -100,7 +111,7 @@ To wipe seeded data:
 npm run clean
 ```
 
-### 5. Configure the frontend
+### 6. Configure the frontend
 
 ```bash
 cd ../frontend
@@ -124,7 +135,7 @@ VITE_FIREBASE_MEASUREMENT_ID=...
 
 Get Firebase values from the [Firebase Console](https://console.firebase.google.com/) → Project settings → Your apps.
 
-### 6. Configure the video editor (optional)
+### 7. Configure the video editor (optional)
 
 Only needed if you are running the editor locally:
 
@@ -165,6 +176,17 @@ npm run dev
 
 Open http://localhost:5173
 
+**Staff / admin portals (dev routes; production uses subdomains):**
+
+| Portal | Login URL | After login |
+|--------|-----------|-------------|
+| Admin | http://localhost:5173/admin | http://localhost:5173/admin/dashboard |
+| Staff (moderators) | http://localhost:5173/staff | http://localhost:5173/staff/dashboard |
+
+Set `VITE_BASE_URL=http://localhost:4000` in `frontend/.env` (required for login API calls).
+
+Seeded staff password: `staff123` (see `backend/lib/seed.js` for generated emails). Admin account uses handle `admin`.
+
 **Terminal 3 — video editor (optional):**
 
 ```bash
@@ -180,9 +202,10 @@ Open http://localhost:3000
 
 | Command        | Description                          |
 |----------------|--------------------------------------|
-| `npm start`    | Start API with nodemon (port 4000)   |
-| `npm run seed` | Insert sample users and staff        |
-| `npm run clean`| Truncate users, staff, and accounts  |
+| `npm start`      | Start API with nodemon (port 4000)   |
+| `npm run db:setup` | Create DB + apply schema           |
+| `npm run seed`   | Insert sample users and staff        |
+| `npm run clean`  | Truncate users, staff, and accounts  |
 
 ### Frontend (`frontend/`)
 
@@ -202,6 +225,23 @@ Open http://localhost:3000
 
 ## Troubleshooting
 
+### `ERR_CONNECTION_REFUSED` on `localhost:4000`
+
+The backend is not running. In the backend terminal you should see `Server is running on port 4000`. If nodemon shows a crash:
+
+- **MongoDB:** `MONGODB_URI` is optional; the server starts without it (forums need Mongo later).
+- Restart: `cd backend` → `npm start`
+
+### `Redis Client Error: WRONGPASS` or login returns Internal server error
+
+Redis credentials in `backend/.env` are wrong. For local dev, add to `backend/.env`:
+
+```env
+REDIS_USE_MEMORY=true
+```
+
+Then restart the backend. Sessions and login lockout will use an in-memory store instead of Redis.
+
 ### `Redis Client Error: WRONGPASS invalid username-password pair`
 
 Redis rejected the credentials in `REDIS_URL`. The backend keeps retrying and auth/session features will not work until this is fixed.
@@ -215,9 +255,19 @@ Redis rejected the credentials in `REDIS_URL`. The backend keeps retrying and au
    - Redis Cloud / hosted: copy the full connection URL from your provider dashboard
 3. Restart the backend (`Ctrl+C`, then `npm start` again)
 
+### `database "ensemble" does not exist` (or your `DB_NAME`)
+
+Postgres is running but the database named in `DB_NAME` was never created. Run:
+
+```bash
+cd backend
+npm run db:setup
+npm run seed
+```
+
 ### `Connection error` (PostgreSQL)
 
-Check that Postgres is running and that `DB_USER`, `DB_HOST`, `DB_NAME`, `DB_PASSWORD`, and `DB_PORT` in `backend/.env` are correct. The database must exist and include the required tables.
+Check that Postgres is running and that `DB_USER`, `DB_HOST`, `DB_NAME`, `DB_PASSWORD`, and `DB_PORT` in `backend/.env` are correct.
 
 ### Frontend cannot reach the API
 
