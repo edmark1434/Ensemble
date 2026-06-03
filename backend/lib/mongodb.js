@@ -4,36 +4,21 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const uri = process.env.MONGODB_URI;
-let client = null;
+const client = new MongoClient(uri);
 let isConnected = false;
 
-async function connectDB() {
-  if (!uri) {
-    console.warn('MONGODB_URI is not set — MongoDB features (forums) are disabled.');
-    return null;
-  }
+async function connectMongoDB() {
+    if (isConnected) return client;
 
-  if (isConnected && client) {
-    return client;
-  }
-
-  try {
-    client = new MongoClient(uri);
-    await client.connect();
-    console.log('Connected successfully to MongoDB');
-    isConnected = true;
-    return client;
-  } catch (err) {
-    console.error('MongoDB connection error:', err.message);
-    console.warn('Server will continue without MongoDB — forum features may not work.');
-    client = null;
-    isConnected = false;
-    return null;
-  }
+    try {
+        await client.connect();
+        console.log('Connected successfully to MongoDB');
+        isConnected = true;
+        return client;
+    } catch (err) {
+        console.error('MongoDB connection error:', err);
+        process.exit(1); // Stop the app if we can't connect to our database
+    }
 }
 
-function getMongoClient() {
-  return client;
-}
-
-module.exports = { connectDB, getMongoClient };
+module.exports = { client, connectMongoDB };

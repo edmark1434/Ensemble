@@ -3,6 +3,7 @@ import { useState } from "react";
 import { X, Users, AlertCircle, Image as ImageIcon, Tag, Plus, Trash2 } from "lucide-react";
 import { showSuccessToast, showErrorToast } from "@/components/utility/toast.ts";
 import axios from "@/lib/axios.ts";
+import {gradientOptions} from "@/pages/user/4_forums/forum_modals/EditGroupModal.tsx";
 interface CreateGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -147,6 +148,7 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
         description: description.trim(),
         tags,
         imageUrl,
+        gradient: gradientOptions[Math.floor(Math.random() * gradientOptions.length)].value, // Randomly assign a gradient from options
       });
 
       if (response.status === 201) {

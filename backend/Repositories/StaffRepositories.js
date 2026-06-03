@@ -1,4 +1,4 @@
-const pool = require('../lib/database');
+const { pool } = require('../lib/database');
 
 
 async function createStaff({

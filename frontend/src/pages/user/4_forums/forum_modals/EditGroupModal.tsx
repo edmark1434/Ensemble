@@ -17,7 +17,7 @@ interface EditGroupModalProps {
   onSave: (updatedData: { name: string; description: string; tags: string[]; gradient: string }) => void;
 }
 
-const gradientOptions = [
+export const gradientOptions = [
   { value: "from-cyan-500 via-blue-500 to-indigo-500", label: "Cyan to Indigo" },
   { value: "from-emerald-500 via-teal-500 to-cyan-500", label: "Emerald to Cyan" },
   { value: "from-purple-500 via-pink-500 to-rose-500", label: "Purple to Rose" },
@@ -39,7 +39,12 @@ const EditGroupModal: React.FC<EditGroupModalProps> = ({
   const [selectedGradient, setSelectedGradient] = useState(group.gradient);
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; description?: string; tags?: string }>({});
-
+  const defaultGroupDetails = {
+    name: group.name,
+    description: group.description,
+    tags: group.tags,
+    gradient: group.gradient,
+  };
   if (!isOpen) return null;
 
   const handleAddTag = () => {
@@ -89,18 +94,27 @@ const EditGroupModal: React.FC<EditGroupModalProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
+  const updatePayload = (payload:any) => {
+    if(payload.name === defaultGroupDetails.name) delete payload.name;
+    if(payload.description === defaultGroupDetails.description) delete payload.description;
+    if(JSON.stringify(payload.tags) === JSON.stringify(defaultGroupDetails.tags)) delete payload.tags;
+    if(payload.gradient === defaultGroupDetails.gradient) delete payload.gradient;
+    return payload;
+  }
+
   const handleSubmit = () => {
+
     if (!validate()) return;
-
+    let updatedPayload = updatePayload({ name, description, tags, gradient: selectedGradient });
+    if (updatedPayload.name) {
+      updatedPayload.group_name = updatedPayload.name.trim();
+      delete updatedPayload.name;
+    }
+    if (!updatedPayload) return;
     setIsSaving(true);
-
+    
     setTimeout(() => {
-      onSave({
-        name: name.trim(),
-        description: description.trim(),
-        tags: tags,
-        gradient: selectedGradient,
-      });
+      onSave(updatedPayload);
       setIsSaving(false);
       onClose();
     }, 500);

@@ -24,7 +24,7 @@ import { showSuccessToast } from "@/components/utility/toast.ts";
 import { showErrorToast } from "@/components/utility/toast.ts";
 
 interface Group {
-  id: number;
+  id: string;
   name: string;
   tags: string[];
 }
@@ -44,7 +44,7 @@ interface NewDiscussionModalProps {
   onCreatePost: (postData: {
     title: string;
     content: string;
-    groupId: number;
+    groupId: string;
     tag: string;
     images?: ImageAttachment[];
   }) => void;
@@ -209,7 +209,7 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
   // State hooks
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedTag, setSelectedTag] = useState<string>("");
   const [isCreating, setIsCreating] = useState(false);
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false);

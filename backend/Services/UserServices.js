@@ -9,6 +9,7 @@ const {
     getEmailandPasswordHashByEmail,
     getEmailandPasswordHashByUsername,
     updateFirebaseUserUuid,
+    getUserByListofIdsRepositories
 } = require('../Repositories/UserRepositories');
 const {
     createAccount,
@@ -84,6 +85,13 @@ async function findUserByEmail(email) {
     }
 
     return getUserByEmail(email.toLowerCase());
+}
+
+async function getUsersByListOfIdsServices(userIds) { 
+    if (!Array.isArray(userIds) || userIds.some(id => typeof id !== 'number')) {
+        throw new ServiceError('Invalid user IDs format. Expected an array of numbers.', 400);
+    }
+    return await getUserByListofIdsRepositories(userIds);
 }
 
 //function to register a new user, handling both standard email/password registration and OAuth-based registration, including validation of input, checking for existing users, creating accounts and users in the database, hashing passwords, and returning the created user and account information
@@ -352,5 +360,6 @@ module.exports = {
     RefreshTokens,
     createSessionId,
     logout,
-    getCredentials
+    getCredentials,
+    getUsersByListOfIdsServices
 };
