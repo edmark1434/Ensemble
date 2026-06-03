@@ -1,4 +1,4 @@
-const pool = require('../lib/database');
+const { pool } = require('../lib/database');
 
 // User repository functions for interacting with the users table in the database
 async function getAllUsers() {
@@ -18,6 +18,16 @@ async function getUserById(userId) {
         return result.rows[0];
     } catch (err) {
         console.error(`Error fetching user with id ${userId}:`, err);
+        throw err;
+    }
+}
+
+async function getUserByListofIdsRepositories(userIds) { 
+    try {
+        const {rows} = await pool.query('SELECT json_agg(user_data) as users_list FROM (SELECT user_id,first_name, last_name,a.avatar_file_id FROM users inner join accounts as a on users.account_id = a.account_id WHERE user_id = ANY($1)) as user_data', [userIds]);
+        return rows[0].users_list || [];
+    }catch (err) {
+        console.error(`Error fetching users with ids ${userIds}:`, err);
         throw err;
     }
 }
@@ -121,5 +131,6 @@ module.exports = {
     getUserByEmail,
     getEmailandPasswordHashByEmail,
     getEmailandPasswordHashByUsername,
-    updateFirebaseUserUuid
+    updateFirebaseUserUuid,
+    getUserByListofIdsRepositories
 };

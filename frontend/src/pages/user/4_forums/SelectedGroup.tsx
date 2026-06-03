@@ -1,6 +1,7 @@
 // src/pages/user/4_forums/SelectedGroup.tsx
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import api from "@/lib/axios";
 import {
   Users,
   MessageCircle,
@@ -53,155 +54,132 @@ type ImageAttachment = {
   url?: string;
   uploading?: boolean;
   uploadProgress?: number;
+  file_path?: string;
 };
 
-type Reply = {
-  id: number;
-  author: string;
-  authorAvatar: string;
-  content: string;
-  ago: string;
-  likes: number;
-  images?: ImageAttachment[];
+// Group type based on your data structure
+type Group = {
+  _id: string;
+  image_url: string;
+  group_name: string;
+  description: string;
+  created_at: string;
+  members: {
+    joined_at: string;
+    role: string;
+    userId: number;
+  }[];
+  tags: string[];
+  gradient?: string;
+};
+
+// Post/Discussion type based on your data structure
+type Comment = {
+  user_id: number;
+  comment: string;
+  comment_id: string;
+  comment_reference_id: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  attachments: {
+    file_path: string;
+  }[];
+  likes: {
+    user_id: number;
+  }[];
 };
 
 type Post = {
-  id: number;
-  groupId: number;
-  author: string;
-  authorAvatar?: string;
+  forum_group_id: number;
+  user_id: number;
   title: string;
-  content: string;
-  excerpt: string;
-  likes: number;
-  comments: number;
-  ago: string;
-  date: string;
-  tag?: string;
-  replies?: Reply[];
-  images?: ImageAttachment[];
+  description: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  tags: {
+    forum_tag_id: number;
+  }[];
+  attachments: {
+    file_path: string;
+  }[];
+  likes: {
+    user_id: number;
+  }[];
+  saves: {
+    user_id: number;
+  }[];
+  comments: Comment[];
 };
 
-type Member = {
-  id: number;
+type MemberWithDetails = {
+  userId: number;
+  role: string;
   name: string;
   avatar: string;
-  role: "owner" | "moderator" | "member";
   joinedAt: string;
-  permissions?: string[];
-};
-
-type Group = {
-  id: number;
-  name: string;
-  owner: string;
-  ownerId: number;
-  members: number;
-  memberCount: number;
-  joined: boolean;
-  gradient: string;
-  description?: string;
-  visibility: "public" | "private";
-  tags: string[];
-  createdAt: string;
-  userRole?: string;
-  userPermissions?: string[];
 };
 
 // Current user ID (simulated)
-const CURRENT_USER_ID = 1;
+const CURRENT_USER_ID = 11;
 const CURRENT_USER_NAME = "John Paul Mahilom";
 const CURRENT_USER_AVATAR = "https://i.pravatar.cc/150?u=john";
 
-// Sample members data with permissions
-const sampleMembers: Member[] = [
-  {
-    id: 1,
-    name: "John Paul Mahilom",
-    avatar: "https://i.pravatar.cc/150?u=john",
-    role: "owner",
-    joinedAt: "2024-01-01",
-    permissions: ["edit_group", "edit_permissions", "remove_member"],
-  },
-  {
-    id: 2,
-    name: "Sarah Chen",
-    avatar: "https://i.pravatar.cc/150?u=sarah",
-    role: "moderator",
-    joinedAt: "2024-01-05",
-    permissions: ["remove_member"],
-  },
-  {
-    id: 3,
-    name: "Marcus Thompson",
-    avatar: "https://i.pravatar.cc/150?u=marcus",
-    role: "member",
-    joinedAt: "2024-01-10",
-    permissions: [],
-  },
-  {
-    id: 4,
-    name: "Emma Watson",
-    avatar: "https://i.pravatar.cc/150?u=emma",
-    role: "member",
-    joinedAt: "2024-01-15",
-    permissions: [],
-  },
-  {
-    id: 5,
-    name: "Jodelic Pablo",
-    avatar: "https://i.pravatar.cc/150?u=jodelic",
-    role: "member",
-    joinedAt: "2024-01-20",
-    permissions: [],
-  },
-];
+// Helper: Format date to "ago" string
+const getTimeAgo = (dateString: string): string => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins} min ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  return date.toLocaleDateString();
+};
 
 // Helper: Render markdown content
 const renderMarkdownContent = (content: string) => {
   let html = content
-    // Bold
     .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-white">$1</strong>')
-    // Italic
     .replace(/\*(.*?)\*/g, '<em class="italic text-zinc-300">$1</em>')
-    // Code blocks
     .replace(/```\n(.*?)\n```/gs, '<pre class="rounded-lg bg-black/50 p-3 text-sm text-green-400 overflow-x-auto"><code>$1</code></pre>')
-    // Inline code
     .replace(/`(.*?)`/g, '<code class="rounded bg-black/50 px-1 py-0.5 text-xs text-green-400">$1</code>')
-    // Bullet lists
     .replace(/^- (.*?)$/gm, '<li class="ml-4 text-zinc-300">$1</li>')
-    // Numbered lists
     .replace(/^\d+\. (.*?)$/gm, '<li class="ml-4 text-zinc-300 list-decimal">$1</li>')
-    // Links
     .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" class="text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">$1</a>')
-    // Line breaks
     .replace(/\n/g, '<br />');
 
-  // Wrap lists properly
   html = html.replace(/(<li[^>]*>.*?<\/li>\n?)+/gs, '<ul class="my-2 space-y-1">$&</ul>');
-
   return html;
 };
 
 // Image Gallery Component
-const ImageGallery = ({ images }: { images?: ImageAttachment[] }) => {
+const ImageGallery = ({ attachments }: { attachments?: { file_path: string }[] }) => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  if (!images || images.length === 0) return null;
+  if (!attachments || attachments.length === 0) return null;
 
   return (
     <>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-        {images.map((image, idx) => (
+        {attachments.map((attachment, idx) => (
           <button
-            key={image.id || idx}
-            onClick={() => setSelectedImage(image.preview)}
+            key={idx}
+            onClick={() => setSelectedImage(attachment.file_path)}
             className="group relative overflow-hidden rounded-lg border border-white/10 bg-white/5 transition-all hover:scale-105 hover:border-white/20"
           >
             <img
-              src={image.preview}
+              src={attachment.file_path}
               alt={`Post image ${idx + 1}`}
               className="h-32 w-full object-cover transition-all group-hover:scale-110"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = "https://placehold.co/400x300?text=Image+Not+Found";
+              }}
             />
             <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition group-hover:opacity-100">
               <ImageIcon className="h-6 w-6 text-white" />
@@ -210,7 +188,6 @@ const ImageGallery = ({ images }: { images?: ImageAttachment[] }) => {
         ))}
       </div>
 
-      {/* Lightbox Modal */}
       {selectedImage && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
@@ -234,9 +211,8 @@ const ImageGallery = ({ images }: { images?: ImageAttachment[] }) => {
   );
 };
 
-// Reply Input Component with Image Upload
+// Reply Input Component
 const ReplyInput = ({
-  // postId,
   replyText,
   updateReplyText,
   handleReply,
@@ -293,10 +269,6 @@ const ReplyInput = ({
         formattedText = `\`${selectedText || "code"}\``;
         newCursorPos = start + 1;
         break;
-      case "insertText":
-        formattedText = value || "";
-        newCursorPos = start + (value?.length || 0);
-        break;
       default:
         return;
     }
@@ -333,7 +305,6 @@ const ReplyInput = ({
           className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20 flex-shrink-0"
         />
         <div className="flex-1">
-          {/* Rich Text Toolbar for Reply */}
           <div className="flex flex-wrap items-center gap-1 rounded-t-lg border border-white/15 border-b-0 bg-white/5 px-2 py-1">
             <button
               type="button"
@@ -385,7 +356,6 @@ const ReplyInput = ({
             </button>
           </div>
 
-          {/* Reply Input or Preview */}
           {!showPreview ? (
             <textarea
               ref={textareaRef}
@@ -408,7 +378,6 @@ const ReplyInput = ({
             </div>
           )}
 
-          {/* Image Previews for Reply */}
           {images.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
               {images.map((image) => (
@@ -475,8 +444,8 @@ const SelectedGroup = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>("posts");
   const [group, setGroup] = useState<Group | null>(null);
+  const [membersWithDetails, setMembersWithDetails] = useState<MemberWithDetails[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
-  const [members, setMembers] = useState<Member[]>(sampleMembers);
   const [loading, setLoading] = useState(true);
   const [expandedPostId, setExpandedPostId] = useState<number | null>(null);
   const [replyText, setReplyText] = useState<{ [key: number]: string }>({});
@@ -495,7 +464,7 @@ const SelectedGroup = () => {
   const [showDeleteGroupModal, setShowDeleteGroupModal] = useState(false);
   const [showReportMemberModal, setShowReportMemberModal] = useState(false);
   const [showRemoveMemberModal, setShowRemoveMemberModal] = useState(false);
-  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [selectedMember, setSelectedMember] = useState<MemberWithDetails | null>(null);
 
   // Post edit/delete states
   const [postMenuOpen, setPostMenuOpen] = useState<number | null>(null);
@@ -507,117 +476,94 @@ const SelectedGroup = () => {
   const [replyImages, setReplyImages] = useState<{ [key: number]: ImageAttachment[] }>({});
   const [replyUploading, setReplyUploading] = useState<{ [key: number]: boolean }>({});
 
+  // Helper to get member details
+  
+
   // Get unique categories from posts
-  const categories = ["All", ...new Set(posts.map(post => post.tag).filter(Boolean))];
+  const categories = ["All"];
 
-  // Filter posts by category
-  const filteredByCategory = selectedCategory === "All"
-    ? posts
-    : posts.filter(post => post.tag === selectedCategory);
-
-  const filteredPosts = filteredByCategory.filter(post =>
-    post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    post.excerpt.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    post.author.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const sortedPosts = [...filteredPosts].sort((a, b) => {
-    if (sortBy === "latest") {
-      return new Date(b.date).getTime() - new Date(a.date).getTime();
-    } else if (sortBy === "most-liked") {
-      return b.likes - a.likes;
-    } else if (sortBy === "most-commented") {
-      return b.comments - a.comments;
-    }
-    return 0;
-  });
-
-  // Fetch group data
+  // Fetch group and posts data
   useEffect(() => {
-    const fetchGroup = async () => {
+    const fetchData = async () => {
       setLoading(true);
-      // Mock data - replace with actual API call
-      const mockGroup: Group = {
-        id: Number(id),
-        name: "Color Grading Society",
-        owner: "John Paul Mahilom",
-        ownerId: 1,
-        members: 20,
-        memberCount: 20,
-        joined: true,
-        gradient: "from-cyan-500 via-blue-500 to-indigo-500",
-        description: "A community for color grading enthusiasts and professionals. Share your work, ask questions, and learn from the best in the industry.",
-        visibility: "public",
-        tags: ["Color Theory", "DaVinci Resolve", "LUTs", "Log Footage", "HDR"],
-        createdAt: "2024-01-01",
-        userRole: "owner",
-        userPermissions: ["edit_group", "edit_permissions", "remove_member"],
-      };
-
-      const mockPosts: Post[] = [
+      
+      const result = await api.get(`api/forum/groups/${id}`);
+      if (!result.data) {
+        showErrorToast("Group not found");
+        navigate("/forums");
+        return;
+      }
+    const mockGroup: Group = result.data;
+    const getMemberDetails = await api.post('api/users/list-of-details', { userIds: mockGroup.members.map(m => m.userId) });
+      let memberDetailsList = getMemberDetails.data.usersList;
+      for(const member of mockGroup.members) { 
+        const details = memberDetailsList.find((details: any) => details.user_id === member.userId);
+        if (details) {
+          details.name = `${details.first_name} ${details.last_name}`;
+          details.role = member.role;
+          details.avatar = details.avatar_file_id ? `api/files/${details.avatar_file_id}` : `https://i.pravatar.cc/150?u=${details.user_id}`;
+          details.joinedAt = member.joined_at;
+          details.userId = details.user_id;
+          delete details.first_name;
+          delete details.last_name;
+          delete details.user_id;
+          delete details.avatar_file_id;
+        }
+      }
+    // Mock posts data matching your structure
+    const mockPosts: Post[] = [
         {
-          id: 1,
-          groupId: Number(id),
-          author: "Forbes Talinging",
-          authorAvatar: "https://i.pravatar.cc/150?u=forbes",
-          title: "Best Practices for color grading log footage?",
-          content: "I am working with S-Log3 footage and looking for advice on the best workflow for color grading. What is your process?",
-          excerpt: "I am working with S-Log3 footage and looking for advice on the best workflow for color grading...",
-          likes: 12,
-          comments: 8,
-          ago: "45 min ago",
-          date: "2024-01-15T10:30:00",
-          tag: "Log Footage",
-          replies: [
-            {
-              id: 1,
-              author: "Sarah Chen",
-              authorAvatar: "https://i.pravatar.cc/150?u=sarah",
-              content: "Great question! I usually start with a color space transform to get from S-Log3 to Rec.709...",
-              ago: "30 min ago",
-              likes: 8,
-            },
+          forum_group_id: Number(id),
+          user_id: 101,
+          title: "Best workflow for log footage?",
+          description: "How do you grade S-Log3 for natural skin tones?",
+          created_at: "2026-06-02T10:30:00.000Z",
+          updated_at: "2026-06-02T10:30:00.000Z",
+          deleted_at: null,
+          tags: [
+            { forum_tag_id: 10 },
+            { forum_tag_id: 11 }
           ],
-          images: [
-            {
-              id: "img1",
-              preview: "https://picsum.photos/id/101/400/300",
-            },
-            {
-              id: "img2",
-              preview: "https://picsum.photos/id/102/400/300",
-            },
+          attachments: [
+            { file_path: "uploads/discussions/log-shot-01.jpg" }
           ],
-        },
-        {
-          id: 2,
-          groupId: Number(id),
-          author: CURRENT_USER_NAME,
-          authorAvatar: CURRENT_USER_AVATAR,
-          title: "Dealing with difficult clients - advice needed",
-          content: "Client keeps asking for revisions beyond what is in the contract...",
-          excerpt: "Client keeps asking for revisions beyond what is in the contract...",
-          likes: 24,
-          comments: 15,
-          ago: "2 hours ago",
-          date: "2024-01-14T15:20:00",
-          tag: "Color Theory",
-          replies: [],
-          images: [
-            {
-              id: "img3",
-              preview: "https://picsum.photos/id/104/400/300",
-            },
+          likes: [
+            { user_id: 101 }
           ],
-        },
+          saves: [
+            { user_id: 205 }
+          ],
+          comments: [
+            {
+              user_id: 205,
+              comment: "Try CST first, then primary correction.",
+              comment_id: "cmt_001",
+              comment_reference_id: null,
+              created_at: "2026-06-02T10:35:00.000Z",
+              updated_at: "2026-06-02T10:35:00.000Z",
+              deleted_at: null,
+              attachments: [
+                { file_path: "uploads/comments/example-grade.png" }
+              ],
+              likes: [
+                { user_id: 101 }
+              ]
+            }
+          ]
+        }
       ];
 
       setGroup(mockGroup);
       setPosts(mockPosts);
+
+      // Build members with details
+
+      setMembersWithDetails(memberDetailsList);
+
       setLoading(false);
     };
 
-    fetchGroup();
+    fetchData();
   }, [id]);
 
   const sortOptions = [
@@ -625,6 +571,26 @@ const SelectedGroup = () => {
     { value: "most-liked", label: "Most Liked", icon: <ThumbsUp className="h-3 w-3" /> },
     { value: "most-commented", label: "Most Commented", icon: <MessageCircle className="h-3 w-3" /> },
   ];
+
+  // Transform posts for UI display
+  const displayPosts = posts.map((post, index) => {
+    const authorDetails = membersWithDetails[post.user_id] || { name: "Unknown User", avatar: "https://i.pravatar.cc/150?u=unknown" };
+    const tagName = post.tags.length > 0 ? `Tag ${post.tags[0].forum_tag_id}` : undefined;
+    
+    return {
+      ...post,
+      id: index,
+      author: authorDetails.name,
+      authorAvatar: authorDetails.avatar,
+      excerpt: post.description.substring(0, 150) + (post.description.length > 150 ? "..." : ""),
+      ago: getTimeAgo(post.created_at),
+      tag: tagName,
+      likeCount: post.likes.length,
+      commentCount: post.comments.length,
+      isLiked: post.likes.some(like => like.user_id === CURRENT_USER_ID),
+      isSaved: post.saves.some(save => save.user_id === CURRENT_USER_ID),
+    };
+  });
 
   const toggleExpand = (postId: number) => {
     setExpandedPostId(expandedPostId === postId ? null : postId);
@@ -666,7 +632,6 @@ const SelectedGroup = () => {
     }));
     setReplyUploading(prev => ({ ...prev, [postId]: true }));
 
-    // Simulate upload
     for (const image of newImages) {
       await new Promise(resolve => setTimeout(resolve, 500));
       setReplyImages(prev => ({
@@ -696,27 +661,26 @@ const SelectedGroup = () => {
 
     if (!replyContent && replyImageList.length === 0) return;
 
-    const updatedPosts = posts.map(post => {
-      if (post.id === postId) {
-        const newReply: Reply = {
-          id: (post.replies?.length || 0) + 1,
-          author: CURRENT_USER_NAME,
-          authorAvatar: CURRENT_USER_AVATAR,
-          content: replyContent || "",
-          ago: "Just now",
-          likes: 0,
-          images: replyImageList,
-        };
-        return {
-          ...post,
-          replies: [...(post.replies || []), newReply],
-          comments: (post.comments || 0) + 1,
-        };
-      }
-      return post;
-    });
+    const updatedPosts = [...posts];
+    const postIndex = updatedPosts.findIndex((_, idx) => idx === postId);
+    
+    if (postIndex !== -1) {
+      const newComment: Comment = {
+        user_id: CURRENT_USER_ID,
+        comment: replyContent || "",
+        comment_id: `cmt_${Date.now()}`,
+        comment_reference_id: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        deleted_at: null,
+        attachments: replyImageList.map(img => ({ file_path: img.preview })),
+        likes: []
+      };
+      
+      updatedPosts[postIndex].comments.push(newComment);
+      setPosts(updatedPosts);
+    }
 
-    setPosts(updatedPosts);
     setReplyText({ ...replyText, [postId]: "" });
     setReplyImages(prev => ({ ...prev, [postId]: [] }));
     showSuccessToast("Reply posted successfully!");
@@ -734,20 +698,18 @@ const SelectedGroup = () => {
     images?: ImageAttachment[];
   }) => {
     const newPost: Post = {
-      id: posts.length + 1,
-      groupId: Number(id),
-      author: CURRENT_USER_NAME,
-      authorAvatar: CURRENT_USER_AVATAR,
+      forum_group_id: Number(id),
+      user_id: CURRENT_USER_ID,
       title: postData.title,
-      content: postData.content,
-      excerpt: postData.content.substring(0, 150) + (postData.content.length > 150 ? "..." : ""),
-      likes: 0,
-      comments: 0,
-      ago: "Just now",
-      date: new Date().toISOString(),
-      tag: postData.tag,
-      replies: [],
-      images: postData.images,
+      description: postData.content,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      deleted_at: null,
+      tags: [{ forum_tag_id: 10 }],
+      attachments: postData.images?.map(img => ({ file_path: img.preview })) || [],
+      likes: [],
+      saves: [],
+      comments: [],
     };
 
     setPosts([newPost, ...posts]);
@@ -755,15 +717,13 @@ const SelectedGroup = () => {
   };
 
   const handleEditPost = (postId: number, updatedData: { title: string; content: string; tag: string; images?: ImageAttachment[] }) => {
-    setPosts(prev => prev.map(post =>
-      post.id === postId
+    setPosts(prev => prev.map((post, idx) =>
+      idx === postId
         ? {
             ...post,
             title: updatedData.title,
-            content: updatedData.content,
-            excerpt: updatedData.content.substring(0, 150) + (updatedData.content.length > 150 ? "..." : ""),
-            tag: updatedData.tag,
-            images: updatedData.images,
+            description: updatedData.content,
+            attachments: updatedData.images?.map(img => ({ file_path: img.preview })) || post.attachments,
           }
         : post
     ));
@@ -772,7 +732,12 @@ const SelectedGroup = () => {
 
   const handleDeletePost = () => {
     if (deletingPost) {
-      setPosts(prev => prev.filter(post => post.id !== deletingPost.id));
+      const postIndex = posts.findIndex((_, idx) => idx === deletingPost.id);
+      if (postIndex !== -1) {
+        const updatedPosts = [...posts];
+        updatedPosts.splice(postIndex, 1);
+        setPosts(updatedPosts);
+      }
       showSuccessToast(`"${deletingPost.title}" has been deleted`);
       setDeletingPost(null);
       if (expandedPostId === deletingPost.id) {
@@ -787,18 +752,18 @@ const SelectedGroup = () => {
       if (newSet.has(postId)) {
         newSet.delete(postId);
         setPosts(prevPosts =>
-          prevPosts.map(post =>
-            post.id === postId
-              ? { ...post, likes: Math.max(0, post.likes - 1) }
+          prevPosts.map((post, idx) =>
+            idx === postId
+              ? { ...post, likes: post.likes.filter(like => like.user_id !== CURRENT_USER_ID) }
               : post
           )
         );
       } else {
         newSet.add(postId);
         setPosts(prevPosts =>
-          prevPosts.map(post =>
-            post.id === postId
-              ? { ...post, likes: post.likes + 1 }
+          prevPosts.map((post, idx) =>
+            idx === postId
+              ? { ...post, likes: [...post.likes, { user_id: CURRENT_USER_ID }] }
               : post
           )
         );
@@ -807,20 +772,31 @@ const SelectedGroup = () => {
     });
   };
 
-  const handleEditGroup = (updatedData: { name: string; description: string; tags: string[]; gradient: string }) => {
+  const handleEditGroup = async(updatedData: { group_name: string; description: string; tags: string[]; gradient: string }) => {
     if (!group) return;
-    setGroup({
-      ...group,
-      name: updatedData.name,
-      description: updatedData.description,
-      tags: updatedData.tags,
-      gradient: updatedData.gradient,
-    });
-    showSuccessToast(`Group "${updatedData.name}" updated successfully!`);
+    try {
+      const response = await api.put(`api/forum/groups/${group._id}`, updatedData);
+      if (response.status === 200) {
+        showSuccessToast(`Group "${updatedData.group_name}" updated successfully!`);
+        setGroup({
+        ...group,
+        group_name: updatedData.group_name ?? group.group_name,
+        description: updatedData.description ?? group.description,
+        tags: updatedData.tags ?? group.tags,
+        gradient: updatedData.gradient ?? group.gradient,
+      });
+      } else { 
+        showErrorToast("Failed to update group. Please try again.");
+        return;
+      }
+    }catch (error) {
+      showErrorToast("Failed to update group. Please try again.");
+      return;
+    }
   };
 
-  const handleEditPermissions = (updatedMembers: Member[]) => {
-    setMembers(updatedMembers);
+  const handleEditPermissions = (updatedMembers: MemberWithDetails[]) => {
+    setMembersWithDetails(updatedMembers);
     showSuccessToast("Permissions updated successfully!");
   };
 
@@ -830,15 +806,25 @@ const SelectedGroup = () => {
   };
 
   const handleLeaveGroup = () => {
-    console.log("Leaving group:", group?.name);
-    showSuccessToast(`You have left "${group?.name}"`);
+    console.log("Leaving group:", group?.group_name);
+    showSuccessToast(`You have left "${group?.group_name}"`);
     navigate("/forums");
   };
 
-  const handleDeleteGroup = () => {
-    console.log("Deleting group:", group?.name);
-    showSuccessToast(`Group "${group?.name}" has been deleted`);
-    navigate("/forums");
+  const handleDeleteGroup = async() => {
+    try {
+      const response = await api.delete(`api/forum/groups/delete/${group?._id}`);
+      if (response.status === 200) {
+        showSuccessToast(`Group "${group?.group_name}" has been deleted`);
+        navigate("/forums");
+      } else {
+        showErrorToast("Failed to delete group. Please try again.");
+        return;
+      }
+    }catch (error) {
+      showErrorToast("Failed to delete group. Please try again.");
+      return;
+    }
   };
 
   const handleReportMember = (reason: string, description: string) => {
@@ -849,21 +835,20 @@ const SelectedGroup = () => {
 
   const handleRemoveMember = () => {
     if (selectedMember && group) {
-      setMembers(members.filter(m => m.id !== selectedMember.id));
+      setMembersWithDetails(membersWithDetails.filter(m => m.userId !== selectedMember.userId));
       setGroup({
         ...group,
-        members: group.members - 1,
-        memberCount: group.memberCount - 1,
+        members: group.members.filter(m => m.userId !== selectedMember.userId),
       });
       showSuccessToast(`${selectedMember.name} has been removed from the group`);
       setSelectedMember(null);
     }
   };
 
-  const isOwner = group?.ownerId === CURRENT_USER_ID;
-  const canEditGroup = isOwner || group?.userPermissions?.includes("edit_group");
-  const canEditPermissions = isOwner || group?.userPermissions?.includes("edit_permissions");
-  const canRemoveMembers = isOwner || group?.userPermissions?.includes("remove_member");
+  const isOwner = group?.members.some(m => m.userId === CURRENT_USER_ID && m.role === "Admin") || false;
+  const canEditGroup = isOwner;
+  const canEditPermissions = isOwner;
+  const canRemoveMembers = isOwner;
 
   if (loading) {
     return (
@@ -901,7 +886,7 @@ const SelectedGroup = () => {
 
   return (
     <div className="min-h-screen bg-[#080a12]">
-      <UserHeader pageTitle={group.name} credits={1250} />
+      <UserHeader pageTitle={group.group_name} credits={1250} />
 
       <div className="mx-auto max-w-7xl p-6 md:p-8">
         {/* Back Button and Three Dots Menu Row */}
@@ -914,104 +899,113 @@ const SelectedGroup = () => {
             Back to Forums
           </button>
 
-          {/* Three Dots Menu - Only show for members */}
-          {group.joined && (
-            <div className="relative">
-              <button
-                onClick={() => setShowMenu(!showMenu)}
-                className="rounded-lg p-2 text-zinc-400 transition hover:bg-white/10 hover:text-white"
-              >
-                <MoreVertical className="h-5 w-5" />
-              </button>
+          {/* Three Dots Menu */}
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="rounded-lg p-2 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+            >
+              <MoreVertical className="h-5 w-5" />
+            </button>
 
-              {showMenu && (
-                <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/10 bg-[#0d0f1a] shadow-2xl backdrop-blur-xl overflow-hidden z-20">
-                  <div className="p-2">
-                    {canEditGroup && (
-                      <button
-                        onClick={() => {
-                          setShowEditGroupModal(true);
-                          setShowMenu(false);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10"
-                      >
-                        <Edit3 className="h-4 w-4" />
-                        Edit Group
-                      </button>
-                    )}
-                    {canEditPermissions && (
-                      <button
-                        onClick={() => {
-                          setShowEditPermissionsModal(true);
-                          setShowMenu(false);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10"
-                      >
-                        <Shield className="h-4 w-4" />
-                        Edit Roles
-                      </button>
-                    )}
-                    {!isOwner && (
-                      <button
-                        onClick={() => {
-                          setShowReportGroupModal(true);
-                          setShowMenu(false);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10"
-                      >
-                        <Flag className="h-4 w-4" />
-                        Report Group
-                      </button>
-                    )}
-                    {!isOwner && (
-                      <button
-                        onClick={() => {
-                          setShowLeaveGroupModal(true);
-                          setShowMenu(false);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 transition hover:bg-red-500/10"
-                      >
-                        <LogOut className="h-4 w-4" />
-                        Leave Group
-                      </button>
-                    )}
-                    {isOwner && (
-                      <button
-                        onClick={() => {
-                          setShowDeleteGroupModal(true);
-                          setShowMenu(false);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 transition hover:bg-red-500/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Delete Group
-                      </button>
-                    )}
-                  </div>
+            {showMenu && (
+              <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/10 bg-[#0d0f1a] shadow-2xl backdrop-blur-xl overflow-hidden z-20">
+                <div className="p-2">
+                  {canEditGroup && (
+                    <button
+                      onClick={() => {
+                        setShowEditGroupModal(true);
+                        setShowMenu(false);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                      Edit Group
+                    </button>
+                  )}
+                  {canEditPermissions && (
+                    <button
+                      onClick={() => {
+                        setShowEditPermissionsModal(true);
+                        setShowMenu(false);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10"
+                    >
+                      <Shield className="h-4 w-4" />
+                      Edit Roles
+                    </button>
+                  )}
+                  {!isOwner && (
+                    <button
+                      onClick={() => {
+                        setShowReportGroupModal(true);
+                        setShowMenu(false);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10"
+                    >
+                      <Flag className="h-4 w-4" />
+                      Report Group
+                    </button>
+                  )}
+                  {!isOwner && (
+                    <button
+                      onClick={() => {
+                        setShowLeaveGroupModal(true);
+                        setShowMenu(false);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 transition hover:bg-red-500/10"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Leave Group
+                    </button>
+                  )}
+                  {isOwner && (
+                    <button
+                      onClick={() => {
+                        setShowDeleteGroupModal(true);
+                        setShowMenu(false);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 transition hover:bg-red-500/10"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete Group
+                    </button>
+                  )}
                 </div>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Group Header */}
-        <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${group.gradient} p-8`}>
+        <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${group.gradient || ' from-purple-600 via-pink-600 to-red-600'} p-8`}>
           <div className="absolute inset-0 bg-black/50" />
           <div className="relative z-10">
-            <h1 className="text-3xl font-bold text-white">{group.name}</h1>
-            <p className="mt-2 text-zinc-200 max-w-2xl">{group.description}</p>
+            <div className="flex items-center gap-4">
+              {group.image_url && (
+                <img 
+                  src={group.image_url} 
+                  alt={group.group_name}
+                  className="h-20 w-20 rounded-xl object-cover ring-2 ring-white/20"
+                  onError={(e) => (e.target as HTMLImageElement).style.display = 'none'}
+                />
+              )}
+              <div>
+                <h1 className="text-3xl font-bold text-white">{group.group_name}</h1>
+                <p className="mt-2 text-zinc-200 max-w-2xl">{group.description}</p>
+              </div>
+            </div>
             <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-zinc-300">
               <div className="flex items-center gap-1">
-                <Users className="h-4 w-4" />
-                <span>{group.members} members</span>
+                <span>Created at {group.created_at.split('T')[0]}</span>
               </div>
               <div className="flex items-center gap-1">
-                <Calendar className="h-4 w-4" />
-                <span>Created {new Date(group.createdAt).toLocaleDateString()}</span>
+                <Users className="h-4 w-4" />
+                <span>{group.members.length} members</span>
               </div>
               <div className="flex items-center gap-1">
                 <Tag className="h-4 w-4" />
-                <span>{group.tags.length} categories</span>
+                <span>{group.tags.length} tags</span>
               </div>
             </div>
           </div>
@@ -1058,7 +1052,6 @@ const SelectedGroup = () => {
           {/* Posts Tab */}
           {activeTab === "posts" && (
             <>
-              {/* New Discussion Button */}
               <div className="mb-6 flex justify-end">
                 <button
                   onClick={() => setIsNewDiscussionOpen(true)}
@@ -1069,7 +1062,7 @@ const SelectedGroup = () => {
                 </button>
               </div>
 
-              {/* Search, Filter and Sort */}
+              {/* Search and Sort */}
               <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 sm:w-64">
                   <Search className="h-4 w-4 text-zinc-500" />
@@ -1082,31 +1075,6 @@ const SelectedGroup = () => {
                 </div>
 
                 <div className="flex items-center gap-4">
-                  {/* Category Filter */}
-                  <div className="flex items-center gap-2">
-                    <Filter className="h-3.5 w-3.5 text-zinc-500" />
-                    <select
-                      value={selectedCategory}
-                      onChange={(e) => setSelectedCategory(e.target.value)}
-                      className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white focus:border-blue-500/50 focus:outline-none"
-                    >
-                      {categories.map((category) => (
-                        <option key={category} value={category} className="bg-[#0d0f1a]">
-                          {category}
-                        </option>
-                      ))}
-                    </select>
-                    {selectedCategory !== "All" && (
-                      <button
-                        onClick={() => setSelectedCategory("All")}
-                        className="rounded-full p-1 text-zinc-500 hover:text-white"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Sort Options */}
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-zinc-500">Sort by:</span>
                     <div className="flex gap-2">
@@ -1131,19 +1099,19 @@ const SelectedGroup = () => {
 
               {/* Posts List */}
               <div className="space-y-4">
-                {sortedPosts.length === 0 ? (
+                {displayPosts.length === 0 ? (
                   <div className="flex flex-col items-center justify-center rounded-xl border border-white/10 bg-white/5 p-12 text-center">
                     <MessageCircle className="mb-3 h-8 w-8 text-zinc-500" />
                     <h3 className="text-lg font-semibold text-white">No posts yet</h3>
                     <p className="mt-1 text-sm text-zinc-400">Be the first to start a discussion!</p>
                   </div>
                 ) : (
-                  sortedPosts.map((post) => {
-                    const isAuthor = post.author === CURRENT_USER_NAME;
-                    const isLiked = likedPosts.has(post.id);
+                  displayPosts.map((post, idx) => {
+                    const isAuthor = post.user_id === CURRENT_USER_ID;
+                    const isLiked = likedPosts.has(idx);
 
                     return (
-                      <div key={post.id} className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 transition hover:border-white/20">
+                      <div key={idx} className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 transition hover:border-white/20">
                         <div className="flex gap-3">
                           <img
                             src={post.authorAvatar}
@@ -1162,16 +1130,15 @@ const SelectedGroup = () => {
                                 )}
                               </div>
 
-                              {/* Three-dot menu for post author */}
                               {isAuthor && (
                                 <div className="relative">
                                   <button
-                                    onClick={() => setPostMenuOpen(postMenuOpen === post.id ? null : post.id)}
+                                    onClick={() => setPostMenuOpen(postMenuOpen === idx ? null : idx)}
                                     className="rounded-lg p-1 text-zinc-500 transition hover:bg-white/10 hover:text-white"
                                   >
                                     <MoreVertical className="h-4 w-4" />
                                   </button>
-                                  {postMenuOpen === post.id && (
+                                  {postMenuOpen === idx && (
                                     <div className="absolute right-0 mt-1 w-36 rounded-lg border border-white/10 bg-[#0d0f1a] shadow-xl overflow-hidden z-20">
                                       <button
                                         onClick={() => {
@@ -1200,39 +1167,35 @@ const SelectedGroup = () => {
                             </div>
 
                             <h3
-                              onClick={() => navigate(`/forums/discussion/${post.id}`)}
+                              onClick={() => navigate(`/forums/discussion/${idx}`)}
                               className="mt-1 text-base font-semibold text-white cursor-pointer hover:text-blue-400 transition-colors"
-                              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                             >
                               {post.title}
                             </h3>
 
-                            {/* Post Content with Markdown */}
                             <div
                               className="mt-2 text-sm text-zinc-400 prose prose-invert prose-sm max-w-none"
                               dangerouslySetInnerHTML={{ __html: renderMarkdownContent(post.excerpt) }}
                             />
 
-                            {/* Image Gallery */}
-                            <ImageGallery images={post.images} />
+                            <ImageGallery attachments={post.attachments} />
 
                             <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
                               <button
-                                onClick={() => toggleExpand(post.id)}
+                                onClick={() => toggleExpand(idx)}
                                 className="inline-flex items-center gap-1 text-zinc-500 transition hover:text-white"
                               >
                                 <MessageCircle className="h-3.5 w-3.5" />
-                                <span>{post.comments} replies</span>
-                                {expandedPostId === post.id ? (
+                                <span>{post.commentCount} replies</span>
+                                {expandedPostId === idx ? (
                                   <ChevronUp className="h-3.5 w-3.5" />
                                 ) : (
                                   <ChevronDown className="h-3.5 w-3.5" />
                                 )}
                               </button>
 
-                              {/* Like button */}
                               <button
-                                onClick={() => handleLikePost(post.id)}
+                                onClick={() => handleLikePost(idx)}
                                 className={`inline-flex items-center gap-1 transition-all duration-200 ${
                                   isLiked 
                                     ? "text-red-400 hover:text-red-300" 
@@ -1241,7 +1204,7 @@ const SelectedGroup = () => {
                                 type="button"
                               >
                                 <Heart className={`h-3.5 w-3.5 transition-all ${isLiked ? "fill-red-400" : ""}`} />
-                                <span>{post.likes} likes</span>
+                                <span>{post.likeCount} likes</span>
                               </button>
 
                               <button className="inline-flex items-center gap-1 text-zinc-500 transition hover:text-white">
@@ -1251,42 +1214,44 @@ const SelectedGroup = () => {
                             </div>
 
                             {/* Expanded Replies */}
-                            {expandedPostId === post.id && (
+                            {expandedPostId === idx && (
                               <div className="mt-4 border-t border-white/10 pt-4">
                                 <div className="space-y-4">
-                                  {post.replies && post.replies.length > 0 ? (
-                                    post.replies.map((reply) => (
-                                      <div key={reply.id} className="flex gap-3">
-                                        <img
-                                          src={reply.authorAvatar}
-                                          alt={reply.author}
-                                          className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20"
-                                        />
-                                        <div className="flex-1">
-                                          <p className="text-sm font-medium text-white">{reply.author}</p>
-                                          <div
-                                            className="mt-1 text-sm text-zinc-400 prose prose-invert prose-sm max-w-none"
-                                            dangerouslySetInnerHTML={{ __html: renderMarkdownContent(reply.content) }}
+                                  {post.comments && post.comments.length > 0 ? (
+                                    post.comments.map((comment, commentIdx) => {
+                                      const commentAuthor = getMemberDetails(comment.user_id);
+                                      return (
+                                        <div key={comment.comment_id || commentIdx} className="flex gap-3">
+                                          <img
+                                            src={commentAuthor.avatar}
+                                            alt={commentAuthor.name}
+                                            className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20"
                                           />
-                                          <ImageGallery images={reply.images} />
+                                          <div className="flex-1">
+                                            <p className="text-sm font-medium text-white">{commentAuthor.name}</p>
+                                            <div
+                                              className="mt-1 text-sm text-zinc-400 prose prose-invert prose-sm max-w-none"
+                                              dangerouslySetInnerHTML={{ __html: renderMarkdownContent(comment.comment) }}
+                                            />
+                                            <ImageGallery attachments={comment.attachments} />
+                                          </div>
                                         </div>
-                                      </div>
-                                    ))
+                                      );
+                                    })
                                   ) : (
                                     <p className="text-center text-sm text-zinc-500">No replies yet.</p>
                                   )}
                                 </div>
 
-                                {/* Reply Input Component */}
                                 <ReplyInput
-                                  postId={post.id}
-                                  replyText={replyText[post.id] || ""}
-                                  updateReplyText={(text) => updateReplyText(post.id, text)}
-                                  handleReply={() => handleReply(post.id)}
-                                  uploadImages={(files) => handleReplyImageUpload(post.id, files)}
-                                  images={replyImages[post.id] || []}
-                                  removeImage={(imageId) => removeReplyImage(post.id, imageId)}
-                                  isUploading={replyUploading[post.id] || false}
+                                  postId={idx}
+                                  replyText={replyText[idx] || ""}
+                                  updateReplyText={(text) => updateReplyText(idx, text)}
+                                  handleReply={() => handleReply(idx)}
+                                  uploadImages={(files) => handleReplyImageUpload(idx, files)}
+                                  images={replyImages[idx] || []}
+                                  removeImage={(imageId) => removeReplyImage(idx, imageId)}
+                                  isUploading={replyUploading[idx] || false}
                                 />
                               </div>
                             )}
@@ -1303,8 +1268,8 @@ const SelectedGroup = () => {
           {/* Members Tab */}
           {activeTab === "members" && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {members.map((member) => (
-                <div key={member.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4">
+              {membersWithDetails.map((member) => (
+                <div key={member.userId} className="flex items-center gap-3 rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4">
                   <img
                     src={member.avatar}
                     alt={member.name}
@@ -1314,25 +1279,21 @@ const SelectedGroup = () => {
                     <p className="text-sm font-semibold text-white">{member.name}</p>
                     <div className="flex items-center gap-2">
                       <p className="text-xs text-zinc-500">Joined {new Date(member.joinedAt).toLocaleDateString()}</p>
-                      {member.role === "owner" && (
-                        <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-400">Owner</span>
-                      )}
-                      {member.role === "moderator" && (
-                        <span className="rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] text-blue-400">Moderator</span>
+                      {member.role === "Admin" && (
+                        <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-400">Admin</span>
                       )}
                     </div>
                   </div>
 
-                  {/* Three-dot menu for members */}
-                  {member.id !== CURRENT_USER_ID && (
+                  {member.userId !== CURRENT_USER_ID && (
                     <div className="relative">
                       <button
-                        onClick={() => setShowMemberMenu(showMemberMenu === member.id ? null : member.id)}
+                        onClick={() => setShowMemberMenu(showMemberMenu === member.userId ? null : member.userId)}
                         className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/10 hover:text-white"
                       >
                         <MoreVertical className="h-4 w-4" />
                       </button>
-                      {showMemberMenu === member.id && (
+                      {showMemberMenu === member.userId && (
                         <div className="absolute right-0 mt-2 w-48 rounded-xl border border-white/10 bg-[#0d0f1a] shadow-2xl backdrop-blur-xl overflow-hidden z-20">
                           <div className="p-2">
                             <button
@@ -1346,7 +1307,7 @@ const SelectedGroup = () => {
                               <Flag className="h-4 w-4" />
                               Report Member
                             </button>
-                            {canRemoveMembers && member.role !== "owner" && (
+                            {canRemoveMembers && member.role !== "Admin" && (
                               <button
                                 onClick={() => {
                                   setSelectedMember(member);
@@ -1378,7 +1339,7 @@ const SelectedGroup = () => {
               </div>
 
               <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-6">
-                <h3 className="text-lg font-semibold text-white">Categories / Tags</h3>
+                <h3 className="text-lg font-semibold text-white">Tags</h3>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {group.tags.map((tag) => (
                     <span key={tag} className="rounded-full bg-blue-500/20 px-3 py-1 text-xs text-blue-400">
@@ -1392,20 +1353,12 @@ const SelectedGroup = () => {
                 <h3 className="text-lg font-semibold text-white">Group Info</h3>
                 <div className="mt-3 space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-zinc-500">Created</span>
-                    <span className="text-white">{new Date(group.createdAt).toLocaleDateString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500">Owner</span>
-                    <span className="text-white">{group.owner}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-500">Visibility</span>
-                    <span className="capitalize text-white">{group.visibility}</span>
-                  </div>
-                  <div className="flex justify-between">
                     <span className="text-zinc-500">Total Members</span>
-                    <span className="text-white">{group.members}</span>
+                    <span className="text-white">{group.members.length}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Total Tags</span>
+                    <span className="text-white">{group.tags.length}</span>
                   </div>
                 </div>
               </div>
@@ -1419,41 +1372,41 @@ const SelectedGroup = () => {
         isOpen={isNewDiscussionOpen}
         onClose={() => setIsNewDiscussionOpen(false)}
         onCreatePost={handleCreatePost}
-        availableGroups={[group]}
+        availableGroups={[{ id: Number(id), name: group.group_name }]}
       />
 
       <EditGroupModal
         isOpen={showEditGroupModal}
         onClose={() => setShowEditGroupModal(false)}
-        group={group}
+        group={{ id: group._id, name: group.group_name, description: group.description, tags: group.tags, gradient: "from-purple-600 via-pink-600 to-red-600" }}
         onSave={handleEditGroup}
       />
 
       <EditGroupPermissionsModal
         isOpen={showEditPermissionsModal}
         onClose={() => setShowEditPermissionsModal(false)}
-        members={members}
+        members={membersWithDetails.map(m => ({ id: m.userId, name: m.name, role: m.role, avatar: m.avatar, joinedAt: m.joinedAt }))}
         onSave={handleEditPermissions}
       />
 
       <ReportGroupModal
         isOpen={showReportGroupModal}
         onClose={() => setShowReportGroupModal(false)}
-        groupName={group.name}
+        groupName={group.group_name}
         onSubmit={handleReportGroup}
       />
 
       <LeaveGroupModal
         isOpen={showLeaveGroupModal}
         onClose={() => setShowLeaveGroupModal(false)}
-        groupName={group.name}
+        groupName={group.group_name}
         onConfirm={handleLeaveGroup}
       />
 
       <DeleteGroupModal
         isOpen={showDeleteGroupModal}
         onClose={() => setShowDeleteGroupModal(false)}
-        groupName={group.name}
+        groupName={group.group_name}
         onConfirm={handleDeleteGroup}
       />
 
@@ -1482,7 +1435,7 @@ const SelectedGroup = () => {
         isOpen={!!editingPost}
         onClose={() => setEditingPost(null)}
         onSave={handleEditPost}
-        post={editingPost}
+        post={editingPost ? { id: displayPosts.findIndex(p => p === editingPost), title: editingPost.title, content: editingPost.description, tag: editingPost.tag || "", images: editingPost.attachments.map(a => ({ id: a.file_path, preview: a.file_path })) } : null}
       />
 
       {/* Delete Post Modal */}

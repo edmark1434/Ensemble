@@ -7,7 +7,7 @@ const client = new MongoClient(uri);
 // Keep track of the connection state so we don't connect multiple times
 let isConnected = false;
 
-async function connectDB() {
+async function connectMongoDB() {
     if (isConnected) return client;
 
     try {
@@ -21,4 +21,4 @@ async function connectDB() {
     }
 }
 
-module.exports = { client, connectDB };
+module.exports = { client, connectMongoDB };

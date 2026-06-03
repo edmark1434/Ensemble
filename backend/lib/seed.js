@@ -1,4 +1,4 @@
-const pool = require('./database');
+const { pool } = require('./database');
 const { faker } = require('@faker-js/faker');
 const bcrypt = require('bcrypt');
 

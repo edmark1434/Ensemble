@@ -8,7 +8,8 @@ const {
     RefreshTokens,
     createSessionId,
     logout,
-    getCredentials
+    getCredentials,
+    getUsersByListOfIdsServices
 } = require('../services/UserServices');
 const jwt = require('jsonwebtoken');
 
@@ -30,6 +31,19 @@ async function getAllUsers(req, res) {
     }
 }
 
+async function getUsersByListOfIdsController(req, res) { 
+    const userIds = req.body.userIds;
+    try {
+        const usersList = await getUsersByListOfIdsServices(userIds);
+        res.status(200).json({usersList,message: 'Users fetched successfully'});
+    } catch (err) {
+        if(err instanceof ServiceError){
+            return res.status(err.statusCode).json({ error: err.message });
+        }
+        res.status(500).json({ error: 'Internal server error' });
+    }
+}
+
 async function setupRefreshTokenCookie(res,result){
         res.cookie(
             'refreshToken',
@@ -41,6 +55,7 @@ async function setupRefreshTokenCookie(res,result){
             }
         );
 }
+
 async function createSessionIdCookie(res,credentials){
     const sessionId = await createSessionId(credentials);
     res.cookie('sessionId', sessionId, {
@@ -275,6 +290,7 @@ module.exports = {
     refreshToken,
     LogoutUsers,
     getCurrentUser,
-    CheckUserRole
+    CheckUserRole,
+    getUsersByListOfIdsController
 
 };
