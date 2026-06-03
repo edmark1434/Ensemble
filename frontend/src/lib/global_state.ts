@@ -1,4 +1,4 @@
-import { create } from 'zustand'
+import {create, type ExtractState, type StoreApi} from 'zustand'
 
 // Define User type
 // interface User {
@@ -12,6 +12,7 @@ import { create } from 'zustand'
 // Define Store type
 interface GlobalState {
   // State
+    isSidebarCollapsed: (state: ExtractState<StoreApi<GlobalState>>) => U;
   user:            any | null
   isAuthenticated: boolean
   isLoading:       boolean
