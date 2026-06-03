@@ -9,6 +9,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon server.js",
+    "db:setup": "node lib/setup-db.js",
     "seed": "node lib/seed.js",
     "clean": "node lib/clean.js"
   },
