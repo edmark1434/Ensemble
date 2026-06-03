@@ -28,6 +28,8 @@ import ExpandDiscussion from "@/pages/user/4_forums/ExpandDiscussion.tsx";
 
 import SectionPlaceholder from './pages/user/0_config/SectionPlaceholder.tsx'
 
+import JobPostingMain from "@/pages/user/6_jobs/Job_Posting/main.tsx";
+
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminSectionPlaceholder from './pages/admin/AdminSectionPlaceholder'
@@ -78,7 +80,12 @@ function App() {
           </Route>
 
           <Route path='/assets' element={<SectionPlaceholder title='ASSET LIBRARY' />} />
-          <Route path='/jobs' element={<SectionPlaceholder title='JOB POSTING' />} />
+
+          <Route path='/jobs'>
+            <Route index element={<JobPostingMain />} />
+            <Route path=':id' element={<JobPostingMain />} />
+          </Route>
+
           <Route path='/proposals' element={<SectionPlaceholder title='INCOMING PROPOSALS' />} />
           <Route path='/my-proposals' element={<SectionPlaceholder title='MY PROPOSALS' />} />
           <Route path='/gigs' element={<SectionPlaceholder title='GIG POSTING' />} />
