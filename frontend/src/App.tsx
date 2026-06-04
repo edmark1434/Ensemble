@@ -45,6 +45,20 @@ import SupportModeratorLayout from './pages/moderator/support-moderator/Layout'
 import ModeratorSectionPlaceholder from './pages/moderator/SectionPlaceholder'
 import RouteMiddleware from './lib/RouteMiddleware'
 import StaffMiddleware from './lib/StaffMiddleware'
+
+// ─── Landing Dropdown Pages Imports ──────────────────────────────────────────
+import PageAboutUs from "@/pages/landing/pages/page_AboutUs.tsx";
+import PageAskOurChatbot from './pages/landing/pages/page_AskOurChatbot';
+import PageFAQ from './pages/landing/pages/page_FAQ';
+import PageHowToHire from './pages/landing/pages/page_HowToHire';
+import PageHowToWork from './pages/landing/pages/page_HowToWork';
+import PagePricing from './pages/landing/pages/page_Pricing';
+import PagePrivacyPolicy from "@/pages/landing/pages/page_PrivacyPolicy.tsx";
+import PageTermsOfService from "@/pages/landing/pages/page_TermsOfService.tsx";
+import PageSendAFeedback from './pages/landing/pages/page_SendAFeedback';
+import PageSubmitATicket from './pages/landing/pages/page_SubmitATicket';
+import PageSupportUs from './pages/landing/pages/page_SupportUs';
+
 import './App.css'
 
 function App() {
@@ -66,6 +80,22 @@ function App() {
         <Route path='/verify-email' element={<EmailVerification />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+        {/* Modular Public Dropdown Landing Pages */}
+        {/* Nested structural grouping under the /landing prefix path */}
+        <Route path="/landing">
+          <Route path="Pricing" element={<PagePricing />} />
+          <Route path="HowToHire" element={<PageHowToHire />} />
+          <Route path="HowToWork" element={<PageHowToWork />} />
+          <Route path="AboutUs" element={<PageAboutUs />} />
+          <Route path="FAQ" element={<PageFAQ />} />
+          <Route path="AskOurChatbot" element={<PageAskOurChatbot />} />
+          <Route path="SubmitATicket" element={<PageSubmitATicket />} />
+          <Route path="SupportUs" element={<PageSupportUs />} />
+          <Route path="SendAFeedback" element={<PageSendAFeedback />} />
+          <Route path="TermsOfService" element={<PageTermsOfService />} />
+          <Route path="PrivacyPolicy" element={<PagePrivacyPolicy />} />
+        </Route>
 
         {/* User Dashboard Routes - All wrapped in Layout */}
         <Route element={<Layout />}>
