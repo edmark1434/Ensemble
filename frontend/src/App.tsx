@@ -31,6 +31,7 @@ import ExpandDiscussion from "@/pages/user/4_forums/ExpandDiscussion.tsx";
 import SectionPlaceholder from './pages/user/0_config/SectionPlaceholder.tsx'
 
 import JobPostingMain from "@/pages/user/6_jobs/Job_Posting/main.tsx";
+import GigMarketplace from "@/pages/user/7_gigs/Gig_Posting/main.tsx";
 
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
@@ -125,10 +126,13 @@ function App() {
             <Route index element={<JobPostingMain />} />
             <Route path=':id' element={<JobPostingMain />} />
           </Route>
+          <Route path='/gigs'>
+            <Route index element={<GigMarketplace />} />
+            <Route path=':id' element={<GigMarketplace />} />
+          </Route>
 
           <Route path='/proposals' element={<SectionPlaceholder title='INCOMING PROPOSALS' />} />
           <Route path='/my-proposals' element={<SectionPlaceholder title='MY PROPOSALS' />} />
-          <Route path='/gigs' element={<SectionPlaceholder title='GIG POSTING' />} />
           <Route path='/requests' element={<SectionPlaceholder title='INCOMING REQUESTS' />} />
           <Route path='/my-requests' element={<SectionPlaceholder title='MY REQUESTS' />} />
           <Route path='/contracts' element={<SectionPlaceholder title='MY CONTRACTS' />} />
