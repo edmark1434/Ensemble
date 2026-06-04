@@ -102,8 +102,19 @@ npm run seed
 
 Default seeded passwords:
 
-- Staff accounts: `staff123`
-- User accounts: `user123`
+- **Staff & admin accounts:** `staff123`
+- **Regular user accounts:** `user123`
+
+**Staff & admin test accounts** (emails change each time you run `npm run seed`; usernames/handles stay the same):
+
+| Role | Email | Username (handle) | Portal |
+|------|-------|-------------------|--------|
+| Admin | `adminw9uj1o@mail.com` | `admin` | http://localhost:5173/admin |
+| Support Moderator | `supportmoderatorhqml4s@mail.com` | `support_moderator` | http://localhost:5173/staff |
+| Jobs N Gigs Moderator | `jobsngigsmoderatorgbvnnv@mail.com` | `jobs_n_gigs_moderator` | http://localhost:5173/staff |
+| Forum Moderator | `forummoderatornfd4ad@mail.com` | `forum_moderator` | http://localhost:5173/staff |
+
+Sign in with **email or username** and password `staff123`.
 
 To wipe seeded data:
 
@@ -185,7 +196,14 @@ Open http://localhost:5173
 
 Set `VITE_BASE_URL=http://localhost:4000` in `frontend/.env` (required for login API calls).
 
-Seeded staff password: `staff123` (see `backend/lib/seed.js` for generated emails). Admin account uses handle `admin`.
+**Password for all staff & admin accounts:** `staff123`
+
+| Portal | Example login |
+|--------|----------------|
+| Admin | `admin` or `adminw9uj1o@mail.com` |
+| Staff | `support_moderator` or `supportmoderatorhqml4s@mail.com` (and other moderator emails above) |
+
+Re-run `npm run seed` to reset data; new random emails will be printed in the terminal — update this table if you document a specific seed run.
 
 **Terminal 3 — video editor (optional):**
 
