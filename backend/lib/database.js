@@ -10,13 +10,19 @@ const pool = new Pool({
     password: process.env.DB_PASSWORD,
     port:  process.env.DB_PORT,
 });
+let isConnected = false;
+async function connectPostgresDB() {
+    if (isConnected) return pool;
+    try {
+        await pool.connect();
+        console.log('Connected successfully to PostgreSQL');
+        isConnected = true;
+        return pool;
+    }catch (err) {
+        console.error('PostgreSQL connection error:', err);
+        process.exit(1); // Stop the app if we can't connect to our database
+    }
+}
 
-pool.on('connect', () => {
-    console.log('Connected to PostgreSQL database');
-});
 
-pool.on('error', (err) => {
-    console.error('PostgreSQL pool error', err.stack);
-});
-
-module.exports = pool;
+module.exports = {  pool, connectPostgresDB };

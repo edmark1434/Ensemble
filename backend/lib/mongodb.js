@@ -7,7 +7,7 @@ const uri = process.env.MONGODB_URI;
 let client = null;
 let isConnected = false;
 
-async function connectDB() {
+async function connectMongoDB() {
   if (!uri) {
     console.warn('MONGODB_URI is not set — MongoDB features (forums) are disabled.');
     return null;
@@ -36,4 +36,4 @@ function getMongoClient() {
   return client;
 }
 
-module.exports = { connectDB, getMongoClient };
+module.exports = { connectMongoDB, getMongoClient };

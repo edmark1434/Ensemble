@@ -10,7 +10,8 @@ const {
     refreshToken,
     LogoutUsers,
     getCurrentUser,
-    CheckUserRole
+    CheckUserRole,
+    getUsersByListOfIdsController
 } = require('../controllers/UserControllers');
 
 router.get('/', [checkSession, requireAuth], getAllUsers);
@@ -28,5 +29,7 @@ router.get('/logout', [requireAuth], LogoutUsers);
 router.get('/check-user-role', [checkSession, requireAuth], CheckUserRole);
 
 router.get('/:email', [checkSession, requireAuth], getUserByEmail);
+
+router.post('/list-of-details',[checkSession, requireAuth], getUsersByListOfIdsController);
 
 module.exports = router;

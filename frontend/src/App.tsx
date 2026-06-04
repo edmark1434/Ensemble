@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import {ToastProvider} from "@/components/utility/toast_provider.tsx";
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/auth/Loginpage'
@@ -35,6 +35,8 @@ import JobPostingMain from "@/pages/user/6_jobs/Job_Posting/main.tsx";
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminSectionPlaceholder from './pages/admin/AdminSectionPlaceholder'
+import UserTeamPage from './pages/admin/userTeam/UserTeamPage'
+import CreditEconomyPage from './pages/admin/creditEconomy/CreditEconomyPage'
 import StaffPortalLayout from './pages/staff/StaffPortalLayout'
 import StaffDashboard from './pages/staff/StaffDashboard'
 
@@ -115,8 +117,10 @@ function App() {
         {/* Admin Routes — dashboard lives under /admin/dashboard; login is /admin */}
         <Route path='/admin' element={<AdminLayout />}>
           <Route path='dashboard' element={<AdminDashboard />} />
-          <Route path='user-team' element={<AdminSectionPlaceholder title='USER & TEAM' />} />
-          <Route path='credit-economy' element={<AdminSectionPlaceholder title='CREDIT & ECONOMY' />} />
+          <Route path='user-team' element={<UserTeamPage />} />
+          <Route path='user-team/teams' element={<Navigate to="/admin/user-team?tab=teams" replace />} />
+          <Route path='user-team/users' element={<Navigate to="/admin/user-team?tab=users" replace />} />
+          <Route path='credit-economy' element={<CreditEconomyPage />} />
           <Route path='moderation' element={<AdminSectionPlaceholder title='MODERATION' />} />
           <Route path='analytics' element={<AdminSectionPlaceholder title='ANALYTICS' />} />
           <Route path='ticket-management' element={<AdminSectionPlaceholder title='TICKET MANAGEMENT' />} />
