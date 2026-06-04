@@ -89,6 +89,10 @@ export const Audios = () => {
   }, []);
   const handleAddAudio = (payload: Partial<IAudio>) => {
     payload.id = generateId();
+    payload.metadata = {
+      ...payload.metadata,
+      name: payload.name,  // store name in metadata
+    };
     console.log(payload);
     dispatch(ADD_AUDIO, {
       payload,
@@ -111,6 +115,11 @@ export const Audios = () => {
   const uniqueResults = Array.from(
     new Map(searchResults.map((item: IAudio) => [item.id, item])).values()
   );
+
+  const handleClearSearch = () => {
+    setSearchQuery("");
+    fetchMusic("");
+  };
 
   // Main view
   return (
@@ -146,7 +155,7 @@ export const Audios = () => {
           <Button
             size="sm"
             variant="outline"
-            // onClick={handleClearSearch}
+            onClick={handleClearSearch}
             disabled={isLoading}
           >
             Clear

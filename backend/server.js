@@ -27,11 +27,10 @@ app.use(express.json());
 //api routes
 app.use('/api', apiRoutes);
 
-//connect to MongoDB before starting the server
-connectMongoDB();
-
 connectPostgresDB();
-//connect to database and start server
+
 httpServer.listen(4000, () => {
   console.log('Server is running on port 4000');
 });
+
+void connectMongoDB();
