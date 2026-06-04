@@ -603,3 +603,17 @@ input[type="number"]::-webkit-outer-spin-button {
   display: block !important;
   min-height: 100%;
 }
+
+* {
+  user-select: none;
+  outline: none;
+}
+
+::selection {
+  background: var(--primary);
+}
+
+@keyframes wave-bar {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
