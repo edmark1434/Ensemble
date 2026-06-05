@@ -13,6 +13,7 @@ import ResetPasswordPage from "@/pages/auth/ResetPasswordPage.tsx";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage.tsx";
 
 import CreditShop from "@/pages/user/0_config/CreditsShop.tsx";
+import Profile from "@/pages/user/7_profile/Profile.tsx";
 
 import Layout from './components/ui/Layout.tsx'
 
@@ -71,6 +72,7 @@ function App() {
         <Route element={<Layout />}>
           <Route path='/home' element={<Home />} />
             <Route path='/credits' element={<CreditShop />} />
+            <Route path='/profile' element={<Profile />} />
 
           <Route path='/projects' element={<Projects />} />
             <Route path='/projects/select' element={<Projects_Selection />} />

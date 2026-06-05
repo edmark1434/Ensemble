@@ -31,6 +31,8 @@ import {
   Trash2 as TrashIcon,
   Eye,
   Loader2,
+  Reply,
+  ChevronRight,
 } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import NewDiscussionModal from "@/pages/user/4_forums/forum_modals/NewDiscussionModal";
@@ -57,28 +59,12 @@ type ImageAttachment = {
   file_path?: string;
 };
 
-// Group type based on your data structure
-type Group = {
-  _id: string;
-  image_url: string;
-  group_name: string;
-  description: string;
-  created_at: string;
-  members: {
-    joined_at: string;
-    role: string;
-    userId: number;
-  }[];
-  tags: string[];
-  gradient?: string;
-};
-
-// Post/Discussion type based on your data structure
+// Comment type with Reddit-like structure
 type Comment = {
   user_id: number;
   comment: string;
   comment_id: string;
-  comment_reference_id: string | null;
+  parent_id: string | null; // Changed from comment_reference_id to parent_id (Reddit style)
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -88,9 +74,13 @@ type Comment = {
   likes: {
     user_id: number;
   }[];
+  depth?: number; // Added for UI indentation
+  children?: Comment[]; // For building the tree
 };
 
+// Post/Discussion type
 type Post = {
+  _id?: string;
   forum_group_id: number;
   user_id: number;
   title: string;
@@ -111,6 +101,21 @@ type Post = {
     user_id: number;
   }[];
   comments: Comment[];
+};
+
+type Group = {
+  _id: string;
+  image_url: string;
+  group_name: string;
+  description: string;
+  created_at: string;
+  members: {
+    joined_at: string;
+    role: string;
+    userId: number;
+  }[];
+  tags: string[];
+  gradient?: string;
 };
 
 type MemberWithDetails = {
@@ -156,6 +161,74 @@ const renderMarkdownContent = (content: string) => {
 
   html = html.replace(/(<li[^>]*>.*?<\/li>\n?)+/gs, '<ul class="my-2 space-y-1">$&</ul>');
   return html;
+};
+
+// Reddit-style comment tree builder with depth calculation
+const buildCommentTree = (comments: Comment[]): Comment[] => {
+  if (!comments || comments.length === 0) return [];
+  
+  // Create a map of comments by ID
+  const commentMap = new Map<string, Comment>();
+  const rootComments: Comment[] = [];
+  
+  // First pass: create map and initialize children array
+  comments.forEach(comment => {
+    commentMap.set(comment.comment_id, { ...comment, children: [] });
+  });
+  
+  // Second pass: build tree structure
+  comments.forEach(comment => {
+    const commentWithChildren = commentMap.get(comment.comment_id)!;
+    if (comment.parent_id && commentMap.has(comment.parent_id)) {
+      // This is a reply - add to parent's children
+      const parent = commentMap.get(comment.parent_id)!;
+      if (!parent.children) parent.children = [];
+      parent.children.push(commentWithChildren);
+    } else {
+      // This is a root comment
+      rootComments.push(commentWithChildren);
+    }
+  });
+  
+  // Sort root comments by date (oldest first for Reddit-style)
+  rootComments.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  
+  // Sort children by date (oldest first)
+  const sortChildren = (comment: Comment) => {
+    if (comment.children && comment.children.length > 0) {
+      comment.children.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      comment.children.forEach(sortChildren);
+    }
+  };
+  rootComments.forEach(sortChildren);
+  
+  // Calculate depth for each comment (Reddit-style indentation)
+  const calculateDepth = (comment: Comment, depth: number = 0) => {
+    comment.depth = depth;
+    if (comment.children) {
+      comment.children.forEach(child => calculateDepth(child, depth + 1));
+    }
+  };
+  rootComments.forEach(comment => calculateDepth(comment, 0));
+  
+  return rootComments;
+};
+
+// Get indentation class based on depth (Reddit uses 15-20px per level, max 10 levels)
+const getDepthClass = (depth: number = 0): string => {
+  const maxDepth = 8; // Maximum indentation levels like Reddit
+  const effectiveDepth = Math.min(depth, maxDepth);
+  
+  // Reddit uses about 1rem (16px) per level
+  if (effectiveDepth === 0) return "";
+  if (effectiveDepth === 1) return "ml-4";
+  if (effectiveDepth === 2) return "ml-8";
+  if (effectiveDepth === 3) return "ml-12";
+  if (effectiveDepth === 4) return "ml-16";
+  if (effectiveDepth === 5) return "ml-20";
+  if (effectiveDepth === 6) return "ml-24";
+  if (effectiveDepth === 7) return "ml-28";
+  return "ml-32";
 };
 
 // Image Gallery Component
@@ -219,9 +292,9 @@ const ReplyInput = ({
   uploadImages,
   images,
   removeImage,
-  isUploading
+  isUploading,
+  placeholder = "Write a reply... (Supports **bold**, *italic*, `code`, and images)"
 }: {
-  postId: number;
   replyText: string;
   updateReplyText: (text: string) => void;
   handleReply: () => void;
@@ -229,12 +302,13 @@ const ReplyInput = ({
   images: ImageAttachment[];
   removeImage: (imageId: string) => void;
   isUploading: boolean;
+  placeholder?: string;
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPreview, setShowPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const applyFormatting = (format: string, value?: string) => {
+  const applyFormatting = (format: string) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
 
@@ -258,12 +332,6 @@ const ReplyInput = ({
           ? selectedText.split("\n").map(line => `- ${line}`).join("\n")
           : "- ";
         newCursorPos = start + 2;
-        break;
-      case "numbered-list":
-        formattedText = selectedText
-          ? selectedText.split("\n").map((line, i) => `${i + 1}. ${line}`).join("\n")
-          : "1. ";
-        newCursorPos = start + 3;
         break;
       case "code":
         formattedText = `\`${selectedText || "code"}\``;
@@ -361,7 +429,7 @@ const ReplyInput = ({
               ref={textareaRef}
               value={replyText}
               onChange={(e) => updateReplyText(e.target.value)}
-              placeholder="Write a reply... (Supports **bold**, *italic*, `code`, and images)"
+              placeholder={placeholder}
               className="w-full rounded-b-lg border border-white/15 border-t-0 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 resize-none"
               rows={3}
             />
@@ -439,6 +507,380 @@ const ReplyInput = ({
   );
 };
 
+// Reddit-style Comment Component with depth-based indentation
+const CommentItem = ({ 
+  comment, 
+  postId, 
+  membersDetails, 
+  onLike, 
+  onReply, 
+  replyingTo, 
+  setReplyingTo,
+  replyText,
+  setReplyText,
+  onSendReply,
+  replyImages,
+  onReplyImageUpload,
+  onRemoveReplyImage,
+  isUploading,
+  isLastInThread = false
+}: { 
+  comment: Comment;
+  postId: number;
+  membersDetails: Record<number, { name: string; avatar: string }>;
+  onLike: (postId: number, commentId: string) => void;
+  onReply: (postId: number, commentId: string, authorName: string, authorId: number) => void;
+  replyingTo: { commentId: string; authorName: string; authorId: number } | null;
+  setReplyingTo: (value: { commentId: string; authorName: string; authorId: number } | null) => void;
+  replyText: string;
+  setReplyText: (text: string) => void;
+  onSendReply: (postId: number, commentId: string) => void;
+  replyImages: ImageAttachment[];
+  onReplyImageUpload: (files: FileList | null) => void;
+  onRemoveReplyImage: (imageId: string) => void;
+  isUploading: boolean;
+  isLastInThread?: boolean;
+}) => {
+  const [showChildren, setShowChildren] = useState(true);
+  const commentAuthor = membersDetails[comment.user_id] || { name: "Unknown User", avatar: "https://i.pravatar.cc/150?u=unknown" };
+  const isLiked = comment.likes.some(like => like.user_id === CURRENT_USER_ID);
+  const hasChildren = comment.children && comment.children.length > 0;
+  const childCount = comment.children?.length || 0;
+  const depth = comment.depth || 0;
+  
+  // Reddit-style: Show "continue thread" button after certain depth
+  const showContinueThread = depth >= 3 && childCount > 0;
+  const depthClass = getDepthClass(depth);
+
+  return (
+    <div className={`${depthClass} mt-2 ${!isLastInThread ? "border-l-2 border-white/10 ml-2 pl-2" : ""}`}>
+      <div className="flex gap-3 py-2">
+        <img
+          src={commentAuthor.avatar}
+          alt={commentAuthor.name}
+          className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20 flex-shrink-0"
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-medium text-white">{commentAuthor.name}</p>
+            <span className="text-xs text-zinc-500">{getTimeAgo(comment.created_at)}</span>
+            {depth > 0 && (
+              <span className="text-[10px] text-zinc-600">· {depth} level{depth > 1 ? 's' : ''} deep</span>
+            )}
+          </div>
+          
+          <div
+            className="mt-1 text-sm text-zinc-400 prose prose-invert prose-sm max-w-none break-words"
+            dangerouslySetInnerHTML={{ __html: renderMarkdownContent(comment.comment) }}
+          />
+          
+          <ImageGallery attachments={comment.attachments} />
+          
+          <div className="mt-2 flex items-center gap-3 flex-wrap">
+            <button
+              onClick={() => onLike(postId, comment.comment_id)}
+              className={`inline-flex items-center gap-1 text-xs transition ${
+                isLiked ? "text-red-400" : "text-zinc-500 hover:text-white"
+              }`}
+            >
+              <Heart className={`h-3 w-3 ${isLiked ? "fill-red-400" : ""}`} />
+              <span>{comment.likes.length}</span>
+            </button>
+            <button
+              onClick={() => onReply(postId, comment.comment_id, commentAuthor.name, comment.user_id)}
+              className="inline-flex items-center gap-1 text-xs text-zinc-500 transition hover:text-white"
+            >
+              <Reply className="h-3 w-3" />
+              <span>Reply</span>
+            </button>
+            {hasChildren && !showContinueThread && (
+              <button
+                onClick={() => setShowChildren(!showChildren)}
+                className="inline-flex items-center gap-1 text-xs text-zinc-500 transition hover:text-white"
+              >
+                <ChevronRight className={`h-3 w-3 transition-transform ${!showChildren ? "rotate-90" : ""}`} />
+                <span>{childCount} {childCount === 1 ? 'reply' : 'replies'}</span>
+              </button>
+            )}
+          </div>
+
+          {/* Reply Input */}
+          {replyingTo?.commentId === comment.comment_id && (
+            <div className="mt-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs text-blue-400">Replying to @{replyingTo.authorName}</span>
+                <button
+                  onClick={() => setReplyingTo(null)}
+                  className="text-xs text-zinc-500 hover:text-white"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+              <ReplyInput
+                replyText={replyText}
+                updateReplyText={setReplyText}
+                handleReply={() => onSendReply(postId, comment.comment_id)}
+                uploadImages={onReplyImageUpload}
+                images={replyImages}
+                removeImage={onRemoveReplyImage}
+                isUploading={isUploading}
+                placeholder={`Reply to @${replyingTo.authorName}...`}
+              />
+            </div>
+          )}
+
+          {/* Child Comments - Reddit style continue thread */}
+          {hasChildren && showChildren && !showContinueThread && (
+            <div className="mt-3">
+              {comment.children!.map((child, index) => (
+                <CommentItem
+                  key={child.comment_id}
+                  comment={child}
+                  postId={postId}
+                  membersDetails={membersDetails}
+                  onLike={onLike}
+                  onReply={onReply}
+                  replyingTo={replyingTo}
+                  setReplyingTo={setReplyingTo}
+                  replyText={replyText}
+                  setReplyText={setReplyText}
+                  onSendReply={onSendReply}
+                  replyImages={replyImages}
+                  onReplyImageUpload={onReplyImageUpload}
+                  onRemoveReplyImage={onRemoveReplyImage}
+                  isUploading={isUploading}
+                  isLastInThread={index === comment.children!.length - 1}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Continue thread button for deep threads (Reddit style) */}
+          {showContinueThread && (
+            <button
+              onClick={() => setShowChildren(!showChildren)}
+              className="mt-2 flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition"
+            >
+              {showChildren ? (
+                <>Hide {childCount} replies</>
+              ) : (
+                <>Continue this thread ({childCount} replies)</>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Dataset 1: Color Grading Discussion
+const dataset1Comments: Comment[] = [
+  {
+    user_id: 205,
+    comment: "Try CST first, then primary correction. The Color Space Transform effect in Premiere Pro works great. Convert from S-Log3 to Rec.709, then do your primary corrections.",
+    comment_id: "cmt_001",
+    parent_id: null,
+    created_at: "2026-06-02T10:35:00.000Z",
+    updated_at: "2026-06-02T10:35:00.000Z",
+    deleted_at: null,
+    attachments: [{ file_path: "uploads/comments/example-grade.png" }],
+    likes: [{ user_id: 101 }]
+  },
+  {
+    user_id: 101,
+    comment: "Thanks! What about the LUT order? Should I apply creative LUTs before or after the CST?",
+    comment_id: "cmt_002",
+    parent_id: "cmt_001",
+    created_at: "2026-06-02T10:40:00.000Z",
+    updated_at: "2026-06-02T10:40:00.000Z",
+    deleted_at: null,
+    attachments: [],
+    likes: [{ user_id: 205 }]
+  },
+  {
+    user_id: 205,
+    comment: "Apply LUT after CST for best results. This ensures your colors are properly transformed first, then the creative LUT works on the correct color space.",
+    comment_id: "cmt_003",
+    parent_id: "cmt_002",
+    created_at: "2026-06-02T10:45:00.000Z",
+    updated_at: "2026-06-02T10:45:00.000Z",
+    deleted_at: null,
+    attachments: [],
+    likes: [{ user_id: 101 }]
+  },
+  {
+    user_id: 101,
+    comment: "That makes sense! I'll try that workflow. Also, what about exposure adjustments?",
+    comment_id: "cmt_004",
+    parent_id: "cmt_003",
+    created_at: "2026-06-02T10:50:00.000Z",
+    updated_at: "2026-06-02T10:50:00.000Z",
+    deleted_at: null,
+    attachments: [],
+    likes: []
+  },
+  {
+    user_id: 205,
+    comment: "Adjust exposure before the CST. Log footage has more latitude in the highlights and shadows, so do your exposure and contrast adjustments in the log space first.",
+    comment_id: "cmt_005",
+    parent_id: "cmt_004",
+    created_at: "2026-06-02T10:55:00.000Z",
+    updated_at: "2026-06-02T10:55:00.000Z",
+    deleted_at: null,
+    attachments: [],
+    likes: [{ user_id: 101 }]
+  }
+];
+
+// Dataset 2: DaVinci Resolve Discussion
+const dataset2Comments: Comment[] = [
+  {
+    user_id: 205,
+    comment: "Resolve is definitely superior for color grading. The node-based workflow gives you so much more control. Plus, it's free!",
+    comment_id: "cmt_101",
+    parent_id: null,
+    created_at: "2026-06-03T09:15:00.000Z",
+    updated_at: "2026-06-03T09:15:00.000Z",
+    deleted_at: null,
+    attachments: [],
+    likes: [{ user_id: 101 }]
+  },
+  {
+    user_id: 101,
+    comment: "I've heard great things about the node system. Is the learning curve steep?",
+    comment_id: "cmt_102",
+    parent_id: "cmt_101",
+    created_at: "2026-06-03T09:20:00.000Z",
+    updated_at: "2026-06-03T09:20:00.000Z",
+    deleted_at: null,
+    attachments: [],
+    likes: []
+  },
+  {
+    user_id: 101,
+    comment: "Actually, I watched some tutorials and it seems quite intuitive! The node-based approach actually makes more sense than layers.",
+    comment_id: "cmt_103",
+    parent_id: "cmt_102",
+    created_at: "2026-06-03T09:25:00.000Z",
+    updated_at: "2026-06-03T09:25:00.000Z",
+    deleted_at: null,
+    attachments: [],
+    likes: [{ user_id: 101 }]
+  },
+  {
+    user_id: 205,
+    comment: "The node system is powerful! You can create parallel nodes for different adjustments, it's very flexible. What kind of projects do you usually work on?",
+    comment_id: "cmt_104",
+    parent_id: "cmt_103",
+    created_at: "2026-06-03T09:30:00.000Z",
+    updated_at: "2026-06-03T09:30:00.000Z",
+    deleted_at: null,
+    attachments: [],
+    likes: []
+  },
+  {
+    user_id: 101,
+    comment: "Mainly commercial work and short films. I think I'll give Resolve a try for my next project!",
+    comment_id: "cmt_105",
+    parent_id: "cmt_104",
+    created_at: "2026-06-03T09:35:00.000Z",
+    updated_at: "2026-06-03T09:35:00.000Z",
+    deleted_at: null,
+    attachments: [],
+    likes: [{ user_id: 205 }]
+  },
+  {
+    user_id: 89,
+    comment: "Both are great tools. I use Premiere for editing and Resolve for grading. Best of both worlds!",
+    comment_id: "cmt_106",
+    parent_id: null,
+    created_at: "2026-06-03T10:00:00.000Z",
+    updated_at: "2026-06-03T10:00:00.000Z",
+    deleted_at: null,
+    attachments: [],
+    likes: [{ user_id: 101 }, { user_id: 205 }]
+  },
+  {
+    user_id: 101,
+    comment: "That's a good workflow suggestion! Round-tripping between the two isn't too difficult?",
+    comment_id: "cmt_107",
+    parent_id: "cmt_106",
+    created_at: "2026-06-03T10:05:00.000Z",
+    updated_at: "2026-06-03T10:05:00.000Z",
+    deleted_at: null,
+    attachments: [],
+    likes: []
+  },
+  {
+    user_id: 89,
+    comment: "Not at all! Export XML from Premiere, import to Resolve, grade, then render. Very straightforward.",
+    comment_id: "cmt_108",
+    parent_id: "cmt_107",
+    created_at: "2026-06-03T10:10:00.000Z",
+    updated_at: "2026-06-03T10:10:00.000Z",
+    deleted_at: null,
+    attachments: [],
+    likes: [{ user_id: 101 }]
+  },
+  {
+    user_id: 101,
+    comment: "Perfect! I'll try that workflow on my next project. Thanks for the tip!",
+    comment_id: "cmt_109",
+    parent_id: "cmt_108",
+    created_at: "2026-06-03T10:15:00.000Z",
+    updated_at: "2026-06-03T10:15:00.000Z",
+    deleted_at: null,
+    attachments: [],
+    likes: [{ user_id: 89 }]
+  },
+  {
+    user_id: 89,
+    comment: "You're welcome! Feel free to DM me if you have any questions about the process.",
+    comment_id: "cmt_110",
+    parent_id: "cmt_109",
+    created_at: "2026-06-03T10:20:00.000Z",
+    updated_at: "2026-06-03T10:20:00.000Z",
+    deleted_at: null,
+    attachments: [],
+    likes: [{ user_id: 101 }]
+  }
+];
+
+const dataset1Posts: Post[] = [
+  {
+    forum_group_id: 1,
+    user_id: 101,
+    title: "Best workflow for log footage?",
+    description: "How do you grade S-Log3 for natural skin tones? I've been struggling with getting accurate skin tones when working with Sony S-Log3 footage. Any workflow suggestions?",
+    created_at: "2026-06-02T10:30:00.000Z",
+    updated_at: "2026-06-02T10:30:00.000Z",
+    deleted_at: null,
+    tags: [{ forum_tag_id: 10 }, { forum_tag_id: 11 }],
+    attachments: [{ file_path: "uploads/discussions/log-shot-01.jpg" }],
+    likes: [{ user_id: 101 }, { user_id: 205 }],
+    saves: [{ user_id: 205 }],
+    comments: dataset1Comments
+  }
+];
+
+const dataset2Posts: Post[] = [
+  {
+    forum_group_id: 1,
+    user_id: 101,
+    title: "DaVinci Resolve vs Premiere Pro for color grading",
+    description: "Which one do you prefer for professional color grading? I've been using Premiere but thinking of switching to Resolve.",
+    created_at: "2026-06-03T09:00:00.000Z",
+    updated_at: "2026-06-03T09:00:00.000Z",
+    deleted_at: null,
+    tags: [{ forum_tag_id: 12 }],
+    attachments: [],
+    likes: [{ user_id: 101 }, { user_id: 205 }, { user_id: 89 }],
+    saves: [],
+    comments: dataset2Comments
+  }
+];
+
 const SelectedGroup = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -449,12 +891,11 @@ const SelectedGroup = () => {
   const [loading, setLoading] = useState(true);
   const [expandedPostId, setExpandedPostId] = useState<number | null>(null);
   const [replyText, setReplyText] = useState<{ [key: number]: string }>({});
+  const [replyCommentText, setReplyCommentText] = useState<string>("");
   const [isNewDiscussionOpen, setIsNewDiscussionOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("latest");
-  const [selectedCategory, setSelectedCategory] = useState<string>("All");
 
-  // Menu and Modal states
   const [showMenu, setShowMenu] = useState(false);
   const [showMemberMenu, setShowMemberMenu] = useState<number | null>(null);
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
@@ -466,23 +907,34 @@ const SelectedGroup = () => {
   const [showRemoveMemberModal, setShowRemoveMemberModal] = useState(false);
   const [selectedMember, setSelectedMember] = useState<MemberWithDetails | null>(null);
 
-  // Post edit/delete states
   const [postMenuOpen, setPostMenuOpen] = useState<number | null>(null);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [deletingPost, setDeletingPost] = useState<Post | null>(null);
   const [likedPosts, setLikedPosts] = useState<Set<number>>(new Set());
 
-  // Reply images states
   const [replyImages, setReplyImages] = useState<{ [key: number]: ImageAttachment[] }>({});
   const [replyUploading, setReplyUploading] = useState<{ [key: number]: boolean }>({});
-
-  // Helper to get member details
   
+  const [replyingTo, setReplyingTo] = useState<{ commentId: string; authorName: string; authorId: number } | null>(null);
+  const [commentReplyImages, setCommentReplyImages] = useState<ImageAttachment[]>([]);
+  const [commentReplyUploading, setCommentReplyUploading] = useState(false);
 
-  // Get unique categories from posts
-  const categories = ["All"];
+  // Use dataset based on group ID
+  const useDataset2 = Number(id) === 1;
+  
+  const getMemberDetails = (userId: number) => {
+    const member = membersWithDetails.find(m => m.userId === userId);
+    return {
+      name: member?.name || `User ${userId}`,
+      avatar: member?.avatar || `https://i.pravatar.cc/150?u=${userId}`,
+    };
+  };
 
-  // Fetch group and posts data
+  const membersDetailsMap = membersWithDetails.reduce((acc, member) => {
+    acc[member.userId] = { name: member.name, avatar: member.avatar };
+    return acc;
+  }, {} as Record<number, { name: string; avatar: string }>);
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -493,8 +945,8 @@ const SelectedGroup = () => {
         navigate("/forums");
         return;
       }
-    const mockGroup: Group = result.data;
-    const getMemberDetails = await api.post('api/users/list-of-details', { userIds: mockGroup.members.map(m => m.userId) });
+      const mockGroup: Group = result.data;
+      const getMemberDetails = await api.post('api/users/list-of-details', { userIds: mockGroup.members.map(m => m.userId) });
       let memberDetailsList = getMemberDetails.data.usersList;
       for(const member of mockGroup.members) { 
         const details = memberDetailsList.find((details: any) => details.user_id === member.userId);
@@ -510,61 +962,22 @@ const SelectedGroup = () => {
           delete details.avatar_file_id;
         }
       }
-    // Mock posts data matching your structure
-    const mockPosts: Post[] = [
-        {
-          forum_group_id: Number(id),
-          user_id: 101,
-          title: "Best workflow for log footage?",
-          description: "How do you grade S-Log3 for natural skin tones?",
-          created_at: "2026-06-02T10:30:00.000Z",
-          updated_at: "2026-06-02T10:30:00.000Z",
-          deleted_at: null,
-          tags: [
-            { forum_tag_id: 10 },
-            { forum_tag_id: 11 }
-          ],
-          attachments: [
-            { file_path: "uploads/discussions/log-shot-01.jpg" }
-          ],
-          likes: [
-            { user_id: 101 }
-          ],
-          saves: [
-            { user_id: 205 }
-          ],
-          comments: [
-            {
-              user_id: 205,
-              comment: "Try CST first, then primary correction.",
-              comment_id: "cmt_001",
-              comment_reference_id: null,
-              created_at: "2026-06-02T10:35:00.000Z",
-              updated_at: "2026-06-02T10:35:00.000Z",
-              deleted_at: null,
-              attachments: [
-                { file_path: "uploads/comments/example-grade.png" }
-              ],
-              likes: [
-                { user_id: 101 }
-              ]
-            }
-          ]
-        }
-      ];
+      
+      let mockPosts: Post[] = [];
+      if (useDataset2) {
+        mockPosts = dataset2Posts.map(post => ({ ...post, forum_group_id: Number(id) }));
+      } else {
+        mockPosts = dataset1Posts.map(post => ({ ...post, forum_group_id: Number(id) }));
+      }
 
       setGroup(mockGroup);
       setPosts(mockPosts);
-
-      // Build members with details
-
       setMembersWithDetails(memberDetailsList);
-
       setLoading(false);
     };
 
     fetchData();
-  }, [id]);
+  }, [id, useDataset2]);
 
   const sortOptions = [
     { value: "latest", label: "Latest", icon: <Clock className="h-3 w-3" /> },
@@ -572,9 +985,8 @@ const SelectedGroup = () => {
     { value: "most-commented", label: "Most Commented", icon: <MessageCircle className="h-3 w-3" /> },
   ];
 
-  // Transform posts for UI display
   const displayPosts = posts.map((post, index) => {
-    const authorDetails = membersWithDetails[post.user_id] || { name: "Unknown User", avatar: "https://i.pravatar.cc/150?u=unknown" };
+    const authorDetails = getMemberDetails(post.user_id);
     const tagName = post.tags.length > 0 ? `Tag ${post.tags[0].forum_tag_id}` : undefined;
     
     return {
@@ -589,6 +1001,7 @@ const SelectedGroup = () => {
       commentCount: post.comments.length,
       isLiked: post.likes.some(like => like.user_id === CURRENT_USER_ID),
       isSaved: post.saves.some(save => save.user_id === CURRENT_USER_ID),
+      commentTree: buildCommentTree(post.comments),
     };
   });
 
@@ -668,12 +1081,12 @@ const SelectedGroup = () => {
       const newComment: Comment = {
         user_id: CURRENT_USER_ID,
         comment: replyContent || "",
-        comment_id: `cmt_${Date.now()}`,
-        comment_reference_id: null,
+        comment_id: `cmt_${Date.now()}_${Math.random()}`,
+        parent_id: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         deleted_at: null,
-        attachments: replyImageList.map(img => ({ file_path: img.preview })),
+        attachments: replyImageList.map(img => ({ file_path: img.url || img.preview })),
         likes: []
       };
       
@@ -686,8 +1099,126 @@ const SelectedGroup = () => {
     showSuccessToast("Reply posted successfully!");
   };
 
+  const handleCommentReply = (postId: number, parentCommentId: string) => {
+    const replyContent = replyCommentText.trim();
+    const replyImageList = commentReplyImages;
+
+    if (!replyContent && replyImageList.length === 0) return;
+
+    const updatedPosts = [...posts];
+    const postIndex = updatedPosts.findIndex((_, idx) => idx === postId);
+    
+    if (postIndex !== -1) {
+      const newComment: Comment = {
+        user_id: CURRENT_USER_ID,
+        comment: replyContent || "",
+        comment_id: `cmt_${Date.now()}_${Math.random()}`,
+        parent_id: parentCommentId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        deleted_at: null,
+        attachments: replyImageList.map(img => ({ file_path: img.url || img.preview })),
+        likes: []
+      };
+      
+      updatedPosts[postIndex].comments.push(newComment);
+      setPosts(updatedPosts);
+    }
+
+    setReplyCommentText("");
+    setCommentReplyImages([]);
+    setReplyingTo(null);
+    showSuccessToast("Reply posted successfully!");
+  };
+
   const updateReplyText = (postId: number, text: string) => {
     setReplyText({ ...replyText, [postId]: text });
+  };
+
+  const handleCommentReplyImageUpload = async (files: FileList | null) => {
+    if (!files) return;
+
+    const newImages: ImageAttachment[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+
+      if (!file.type.startsWith("image/")) {
+        showErrorToast(`${file.name} is not an image file`);
+        continue;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        showErrorToast(`${file.name} exceeds 5MB limit`);
+        continue;
+      }
+
+      const preview = URL.createObjectURL(file);
+      const imageId = `${Date.now()}-${i}`;
+
+      newImages.push({
+        id: imageId,
+        file,
+        preview,
+        uploading: true,
+        uploadProgress: 0,
+      });
+    }
+
+    setCommentReplyImages(prev => [...prev, ...newImages]);
+    setCommentReplyUploading(true);
+
+    for (const image of newImages) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setCommentReplyImages(prev =>
+        prev.map(img =>
+          img.id === image.id ? { ...img, uploading: false, url: img.preview } : img
+        )
+      );
+    }
+    setCommentReplyUploading(false);
+  };
+
+  const removeCommentReplyImage = (imageId: string) => {
+    const image = commentReplyImages.find(img => img.id === imageId);
+    if (image && image.preview.startsWith('blob:')) {
+      URL.revokeObjectURL(image.preview);
+    }
+    setCommentReplyImages(prev => prev.filter(img => img.id !== imageId));
+  };
+
+  const handleLikeComment = (postId: number, commentId: string) => {
+    setPosts(prevPosts =>
+      prevPosts.map((post, idx) => {
+        if (idx === postId) {
+          const updatedComments = post.comments.map(comment => {
+            if (comment.comment_id === commentId) {
+              const isLiked = comment.likes.some(like => like.user_id === CURRENT_USER_ID);
+              if (isLiked) {
+                return {
+                  ...comment,
+                  likes: comment.likes.filter(like => like.user_id !== CURRENT_USER_ID)
+                };
+              } else {
+                return {
+                  ...comment,
+                  likes: [...comment.likes, { user_id: CURRENT_USER_ID }]
+                };
+              }
+            }
+            return comment;
+          });
+          return { ...post, comments: updatedComments };
+        }
+        return post;
+      })
+    );
+  };
+
+  const handleReplyClick = (postId: number, commentId: string, authorName: string, authorId: number) => {
+    setReplyingTo({ commentId, authorName, authorId });
+    setReplyCommentText("");
+    setCommentReplyImages([]);
   };
 
   const handleCreatePost = (postData: {
@@ -889,7 +1420,6 @@ const SelectedGroup = () => {
       <UserHeader pageTitle={group.group_name} credits={1250} />
 
       <div className="mx-auto max-w-7xl p-6 md:p-8">
-        {/* Back Button and Three Dots Menu Row */}
         <div className="mb-6 flex items-center justify-between">
           <button
             onClick={() => navigate("/forums")}
@@ -899,7 +1429,6 @@ const SelectedGroup = () => {
             Back to Forums
           </button>
 
-          {/* Three Dots Menu */}
           <div className="relative">
             <button
               onClick={() => setShowMenu(!showMenu)}
@@ -977,7 +1506,6 @@ const SelectedGroup = () => {
           </div>
         </div>
 
-        {/* Group Header */}
         <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${group.gradient || ' from-purple-600 via-pink-600 to-red-600'} p-8`}>
           <div className="absolute inset-0 bg-black/50" />
           <div className="relative z-10">
@@ -1011,7 +1539,6 @@ const SelectedGroup = () => {
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="mt-6 border-b border-white/10">
           <div className="flex gap-6">
             <button
@@ -1047,9 +1574,7 @@ const SelectedGroup = () => {
           </div>
         </div>
 
-        {/* Tab Content */}
         <div className="mt-6">
-          {/* Posts Tab */}
           {activeTab === "posts" && (
             <>
               <div className="mb-6 flex justify-end">
@@ -1062,7 +1587,6 @@ const SelectedGroup = () => {
                 </button>
               </div>
 
-              {/* Search and Sort */}
               <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 sm:w-64">
                   <Search className="h-4 w-4 text-zinc-500" />
@@ -1097,7 +1621,6 @@ const SelectedGroup = () => {
                 </div>
               </div>
 
-              {/* Posts List */}
               <div className="space-y-4">
                 {displayPosts.length === 0 ? (
                   <div className="flex flex-col items-center justify-center rounded-xl border border-white/10 bg-white/5 p-12 text-center">
@@ -1166,12 +1689,7 @@ const SelectedGroup = () => {
                               )}
                             </div>
 
-                            <h3
-                              onClick={() => navigate(`/forums/discussion/${idx}`)}
-                              className="mt-1 text-base font-semibold text-white cursor-pointer hover:text-blue-400 transition-colors"
-                            >
-                              {post.title}
-                            </h3>
+                            <h3 className="mt-1 text-base font-semibold text-white">{post.title}</h3>
 
                             <div
                               className="mt-2 text-sm text-zinc-400 prose prose-invert prose-sm max-w-none"
@@ -1213,46 +1731,47 @@ const SelectedGroup = () => {
                               </button>
                             </div>
 
-                            {/* Expanded Replies */}
                             {expandedPostId === idx && (
                               <div className="mt-4 border-t border-white/10 pt-4">
                                 <div className="space-y-4">
-                                  {post.comments && post.comments.length > 0 ? (
-                                    post.comments.map((comment, commentIdx) => {
-                                      const commentAuthor = getMemberDetails(comment.user_id);
-                                      return (
-                                        <div key={comment.comment_id || commentIdx} className="flex gap-3">
-                                          <img
-                                            src={commentAuthor.avatar}
-                                            alt={commentAuthor.name}
-                                            className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20"
-                                          />
-                                          <div className="flex-1">
-                                            <p className="text-sm font-medium text-white">{commentAuthor.name}</p>
-                                            <div
-                                              className="mt-1 text-sm text-zinc-400 prose prose-invert prose-sm max-w-none"
-                                              dangerouslySetInnerHTML={{ __html: renderMarkdownContent(comment.comment) }}
-                                            />
-                                            <ImageGallery attachments={comment.attachments} />
-                                          </div>
-                                        </div>
-                                      );
-                                    })
+                                  {post.commentTree && post.commentTree.length > 0 ? (
+                                    post.commentTree.map((comment, commentIndex) => (
+                                      <CommentItem
+                                        key={comment.comment_id}
+                                        comment={comment}
+                                        postId={idx}
+                                        membersDetails={membersDetailsMap}
+                                        onLike={handleLikeComment}
+                                        onReply={handleReplyClick}
+                                        replyingTo={replyingTo}
+                                        setReplyingTo={setReplyingTo}
+                                        replyText={replyCommentText}
+                                        setReplyText={setReplyCommentText}
+                                        onSendReply={handleCommentReply}
+                                        replyImages={commentReplyImages}
+                                        onReplyImageUpload={handleCommentReplyImageUpload}
+                                        onRemoveReplyImage={removeCommentReplyImage}
+                                        isUploading={commentReplyUploading}
+                                        isLastInThread={commentIndex === post.commentTree.length - 1}
+                                      />
+                                    ))
                                   ) : (
-                                    <p className="text-center text-sm text-zinc-500">No replies yet.</p>
+                                    <p className="text-center text-sm text-zinc-500">No comments yet.</p>
                                   )}
                                 </div>
 
-                                <ReplyInput
-                                  postId={idx}
-                                  replyText={replyText[idx] || ""}
-                                  updateReplyText={(text) => updateReplyText(idx, text)}
-                                  handleReply={() => handleReply(idx)}
-                                  uploadImages={(files) => handleReplyImageUpload(idx, files)}
-                                  images={replyImages[idx] || []}
-                                  removeImage={(imageId) => removeReplyImage(idx, imageId)}
-                                  isUploading={replyUploading[idx] || false}
-                                />
+                                <div className="mt-4 pt-4 border-t border-white/10">
+                                  <ReplyInput
+                                    replyText={replyText[idx] || ""}
+                                    updateReplyText={(text) => updateReplyText(idx, text)}
+                                    handleReply={() => handleReply(idx)}
+                                    uploadImages={(files) => handleReplyImageUpload(idx, files)}
+                                    images={replyImages[idx] || []}
+                                    removeImage={(imageId) => removeReplyImage(idx, imageId)}
+                                    isUploading={replyUploading[idx] || false}
+                                    placeholder="Write a comment..."
+                                  />
+                                </div>
                               </div>
                             )}
                           </div>
@@ -1265,7 +1784,6 @@ const SelectedGroup = () => {
             </>
           )}
 
-          {/* Members Tab */}
           {activeTab === "members" && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {membersWithDetails.map((member) => (
@@ -1330,7 +1848,6 @@ const SelectedGroup = () => {
             </div>
           )}
 
-          {/* About Tab */}
           {activeTab === "about" && (
             <div className="space-y-6">
               <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-6">
@@ -1367,7 +1884,6 @@ const SelectedGroup = () => {
         </div>
       </div>
 
-      {/* Modals */}
       <NewDiscussionModal
         isOpen={isNewDiscussionOpen}
         onClose={() => setIsNewDiscussionOpen(false)}
@@ -1430,7 +1946,6 @@ const SelectedGroup = () => {
         onConfirm={handleRemoveMember}
       />
 
-      {/* Edit Post Modal */}
       <EditPostModal
         isOpen={!!editingPost}
         onClose={() => setEditingPost(null)}
@@ -1438,30 +1953,12 @@ const SelectedGroup = () => {
         post={editingPost ? { id: displayPosts.findIndex(p => p === editingPost), title: editingPost.title, content: editingPost.description, tag: editingPost.tag || "", images: editingPost.attachments.map(a => ({ id: a.file_path, preview: a.file_path })) } : null}
       />
 
-      {/* Delete Post Modal */}
       <DeletePostModal
         isOpen={!!deletingPost}
         onClose={() => setDeletingPost(null)}
         onConfirm={handleDeletePost}
         postTitle={deletingPost?.title || ""}
       />
-
-      <style>{`
-        @keyframes fade-in-modal {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes scale-in {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        .animate-fade-in-modal {
-          animation: fade-in-modal 0.2s ease-out;
-        }
-        .animate-scale-in {
-          animation: scale-in 0.2s ease-out;
-        }
-      `}</style>
     </div>
   );
 };

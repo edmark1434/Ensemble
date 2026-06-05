@@ -156,7 +156,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
               >
                 <img src={userAvatar} alt={userName} className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20" />
                 <div className="text-left">
-                  <p className="text-sm font-medium text-white">{userInfo?.displayName || "User"}</p>
+                  <p className="text-sm font-medium text-white">{userInfo?.display_name || userInfo?.displayName || "User"}</p>
                   <p className="text-xs text-zinc-500">Premium Member</p>
                 </div>
                 <ChevronDown className={`h-4 w-4 text-zinc-400 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`} />
@@ -165,11 +165,12 @@ const UserHeader: React.FC<UserHeaderProps> = ({
               {isProfileOpen && (
                 <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/10 bg-[#0d0f1a] shadow-2xl backdrop-blur-xl animate-fade-in">
                   <div className="border-b border-white/10 p-3">
-                    <p className="text-sm font-medium text-white">{userName}</p>
+                    <p className="text-sm font-medium text-white">{ userInfo.username}</p>
                     <p className="text-xs text-zinc-500">{userInfo?.email || "user@ensemble.com"}</p>
                   </div>
                   <div className="p-2">
-                    <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10">
+                    <button onClick={() => { navigate("/profile"); setIsProfileOpen(false); }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10">
                       <User className="h-4 w-4" /> Profile
                     </button>
                     <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10">
