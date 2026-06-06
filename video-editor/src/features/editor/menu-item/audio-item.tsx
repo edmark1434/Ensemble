@@ -52,7 +52,7 @@ export const AudioItem = ({
   const style = useMemo(
     () => ({
       backgroundImage:
-        "url(https://cdn.designcombo.dev/thumbnails/music-preview.png)",
+          "url(https://cdn.designcombo.dev/thumbnails/music-preview.png)",
       backgroundSize: "cover",
       width: "70px",
       height: "70px"
@@ -95,8 +95,30 @@ export const AudioItem = ({
           <span className="text-xs font-medium truncate mb-0.5 text-zinc-900 dark:text-zinc-300">
             {item.name}
           </span>
-          <span className="text-[10px] text-muted-foreground">{duration}</span>
+          <span className="text-[10px] text-muted-foreground">
+            {item.metadata?.author && `${item.metadata.author} · `}{duration}
+          </span>
         </div>
+
+        {isPlaying && (
+          <div className="flex items-end gap-[2px] h-4 shrink-0">
+            {[...Array(5)].map((_, i) => (
+              <span
+                key={i}
+                className="w-[3px] bg-primary rounded-full"
+                style={{
+                  height: "100%",
+                  animationName: "wave-bar",
+                  animationDelay: `${i * 0.15}s`,
+                  animationDuration: "0.8s",
+                  animationIterationCount: "infinite",
+                  animationTimingFunction: "ease-in-out",
+                  display: "inline-block",
+                }}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </Draggable>
   );
