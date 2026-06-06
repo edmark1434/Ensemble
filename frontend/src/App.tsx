@@ -37,6 +37,7 @@ import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminSectionPlaceholder from './pages/admin/AdminSectionPlaceholder'
 import UserTeamPage from './pages/admin/userTeam/UserTeamPage'
 import CreditEconomyPage from './pages/admin/creditEconomy/CreditEconomyPage'
+import ModerationPage from './pages/admin/moderation/ModerationPage'
 import StaffPortalLayout from './pages/staff/StaffPortalLayout'
 import StaffDashboard from './pages/staff/StaffDashboard'
 
@@ -121,7 +122,7 @@ function App() {
           <Route path='user-team/teams' element={<Navigate to="/admin/user-team?tab=teams" replace />} />
           <Route path='user-team/users' element={<Navigate to="/admin/user-team?tab=users" replace />} />
           <Route path='credit-economy' element={<CreditEconomyPage />} />
-          <Route path='moderation' element={<AdminSectionPlaceholder title='MODERATION' />} />
+          <Route path='moderation' element={<ModerationPage />} />
           <Route path='analytics' element={<AdminSectionPlaceholder title='ANALYTICS' />} />
           <Route path='ticket-management' element={<AdminSectionPlaceholder title='TICKET MANAGEMENT' />} />
           <Route path='system-settings' element={<AdminSectionPlaceholder title='SYSTEM SETTINGS' />} />
