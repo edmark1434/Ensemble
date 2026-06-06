@@ -249,7 +249,7 @@ function OverviewTab({
     {
       label: 'Open disputes',
       value: kpis.openDisputes,
-      sub: 'Dispute module coming soon',
+      sub: 'Open dispute cases',
       icon: Shield,
       accent: 'text-orange-400',
     },
@@ -270,7 +270,7 @@ function OverviewTab({
     {
       label: 'Support tickets',
       value: kpis.openTickets,
-      sub: 'Ticket desk not connected yet',
+      sub: 'Open & in-progress tickets',
       icon: Ticket,
       accent: 'text-violet-400',
     },

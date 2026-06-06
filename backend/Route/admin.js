@@ -10,6 +10,15 @@ const {
 const { getAdminEconomyOverview } = require('../Controllers/AdminEconomyControllers');
 const { getAdminModerationOverview } = require('../Controllers/AdminModerationControllers');
 const { getAdminAnalyticsOverview } = require('../Controllers/AdminAnalyticsControllers');
+const {
+  getAdminTicketsOverview,
+  getAdminTicketDetail,
+  patchAdminTicket,
+  postAdminTicketMessage,
+  patchAdminDispute,
+  patchAdminReport,
+} = require('../Controllers/AdminTicketsControllers');
+const { getAdminSettingsOverview, patchAdminSettings } = require('../Controllers/AdminSettingsControllers');
 
 router.get('/dashboard-overview', [checkSession, requireAdmin], getAdminDashboardOverview);
 router.get('/teams-management', [checkSession, requireAdmin], getAdminTeamsManagement);
@@ -18,5 +27,13 @@ router.get('/user-team-overview', [checkSession, requireAdmin], getAdminUserTeam
 router.get('/economy-overview', [checkSession, requireAdmin], getAdminEconomyOverview);
 router.get('/moderation-overview', [checkSession, requireAdmin], getAdminModerationOverview);
 router.get('/analytics-overview', [checkSession, requireAdmin], getAdminAnalyticsOverview);
+router.get('/tickets-overview', [checkSession, requireAdmin], getAdminTicketsOverview);
+router.get('/tickets/:id', [checkSession, requireAdmin], getAdminTicketDetail);
+router.patch('/tickets/:id', [checkSession, requireAdmin], patchAdminTicket);
+router.post('/tickets/:id/messages', [checkSession, requireAdmin], postAdminTicketMessage);
+router.patch('/disputes/:id', [checkSession, requireAdmin], patchAdminDispute);
+router.patch('/reports/:id', [checkSession, requireAdmin], patchAdminReport);
+router.get('/settings-overview', [checkSession, requireAdmin], getAdminSettingsOverview);
+router.patch('/settings', [checkSession, requireAdmin], patchAdminSettings);
 
 module.exports = router;

@@ -39,6 +39,8 @@ import UserTeamPage from './pages/admin/userTeam/UserTeamPage'
 import CreditEconomyPage from './pages/admin/creditEconomy/CreditEconomyPage'
 import ModerationPage from './pages/admin/moderation/ModerationPage'
 import AnalyticsPage from './pages/admin/analytics/AnalyticsPage'
+import TicketManagementPage from './pages/admin/ticketManagement/TicketManagementPage'
+import SystemSettingsPage from './pages/admin/systemSettings/SystemSettingsPage'
 import StaffPortalLayout from './pages/staff/StaffPortalLayout'
 import StaffDashboard from './pages/staff/StaffDashboard'
 
@@ -125,8 +127,8 @@ function App() {
           <Route path='credit-economy' element={<CreditEconomyPage />} />
           <Route path='moderation' element={<ModerationPage />} />
           <Route path='analytics' element={<AnalyticsPage />} />
-          <Route path='ticket-management' element={<AdminSectionPlaceholder title='TICKET MANAGEMENT' />} />
-          <Route path='system-settings' element={<AdminSectionPlaceholder title='SYSTEM SETTINGS' />} />
+          <Route path='ticket-management' element={<TicketManagementPage />} />
+          <Route path='system-settings' element={<SystemSettingsPage />} />
         </Route>
 
         {/* Moderator Routes */}

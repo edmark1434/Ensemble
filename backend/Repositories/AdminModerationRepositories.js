@@ -1,5 +1,6 @@
 const { pool } = require('../lib/database');
 const { getMongoClient, connectMongoDB } = require('../lib/mongodb');
+const { DEFAULT_SETTINGS } = require('./AdminSettingsRepositories');
 
 function normalizeStatus(status) {
   if (!status) return 'Unknown';
@@ -267,7 +268,7 @@ function computeModeratorPerformance(staff, activities) {
 }
 
 async function getModerationOverview() {
-  const [usersResult, staffResult, accountsResult, accountStats, statusBreakdown, forum] = await Promise.all([
+  const [usersResult, staffResult, accountsResult, accountStats, statusBreakdown, forum, disputeStats, moderationSettingsRow] = await Promise.all([
     pool.query(`
       SELECT
         u.user_id,
@@ -325,6 +326,16 @@ async function getModerationOverview() {
       ORDER BY count DESC
     `),
     scanForumContent(),
+    pool
+      .query(`
+        SELECT COUNT(*)::int AS open_disputes
+        FROM disputes
+        WHERE LOWER(status) NOT IN ('resolved', 'closed')
+      `)
+      .catch(() => ({ rows: [{ open_disputes: 0 }] })),
+    pool
+      .query(`SELECT setting_value FROM platform_settings WHERE setting_key = 'moderation'`)
+      .catch(() => ({ rows: [] })),
   ]);
 
   const users = usersResult.rows;
@@ -366,13 +377,8 @@ async function getModerationOverview() {
         forumGroups: forum.activeGroups + forum.inactiveGroups,
         discussions: forum.discussions,
       },
-      notYetInDatabase: [
-        'moderation_actions',
-        'user_reports',
-        'disputes',
-        'violations',
-        'automated_moderation_rules',
-      ],
+      notYetInDatabase: ['moderation_actions'],
+      persisted: ['user_reports', 'disputes', 'violations', 'platform_settings'],
     },
     summary: {
       yourPendingCases: pendingCases.filter((c) => c.status === 'Open').length,
@@ -384,7 +390,7 @@ async function getModerationOverview() {
       softDeletedAccounts: Number(stats.soft_deleted),
       forumGroupsActive: forum.activeGroups,
       forumDiscussions: forum.discussions,
-      disputeQueueCount: 0,
+      disputeQueueCount: Number(disputeStats.rows[0]?.open_disputes || 0),
     },
     pendingCases,
     recentActivity,
@@ -396,19 +402,15 @@ async function getModerationOverview() {
     forumReviewQueue: forum.groups.slice(0, 12),
     contentSnapshots: forum.flaggedDiscussions.slice(0, 8),
     automatedSettings: {
-      spamFilterEnabled: true,
-      autoFlagProfanity: true,
-      autoHoldNewAccounts: false,
-      maxWarningsBeforeSuspend: 3,
+      ...DEFAULT_SETTINGS.moderation,
+      ...(moderationSettingsRow.rows[0]?.setting_value || {}),
       forumLinkScanning: forum.connected,
-      marketplaceListingReview: false,
-      disputeAutoAssign: false,
     },
-    alerts: buildModerationAlerts(pendingCases, forum, stats),
+    alerts: buildModerationAlerts(pendingCases, forum, stats, Number(disputeStats.rows[0]?.open_disputes || 0)),
   };
 }
 
-function buildModerationAlerts(cases, forum, stats) {
+function buildModerationAlerts(cases, forum, stats, openDisputes = 0) {
   const alerts = [];
 
   const open = cases.filter((c) => c.status === 'Open').length;
@@ -442,13 +444,15 @@ function buildModerationAlerts(cases, forum, stats) {
     });
   }
 
-  alerts.push({
-    id: 'disputes-module',
-    message: 'Dispute resolution queue is not in the database yet — showing 0 disputes.',
-    severity: 'info',
-  });
+  if (openDisputes > 0) {
+    alerts.push({
+      id: 'open-disputes',
+      message: `${openDisputes} open dispute(s) in the resolution queue.`,
+      severity: openDisputes > 3 ? 'warning' : 'info',
+    });
+  }
 
-  if (alerts.length === 1) {
+  if (alerts.length === 0) {
     alerts.unshift({
       id: 'stable',
       message: 'No urgent moderation escalations from current database scan.',
