@@ -72,7 +72,7 @@ class Timeline extends TimelineBase {
     super.purge();
     window.removeEventListener("keydown", this.handleKeyDown);
     window.removeEventListener("keyup", this.handleKeyUp);
-    this.upperCanvasEl.removeEventListener('wheel', this.handleWheel);
+    this.upperCanvasEl?.removeEventListener('wheel', this.handleWheel);
   }
 
   public setViewportPos(posX: number, posY: number) {

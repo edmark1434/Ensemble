@@ -29,11 +29,15 @@ import {
   useIsMediumScreen,
   useIsSmallScreen
 } from "@/hooks/use-media-query";
+import {
+  CloudCheck
+} from "lucide-react";
 
 import { LogoIcons } from "@/components/shared/logos";
 import Link from "next/link";
 import { ShortcutsModal } from "./shortcuts-modal";
 import { ModeToggle } from "@/components/ui/mode-toggle";
+import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
 
 export default function Navbar({
   user,
@@ -96,22 +100,53 @@ export default function Navbar({
         </div>
 
         <div className=" pointer-events-auto flex h-10 items-center px-1.5">
-          <Button
-            onClick={handleUndo}
-            className="text-muted-foreground"
-            variant="ghost"
-            size="icon"
-          >
-            <Icons.undo width={20} />
-          </Button>
-          <Button
-            onClick={handleRedo}
-            className="text-muted-foreground"
-            variant="ghost"
-            size="icon"
-          >
-            <Icons.redo width={20} />
-          </Button>
+          <Tooltip delayDuration={10}>
+            <TooltipTrigger asChild>
+              <Button
+                  onClick={handleUndo}
+                  className=""
+                  variant="ghost"
+                  size="icon"
+              >
+                <Icons.undo width={20} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" align="center" sideOffset={1}>
+              Undo
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip delayDuration={10}>
+            <TooltipTrigger asChild>
+              <Button
+                  onClick={handleRedo}
+                  className=""
+                  variant="ghost"
+                  size="icon"
+              >
+                <Icons.redo width={20} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" align="center" sideOffset={1}>
+              Redo
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip delayDuration={10}>
+            <TooltipTrigger asChild>
+              <Button
+                  onClick={handleUndo}
+                  className=""
+                  variant="ghost"
+                  size="icon"
+              >
+                <CloudCheck size={20} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" align="center" sideOffset={1}>
+              All changes saved
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 

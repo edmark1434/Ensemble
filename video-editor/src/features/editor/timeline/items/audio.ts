@@ -55,6 +55,8 @@ class Audio extends Trimmable {
     this.objectCaching = false;
     this.initOffscreenCanvas();
     this.initialize();
+    this.rx = 4;
+    this.ry = 4;
   }
 
   // Update the _render method to handle the visible portion
@@ -165,7 +167,7 @@ class Audio extends Trimmable {
     const borderColor = this.isSelected
       ? "rgba(255, 255, 255,1.0)"
       : "rgba(255, 255, 255,0.05)";
-    const borderWidth = 2;
+    const borderWidth = 1;
     const innerRadius = 4;
 
     ctx.save();
@@ -173,7 +175,11 @@ class Audio extends Trimmable {
 
     // Create a path for the outer rectangle (no radius)
     ctx.beginPath();
-    ctx.rect(-this.width / 2, -this.height / 2, this.width, this.height);
+    if (this.isSelected) {
+      ctx.rect(-this.width / 2, -this.height / 2, this.width, this.height);
+    } else {
+      ctx.roundRect(-this.width / 2, -this.height / 2, this.width, this.height, innerRadius);
+    }
 
     // Create a path for the inner rectangle with rounded corners (the hole)
     ctx.roundRect(
@@ -225,11 +231,11 @@ class Audio extends Trimmable {
     if (!bars) return;
 
     // Clear the offscreen canvas
-    ctx.clearRect(0, 0, this.offscreenCanvas!.width, this.height);
+    // ctx.clearRect(0, 0, this.offscreenCanvas!.width, this.height);
 
     // Clip with rounded corners
     ctx.beginPath();
-    ctx.roundRect(0, 0, this.offscreenCanvas!.width, this.height, this.rx);
+    ctx.rect(0, 0, this.offscreenCanvas!.width, this.height);
     ctx.clip();
 
     // Draw waveform

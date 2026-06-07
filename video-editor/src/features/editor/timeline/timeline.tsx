@@ -63,7 +63,8 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     timelineHeight,
     onMouseDown,
     onMouseMove,
-    onMouseOut
+    onMouseOut,
+    toggleFullHeight
   } = useResizbleTimeline();
   const { theme } = useTheme();
 
@@ -215,6 +216,18 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     setCanvasSize({ width: containerWidth, height: containerHeight });
     setTimeline(canvas);
 
+    // watch for hidden state changes on canvas items
+    canvas.state.subscribeToUpdateItemDetails(({ trackItemsMap }) => {
+      canvas.getTrackItems().forEach((item: any) => {
+        const details = trackItemsMap[item.id]?.details;
+        if (details?.hidden !== undefined && item.hidden !== details.hidden) {
+          item.hidden = details.hidden;
+          item.dirty = true;
+        }
+      });
+      canvas.requestRenderAll();
+    });
+
     return () => {
       canvas.purge();
     };
@@ -280,7 +293,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       onMouseMove={onMouseMove}
       onMouseOut={onMouseOut}
     >
-      <Header />
+      <Header toggleFullHeight={toggleFullHeight} timelineHeight={timelineHeight} />
       <Ruler
         onClick={onClickRuler}
         scrollLeft={scrollLeft}

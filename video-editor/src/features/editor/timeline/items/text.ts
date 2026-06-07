@@ -7,11 +7,14 @@ interface TextProps extends ResizableProps {
   text: string;
   tScale: number;
   display: IDisplay;
+  hidden: boolean;
 }
 class Text extends Resizable {
   static type = "Text";
   declare id: string;
   declare text: string;
+  declare hidden: boolean;
+
   static createControls(): { controls: Record<string, Control> } {
     return { controls: createResizeControls() };
   }
@@ -23,6 +26,7 @@ class Text extends Resizable {
     this.borderColor = "transparent";
     this.stroke = "transparent";
     this.text = props.text;
+    this.hidden = props.hidden ?? false;
     // this.rx = 0;
     // this.ry = 0;
   }
@@ -40,9 +44,22 @@ class Text extends Resizable {
     ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
     ctx.textAlign = "left";
     ctx.clip();
-    ctx.fillText(this.text, 12, 20);
 
-    ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+    if (this.hidden) {
+      // draw eye-off icon first, then text offset to the right
+      const eyeOffPath = new Path2D("M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22");
+      ctx.save();
+      ctx.translate(12, 8);
+      ctx.strokeStyle = "rgba(255,255,255,0.8)";
+      ctx.lineWidth = 2;
+      ctx.scale(0.67, 0.67);
+      ctx.stroke(eyeOffPath);
+      ctx.restore();
+      ctx.fillText(this.text, 36, 20); // offset text to clear the icon
+    } else {
+      ctx.fillText(this.text, 12, 20); // original position
+    }
+
     ctx.restore();
   }
 
@@ -50,7 +67,7 @@ class Text extends Resizable {
     const borderColor = this.isSelected
       ? "rgba(255, 255, 255,1.0)"
       : "rgba(255, 255, 255,0.05)";
-    const borderWidth = 2;
+    const borderWidth = 1;
     const innerRadius = 4;
 
     ctx.save();
@@ -58,7 +75,11 @@ class Text extends Resizable {
 
     // Create a path for the outer rectangle (no radius)
     ctx.beginPath();
-    ctx.rect(-this.width / 2, -this.height / 2, this.width, this.height);
+    if (this.isSelected) {
+      ctx.rect(-this.width / 2, -this.height / 2, this.width, this.height);
+    } else {
+      ctx.roundRect(-this.width / 2, -this.height / 2, this.width, this.height, innerRadius);
+    }
 
     // Create a path for the inner rectangle with rounded corners (the hole)
     ctx.roundRect(

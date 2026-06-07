@@ -71,11 +71,26 @@ export const useResizbleTimeline = () => {
     setTimelineHeight(timelineContainerRef.current.clientHeight);
   }, [timelineContainerRef.current]);
 
+  const FULL_HEIGHT = window.innerHeight;
+  const DEFAULT_HEIGHT = window.innerHeight * 0.5;
+
+  const toggleFullHeight = () => {
+    const isFull = timelineHeight >= FULL_HEIGHT;
+    const newHeight = isFull ? DEFAULT_HEIGHT : FULL_HEIGHT;
+    setTimelineHeight(newHeight);
+    timelineContainerRef.current!.style.height = `${newHeight}px`;
+    const containerHeight =
+        (document.getElementById("playhead")?.clientHeight || 0) -
+        (document.getElementById("playhead-handle")?.clientHeight || 0);
+    timeline?.resize({ height: containerHeight });
+  };
+
   return {
     timelineContainerRef,
     onMouseDown,
     onMouseMove,
     onMouseOut,
-    timelineHeight
+    timelineHeight,
+    toggleFullHeight
   };
 };

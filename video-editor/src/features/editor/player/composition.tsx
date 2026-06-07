@@ -27,6 +27,14 @@ const Composition = () => {
     transitionsMap,
     trackItemsMap: trackItemsMap
   });
+
+  const visibleGroupedItems = groupedItems.map(group =>
+      group.filter(item => {
+        if (item.type === "transition") return true;
+        return !trackItemsMap[item.id]?.details?.hidden;
+      })
+  ).filter(group => group.length > 0);
+
   const mediaItems = Object.values(trackItemsMap).filter((item) => {
     return item.type === "video" || item.type === "audio";
   });
@@ -190,7 +198,7 @@ const Composition = () => {
 
   return (
     <>
-      {groupedItems.map((group, index) => {
+      {visibleGroupedItems.map((group, index) => {
         if (group.length === 1) {
           const item = trackItemsMap[group[0].id];
           return SequenceItem[item.type](item, {

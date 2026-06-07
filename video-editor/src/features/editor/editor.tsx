@@ -267,7 +267,7 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
 
             <ResizablePanel
               defaultSize={40}
-              minSize={60}
+              minSize={40}
               className="min-w-0 min-h-0"
             >
               <SceneContainer
