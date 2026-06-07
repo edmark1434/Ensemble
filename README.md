@@ -105,14 +105,15 @@ Default seeded passwords:
 - **Staff & admin accounts:** `staff123`
 - **Regular user accounts:** `user123`
 
-**Staff & admin test accounts** (emails change each time you run `npm run seed`; usernames/handles stay the same):
+**Staff & admin test accounts** (fixed emails — same every seed):
 
 | Role | Email | Username (handle) | Portal |
 |------|-------|-------------------|--------|
-| Admin | `adminw9uj1o@mail.com` | `admin` | http://localhost:5173/admin |
-| Support Moderator | `supportmoderatorhqml4s@mail.com` | `support_moderator` | http://localhost:5173/staff |
-| Jobs N Gigs Moderator | `jobsngigsmoderatorgbvnnv@mail.com` | `jobs_n_gigs_moderator` | http://localhost:5173/staff |
-| Forum Moderator | `forummoderatornfd4ad@mail.com` | `forum_moderator` | http://localhost:5173/staff |
+| Admin | `admin@ensemble.dev` | `admin` | http://localhost:5173/admin |
+| Support Moderator | `support@ensemble.dev` | `support_moderator` | http://localhost:5173/staff |
+| Dispute Moderator | `disputes@ensemble.dev` | `dispute_moderator` | http://localhost:5173/staff |
+| Jobs N Gigs Moderator | `jobs@ensemble.dev` | `jobs_n_gigs_moderator` | http://localhost:5173/staff |
+| Forum Moderator | `forum@ensemble.dev` | `forum_moderator` | http://localhost:5173/staff |
 
 Sign in with **email or username** and password `staff123`.
 
@@ -200,10 +201,10 @@ Set `VITE_BASE_URL=http://localhost:4000` in `frontend/.env` (required for login
 
 | Portal | Example login |
 |--------|----------------|
-| Admin | `admin` or `adminw9uj1o@mail.com` |
-| Staff | `support_moderator` or `supportmoderatorhqml4s@mail.com` (and other moderator emails above) |
+| Admin | `admin` or `admin@ensemble.dev` |
+| Staff | `support_moderator` or `support@ensemble.dev` (and other staff emails above) |
 
-Re-run `npm run seed` to reset data; new random emails will be printed in the terminal — update this table if you document a specific seed run.
+Re-run `npm run seed` to reset data; staff emails stay the same.
 
 **Terminal 3 — video editor (optional):**
 

@@ -1,6 +1,7 @@
 const {
   getTeamsManagement,
   getUsersManagement,
+  getUserTeamOverview,
 } = require('../Repositories/AdminUserTeamRepositories');
 
 async function getAdminTeamsManagement(req, res) {
@@ -23,7 +24,18 @@ async function getAdminUsersManagement(req, res) {
   }
 }
 
+async function getAdminUserTeamOverview(req, res) {
+  try {
+    const data = await getUserTeamOverview();
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching user-team overview:', err);
+    res.status(500).json({ success: false, message: 'Failed to load user & team overview' });
+  }
+}
+
 module.exports = {
   getAdminTeamsManagement,
   getAdminUsersManagement,
+  getAdminUserTeamOverview,
 };

@@ -31,12 +31,17 @@ import ExpandDiscussion from "@/pages/user/4_forums/ExpandDiscussion.tsx";
 import SectionPlaceholder from './pages/user/0_config/SectionPlaceholder.tsx'
 
 import JobPostingMain from "@/pages/user/6_jobs/Job_Posting/main.tsx";
+import GigMarketplace from "@/pages/user/7_gigs/Gig_Posting/main.tsx";
 
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminSectionPlaceholder from './pages/admin/AdminSectionPlaceholder'
 import UserTeamPage from './pages/admin/userTeam/UserTeamPage'
 import CreditEconomyPage from './pages/admin/creditEconomy/CreditEconomyPage'
+import ModerationPage from './pages/admin/moderation/ModerationPage'
+import AnalyticsPage from './pages/admin/analytics/AnalyticsPage'
+import TicketManagementPage from './pages/admin/ticketManagement/TicketManagementPage'
+import SystemSettingsPage from './pages/admin/systemSettings/SystemSettingsPage'
 import StaffPortalLayout from './pages/staff/StaffPortalLayout'
 import StaffDashboard from './pages/staff/StaffDashboard'
 
@@ -47,6 +52,20 @@ import SupportModeratorLayout from './pages/moderator/support-moderator/Layout'
 import ModeratorSectionPlaceholder from './pages/moderator/SectionPlaceholder'
 import RouteMiddleware from './lib/RouteMiddleware'
 import StaffMiddleware from './lib/StaffMiddleware'
+
+// ─── Landing Dropdown Pages Imports ──────────────────────────────────────────
+import PageAboutUs from "@/pages/landing/pages/page_AboutUs.tsx";
+import PageAskOurChatbot from './pages/landing/pages/page_AskOurChatbot';
+import PageFAQ from './pages/landing/pages/page_FAQ';
+import PageHowToHire from './pages/landing/pages/page_HowToHire';
+import PageHowToWork from './pages/landing/pages/page_HowToWork';
+import PagePricing from './pages/landing/pages/page_Pricing';
+import PagePrivacyPolicy from "@/pages/landing/pages/page_PrivacyPolicy.tsx";
+import PageTermsOfService from "@/pages/landing/pages/page_TermsOfService.tsx";
+import PageSendAFeedback from './pages/landing/pages/page_SendAFeedback';
+import PageSubmitATicket from './pages/landing/pages/page_SubmitATicket';
+import PageSupportUs from './pages/landing/pages/page_SupportUs';
+
 import './App.css'
 
 function App() {
@@ -68,6 +87,22 @@ function App() {
         <Route path='/verify-email' element={<EmailVerification />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+        {/* Modular Public Dropdown Landing Pages */}
+        {/* Nested structural grouping under the /landing prefix path */}
+        <Route path="/landing">
+          <Route path="Pricing" element={<PagePricing />} />
+          <Route path="HowToHire" element={<PageHowToHire />} />
+          <Route path="HowToWork" element={<PageHowToWork />} />
+          <Route path="AboutUs" element={<PageAboutUs />} />
+          <Route path="FAQ" element={<PageFAQ />} />
+          <Route path="AskOurChatbot" element={<PageAskOurChatbot />} />
+          <Route path="SubmitATicket" element={<PageSubmitATicket />} />
+          <Route path="SupportUs" element={<PageSupportUs />} />
+          <Route path="SendAFeedback" element={<PageSendAFeedback />} />
+          <Route path="TermsOfService" element={<PageTermsOfService />} />
+          <Route path="PrivacyPolicy" element={<PagePrivacyPolicy />} />
+        </Route>
 
         {/* User Dashboard Routes - All wrapped in Layout */}
         <Route element={<Layout />}>
@@ -95,10 +130,13 @@ function App() {
             <Route index element={<JobPostingMain />} />
             <Route path=':id' element={<JobPostingMain />} />
           </Route>
+          <Route path='/gigs'>
+            <Route index element={<GigMarketplace />} />
+            <Route path=':id' element={<GigMarketplace />} />
+          </Route>
 
           <Route path='/proposals' element={<SectionPlaceholder title='INCOMING PROPOSALS' />} />
           <Route path='/my-proposals' element={<SectionPlaceholder title='MY PROPOSALS' />} />
-          <Route path='/gigs' element={<SectionPlaceholder title='GIG POSTING' />} />
           <Route path='/requests' element={<SectionPlaceholder title='INCOMING REQUESTS' />} />
           <Route path='/my-requests' element={<SectionPlaceholder title='MY REQUESTS' />} />
           <Route path='/contracts' element={<SectionPlaceholder title='MY CONTRACTS' />} />
@@ -121,10 +159,10 @@ function App() {
           <Route path='user-team/teams' element={<Navigate to="/admin/user-team?tab=teams" replace />} />
           <Route path='user-team/users' element={<Navigate to="/admin/user-team?tab=users" replace />} />
           <Route path='credit-economy' element={<CreditEconomyPage />} />
-          <Route path='moderation' element={<AdminSectionPlaceholder title='MODERATION' />} />
-          <Route path='analytics' element={<AdminSectionPlaceholder title='ANALYTICS' />} />
-          <Route path='ticket-management' element={<AdminSectionPlaceholder title='TICKET MANAGEMENT' />} />
-          <Route path='system-settings' element={<AdminSectionPlaceholder title='SYSTEM SETTINGS' />} />
+          <Route path='moderation' element={<ModerationPage />} />
+          <Route path='analytics' element={<AnalyticsPage />} />
+          <Route path='ticket-management' element={<TicketManagementPage />} />
+          <Route path='system-settings' element={<SystemSettingsPage />} />
         </Route>
 
         {/* Moderator Routes */}

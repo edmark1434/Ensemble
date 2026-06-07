@@ -291,7 +291,107 @@ async function getUsersManagement() {
   };
 }
 
+async function getUserTeamOverview() {
+  const [teamsData, usersData] = await Promise.all([getTeamsManagement(), getUsersManagement()]);
+
+  const users = usersData.users;
+  const teams = teamsData.teams;
+
+  const recentSignups = users.slice(0, 6).map((u) => ({
+    id: u.id,
+    name: u.name,
+    username: u.username,
+    status: u.status,
+    verificationStatus: u.verificationStatus,
+    joinedAt: u.joinedAt,
+  }));
+
+  const spotlightTeams = teams.slice(0, 4).map((t) => ({
+    id: t.id,
+    name: t.name,
+    leaderName: t.leaderName,
+    memberCount: t.memberCount,
+    status: t.status,
+    verificationStatus: t.verificationStatus,
+  }));
+
+  const verificationBreakdown = {
+    verified: users.filter((u) => u.verificationStatus === 'Verified').length,
+    partial: users.filter((u) => u.verificationStatus === 'Partially Verified').length,
+    unverified: users.filter((u) => u.verificationStatus === 'Unverified').length,
+    pending: users.filter((u) => u.verificationStatus === 'Pending Review').length,
+  };
+
+  return {
+    lastUpdated: new Date().toISOString(),
+    teamStats: teamsData.stats,
+    userStats: usersData.stats,
+    totals: {
+      teams: teams.length,
+      users: users.length,
+      combinedPending:
+        teamsData.stats.totalPendingVerification + usersData.stats.totalPendingVerification,
+      activeTeams: teamsData.stats.totalActive,
+      activeUsers: usersData.stats.totalActive,
+    },
+    verificationBreakdown,
+    recentSignups,
+    spotlightTeams,
+    statusBreakdown: {
+      users: [
+        { label: 'Active', count: usersData.stats.totalActive },
+        { label: 'Suspended', count: usersData.stats.totalSuspended },
+        { label: 'Banned', count: usersData.stats.totalBanned },
+        { label: 'Pending verification', count: usersData.stats.totalPendingVerification },
+      ],
+      teams: [
+        { label: 'Active', count: teamsData.stats.totalActive },
+        { label: 'Suspended', count: teamsData.stats.totalSuspended },
+        { label: 'Banned', count: teamsData.stats.totalBanned },
+        { label: 'Pending verification', count: teamsData.stats.totalPendingVerification },
+      ],
+    },
+    alerts: buildUserTeamAlerts(teamsData.stats, usersData.stats, verificationBreakdown),
+  };
+}
+
+function buildUserTeamAlerts(teamStats, userStats, verification) {
+  const alerts = [];
+  const pending = teamStats.totalPendingVerification + userStats.totalPendingVerification;
+
+  if (pending > 0) {
+    alerts.push({
+      id: 'pending',
+      message: `${pending} account(s) need verification or approval across users and teams.`,
+      severity: 'warning',
+    });
+  }
+  if (verification.unverified > 0) {
+    alerts.push({
+      id: 'unverified',
+      message: `${verification.unverified} user(s) have incomplete identity linkage.`,
+      severity: 'info',
+    });
+  }
+  if (teamStats.totalSuspended + userStats.totalSuspended > 0) {
+    alerts.push({
+      id: 'suspended',
+      message: `${teamStats.totalSuspended + userStats.totalSuspended} suspended account(s) on record.`,
+      severity: 'warning',
+    });
+  }
+  if (alerts.length === 0) {
+    alerts.push({
+      id: 'ok',
+      message: 'User and team accounts look healthy from current database scan.',
+      severity: 'success',
+    });
+  }
+  return alerts;
+}
+
 module.exports = {
   getTeamsManagement,
   getUsersManagement,
+  getUserTeamOverview,
 };

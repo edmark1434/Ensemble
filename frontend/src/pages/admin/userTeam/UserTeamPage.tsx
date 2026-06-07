@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, Search, UserCircle, Users } from 'lucide-react';
+import { Activity, RefreshCw, Search, UserCircle, Users } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import useGlobalState from '@/lib/global_state';
 import TeamsTab from './TeamsTab';
 import UsersTab from './UsersTab';
+import UserTeamOverviewTab from './UserTeamOverviewTab';
 
-type TabId = 'teams' | 'users';
+type TabId = 'overview' | 'teams' | 'users';
 
-const TABS: { id: TabId; label: string; icon: typeof Users }[] = [
+const TABS: { id: TabId; label: string; icon: typeof Activity }[] = [
+  { id: 'overview', label: 'Overview', icon: Activity },
   { id: 'teams', label: 'Team accounts', icon: Users },
   { id: 'users', label: 'Platform users', icon: UserCircle },
 ];
@@ -15,24 +17,26 @@ const TABS: { id: TabId; label: string; icon: typeof Users }[] = [
 export default function UserTeamPage() {
   const { user } = useGlobalState();
   const [searchParams, setSearchParams] = useSearchParams();
-  const paramTab = searchParams.get('tab');
-  const initialTab: TabId = paramTab === 'users' ? 'users' : 'teams';
+  const paramTab = searchParams.get('tab') as TabId | null;
+  const valid: TabId[] = ['overview', 'teams', 'users'];
+  const initialTab = paramTab && valid.includes(paramTab) ? paramTab : 'overview';
 
   const [tab, setTab] = useState<TabId>(initialTab);
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
+  const [overviewPending, setOverviewPending] = useState(0);
   const [teamsPending, setTeamsPending] = useState(0);
   const [usersPending, setUsersPending] = useState(0);
 
   useEffect(() => {
-    const next: TabId = paramTab === 'users' ? 'users' : 'teams';
-    setTab(next);
+    if (paramTab && valid.includes(paramTab)) setTab(paramTab);
+    else if (!paramTab) setTab('overview');
   }, [paramTab]);
 
   const switchTab = (id: TabId) => {
     setTab(id);
-    setSearchParams(id === 'users' ? { tab: 'users' } : {}, { replace: true });
+    setSearchParams(id === 'overview' ? {} : { tab: id }, { replace: true });
   };
 
   const handleRefresh = () => {
@@ -41,7 +45,8 @@ export default function UserTeamPage() {
     setTimeout(() => setRefreshing(false), 400);
   };
 
-  const pendingBadge = tab === 'teams' ? teamsPending : usersPending;
+  const pendingBadge =
+    tab === 'overview' ? overviewPending : tab === 'teams' ? teamsPending : usersPending;
 
   return (
     <main className="min-h-screen md:pl-[260px]">
@@ -56,16 +61,29 @@ export default function UserTeamPage() {
               Signed in as @{user?.username || 'admin'}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[200px] flex-1 lg:w-72">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by name / email / id…"
-                className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
-              />
+          {tab !== 'overview' && (
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[200px] flex-1 lg:w-72">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search by name / email / id…"
+                  className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-4 py-2 text-sm text-zinc-300 hover:text-white"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
             </div>
+          )}
+          {tab === 'overview' && (
             <button
               type="button"
               onClick={handleRefresh}
@@ -75,7 +93,7 @@ export default function UserTeamPage() {
               <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </button>
-          </div>
+          )}
         </div>
 
         <div className="flex gap-1 overflow-x-auto px-4 pb-0 md:px-6">
@@ -92,9 +110,14 @@ export default function UserTeamPage() {
             >
               <Icon className="h-4 w-4" />
               {label}
-              {id === tab && pendingBadge > 0 && (
+              {id === tab && pendingBadge > 0 && id !== 'overview' && (
                 <span className="rounded-full bg-amber-500/20 px-1.5 text-[10px] font-bold text-amber-200">
                   {pendingBadge}
+                </span>
+              )}
+              {id === 'overview' && overviewPending > 0 && tab === 'overview' && (
+                <span className="rounded-full bg-amber-500/20 px-1.5 text-[10px] font-bold text-amber-200">
+                  {overviewPending}
                 </span>
               )}
             </button>
@@ -103,19 +126,19 @@ export default function UserTeamPage() {
       </header>
 
       <div className="space-y-6 px-6 py-6 md:px-8 md:py-8">
-        {tab === 'teams' && (
-          <TeamsTab
-            search={search}
+        {tab === 'overview' && (
+          <UserTeamOverviewTab
             refreshToken={refreshToken}
-            onStatsLoaded={setTeamsPending}
+            onStatsLoaded={setOverviewPending}
+            onGoUsers={() => switchTab('users')}
+            onGoTeams={() => switchTab('teams')}
           />
         )}
+        {tab === 'teams' && (
+          <TeamsTab search={search} refreshToken={refreshToken} onStatsLoaded={setTeamsPending} />
+        )}
         {tab === 'users' && (
-          <UsersTab
-            search={search}
-            refreshToken={refreshToken}
-            onStatsLoaded={setUsersPending}
-          />
+          <UsersTab search={search} refreshToken={refreshToken} onStatsLoaded={setUsersPending} />
         )}
       </div>
     </main>

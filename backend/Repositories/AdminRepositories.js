@@ -23,6 +23,7 @@ async function getForumCounts() {
 
 async function getDashboardOverview() {
   const [
+    ticketCountsResult,
     statsResult,
     usersResult,
     staffResult,
@@ -33,6 +34,13 @@ async function getDashboardOverview() {
     statusBreakdown,
     forumCounts,
   ] = await Promise.all([
+    pool
+      .query(`
+        SELECT
+          (SELECT COUNT(*)::int FROM support_tickets WHERE LOWER(status) NOT IN ('resolved', 'closed')) AS open_tickets,
+          (SELECT COUNT(*)::int FROM disputes WHERE LOWER(status) NOT IN ('resolved', 'closed')) AS open_disputes
+      `)
+      .catch(() => ({ rows: [{ open_tickets: 0, open_disputes: 0 }] })),
     pool.query(`
       SELECT
         (SELECT COUNT(*)::int FROM users) AS total_users,
@@ -142,6 +150,7 @@ async function getDashboardOverview() {
   ]);
 
   const stats = statsResult.rows[0];
+  const ticketStats = ticketCountsResult?.rows?.[0] || { open_tickets: 0, open_disputes: 0 };
   const users = usersResult.rows.map(mapPlatformUser);
   const staff = staffResult.rows.map(mapStaffMember);
   const verificationQueue = pendingVerifications.rows.map(mapVerificationItem);
@@ -155,11 +164,11 @@ async function getDashboardOverview() {
     lastUpdated: new Date().toISOString(),
     kpis: {
       pendingVerifications: Number(stats.pending_review),
-      openDisputes: 0,
+      openDisputes: Number(ticketStats.open_disputes),
       platformRevenueCredits: Number(stats.total_user_merit),
       activeUsers: Number(stats.active_users),
       totalUsers: Number(stats.total_users),
-      openTickets: 0,
+      openTickets: Number(ticketStats.open_tickets),
       pendingApproval: Number(stats.pending_review),
       totalStaff: Number(stats.total_staff),
       avgUserMerit: Number(stats.avg_user_merit),
@@ -360,13 +369,7 @@ function buildPlatformAlerts(stats, verificationQueue, staff, forumCounts) {
     });
   }
 
-  alerts.push({
-    id: 'disputes-module',
-    message: 'Dispute management module not live yet — count shows 0.',
-    severity: 'info',
-  });
-
-  if (alerts.length === 1) {
+  if (alerts.length === 0) {
     alerts.unshift({
       id: 'healthy',
       message: 'No urgent platform issues detected right now.',
