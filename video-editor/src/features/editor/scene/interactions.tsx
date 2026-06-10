@@ -121,6 +121,12 @@ export function SceneInteractions({
     };
   }, [activeIds, playerRef, trackItemsMap]);
 
+  const trackItemsMapRef = useRef(trackItemsMap);
+  useEffect(() => {
+    trackItemsMapRef.current = trackItemsMap;
+  }, [trackItemsMap]);
+
+  const isDraggingRef = useRef(false);
   useEffect(() => {
     const selection = new Selection({
       container: containerRef.current,
@@ -132,10 +138,14 @@ export function SceneInteractions({
       toggleContinueSelect: "shift"
     })
       .on("select", (e) => {
-        // Filter out audio items from selection
-        const filteredSelected = e.selected.filter(
-          (el) => !el.className.includes("designcombo-scene-item-type-audio")
-        );
+        const isClick = !isDraggingRef.current;
+
+        const filteredSelected = e.selected.filter((el) => {
+          if (el.className.includes("designcombo-scene-item-type-audio")) return false;
+          const id = getIdFromClassName(el.className);
+          if (isClick) return true;
+          return !trackItemsMapRef.current[id]?.details?.locked;
+        }) as HTMLDivElement[];
 
         const ids = filteredSelected.map((el) =>
           getIdFromClassName(el.className)
@@ -154,6 +164,7 @@ export function SceneInteractions({
         );
       })
       .on("dragStart", (e) => {
+        isDraggingRef.current = false;
         const target = e.inputEvent.target as HTMLDivElement;
         dragStartEnd = false;
 
@@ -167,7 +178,11 @@ export function SceneInteractions({
           e.stop();
         }
       })
+      .on("drag", () => {
+        isDraggingRef.current = true;
+      })
       .on("dragEnd", () => {
+        isDraggingRef.current = true;
         dragStartEnd = true;
       })
       .on("selectEnd", (e) => {
@@ -180,10 +195,12 @@ export function SceneInteractions({
             }
           });
         } else {
-          // Filter out audio items from selection
-          const filteredSelected = e.selected.filter(
-            (el) => !el.className.includes("designcombo-scene-item-type-audio")
-          ) as HTMLDivElement[];
+          // filter out audio + locked items from selection
+          const filteredSelected = e.selected.filter((el) => {
+            if (el.className.includes("designcombo-scene-item-type-audio")) return false;
+            const id = getIdFromClassName(el.className);
+            return !trackItemsMapRef.current[id]?.details?.locked;
+          }) as HTMLDivElement[];
 
           const ids = filteredSelected.map((el) =>
             getIdFromClassName(el.className)
@@ -227,6 +244,10 @@ export function SceneInteractions({
   useEffect(() => {
     setSceneMoveableRef(moveableRef as React.RefObject<Moveable>);
   }, [moveableRef]);
+
+  const isLocked = activeIds.length === 1 &&
+      trackItemsMap[activeIds[0]]?.details?.locked;
+
   return (
     <Moveable
       ref={moveableRef}
@@ -245,6 +266,10 @@ export function SceneInteractions({
       snapGap={true}
       isDisplaySnapDigit={false}
       isDisplayInnerSnapDigit={false}
+      draggable={!isLocked}
+      resizable={!isLocked}
+      rotatable={!isLocked}
+      scalable={!isLocked}
       onDrag={({ target, top, left }) => {
         target.style.top = `${top}px`;
         target.style.left = `${left}px`;
@@ -252,6 +277,7 @@ export function SceneInteractions({
       onDragEnd={({ target, isDrag }) => {
         if (!isDrag) return;
         const targetId = getIdFromClassName(target.className) as string;
+        if (trackItemsMap[targetId]?.details?.locked) return;
 
         dispatch(EDIT_OBJECT, {
           payload: {
@@ -313,6 +339,7 @@ export function SceneInteractions({
       onScaleEnd={({ target }) => {
         if (!target.style.transform) return;
         const targetId = getIdFromClassName(target.className) as string;
+        if (trackItemsMap[targetId]?.details?.locked) return;
 
         dispatch(EDIT_OBJECT, {
           payload: {
@@ -332,6 +359,8 @@ export function SceneInteractions({
       onRotateEnd={({ target }) => {
         if (!target.style.transform) return;
         const targetId = getIdFromClassName(target.className) as string;
+        if (trackItemsMap[targetId]?.details?.locked) return;
+
         dispatch(EDIT_OBJECT, {
           payload: {
             [targetId]: {
@@ -624,6 +653,7 @@ export function SceneInteractions({
       }}
       onResizeEnd={({ target }) => {
         const targetId = getIdFromClassName(target.className) as string;
+        if (trackItemsMap[targetId]?.details?.locked) return;
 
         const type = trackItemsMap[targetId].type;
 
@@ -653,6 +683,8 @@ export function SceneInteractions({
         if (holdGroupPosition) {
           const payload: Record<string, Partial<any>> = {};
           for (const id of Object.keys(holdGroupPosition)) {
+            if (trackItemsMap[id]?.details?.locked) continue;
+
             const left = holdGroupPosition[id].left;
             const top = holdGroupPosition[id].top;
             payload[id] = {

@@ -36,6 +36,7 @@ interface VideoProps extends TrimmableProps {
     previewUrl: string;
   };
   hidden: boolean;
+  volume: number;
 }
 class Video extends Trimmable {
   static type = "Video";
@@ -81,6 +82,7 @@ class Video extends Trimmable {
   private previewUrl = "";
 
   declare hidden: boolean;
+  declare volume: number;
 
   static createControls(): { controls: Record<string, Control> } {
     return { controls: createMediaControls() };
@@ -114,6 +116,7 @@ class Video extends Trimmable {
     this.initialize();
 
     this.hidden = props.hidden ?? false;
+    this.volume = props.volume ?? 100;
   }
 
   private initOffscreenCanvas() {
@@ -384,24 +387,50 @@ class Video extends Trimmable {
 
     ctx.restore();
     // this.drawTextIdentity(ctx);
-    if (this.hidden) this.drawHiddenIcon(ctx);
+    if (this.hidden || this.volume === 0) this.drawStatusIcons(ctx);
     this.updateSelected(ctx);
   }
 
-  public drawHiddenIcon(ctx: CanvasRenderingContext2D) {
-    ctx.save();
-    ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-    ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
-    ctx.restore();
+  public drawStatusIcons(ctx: CanvasRenderingContext2D) {
+    const theme = (this.canvas as any)?.theme ?? "dark";
+    const overlayColor = theme === "dark" ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.6)";
+    const iconColor = theme === "dark" ? "rgba(255,255,255,1)" : "rgba(0,0,0,0.8)";
 
-    const eyeOffPath = new Path2D("M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22");
-    ctx.save();
-    ctx.translate(-this.width / 2 + 12, -this.height / 2 + 12.5);
-    ctx.strokeStyle = "rgba(255,255,255,0.8)";
-    ctx.lineWidth = 2;
-    ctx.scale(0.67, 0.67);
-    ctx.stroke(eyeOffPath);
-    ctx.restore();
+    if (this.hidden) {
+      ctx.save();
+      ctx.fillStyle = overlayColor;
+      ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
+      ctx.restore();
+    }
+
+    let iconX = -this.width / 2 + 12;
+
+    if (this.hidden) {
+      const eyeOffPath = new Path2D("M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22");
+      ctx.save();
+      ctx.translate(iconX, -this.height / 2 + 13);
+      ctx.strokeStyle = iconColor;
+      ctx.lineWidth = 2;
+      ctx.shadowColor = "rgba(0,0,0,0.8)";
+      ctx.shadowBlur = 4;
+      ctx.scale(0.67, 0.67);
+      ctx.stroke(eyeOffPath);
+      ctx.restore();
+      iconX += 26;
+    }
+
+    if (this.volume === 0) {
+      const volumeOffPath = new Path2D("M16 9a5 5 0 0 1 .95 2.293M19.364 5.636a9 9 0 0 1 1.889 9.96M2 2l20 20M7 7l-.587.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298V11M9.828 4.172A.686.686 0 0 1 11 4.657v.686");
+      ctx.save();
+      ctx.translate(iconX, -this.height / 2 + 13);
+      ctx.strokeStyle = iconColor;
+      ctx.lineWidth = 2;
+      ctx.shadowColor = "rgba(0,0,0,0.8)";
+      ctx.shadowBlur = 8;
+      ctx.scale(0.67, 0.67);
+      ctx.stroke(volumeOffPath);
+      ctx.restore();
+    }
   }
 
   public setDuration(duration: number) {

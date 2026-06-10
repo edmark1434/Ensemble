@@ -216,16 +216,53 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     setCanvasSize({ width: containerWidth, height: containerHeight });
     setTimeline(canvas);
 
-    // watch for hidden state changes on canvas items
+    // watch for state changes on canvas items
     canvas.state.subscribeToUpdateItemDetails(({ trackItemsMap }) => {
       canvas.getTrackItems().forEach((item: any) => {
         const details = trackItemsMap[item.id]?.details;
         if (details?.hidden !== undefined && item.hidden !== details.hidden) {
           item.hidden = details.hidden;
+          item.opacity = details.hidden ? 0.5 : 1;
+          item.dirty = true;
+        }
+        if (details?.volume !== undefined && item.volume !== details.volume) {
+          item.volume = details.volume;
+          if (item.type == "audio") item.opacity = details.volume === 0 ? 0.5 : 1;
+          item.dirty = true;
+        }
+        if (details?.locked !== undefined && item.locked !== details.locked) {
+          const locked = details.locked;
+          item.lockMovementX = locked;
+          item.lockMovementY = locked;
+          item.selectable = !locked;    // blocks marquee/group select (we manually add click select)
+          item.lockScalingX = locked;
+          item.lockScalingY = locked;
+          item.hasControls = !locked;
           item.dirty = true;
         }
       });
       canvas.requestRenderAll();
+    });
+
+    let isDragging = false;
+    canvas.on('mouse:down', () => {
+      isDragging = false;
+    });
+    canvas.on('mouse:move', () => {
+      isDragging = true;
+    });
+    canvas.on('mouse:up', (e: any) => {
+      if (isDragging) return;
+      if (!e.target) return;
+      const itemId = e.target.id;
+      if (!itemId) return;
+      const { trackItemsMap } = stateManager.getState();
+      if (trackItemsMap[itemId]?.details?.locked) {
+        stateManager.updateState(
+            { activeIds: [itemId] },
+            { updateHistory: false, kind: 'layer:selection' }
+        );
+      }
     });
 
     return () => {

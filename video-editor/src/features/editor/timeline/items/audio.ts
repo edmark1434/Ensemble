@@ -22,6 +22,7 @@ interface AudioProps extends TrimmableProps {
   duration: number;
   src: string;
   metadata?: { name?: string; [key: string]: any };
+  volume: number;
 }
 
 class Audio extends Trimmable {
@@ -37,6 +38,7 @@ class Audio extends Trimmable {
   public bars: any[] = [];
 
   public name: string = "Audio";
+  declare volume: number;
 
   static createControls(): { controls: Record<string, Control> } {
     return { controls: createAudioControls() };
@@ -57,6 +59,7 @@ class Audio extends Trimmable {
     this.initialize();
     this.rx = 4;
     this.ry = 4;
+    this.volume = props.volume ?? 100;
   }
 
   // Update the _render method to handle the visible portion
@@ -151,14 +154,24 @@ class Audio extends Trimmable {
   public drawTextIdentity(ctx: CanvasRenderingContext2D) {
     ctx.save();
     ctx.translate(-this.width / 2, -this.height / 2);
-    ctx.beginPath();
-    ctx.rect(0, 0, this.width, this.height);
+    ctx.font = `400 12px ${SECONDARY_FONT}`;
+    ctx.fillStyle = "rgba(255, 255, 255,1)";
+    ctx.textAlign = "left";
     ctx.clip();
 
-    ctx.font = `400 12px ${SECONDARY_FONT}`;
-    ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
-    ctx.textAlign = "left";
-    ctx.fillText(this.name, 12, 22);
+    if (this.volume === 0) {
+      ctx.save();
+      ctx.translate(12, 10);
+      ctx.strokeStyle = "rgba(255,255,255,1)";
+      ctx.lineWidth = 2;
+      ctx.scale(0.67, 0.67);
+      const volumeOffPath = new Path2D("M16 9a5 5 0 0 1 .95 2.293M19.364 5.636a9 9 0 0 1 1.889 9.96M2 2l20 20M7 7l-.587.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298V11M9.828 4.172A.686.686 0 0 1 11 4.657v.686");
+      ctx.stroke(volumeOffPath);
+      ctx.restore();
+      ctx.fillText(this.name, 36, 22);
+    } else {
+      ctx.fillText(this.name, 12, 22);
+    }
 
     ctx.restore();
   }
