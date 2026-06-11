@@ -9,10 +9,12 @@ import {
   PopoverTrigger
 } from "@/components/ui/popover";
 import {
+  ArrowUpRight,
   ChevronDown,
   Download,
   Keyboard,
   ProportionsIcon,
+  Send,
   ShareIcon
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
@@ -104,7 +106,7 @@ export default function Navbar({
             <TooltipTrigger asChild>
               <Button
                   onClick={handleUndo}
-                  className=""
+                  className="hover:!bg-accent/20"
                   variant="ghost"
                   size="icon"
               >
@@ -120,7 +122,7 @@ export default function Navbar({
             <TooltipTrigger asChild>
               <Button
                   onClick={handleRedo}
-                  className=""
+                  className="hover:!bg-accent/20"
                   variant="ghost"
                   size="icon"
               >
@@ -136,14 +138,14 @@ export default function Navbar({
             <TooltipTrigger asChild>
               <Button
                   onClick={handleUndo}
-                  className=""
+                  className="hover:!bg-accent/20"
                   variant="ghost"
                   size="icon"
               >
                 <CloudCheck size={20} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right" align="center" sideOffset={1}>
+            <TooltipContent side="bottom" align="center" sideOffset={1}>
               All changes saved
             </TooltipContent>
           </Tooltip>
@@ -166,26 +168,34 @@ export default function Navbar({
 
       <div className="flex h-13 items-center justify-end gap-2">
         <div className=" pointer-events-auto flex h-10 items-center gap-2 rounded-md px-2.5">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            onClick={() => setIsShortcutsModalOpen(true)}
-          >
-            <Keyboard className="size-5" />
-          </Button>
+          <Tooltip delayDuration={10}>
+            <TooltipTrigger asChild>
+              <Button
+                  onClick={() => setIsShortcutsModalOpen(true)}
+                  className="hover:!bg-accent/20"
+                  variant="ghost"
+                  size="icon"
+              >
+                <Keyboard size={20} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="center" sideOffset={1}>
+              Keyboard shortcuts
+            </TooltipContent>
+          </Tooltip>
+
           {/*<ModeToggle />*/}
 
-          {/* <Button
-            className="flex h-8 gap-1 border border-border"
-            variant="outline"
+          <DownloadPopover stateManager={stateManager} />
+          <Button
+            className="flex h-8 gap-2 border border-border"
+            variant="default"
             size={isMediumScreen ? "sm" : "icon"}
           >
-            <ShareIcon width={18} />{" "}
+            <Send width={16} />
             <span className="hidden md:block">Share</span>
-          </Button> */}
+          </Button>
 
-          <DownloadPopover stateManager={stateManager} />
         </div>
       </div>
       <ShortcutsModal
@@ -218,11 +228,12 @@ const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          className="flex h-8 gap-1 border border-border"
+          className="flex h-8 gap-2 hover:!bg-accent/20"
+          variant="outline"
           size={isMediumScreen ? "sm" : "icon"}
         >
-          {/* <Download width={18} />{" "} */}
-          <span className="hidden md:block font-normal">Download</span>
+          <Download size={16} />{" "}
+          <span className="hidden md:block font-normal">Export</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent

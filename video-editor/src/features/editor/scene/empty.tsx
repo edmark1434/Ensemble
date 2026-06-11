@@ -66,7 +66,7 @@ const SceneEmpty = () => {
             {/* i removed a pb-12 here */}
             <div className="flex flex-col items-center justify-center gap-4">
               <div className="hover:bg-primary-dark cursor-pointer rounded-md border bg-primary p-2 text-secondary transition-colors duration-200">
-                <PlusIcon className="h-5 w-5" aria-hidden="true" />
+                <PlusIcon size={20} />
               </div>
               <div className="flex flex-col gap-px">
                 <p className="text-sm text-muted-foreground">Click to upload</p>

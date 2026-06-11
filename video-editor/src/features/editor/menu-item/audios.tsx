@@ -129,7 +129,7 @@ export const Audios = () => {
           <Button
             size="sm"
             variant="ghost"
-            className="absolute left-1 top-1/2 h-6 w-6 -translate-y-1/2 p-0"
+            className="absolute left-2 top-1/2 h-6 w-6 -translate-y-1/2 p-0"
             onClick={() => fetchMusic(searchQuery)}
             disabled={isLoading}
           >

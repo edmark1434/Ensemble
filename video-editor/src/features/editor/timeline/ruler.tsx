@@ -62,16 +62,25 @@ const Ruler = (props: RulerProps) => {
     const context = canvas.getContext("2d");
     setCanvasContext(context);
 
-    document.fonts.ready.then(() => {
+    const tryDraw = async () => {
+      // wait for the specific font face to be available
+      await document.fonts.load(`${SMALL_FONT_SIZE}px "${SECONDARY_FONT}"`);
       resize(canvas, context, scrollLeft);
-    });
+    };
+
+    // try immediately, then retry after a short delay as fallback
+    tryDraw();
+    const fallback = setTimeout(() => tryDraw(), 500);
 
     const observer = new ResizeObserver(() => {
       resize(canvas, context, scrollLeft);
     });
     observer.observe(canvas.offsetParent as Element);
 
-    return () => observer.disconnect();
+    return () => {
+      clearTimeout(fallback);
+      observer.disconnect();
+    };
   }, [timelineOffsetX]);
 
   const handleResize = useCallback(() => {

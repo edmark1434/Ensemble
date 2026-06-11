@@ -8,9 +8,9 @@ export const Transitions = () => {
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
 
   return (
-    <div className="flex flex-1 flex-col py-4 max-h-full">
-      <ScrollArea className="flex-1 px-4 max-h-full">
-        <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(80px,1fr))] max-h-full">
+    <div className="flex flex-1 flex-col max-h-full">
+      <ScrollArea className="flex-1 max-h-full">
+        <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(80px,1fr))] max-h-full p-4">
           {TRANSITIONS.map((transition, index) => (
             <TransitionsMenuItem
               key={index}

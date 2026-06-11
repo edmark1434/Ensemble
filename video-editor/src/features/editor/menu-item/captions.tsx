@@ -112,7 +112,7 @@ export const Captions = () => {
   };
 
   return (
-    <div className="h-full flex items-center justify-center flex-1 flex-col gap-4 p-4">
+    <div className="h-full w-full flex items-center justify-center flex-1 flex-col gap-4 p-2">
       {mediaTrackItems.length === 0 ? (
         <EmptyMediaTrackItems />
       ) : (
@@ -144,9 +144,9 @@ const MediaSection = ({
   createCaptions: (selectedMedia: string) => void;
   isGenerating: boolean;
 }) => (
-  <div className="flex h-[calc(100%-4.5rem)] flex-col gap-4 px-4">
+  <div className="flex h-full w-full p-2 flex-col gap-4">
     <Select value={selectedMedia} onValueChange={onSelectChange}>
-      <SelectTrigger className="w-full">
+      <SelectTrigger className="w-full truncate overflow-hidden">
         <SelectValue placeholder="Select media" />
       </SelectTrigger>
       <SelectContent className="z-[200]">
@@ -198,7 +198,7 @@ const MediaWithNoCaptions = ({
   createCaptions: () => void;
   isGenerating: boolean;
 }) => (
-  <div className="flex flex-col gap-2 px-4">
+  <div className="flex flex-col gap-4">
     <div className="text-center text-sm text-muted-foreground">
       Recognize speech in the selected video/audio and generate captions
       automatically.
