@@ -68,8 +68,8 @@ export const Captions = () => {
         throw new Error("Track item not found");
       }
 
-      const { url } = await transcribeMedia(selectedMedia, "ES");
-      const jsonData = await fetchJsonFromUrl(url);
+      const transcribeData = await transcribeMedia(selectedMedia, "ES");
+      const jsonData = transcribeData; // already shaped, no fetch needed
       const fontInfo = {
         fontFamily: "theboldfont",
         fontUrl: "https://cdn.designcombo.dev/fonts/the-bold-font.ttf",
@@ -112,7 +112,7 @@ export const Captions = () => {
   };
 
   return (
-    <div className="h-full w-full flex items-center justify-center flex-1 flex-col gap-4 p-2">
+    <div className="h-full w-full flex items-center justify-center flex-1 flex-col gap-4">
       {mediaTrackItems.length === 0 ? (
         <EmptyMediaTrackItems />
       ) : (
@@ -144,38 +144,38 @@ const MediaSection = ({
   createCaptions: (selectedMedia: string) => void;
   isGenerating: boolean;
 }) => (
-  <div className="flex h-full w-full p-2 flex-col gap-4">
-    <Select value={selectedMedia} onValueChange={onSelectChange}>
-      <SelectTrigger className="w-full truncate overflow-hidden">
-        <SelectValue placeholder="Select media" />
-      </SelectTrigger>
-      <SelectContent className="z-[200]">
-        {selectMediaItems.map((item) => (
-          <SelectItem value={item.value} key={item.value}>
-            {item.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+  <div className="flex h-full w-full flex-col">
+    <div className="w-full p-4">
+      <Select value={selectedMedia} onValueChange={onSelectChange}>
+        <SelectTrigger className="w-full truncate overflow-hidden">
+          <SelectValue placeholder="Select media" />
+        </SelectTrigger>
+        <SelectContent className="z-[200]">
+          {selectMediaItems.map((item) => (
+              <SelectItem value={item.value} key={item.value}>
+                {item.label}
+              </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
 
-    {selectedMedia ? (
-      captionTrackItemsMap[selectedMedia] ? (
-        <div className="h-[calc(100vh-29rem)]">
-          <ScrollArea className="h-full">
-            <MediaWithCaptions
-              captionTrackItems={captionTrackItemsMap[selectedMedia]}
-            />
-          </ScrollArea>
-        </div>
+    <ScrollArea className="w-full px-4 pb-4">
+      {selectedMedia ? (
+          captionTrackItemsMap[selectedMedia] ? (
+              <MediaWithCaptions
+                  captionTrackItems={captionTrackItemsMap[selectedMedia]}
+              />
+          ) : (
+              <MediaWithNoCaptions
+                  createCaptions={() => createCaptions(selectedMedia)}
+                  isGenerating={isGenerating}
+              />
+          )
       ) : (
-        <MediaWithNoCaptions
-          createCaptions={() => createCaptions(selectedMedia)}
-          isGenerating={isGenerating}
-        />
-      )
-    ) : (
-      <MediaNoSelected />
-    )}
+          <MediaNoSelected />
+      )}
+    </ScrollArea>
   </div>
 );
 
@@ -273,7 +273,7 @@ const CaptionItem = ({
   };
   return (
     <div
-      className={`flex flex-col gap-2 rounded-lg p-2 hover:cursor-pointer hover:bg-slate-900 ${
+      className={`flex flex-col gap-2 rounded-lg p-2 hover:cursor-pointer hover:bg-accent/30 ${
         isActive
           ? "bg-captions-background text-captions-text"
           : "text-muted-foreground"
@@ -281,7 +281,7 @@ const CaptionItem = ({
       onClick={() => handleSeek(display.from)}
     >
       <div className="flex flex-col gap-1">
-        <div className="text-xs">
+        <div className="text-xs font-normal">
           {millisecondsToHHMMSS(display.from)} -{" "}
           {millisecondsToHHMMSS(display.to)}
         </div>
@@ -311,43 +311,34 @@ const groupCaptionItems = (trackItemsMap: ITrackItemsMap) => {
   return groupBy(captionTrackItems, "metadata.sourceUrl");
 };
 
-async function transcribeMedia(
-  mediaUrl: string,
-  targetLanguage: string
-): Promise<{ url: string }> {
+async function transcribeMedia(mediaUrl: string, targetLanguage: string) {
   const transcribeResponse = await fetch("/api/transcribe", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      url: mediaUrl,
-      targetLanguage
-    })
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: mediaUrl, targetLanguage })
   });
 
   if (!transcribeResponse.ok) {
-    throw new Error("Failed to initiate transcription.");
+    const err = await transcribeResponse.text();
+    throw new Error(`Failed to initiate transcription: ${err}`);
   }
 
   const transcribeData = await transcribeResponse.json();
-  const { transcribe } = transcribeData;
-
-  return { url: transcribe.url };
+  return transcribeData.transcribe.data; // returns the shaped { results: { main: { words: [] } } }
 }
 
-async function fetchJsonFromUrl(url: string) {
-  try {
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      throw new Error(`Error fetching JSON: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error("Failed to fetch JSON data:", error);
-    throw error; // Optionally rethrow to handle it in the caller
-  }
-}
+// async function fetchJsonFromUrl(url: string) {
+//   try {
+//     const response = await fetch(url);
+//
+//     if (!response.ok) {
+//       throw new Error(`Error fetching JSON: ${response.statusText}`);
+//     }
+//
+//     const data = await response.json();
+//     return data;
+//   } catch (error) {
+//     console.error("Failed to fetch JSON data:", error);
+//     throw error; // Optionally rethrow to handle it in the caller
+//   }
+// }

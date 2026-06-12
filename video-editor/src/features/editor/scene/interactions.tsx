@@ -86,19 +86,32 @@ export function SceneInteractions({
 
   useEffect(() => {
     const updateTargets = (time?: number) => {
-      const currentTime = time || getCurrentTime();
-      const { trackItemsMap } = useStore.getState();
+      const { trackItemsMap, playerRef, fps, activeIds } = useStore.getState();
+      const currentTime = time ?? (playerRef?.current
+          ? (playerRef.current.getCurrentFrame() / fps) * 1000
+          : 0);
       const targetIds = activeIds.filter((id) => {
         return (
-          trackItemsMap[id]?.display.from <= currentTime &&
-          trackItemsMap[id]?.display.to >= currentTime
+            trackItemsMap[id]?.display.from <= currentTime &&
+            trackItemsMap[id]?.display.to >= currentTime
         );
       });
       const targets = targetIds.map(
-        (id) => getTargetById(id) as HTMLDivElement
+          (id) => getTargetById(id) as HTMLDivElement
       );
       selection?.setSelectedTargets(targets);
       const selInfo = getSelectionByIds(targetIds);
+      const isLocked = targetIds.length === 1 &&
+          useStore.getState().trackItemsMap[targetIds[0]]?.details?.locked;
+      if (isLocked) {
+        selInfo.ables = {
+          ...selInfo.ables,
+          draggable: false,
+          resizable: false,
+          scalable: false,
+          rotatable: false
+        };
+      }
       setSelectionInfo(selInfo);
       setTargets(selInfo.targets as HTMLDivElement[]);
     };
@@ -242,11 +255,25 @@ export function SceneInteractions({
   }, [trackItemsMap]);
 
   useEffect(() => {
+    const { activeIds, trackItemsMap } = useStore.getState();
+    if (activeIds.length !== 1) return;
+
+    const isLocked = trackItemsMap[activeIds[0]]?.details?.locked;
+    setSelectionInfo(prev => ({
+      ...prev,
+      ables: {
+        ...prev.ables,
+        draggable: !isLocked,
+        resizable: !isLocked,
+        scalable: !isLocked,
+        rotatable: !isLocked
+      }
+    }));
+  }, [trackItemsMap]);
+
+  useEffect(() => {
     setSceneMoveableRef(moveableRef as React.RefObject<Moveable>);
   }, [moveableRef]);
-
-  const isLocked = activeIds.length === 1 &&
-      trackItemsMap[activeIds[0]]?.details?.locked;
 
   return (
     <Moveable
@@ -266,10 +293,7 @@ export function SceneInteractions({
       snapGap={true}
       isDisplaySnapDigit={false}
       isDisplayInnerSnapDigit={false}
-      draggable={!isLocked}
-      resizable={!isLocked}
-      rotatable={!isLocked}
-      scalable={!isLocked}
+
       onDrag={({ target, top, left }) => {
         target.style.top = `${top}px`;
         target.style.left = `${left}px`;
@@ -657,14 +681,26 @@ export function SceneInteractions({
 
         const type = trackItemsMap[targetId].type;
 
-        const selector =
-          type === "text"
-            ? `[data-text-id="${targetId}"]`
-            : `#caption-${targetId}`;
-
-        const textDiv = document.querySelector(selector) as HTMLDivElement;
-
-        if (textDiv) {
+        if (type === "text" || type === "caption") {
+          const selector = type === "text"
+              ? `[data-text-id="${targetId}"]`
+              : `#caption-${targetId}`;
+          const textDiv = document.querySelector(selector) as HTMLDivElement;
+          if (textDiv) {
+            dispatch(EDIT_OBJECT, {
+              payload: {
+                [targetId]: {
+                  details: {
+                    ...trackItemsMap[targetId].details,
+                    width: parseFloat(target.style.width),
+                    height: parseFloat(target.style.height),
+                    fontSize: parseFloat(textDiv.style.fontSize)
+                  }
+                }
+              }
+            });
+          }
+        } else {
           dispatch(EDIT_OBJECT, {
             payload: {
               [targetId]: {
@@ -672,7 +708,6 @@ export function SceneInteractions({
                   ...trackItemsMap[targetId].details,
                   width: parseFloat(target.style.width),
                   height: parseFloat(target.style.height),
-                  fontSize: parseFloat(textDiv.style.fontSize)
                 }
               }
             }

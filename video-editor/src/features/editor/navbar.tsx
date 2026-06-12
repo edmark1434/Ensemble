@@ -40,6 +40,8 @@ import Link from "next/link";
 import { ShortcutsModal } from "./shortcuts-modal";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
+import {Input} from "@/components/ui/input";
+import {cn} from "@/lib/utils";
 
 export default function Navbar({
   user,
@@ -154,13 +156,13 @@ export default function Navbar({
 
       <div className="flex h-13 items-center justify-center gap-2">
         {!isSmallScreen && (
-          <div className=" pointer-events-auto flex h-10 items-center gap-2 rounded-md px-2.5">
+          <div className=" pointer-events-auto flex h-8 items-center gap-2 rounded-md px-2.5">
             <AutosizeInput
               name="title"
               value={title}
               onChange={handleTitleChange}
               width={200}
-              inputClassName="border-none outline-none px-1 text-sm font-medium"
+              inputClassName="h-8 text-sm font-normal"
             />
           </div>
         )}
