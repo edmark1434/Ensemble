@@ -32,6 +32,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: transcript.error }, { status: 500 });
     }
 
+    if (!transcript.words || transcript.words.length === 0) {
+      return NextResponse.json({ message: "No speech detected in the media." }, { status: 422 });
+    }
+
     // Shape it to match what generateCaptions expects
     const shaped = {
       results: {

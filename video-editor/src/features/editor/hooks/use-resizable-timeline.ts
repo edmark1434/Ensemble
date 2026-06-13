@@ -2,9 +2,12 @@ import React from "react";
 import useStore from "../store/use-store";
 
 export const useResizbleTimeline = () => {
+  const FULL_HEIGHT = window.innerHeight;
+  const DEFAULT_HEIGHT = window.innerHeight * 0.45;
+
   const [isResizing, setIsResizing] = React.useState(false);
   const timelineContainerRef = React.useRef<HTMLDivElement>(null);
-  const [timelineHeight, setTimelineHeight] = React.useState(280);
+  const [timelineHeight, setTimelineHeight] = React.useState(DEFAULT_HEIGHT);
   const { timeline } = useStore();
 
   const onMouseDown = (ev: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
@@ -70,9 +73,6 @@ export const useResizbleTimeline = () => {
 
     setTimelineHeight(timelineContainerRef.current.clientHeight);
   }, [timelineContainerRef.current]);
-
-  const FULL_HEIGHT = window.innerHeight;
-  const DEFAULT_HEIGHT = window.innerHeight * 0.5;
 
   const toggleFullHeight = () => {
     const isFull = timelineHeight >= FULL_HEIGHT;

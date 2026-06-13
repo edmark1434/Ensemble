@@ -168,6 +168,13 @@ const Header = ({ toggleFullHeight, timelineHeight }: {
 
   const isFull = timelineHeight >= window.innerHeight;
   const activeItems = activeIds.map(id => trackItemsMap[id]).filter(Boolean);
+  const selectionStart = activeIds.length > 0
+      ? Math.min(...activeIds.map(id => trackItemsMap[id]?.display.from ?? 0))
+      : null;
+  const selectionDuration = activeIds.length > 0
+      ? Math.max(...activeIds.map(id => trackItemsMap[id]?.display.to ?? 0)) -
+      Math.min(...activeIds.map(id => trackItemsMap[id]?.display.from ?? 0))
+      : null;
 
   const isHidden = activeItems.length > 0 && activeItems
       .filter(item => item.type !== "audio")
@@ -411,6 +418,8 @@ const Header = ({ toggleFullHeight, timelineHeight }: {
                 onChangeTimelineScale={changeScale}
                 duration={duration}
                 isFull={isFull}
+                selectionStart={selectionStart}
+                selectionDuration={selectionDuration}
             />
 
             <Tooltip delayDuration={10}>
@@ -435,11 +444,15 @@ const ZoomControl = ({
   onChangeTimelineScale,
   duration,
   isFull,
+  selectionStart,
+  selectionDuration,
 }: {
   scale: ITimelineScaleState;
   onChangeTimelineScale: (scale: ITimelineScaleState) => void;
   duration: number;
   isFull: boolean;
+  selectionStart: number | null;
+  selectionDuration: number | null;
 }) => {
   const [localValue, setLocalValue] = useState(scale.index);
   const timelineOffsetX = useTimelineOffsetX();
@@ -459,8 +472,17 @@ const ZoomControl = ({
   };
 
   const onZoomFitClick = () => {
-    const fitZoom = getFitZoomLevel(duration, scale.zoom, timelineOffsetX);
+    const targetDuration = selectionDuration ?? duration;
+    const fitZoom = getFitZoomLevel(targetDuration, scale.zoom, timelineOffsetX);
     onChangeTimelineScale(fitZoom);
+
+    Promise.resolve().then(() => {
+      const { timeline } = useStore.getState();
+      const scrollLeft = selectionStart !== null
+          ? timeMsToUnits(selectionStart, fitZoom.zoom)
+          : 0;
+      timeline?.scrollTo({ scrollLeft: Math.max(0, scrollLeft) });
+    });
   };
 
   return (
@@ -480,8 +502,8 @@ const ZoomControl = ({
         <Slider
           className="w-28 hidden lg:flex"
           value={[localValue]}
-          min={0}
-          max={12}
+          min={1}
+          max={35}
           step={1}
           onValueChange={(e) => {
             setLocalValue(e[0]); // Update local state

@@ -32,6 +32,7 @@ export const Captions = () => {
   >({});
   const [mediaTrackItems, setMediaTrackItems] = useState<ITrackItem[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const mediaTrackItems = fetchMediaTrackItems(trackItemsMap);
@@ -59,6 +60,7 @@ export const Captions = () => {
 
   const createCaptions = async (selectedMedia: string) => {
     setIsGenerating(true);
+    setErrorMessage(null);
     try {
       const trackItem = mediaTrackItems.find(
         (m) => m.details.src === selectedMedia
@@ -104,8 +106,9 @@ export const Captions = () => {
           ]
         }
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error generating captions:", error);
+      setErrorMessage(error.message || "Failed to generate captions.");
     } finally {
       setIsGenerating(false);
     }
@@ -123,6 +126,7 @@ export const Captions = () => {
           captionTrackItemsMap={captionTrackItemsMap}
           createCaptions={createCaptions}
           isGenerating={isGenerating}
+          errorMessage={errorMessage}
         />
       )}
     </div>
@@ -135,7 +139,8 @@ const MediaSection = ({
   onSelectChange,
   captionTrackItemsMap,
   createCaptions,
-  isGenerating
+  isGenerating,
+  errorMessage,
 }: {
   selectMediaItems: { label: string; value: string }[];
   selectedMedia: string | undefined;
@@ -143,6 +148,7 @@ const MediaSection = ({
   captionTrackItemsMap: Record<string, ITrackItem[]>;
   createCaptions: (selectedMedia: string) => void;
   isGenerating: boolean;
+  errorMessage: string | null;
 }) => (
   <div className="flex h-full w-full flex-col">
     <div className="w-full p-4">
@@ -174,6 +180,10 @@ const MediaSection = ({
           )
       ) : (
           <MediaNoSelected />
+      )}
+
+      {errorMessage && (
+          <div className="text-sm text-destructive text-center my-4">{errorMessage}</div>
       )}
     </ScrollArea>
   </div>
@@ -319,8 +329,8 @@ async function transcribeMedia(mediaUrl: string, targetLanguage: string) {
   });
 
   if (!transcribeResponse.ok) {
-    const err = await transcribeResponse.text();
-    throw new Error(`Failed to initiate transcription: ${err}`);
+    const err = await transcribeResponse.json().catch(() => ({ message: "Failed to transcribe media." }));
+    throw new Error(err.message || "Failed to transcribe media.");
   }
 
   const transcribeData = await transcribeResponse.json();

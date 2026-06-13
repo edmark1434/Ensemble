@@ -311,13 +311,6 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
     ]);
   }, []);
 
-  useEffect(() => {
-    const screenHeight = window.innerHeight;
-    const desiredHeight = 300;
-    const percentage = (desiredHeight / screenHeight) * 100;
-    timelinePanelRef.current?.resize(percentage);
-  }, []);
-
   const handleTimelineResize = () => {
     const timelineContainer = document.getElementById("timeline-container");
     if (!timelineContainer) return;

@@ -88,6 +88,17 @@ export default function Navbar({
     setTitle(e.target.value);
   };
 
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  useEffect(() => {
+    const sub = stateManager.subscribe(() => {
+      setCanUndo(stateManager.undos.length > 0);
+      setCanRedo(stateManager.redos.length > 0);
+    });
+    return () => sub.unsubscribe();
+  }, [stateManager]);
+
   return (
     <div
       style={{
@@ -108,9 +119,10 @@ export default function Navbar({
             <TooltipTrigger asChild>
               <Button
                   onClick={handleUndo}
-                  className="hover:!bg-accent/20"
+                  className="hover:!bg-accent/30"
                   variant="ghost"
                   size="icon"
+                  disabled={!canUndo}
               >
                 <Icons.undo width={20} />
               </Button>
@@ -124,9 +136,10 @@ export default function Navbar({
             <TooltipTrigger asChild>
               <Button
                   onClick={handleRedo}
-                  className="hover:!bg-accent/20"
+                  className="hover:!bg-accent/30"
                   variant="ghost"
                   size="icon"
+                  disabled={!canRedo}
               >
                 <Icons.redo width={20} />
               </Button>
@@ -140,7 +153,7 @@ export default function Navbar({
             <TooltipTrigger asChild>
               <Button
                   onClick={handleUndo}
-                  className="hover:!bg-accent/20"
+                  className="hover:!bg-accent/30"
                   variant="ghost"
                   size="icon"
               >
@@ -174,7 +187,7 @@ export default function Navbar({
             <TooltipTrigger asChild>
               <Button
                   onClick={() => setIsShortcutsModalOpen(true)}
-                  className="hover:!bg-accent/20"
+                  className="hover:!bg-accent/30"
                   variant="ghost"
                   size="icon"
               >
@@ -230,7 +243,7 @@ const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          className="flex h-8 gap-2 hover:!bg-accent/20"
+          className="flex h-8 gap-2 hover:!bg-accent/30"
           variant="outline"
           size={isMediumScreen ? "sm" : "icon"}
         >
