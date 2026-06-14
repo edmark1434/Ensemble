@@ -34,11 +34,11 @@ interface Message {
   id: number;
   senderId: "me" | "them";
   senderName?: string;
-  text: string;
+  text?: string;
+  image?: string;
   time: string;
 }
 
-// Global available contacts to add to a group chat session
 const AVAILABLE_CONTACTS = [
   { id: 1, name: "Robert Simion", avatar: "https://placehold.co/100x100/3b82f6/fff?text=RS" },
   { id: 2, name: "Sarah Chen", avatar: "https://placehold.co/100x100/eab308/fff?text=SC" },
@@ -85,18 +85,18 @@ const Inbox: React.FC = () => {
   const [conversations, setConversations] = useState<Record<number, Message[]>>(INITIAL_MESSAGES);
   const [chatsData, setChatsData] = useState<Record<"primary" | "requests" | "drafts", Chat[]>>(MOCK_CHATS);
 
-  // Feature Action States
+  const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [isMobileChatOpen, setIsMobileChatOpen] = useState(true);
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
 
-  // Group creation working states
   const [groupNameInput, setGroupNameInput] = useState("");
   const [selectedContacts, setSelectedContacts] = useState<number[]>([]);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close context menu dropdown upon clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -117,9 +117,41 @@ const Inbox: React.FC = () => {
 
   const currentMessages = selectedChatId ? conversations[selectedChatId] || [] : [];
 
+  const processFile = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      alert("Please upload valid graphics formats only.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAttachedImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      processFile(e.target.files[0]);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          processFile(file);
+          e.preventDefault();
+          break;
+        }
+      }
+    }
+  };
+
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!messageInput.trim() || !selectedChatId) return;
+    if (!messageInput.trim() && !attachedImage || !selectedChatId) return;
 
     const now = new Date();
     const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -127,7 +159,8 @@ const Inbox: React.FC = () => {
     const newMessage: Message = {
       id: Date.now(),
       senderId: "me",
-      text: messageInput,
+      text: messageInput.trim() ? messageInput : undefined,
+      image: attachedImage || undefined,
       time: timeString
     };
 
@@ -145,7 +178,7 @@ const Inbox: React.FC = () => {
         if (index !== -1) {
           updated[t][index] = {
             ...updated[t][index],
-            lastMessage: messageInput,
+            lastMessage: attachedImage ? "📷 Photo Asset" : messageInput,
             time: "Just now"
           };
         }
@@ -154,6 +187,7 @@ const Inbox: React.FC = () => {
     });
 
     setMessageInput("");
+    setAttachedImage(null);
   };
 
   const toggleContactSelection = (contactId: number) => {
@@ -181,7 +215,6 @@ const Inbox: React.FC = () => {
       isGroup: true
     };
 
-    // Add conversation entry to setup empty state mapping
     setConversations(prev => ({
       ...prev,
       [newGroupId]: [{
@@ -193,18 +226,14 @@ const Inbox: React.FC = () => {
       }]
     }));
 
-    // Inject into primary messaging board route lane
     setChatsData(prev => ({
       ...prev,
       primary: [newGroupChat, ...prev.primary]
     }));
 
-    // Select the newly built group thread immediately
     setActiveTab("primary");
     setSelectedChatId(newGroupId);
     setIsGroupModalOpen(false);
-
-    // Reset fields
     setGroupNameInput("");
     setSelectedContacts([]);
   };
@@ -213,6 +242,7 @@ const Inbox: React.FC = () => {
     setSelectedChatId(id);
     setIsMobileChatOpen(true);
     setIsOptionsOpen(false);
+    setAttachedImage(null);
 
     setChatsData(prev => {
       const updated = { ...prev };
@@ -225,7 +255,6 @@ const Inbox: React.FC = () => {
     });
   };
 
-  // Chat management option handlers
   const handleViewProfile = () => {
     setIsOptionsOpen(false);
     alert(`Routing to target profile information: ${currentChat?.name}`);
@@ -254,28 +283,23 @@ const Inbox: React.FC = () => {
     <div className="min-h-screen bg-[#080a12] flex flex-col h-screen overflow-hidden">
       <UserHeader pageTitle="Inbox" credits={1250} />
 
-      {/* Inbox Workspace Wrap */}
       <div className="flex-1 flex max-w-7xl w-full mx-auto p-4 md:p-6 gap-4 h-[calc(100vh-80px)] overflow-hidden">
 
         {/* SIDEBAR: Chat List Section */}
         <div className={`w-full md:w-80 lg:w-96 border border-white/10 bg-white/5 rounded-2xl flex flex-col backdrop-blur-xl ${
           isMobileChatOpen && selectedChatId ? "hidden md:flex" : "flex"
         }`}>
-
-          {/* Section Header with Actions */}
           <div className="p-4 border-b border-white/10 flex items-center justify-between">
             <h2 className="text-sm font-bold text-zinc-300">Messages</h2>
             <button
               onClick={() => setIsGroupModalOpen(true)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition"
-              title="Create a Group Chat"
             >
               <UserPlus className="h-3.5 w-3.5" />
               <span>New Group</span>
             </button>
           </div>
 
-          {/* Internal Navigation Filter Tabs */}
           <div className="grid grid-cols-3 border-b border-white/10 p-2 gap-1 text-center text-xs font-semibold">
             {(["primary", "requests", "drafts"] as const).map((tab) => (
               <button
@@ -292,7 +316,6 @@ const Inbox: React.FC = () => {
             ))}
           </div>
 
-          {/* Quick Search */}
           <div className="p-3 border-b border-white/10 relative">
             <Search className="absolute left-6 top-5.5 h-4 w-4 text-zinc-500" />
             <input
@@ -304,7 +327,6 @@ const Inbox: React.FC = () => {
             />
           </div>
 
-          {/* Chat Rows Scroll Area */}
           <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
             {activeChats.length > 0 ? (
               activeChats.map((chat) => (
@@ -362,7 +384,7 @@ const Inbox: React.FC = () => {
           {currentChat ? (
             <>
               {/* Active Header Panel */}
-              <div className="p-4 border-b border-white/10 flex items-center justify-between bg-zinc-950/20 relative z-30">
+              <div className="p-4 border-b border-white/10 flex items-center justify-between bg-zinc-950/20 relative z-30 flex-shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
                   <button
                     onClick={() => setIsMobileChatOpen(false)}
@@ -382,7 +404,6 @@ const Inbox: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Calling & Management Triggers */}
                 <div className="flex items-center gap-1.5 text-zinc-400 relative" ref={dropdownRef}>
                   <button className="p-2 hover:text-white rounded-xl hover:bg-white/5 transition" title="Voice Call (Disabled)">
                     <Phone className="h-4 w-4" />
@@ -397,7 +418,6 @@ const Inbox: React.FC = () => {
                     <MoreVertical className="h-4 w-4" />
                   </button>
 
-                  {/* Contextual Options Action Dropdown menu */}
                   {isOptionsOpen && (
                     <div className="absolute right-0 top-11 w-48 bg-[#0d0f1a] border border-white/10 rounded-xl shadow-2xl p-1.5 flex flex-col z-50 animate-slide-in">
                       <button
@@ -429,26 +449,35 @@ const Inbox: React.FC = () => {
 
               {/* Message Flow Dynamic Area */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar flex flex-col">
-                <div className="text-center my-6 flex flex-col items-center">
+                <div className="text-center my-6 flex flex-col items-center flex-shrink-0">
                   <img src={currentChat.avatar} alt="" className="w-16 h-16 rounded-full border border-white/10 shadow-xl mb-2" />
                   <h4 className="text-white font-bold text-base">{currentChat.name}</h4>
-                  <p className="text-xs text-zinc-500 max-w-xs mt-1">This is the absolute beginning of your message history with this conversational element.</p>
+                  <p className="text-xs text-zinc-500 max-w-xs mt-1">This is the absolute beginning of your message history with this contact.</p>
                 </div>
 
                 {currentMessages.map((msg) => {
                   const isMe = msg.senderId === "me";
                   return (
-                    <div key={msg.id} className={`flex flex-col max-w-[75%] ${isMe ? "self-end items-end" : "self-start items-start"}`}>
+                    <div key={msg.id} className={`flex flex-col max-w-[75%] ${isMe ? "self-end items-end" : "self-start items-start"} flex-shrink-0`}>
                       {!isMe && msg.senderName && (
                         <span className="text-[10px] font-semibold text-zinc-400 mb-1 px-1">{msg.senderName}</span>
                       )}
-                      <div className={`p-3 text-sm rounded-2xl leading-relaxed break-words ${
+
+                      <div className={`p-2.5 rounded-2xl leading-relaxed break-words flex flex-col gap-2 ${
                         isMe 
                           ? "bg-blue-500 text-white rounded-tr-none" 
                           : "bg-white/10 text-zinc-100 rounded-tl-none border border-white/5"
                       }`}>
-                        {msg.text}
+                        {msg.image && (
+                          <img
+                            src={msg.image}
+                            alt="Chat attachment"
+                            className="max-w-full max-h-60 rounded-xl object-cover border border-white/10 shadow-md block"
+                          />
+                        )}
+                        {msg.text && <span className="text-sm px-0.5">{msg.text}</span>}
                       </div>
+
                       <span className="text-[9px] text-zinc-500 mt-1 px-1">{msg.time}</span>
                     </div>
                   );
@@ -456,27 +485,60 @@ const Inbox: React.FC = () => {
               </div>
 
               {/* Message Composer Footer Form */}
-              <form onSubmit={handleSendMessage} className="p-4 border-t border-white/10 bg-zinc-950/10 z-20">
+              <form onSubmit={handleSendMessage} className="p-4 border-t border-white/10 bg-[#080a12] z-20 flex flex-col gap-3 flex-shrink-0">
+
+                {/* Fixed Image Upload Preview Area */}
+                {attachedImage && (
+                  <div className="flex p-2 bg-white/5 border border-white/10 rounded-xl self-start animate-slide-in">
+                    <div className="relative w-20 h-20 bg-zinc-950 rounded-lg overflow-hidden border border-white/10 flex-shrink-0">
+                      <img
+                        src={attachedImage}
+                        alt="Upload Preview"
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setAttachedImage(null)}
+                        className="absolute top-1 right-1 p-1 rounded-full bg-red-500/90 text-white shadow-xl hover:bg-red-600 transition z-10"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Main Input Field Container */}
                 <div className="relative flex items-center bg-white/5 border border-white/5 rounded-xl p-1.5 focus-within:border-blue-500/40 transition">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
                   <button
                     type="button"
+                    onClick={() => fileInputRef.current?.click()}
                     className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-white/5 transition flex-shrink-0"
-                    title="Attach Picture (Mocked)"
+                    title="Upload Graphic Asset"
                   >
                     <ImageIcon className="h-4 w-4" />
                   </button>
+
                   <input
                     type="text"
-                    placeholder={`Message ${currentChat.name}...`}
+                    placeholder={`Message ${currentChat.name}... (Paste screenshot supported)`}
                     value={messageInput}
                     onChange={(e) => setMessageInput(e.target.value)}
+                    onPaste={handlePaste}
                     className="w-full bg-transparent text-sm text-white px-2 focus:outline-none py-1.5 placeholder-zinc-500"
                   />
+
                   <button
                     type="submit"
-                    disabled={!messageInput.trim()}
+                    disabled={!messageInput.trim() && !attachedImage}
                     className={`p-2 rounded-lg flex-shrink-0 transition ${
-                      messageInput.trim() 
+                      messageInput.trim() || attachedImage
                         ? "bg-blue-500 text-white hover:bg-blue-600" 
                         : "text-zinc-500 bg-white/5 cursor-not-allowed"
                     }`}
@@ -512,7 +574,6 @@ const Inbox: React.FC = () => {
             className="bg-[#0d0f1a] border border-white/10 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[85vh]"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Top Row */}
             <div className="p-4 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <Users className="h-4 w-4 text-blue-400" />
@@ -527,9 +588,7 @@ const Inbox: React.FC = () => {
               </button>
             </div>
 
-            {/* Modal Input Content Field Panel */}
             <div className="p-4 space-y-4 flex-1 overflow-y-auto custom-scrollbar">
-              {/* Group Name Field */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold tracking-wider text-zinc-400 uppercase">Group Project Name</label>
                 <input
@@ -541,7 +600,6 @@ const Inbox: React.FC = () => {
                 />
               </div>
 
-              {/* Contacts Selection Segment */}
               <div className="space-y-2">
                 <label className="text-[11px] font-bold tracking-wider text-zinc-400 uppercase">
                   Select Members ({selectedContacts.length} Selected)
@@ -575,7 +633,6 @@ const Inbox: React.FC = () => {
               </div>
             </div>
 
-            {/* Modal Bottom Submissions Control */}
             <div className="p-4 border-t border-white/10 bg-zinc-950/40 flex gap-3">
               <button
                 type="button"
@@ -600,7 +657,6 @@ const Inbox: React.FC = () => {
         </div>
       )}
 
-      {/* Embedded CSS Animations Injection */}
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
