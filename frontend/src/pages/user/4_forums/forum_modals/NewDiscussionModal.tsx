@@ -21,13 +21,18 @@ import {
   Trash2,
   Upload,
   Loader2,
+  Check,
+  XCircle,
 } from "lucide-react";
 import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
 
 interface Group {
   id: string;
   name: string;
-  tags: string[];
+  tags: {
+    tag_id: number;
+    tag: string;
+  }[];
 }
 
 interface ImageAttachment {
@@ -46,7 +51,7 @@ interface NewDiscussionModalProps {
     title: string;
     content: string;
     groupId: string;
-    tag: string;
+    tags: { tag_id: number; tag_name: string }[]; // Changed from single tag to array of tags
     images?: ImageAttachment[];
   }) => void;
   availableGroups: Group[];
@@ -265,6 +270,23 @@ const ImagePreview = ({ image, onRemove }: { image: ImageAttachment; onRemove: (
   );
 };
 
+// Selected Tag component
+const SelectedTagBadge = ({ tag, onRemove }: { tag: { tag_id: number; tag_name: string }; onRemove: () => void }) => {
+  return (
+    <div className="flex items-center gap-1 rounded-full bg-blue-500/20 px-3 py-1.5 text-xs text-blue-400">
+      <Tag className="h-3 w-3" />
+      <span>{tag.tag_name}</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="ml-1 rounded-full p-0.5 hover:bg-blue-500/30 transition-colors"
+      >
+        <XCircle className="h-3 w-3" />
+      </button>
+    </div>
+  );
+};
+
 const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
   isOpen,
   onClose,
@@ -274,11 +296,11 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [selectedTag, setSelectedTag] = useState<string>("");
+  const [selectedTags, setSelectedTags] = useState<{ tag_id: number; tag_name: string }[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false);
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
-  const [errors, setErrors] = useState<{ title?: string; content?: string; group?: string; tag?: string }>({});
+  const [errors, setErrors] = useState<{ title?: string; content?: string; group?: string; tags?: string }>({});
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -399,6 +421,21 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
     setImages(prev => prev.filter(img => img.id !== imageId));
   };
 
+  // Handle tag selection
+  const handleTagToggle = (tag: { tag_id: number; tag: string }) => {
+    const tagExists = selectedTags.some(t => t.tag_id === tag.tag_id);
+    if (tagExists) {
+      setSelectedTags(prev => prev.filter(t => t.tag_id !== tag.tag_id));
+    } else {
+      setSelectedTags(prev => [...prev, { tag_id: tag.tag_id, tag_name: tag.tag }]);
+    }
+    if (errors.tags) setErrors({ ...errors, tags: undefined });
+  };
+
+  const removeTag = (tagId: number) => {
+    setSelectedTags(prev => prev.filter(t => t.tag_id !== tagId));
+  };
+
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -418,17 +455,15 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
     if (isOpen && availableGroups.length > 0) {
       const firstGroup = availableGroups[0];
       setSelectedGroupId(firstGroup.id);
-      setSelectedTag(firstGroup.tags?.[0] || "");
+      setSelectedTags([]);
     }
   }, [isOpen, availableGroups]);
 
-  // Reset tag when group changes
+  // Reset tags when group changes
   useEffect(() => {
-    if (selectedGroupId) {
-      const group = availableGroups.find(g => g.id === selectedGroupId);
-      setSelectedTag(group?.tags?.[0] || "");
-    }
-  }, [selectedGroupId, availableGroups]);
+    setSelectedTags([]);
+    if (errors.tags) setErrors({ ...errors, tags: undefined });
+  }, [selectedGroupId]);
 
   // Cleanup preview URLs
   useEffect(() => {
@@ -441,19 +476,19 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
   const availableTags = selectedGroup?.tags || [];
 
   const validate = (): boolean => {
-    const newErrors: { title?: string; content?: string; group?: string; tag?: string } = {};
+    const newErrors: { title?: string; content?: string; group?: string; tags?: string } = {};
     if (!title.trim()) newErrors.title = "Title is required";
     else if (title.length < 5) newErrors.title = "Title must be at least 5 characters";
     if (!content.trim()) newErrors.content = "Content is required";
     else if (content.length < 20) newErrors.content = "Content must be at least 20 characters";
     if (!selectedGroupId) newErrors.group = "Please select a group";
-    if (!selectedTag) newErrors.tag = "Please select a category";
+    if (selectedTags.length === 0) newErrors.tags = "Please select at least one tag";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = () => {
-    if (!validate() || !selectedGroupId || !selectedTag) return;
+    if (!validate() || !selectedGroupId) return;
 
     const uploadingImages = images.filter(img => img.uploading);
     if (uploadingImages.length > 0) {
@@ -462,16 +497,40 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
     }
 
     setIsCreating(true);
+    
+    // Prepare the post data with multiple tags
+    const postData = { 
+      title: title.trim(), 
+      content: content.trim(), 
+      groupId: selectedGroupId, 
+      tags: selectedTags, // Array of tags with tag_id and tag_name
+      images 
+    };
+    
+    // Console log all the data being submitted
+    console.log("=== NEW DISCUSSION SUBMISSION ===");
+    console.log("Title:", postData.title);
+    console.log("Content:", postData.content);
+    console.log("Content Length:", postData.content.length);
+    console.log("Group ID:", postData.groupId);
+    console.log("Selected Group:", selectedGroup?.name);
+    console.log("Tags:", postData.tags);
+    console.log("Number of Tags:", postData.tags.length);
+    console.log("Images:", postData.images.map(img => ({ id: img.id, url: img.url, uploading: img.uploading })));
+    console.log("Number of Images:", postData.images.length);
+    console.log("Full Post Data:", JSON.stringify(postData, null, 2));
+    console.log("=================================");
+    
     setTimeout(() => {
-      onCreatePost({ title: title.trim(), content: content.trim(), groupId: selectedGroupId, tag: selectedTag, images });
+      onCreatePost(postData);
       showSuccessToast("Discussion Posted Successfully!");
       setTitle("");
       setContent("");
       images.forEach(image => URL.revokeObjectURL(image.preview));
       setImages([]);
+      setSelectedTags([]);
       if (availableGroups.length > 0) {
         setSelectedGroupId(availableGroups[0].id);
-        setSelectedTag(availableGroups[0].tags?.[0] || "");
       }
       setIsCreating(false);
       onClose();
@@ -479,16 +538,16 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
   };
 
   const handleClose = () => {
-    if (title.trim() || content.trim() || images.length > 0) {
+    if (title.trim() || content.trim() || images.length > 0 || selectedTags.length > 0) {
       showErrorToast("Discussion cancelled");
     }
     setTitle("");
     setContent("");
     images.forEach(image => URL.revokeObjectURL(image.preview));
     setImages([]);
+    setSelectedTags([]);
     if (availableGroups.length > 0) {
       setSelectedGroupId(availableGroups[0].id);
-      setSelectedTag(availableGroups[0].tags?.[0] || "");
     }
     setErrors({});
     setIsGroupDropdownOpen(false);
@@ -558,41 +617,71 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
             {errors.group && <p className="mt-1 text-xs text-red-400">{errors.group}</p>}
           </div>
 
-          {/* Category Selection */}
+          {/* Categories/Tags Selection - Multi-select */}
           <div className="mb-4">
-            <label className="mb-2 block text-xs font-semibold uppercase text-zinc-500">Category *</label>
+            <label className="mb-2 block text-xs font-semibold uppercase text-zinc-500">
+              Categories / Tags * (Select one or more)
+            </label>
             <div className="relative" ref={tagDropdownRef}>
               <button
                 onClick={() => availableTags.length > 0 && setIsTagDropdownOpen(!isTagDropdownOpen)}
-                className={`flex w-full items-center justify-between rounded-lg border ${errors.tag ? "border-red-500/50" : "border-white/15"} bg-white/5 px-4 py-2.5 text-sm text-white transition hover:bg-white/10 ${availableTags.length === 0 ? "opacity-50 cursor-not-allowed" : ""}`}
+                className={`flex w-full items-center justify-between rounded-lg border ${errors.tags ? "border-red-500/50" : "border-white/15"} bg-white/5 px-4 py-2.5 text-sm text-white transition hover:bg-white/10 ${availableTags.length === 0 ? "opacity-50 cursor-not-allowed" : ""}`}
                 disabled={availableTags.length === 0}
               >
                 <div className="flex items-center gap-2">
                   <Tag className="h-4 w-4 text-zinc-500" />
-                  <span>{selectedTag || (availableTags.length === 0 ? "No tags available" : "Select a category")}</span>
+                  <span>
+                    {selectedTags.length > 0 
+                      ? `${selectedTags.length} tag${selectedTags.length > 1 ? 's' : ''} selected` 
+                      : (availableTags.length === 0 ? "No tags available" : "Select tags")}
+                  </span>
                 </div>
-                {availableTags.length > 0 && <ChevronDown className={`h-4 w-4 transition-transform ${isTagDropdownOpen ? "rotate-180" : ""}`} />}
+                <ChevronDown className={`h-4 w-4 transition-transform ${isTagDropdownOpen ? "rotate-180" : ""}`} />
               </button>
+              
               {isTagDropdownOpen && availableTags.length > 0 && (
                 <div className="absolute left-0 right-0 top-full mt-1 z-10 max-h-48 overflow-y-auto rounded-lg border border-white/15 bg-[#0d0f1a] shadow-xl">
-                  {availableTags.map(tag => (
-                    <button
-                      key={tag}
-                      onClick={() => {
-                        setSelectedTag(tag);
-                        setIsTagDropdownOpen(false);
-                        setErrors({ ...errors, tag: undefined });
-                      }}
-                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/10 hover:text-white"
-                    >
-                      <Tag className="h-3.5 w-3.5" />
-                      {tag}
-                    </button>
-                  ))}
+                  {availableTags.map(tag => {
+                    const isSelected = selectedTags.some(t => t.tag_id === tag.tag_id);
+                    return (
+                      <button
+                        key={tag.tag_id}
+                        onClick={() => handleTagToggle(tag)}
+                        className={`flex w-full items-center justify-between gap-2 px-4 py-2 text-sm transition ${
+                          isSelected 
+                            ? "bg-blue-500/20 text-blue-400" 
+                            : "text-zinc-300 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Tag className="h-3.5 w-3.5" />
+                          <span>{tag.tag}</span>
+                        </div>
+                        {isSelected && <Check className="h-4 w-4" />}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
-            {errors.tag && <p className="mt-1 text-xs text-red-400">{errors.tag}</p>}
+            
+            {/* Selected Tags Display */}
+            {selectedTags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {selectedTags.map(tag => (
+                  <SelectedTagBadge
+                    key={tag.tag_id}
+                    tag={tag}
+                    onRemove={() => removeTag(tag.tag_id)}
+                  />
+                ))}
+              </div>
+            )}
+            
+            {errors.tags && <p className="mt-1 text-xs text-red-400">{errors.tags}</p>}
+            <p className="mt-1 text-[10px] text-zinc-500">
+              You can select multiple tags to better categorize your discussion
+            </p>
           </div>
 
           {/* Title Input */}
@@ -689,7 +778,7 @@ Formatting examples:
           <div className="flex gap-3 mt-6">
             <button
               onClick={handleSubmit}
-              disabled={isCreating || availableGroups.length === 0 || availableTags.length === 0}
+              disabled={isCreating || availableGroups.length === 0}
               className="flex-1 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:scale-105 hover:shadow-lg hover:shadow-blue-500/25 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
             >
               {isCreating ? (

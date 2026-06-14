@@ -28,7 +28,7 @@ import SelectedTeam from "@/pages/user/3_teams/SelectedTeam.tsx";
 import Forums from './pages/user/4_forums/Forums.tsx'
 import SelectedGroup from "@/pages/user/4_forums/SelectedGroup.tsx";
 import ExpandDiscussion from "@/pages/user/4_forums/ExpandDiscussion.tsx";
-
+import Inbox from "@/pages/user/8_inbox/Inbox.tsx";
 import SectionPlaceholder from './pages/user/0_config/SectionPlaceholder.tsx'
 
 import JobPostingMain from "@/pages/user/6_jobs/Job_Posting/main.tsx";
@@ -103,7 +103,7 @@ function App() {
           <Route path='/my-requests' element={<SectionPlaceholder title='MY REQUESTS' />} />
           <Route path='/contracts' element={<SectionPlaceholder title='MY CONTRACTS' />} />
           <Route path='/transactions' element={<SectionPlaceholder title='TRANSACTION HISTORY' />} />
-          <Route path='/inbox' element={<SectionPlaceholder title='INBOX' />} />
+          <Route path='/inbox' element={<Inbox />} />
         </Route>
       </Route>
 
