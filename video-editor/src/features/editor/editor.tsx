@@ -104,7 +104,11 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
 
         <div className="grid grid-cols-3 items-center p-2 pt-1 bg-card">
           <div className="text-xs flex items-center gap-1 px-2">
-          <span className="font-medium text-zinc-200">
+          <span
+            className="font-medium text-zinc-200"
+            id="video-current-time"
+            data-current-time={currentFrame / fps}
+          >
             {frameToTimeString({ frame: currentFrame }, { fps })}
           </span>
             <span className="text-zinc-500">|</span>
