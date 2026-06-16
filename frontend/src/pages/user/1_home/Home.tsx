@@ -217,7 +217,6 @@ const Home: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedPriceRange, setSelectedPriceRange] = useState("All");
   const [selectedRating, setSelectedRating] = useState("All");
-  console.log("userInfo from global state:", useGlobalState((state) => state.user));
   const assetsSectionRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
 

@@ -185,19 +185,24 @@ async function loginCredentials(req, res) {
 
 async function refreshToken(req, res) {
     const refreshTokenValue = req.cookies?.refreshToken;
+    
+    // 1. Return EARLY if token is missing
     if (!refreshTokenValue) {
         return res.status(401).json({
             success: false,
             message: 'Refresh token is required',
         });
     }
+
     if (!process.env.REFRESH_TOKEN_JWT_SECRET) {
         return res.status(500).json({
             success: false,
             message: 'Refresh token secret is not configured',
         });
     }
-    try{
+
+    try {
+        // 2. This will safely throw an error to the catch block if the token is expired/invalid
         const decoded = jwt.verify(refreshTokenValue, process.env.REFRESH_TOKEN_JWT_SECRET);
         const email = decoded?.email || req.session?.email;
 
@@ -210,33 +215,54 @@ async function refreshToken(req, res) {
 
         const credentials = await getCredentials(email);
         if (!credentials) {
+            // Clear dead session identifiers since the user profile no longer exists
+            await logout(req.cookies?.sessionId);
+            res.clearCookie('sessionId');
+            res.clearCookie('accessToken');
+            res.clearCookie('refreshToken');
+            
             return res.status(401).json({
                 success: false,
-                message: 'User not found for refresh token',
+                message: 'User not found for the provided refresh token',
             });
         }
 
+        // Format credentials payload
         credentials.email = credentials.email_address;
         delete credentials.email_address;
         credentials.username = credentials.handle;
         delete credentials.handle;
-        delete credentials.password_hash; // Ensure password hash is not included in the access token payload
+        delete credentials.password_hash; 
 
+        // Generate and set fresh access token
         const accessToken = await AccessTokens(credentials);
         setAccessTokenCookie(res, accessToken);
+        
         return res.json({
             success: true,
             message: 'Access token refreshed',
         });
-    }catch(err){
+
+    } catch (err) {
         console.error('Error refreshing token:', err);
-        res.status(500).json({
+        
+        // 3. FIX: If JWT verification fails (JsonWebTokenError / TokenExpiredError), 
+        // return a 401 instead of a 500 so the frontend interceptor breaks the loop!
+        if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+            res.clearCookie('sessionId');
+            res.clearCookie('accessToken');
+            res.clearCookie('refreshToken');
+            return res.status(401).json({ success: false, message: 'Session expired. Please log in again.' });
+        }
+
+        // True unexpected database or server issues can remain 500
+        return res.status(500).json({
             success: false,
             message: 'Internal server error',
         });
     }
-
 }
+
 async function LogoutUsers(req, res) {
     try {
         const sessionId = req.cookies?.sessionId;

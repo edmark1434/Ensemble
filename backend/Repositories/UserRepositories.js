@@ -123,6 +123,7 @@ async function updateFirebaseUserUuid(email, firebaseUserUuid) {
         throw err;
     }
 }
+
 //exports all the repository functions for use in other parts of the application
 module.exports = {
     getAllUsers,

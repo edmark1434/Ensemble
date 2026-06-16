@@ -71,9 +71,56 @@ async function getAccountByHandle(handle) {
         throw err;
     }
 }
+
+async function getAccountWalletRepositories(accountId,type = 'account wallets') { 
+    try {
+        const queryText = `
+            SELECT 
+                w.wallet_id, 
+                w.type,
+                w.status, 
+                w.balance_credits, 
+                w.frozen_balance_credits 
+            FROM wallets w
+            INNER JOIN account_wallets aw ON w.wallet_id = aw.wallet_id
+            WHERE aw.account_id = $1
+              AND w.type = $2
+              AND w.status = 'active';
+        `;
+
+        const result = await pool.query(queryText, [accountId, type]);
+
+        // If a matching active account wallet is found, return it. Otherwise, return null.
+        return result.rows.length > 0 ? result.rows[0] : null;
+
+    } catch (err) {
+        console.error(`Error fetching wallet for account ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function checkAccountId(accountId) { 
+    try {
+        const queryText = `
+            SELECT EXISTS(
+                SELECT 1 FROM accounts WHERE account_id = $1
+            );
+        `;
+        const result = await pool.query(queryText, [accountId]);
+        
+        // result.rows[0].exists will look like: true OR false
+        return result.rows[0].exists; 
+    } catch (err) { 
+        console.error(`Error checking existence for account id ${accountId}:`, err);
+        throw err;
+    }
+}
+
 module.exports = {
     getAllAccounts,
     getAccountById,
     createAccount,
-    getAccountByHandle
+    getAccountByHandle,
+    getAccountWalletRepositories,
+    checkAccountId,
 };
