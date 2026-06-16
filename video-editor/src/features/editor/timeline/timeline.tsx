@@ -220,6 +220,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     canvas.state.subscribeToUpdateItemDetails(({ trackItemsMap }) => {
       canvas.getTrackItems().forEach((item: any) => {
         const details = trackItemsMap[item.id]?.details;
+
         if (details?.hidden !== undefined && item.hidden !== details.hidden) {
           item.hidden = details.hidden;
           item.opacity = details.hidden ? 0.5 : 1;
@@ -234,9 +235,9 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
           const locked = details.locked;
           item.lockMovementX = locked;
           item.lockMovementY = locked;
-          item.selectable = !locked;    // blocks marquee/group select (we manually add click select)
           item.lockScalingX = locked;
           item.lockScalingY = locked;
+          item.selectable = !locked;    // blocks marquee/group select (we manually add click select)
           item.hasControls = !locked;
           item.dirty = true;
         }
@@ -245,8 +246,52 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     });
 
     let isDragging = false;
-    canvas.on('mouse:down', () => {
+    let activeIdsBeforeClick: string[] = [];
+
+    canvas.on('mouse:down', (e: any) => {
       isDragging = false;
+
+      if (!e.target) return;
+      const itemId = e.target.id;
+      if (!itemId) return;
+
+      const { trackItemsMap } = useStore.getState();
+      const isLocked = trackItemsMap[itemId]?.details?.locked;
+      const isShift = canvas.isShiftKey;
+
+      if (isShift) {
+        if (isLocked) {
+          // shift-click locked → solo just the locked item
+          canvas.selectTrackItemByIds([itemId]);
+          stateManager.updateState(
+            { activeIds: [itemId] },
+            { updateHistory: false, kind: 'layer:selection' }
+          );
+        } else {
+          // shift-click normal → add to selection, drop any locked from existing
+          const existingNonLocked = activeIdsBeforeClick.filter(
+            id => !trackItemsMap[id]?.details?.locked
+          );
+          const next = [...new Set([...existingNonLocked, itemId])];
+          canvas.selectTrackItemByIds(next);
+          stateManager.updateState(
+            { activeIds: next },
+            { updateHistory: false, kind: 'layer:selection' }
+          );
+        }
+      } else {
+        if (isLocked) {
+          // normal click locked → solo just the locked item
+          canvas.selectTrackItemByIds([itemId]);
+          stateManager.updateState(
+            { activeIds: [itemId] },
+            { updateHistory: false, kind: 'layer:selection' }
+          );
+        }
+        // normal click non-locked → fall through, library handles it
+      }
+
+      activeIdsBeforeClick = [...useStore.getState().activeIds];
     });
     canvas.on('mouse:move', () => {
       isDragging = true;
@@ -256,11 +301,12 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       if (!e.target) return;
       const itemId = e.target.id;
       if (!itemId) return;
-      const { trackItemsMap } = stateManager.getState();
+
+      const { trackItemsMap } = useStore.getState();
       if (trackItemsMap[itemId]?.details?.locked) {
         stateManager.updateState(
-            { activeIds: [itemId] },
-            { updateHistory: false, kind: 'layer:selection' }
+          { activeIds: [itemId] },
+          { updateHistory: false, kind: 'layer:selection' }
         );
       }
     });

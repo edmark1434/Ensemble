@@ -160,20 +160,32 @@ export function SceneInteractions({
           return !trackItemsMapRef.current[id]?.details?.locked;
         }) as HTMLDivElement[];
 
-        const ids = filteredSelected.map((el) =>
-          getIdFromClassName(el.className)
-        );
+        let finalSelected = filteredSelected;
 
-        setTargets(filteredSelected as HTMLDivElement[]);
+        if (isClick && filteredSelected.length > 1) {
+          const prevIds = new Set(targets.map(t => getIdFromClassName(t.className)));
+          const newlyAdded = filteredSelected.find(el => !prevIds.has(getIdFromClassName(el.className)));
 
-        stateManager.updateState(
-          {
-            activeIds: ids
-          },
-          {
-            updateHistory: false,
-            kind: "layer:selection"
+          if (newlyAdded) {
+            const newlyAddedId = getIdFromClassName(newlyAdded.className);
+            const newlyAddedLocked = trackItemsMapRef.current[newlyAddedId]?.details?.locked;
+
+            if (newlyAddedLocked) {
+              finalSelected = [newlyAdded];
+            } else {
+              finalSelected = filteredSelected.filter(el => {
+                const id = getIdFromClassName(el.className);
+                return !trackItemsMapRef.current[id]?.details?.locked;
+              });
+            }
           }
+        }
+
+        const ids = finalSelected.map((el) => getIdFromClassName(el.className));
+        setTargets(finalSelected as HTMLDivElement[]);
+        stateManager.updateState(
+          { activeIds: ids },
+          { updateHistory: false, kind: "layer:selection" }
         );
       })
       .on("dragStart", (e) => {

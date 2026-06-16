@@ -36,17 +36,28 @@ export function useKeyboardShortcuts() {
         dispatch(LAYER_DELETE);
       }
 
-      // // split
-      // if (mod && e.code === "KeyB") {
-      //   e.preventDefault();
-      //   if (!activeIds.length) return;
-      //   const time = getCurrentTime();
-      //   activeIds.forEach((id) => {
-      //     dispatch(LAYER_SELECT, { payload: { trackItemIds: [id] } });
-      //     dispatch(ACTIVE_SPLIT, { payload: {}, options: { time } });
-      //   });
-      //   dispatch(LAYER_SELECT, { payload: { trackItemIds: activeIds } });
-      // }
+      // split
+      if (mod && e.code === "KeyB") {
+        e.preventDefault();
+        if (!activeIds.length) return;
+        const time = getCurrentTime();
+        activeIds.forEach((id) => {
+          dispatch(LAYER_SELECT, { payload: { trackItemIds: [id] } });
+          dispatch(ACTIVE_SPLIT, { payload: {}, options: { time } });
+        });
+        dispatch(LAYER_SELECT, { payload: { trackItemIds: activeIds } });
+      }
+
+      // select all
+      if (mod && e.code === "KeyA") {
+        e.preventDefault();
+        const { trackItemsMap } = useStore.getState();
+        const allIds = Object.keys(trackItemsMap).filter(
+          (id) => !trackItemsMap[id]?.details?.locked
+        );
+        if (!allIds.length) return;
+        dispatch(LAYER_SELECT, { payload: { trackItemIds: allIds } });
+      }
     };
 
     window.addEventListener("keydown", handler);
