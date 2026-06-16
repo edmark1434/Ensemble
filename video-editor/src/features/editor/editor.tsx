@@ -39,6 +39,7 @@ import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
 import useUpdateAnsestors from "@/features/editor/hooks/use-update-ansestors";
 import {PLAYER_PAUSE, PLAYER_PLAY} from "@/features/editor/constants/events";
 import {cn} from "@/lib/utils";
+import {useKeyboardShortcuts} from './hooks/use-keyboard-shortcuts'
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -360,6 +361,8 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
   useEffect(() => {
     setLoaded(true);
   }, []);
+
+  // useKeyboardShortcuts();
 
   return (
     <div className="flex h-screen w-screen flex-col bg-background">
