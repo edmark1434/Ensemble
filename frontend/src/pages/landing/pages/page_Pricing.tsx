@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, Crown } from "lucide-react";
+import { ArrowLeft, Check, Crown, X } from "lucide-react";
 
 const PLANS = [
   {
@@ -71,6 +71,17 @@ const PLANS = [
 
 const PagePricing: React.FC = () => {
   const navigate = useNavigate();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+
+  const handlePlanClick = (tierName: string) => {
+    if (tierName === "Default") {
+      navigate("/signup"); // Or change to dashboard if that's preferred for free tier
+    } else {
+      setSelectedPlan(tierName);
+      setIsModalOpen(true);
+    }
+  };
 
   return (
     <div style={{ background: "#080a12", minHeight: "100vh", color: "#fff", padding: "80px 24px", position: "relative", overflowX: "hidden" }}>
@@ -109,6 +120,16 @@ const PagePricing: React.FC = () => {
         }
         .pricing-btn:hover {
           transform: scale(1.02);
+        }
+        .modal-action-btn {
+          padding: 12px 24px;
+          border-radius: 10px;
+          font-weight: 600;
+          font-size: 14px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          text-align: center;
+          flex: 1;
         }
         @media (max-width: 1024px) {
           .pricing-grid { grid-template-columns: 1fr !important; max-width: 450px !important; margin: 0 auto; }
@@ -212,6 +233,7 @@ const PagePricing: React.FC = () => {
               {/* Action Button Trigger */}
               <button
                 className="pricing-btn"
+                onClick={() => handlePlanClick(tier.name)}
                 style={{
                   background: tier.isPrimary ? "#ffffff" : "transparent",
                   color: tier.isPrimary ? "#080a12" : "#ffffff",
@@ -256,8 +278,85 @@ const PagePricing: React.FC = () => {
             </div>
           ))}
         </div>
-
       </div>
+
+      {/* Authentication Gateway Modal */}
+      {isModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(4, 5, 9, 0.8)",
+            backdropFilter: "blur(12px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100,
+            padding: 20
+          }}
+          onClick={() => setIsModalOpen(false)}
+        >
+          <div
+            style={{
+              background: "#0d0f1a",
+              border: "1px solid #1e2130",
+              borderRadius: "20px",
+              padding: "32px",
+              maxWidth: "400px",
+              width: "100%",
+              position: "relative",
+              boxShadow: "0 40px 80px -15px rgba(0,0,0,0.9)"
+            }}
+            onClick={(e) => e.stopPropagation()} // Prevents closing when clicking inside modal
+          >
+            {/* Close Button */}
+            <button
+              onClick={() => setIsModalOpen(false)}
+              style={{ position: "absolute", top: 20, right: 20, background: "none", border: "none", color: "#525c73", cursor: "pointer", transition: "color 0.2s" }}
+              onMouseEnter={(e) => e.currentTarget.style.color = "#fff"}
+              onMouseLeave={(e) => e.currentTarget.style.color = "#525c73"}
+            >
+              <X size={20} />
+            </button>
+
+            {/* Modal Title */}
+            <div style={{ textAlign: "center", marginBottom: 24, marginTop: 8 }}>
+              <div style={{ display: "inline-flex", padding: 12, borderRadius: "50%", background: "rgba(59, 130, 246, 0.05)", border: "1px solid rgba(59, 130, 246, 0.15)", marginBottom: 16 }}>
+                <Crown size={28} color={selectedPlan === "BUSINESS" ? "#2dd4bf" : "#eab308"} />
+              </div>
+              <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Account Required</h3>
+              <p style={{ color: "#7a8499", fontSize: 14, lineHeight: 1.4 }}>
+                To subscribe to the <span style={{ color: selectedPlan === "BUSINESS" ? "#2dd4bf" : "#eab308", fontWeight: 600 }}>{selectedPlan}</span> plan, please sign in or create a new account.
+              </p>
+            </div>
+
+            {/* Modal Action Buttons */}
+            <div style={{ display: "flex", gap: 12 }}>
+              <button
+                className="modal-action-btn"
+                onClick={() => navigate("/login")}
+                style={{ background: "transparent", border: "1px solid #1e2130", color: "#fff" }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.02)"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+              >
+                Log In
+              </button>
+              <button
+                className="modal-action-btn"
+                onClick={() => navigate("/signup")}
+                style={{ background: "#fff", border: "none", color: "#080a12" }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "#dde3ed"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "#fff"}
+              >
+                Sign Up Free
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

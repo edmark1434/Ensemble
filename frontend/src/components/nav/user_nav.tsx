@@ -67,7 +67,6 @@ const UserNav: React.FC<UserNavProps> = () => {
     const [isJobsOpen, setIsJobsOpen] = useState(true);
     const [isGigsOpen, setIsGigsOpen] = useState(true);
 
-    // Using simple constant for dev as per your previous setup
     const primaryNavState = primaryNavInitial;
     const jobsState = jobsItemsInitial;
     const gigsState = gigsItemsInitial;
@@ -124,7 +123,7 @@ const UserNav: React.FC<UserNavProps> = () => {
              </button>
 
              {/* Navigation - Scrollable */}
-             <nav className="flex-1 overflow-y-auto px-3 py-5 scrollbar-thin">
+             <nav className="flex-1 overflow-y-visible px-3 py-5 scrollbar-thin">
                 {/* 1. Main Menu */}
                 <div>
                    {!isCollapsed && (
@@ -135,12 +134,26 @@ const UserNav: React.FC<UserNavProps> = () => {
                    <ul className="space-y-1">
                       {primaryNavState.map(({ label, icon: Icon, to }) => (
                          <li key={label}>
-                            <NavLink to={to} className={linkClassName} title={isCollapsed ? label : undefined}>
-                               <Icon className="h-4 w-4 shrink-0" />
-                               {!isCollapsed && (
+                            {!isCollapsed ? (
+                               <NavLink to={to} className={linkClassName}>
+                                  <Icon className="h-4 w-4 shrink-0" />
                                   <span className="text-sm font-medium">{label}</span>
-                               )}
-                            </NavLink>
+                               </NavLink>
+                            ) : (
+                               /* Collapsed Floating Display for Primary Items (No Children) */
+                               <div className="group relative flex flex-col items-center">
+                                  <NavLink to={to} className={linkClassName}>
+                                     <Icon className="h-4 w-4 shrink-0" />
+                                  </NavLink>
+
+                                  {/* Floating Title Display */}
+                                  <div className="absolute left-full top-0 pl-2 hidden group-hover:block z-50 pointer-events-none">
+                                     <div className="rounded-lg border border-white/10 bg-[#0d0f1a] px-3 py-2 shadow-2xl animate-fade-in whitespace-nowrap">
+                                        <span className="text-xs font-medium text-zinc-200">{label}</span>
+                                     </div>
+                                  </div>
+                               </div>
+                            )}
                          </li>
                       ))}
                    </ul>
@@ -150,7 +163,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                 {isCollapsed && <div className="my-4 border-t border-white/10 mx-2" />}
 
                 {/* 2. Marketplace Section */}
-                <div className={isCollapsed ? "mt-0" : "mt-6"}>
+                <div className={isCollapsed ? "mt-0 space-y-3" : "mt-6"}>
                    {!isCollapsed && (
                       <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
                          Marketplace
@@ -166,7 +179,6 @@ const UserNav: React.FC<UserNavProps> = () => {
                             <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-300 ${isJobsOpen ? "rotate-180" : ""}`} />
                          </button>
 
-                         {/* Animated Wrapper */}
                          <div className={`grid transition-all duration-300 ease-in-out ${isJobsOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
                             <ul className="ml-6 overflow-hidden space-y-1 border-l border-white/10 pl-2">
                                {jobsState.map(({ label, icon: Icon, to }) => (
@@ -181,10 +193,27 @@ const UserNav: React.FC<UserNavProps> = () => {
                          </div>
                       </div>
                    ) : (
-                      <div className="mb-1 flex flex-col items-center">
-                         <NavLink to="/jobs" className={linkClassName} title="Jobs">
+                      /* Collapsed Menu Flyout Item for Jobs (With Children) */
+                      <div className="group relative flex flex-col items-center">
+                         <div className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors group-hover:bg-white/5 group-hover:text-white cursor-pointer">
                             <BriefcaseBusiness className="h-4 w-4" />
-                         </NavLink>
+                         </div>
+
+                         <div className="absolute left-full top-0 pl-2 hidden w-52 group-hover:block z-50">
+                            <div className="rounded-xl border border-white/10 bg-[#0d0f1a] p-1.5 shadow-2xl animate-fade-in">
+                               <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 border-b border-white/5 mb-1">Jobs</p>
+                               <ul className="space-y-0.5">
+                                  {jobsState.map(({ label, icon: Icon, to }) => (
+                                     <li key={label}>
+                                        <NavLink to={to} className={({ isActive }) => `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-blue-500/10 text-blue-400" : "text-zinc-400 hover:text-white hover:bg-white/5"}`}>
+                                           <Icon className="h-3.5 w-3.5 shrink-0" />
+                                           <span>{label}</span>
+                                        </NavLink>
+                                     </li>
+                                  ))}
+                               </ul>
+                            </div>
+                         </div>
                       </div>
                    )}
 
@@ -197,7 +226,6 @@ const UserNav: React.FC<UserNavProps> = () => {
                             <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-300 ${isGigsOpen ? "rotate-180" : ""}`} />
                          </button>
 
-                         {/* Animated Wrapper */}
                          <div className={`grid transition-all duration-300 ease-in-out ${isGigsOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
                             <ul className="ml-6 overflow-hidden space-y-1 border-l border-white/10 pl-2">
                                {gigsState.map(({ label, icon: Icon, to }) => (
@@ -212,10 +240,27 @@ const UserNav: React.FC<UserNavProps> = () => {
                          </div>
                       </div>
                    ) : (
-                      <div className="mb-2 flex flex-col items-center">
-                         <NavLink to="/gigs" className={linkClassName} title="Gigs">
+                      /* Collapsed Menu Flyout Item for Gigs (With Children) */
+                      <div className="group relative flex flex-col items-center">
+                         <div className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors group-hover:bg-white/5 group-hover:text-white cursor-pointer">
                             <MicVocal className="h-4 w-4" />
-                         </NavLink>
+                         </div>
+
+                         <div className="absolute left-full top-0 pl-2 hidden w-52 group-hover:block z-50">
+                            <div className="rounded-xl border border-white/10 bg-[#0d0f1a] p-1.5 shadow-2xl animate-fade-in">
+                               <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 border-b border-white/5 mb-1">Gigs</p>
+                               <ul className="space-y-0.5">
+                                  {gigsState.map(({ label, icon: Icon, to }) => (
+                                     <li key={label}>
+                                        <NavLink to={to} className={({ isActive }) => `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-blue-500/10 text-blue-400" : "text-zinc-400 hover:text-white hover:bg-white/5"}`}>
+                                           <Icon className="h-3.5 w-3.5 shrink-0" />
+                                           <span>{label}</span>
+                                        </NavLink>
+                                     </li>
+                                  ))}
+                               </ul>
+                            </div>
+                         </div>
                       </div>
                    )}
                 </div>
@@ -224,23 +269,35 @@ const UserNav: React.FC<UserNavProps> = () => {
                 {isCollapsed && <div className="my-4 border-t border-white/10 mx-2" />}
 
                 {/* 3. Activity & Records Section */}
-                <div className={isCollapsed ? "mt-0" : "mt-6"}>
+                <div className={isCollapsed ? "mt-0 space-y-1" : "mt-6"}>
                    {!isCollapsed && (
                       <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
                          Activity & Records
                       </p>
                    )}
-                   <ul className={`space-y-1 ${isCollapsed ? "flex flex-col items-center" : ""}`}>
+                   <ul className="space-y-1">
                       {activityState.map(({ label, icon: Icon, to }) => (
                          <li key={label} className="w-full">
-                            <NavLink
-                                to={to}
-                                className={linkClassName}
-                                title={isCollapsed ? label : undefined}
-                            >
-                               <Icon className="h-4 w-4 shrink-0" />
-                               {!isCollapsed && <span className="text-sm font-medium">{label}</span>}
-                            </NavLink>
+                            {!isCollapsed ? (
+                               <NavLink to={to} className={linkClassName}>
+                                  <Icon className="h-4 w-4 shrink-0" />
+                                  <span className="text-sm font-medium">{label}</span>
+                               </NavLink>
+                            ) : (
+                               /* Collapsed Floating Display for Activity Items (No Children) */
+                               <div className="group relative flex flex-col items-center">
+                                  <NavLink to={to} className={linkClassName}>
+                                     <Icon className="h-4 w-4 shrink-0" />
+                                  </NavLink>
+
+                                  {/* Floating Title Display */}
+                                  <div className="absolute left-full top-0 pl-2 hidden group-hover:block z-50 pointer-events-none">
+                                     <div className="rounded-lg border border-white/10 bg-[#0d0f1a] px-3 py-2 shadow-2xl animate-fade-in whitespace-nowrap">
+                                        <span className="text-xs font-medium text-zinc-200">{label}</span>
+                                     </div>
+                                  </div>
+                               </div>
+                            )}
                          </li>
                       ))}
                    </ul>
@@ -254,7 +311,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-400 transition hover:bg-white/10 hover:text-white ${
                       isCollapsed ? "justify-center" : ""
                    }`}
-                   title={isCollapsed ? "Expand" : "Collapse"}
+                   title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
                 >
                    {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <><ChevronLeft className="h-4 w-4" /><span className="font-medium">Collapse</span></>}
                 </button>
@@ -263,8 +320,16 @@ const UserNav: React.FC<UserNavProps> = () => {
 
           <style>{`
              .scrollbar-thin::-webkit-scrollbar { width: 4px; }
-             .scrollbar-thin::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
+             .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
              .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
+             
+             @keyframes fadeIn {
+                from { opacity: 0; transform: translateX(-4px); }
+                to { opacity: 1; transform: translateX(0); }
+             }
+             .animate-fade-in {
+                animation: fadeIn 0.15s ease-out forwards;
+             }
           `}</style>
        </>
     );

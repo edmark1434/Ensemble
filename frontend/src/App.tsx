@@ -28,6 +28,8 @@ import Forums from './pages/user/4_forums/Forums.tsx'
 import SelectedGroup from "@/pages/user/4_forums/SelectedGroup.tsx";
 import ExpandDiscussion from "@/pages/user/4_forums/ExpandDiscussion.tsx";
 
+import Inbox from "@/pages/user/10_inbox/Main.tsx";
+
 import SectionPlaceholder from './pages/user/0_config/SectionPlaceholder.tsx'
 
 import JobPostingMain from "@/pages/user/6_jobs/Job_Posting/main.tsx";
@@ -117,6 +119,8 @@ function App() {
             <Route path='group/:id' element={<SelectedGroup />} />
             <Route path='discussion/:postId' element={<ExpandDiscussion />} />
           </Route>
+
+          <Route path='/inbox' element={<Inbox />} />
 
           {/* Teams Routes - Nested structure */}
           <Route path='/teams'>
