@@ -116,6 +116,51 @@ async function checkAccountId(accountId) {
     }
 }
 
+async function getProfileRepositories(accountId) {
+    try {
+        const queryText = `
+            SELECT 
+                -- Cast the columns to ::TEXT so NULLIF can evaluate them without crashing on ENUMs
+                CONCAT_WS(' ', 
+                    NULLIF(U.FIRST_NAME::TEXT, ''), 
+                    NULLIF(U.MIDDLE_NAME::TEXT, ''), 
+                    NULLIF(U.LAST_NAME::TEXT, ''), 
+                    NULLIF(U.SUFFIX::TEXT, '')
+                ) AS NAME, 
+                U.EMAIL_ADDRESS, 
+                A.TAGLINE, 
+                A.DESCRIPTION AS BIO, 
+                A.CREATED_AT, 
+                A.MERIT_SCORE, 
+                A.AVATAR_FILE_ID,
+                -- Do the same for location properties just in case any of them are ENUMs or custom domains
+                CONCAT_WS(', ', 
+                    NULLIF(ADDR.ADDRESS_LINE1::TEXT, ''), 
+                    NULLIF(ADDR.CITY::TEXT, ''), 
+                    NULLIF(ADDR.STATE_PROVINCE::TEXT, ''), 
+                    NULLIF(U.COUNTRY::TEXT, ''), 
+                    NULLIF(ADDR.POSTAL_CODE::TEXT, '')
+                ) AS LOCATION, 
+                ADDR.ADDRESS_LINE2,
+                V.STATUS AS VERIFICATION_STATUS
+            FROM ACCOUNTS A
+            LEFT JOIN USERS U ON A.ACCOUNT_ID = U.ACCOUNT_ID
+            LEFT JOIN ACCOUNT_DETAILS AD ON A.ACCOUNT_ID = AD.ACCOUNT_ID
+            LEFT JOIN ADDRESSES ADDR ON ADDR.ADDRESS_ID = AD.ADDRESS_ID
+            LEFT JOIN VERIFICATIONS V ON V.ACCOUNT_ID = A.ACCOUNT_ID
+            WHERE A.ACCOUNT_ID = $1
+            LIMIT 1;
+        `;
+        
+        const result = await pool.query(queryText, [accountId]);
+        return result.rows[0] || null; 
+    
+    } catch (err) {
+        console.error(`Error fetching profile for account ${accountId}:`, err.message);
+        throw err;
+    }
+}
+
 module.exports = {
     getAllAccounts,
     getAccountById,
@@ -123,4 +168,5 @@ module.exports = {
     getAccountByHandle,
     getAccountWalletRepositories,
     checkAccountId,
+    getProfileRepositories
 };

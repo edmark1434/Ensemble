@@ -561,7 +561,7 @@ const Forums = () => {
   
   // Get user from global state
   const user = useGlobalState((state) => state.user);
-  const currentUserId = user?.userId || 1; // Fallback to 1 if user not found
+  const currentUserId = user?.user_id || 1; // Fallback to 1 if user not found
   const currentUserAvatar = user?.avatar || DEFAULT_AVATAR;
 
   const [joinedGroups, setJoinedGroups] = useState<Group[]>([]);

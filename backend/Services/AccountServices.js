@@ -1,5 +1,5 @@
 const { getAllAccounts, createAccount, getAccountByHandle, getAccountWalletRepositories,
-    checkAccountId
+    checkAccountId, getProfileRepositories
  } = require("../Repositories/AccountRepositories");
 const redisClient = require('../lib/redis');
 
@@ -43,9 +43,6 @@ async function getAccountByHandleService(handle) {
 }
 
 async function getAccountWalletService(accountId, type) { 
-    if(!accountId){
-        throw new Error('Account ID is required to fetch wallet information');
-    }
     if (!checkAccountIdService(accountId)) {
         throw new Error('Invalid account ID');
     }
@@ -63,10 +60,26 @@ async function getAccountWalletService(accountId, type) {
 }
 
 async function checkAccountIdService(accountId) { 
+    if(!accountId){
+        throw new Error('Account ID is required to fetch wallet information');
+    }
     try {
         return isExist = await checkAccountId(accountId);
     } catch (err) {
         console.error('Error checking account ID:', err);
+        throw err;
+    }
+}
+
+async function getProfileServices(accountId) {
+    if (!checkAccountIdService(accountId)) {
+        throw new Error('Invalid account ID');
+    }
+    try {
+        const profile = await getProfileRepositories(accountId);
+        return profile;
+    } catch (err) {
+        console.error('Error fetching profile:', err);
         throw err;
     }
 }
@@ -76,4 +89,5 @@ module.exports = {
     createNewAccount,
     getAccountByHandleService,
     getAccountWalletService,
+    getProfileServices,
 };

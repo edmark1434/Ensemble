@@ -1,10 +1,10 @@
-const { client } = require('../lib/mongodb');
+const { getDB } = require('../lib/mongodb');
 const { ObjectId } = require('mongodb');
-const db = client.db('ensemble');
+const db = getDB();
 const forumDiscussionsCollection = db.collection('forum_discussions');
 async function createForumDiscussionRepositories(discussionPayload = {}) {
     try {
-        const result = await forumDiscussionsCollection.insertOne(discussionPayload);
+        const result = await getForumDiscussionsCollection().insertOne(discussionPayload);
         return result.insertedId;
     } catch (err) {
         console.error('Error creating forum discussion:', err);
@@ -32,14 +32,14 @@ async function getForumDiscussionById(discussionId) {
 
 async function getForumDiscussionsByUserId(userId) {
     try {
-        return await forumDiscussionsCollection.find({ user_id: userId }).toArray();
+        return await getForumDiscussionsCollection().find({ user_id: userId }).toArray();
     } catch (err) {
         console.error('Error fetching forum discussions by user ID:', err);
         throw err;
     }
 }
 
-async function updateForumDiscussion(discussionId, updateFields = {}) { 
+async function updateForumDiscussion(discussionId, updateFields = {}) {
     try {
         const result = await forumDiscussionsCollection.updateOne(
             { _id: new ObjectId(discussionId) },
@@ -59,7 +59,7 @@ async function updateForumDiscussionComments({ discussionId, commentId, updateFi
             updateFields
         );
         return result.modifiedCount > 0;
-    } catch (err) { 
+    } catch (err) {
         console.error('Error updating forum discussion comments:', err);
         throw err;
     }

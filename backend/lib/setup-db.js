@@ -33,12 +33,12 @@ async function setup() {
     await admin.end();
   }
 
-  const pool = require('./database');
+  const { pool } = require('./database');
   const schemaPath = path.join(__dirname, '..', 'sql', 'schema.sql');
   const schemaSql = fs.readFileSync(schemaPath, 'utf8');
 
   await pool.query(schemaSql);
-  console.log('✅ Applied schema (accounts, users, staff)');
+  console.log('✅ Applied schema (accounts, users, staff, tickets, disputes, settings)');
   await pool.end();
 }
 

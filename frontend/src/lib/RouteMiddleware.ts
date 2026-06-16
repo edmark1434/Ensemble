@@ -26,8 +26,10 @@ export default function RouteMiddleware() {
     const location = useLocation();
     const [resolvedUser, setResolvedUser] = useState(user);
     const [isCheckingSession, setIsCheckingSession] = useState(!user);
-    const isPublicRoute = ['/', '/login', '/signup', '/admin', '/staff'].includes(location.pathname);
-
+    const basePublicRoutes = ['/', '/login', '/signup', '/admin', '/staff'];
+    const isPublicRoute =
+        basePublicRoutes.includes(location.pathname) ||
+        location.pathname.startsWith('/landing/');
     useEffect(() => {
         let cancelled = false;
 

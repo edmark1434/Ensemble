@@ -26,7 +26,7 @@ class WaveAudioBars extends Resizable {
     const borderColor = this.isSelected
       ? "rgba(255, 255, 255,1.0)"
       : "rgba(255, 255, 255,0.1)";
-    const borderWidth = 2;
+    const borderWidth = 1;
     const innerRadius = 4;
 
     ctx.save();
@@ -34,7 +34,11 @@ class WaveAudioBars extends Resizable {
 
     // Create a path for the outer rectangle (no radius)
     ctx.beginPath();
-    ctx.rect(-this.width / 2, -this.height / 2, this.width, this.height);
+    if (this.isSelected) {
+      ctx.rect(-this.width / 2, -this.height / 2, this.width, this.height);
+    } else {
+      ctx.roundRect(-this.width / 2, -this.height / 2, this.width, this.height, innerRadius);
+    }
 
     // Create a path for the inner rectangle with rounded corners (the hole)
     ctx.roundRect(

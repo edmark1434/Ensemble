@@ -1,0 +1,681 @@
+import React, { useState, useRef, useEffect } from "react";
+import {
+  MessageSquare,
+  Search,
+  Phone,
+  Video,
+  Image as ImageIcon,
+  Send,
+  MoreVertical,
+  ChevronLeft,
+  Inbox as InboxIcon,
+  UserPlus,
+  X,
+  User,
+  Trash2,
+  AlertTriangle,
+  Users
+} from "lucide-react";
+import UserHeader from "@/components/nav/user_header";
+
+interface Chat {
+  id: number;
+  name: string;
+  avatar: string;
+  lastMessage: string;
+  time: string;
+  unreadCount: number;
+  isOnline: boolean;
+  statusText?: string;
+  isGroup?: boolean;
+}
+
+interface Message {
+  id: number;
+  senderId: "me" | "them";
+  senderName?: string;
+  text?: string;
+  image?: string;
+  time: string;
+}
+
+const AVAILABLE_CONTACTS = [
+  { id: 1, name: "Robert Simion", avatar: "https://placehold.co/100x100/3b82f6/fff?text=RS" },
+  { id: 2, name: "Sarah Chen", avatar: "https://placehold.co/100x100/eab308/fff?text=SC" },
+  { id: 3, name: "Marcus Thompson", avatar: "https://placehold.co/100x100/2dd4bf/fff?text=MT" },
+  { id: 4, name: "David Kim", avatar: "https://placehold.co/100x100/a855f7/fff?text=DK" },
+  { id: 5, name: "Emma Watson", avatar: "https://placehold.co/100x100/ec4899/fff?text=EW" },
+];
+
+const MOCK_CHATS: Record<"primary" | "requests" | "drafts", Chat[]> = {
+  primary: [
+    { id: 1, name: "Robert Simion", avatar: "https://placehold.co/100x100/3b82f6/fff?text=RS", lastMessage: "Let's use the premium tools for this track.", time: "4m ago", unreadCount: 2, isOnline: true, statusText: "Active now" },
+    { id: 2, name: "Sarah Chen", avatar: "https://placehold.co/100x100/eab308/fff?text=SC", lastMessage: "The cinematic trailer cut looks amazing!", time: "2h ago", unreadCount: 0, isOnline: false, statusText: "Active 2h ago" },
+    { id: 3, name: "Marcus Thompson", avatar: "https://placehold.co/100x100/2dd4bf/fff?text=MT", lastMessage: "Sent you the raw 4K nature footage.", time: "1d ago", unreadCount: 0, isOnline: true, statusText: "Active now" },
+  ],
+  requests: [
+    { id: 4, name: "David Kim", avatar: "https://placehold.co/100x100/a855f7/fff?text=DK", lastMessage: "Hey, I want to collaborate on a new LUTs bundle.", time: "5h ago", unreadCount: 1, isOnline: false },
+    { id: 5, name: "Emma Watson", avatar: "https://placehold.co/100x100/ec4899/fff?text=EW", lastMessage: "Can you edit a quick sequence for me?", time: "3d ago", unreadCount: 3, isOnline: false },
+  ],
+  drafts: [
+    { id: 6, name: "Jessica Martinez", avatar: "https://placehold.co/100x100/f97316/fff?text=JM", lastMessage: "[Draft] Hey Jessica, regarding the motion graphics...", time: "Just now", unreadCount: 0, isOnline: true },
+  ]
+};
+
+const INITIAL_MESSAGES: Record<number, Message[]> = {
+  1: [
+    { id: 1, senderId: "them", text: "Hey! Did you check out the new sound effects pack?", time: "10:14 AM" },
+    { id: 2, senderId: "me", text: "Yeah, it sounds insanely crisp. Perfect for the industrial theme project.", time: "10:15 AM" },
+    { id: 3, senderId: "them", text: "Let's use the premium tools for this track.", time: "10:16 AM" },
+  ],
+  2: [
+    { id: 1, senderId: "me", text: "How's the rendering coming along?", time: "Yesterday" },
+    { id: 2, senderId: "them", text: "The cinematic trailer cut looks amazing!", time: "Yesterday" },
+  ],
+  3: [
+    { id: 1, senderId: "them", text: "Sent you the raw 4K nature footage.", time: "2 days ago" },
+  ]
+};
+
+const Inbox: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<"primary" | "requests" | "drafts">("primary");
+  const [selectedChatId, setSelectedChatId] = useState<number | null>(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [messageInput, setMessageInput] = useState("");
+  const [conversations, setConversations] = useState<Record<number, Message[]>>(INITIAL_MESSAGES);
+  const [chatsData, setChatsData] = useState<Record<"primary" | "requests" | "drafts", Chat[]>>(MOCK_CHATS);
+
+  const [attachedImage, setAttachedImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [isMobileChatOpen, setIsMobileChatOpen] = useState(true);
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+
+  const [groupNameInput, setGroupNameInput] = useState("");
+  const [selectedContacts, setSelectedContacts] = useState<number[]>([]);
+
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOptionsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const activeChats = chatsData[activeTab].filter(chat =>
+    chat.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const currentChat = [...chatsData.primary, ...chatsData.requests, ...chatsData.drafts].find(
+    c => c.id === selectedChatId
+  );
+
+  const currentMessages = selectedChatId ? conversations[selectedChatId] || [] : [];
+
+  const processFile = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      alert("Please upload valid graphics formats only.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setAttachedImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      processFile(e.target.files[0]);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          processFile(file);
+          e.preventDefault();
+          break;
+        }
+      }
+    }
+  };
+
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!messageInput.trim() && !attachedImage || !selectedChatId) return;
+
+    const now = new Date();
+    const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const newMessage: Message = {
+      id: Date.now(),
+      senderId: "me",
+      text: messageInput.trim() ? messageInput : undefined,
+      image: attachedImage || undefined,
+      time: timeString
+    };
+
+    setConversations(prev => ({
+      ...prev,
+      [selectedChatId]: [...(prev[selectedChatId] || []), newMessage]
+    }));
+
+    setChatsData(prev => {
+      const updated = { ...prev };
+      const tabs: ("primary" | "requests" | "drafts")[] = ["primary", "requests", "drafts"];
+
+      tabs.forEach(t => {
+        const index = updated[t].findIndex(c => c.id === selectedChatId);
+        if (index !== -1) {
+          updated[t][index] = {
+            ...updated[t][index],
+            lastMessage: attachedImage ? "📷 Photo Asset" : messageInput,
+            time: "Just now"
+          };
+        }
+      });
+      return updated;
+    });
+
+    setMessageInput("");
+    setAttachedImage(null);
+  };
+
+  const toggleContactSelection = (contactId: number) => {
+    setSelectedContacts(prev =>
+      prev.includes(contactId) ? prev.filter(id => id !== contactId) : [...prev, contactId]
+    );
+  };
+
+  const handleCreateGroupChat = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedContacts.length === 0) return;
+
+    const assignedName = groupNameInput.trim() || `Group Cut (${selectedContacts.length + 1} Members)`;
+    const newGroupId = Date.now();
+
+    const newGroupChat: Chat = {
+      id: newGroupId,
+      name: assignedName,
+      avatar: `https://placehold.co/100x100/3b82f6/fff?text=GC`,
+      lastMessage: "Group chat established.",
+      time: "Just now",
+      unreadCount: 0,
+      isOnline: true,
+      statusText: `${selectedContacts.length + 1} collaborators active`,
+      isGroup: true
+    };
+
+    setConversations(prev => ({
+      ...prev,
+      [newGroupId]: [{
+        id: Date.now(),
+        senderId: "them",
+        senderName: "System",
+        text: `Welcome to ${assignedName}. Kick off your video production talk.`,
+        time: "Just now"
+      }]
+    }));
+
+    setChatsData(prev => ({
+      ...prev,
+      primary: [newGroupChat, ...prev.primary]
+    }));
+
+    setActiveTab("primary");
+    setSelectedChatId(newGroupId);
+    setIsGroupModalOpen(false);
+    setGroupNameInput("");
+    setSelectedContacts([]);
+  };
+
+  const selectChat = (id: number) => {
+    setSelectedChatId(id);
+    setIsMobileChatOpen(true);
+    setIsOptionsOpen(false);
+    setAttachedImage(null);
+
+    setChatsData(prev => {
+      const updated = { ...prev };
+      const list = updated[activeTab];
+      const index = list.findIndex(c => c.id === id);
+      if (index !== -1) {
+        list[index] = { ...list[index], unreadCount: 0 };
+      }
+      return updated;
+    });
+  };
+
+  const handleViewProfile = () => {
+    setIsOptionsOpen(false);
+    alert(`Routing to target profile information: ${currentChat?.name}`);
+  };
+
+  const handleDeleteConversation = () => {
+    if (!selectedChatId) return;
+    setIsOptionsOpen(false);
+
+    if (confirm(`Are you sure you want to permanently erase your session history with ${currentChat?.name}?`)) {
+      setChatsData(prev => {
+        const updated = { ...prev };
+        updated[activeTab] = updated[activeTab].filter(c => c.id !== selectedChatId);
+        return updated;
+      });
+      setSelectedChatId(null);
+    }
+  };
+
+  const handleReportUser = () => {
+    setIsOptionsOpen(false);
+    alert(`Flagged content violation alert issued for user instance ID reference profile: ${currentChat?.name}`);
+  };
+
+  return (
+    <div className="min-h-screen bg-[#080a12] flex flex-col h-screen overflow-hidden">
+      <UserHeader pageTitle="Inbox" credits={1250} />
+
+      <div className="flex-1 flex max-w-7xl w-full mx-auto p-4 md:p-6 gap-4 h-[calc(100vh-80px)] overflow-hidden">
+
+        {/* SIDEBAR: Chat List Section */}
+        <div className={`w-full md:w-80 lg:w-96 border border-white/10 bg-white/5 rounded-2xl flex flex-col backdrop-blur-xl ${
+          isMobileChatOpen && selectedChatId ? "hidden md:flex" : "flex"
+        }`}>
+          <div className="p-4 border-b border-white/10 flex items-center justify-between">
+            <h2 className="text-sm font-bold text-zinc-300">Messages</h2>
+            <button
+              onClick={() => setIsGroupModalOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              <span>New Group</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 border-b border-white/10 p-2 gap-1 text-center text-xs font-semibold">
+            {(["primary", "requests", "drafts"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => { setActiveTab(tab); setSelectedChatId(null); }}
+                className={`py-2 rounded-lg capitalize transition-all duration-200 ${
+                  activeTab === tab 
+                    ? "bg-white/10 text-white border border-white/10" 
+                    : "text-zinc-400 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          <div className="p-3 border-b border-white/10 relative">
+            <Search className="absolute left-6 top-5.5 h-4 w-4 text-zinc-500" />
+            <input
+              type="text"
+              placeholder="Search chat thread..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-white/5 border border-white/5 text-sm rounded-xl pl-9 pr-4 py-2 text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500/40"
+            />
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+            {activeChats.length > 0 ? (
+              activeChats.map((chat) => (
+                <div
+                  key={chat.id}
+                  onClick={() => selectChat(chat.id)}
+                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition duration-200 ${
+                    selectedChatId === chat.id 
+                      ? "bg-white/10 border border-white/10" 
+                      : "border border-transparent hover:bg-white/5"
+                  }`}
+                >
+                  <div className="relative flex-shrink-0">
+                    <img src={chat.avatar} alt={chat.name} className="w-11 h-11 rounded-full object-cover" />
+                    {chat.isOnline && !chat.isGroup && (
+                      <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-[#080a12] rounded-full" />
+                    )}
+                    {chat.isGroup && (
+                      <span className="absolute -bottom-1 -right-1 p-0.5 bg-blue-500 rounded-md text-white border border-[#080a12]">
+                        <Users className="w-2.5 h-2.5" />
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-baseline mb-0.5">
+                      <h4 className="text-sm font-semibold text-white truncate">{chat.name}</h4>
+                      <span className="text-[10px] text-zinc-500 flex-shrink-0">{chat.time}</span>
+                    </div>
+                    <p className={`text-xs truncate ${chat.unreadCount > 0 ? "text-white font-medium" : "text-zinc-400"}`}>
+                      {chat.lastMessage}
+                    </p>
+                  </div>
+
+                  {chat.unreadCount > 0 && (
+                    <div className="bg-blue-500 text-white font-bold text-[10px] h-5 min-w-5 px-1.5 rounded-full flex items-center justify-center animate-pulse">
+                      {chat.unreadCount}
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-12 flex flex-col items-center justify-center text-zinc-500 gap-2">
+                <InboxIcon className="h-8 w-8 stroke-1 text-zinc-600" />
+                <p className="text-xs">No active threads here</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* MAIN PANEL: Conversation Area */}
+        <div className={`flex-1 border border-white/10 bg-gradient-to-b from-white/5 to-transparent rounded-2xl flex flex-col backdrop-blur-xl overflow-hidden relative ${
+          !isMobileChatOpen || !selectedChatId ? "hidden md:flex" : "flex"
+        }`}>
+          {currentChat ? (
+            <>
+              {/* Active Header Panel */}
+              <div className="p-4 border-b border-white/10 flex items-center justify-between bg-zinc-950/20 relative z-30 flex-shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <button
+                    onClick={() => setIsMobileChatOpen(false)}
+                    className="p-1 text-zinc-400 hover:text-white md:hidden mr-1 rounded-lg hover:bg-white/5"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <div className="relative flex-shrink-0">
+                    <img src={currentChat.avatar} alt={currentChat.name} className="w-10 h-10 rounded-full object-cover" />
+                    {currentChat.isOnline && !currentChat.isGroup && (
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#080a12] rounded-full" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-white truncate">{currentChat.name}</h3>
+                    <p className="text-[10px] text-zinc-400 truncate">{currentChat.statusText || "Offline"}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 text-zinc-400 relative" ref={dropdownRef}>
+                  <button className="p-2 hover:text-white rounded-xl hover:bg-white/5 transition" title="Voice Call (Disabled)">
+                    <Phone className="h-4 w-4" />
+                  </button>
+                  <button className="p-2 hover:text-white rounded-xl hover:bg-white/5 transition" title="Video Call (Disabled)">
+                    <Video className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => setIsOptionsOpen(!isOptionsOpen)}
+                    className={`p-2 rounded-xl hover:bg-white/5 transition ${isOptionsOpen ? "text-white bg-white/5" : "hover:text-white"}`}
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
+
+                  {isOptionsOpen && (
+                    <div className="absolute right-0 top-11 w-48 bg-[#0d0f1a] border border-white/10 rounded-xl shadow-2xl p-1.5 flex flex-col z-50 animate-slide-in">
+                      <button
+                        onClick={handleViewProfile}
+                        className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-zinc-200 hover:text-white rounded-lg hover:bg-white/5 text-left transition"
+                      >
+                        <User className="h-3.5 w-3.5 text-zinc-400" />
+                        View Profile
+                      </button>
+                      <button
+                        onClick={handleDeleteConversation}
+                        className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-400 hover:text-red-300 rounded-lg hover:bg-red-500/10 text-left transition"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete Conversation
+                      </button>
+                      <div className="h-px bg-white/5 my-1" />
+                      <button
+                        onClick={handleReportUser}
+                        className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-orange-400 hover:text-orange-300 rounded-lg hover:bg-orange-500/10 text-left transition"
+                      >
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        Report User
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Message Flow Dynamic Area */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar flex flex-col">
+                <div className="text-center my-6 flex flex-col items-center flex-shrink-0">
+                  <img src={currentChat.avatar} alt="" className="w-16 h-16 rounded-full border border-white/10 shadow-xl mb-2" />
+                  <h4 className="text-white font-bold text-base">{currentChat.name}</h4>
+                  <p className="text-xs text-zinc-500 max-w-xs mt-1">This is the absolute beginning of your message history with this contact.</p>
+                </div>
+
+                {currentMessages.map((msg) => {
+                  const isMe = msg.senderId === "me";
+                  return (
+                    <div key={msg.id} className={`flex flex-col max-w-[75%] ${isMe ? "self-end items-end" : "self-start items-start"} flex-shrink-0`}>
+                      {!isMe && msg.senderName && (
+                        <span className="text-[10px] font-semibold text-zinc-400 mb-1 px-1">{msg.senderName}</span>
+                      )}
+
+                      <div className={`p-2.5 rounded-2xl leading-relaxed break-words flex flex-col gap-2 ${
+                        isMe 
+                          ? "bg-blue-500 text-white rounded-tr-none" 
+                          : "bg-white/10 text-zinc-100 rounded-tl-none border border-white/5"
+                      }`}>
+                        {msg.image && (
+                          <img
+                            src={msg.image}
+                            alt="Chat attachment"
+                            className="max-w-full max-h-60 rounded-xl object-cover border border-white/10 shadow-md block"
+                          />
+                        )}
+                        {msg.text && <span className="text-sm px-0.5">{msg.text}</span>}
+                      </div>
+
+                      <span className="text-[9px] text-zinc-500 mt-1 px-1">{msg.time}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Message Composer Footer Form */}
+              <form onSubmit={handleSendMessage} className="p-4 border-t border-white/10 bg-[#080a12] z-20 flex flex-col gap-3 flex-shrink-0">
+
+                {/* Fixed Image Upload Preview Area */}
+                {attachedImage && (
+                  <div className="flex p-2 bg-white/5 border border-white/10 rounded-xl self-start animate-slide-in">
+                    <div className="relative w-20 h-20 bg-zinc-950 rounded-lg overflow-hidden border border-white/10 flex-shrink-0">
+                      <img
+                        src={attachedImage}
+                        alt="Upload Preview"
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setAttachedImage(null)}
+                        className="absolute top-1 right-1 p-1 rounded-full bg-red-500/90 text-white shadow-xl hover:bg-red-600 transition z-10"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Main Input Field Container */}
+                <div className="relative flex items-center bg-white/5 border border-white/5 rounded-xl p-1.5 focus-within:border-blue-500/40 transition">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-white/5 transition flex-shrink-0"
+                    title="Upload Graphic Asset"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                  </button>
+
+                  <input
+                    type="text"
+                    placeholder={`Message ${currentChat.name}... (Paste screenshot supported)`}
+                    value={messageInput}
+                    onChange={(e) => setMessageInput(e.target.value)}
+                    onPaste={handlePaste}
+                    className="w-full bg-transparent text-sm text-white px-2 focus:outline-none py-1.5 placeholder-zinc-500"
+                  />
+
+                  <button
+                    type="submit"
+                    disabled={!messageInput.trim() && !attachedImage}
+                    className={`p-2 rounded-lg flex-shrink-0 transition ${
+                      messageInput.trim() || attachedImage
+                        ? "bg-blue-500 text-white hover:bg-blue-600" 
+                        : "text-zinc-500 bg-white/5 cursor-not-allowed"
+                    }`}
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </form>
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 gap-3 p-6 text-center">
+              <div className="p-4 bg-white/5 rounded-full border border-white/5">
+                <MessageSquare className="h-8 w-8 text-zinc-400 stroke-1" />
+              </div>
+              <div>
+                <h3 className="text-white font-semibold text-sm">No Thread Selected</h3>
+                <p className="text-xs text-zinc-500 mt-1 max-w-xs mx-auto">Choose an existing conversation from your layout stack tabs to begin formatting live interactions.</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+      </div>
+
+      {/* CREATE GROUP MODAL OVERLAY */}
+      {isGroupModalOpen && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in"
+          onClick={() => setIsGroupModalOpen(false)}
+        >
+          <form
+            onSubmit={handleCreateGroupChat}
+            className="bg-[#0d0f1a] border border-white/10 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[85vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Users className="h-4 w-4 text-blue-400" />
+                Create Group Session
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsGroupModalOpen(false)}
+                className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4 flex-1 overflow-y-auto custom-scrollbar">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold tracking-wider text-zinc-400 uppercase">Group Project Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Capstone Squad / Media Hub Team"
+                  value={groupNameInput}
+                  onChange={(e) => setGroupNameInput(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 text-sm rounded-xl px-3 py-2.5 text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500/40"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold tracking-wider text-zinc-400 uppercase">
+                  Select Members ({selectedContacts.length} Selected)
+                </label>
+                <div className="space-y-1">
+                  {AVAILABLE_CONTACTS.map((contact) => {
+                    const isSelected = selectedContacts.includes(contact.id);
+                    return (
+                      <div
+                        key={contact.id}
+                        onClick={() => toggleContactSelection(contact.id)}
+                        className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer border transition ${
+                          isSelected 
+                            ? "bg-blue-500/10 border-blue-500/30 text-white" 
+                            : "bg-white/5 border-transparent text-zinc-300 hover:bg-white/10"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <img src={contact.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+                          <span className="text-xs font-semibold">{contact.name}</span>
+                        </div>
+                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-all ${
+                          isSelected ? "bg-blue-500 border-blue-500" : "border-zinc-600"
+                        }`}>
+                          {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-white/10 bg-zinc-950/40 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setIsGroupModalOpen(false)}
+                className="flex-1 py-2 rounded-xl text-xs font-semibold bg-transparent border border-white/10 text-zinc-300 hover:bg-white/5 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={selectedContacts.length === 0}
+                className={`flex-1 py-2 rounded-xl text-xs font-semibold transition ${
+                  selectedContacts.length > 0
+                    ? "bg-blue-500 text-white hover:bg-blue-600"
+                    : "bg-white/5 text-zinc-500 cursor-not-allowed"
+                }`}
+              >
+                Assemble Group
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 99px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+        
+        @keyframes slide-in {
+          from { opacity: 0; transform: translateY(-8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-slide-in { animation: slide-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-fade-in { animation: fade-in 0.2s ease-out forwards; }
+      `}</style>
+    </div>
+  );
+};
+
+export default Inbox;

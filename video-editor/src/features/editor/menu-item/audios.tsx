@@ -89,6 +89,10 @@ export const Audios = () => {
   }, []);
   const handleAddAudio = (payload: Partial<IAudio>) => {
     payload.id = generateId();
+    payload.metadata = {
+      ...payload.metadata,
+      name: payload.name,  // store name in metadata
+    };
     console.log(payload);
     dispatch(ADD_AUDIO, {
       payload,
@@ -112,6 +116,11 @@ export const Audios = () => {
     new Map(searchResults.map((item: IAudio) => [item.id, item])).values()
   );
 
+  const handleClearSearch = () => {
+    setSearchQuery("");
+    fetchMusic("");
+  };
+
   // Main view
   return (
     <div className="flex flex-1 flex-col max-w-full h-full">
@@ -120,7 +129,7 @@ export const Audios = () => {
           <Button
             size="sm"
             variant="ghost"
-            className="absolute left-1 top-1/2 h-6 w-6 -translate-y-1/2 p-0"
+            className="absolute left-2 top-1/2 h-6 w-6 -translate-y-1/2 p-0"
             onClick={() => fetchMusic(searchQuery)}
             disabled={isLoading}
           >
@@ -146,7 +155,7 @@ export const Audios = () => {
           <Button
             size="sm"
             variant="outline"
-            // onClick={handleClearSearch}
+            onClick={handleClearSearch}
             disabled={isLoading}
           >
             Clear

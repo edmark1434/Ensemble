@@ -1,152 +1,40 @@
 import { ITimelineScaleState } from "@designcombo/types";
 
 export const TIMELINE_ZOOM_LEVELS: ITimelineScaleState[] = [
-  {
-    // 1x distance (minute 0 to minute 5, 5 segments).
-    index: 0,
-    unit: 18000,
-    zoom: 1 / 18000,
-    segments: 5
-  },
-  {
-    // 1x distance (minute 0 to minute 3, 3 segments).
-    index: 1,
-    unit: 10800,
-    zoom: 1 / 10800,
-    segments: 5
-  },
-  {
-    // 1x distance (minute 0 to minute 2, 2 segments).
-    index: 2,
-    unit: 7200,
-    zoom: 1 / 7200,
-    segments: 5
-  },
-  {
-    // 1x distance (minute 0 to minute 1, 1 segment).
-    index: 3,
-    unit: 3600,
-    zoom: 1 / 3600,
-    segments: 5
-  },
-  {
-    // 1x distance (second 0 to second 30, 2 segments).
-    index: 4,
-    unit: 1800,
-    zoom: 1 / 1800,
-    segments: 5
-  },
-  {
-    // 1x distance (second 0 to second 15, 3 segments).
-    index: 5,
-    unit: 900,
-    zoom: 1 / 900,
-    segments: 5
-  },
-  {
-    // 1x distance (second 0 to second 10, 2 segments).
-    index: 6,
-    unit: 600,
-    zoom: 1 / 600,
-    segments: 5
-  },
-  {
-    // 1x distance (second 0 to second 5, 5 segments).
-    index: 7,
-    unit: 300,
-    zoom: 1 / 300,
-    segments: 5
-  },
-  {
-    // 1x distance (second 0 to second 3, 3 segments).
-    index: 8,
-    unit: 180,
-    zoom: 1 / 180,
-    segments: 3
-  },
-  {
-    // 1x distance (second 0 to second 2, 2 segments).
-    index: 9,
-    unit: 120,
-    zoom: 1 / 120,
-    segments: 4
-  },
-  {
-    // 1x distance (second 0 to second 1, 1 segment).
-    index: 10,
-    unit: 60,
-    zoom: 1 / 60,
-    segments: 4
-  },
-
-  {
-    // 1x distance (second 0 to second 1, 1 segment).
-    index: 11,
-    unit: 60,
-    zoom: 1 / 60,
-    segments: 4
-  },
-  {
-    // 1x distance (frame 0 to frame 30, 2 segments).
-    index: 12,
-    unit: 60,
-    zoom: 1 / 40,
-    segments: 6
-  },
-  // {
-  //   // 1x distance (frame 0 to frame 15, 3 segments).
-  //   index: 13,
-  //   unit: 15,
-  //   zoom: 1 / 15,
-  //   segments: 3,
-  // },
-  // {
-  //   // 1x distance (frame 0 to frame 10, 2 segments).
-  //   index: 14,
-  //   unit: 10,
-  //   zoom: 1 / 10,
-  //   segments: 5,
-  // },
-  // {
-  //   // 1x distance (frame 0 to frame 5, 5 segments).
-  //   index: 15,
-  //   unit: 5,
-  //   zoom: 1 / 5,
-  //   segments: 5,
-  // },
-  // {
-  //   // 1x distance (frame 0 to frame 3, 3 segments).
-  //   index: 16,
-  //   unit: 3,
-  //   zoom: 1 / 3,
-  //   segments: 3,
-  // },
-  // {
-  //   // 1x distance (frame 0 to frame 2, 2 segments).
-  //   index: 17,
-  //   unit: 2,
-  //   zoom: 1 / 2,
-  //   segments: 5,
-  // },
-  // {
-  //   // 1x distance (frame 0 to frame 1, 1 segment).
-  //   index: 18,
-  //   unit: 1,
-  //   zoom: 1,
-  //   segments: 5,
-  // },
-  // {
-  //   // 2x distance (frame 0 to frame 1, 1 segment).
-  //   index: 19,
-  //   unit: 1,
-  //   zoom: 2,
-  //   segments: 5,
-  // },
-  // {
-  //   // 4x distance (frame 0 to frame 1, 1 segment).
-  //   index: 20,
-  //   unit: 1,
-  //   zoom: 4,
-  //   segments: 10,
-  // },
+  // { index: 0, unit: 108000, zoom: 1 / 144000, segments: 3 },
+  { index: 1, unit: 108000, zoom: 1 / 108000, segments: 3 },
+  { index: 2, unit: 108000, zoom: 1 / 81000, segments: 5 },
+  { index: 3, unit: 54000, zoom: 1 / 72000, segments: 3 },
+  { index: 4, unit: 54000, zoom: 1 / 54000, segments: 3 },
+  { index: 5, unit: 54000, zoom: 1 / 45000, segments: 5 },
+  { index: 6, unit: 36000, zoom: 1 / 36000, segments: 4 },
+  { index: 7, unit: 36000, zoom: 1 / 27000, segments: 5 },
+  { index: 8, unit: 18000, zoom: 1 / 21600, segments: 3 },
+  { index: 9, unit: 18000, zoom: 1 / 18000, segments: 4 },
+  { index: 10, unit: 18000, zoom: 1 / 12600, segments: 5 },
+  { index: 11, unit: 7200, zoom: 1 / 9000, segments: 3 },
+  { index: 12, unit: 7200, zoom: 1 / 7200, segments: 4 },
+  { index: 13, unit: 7200, zoom: 1 / 5400, segments: 5 },
+  { index: 14, unit: 3600, zoom: 1 / 4500, segments: 3 },
+  { index: 15, unit: 3600, zoom: 1 / 3600, segments: 4 },
+  { index: 16, unit: 3600, zoom: 1 / 3000, segments: 5 },
+  { index: 17, unit: 3600, zoom: 1 / 2400, segments: 6 },
+  { index: 18, unit: 1800, zoom: 1 / 2400, segments: 3 },
+  { index: 19, unit: 1800, zoom: 1 / 1800, segments: 3 },
+  { index: 20, unit: 1800, zoom: 1 / 1350, segments: 5 },
+  { index: 21, unit: 900, zoom: 1 / 1200, segments: 3 },
+  { index: 22, unit: 900, zoom: 1 / 900, segments: 3 },
+  { index: 23, unit: 900, zoom: 1 / 750, segments: 5 },
+  { index: 24, unit: 600, zoom: 1 / 600, segments: 4 },
+  { index: 25, unit: 600, zoom: 1 / 450, segments: 5 },
+  { index: 26, unit: 300, zoom: 1 / 360, segments: 3 },
+  { index: 27, unit: 300, zoom: 1 / 300, segments: 4 },
+  { index: 28, unit: 300, zoom: 1 / 210, segments: 5 },
+  { index: 29, unit: 120, zoom: 1 / 150, segments: 3 },
+  { index: 30, unit: 120, zoom: 1 / 120, segments: 4 },
+  { index: 31, unit: 120, zoom: 1 / 90, segments: 5 },
+  { index: 32, unit: 60, zoom: 1 / 75, segments: 3 },
+  { index: 33, unit: 60, zoom: 1 / 60, segments: 4 },
+  { index: 34, unit: 60, zoom: 1 / 50, segments: 5 },
+  { index: 35, unit: 60, zoom: 1 / 40, segments: 6 },
 ];

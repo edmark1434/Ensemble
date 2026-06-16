@@ -824,7 +824,7 @@ const SelectedGroup = () => {
   const [commentReplyUploading, setCommentReplyUploading] = useState(false);
   
   const user = useGlobalState((state) => state.user);
-  const currentUserId = user?.userId || 1;
+  const currentUserId = user?.user_id || 1;
   const currentUserAvatar = user?.avatar || "https://i.pravatar.cc/150?u=default";
   
   const getMemberDetails = (userId: number) => {

@@ -19,7 +19,7 @@ const T = {
   borderFoc: "#4a6fa5",
   accent:    "#4a6fa5",
   text:      "#ffffff",
-  muted:     "#888",
+  muted:       "#888",
   dim:       "#555",
   error:     "#e05252",
   fontDisplay: "'Plus Jakarta Sans', sans-serif",
@@ -42,38 +42,33 @@ function Logo({ size = 28 }) {
   );
 }
 
-// ─── Slowly Moving Animated Background (right panel) ──────────────────────────
-function AnimatedBg() {
+// ─── Cinematic Video Background (right panel) ─────────────────────────────────
+function VideoBg() {
   return (
     <div className="absolute inset-0 overflow-hidden">
-      {/* Slowly Moving Color Blurs */}
-      <div className="absolute top-20 left-10 w-96 h-96 rounded-full bg-cyan-500/15 blur-3xl animate-float-gentle" />
-      <div className="absolute top-1/3 right-10 w-80 h-80 rounded-full bg-yellow-500/12 blur-3xl animate-float-gentle-delayed" />
-      <div className="absolute bottom-20 left-1/4 w-96 h-96 rounded-full bg-purple-500/15 blur-3xl animate-float-gentle-slow" />
-      <div className="absolute top-1/2 right-1/3 w-80 h-80 rounded-full bg-pink-500/12 blur-3xl animate-float-gentle-very-slow" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-blue-500/8 blur-3xl animate-pulse-gentle" />
+      {/* Native HTML5 Video Element pointing to public workspace folder */}
+      <video
+        autoPlay
+        muted
+        loop
+        playsInline
+        className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none"
+        style={{ filter: "brightness(0.35) contrast(1.05)" }}
+      >
+        <source src="/clip/login_bg_vid.mp4" type="video/mp4" /> {/* Referenced from public asset library */}
+      </video>
 
-      {/* Slowly Moving Gradient borderlines */}
-      <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-cyan-500/30 via-yellow-500/30 to-purple-500/30 animate-gradient-gentle" />
-      <div className="absolute bottom-0 left-0 w-full h-2 bg-gradient-to-r from-purple-500/30 via-yellow-500/30 to-cyan-500/30 animate-gradient-gentle-reverse" />
+      {/* Dark vignette blending mask layer ensuring premium text visibility */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: "radial-gradient(circle, rgba(8,10,18,0.2) 0%, rgba(8,10,18,0.75) 100%)"
+        }}
+      />
 
-      {/* Gentle Floating Particles */}
-      {[...Array(50)].map((_, i) => (
-        <div
-          key={i}
-          className="absolute w-0.5 h-0.5 bg-white/10 rounded-full animate-float-particle-gentle"
-          style={{
-              // eslint-disable-next-line react-hooks/purity
-            top: `${Math.random() * 100}%`,
-              // eslint-disable-next-line react-hooks/purity
-            left: `${Math.random() * 100}%`,
-              // eslint-disable-next-line react-hooks/purity
-            animationDelay: `${Math.random() * 15}s`,
-              // eslint-disable-next-line react-hooks/purity
-            animationDuration: `${20 + Math.random() * 20}s`,
-          }}
-        />
-      ))}
+      {/* Slowly Moving Accent Gradient Border Lines */}
+      <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-cyan-500/30 via-yellow-500/30 to-purple-500/30 animate-gradient-gentle" />
+      <div className="absolute bottom-0 left-0 w-full h-1.5 bg-gradient-to-r from-purple-500/30 via-yellow-500/30 to-cyan-500/30 animate-gradient-gentle-reverse" />
     </div>
   );
 }
@@ -111,38 +106,6 @@ function RightPanel() {
         transform: `translate(${offset.x}px, ${offset.y}px)`,
       }}
     >
-      {/* Animated Logo Container */}
-      <div className={`relative transition-all duration-1000 ${isHovered ? 'scale-105' : 'scale-100'}`}>
-        <div className="absolute inset-0 rounded-full bg-gradient-to-r from-cyan-500/15 via-yellow-500/15 to-purple-500/15 blur-xl animate-pulse-gentle" />
-        <img
-          src="/ensemble_lg.svg"
-          alt="Ensemble Logo"
-          className="relative w-14 h-14"
-        />
-      </div>
-
-      {/* Animated Text */}
-      <div className="text-center space-y-1.5">
-        <h2
-          className={`text-xl font-bold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent transition-all duration-1000 ${
-            isHovered ? 'tracking-wider' : 'tracking-normal'
-          }`}
-          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-        >
-          Ensemble
-        </h2>
-        <p
-          className="text-xs text-zinc-400 max-w-xs leading-relaxed transition-all duration-1000"
-          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-        >
-          The parallel workflow platform for modern film production teams.
-        </p>
-      </div>
-
-      {/* Decorative line */}
-      <div className={`h-px bg-gradient-to-r from-cyan-500/50 via-yellow-500/50 to-purple-500/50 transition-all duration-1000 ${
-        isHovered ? 'w-28' : 'w-12'
-      }`} />
     </div>
   );
 }
@@ -356,7 +319,6 @@ function Divider() {
 // ─── LoginPage ────────────────────────────────────────────────────────────────
 export default function LoginPage({
   onSuccess,
-  // onForgotPassword,
   onBack,
 }: {
   onSuccess?: () => void;
@@ -445,47 +407,23 @@ export default function LoginPage({
         
         /* Page Load Animation */
         @keyframes page-fade-in {
-          0% {
-            opacity: 0;
-            transform: scale(0.98);
-          }
-          100% {
-            opacity: 1;
-            transform: scale(1);
-          }
+          0% { opacity: 0; transform: scale(0.98); }
+          100% { opacity: 1; transform: scale(1); }
         }
         
         @keyframes slide-in-left {
-          0% {
-            opacity: 0;
-            transform: translateX(-30px);
-          }
-          100% {
-            opacity: 1;
-            transform: translateX(0);
-          }
+          0% { opacity: 0; transform: translateX(-30px); }
+          100% { opacity: 1; transform: translateX(0); }
         }
         
         @keyframes slide-in-right {
-          0% {
-            opacity: 0;
-            transform: translateX(30px);
-          }
-          100% {
-            opacity: 1;
-            transform: translateX(0);
-          }
+          0% { opacity: 0; transform: translateX(30px); }
+          100% { opacity: 1; transform: translateX(0); }
         }
         
         @keyframes fade-in-up {
-          0% {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          100% {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          0% { opacity: 0; transform: translateY(20px); }
+          100% { opacity: 1; transform: translateY(0); }
         }
         
         .page-container {
@@ -511,30 +449,6 @@ export default function LoginPage({
         .delay-400 { animation-delay: 0.4s; opacity: 0; animation-fill-mode: forwards; }
         .delay-500 { animation-delay: 0.5s; opacity: 0; animation-fill-mode: forwards; }
         
-        @keyframes float-gentle {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          33% { transform: translate(15px, -10px) scale(1.08); }
-          66% { transform: translate(-10px, 8px) scale(0.96); }
-        }
-        
-        @keyframes float-gentle-delayed {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          33% { transform: translate(-12px, -8px) scale(1.05); }
-          66% { transform: translate(10px, 10px) scale(0.97); }
-        }
-        
-        @keyframes float-gentle-slow {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          33% { transform: translate(10px, 12px) scale(1.06); }
-          66% { transform: translate(-8px, -10px) scale(0.95); }
-        }
-        
-        @keyframes float-gentle-very-slow {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          33% { transform: translate(-10px, -12px) scale(1.04); }
-          66% { transform: translate(12px, -8px) scale(0.96); }
-        }
-        
         @keyframes gradient-gentle {
           0% { transform: translateX(-100%); }
           100% { transform: translateX(100%); }
@@ -545,31 +459,9 @@ export default function LoginPage({
           100% { transform: translateX(-100%); }
         }
         
-        @keyframes float-particle-gentle {
-          0% { transform: translateY(0) translateX(0); opacity: 0; }
-          50% { opacity: 0.4; }
-          100% { transform: translateY(-100vh) translateX(80px); opacity: 0; }
-        }
-        
         @keyframes pulse-gentle {
-          0%, 100% { opacity: 0.08; transform: scale(1); }
-          50% { opacity: 0.12; transform: scale(1.02); }
-        }
-        
-        .animate-float-gentle {
-          animation: float-gentle 14s ease-in-out infinite;
-        }
-        
-        .animate-float-gentle-delayed {
-          animation: float-gentle-delayed 16s ease-in-out infinite;
-        }
-        
-        .animate-float-gentle-slow {
-          animation: float-gentle-slow 18s ease-in-out infinite;
-        }
-        
-        .animate-float-gentle-very-slow {
-          animation: float-gentle-very-slow 20s ease-in-out infinite;
+          0%, 100% { opacity: 0.12; transform: scale(1); }
+          50% { opacity: 0.18; transform: scale(1.02); }
         }
         
         .animate-gradient-gentle {
@@ -578,10 +470,6 @@ export default function LoginPage({
         
         .animate-gradient-gentle-reverse {
           animation: gradient-gentle-reverse 12s ease-in-out infinite;
-        }
-        
-        .animate-float-particle-gentle {
-          animation: float-particle-gentle linear infinite;
         }
         
         .animate-pulse-gentle {
@@ -608,6 +496,7 @@ export default function LoginPage({
           overflowY: "auto",
           position: "relative",
           zIndex: 10,
+          background: T.bg
         }}>
 
           {/* Back */}
@@ -741,7 +630,7 @@ export default function LoginPage({
           <GoogleBtn />
         </div>
 
-        {/* ── Right: Decorative panel with slowly moving animated background ── */}
+        {/* ── Right: Dynamic Video Player Layout Panel ── */}
         <div className="slide-in-right" style={{
           flex: 1,
           position: "relative",
@@ -753,7 +642,7 @@ export default function LoginPage({
           justifyContent: "center",
           gap: 28,
         }}>
-          <AnimatedBg />
+          <VideoBg /> {/* Dynamic asset wrapper component replaces vector circles */}
           <RightPanel />
         </div>
 

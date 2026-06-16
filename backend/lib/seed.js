@@ -1,6 +1,7 @@
 const { pool } = require('./database');
 const { faker } = require('@faker-js/faker');
 const bcrypt = require('bcrypt');
+const { ensureDefaultSettings } = require('../Repositories/AdminSettingsRepositories');
 
 function cap(value, max) {
   if (value == null) return value;
@@ -34,7 +35,137 @@ async function ensurePasswordHashColumnCapacity() {
 }
 
 async function resetSeedTables() {
-  await pool.query('TRUNCATE TABLE staff, users, accounts RESTART IDENTITY CASCADE');
+  await pool.query(`
+    TRUNCATE TABLE
+      ticket_messages,
+      support_tickets,
+      user_reports,
+      disputes,
+      violations,
+      platform_settings,
+      staff,
+      users,
+      accounts
+    RESTART IDENTITY CASCADE
+  `).catch(async () => {
+    await pool.query('TRUNCATE TABLE staff, users, accounts RESTART IDENTITY CASCADE');
+  });
+}
+
+async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
+  const supportStaffId = staffByRole['Support Moderator'];
+  const adminStaffId = staffByRole.Admin;
+  const disputeStaffId = staffByRole['Dispute Moderator'] || adminStaffId;
+
+  const reports = [
+    ['RPT-10001', userAccountIds[0], 'member', 'u-3', '@noisy_creator', 'Harassment', 'Repeated hostile messages in forum thread.', 'open', 'high'],
+    ['RPT-10002', userAccountIds[2], 'group', 'fg-12', 'Design Critique Hub', 'Spam', 'Group flooded with promotional links.', 'in_review', 'medium'],
+    ['RPT-10003', userAccountIds[4], 'team', 'team-2', 'Graphitee', 'Impersonation', 'Member posing as official support.', 'open', 'high'],
+    ['RPT-10004', userAccountIds[1], 'member', 'u-7', '@seller_x', 'Scam', 'Marketplace listing never delivered after payment.', 'resolved', 'high'],
+    ['RPT-10005', userAccountIds[5], 'discussion', 'd-44', 'Late delivery thread', 'Other', 'Misleading project timeline claims.', 'open', 'low'],
+    ['RPT-10006', userAccountIds[3], 'member', 'u-2', '@quiet_dev', 'Harassment', 'Off-platform threats referenced in chat.', 'open', 'high'],
+  ];
+
+  const reportIds = [];
+  for (const r of reports) {
+    const res = await pool.query(
+      `INSERT INTO user_reports (
+        report_number, reporter_account_id, target_type, target_id, target_label,
+        reason, description, status, priority, assigned_staff_id, created_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, NOW() - ($11 || ' hours')::interval)
+      RETURNING report_id`,
+      [...r.slice(0, 9), r[7] === 'resolved' ? adminStaffId : supportStaffId, String(faker.number.int({ min: 2, max: 120 }))]
+    );
+    reportIds.push(res.rows[0].report_id);
+  }
+
+  const disputes = [
+    ['DIS-21123', 'Feedback dispute after delivery', 'Buyer contests quality rating on completed gig.', 'resolved', 'medium', userAccountIds[1], userAccountIds[3], 'job', 'JOB-8821', disputeStaffId, 2500],
+    ['DIS-21124', 'Payment not released from escrow', 'Seller claims buyer abandoned milestone review.', 'open', 'high', userAccountIds[4], userAccountIds[0], 'contract', 'CTR-4410', disputeStaffId, 12000],
+    ['DIS-21125', 'Asset license disagreement', 'Marketplace buyer disputes commercial usage rights.', 'under_review', 'high', userAccountIds[2], userAccountIds[6], 'marketplace', 'LST-992', adminStaffId, 4500],
+    ['DIS-21126', 'Team revenue split', 'Members disagree on credit distribution.', 'open', 'medium', userAccountIds[5], userAccountIds[7], 'team', 'team-1', disputeStaffId, 8000],
+    ['DIS-21127', 'Refund window expired', 'Buyer requests refund outside policy window.', 'resolved', 'low', userAccountIds[8], userAccountIds[9], 'marketplace', 'LST-118', supportStaffId, 900],
+  ];
+
+  const disputeIds = [];
+  for (const d of disputes) {
+    const res = await pool.query(
+      `INSERT INTO disputes (
+        dispute_number, title, reason, status, priority,
+        initiator_account_id, respondent_account_id,
+        related_entity_type, related_entity_id, assigned_staff_id,
+        credit_amount_involved, opened_at, resolution_notes
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, NOW() - ($12 || ' days')::interval, $13)
+      RETURNING dispute_id`,
+      [
+        ...d.slice(0, 11),
+        String(faker.number.int({ min: 3, max: 90 })),
+        d[3] === 'resolved' ? 'Resolved per platform policy.' : null,
+      ]
+    );
+    disputeIds.push(res.rows[0].dispute_id);
+  }
+
+  const tickets = [
+    ['TKT-50001', 'Cannot verify payment method', 'billing', 'high', 'open', userAccountIds[0], supportStaffId, 'Support Moderator', reportIds[0], null],
+    ['TKT-50002', 'Account locked after password reset', 'account', 'high', 'in_progress', userAccountIds[3], supportStaffId, 'Support Moderator', null, null],
+    ['TKT-50003', 'Credits missing after package purchase', 'billing', 'high', 'open', userAccountIds[4], adminStaffId, 'Admin', null, disputeIds[1]],
+    ['TKT-50004', 'Forum group ownership transfer', 'community', 'medium', 'in_progress', userAccountIds[2], staffByRole['Forum Moderator'] || supportStaffId, 'Forum Moderator', reportIds[1], null],
+    ['TKT-50005', 'How to invite team members?', 'general', 'low', 'resolved', userAccountIds[6], supportStaffId, 'Support Moderator', null, null],
+    ['TKT-50006', 'Marketplace listing rejected', 'marketplace', 'medium', 'open', userAccountIds[7], supportStaffId, 'Support Moderator', reportIds[2], null],
+    ['TKT-50007', 'Two-factor not receiving codes', 'security', 'high', 'open', userAccountIds[1], adminStaffId, 'Admin', null, null],
+    ['TKT-50008', 'Dispute escalation request', 'dispute', 'high', 'in_progress', userAccountIds[5], disputeStaffId, 'Dispute Moderator', null, disputeIds[3]],
+  ];
+
+  const ticketIds = [];
+  for (const t of tickets) {
+    const res = await pool.query(
+      `INSERT INTO support_tickets (
+        ticket_number, subject, category, priority, status, channel,
+        requester_account_id, assigned_staff_id, assigned_role,
+        related_report_id, related_dispute_id, created_at, closed_at
+      ) VALUES ($1,$2,$3,$4,$5,'web',$6,$7,$8,$9,$10, NOW() - ($11 || ' hours')::interval, $12)
+      RETURNING ticket_id`,
+      [
+        ...t,
+        String(faker.number.int({ min: 4, max: 200 })),
+        t[4] === 'resolved' ? new Date() : null,
+      ]
+    );
+    ticketIds.push(res.rows[0].ticket_id);
+  }
+
+  const messageSeeds = [
+    [ticketIds[0], userAccountIds[0], 'user', 'Member', 'I added my card but verification keeps failing.', false],
+    [ticketIds[0], null, 'staff', 'Support', 'We are checking your Xendit customer profile — please confirm billing email.', false],
+    [ticketIds[1], userAccountIds[3], 'user', 'Member', 'Reset link worked but login says account suspended.', false],
+    [ticketIds[1], null, 'staff', 'Support', 'Internal: escalated to admin for status review.', true],
+    [ticketIds[2], userAccountIds[4], 'user', 'Member', 'Pro Pack purchase did not credit my wallet.', false],
+    [ticketIds[7], userAccountIds[5], 'user', 'Member', 'Please escalate dispute DIS-21126 to senior reviewer.', false],
+  ];
+
+  for (const m of messageSeeds) {
+    await pool.query(
+      `INSERT INTO ticket_messages (ticket_id, author_account_id, author_type, author_name, body, is_internal)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      m
+    );
+  }
+
+  const violations = [
+    ['VIO-21034', userAccountIds[3], 'Spam posting', 'Automated flag: duplicate promo links.', 2, adminStaffId],
+    ['VIO-21035', userAccountIds[0], 'Harassment warning', 'Report RPT-10001 substantiated — first warning.', 3, supportStaffId],
+  ];
+
+  for (const v of violations) {
+    await pool.query(
+      `INSERT INTO violations (violation_number, account_id, title, reason, points, issued_by_staff_id)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      v
+    );
+  }
+
+  console.log(`✅ Seeded ${tickets.length} tickets, ${disputes.length} disputes, ${reports.length} reports`);
 }
 
 async function seed() {
@@ -44,42 +175,44 @@ async function seed() {
     await resetSeedTables();
     await ensurePasswordHashColumnCapacity();
 
-    const roles = ['Admin', 'Support Moderator', 'Jobs N Gigs Moderator', 'Forum Moderator'];
+    const STAFF_SEED = [
+      { role: 'Admin', handle: 'admin', email: 'admin@ensemble.dev', firstName: 'Platform', lastName: 'Admin' },
+      { role: 'Support Moderator', handle: 'support_moderator', email: 'support@ensemble.dev', firstName: 'Support', lastName: 'Moderator' },
+      { role: 'Dispute Moderator', handle: 'dispute_moderator', email: 'disputes@ensemble.dev', firstName: 'Dispute', lastName: 'Moderator' },
+      { role: 'Jobs N Gigs Moderator', handle: 'jobs_n_gigs_moderator', email: 'jobs@ensemble.dev', firstName: 'Jobs', lastName: 'Moderator' },
+      { role: 'Forum Moderator', handle: 'forum_moderator', email: 'forum@ensemble.dev', firstName: 'Forum', lastName: 'Moderator' },
+    ];
+    const staffByRole = {};
+    const userAccountIds = [];
     const saltRounds = 10;
     const staffPasswordHash = await bcrypt.hash('staff123', saltRounds);
     const userPasswordHash = await bcrypt.hash('user123', saltRounds);
 
-    // 1. Seed STAFF (Specific Roles)
-    for (const roleName of roles) {
-      // Create Account entry first
-      const staffFirstName = cap(faker.person.firstName(), 50);
-      const staffLastName = cap(faker.person.lastName(), 50);
-      const staffRole = cap(roleName, 50);
-      const staffEmail = buildShortEmail(staffRole);
-
+    // 1. Seed STAFF (fixed dev credentials — always the same after seed)
+    for (const staff of STAFF_SEED) {
       const accountRes = await pool.query(
         `INSERT INTO ACCOUNTS (display_name, handle, type, merit_score, status, created_at) 
          VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING account_id`,
-        [cap(roleName, 50), cap(roleName.toLowerCase().replace(/\s+/g, '_'), 50), 'Staff', 100, 'Active']
+        [cap(staff.role, 50), cap(staff.handle, 50), 'Staff', 100, 'Active']
       );
-      
+
       const accountId = accountRes.rows[0].account_id;
 
-      // Create Staff entry
-      await pool.query(
+      const staffRes = await pool.query(
         `INSERT INTO STAFF (firebase_staff_uuid, first_name, last_name, role, email_address, password_hash, account_id) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING staff_id`,
         [
           cap(faker.string.alphanumeric(28), 50),
-          staffFirstName,
-          staffLastName,
-          staffRole,
-          cap(staffEmail, 50),
+          cap(staff.firstName, 50),
+          cap(staff.lastName, 50),
+          cap(staff.role, 50),
+          cap(staff.email, 50),
           staffPasswordHash,
-          accountId
+          accountId,
         ]
       );
-      console.log(`✅ Created Staff: ${roleName}`);
+      staffByRole[staff.role] = staffRes.rows[0].staff_id;
+      console.log(`✅ Created Staff: ${staff.role} (${staff.email} / ${staff.handle})`);
     }
 
     // 2. Seed Regular USERS (10 random users)
@@ -96,6 +229,7 @@ async function seed() {
       );
 
       const accountId = accountRes.rows[0].account_id;
+      userAccountIds.push(accountId);
 
       await pool.query(
         `INSERT INTO USERS (firebase_user_uuid, xendit_customer_id, first_name, last_name, email_address, password_hash, account_id) 
@@ -112,7 +246,13 @@ async function seed() {
       );
     }
 
-    console.log("✨ Seeding complete! 10 Users and 4 Staff members created.");
+    await ensureDefaultSettings();
+    await seedTicketsAndDisputes(userAccountIds, staffByRole);
+
+    console.log('');
+    console.log('🔑 Staff login (password: staff123):');
+    console.log('   Admin portal → admin@ensemble.dev  or  username: admin');
+    console.log(`✨ Seeding complete! ${userAccountIds.length} users, ${STAFF_SEED.length} staff, tickets & settings loaded.`);
   } catch (err) {
     console.error("❌ Seeding Error:", err);
   } finally {

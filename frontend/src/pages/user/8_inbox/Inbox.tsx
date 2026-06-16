@@ -521,7 +521,7 @@ const Inbox = () => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   
   const user = useGlobalState((state) => state.user);
-  const currentUserId = user?.userId || 1;
+  const currentUserId = user?.user_id || 1;
 
   // Fetch chats on mount
   useEffect(() => {

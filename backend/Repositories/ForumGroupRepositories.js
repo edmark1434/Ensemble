@@ -1,19 +1,27 @@
 const { ObjectId } = require('mongodb');
-const { client } = require('../lib/mongodb');
-const db = client.db('ensemble');
+const { getMongoClient } = require('../lib/mongodb');
+
+function getForumDb() {
+  const client = getMongoClient();
+  if (!client) {
+    throw new Error('MongoDB is not connected. Set MONGODB_URI in backend/.env to use forum features.');
+  }
+  return client.db('ensemble');
+}
+
 async function createForumGroup({
     imageUrl = null,
     groupName = null,
     description = null,
     members = [],
-    tags = [],  
+    tags = [],
     created_at = new Date(),
     gradient = null,
     deleted_at = null,
     status = 'active',
 }){
     try{
-        const forumGroupsCollection = db.collection('forum_groups');
+        const forumGroupsCollection = getForumDb().collection('forum_groups');
         const result = await forumGroupsCollection.insertOne({
             image_url: imageUrl,
             group_name: groupName,
@@ -34,7 +42,7 @@ async function createForumGroup({
 
 async function getForumGroupById(groupId){
     try{
-        const forumGroupsCollection = db.collection('forum_groups');
+        const forumGroupsCollection = getForumDb().collection('forum_groups');
             const result = await forumGroupsCollection.findOne({ _id: new ObjectId(groupId),status: 'active' });
         return result;
     }catch(err){
@@ -45,7 +53,7 @@ async function getForumGroupById(groupId){
 
 async function getAllForumGroups(){
     try{
-        const forumGroupsCollection = db.collection('forum_groups');
+        const forumGroupsCollection = getForumDb().collection('forum_groups');
         const result = await forumGroupsCollection.find({status: 'active'}).toArray();
         return result;
     }catch(err){
@@ -56,7 +64,7 @@ async function getAllForumGroups(){
 
 async function getForumGroupsByMemberId(memberId){
     try{
-        const forumGroupsCollection = db.collection('forum_groups');
+        const forumGroupsCollection = getForumDb().collection('forum_groups');
         const normalizedMemberId = Number.isNaN(Number(memberId)) ? memberId : Number(memberId);
         const result = await forumGroupsCollection.find({ 'members.userId': normalizedMemberId, status: 'active' }).toArray();
         return result;
@@ -66,9 +74,9 @@ async function getForumGroupsByMemberId(memberId){
     }
 }
 
-async function updateForumGroupRepositories(groupId, updateData) { 
+async function updateForumGroupRepositories(groupId, updateData) {
     try {
-        const forumGroupsCollection = db.collection('forum_groups');
+        const forumGroupsCollection = getForumDb().collection('forum_groups');
         const result = await forumGroupsCollection.updateOne(
             { _id: new ObjectId(groupId), status: 'active' },
             { $set: updateData }
@@ -80,9 +88,9 @@ async function updateForumGroupRepositories(groupId, updateData) {
     }
 }
 
-async function deleteForumGroupRepositories(groupId) { 
+async function deleteForumGroupRepositories(groupId) {
     try {
-        const forumGroupsCollection = db.collection('forum_groups');
+        const forumGroupsCollection = getForumDb().collection('forum_groups');
         const result = await forumGroupsCollection.updateOne(
             { _id: new ObjectId(groupId), status: 'active' },
             { $set: { deleted_at: new Date(), status: 'inactive' } }

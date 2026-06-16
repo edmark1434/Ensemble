@@ -9,10 +9,12 @@ import {
   PopoverTrigger
 } from "@/components/ui/popover";
 import {
+  ArrowUpRight,
   ChevronDown,
   Download,
   Keyboard,
   ProportionsIcon,
+  Send,
   ShareIcon
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
@@ -29,11 +31,17 @@ import {
   useIsMediumScreen,
   useIsSmallScreen
 } from "@/hooks/use-media-query";
+import {
+  CloudCheck
+} from "lucide-react";
 
 import { LogoIcons } from "@/components/shared/logos";
 import Link from "next/link";
 import { ShortcutsModal } from "./shortcuts-modal";
 import { ModeToggle } from "@/components/ui/mode-toggle";
+import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
+import {Input} from "@/components/ui/input";
+import {cn} from "@/lib/utils";
 
 export default function Navbar({
   user,
@@ -80,6 +88,17 @@ export default function Navbar({
     setTitle(e.target.value);
   };
 
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  useEffect(() => {
+    const sub = stateManager.subscribe(() => {
+      setCanUndo(stateManager.undos.length > 0);
+      setCanRedo(stateManager.redos.length > 0);
+    });
+    return () => sub.unsubscribe();
+  }, [stateManager]);
+
   return (
     <div
       style={{
@@ -96,34 +115,67 @@ export default function Navbar({
         </div>
 
         <div className=" pointer-events-auto flex h-10 items-center px-1.5">
-          <Button
-            onClick={handleUndo}
-            className="text-muted-foreground"
-            variant="ghost"
-            size="icon"
-          >
-            <Icons.undo width={20} />
-          </Button>
-          <Button
-            onClick={handleRedo}
-            className="text-muted-foreground"
-            variant="ghost"
-            size="icon"
-          >
-            <Icons.redo width={20} />
-          </Button>
+          <Tooltip delayDuration={10}>
+            <TooltipTrigger asChild>
+              <Button
+                  onClick={handleUndo}
+                  className="hover:!bg-accent/30"
+                  variant="ghost"
+                  size="icon"
+                  disabled={!canUndo}
+              >
+                <Icons.undo width={20} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" align="center" sideOffset={1}>
+              Undo
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip delayDuration={10}>
+            <TooltipTrigger asChild>
+              <Button
+                  onClick={handleRedo}
+                  className="hover:!bg-accent/30"
+                  variant="ghost"
+                  size="icon"
+                  disabled={!canRedo}
+              >
+                <Icons.redo width={20} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" align="center" sideOffset={1}>
+              Redo
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip delayDuration={10}>
+            <TooltipTrigger asChild>
+              <Button
+                  onClick={handleUndo}
+                  className="hover:!bg-accent/30"
+                  variant="ghost"
+                  size="icon"
+              >
+                <CloudCheck size={20} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="center" sideOffset={1}>
+              All changes saved
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
       <div className="flex h-13 items-center justify-center gap-2">
         {!isSmallScreen && (
-          <div className=" pointer-events-auto flex h-10 items-center gap-2 rounded-md px-2.5">
+          <div className=" pointer-events-auto flex h-8 items-center gap-2 rounded-md px-2.5">
             <AutosizeInput
               name="title"
               value={title}
               onChange={handleTitleChange}
               width={200}
-              inputClassName="border-none outline-none px-1 text-sm font-medium"
+              inputClassName="h-8 text-sm font-normal"
             />
           </div>
         )}
@@ -131,26 +183,34 @@ export default function Navbar({
 
       <div className="flex h-13 items-center justify-end gap-2">
         <div className=" pointer-events-auto flex h-10 items-center gap-2 rounded-md px-2.5">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            onClick={() => setIsShortcutsModalOpen(true)}
-          >
-            <Keyboard className="size-5" />
-          </Button>
+          <Tooltip delayDuration={10}>
+            <TooltipTrigger asChild>
+              <Button
+                  onClick={() => setIsShortcutsModalOpen(true)}
+                  className="hover:!bg-accent/30"
+                  variant="ghost"
+                  size="icon"
+              >
+                <Keyboard size={20} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="center" sideOffset={1}>
+              Keyboard shortcuts
+            </TooltipContent>
+          </Tooltip>
+
           {/*<ModeToggle />*/}
 
-          {/* <Button
-            className="flex h-8 gap-1 border border-border"
-            variant="outline"
+          <DownloadPopover stateManager={stateManager} />
+          <Button
+            className="flex h-8 gap-2 border border-border"
+            variant="default"
             size={isMediumScreen ? "sm" : "icon"}
           >
-            <ShareIcon width={18} />{" "}
+            <Send width={16} />
             <span className="hidden md:block">Share</span>
-          </Button> */}
+          </Button>
 
-          <DownloadPopover stateManager={stateManager} />
         </div>
       </div>
       <ShortcutsModal
@@ -183,11 +243,12 @@ const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
-          className="flex h-8 gap-1 border border-border"
+          className="flex h-8 gap-2 hover:!bg-accent/30"
+          variant="outline"
           size={isMediumScreen ? "sm" : "icon"}
         >
-          {/* <Download width={18} />{" "} */}
-          <span className="hidden md:block font-normal">Download</span>
+          <Download size={16} />{" "}
+          <span className="hidden md:block font-normal">Export</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent

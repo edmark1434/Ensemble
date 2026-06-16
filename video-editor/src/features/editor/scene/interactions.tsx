@@ -86,19 +86,32 @@ export function SceneInteractions({
 
   useEffect(() => {
     const updateTargets = (time?: number) => {
-      const currentTime = time || getCurrentTime();
-      const { trackItemsMap } = useStore.getState();
+      const { trackItemsMap, playerRef, fps, activeIds } = useStore.getState();
+      const currentTime = time ?? (playerRef?.current
+          ? (playerRef.current.getCurrentFrame() / fps) * 1000
+          : 0);
       const targetIds = activeIds.filter((id) => {
         return (
-          trackItemsMap[id]?.display.from <= currentTime &&
-          trackItemsMap[id]?.display.to >= currentTime
+            trackItemsMap[id]?.display.from <= currentTime &&
+            trackItemsMap[id]?.display.to >= currentTime
         );
       });
       const targets = targetIds.map(
-        (id) => getTargetById(id) as HTMLDivElement
+          (id) => getTargetById(id) as HTMLDivElement
       );
       selection?.setSelectedTargets(targets);
       const selInfo = getSelectionByIds(targetIds);
+      const isLocked = targetIds.length === 1 &&
+          useStore.getState().trackItemsMap[targetIds[0]]?.details?.locked;
+      if (isLocked) {
+        selInfo.ables = {
+          ...selInfo.ables,
+          draggable: false,
+          resizable: false,
+          scalable: false,
+          rotatable: false
+        };
+      }
       setSelectionInfo(selInfo);
       setTargets(selInfo.targets as HTMLDivElement[]);
     };
@@ -121,6 +134,12 @@ export function SceneInteractions({
     };
   }, [activeIds, playerRef, trackItemsMap]);
 
+  const trackItemsMapRef = useRef(trackItemsMap);
+  useEffect(() => {
+    trackItemsMapRef.current = trackItemsMap;
+  }, [trackItemsMap]);
+
+  const isDraggingRef = useRef(false);
   useEffect(() => {
     const selection = new Selection({
       container: containerRef.current,
@@ -132,10 +151,14 @@ export function SceneInteractions({
       toggleContinueSelect: "shift"
     })
       .on("select", (e) => {
-        // Filter out audio items from selection
-        const filteredSelected = e.selected.filter(
-          (el) => !el.className.includes("designcombo-scene-item-type-audio")
-        );
+        const isClick = !isDraggingRef.current;
+
+        const filteredSelected = e.selected.filter((el) => {
+          if (el.className.includes("designcombo-scene-item-type-audio")) return false;
+          const id = getIdFromClassName(el.className);
+          if (isClick) return true;
+          return !trackItemsMapRef.current[id]?.details?.locked;
+        }) as HTMLDivElement[];
 
         const ids = filteredSelected.map((el) =>
           getIdFromClassName(el.className)
@@ -154,6 +177,7 @@ export function SceneInteractions({
         );
       })
       .on("dragStart", (e) => {
+        isDraggingRef.current = false;
         const target = e.inputEvent.target as HTMLDivElement;
         dragStartEnd = false;
 
@@ -167,7 +191,11 @@ export function SceneInteractions({
           e.stop();
         }
       })
+      .on("drag", () => {
+        isDraggingRef.current = true;
+      })
       .on("dragEnd", () => {
+        isDraggingRef.current = true;
         dragStartEnd = true;
       })
       .on("selectEnd", (e) => {
@@ -180,10 +208,12 @@ export function SceneInteractions({
             }
           });
         } else {
-          // Filter out audio items from selection
-          const filteredSelected = e.selected.filter(
-            (el) => !el.className.includes("designcombo-scene-item-type-audio")
-          ) as HTMLDivElement[];
+          // filter out audio + locked items from selection
+          const filteredSelected = e.selected.filter((el) => {
+            if (el.className.includes("designcombo-scene-item-type-audio")) return false;
+            const id = getIdFromClassName(el.className);
+            return !trackItemsMapRef.current[id]?.details?.locked;
+          }) as HTMLDivElement[];
 
           const ids = filteredSelected.map((el) =>
             getIdFromClassName(el.className)
@@ -225,8 +255,26 @@ export function SceneInteractions({
   }, [trackItemsMap]);
 
   useEffect(() => {
+    const { activeIds, trackItemsMap } = useStore.getState();
+    if (activeIds.length !== 1) return;
+
+    const isLocked = trackItemsMap[activeIds[0]]?.details?.locked;
+    setSelectionInfo(prev => ({
+      ...prev,
+      ables: {
+        ...prev.ables,
+        draggable: !isLocked,
+        resizable: !isLocked,
+        scalable: !isLocked,
+        rotatable: !isLocked
+      }
+    }));
+  }, [trackItemsMap]);
+
+  useEffect(() => {
     setSceneMoveableRef(moveableRef as React.RefObject<Moveable>);
   }, [moveableRef]);
+
   return (
     <Moveable
       ref={moveableRef}
@@ -245,6 +293,7 @@ export function SceneInteractions({
       snapGap={true}
       isDisplaySnapDigit={false}
       isDisplayInnerSnapDigit={false}
+
       onDrag={({ target, top, left }) => {
         target.style.top = `${top}px`;
         target.style.left = `${left}px`;
@@ -252,6 +301,7 @@ export function SceneInteractions({
       onDragEnd={({ target, isDrag }) => {
         if (!isDrag) return;
         const targetId = getIdFromClassName(target.className) as string;
+        if (trackItemsMap[targetId]?.details?.locked) return;
 
         dispatch(EDIT_OBJECT, {
           payload: {
@@ -313,6 +363,7 @@ export function SceneInteractions({
       onScaleEnd={({ target }) => {
         if (!target.style.transform) return;
         const targetId = getIdFromClassName(target.className) as string;
+        if (trackItemsMap[targetId]?.details?.locked) return;
 
         dispatch(EDIT_OBJECT, {
           payload: {
@@ -332,6 +383,8 @@ export function SceneInteractions({
       onRotateEnd={({ target }) => {
         if (!target.style.transform) return;
         const targetId = getIdFromClassName(target.className) as string;
+        if (trackItemsMap[targetId]?.details?.locked) return;
+
         dispatch(EDIT_OBJECT, {
           payload: {
             [targetId]: {
@@ -624,17 +677,30 @@ export function SceneInteractions({
       }}
       onResizeEnd={({ target }) => {
         const targetId = getIdFromClassName(target.className) as string;
+        if (trackItemsMap[targetId]?.details?.locked) return;
 
         const type = trackItemsMap[targetId].type;
 
-        const selector =
-          type === "text"
-            ? `[data-text-id="${targetId}"]`
-            : `#caption-${targetId}`;
-
-        const textDiv = document.querySelector(selector) as HTMLDivElement;
-
-        if (textDiv) {
+        if (type === "text" || type === "caption") {
+          const selector = type === "text"
+              ? `[data-text-id="${targetId}"]`
+              : `#caption-${targetId}`;
+          const textDiv = document.querySelector(selector) as HTMLDivElement;
+          if (textDiv) {
+            dispatch(EDIT_OBJECT, {
+              payload: {
+                [targetId]: {
+                  details: {
+                    ...trackItemsMap[targetId].details,
+                    width: parseFloat(target.style.width),
+                    height: parseFloat(target.style.height),
+                    fontSize: parseFloat(textDiv.style.fontSize)
+                  }
+                }
+              }
+            });
+          }
+        } else {
           dispatch(EDIT_OBJECT, {
             payload: {
               [targetId]: {
@@ -642,7 +708,6 @@ export function SceneInteractions({
                   ...trackItemsMap[targetId].details,
                   width: parseFloat(target.style.width),
                   height: parseFloat(target.style.height),
-                  fontSize: parseFloat(textDiv.style.fontSize)
                 }
               }
             }
@@ -653,6 +718,8 @@ export function SceneInteractions({
         if (holdGroupPosition) {
           const payload: Record<string, Partial<any>> = {};
           for (const id of Object.keys(holdGroupPosition)) {
+            if (trackItemsMap[id]?.details?.locked) continue;
+
             const left = holdGroupPosition[id].left;
             const top = holdGroupPosition[id].top;
             payload[id] = {

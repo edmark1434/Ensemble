@@ -86,6 +86,13 @@ const TextLayer: React.FC<{
       }
     }
   };
+
+  useEffect(() => {
+    if (!editable && divRef.current) {
+      divRef.current.style.height = "100%";
+    }
+  }, [editable]);
+
   return (
     <div
       data-text-id={id}
@@ -100,6 +107,7 @@ const TextLayer: React.FC<{
         outline: "none",
         ...style,
         pointerEvents: editable ? "auto" : "none",
+        userSelect: editable ? "text" : "none",
         whiteSpace: "pre-line",
         width: "100%",
         display: "flex",

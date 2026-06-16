@@ -4,19 +4,19 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const { createServer } = require('http');
 const { initSocket } = require('./lib/websocket');
-const apiRoutes = require('./Route/api');
 const { connectMongoDB } = require('./lib/mongodb');
 const { connectPostgresDB } = require('./lib/database');
+
 const app = express();
 app.set('trust proxy', 1);
-//websocket server setup
+
+// Websocket server setup
 const httpServer = createServer(app);
 initSocket(httpServer);
 
-//origin URL allowed to access the backend, can be set via environment variable FRONTEND_URL, defaults to localhost:5173 for development
-const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173' || 'http://localhost:5174' || 'http://localhost:5175';
+const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
 
-//middleware for cors policy and parsing JSON bodies
+// Middleware configuration
 app.use(cors({
   origin: allowedOrigin,
   credentials: true,
@@ -24,14 +24,29 @@ app.use(cors({
 app.use(cookieParser());
 app.use(express.json());
 
-//api routes
-app.use('/api', apiRoutes);
+// Create a wrapper function to handle asynchronous startup sequence sequential ordering
+async function startServer() {
+  try {
+    console.log('Connecting to databases...');
+    
+    // 1. Await database connections FIRST
+    await connectPostgresDB();
+    await connectMongoDB(); 
 
-//connect to MongoDB before starting the server
-connectMongoDB();
+    // 2. Load API routes ONLY after database setups are fully initialized
+    const apiRoutes = require('./Route/api');
+    app.use('/api', apiRoutes);
 
-connectPostgresDB();
-//connect to database and start server
-httpServer.listen(4000, () => {
-  console.log('Server is running on port 4000');
-});
+    // 3. Finally, open up the HTTP ports
+    httpServer.listen(4000, () => {
+      console.log('Server successfully initialized and running on port 4000');
+    });
+
+  } catch (error) {
+    console.error('Critical failure during server startup sequence:', error);
+    process.exit(1); // Stop the application if crucial boot processes fail
+  }
+}
+
+// Fire up the startup wrapper
+startServer();

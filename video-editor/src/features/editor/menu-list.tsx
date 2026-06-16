@@ -16,63 +16,16 @@ import {
   TooltipContent,
   TooltipTrigger
 } from "@/components/ui/tooltip";
+import { Upload, Video, Image, Music, Type, Captions, Shuffle } from "lucide-react";
 
-// Define menu items configuration for better maintainability
 const MENU_ITEMS = [
-  {
-    id: "uploads",
-    icon: Icons.upload,
-    label: "Uploads",
-    ariaLabel: "Add and manage uploads"
-  },
-  {
-    id: "videos",
-    icon: Icons.video,
-    label: "Videos",
-    ariaLabel: "Add and manage video content"
-  },
-  {
-    id: "images",
-    icon: Icons.image,
-    label: "Images",
-    ariaLabel: "Add and manage images"
-  },
-  {
-    id: "audios",
-    icon: Icons.audio,
-    label: "Audio",
-    ariaLabel: "Add and manage audio content"
-  },
-  {
-    id: "texts",
-    icon: Icons.type,
-    label: "Texts",
-    ariaLabel: "Add and edit text elements"
-  },
-  {
-    id: "captions",
-    icon: Icons.captions,
-    label: "Captions",
-    ariaLabel: "Add and edit captions"
-  },
-  {
-    id: "transitions",
-    icon: Icons.transition, // Custom SVG for transitions
-    label: "Transitions",
-    ariaLabel: "Add transition effects"
-  },
-  // {
-  //   id: "ai-voice",
-  //   icon: Icons.volume,
-  //   label: "AI Voice",
-  //   ariaLabel: "Generate AI voice from text"
-  // },
-  // {
-  //   id: "sfx",
-  //   icon: Icons.sfx,
-  //   label: "SFX",
-  //   ariaLabel: "Generate SFX from text"
-  // }
+  { id: "uploads",     icon: Upload,   label: "Uploads",     ariaLabel: "Add and manage uploads" },
+  { id: "videos",      icon: Video,    label: "Videos",      ariaLabel: "Add and manage video content" },
+  { id: "images",      icon: Image,    label: "Images",      ariaLabel: "Add and manage images" },
+  { id: "audios",      icon: Music,    label: "Audio",       ariaLabel: "Add and manage audio content" },
+  { id: "texts",       icon: Type,     label: "Texts",       ariaLabel: "Add and edit text elements" },
+  { id: "captions",    icon: Captions, label: "Captions",    ariaLabel: "Add and edit captions" },
+  { id: "transitions", icon: Shuffle,  label: "Transitions", ariaLabel: "Add transition effects" },
 ] as const;
 
 // Memoized menu button component for better performance
@@ -100,7 +53,7 @@ const MenuButton = memo<{
     >
       <Tooltip delayDuration={10}>
         <TooltipTrigger asChild>
-          <IconComponent width={20} height={20} />
+          <IconComponent size={18} />
         </TooltipTrigger>
         <TooltipContent side="right" align="center" sideOffset={8}>
           {item.label}

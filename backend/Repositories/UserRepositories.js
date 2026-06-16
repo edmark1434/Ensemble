@@ -124,6 +124,69 @@ async function updateFirebaseUserUuid(email, firebaseUserUuid) {
     }
 }
 
+async function getUserTag(userId) {
+    try{
+        const queryText = `SELECT T.TAG_ID, T.NAME FROM USER_TAG UT 
+        INNER JOIN TAG T ON UT.TAG_ID = T.TAG_ID WHERE UT.USER_ID = $1`;
+        const result = await pool.query(queryText, [userId]);
+        return result.rows;
+    }catch(err){
+        console.error(`Error fetching user tag for user ${userId}:`, err);
+        throw err;
+    }
+}
+
+async function createUserTag(userId, tags) {
+    if (!tags || tags.length === 0) return 0;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Build placeholders for the tags: ($1, NOW()), ($2, NOW())...
+        const tagPlaceholders = tags.map((_, i) => `($${i + 1}, NOW())`).join(', ');
+        
+        // The magic happens here: ON CONFLICT ensures duplicates are not saved, 
+        // but RETURNING tag_id still gives us EVERY tag's ID (new and old).
+        const tagQueryText = `
+            INSERT INTO TAG (NAME, CREATED_AT) 
+            VALUES ${tagPlaceholders} 
+            ON CONFLICT (NAME) DO UPDATE SET NAME = EXCLUDED.NAME
+            RETURNING tag_id;
+        `;
+        
+        const result = await client.query(tagQueryText, tags);
+        const tagIds = result.rows.map(row => row.tag_id);
+
+        // 2. Build placeholders for USER_TAG table
+        const userTagPlaceholders = [];
+        const userTagValues = [];
+        
+        tagIds.forEach((tagId, index) => {
+            userTagPlaceholders.push(`($${index * 2 + 1}, $${index * 2 + 2})`);
+            userTagValues.push(userId, tagId);
+        });
+
+        // Use ON CONFLICT here too, so a user can't be linked to the same tag twice
+        const userTagQueryText = `
+            INSERT INTO USER_TAG (USER_ID, TAG_ID) 
+            VALUES ${userTagPlaceholders.join(', ')}
+            ON CONFLICT DO NOTHING
+        `;
+        
+        const result2 = await client.query(userTagQueryText, userTagValues);
+        
+        await client.query('COMMIT');
+        return result2.rowCount; // Returns how many NEW links were made
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(`Error creating user tag for user ${userId}:`, err);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
 //exports all the repository functions for use in other parts of the application
 module.exports = {
     getAllUsers,
