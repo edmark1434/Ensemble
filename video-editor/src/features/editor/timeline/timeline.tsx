@@ -251,64 +251,88 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     canvas.on('mouse:down', (e: any) => {
       isDragging = false;
 
-      if (!e.target) return;
-      const itemId = e.target.id;
-      if (!itemId) return;
+      const pointer = canvas.getScenePoint(e.e);
+      const trackItems = canvas.getTrackItems() as any[];
+      const target = trackItems.find(item => {
+        const b = item.getBoundingRect();
+        return pointer.x >= b.left && pointer.x <= b.left + b.width &&
+          pointer.y >= b.top && pointer.y <= b.top + b.height;
+      });
 
-      const { trackItemsMap } = useStore.getState();
-      const isLocked = trackItemsMap[itemId]?.details?.locked;
       const isShift = canvas.isShiftKey;
 
-      if (isShift) {
-        if (isLocked) {
-          // shift-click locked → solo just the locked item
-          canvas.selectTrackItemByIds([itemId]);
-          stateManager.updateState(
-            { activeIds: [itemId] },
-            { updateHistory: false, kind: 'layer:selection' }
-          );
-        } else {
-          // shift-click normal → add to selection, drop any locked from existing
-          const existingNonLocked = activeIdsBeforeClick.filter(
-            id => !trackItemsMap[id]?.details?.locked
-          );
-          const next = [...new Set([...existingNonLocked, itemId])];
-          canvas.selectTrackItemByIds(next);
-          stateManager.updateState(
-            { activeIds: next },
-            { updateHistory: false, kind: 'layer:selection' }
-          );
-        }
-      } else {
-        if (isLocked) {
-          // normal click locked → solo just the locked item
-          canvas.selectTrackItemByIds([itemId]);
-          stateManager.updateState(
-            { activeIds: [itemId] },
-            { updateHistory: false, kind: 'layer:selection' }
-          );
-        }
-        // normal click non-locked → fall through, library handles it
+      if (!target) {
+        canvas.discardActiveObject();
+        canvas.requestRenderAll();
+        stateManager.updateState(
+          { activeIds: [] },
+          { updateHistory: false, kind: 'layer:selection' }
+        );
+        activeIdsBeforeClick = [];
+        return;
       }
 
-      activeIdsBeforeClick = [...useStore.getState().activeIds];
+      if (!isShift) return; // let library handle normal clicks, we do it in mouse:up
+
+      const itemId = target.id;
+      const { trackItemsMap } = useStore.getState();
+      const isLocked = trackItemsMap[itemId]?.details?.locked;
+      let next = [itemId];
+
+      if (isLocked) {
+        next = [itemId];
+      } else {
+        const existingNonLocked = activeIdsBeforeClick.filter(
+          id => !trackItemsMap[id]?.details?.locked
+        );
+        next = existingNonLocked.includes(itemId)
+          ? existingNonLocked.filter(id => id !== itemId)
+          : [...existingNonLocked, itemId];
+      }
+
+      if (next.length === 0) {
+        canvas.discardActiveObject();
+        canvas.requestRenderAll();
+        stateManager.updateState(
+          { activeIds: [] },
+          { updateHistory: false, kind: 'layer:selection' }
+        );
+      } else {
+        canvas.selectTrackItemByIds(next);
+        stateManager.updateState(
+          { activeIds: next },
+          { updateHistory: false, kind: 'layer:selection' }
+        );
+      }
+
+      activeIdsBeforeClick = next;
     });
     canvas.on('mouse:move', () => {
       isDragging = true;
     });
     canvas.on('mouse:up', (e: any) => {
       if (isDragging) return;
-      if (!e.target) return;
-      const itemId = e.target.id;
-      if (!itemId) return;
 
+      const pointer = canvas.getScenePoint(e.e);
+      const trackItems = canvas.getTrackItems() as any[];
+      const target = trackItems.find(item => {
+        const b = item.getBoundingRect();
+        return pointer.x >= b.left && pointer.x <= b.left + b.width &&
+          pointer.y >= b.top && pointer.y <= b.top + b.height;
+      });
+
+      if (!target || canvas.isShiftKey) return;
+
+      const itemId = target.id;
       const { trackItemsMap } = useStore.getState();
-      if (trackItemsMap[itemId]?.details?.locked) {
-        stateManager.updateState(
-          { activeIds: [itemId] },
-          { updateHistory: false, kind: 'layer:selection' }
-        );
-      }
+
+      canvas.selectTrackItemByIds([itemId]);
+      stateManager.updateState(
+        { activeIds: [itemId] },
+        { updateHistory: false, kind: 'layer:selection' }
+      );
+
+      activeIdsBeforeClick = [itemId];
     });
 
     return () => {
