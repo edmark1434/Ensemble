@@ -366,7 +366,7 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
     setLoaded(true);
   }, []);
 
-  useKeyboardShortcuts();
+  useKeyboardShortcuts(stateManager);
 
   return (
     <div className="flex h-screen w-screen flex-col bg-background">

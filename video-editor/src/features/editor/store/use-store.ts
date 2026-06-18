@@ -12,6 +12,7 @@ import {
 import { Moveable } from "@interactify/toolkit";
 import { PlayerRef } from "@remotion/player";
 import { create } from "zustand";
+import {TIMELINE_ZOOM_LEVELS} from "@/features/editor/constants/scale";
 
 interface ITimelineStore {
   duration: number;
@@ -52,7 +53,7 @@ const useStore = create<ITimelineStore>((set) => ({
   structure: [],
   setCompositions: (compositions) => set({ compositions }),
   size: {
-    width: 2560,
+    width: 1920,
     height: 1080
   },
 
@@ -66,13 +67,7 @@ const useStore = create<ITimelineStore>((set) => ({
   timeline: null,
   duration: 1000,
   fps: 30,
-  scale: {
-    // 1x distance (second 0 to second 5, 5 segments).
-    index: 7,
-    unit: 300,
-    zoom: 1 / 300,
-    segments: 5
-  },
+  scale: TIMELINE_ZOOM_LEVELS[27],
   scroll: {
     left: 0,
     top: 0

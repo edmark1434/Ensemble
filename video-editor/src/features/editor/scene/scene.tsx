@@ -1,5 +1,5 @@
 import { Player } from "../player";
-import { useRef, useImperativeHandle, forwardRef } from "react";
+import {useRef, useImperativeHandle, forwardRef, useEffect} from "react";
 import useStore from "../store/use-store";
 import StateManager from "@designcombo/state";
 import SceneEmpty from "./empty";
@@ -26,6 +26,17 @@ const Scene = forwardRef<
     recalculateZoom
   }));
 
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const lockScroll = () => {
+      el.scrollTop = 0;
+      el.scrollLeft = 0;
+    };
+    el.addEventListener("scroll", lockScroll);
+    return () => el.removeEventListener("scroll", lockScroll);
+  }, []);
+
   return (
     <div
       style={{
@@ -48,7 +59,8 @@ const Scene = forwardRef<
           height: size.height,
           background: "#000000",
           transform: `scale(${zoom})`,
-          position: "absolute"
+          position: "absolute",
+          overflow: "clip",
         }}
         className="player-container bg-sidebar"
       >

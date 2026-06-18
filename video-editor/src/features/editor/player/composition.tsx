@@ -108,6 +108,20 @@ const Composition = () => {
     }
     sceneMoveableRef?.current?.moveable.updateRect();
     sceneMoveableRef?.current?.moveable.forceUpdate();
+
+    const newWidth = parseInt(elRef.style.width) || elRef.clientWidth;
+    const finalHeight = Math.max(newHeight, currentHeight);
+
+    dispatch(EDIT_OBJECT, {
+      payload: {
+        [id]: {
+          details: {
+            width: newWidth,
+            height: finalHeight,
+          }
+        }
+      }
+    });
   };
 
   const onTextBlur = (id: string, _: string) => {
@@ -179,15 +193,19 @@ const Composition = () => {
           }
 
           if (trackItemIds.includes(editableTextId)) {
-            dispatch(EDIT_OBJECT, {
-              payload: {
-                [editableTextId]: {
-                  details: {
-                    text: text || ""
+            const freshMap = useStore.getState().trackItemsMap;
+            const item = freshMap[editableTextId];
+            if (item) {
+              dispatch(EDIT_OBJECT, {
+                payload: {
+                  [editableTextId]: {
+                    details: {
+                      text: text || ""
+                    }
                   }
                 }
-              }
-            });
+              });
+            }
           }
         }
         setEditableTextId(obj.value?.payload.id);

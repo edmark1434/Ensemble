@@ -57,7 +57,7 @@ export default function Text({
 
   const children = (
     <BoxAnim
-      style={calculateContainerStyles(details)}
+      style={calculateContainerStyles(details, undefined, {}, "text")}
       animationIn={editableTextId === id ? null : animationIn}
       animationOut={editableTextId === id ? null : animationOut}
       frame={currentFrame}

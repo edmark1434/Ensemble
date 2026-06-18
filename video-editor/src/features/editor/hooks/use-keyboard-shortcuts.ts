@@ -1,19 +1,24 @@
 import { useEffect } from "react";
 import { dispatch } from "@designcombo/events";
-import {
+import StateManager, {
   ACTIVE_SPLIT,
   LAYER_DELETE,
   LAYER_SELECT,
   HISTORY_UNDO,
-  HISTORY_REDO,
+  HISTORY_REDO, ACTIVE_PASTE, LAYER_CLONE, LAYER_COPY,
 } from "@designcombo/state";
 import { getCurrentTime } from "../utils/time";
 import useStore from "../store/use-store";
 
-export function useKeyboardShortcuts() {
+export function useKeyboardShortcuts(stateManager: StateManager) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const target = e.target as HTMLElement;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target.isContentEditable
+      ) return;
 
       const mod = e.ctrlKey || e.metaKey;
       const { activeIds, playerRef } = useStore.getState();
@@ -31,7 +36,7 @@ export function useKeyboardShortcuts() {
       }
 
       // delete
-      if (e.code === "Delete" || e.code === "Backspace") {
+      if (e.code === "Delete") {
         if (!activeIds.length) return;
         dispatch(LAYER_DELETE);
       }
@@ -57,6 +62,73 @@ export function useKeyboardShortcuts() {
         );
         if (!allIds.length) return;
         dispatch(LAYER_SELECT, { payload: { trackItemIds: allIds } });
+      }
+
+      // copy
+      if (mod && e.code === "KeyC") {
+        e.preventDefault();
+        if (!activeIds.length) return;
+        dispatch(LAYER_COPY);
+      }
+
+      // duplicate
+      if (mod && e.code === "KeyD") {
+        e.preventDefault();
+        if (!activeIds.length) return;
+        dispatch(LAYER_CLONE);
+      }
+
+      // cut
+      if (mod && e.code === "KeyX") {
+        e.preventDefault();
+        if (!activeIds.length) return;
+        dispatch(LAYER_COPY);
+        dispatch(LAYER_DELETE);
+      }
+
+      // paste
+      if (mod && e.code === "KeyV") {
+        e.preventDefault();
+        const doPaste = async () => {
+          const before = useStore.getState().trackItemIds;
+          dispatch(ACTIVE_PASTE);
+          await Promise.resolve();
+
+          const after = useStore.getState();
+          const newIds = after.trackItemIds.filter(id => !before.includes(id));
+          if (!newIds.length) return;
+
+          const { fps: currentFps } = useStore.getState();
+          const currentFrame = useStore.getState().playerRef?.current?.getCurrentFrame() ?? 0;
+          const currentTime = (currentFrame / currentFps) * 1000;
+          const minFrom = Math.min(
+            ...newIds.map(id => after.trackItemsMap[id]?.display.from ?? 0)
+          );
+          const offset = currentTime - minFrom;
+
+          const updatedMap = { ...after.trackItemsMap };
+          newIds.forEach(id => {
+            const item = updatedMap[id];
+            if (!item) return;
+            updatedMap[id] = {
+              ...item,
+              display: {
+                from: item.display.from + offset,
+                to: item.display.to + offset,
+              },
+              details: {
+                ...item.details,
+                locked: false,
+              },
+            };
+          });
+
+          stateManager.updateState(
+            { trackItemsMap: updatedMap },
+            { updateHistory: true, kind: "update" }
+          );
+        };
+        doPaste().then(r => {});
       }
     };
 

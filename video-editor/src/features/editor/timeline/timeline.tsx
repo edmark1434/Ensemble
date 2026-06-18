@@ -1,34 +1,31 @@
-import { useEffect, useRef, useState } from "react";
+import {useEffect, useRef, useState} from "react";
 import Header from "./header";
 import Ruler from "./ruler";
-import { timeMsToUnits, unitsToTimeMs } from "@designcombo/timeline";
+import {timeMsToUnits, unitsToTimeMs} from "@designcombo/timeline";
 import CanvasTimeline from "./items/timeline";
 import useStore from "../store/use-store";
 import Playhead from "./playhead";
-import { useTheme } from "next-themes";
-import { useCurrentPlayerFrame } from "../hooks/use-current-frame";
+import {useTheme} from "next-themes";
+import {useCurrentPlayerFrame} from "../hooks/use-current-frame";
 import {
   Audio,
-  Image,
-  Text,
-  Video,
   Caption,
   Helper,
-  Track,
+  HillAudioBars,
+  Image,
   LinealAudioBars,
   RadialAudioBars,
-  WaveAudioBars,
-  HillAudioBars
+  Text,
+  Track,
+  Video,
+  WaveAudioBars
 } from "./items";
 import StateManager from "@designcombo/state";
-import {
-  TIMELINE_OFFSET_CANVAS_LEFT,
-  TIMELINE_OFFSET_CANVAS_RIGHT
-} from "../constants/constants";
+import {TIMELINE_OFFSET_CANVAS_LEFT, TIMELINE_OFFSET_CANVAS_RIGHT} from "../constants/constants";
 import PreviewTrackItem from "./items/preview-drag-item";
-import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
-import { useStateManagerEvents } from "../hooks/use-state-manager-events";
-import { useResizbleTimeline } from "../hooks/use-resizable-timeline";
+import {useTimelineOffsetX} from "../hooks/use-timeline-offset";
+import {useStateManagerEvents} from "../hooks/use-state-manager-events";
+import {useResizbleTimeline} from "../hooks/use-resizable-timeline";
 
 CanvasTimeline.registerItems({
   Text,
@@ -259,20 +256,10 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
           pointer.y >= b.top && pointer.y <= b.top + b.height;
       });
 
+      if (!target) return; // don't deselect here, just bail
+
       const isShift = canvas.isShiftKey;
-
-      if (!target) {
-        canvas.discardActiveObject();
-        canvas.requestRenderAll();
-        stateManager.updateState(
-          { activeIds: [] },
-          { updateHistory: false, kind: 'layer:selection' }
-        );
-        activeIdsBeforeClick = [];
-        return;
-      }
-
-      if (!isShift) return; // let library handle normal clicks, we do it in mouse:up
+      if (!isShift) return; // normal clicks are handled in mouse:up
 
       const itemId = target.id;
       const { trackItemsMap } = useStore.getState();
@@ -309,6 +296,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     });
     canvas.on('mouse:move', () => {
       isDragging = true;
+      activeIdsBeforeClick = [...useStore.getState().activeIds];
     });
     canvas.on('mouse:up', (e: any) => {
       if (isDragging) return;
@@ -321,10 +309,19 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
           pointer.y >= b.top && pointer.y <= b.top + b.height;
       });
 
-      if (!target || canvas.isShiftKey) return;
+      if (!target) {
+        canvas.discardActiveObject();
+        canvas.requestRenderAll();
+        stateManager.updateState(
+          { activeIds: [] },
+          { updateHistory: false, kind: 'layer:selection' }
+        );
+        activeIdsBeforeClick = [];
+        return;
+      }
+      if (canvas.isShiftKey) return;
 
       const itemId = target.id;
-      const { trackItemsMap } = useStore.getState();
 
       canvas.selectTrackItemByIds([itemId]);
       stateManager.updateState(
@@ -400,7 +397,11 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       onMouseMove={onMouseMove}
       onMouseOut={onMouseOut}
     >
-      <Header toggleFullHeight={toggleFullHeight} timelineHeight={timelineHeight} />
+      <Header
+        toggleFullHeight={toggleFullHeight}
+        timelineHeight={timelineHeight}
+        stateManager={stateManager}
+      />
       <Ruler
         onClick={onClickRuler}
         scrollLeft={scrollLeft}
