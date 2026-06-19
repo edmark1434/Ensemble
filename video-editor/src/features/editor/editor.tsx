@@ -39,6 +39,7 @@ import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
 import useUpdateAnsestors from "@/features/editor/hooks/use-update-ansestors";
 import {PLAYER_PAUSE, PLAYER_PLAY} from "@/features/editor/constants/events";
 import {cn} from "@/lib/utils";
+import {useKeyboardShortcuts} from './hooks/use-keyboard-shortcuts'
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -103,7 +104,11 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
 
         <div className="grid grid-cols-3 items-center p-2 pt-1 bg-card">
           <div className="text-xs flex items-center gap-1 px-2">
-          <span className="font-medium text-zinc-200">
+          <span
+            className="font-medium text-zinc-200"
+            id="video-current-time"
+            data-current-time={currentFrame / fps}
+          >
             {frameToTimeString({ frame: currentFrame }, { fps })}
           </span>
             <span className="text-zinc-500">|</span>
@@ -216,7 +221,7 @@ const Panels = ({
                   defaultSize={showMenuItem ? 40 : 70}
                   minSize={showMenuItem ? 35 : 50}
                   maxSize={showMenuItem ? 40 : 70}
-                  className="relative bg-card min-w-0 overflow-visible!"
+                  className="relative bg-card min-w-0"
               >
                 <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} />
               </ResizablePanel>
@@ -226,7 +231,7 @@ const Panels = ({
                   defaultSize={30}
                   minSize={30}
                   maxSize={showMenuItem ? 40 : 50}
-                  className="relative bg-card min-w-0 overflow-visible!"
+                  className="relative bg-card min-w-0"
               >
                 <Controls />
               </ResizablePanel>
@@ -359,6 +364,14 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
 
   useEffect(() => {
     setLoaded(true);
+  }, []);
+
+  useKeyboardShortcuts(stateManager);
+
+  useEffect(() => {
+    const lockWindowScroll = () => window.scrollTo(0, 0);
+    window.addEventListener("scroll", lockWindowScroll);
+    return () => window.removeEventListener("scroll", lockWindowScroll);
   }, []);
 
   return (

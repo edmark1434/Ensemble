@@ -1,34 +1,31 @@
-import { useEffect, useRef, useState } from "react";
+import {useEffect, useRef, useState} from "react";
 import Header from "./header";
 import Ruler from "./ruler";
-import { timeMsToUnits, unitsToTimeMs } from "@designcombo/timeline";
+import {timeMsToUnits, unitsToTimeMs} from "@designcombo/timeline";
 import CanvasTimeline from "./items/timeline";
 import useStore from "../store/use-store";
 import Playhead from "./playhead";
-import { useTheme } from "next-themes";
-import { useCurrentPlayerFrame } from "../hooks/use-current-frame";
+import {useTheme} from "next-themes";
+import {useCurrentPlayerFrame} from "../hooks/use-current-frame";
 import {
   Audio,
-  Image,
-  Text,
-  Video,
   Caption,
   Helper,
-  Track,
+  HillAudioBars,
+  Image,
   LinealAudioBars,
   RadialAudioBars,
-  WaveAudioBars,
-  HillAudioBars
+  Text,
+  Track,
+  Video,
+  WaveAudioBars
 } from "./items";
 import StateManager from "@designcombo/state";
-import {
-  TIMELINE_OFFSET_CANVAS_LEFT,
-  TIMELINE_OFFSET_CANVAS_RIGHT
-} from "../constants/constants";
+import {TIMELINE_OFFSET_CANVAS_LEFT, TIMELINE_OFFSET_CANVAS_RIGHT} from "../constants/constants";
 import PreviewTrackItem from "./items/preview-drag-item";
-import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
-import { useStateManagerEvents } from "../hooks/use-state-manager-events";
-import { useResizbleTimeline } from "../hooks/use-resizable-timeline";
+import {useTimelineOffsetX} from "../hooks/use-timeline-offset";
+import {useStateManagerEvents} from "../hooks/use-state-manager-events";
+import {useResizbleTimeline} from "../hooks/use-resizable-timeline";
 
 CanvasTimeline.registerItems({
   Text,
@@ -220,6 +217,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     canvas.state.subscribeToUpdateItemDetails(({ trackItemsMap }) => {
       canvas.getTrackItems().forEach((item: any) => {
         const details = trackItemsMap[item.id]?.details;
+
         if (details?.hidden !== undefined && item.hidden !== details.hidden) {
           item.hidden = details.hidden;
           item.opacity = details.hidden ? 0.5 : 1;
@@ -234,9 +232,9 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
           const locked = details.locked;
           item.lockMovementX = locked;
           item.lockMovementY = locked;
-          item.selectable = !locked;    // blocks marquee/group select (we manually add click select)
           item.lockScalingX = locked;
           item.lockScalingY = locked;
+          item.selectable = !locked;    // blocks marquee/group select (we manually add click select)
           item.hasControls = !locked;
           item.dirty = true;
         }
@@ -245,24 +243,93 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     });
 
     let isDragging = false;
-    canvas.on('mouse:down', () => {
+    let activeIdsBeforeClick: string[] = [];
+
+    canvas.on('mouse:down', (e: any) => {
       isDragging = false;
+
+      const pointer = canvas.getScenePoint(e.e);
+      const trackItems = canvas.getTrackItems() as any[];
+      const target = trackItems.find(item => {
+        const b = item.getBoundingRect();
+        return pointer.x >= b.left && pointer.x <= b.left + b.width &&
+          pointer.y >= b.top && pointer.y <= b.top + b.height;
+      });
+
+      if (!target) return; // don't deselect here, just bail
+
+      const isShift = canvas.isShiftKey;
+      if (!isShift) return; // normal clicks are handled in mouse:up
+
+      const itemId = target.id;
+      const { trackItemsMap } = useStore.getState();
+      const isLocked = trackItemsMap[itemId]?.details?.locked;
+      let next = [itemId];
+
+      if (isLocked) {
+        next = [itemId];
+      } else {
+        const existingNonLocked = activeIdsBeforeClick.filter(
+          id => !trackItemsMap[id]?.details?.locked
+        );
+        next = existingNonLocked.includes(itemId)
+          ? existingNonLocked.filter(id => id !== itemId)
+          : [...existingNonLocked, itemId];
+      }
+
+      if (next.length === 0) {
+        canvas.discardActiveObject();
+        canvas.requestRenderAll();
+        stateManager.updateState(
+          { activeIds: [] },
+          { updateHistory: false, kind: 'layer:selection' }
+        );
+      } else {
+        canvas.selectTrackItemByIds(next);
+        stateManager.updateState(
+          { activeIds: next },
+          { updateHistory: false, kind: 'layer:selection' }
+        );
+      }
+
+      activeIdsBeforeClick = next;
     });
     canvas.on('mouse:move', () => {
       isDragging = true;
+      activeIdsBeforeClick = [...useStore.getState().activeIds];
     });
     canvas.on('mouse:up', (e: any) => {
       if (isDragging) return;
-      if (!e.target) return;
-      const itemId = e.target.id;
-      if (!itemId) return;
-      const { trackItemsMap } = stateManager.getState();
-      if (trackItemsMap[itemId]?.details?.locked) {
+
+      const pointer = canvas.getScenePoint(e.e);
+      const trackItems = canvas.getTrackItems() as any[];
+      const target = trackItems.find(item => {
+        const b = item.getBoundingRect();
+        return pointer.x >= b.left && pointer.x <= b.left + b.width &&
+          pointer.y >= b.top && pointer.y <= b.top + b.height;
+      });
+
+      if (!target) {
+        canvas.discardActiveObject();
+        canvas.requestRenderAll();
         stateManager.updateState(
-            { activeIds: [itemId] },
-            { updateHistory: false, kind: 'layer:selection' }
+          { activeIds: [] },
+          { updateHistory: false, kind: 'layer:selection' }
         );
+        activeIdsBeforeClick = [];
+        return;
       }
+      if (canvas.isShiftKey) return;
+
+      const itemId = target.id;
+
+      canvas.selectTrackItemByIds([itemId]);
+      stateManager.updateState(
+        { activeIds: [itemId] },
+        { updateHistory: false, kind: 'layer:selection' }
+      );
+
+      activeIdsBeforeClick = [itemId];
     });
 
     return () => {
@@ -330,7 +397,11 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       onMouseMove={onMouseMove}
       onMouseOut={onMouseOut}
     >
-      <Header toggleFullHeight={toggleFullHeight} timelineHeight={timelineHeight} />
+      <Header
+        toggleFullHeight={toggleFullHeight}
+        timelineHeight={timelineHeight}
+        stateManager={stateManager}
+      />
       <Ruler
         onClick={onClickRuler}
         scrollLeft={scrollLeft}

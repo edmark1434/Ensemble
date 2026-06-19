@@ -34,7 +34,10 @@ import Inbox from "@/pages/user/10_inbox/Main.tsx";
 import SectionPlaceholder from './pages/user/0_config/SectionPlaceholder.tsx'
 
 import JobPostingMain from "@/pages/user/6_jobs/Job_Posting/main.tsx";
+import {CreateJobWizard} from "@/pages/user/6_jobs/Job_Posting/CreateJobWizard.tsx";
+
 import GigMarketplace from "@/pages/user/7_gigs/Gig_Posting/main.tsx";
+import {CreateGigWizard} from "@/pages/user/7_gigs/Gig_Posting/CreateGigWizard.tsx";
 import Verification from "@/pages/user/9_verification/Verification.tsx";
 
 import AdminLayout from './pages/admin/AdminLayout'
@@ -135,10 +138,12 @@ function App() {
 
           <Route path='/jobs'>
             <Route index element={<JobPostingMain />} />
+            <Route path='create' element={<CreateJobWizard />} />
             <Route path=':id' element={<JobPostingMain />} />
           </Route>
           <Route path='/gigs'>
             <Route index element={<GigMarketplace />} />
+            <Route path='create' element={<CreateGigWizard />} />
             <Route path=':id' element={<GigMarketplace />} />
           </Route>
           <Route path='/verification' element={<Verification />} />

@@ -1,11 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { dispatch } from "@designcombo/events";
-import {
+import StateManager, {
   ACTIVE_SPLIT,
   LAYER_CLONE,
   LAYER_DELETE,
   TIMELINE_SCALE_CHANGED,
-  EDIT_OBJECT, LAYER_SELECT
+  EDIT_OBJECT,
+  LAYER_SELECT,
+  LAYER_COPY,
+  ACTIVE_PASTE
 } from "@designcombo/state";
 import { PLAYER_PAUSE, PLAYER_PLAY } from "../constants/events";
 import { frameToTimeString, getCurrentTime, timeToString } from "../utils/time";
@@ -18,7 +21,7 @@ import {
   SquareSplitHorizontal,
   Trash,
   ZoomIn,
-  ZoomOut, EyeOff, LockOpen, Eye, VolumeOff, Volume2, Home
+  ZoomOut, EyeOff, LockOpen, Eye, VolumeOff, Volume2, Home, Scissors, ClipboardPaste
 } from "lucide-react";
 import {
   getFitZoomLevel,
@@ -93,9 +96,10 @@ const IconPlayerSkipForward = ({ size }: { size: number }) => (
     <path d="M20 5l0 14" />
   </svg>
 );
-const Header = ({ toggleFullHeight, timelineHeight }: {
+const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
   toggleFullHeight: () => void;
   timelineHeight: number;
+  stateManager: StateManager;
 }) => {
   const [playing, setPlaying] = useState(false);
   const { duration, fps, scale, playerRef, activeIds, timeline, trackItemsMap } = useStore();
@@ -117,6 +121,83 @@ const Header = ({ toggleFullHeight, timelineHeight }: {
     });
     // Restore full selection after
     dispatch(LAYER_SELECT, { payload: { trackItemIds: activeIds } });
+  };
+
+  const doActiveCopy = () => {
+    dispatch(LAYER_COPY);
+  };
+  const doActiveCut = () => {
+    dispatch(LAYER_COPY);
+    dispatch(LAYER_DELETE);
+  };
+  const doActivePaste = async () => {
+    const before = useStore.getState().trackItemIds;
+
+    dispatch(ACTIVE_PASTE);
+    await Promise.resolve();
+
+    const after = useStore.getState();
+    const newIds = after.trackItemIds.filter(id => !before.includes(id));
+
+    if (!newIds.length) return;
+
+    const currentTime = (currentFrame / fps) * 1000;
+    const minFrom = Math.min(
+      ...newIds.map(id => after.trackItemsMap[id]?.display.from ?? 0)
+    );
+    const offset = currentTime - minFrom;
+
+    const updatedMap = { ...after.trackItemsMap };
+    newIds.forEach(id => {
+      const item = updatedMap[id];
+      if (!item) return;
+      updatedMap[id] = {
+        ...item,
+        display: {
+          from: item.display.from + offset,
+          to: item.display.to + offset,
+        },
+        details: {
+          ...item.details,
+          locked: false,
+        },
+      };
+    });
+
+    stateManager.updateState(
+      { trackItemsMap: updatedMap },
+      { updateHistory: !0, kind: "update" }
+    );
+  };
+
+  const doActiveDuplicate = async () => {
+    const before = useStore.getState().trackItemIds;
+
+    dispatch(LAYER_CLONE);
+    await Promise.resolve();
+
+    const after = useStore.getState();
+    const newIds = after.trackItemIds.filter(id => !before.includes(id));
+
+    if (!newIds.length) return;
+
+    const updatedMap = { ...after.trackItemsMap };
+    newIds.forEach(id => {
+      const item = updatedMap[id];
+      if (!item) return;
+      updatedMap[id] = {
+        ...item,
+        details: {
+          ...item.details,
+          locked: false,
+        },
+      };
+    });
+
+    stateManager.updateState(
+      { trackItemsMap: updatedMap },
+      { updateHistory: true, kind: "update" }
+    );
   };
 
   const changeScale = (newScale: ITimelineScaleState) => {
@@ -248,164 +329,184 @@ const Header = ({ toggleFullHeight, timelineHeight }: {
           }}
         >
           <div className="flex px-2 pr-4 gap-1 items-center">
-            {activeIds.length ? (
-              <>
-                <Tooltip delayDuration={10}>
-                  <TooltipTrigger asChild>
-                    <Button
-                        disabled={!activeIds.length}
-                        onClick={toggleItemLock}
-                        variant={isLocked ? "secondary" : "ghost"}
-                        size={"icon"}
-                        className={`disabled:opacity-0 disabled:pointer-events-none ${isLocked ? "text-primary hover:text-primary" : ""}`}
-                    >
-                      {isLocked ? <Lock size={16} /> : <LockOpen size={16} />}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
-                    {isLocked ? "Unlock" : "Lock"}
-                  </TooltipContent>
-                </Tooltip>
-
-                {activeItems.some(item => item.type !== "audio") && (
-                  <Tooltip delayDuration={10}>
-                    <TooltipTrigger asChild>
-                      <Button
-                          disabled={!activeIds.length || isLocked}
-                          onClick={toggleItemHide}
-                          variant={isHidden ? "secondary" : "ghost"}
-                          size={"icon"}
-                          className={`disabled:opacity-0 disabled:pointer-events-none ${isHidden ? "text-primary hover:text-primary" : ""}`}
-                      >
-                        {isHidden ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
-                      {isHidden ? "Show" : "Hide"}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-
-                {activeItems.some(item => item.type === "audio" || item.type === "video") && (
-                  <Tooltip delayDuration={10}>
-                    <TooltipTrigger asChild>
-                      <Button
-                          disabled={!activeIds.length || isLocked}
-                          onClick={toggleItemMute}
-                          variant={isMuted ? "secondary" : "ghost"}
-                          size={"icon"}
-                          className={`disabled:opacity-0 disabled:pointer-events-none ${isMuted ? "text-primary hover:text-primary" : ""}`}
-                      >
-                        {isMuted ? <VolumeOff size={16} /> : <Volume2 size={16} />}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
-                      {isMuted ? "Unmute" : "Mute"}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-
-                <Tooltip delayDuration={10}>
-                  <TooltipTrigger asChild>
-                    <Button
-                        disabled={!activeIds.length || isLocked}
-                        onClick={doActiveSplit}
-                        variant={"ghost"}
-                        size={"icon"}
-                        className="disabled:opacity-0 disabled:pointer-events-none"
-                    >
-                      <SquareSplitHorizontal strokeWidth={2} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
-                    Split
-                  </TooltipContent>
-                </Tooltip>
-
-                <Tooltip delayDuration={10}>
-                  <TooltipTrigger asChild>
-                    <Button
-                        disabled={!activeIds.length || isLocked}
-                        onClick={() => {
-                          dispatch(LAYER_CLONE);
-                        }}
-                        variant={"ghost"}
-                        size={"icon"}
-                        className="disabled:opacity-0 disabled:pointer-events-none"
-                    >
-                      <Copy size={16} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
-                    Copy
-                  </TooltipContent>
-                </Tooltip>
-
-                <Tooltip delayDuration={10}>
-                  <TooltipTrigger asChild>
-                    <Button
-                        disabled={!activeIds.length || isLocked}
-                        onClick={() => {
-                          dispatch(LAYER_CLONE);
-                        }}
-                        variant={"ghost"}
-                        size={"icon"}
-                        className="disabled:opacity-0 disabled:pointer-events-none"
-                    >
-                      <CopyPlus size={16} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
-                    Duplicate
-                  </TooltipContent>
-                </Tooltip>
-
-                <Tooltip delayDuration={10}>
-                  <TooltipTrigger asChild>
-                    <Button
-                        disabled={!activeIds.length || isLocked}
-                        onClick={doActiveDelete}
-                        variant={"ghost"}
-                        size={"icon"}
-                        className="disabled:opacity-0 disabled:pointer-events-none"
-                    >
-                      <Trash size={16} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
-                    Delete
-                  </TooltipContent>
-                </Tooltip>
-              </>
-            ) : (
-              <>
-                {/*<Tooltip delayDuration={10}>*/}
-                {/*  <TooltipTrigger asChild>*/}
-                {/*    <Button*/}
-                {/*        onClick={doActiveDelete}*/}
-                {/*        variant={"ghost"}*/}
-                {/*        size={"icon"}*/}
-                {/*        className="disabled:opacity-0 disabled:pointer-events-none"*/}
-                {/*    >*/}
-                {/*      <Home size={16} />*/}
-                {/*    </Button>*/}
-                {/*  </TooltipTrigger>*/}
-                {/*  <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>*/}
-                {/*    Home timeline*/}
-                {/*  </TooltipContent>*/}
-                {/*</Tooltip>*/}
-
-                <Button
-                    onClick={doActiveDelete}
-                    variant={"ghost"}
-                    size={"sm"}
-                    className="disabled:opacity-0 disabled:pointer-events-none font-normal"
-                >
-                  Home
-                </Button>
-              </>
+            {!(activeIds.length > 0) && (
+              <Button
+                onClick={doActiveDelete}
+                variant={"secondary"}
+                size={"sm"}
+                className="disabled:opacity-0 disabled:pointer-events-none font-normal"
+              >
+                Home
+              </Button>
             )}
 
+            {activeIds.length > 0 && (
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    disabled={!activeIds.length}
+                    onClick={toggleItemLock}
+                    variant={isLocked ? "secondary" : "ghost"}
+                    size={"icon"}
+                    className={`disabled:opacity-0 disabled:pointer-events-none ${isLocked ? "text-primary hover:text-primary" : ""}`}
+                  >
+                    {isLocked ? <Lock size={16} /> : <LockOpen size={16} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                  {isLocked ? "Unlock" : "Lock"}
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {activeItems.some(item => item.type !== "audio") && !isLocked && (
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                      disabled={!activeIds.length || isLocked}
+                      onClick={toggleItemHide}
+                      variant={isHidden ? "secondary" : "ghost"}
+                      size={"icon"}
+                      className={`disabled:opacity-0 disabled:pointer-events-none ${isHidden ? "text-primary hover:text-primary" : ""}`}
+                  >
+                    {isHidden ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                  {isHidden ? "Show" : "Hide"}
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {activeItems.some(item => item.type === "audio" || item.type === "video") && !isLocked && (
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                      disabled={!activeIds.length || isLocked}
+                      onClick={toggleItemMute}
+                      variant={isMuted ? "secondary" : "ghost"}
+                      size={"icon"}
+                      className={`disabled:opacity-0 disabled:pointer-events-none ${isMuted ? "text-primary hover:text-primary" : ""}`}
+                  >
+                    {isMuted ? <VolumeOff size={16} /> : <Volume2 size={16} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                  {isMuted ? "Unmute" : "Mute"}
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {activeIds.length > 0 && !isLocked && (
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    disabled={!activeIds.length || isLocked}
+                    onClick={doActiveSplit}
+                    variant={"ghost"}
+                    size={"icon"}
+                    className="disabled:opacity-0 disabled:pointer-events-none"
+                  >
+                    <SquareSplitHorizontal size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                  Split
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {activeIds.length > 0 && (
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    disabled={!activeIds.length}
+                    onClick={doActiveCopy}
+                    variant={"ghost"}
+                    size={"icon"}
+                    className="disabled:opacity-0 disabled:pointer-events-none"
+                  >
+                    <Copy size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                  Copy
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {activeIds.length > 0 && (
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    disabled={!activeIds.length}
+                    onClick={doActiveDuplicate}
+                    variant={"ghost"}
+                    size={"icon"}
+                    className="disabled:opacity-0 disabled:pointer-events-none"
+                  >
+                    <CopyPlus size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                  Duplicate
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            {activeIds.length > 0 && !isLocked && (
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    disabled={!activeIds.length || isLocked}
+                    onClick={doActiveCut}
+                    variant={"ghost"}
+                    size={"icon"}
+                    className="disabled:opacity-0 disabled:pointer-events-none"
+                  >
+                    <Scissors size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                  Cut
+                </TooltipContent>
+              </Tooltip>
+            )}
+
+            <Tooltip delayDuration={10}>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={doActivePaste}
+                  variant={"ghost"}
+                  size={"icon"}
+                  className="disabled:opacity-0 disabled:pointer-events-none"
+                >
+                  <ClipboardPaste size={16} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                Paste
+              </TooltipContent>
+            </Tooltip>
+
+            {activeIds.length > 0 && !isLocked && (
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    disabled={!activeIds.length || isLocked}
+                    onClick={doActiveDelete}
+                    variant={"ghost"}
+                    size={"icon"}
+                    className="disabled:opacity-0 disabled:pointer-events-none"
+                  >
+                    <Trash size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                  Delete
+                </TooltipContent>
+              </Tooltip>
+            )}
           </div>
 
           <div className="flex items-center justify-center gap-1">
@@ -502,8 +603,8 @@ const ZoomControl = ({
         <Slider
           className="w-28 hidden lg:flex"
           value={[localValue]}
-          min={1}
-          max={35}
+          min={0}
+          max={34}
           step={1}
           onValueChange={(e) => {
             setLocalValue(e[0]); // Update local state

@@ -41,11 +41,8 @@ const Composition = () => {
 
   const handleTextChange = (id: string, _: string) => {
     const elRef = document.querySelector(`.id-${id}`) as HTMLDivElement;
-    const containerDiv = elRef.firstElementChild
-      ?.firstElementChild as HTMLDivElement;
-    const textDiv = elRef.firstElementChild?.firstElementChild
-      ?.firstElementChild?.firstElementChild
-      ?.firstElementChild as HTMLDivElement;
+    const containerDiv = elRef.firstElementChild?.firstElementChild as HTMLDivElement;
+    const textEl = document.querySelector(`[data-text-id="${id}"]`) as HTMLDivElement;
 
     const {
       fontFamily,
@@ -56,17 +53,17 @@ const Composition = () => {
       textShadow,
       webkitTextStroke,
       textTransform
-    } = textDiv.style;
-    if (!elRef.innerText) return;
+    } = textEl.style;
 
-    // Check if any word is wider than current container
+    if (!textEl.innerHTML) return;
+
+    // measure longest word
     const words = elRef.innerText.split(/\s+/);
     const longestWord = words.reduce(
       (longest, word) => (word.length > longest.length ? word : longest),
       ""
     );
 
-    // Create temporary element to measure longest word width
     const tempDiv = document.createElement("div");
     tempDiv.style.visibility = "hidden";
     tempDiv.style.position = "absolute";
@@ -80,34 +77,82 @@ const Composition = () => {
     const wordWidth = tempDiv.offsetWidth;
     document.body.removeChild(tempDiv);
 
-    // Expand width if word is wider than current container
-    const currentWidth = elRef.clientWidth;
+    const rawHeight = parseFloat(elRef.style.height);
+    const currentHeight = isNaN(rawHeight) ? elRef.clientHeight : rawHeight;
+
+    const rawWidth = parseFloat(elRef.style.width);
+    const currentWidth = isNaN(rawWidth) ? elRef.clientWidth : rawWidth;
+
+    // only grow width if longest word can't fit
+    let finalWidth = currentWidth;
     if (wordWidth > currentWidth) {
-      elRef.style.width = `${wordWidth}px`;
-      textDiv.style.width = `${wordWidth}px`;
-      containerDiv.style.width = `${wordWidth}px`;
+      finalWidth = wordWidth;
+      elRef.style.width = `${finalWidth}px`;
+      textEl.style.width = `${finalWidth}px`;
+      containerDiv.style.width = `${finalWidth}px`;
     }
 
-    const newHeight = calculateTextHeight({
-      family: fontFamily,
-      fontSize,
-      fontWeight,
-      letterSpacing,
-      lineHeight,
-      text: elRef.innerText || "",
-      textShadow: textShadow,
-      webkitTextStroke,
-      width: elRef.style.width,
-      id: id,
-      textTransform
-    });
-    const currentHeight = elRef.clientHeight;
-    if (newHeight > currentHeight) {
-      elRef.style.height = `${newHeight}px`;
-      textDiv.style.height = `${newHeight}px`;
+    // measure height the same way TextAnimated renders — single div with white-space: pre-line
+    const rawText = textEl.innerText
+      .replace(/\n+$/, "")
+      .split("\n")
+      .map(line => line === "" ? "0" : line)
+      .join("\n")
+      .replace(/(^|\n)0(\n0)+/g, "\n0");
+    const tempMeasure = document.createElement("div");
+    tempMeasure.style.visibility = "hidden";
+    tempMeasure.style.position = "absolute";
+    tempMeasure.style.top = "-9999px";
+    tempMeasure.style.whiteSpace = "pre-line";
+    tempMeasure.style.overflowWrap = "break-word";
+    tempMeasure.style.wordBreak = "normal";
+    tempMeasure.style.width = `${finalWidth}px`;
+    tempMeasure.style.fontSize = fontSize;
+    tempMeasure.style.fontFamily = fontFamily;
+    tempMeasure.style.fontWeight = fontWeight;
+    tempMeasure.style.letterSpacing = letterSpacing;
+    tempMeasure.style.lineHeight = lineHeight;
+    tempMeasure.style.webkitTextStroke = webkitTextStroke;
+    tempMeasure.style.textShadow = textShadow;
+    tempMeasure.style.textTransform = textTransform;
+    tempMeasure.style.minWidth = "1ch";
+    tempMeasure.innerText = rawText;
+    document.body.appendChild(tempMeasure);
+    const minHeight = tempMeasure.clientHeight;
+    document.body.removeChild(tempMeasure);
+
+    console.log("handleflopchange rawtext", rawText);
+    console.log("handleflopchange minheight", minHeight);
+
+    // only grow height if box is too short
+    let finalHeight = currentHeight;
+    if (minHeight > currentHeight) {
+      finalHeight = minHeight;
+      elRef.style.height = `${finalHeight}px`;
+      textEl.style.height = `${finalHeight}px`;
+
+      const animationDiv = elRef.firstElementChild?.firstElementChild as HTMLDivElement | null;
+      if (animationDiv) {
+        animationDiv.style.height = `${finalHeight}px`;
+      }
     }
+
     sceneMoveableRef?.current?.moveable.updateRect();
     sceneMoveableRef?.current?.moveable.forceUpdate();
+
+    // only dispatch if something actually changed
+    if (finalWidth !== currentWidth || finalHeight !== currentHeight) {
+      dispatch(EDIT_OBJECT, {
+        payload: {
+          [id]: {
+            details: {
+              width: finalWidth,
+              height: finalHeight,
+            }
+          }
+        }
+      });
+    }
   };
 
   const onTextBlur = (id: string, _: string) => {
@@ -158,6 +203,13 @@ const Composition = () => {
 
     const subscription = stateEvents.subscribe((obj) => {
       if (obj.key === ENTER_EDIT_MODE) {
+        const incomingId = obj.value?.payload.id;
+        const freshMap = useStore.getState().trackItemsMap;
+
+        if (incomingId && freshMap[incomingId]?.details?.locked) {
+          return;
+        }
+
         if (editableTextId) {
           // get element by  data-text-id={id}
           const element = document.querySelector(
@@ -179,15 +231,19 @@ const Composition = () => {
           }
 
           if (trackItemIds.includes(editableTextId)) {
-            dispatch(EDIT_OBJECT, {
-              payload: {
-                [editableTextId]: {
-                  details: {
-                    text: text || ""
+            const freshMap = useStore.getState().trackItemsMap;
+            const item = freshMap[editableTextId];
+            if (item) {
+              dispatch(EDIT_OBJECT, {
+                payload: {
+                  [editableTextId]: {
+                    details: {
+                      text: text || ""
+                    }
                   }
                 }
-              }
-            });
+              });
+            }
           }
         }
         setEditableTextId(obj.value?.payload.id);
