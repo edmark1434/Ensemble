@@ -22,6 +22,7 @@ import UserHeader from "@/components/nav/user_header";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import useGlobalState from "@/lib/global_state";
+import { APP_VERSION } from "@/version.tsx";
 
 interface Asset {
   id: number;
@@ -423,7 +424,7 @@ const Home: React.FC = () => {
           <div className="relative z-10 max-w-2xl">
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-400 mb-4 tracking-wide uppercase">
               <span className="flex h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />
-              V1.2.0.10 : Pre-Alpha
+              {APP_VERSION}
             </div>
 
             <h1
