@@ -428,11 +428,11 @@ export function SceneInteractions({
         }
       }}
       onResize={({
-        target,
-        width: nextWidth,
-        height: nextHeight,
-        direction
-      }) => {
+                   target,
+                   width: nextWidth,
+                   height: nextHeight,
+                   direction
+                 }) => {
         const id = getIdFromClassName(target.className);
         if (direction[1] === 1 || direction[1] === -1) {
           if (trackItemsMap[id].type === "progressSquare") {
@@ -463,62 +463,56 @@ export function SceneInteractions({
             });
             return;
           }
-          // Check if this is pure "s" direction (only vertical, no horizontal change)
+
           const isPureSouthDirection =
             (direction[1] === 1 || direction[1] === -1) && direction[0] === 0;
 
-          // Handle "s" target type with content-aware height constraints (only for pure south direction)
           if (
             isPureSouthDirection &&
-            (trackItemsMap[id].type === "text" ||
-              trackItemsMap[id].type === "caption")
+            (trackItemsMap[id].type === "text" || trackItemsMap[id].type === "caption")
           ) {
             const type = trackItemsMap[id].type;
-
-            const selector =
-              type === "text" ? `[data-text-id="${id}"]` : `#caption-${id}`;
-
+            const selector = type === "text" ? `[data-text-id="${id}"]` : `#caption-${id}`;
             const textEl = document.querySelector(selector) as HTMLDivElement;
 
+            console.log("onresize textel.innerhtml", textEl.innerHTML);
+
             if (textEl) {
-              // Calculate minimum content height for current width
               const minContentHeight = calculateTextHeight({
                 family: textEl.style.fontFamily,
                 fontSize: textEl.style.fontSize,
                 fontWeight: textEl.style.fontWeight,
                 letterSpacing: textEl.style.letterSpacing,
                 lineHeight: textEl.style.lineHeight,
-                text: (textEl as HTMLDivElement).innerHTML,
+                text: textEl.innerHTML,
                 textShadow: textEl.style.textShadow,
                 webkitTextStroke: textEl.style.webkitTextStroke,
                 width: nextWidth + "px",
                 textTransform: textEl.style.textTransform
               });
 
-              // Use the larger of the requested height or minimum content height
+              // only clamp upward, user can freely resize if above minimum
               const finalHeight = Math.max(nextHeight, minContentHeight);
 
-              // Update target dimensions
               target.style.width = `${nextWidth}px`;
               target.style.height = `${finalHeight}px`;
 
-              // Safely access nested elements
-              const animationDiv = target.firstElementChild
-                ?.firstElementChild as HTMLDivElement | null;
+              console.log("onResize.nextHeight", nextHeight);
+              console.log("onResize.minContentHeight", minContentHeight);
+              console.log("onResize.finalHeight", finalHeight);
+
+              const animationDiv = target.firstElementChild?.firstElementChild as HTMLDivElement | null;
               if (animationDiv) {
                 animationDiv.style.width = `${nextWidth}px`;
                 animationDiv.style.height = `${finalHeight}px`;
 
-                const textDiv = document.querySelector(
-                  `[data-text-id="${id}"]`
-                ) as HTMLDivElement;
+                const textDiv = document.querySelector(selector) as HTMLDivElement;
                 if (textDiv) {
                   textDiv.style.width = `${nextWidth}px`;
                   textDiv.style.height = `${finalHeight}px`;
                 }
               }
 
-              // Update state with final dimensions
               setState({
                 trackItemsMap: {
                   ...trackItemsMap,
@@ -536,32 +530,22 @@ export function SceneInteractions({
             }
           }
 
-          // Default behavior for other element types (proportional scaling)
+          // default proportional scaling for corner handles and non-text types
           const currentWidth = target.clientWidth;
           const currentHeight = target.clientHeight;
-
-          // Get new width and height
           const scaleY = nextHeight / currentHeight;
           const scale = scaleY;
 
-          // Update target dimensions
           target.style.width = `${currentWidth * scale}px`;
           target.style.height = `${currentHeight * scale}px`;
 
-          // Safely access nested elements
-          const animationDiv = target.firstElementChild
-            ?.firstElementChild as HTMLDivElement | null;
+          const animationDiv = target.firstElementChild?.firstElementChild as HTMLDivElement | null;
           if (animationDiv) {
             animationDiv.style.width = `${currentWidth * scale}px`;
             animationDiv.style.height = `${currentHeight * scale}px`;
 
             if (trackItemsMap[id].type === "text") {
-              scaleDiv(
-                `[data-text-id="${id}"]`,
-                scale,
-                currentWidth,
-                currentHeight
-              );
+              scaleDiv(`[data-text-id="${id}"]`, scale, currentWidth, currentHeight);
             } else if (trackItemsMap[id].type === "caption") {
               scaleDiv(`#caption-${id}`, scale, currentWidth, currentHeight);
             }
@@ -573,32 +557,16 @@ export function SceneInteractions({
             trackItemsMap[id].type === "caption"
           ) {
             const type = trackItemsMap[id].type;
-
-            const selector =
-              type === "text" ? `[data-text-id="${id}"]` : `#caption-${id}`;
-
+            const selector = type === "text" ? `[data-text-id="${id}"]` : `#caption-${id}`;
             const textEl = document.querySelector(selector) as HTMLDivElement;
 
-            const newHeight = calculateTextHeight({
+            const minHeight = calculateTextHeight({
               family: textEl!.style.fontFamily,
               fontSize: textEl!.style.fontSize,
               fontWeight: textEl!.style.fontWeight,
               letterSpacing: textEl!.style.letterSpacing,
               lineHeight: textEl!.style.lineHeight,
-              text: (textEl! as HTMLDivElement).innerHTML,
-              textShadow: textEl!.style.textShadow,
-              webkitTextStroke: textEl!.style.webkitTextStroke,
-              width: nextWidth + "px",
-              textTransform: textEl!.style.textTransform
-            });
-
-            const validHeight = calculateTextHeight({
-              family: textEl!.style.fontFamily,
-              fontSize: textEl!.style.fontSize,
-              fontWeight: textEl!.style.fontWeight,
-              letterSpacing: textEl!.style.letterSpacing,
-              lineHeight: textEl!.style.lineHeight,
-              text: htmlToPlainText((textEl! as HTMLDivElement).innerHTML),
+              text: textEl!.innerHTML,
               textShadow: textEl!.style.textShadow,
               webkitTextStroke: textEl!.style.webkitTextStroke,
               width: nextWidth + "px",
@@ -611,48 +579,47 @@ export function SceneInteractions({
               fontWeight: textEl!.style.fontWeight,
               letterSpacing: textEl!.style.letterSpacing,
               lineHeight: textEl!.style.lineHeight,
-              text: (textEl! as HTMLDivElement).innerText,
+              text: textEl!.innerText,
               textShadow: textEl!.style.textShadow,
               webkitTextStroke: textEl!.style.webkitTextStroke,
               textTransform: textEl!.style.textTransform
             });
-            target.style.width = nextWidth + "px";
-            target.style.minWidth = minWidth + "px";
-            target.style.height = newHeight + "px";
 
-            // Safely access nested elements
-            const animationDiv = target.firstElementChild
-              ?.firstElementChild as HTMLDivElement | null;
+            const currentHeight = parseFloat(target.style.height);
+            // only update height if current height is below the minimum
+            const finalHeight = Math.max(currentHeight, minHeight);
+
+            target.style.width = `${nextWidth}px`;
+            target.style.minWidth = `${minWidth}px`;
+            target.style.height = `${finalHeight}px`;
+
+            const animationDiv = target.firstElementChild?.firstElementChild as HTMLDivElement | null;
             if (animationDiv) {
               animationDiv.style.width = `${nextWidth}px`;
-              animationDiv.style.height = `${validHeight}px`;
+              animationDiv.style.height = `${finalHeight}px`;
 
-              const type = trackItemsMap[id].type;
-              const selector =
-                type === "text" ? `[data-text-id="${id}"]` : `#caption-${id}`;
-
-              const textDiv = document.querySelector(
-                selector
-              ) as HTMLDivElement | null;
-
+              const textDiv = document.querySelector(selector) as HTMLDivElement | null;
               if (textDiv) {
                 textDiv.style.width = `${nextWidth}px`;
-                textDiv.style.height = `${validHeight}px`;
+                textDiv.style.height = `${finalHeight}px`;
               }
             }
-            if (Math.floor(newHeight) !== Math.floor(validHeight)) {
+
+            // only dispatch if height had to grow
+            if (finalHeight > currentHeight) {
               dispatch(EDIT_OBJECT, {
                 payload: {
                   [id]: {
                     details: {
                       width: nextWidth,
-                      height: newHeight
+                      height: finalHeight
                     }
                   }
                 }
               });
             }
           }
+
           if (trackItemsMap[id].type === "progressSquare") {
             const currentWidth = parseFloat(target.style.width);
             target.style.width = `${nextWidth}px`;
@@ -664,12 +631,8 @@ export function SceneInteractions({
             };
             if (direction[0] === -1) {
               const diffWidth = nextWidth - currentWidth;
-              target.style.left = `${
-                parseFloat(target.style.left) - diffWidth
-              }px`;
-              updateData.left = `${
-                parseFloat(target.style.left) - diffWidth
-              }px`;
+              target.style.left = `${parseFloat(target.style.left) - diffWidth}px`;
+              updateData.left = `${parseFloat(target.style.left) - diffWidth}px`;
             }
             setState({
               trackItemsMap: {
@@ -695,8 +658,8 @@ export function SceneInteractions({
 
         if (type === "text" || type === "caption") {
           const selector = type === "text"
-              ? `[data-text-id="${targetId}"]`
-              : `#caption-${targetId}`;
+            ? `[data-text-id="${targetId}"]`
+            : `#caption-${targetId}`;
           const textDiv = document.querySelector(selector) as HTMLDivElement;
           if (textDiv) {
             dispatch(EDIT_OBJECT, {
