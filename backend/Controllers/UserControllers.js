@@ -160,7 +160,7 @@ async function loginCredentials(req, res) {
             credentials:{
                 email: credentials.email,
                 username: credentials.username,
-                accountId: credentials.account_id,
+                account_id: credentials.account_id,
                 type: credentials.type,
                 role: credentials.role,
                 staffId: credentials.staff_id

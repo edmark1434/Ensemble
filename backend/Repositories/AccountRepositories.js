@@ -120,43 +120,61 @@ async function getProfileRepositories(accountId) {
     try {
         const queryText = `
             SELECT 
-                -- Cast the columns to ::TEXT so NULLIF can evaluate them without crashing on ENUMs
-                CONCAT_WS(' ', 
-                    NULLIF(U.FIRST_NAME::TEXT, ''), 
-                    NULLIF(U.MIDDLE_NAME::TEXT, ''), 
-                    NULLIF(U.LAST_NAME::TEXT, ''), 
-                    NULLIF(U.SUFFIX::TEXT, '')
-                ) AS NAME, 
+                A.DISPLAY_NAME AS NAME, 
                 U.EMAIL_ADDRESS, 
                 A.TAGLINE, 
                 A.DESCRIPTION AS BIO, 
                 A.CREATED_AT, 
                 A.MERIT_SCORE, 
                 A.AVATAR_FILE_ID,
-                -- Do the same for location properties just in case any of them are ENUMs or custom domains
-                CONCAT_WS(', ', 
-                    NULLIF(ADDR.ADDRESS_LINE1::TEXT, ''), 
-                    NULLIF(ADDR.CITY::TEXT, ''), 
-                    NULLIF(ADDR.STATE_PROVINCE::TEXT, ''), 
-                    NULLIF(U.COUNTRY::TEXT, ''), 
-                    NULLIF(ADDR.POSTAL_CODE::TEXT, '')
-                ) AS LOCATION, 
-                ADDR.ADDRESS_LINE2,
-                V.STATUS AS VERIFICATION_STATUS
+                U.COUNTRY AS LOCATION,
+                U.USER_ID,
+                V.STATUS AS VERIFICATION_STATUS,
+                -- Aggregates all matching ACCOUNT_LINK rows into a JSON array
+                COALESCE(
+                    (
+                        SELECT json_agg(json_build_object(
+                            'platform', AL.PLATFORM,
+                            'url', AL.URL
+                        )) 
+                        FROM ACCOUNT_LINK AL 
+                        WHERE AL.ACCOUNT_ID = A.ACCOUNT_ID
+                    ), 
+                    '[]'::json
+                ) AS SOCIAL_LINKS
             FROM ACCOUNTS A
             LEFT JOIN USERS U ON A.ACCOUNT_ID = U.ACCOUNT_ID
-            LEFT JOIN ACCOUNT_DETAILS AD ON A.ACCOUNT_ID = AD.ACCOUNT_ID
-            LEFT JOIN ADDRESSES ADDR ON ADDR.ADDRESS_ID = AD.ADDRESS_ID
-            LEFT JOIN VERIFICATIONS V ON V.ACCOUNT_ID = A.ACCOUNT_ID
+            LEFT JOIN ACCOUNT_VERIFICATION V ON V.ACCOUNT_ID = A.ACCOUNT_ID
             WHERE A.ACCOUNT_ID = $1
             LIMIT 1;
         `;
         
         const result = await pool.query(queryText, [accountId]);
+        // Since we aggregated the links, we can safely limit to the first row here
         return result.rows[0] || null; 
     
     } catch (err) {
         console.error(`Error fetching profile for account ${accountId}:`, err.message);
+        throw err;
+    }
+}
+
+async function getAccountLinkByAccountIdRepositories(accountId) { 
+    try {
+        const result = await pool.query('SELECT account_link_id,platform,url FROM account_link WHERE account_id = $1', [accountId]);
+        return result.rows;
+    } catch (err) {
+        console.error(`Error fetching account links for account ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function checkUserAccountIdRepositories(accountId) { 
+    try{
+        const isRoleResult = await pool.query('SELECT EXISTS(SELECT 1 FROM accounts WHERE account_id = $1 AND type = $2)', [accountId, 'User']);
+        return isRoleResult.rows[0].exists;
+    }catch(err){
+        console.error(`Error checking role for account ${accountId}:`, err);
         throw err;
     }
 }
@@ -168,5 +186,7 @@ module.exports = {
     getAccountByHandle,
     getAccountWalletRepositories,
     checkAccountId,
-    getProfileRepositories
+    getProfileRepositories,
+    getAccountLinkByAccountIdRepositories,
+    checkUserAccountIdRepositories
 };

@@ -187,6 +187,15 @@ async function createUserTag(userId, tags) {
     }
 }
 
+async function getUserByIdFromAccountId(accountId) {
+    try {
+        const result = await pool.query('SELECT user_id FROM users WHERE account_id = $1', [accountId]);
+        return result.rows[0];
+    } catch (err) {
+        console.error(`Error fetching user with account id ${accountId}:`, err);
+        throw err;
+    }
+}
 //exports all the repository functions for use in other parts of the application
 module.exports = {
     getAllUsers,
@@ -196,5 +205,5 @@ module.exports = {
     getEmailandPasswordHashByEmail,
     getEmailandPasswordHashByUsername,
     updateFirebaseUserUuid,
-    getUserByListofIdsRepositories
+    getUserByIdFromAccountId
 };

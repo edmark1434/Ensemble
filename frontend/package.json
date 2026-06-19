@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
+    "@icons-pack/react-simple-icons": "^13.13.0",
     "@shadcn/ui": "^0.0.4",
     "@shotstack/shotstack-studio": "^2.4.4",
     "@tailwindcss/vite": "^4.2.2",

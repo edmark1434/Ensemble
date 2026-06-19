@@ -1,5 +1,6 @@
 const { getAllAccounts, createAccount, getAccountByHandle, getAccountWalletRepositories,
-    checkAccountId, getProfileRepositories
+    checkAccountId, getProfileRepositories, getAccountLinkByAccountIdRepositories,
+    checkUserAccountIdRepositories
  } = require("../Repositories/AccountRepositories");
 const redisClient = require('../lib/redis');
 
@@ -84,10 +85,38 @@ async function getProfileServices(accountId) {
     }
 }
 
+async function getAccountLinkByAccountIdService(accountId) { 
+    if (!checkAccountIdService(accountId)) {
+        throw new Error('Invalid account ID');
+    }
+    try {
+        const accountLinks = await getAccountLinkByAccountIdRepositories(accountId);
+        return accountLinks;
+    } catch (err) {
+        console.error('Error fetching account links:', err);
+        throw err;
+    }
+}
+
+async function checkUserAccountIdService(accountId) {
+    if (!checkAccountIdService(accountId)) {
+        throw new Error('Invalid account ID');
+    }
+    try {
+        const isUserResult = await checkUserAccountIdRepositories(accountId);
+        return isUserResult;
+    } catch (err) {
+        console.error('Error checking account role:', err);
+        throw err;
+    }
+}
+
 module.exports = {
     fetchAllAccounts,
     createNewAccount,
     getAccountByHandleService,
     getAccountWalletService,
     getProfileServices,
+    getAccountLinkByAccountIdService,
+    checkUserAccountIdService
 };

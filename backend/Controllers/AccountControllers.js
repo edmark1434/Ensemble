@@ -1,5 +1,6 @@
 const { createNewAccount, fetchAllAccounts, getAccountByHandleService,
-    getAccountWalletService,getProfileServices
+    getAccountWalletService, getProfileServices, getAccountLinkByAccountIdService,
+    checkUserAccountIdService
 } = require("../services/AccountServices");
 const redisClient = require('../lib/redis');
 async function createAccount(req, res) {
@@ -90,9 +91,47 @@ async function getProfileController(req, res) {
         });
     }
 }
+
+async function getAccountLinkByAccountIdController(req, res) {
+    const { accountId } = req.params;
+    if (!accountId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized. Account session not found.' });
+    }
+    try {
+        const links = await getAccountLinkByAccountIdService(accountId);
+        return res.status(200).json({ success: true, message: 'Account links fetched successfully', links });
+    } catch (err) {
+        console.error(`Error fetching account links for accountId ${accountId}:`, err);
+        return res.status(500).json({
+            success: false,
+            message: err.message,
+        });
+    }
+}
+
+async function checkUserAccountIdController(req, res) {
+    const { accountId } = req.params;
+    if (!accountId) {
+        return res.status(401).json({ success: false, message: 'Unauthorized. Account session not found.' });
+    }
+    try {
+        const isUser = await checkUserAccountIdService(accountId);
+        return res.status(200).json({ success: true, message: 'User check completed successfully', isUser });
+    }
+    catch (err) {
+        console.error(`Error checking user status for accountId ${accountId}:`, err);
+        return res.status(500).json({
+            success: false,
+            message: err.message,
+        });
+    }
+}
+
 module.exports = {
     createAccount,
     getAccountByHandle,
     getAccountWalletController,
-    getProfileController
+    getProfileController,
+    getAccountLinkByAccountIdController,
+    checkUserAccountIdController
 };

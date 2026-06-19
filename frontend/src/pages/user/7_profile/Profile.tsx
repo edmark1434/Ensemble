@@ -27,21 +27,27 @@ import {
   AtSign,
   Shield,
   Tag,
-  Youtube,
-  Twitter,
-  Instagram,
-  Facebook,
-  Twitch,
-  Reddit,
-  Github,
-  Linkedin,
-  Dribbble,
-  Pinterest,
-  Snapchat,
-  Spotify,
-  Soundcloud,
-  Tiktok,
+  Search,
 } from "lucide-react";
+// Import Simple Icons for social media platforms
+import {
+  SiYoutube,
+  SiTiktok,
+  SiVimeo,
+  SiInstagram,
+  SiFacebook,
+  SiTwitch,
+  SiReddit,
+  SiDiscord,
+  SiGithub,
+  SiDribbble,
+  SiPinterest,
+  SiSnapchat,
+  SiSpotify,
+  SiSoundcloud,
+  SiFiverr,
+  SiUpwork,
+} from "@icons-pack/react-simple-icons";
 import UserHeader from "@/components/nav/user_header";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -50,6 +56,22 @@ import api from "@/lib/axios";
 import toast from "react-hot-toast";
 
 type TabType = "portfolio" | "services" | "job-posts" | "projects" | "assets" | "history";
+
+type Tag = {
+  tag_id: number;
+  name: string;
+};
+
+type SkillObject = {
+  tag_id: number;
+  name: string;
+};
+
+type SocialLink = {
+  account_link_id?: number;
+  platform: string;
+  url: string;
+};
 
 type UserDetail = {
   name: string;
@@ -61,33 +83,158 @@ type UserDetail = {
   tagline: string;
   merit_score: number;
   avatar_file_id: number | null;
-  skills?: string[];
+  skills?: SkillObject[];
   badges?: { name: string; description: string; icon: string }[];
-  social_links?: { platform: string; url: string }[];
+  social_links?: SocialLink[];
 };
 
-type EditSection = "full" | "bio" | "tagline" | "skills" | "badges" | "profile-pic" | "social-links";
+type EditSection = "full" | "bio" | "tagline" | "skills" | "profile-pic" | "social-links";
 
-// Social Media Platforms with proper icons
+// Helper function for info toasts
+const showInfoToast = (message: string) => {
+  toast(message, {
+    icon: 'ℹ️',
+    style: {
+      background: '#1e293b',
+      color: '#fff',
+      borderRadius: '8px',
+      padding: '12px 16px',
+      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+    },
+  });
+};
+
+// Skills Selector Component
+const SkillsSelector = ({ 
+  selectedSkills, 
+  onSkillsChange,
+  availableSkills = []
+}: { 
+  selectedSkills: SkillObject[]; 
+  onSkillsChange: (skills: SkillObject[]) => void;
+  availableSkills: Tag[];
+}) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Get skill names for display
+  const selectedSkillNames = selectedSkills.map(s => s.name);
+  
+  // Filter skills based on search term
+  const filteredSkills = availableSkills.filter(tag => 
+    tag.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+    !selectedSkillNames.includes(tag.name)
+  );
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const addSkill = (tag: Tag) => {
+    if (!selectedSkillNames.includes(tag.name)) {
+      onSkillsChange([...selectedSkills, { tag_id: tag.tag_id, name: tag.name }]);
+      setSearchTerm("");
+      setIsOpen(false);
+    }
+  };
+
+  const removeSkill = (skillToRemove: SkillObject) => {
+    onSkillsChange(selectedSkills.filter(skill => skill.tag_id !== skillToRemove.tag_id));
+  };
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      {/* Search Input */}
+      <div className="relative">
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          placeholder="Search and add skills..."
+          className="w-full rounded-lg border border-white/10 bg-white/5 px-4 py-2 pl-10 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+        <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
+      </div>
+
+      {/* Dropdown */}
+      {isOpen && (
+        <div className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-white/10 bg-[#1a1d2e] shadow-xl">
+          {filteredSkills.length > 0 ? (
+            filteredSkills.map((tag) => (
+              <button
+                key={tag.tag_id}
+                onClick={() => addSkill(tag)}
+                className="flex w-full items-center px-4 py-2 text-sm text-white transition hover:bg-blue-500/20 hover:text-blue-400"
+              >
+                <PlusCircle className="mr-2 h-3.5 w-3.5 text-blue-400" />
+                {tag.name}
+              </button>
+            ))
+          ) : (
+            <div className="px-4 py-3 text-sm text-zinc-500">
+              {searchTerm ? `No skills found matching "${searchTerm}"` : "Type to search for skills"}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Selected Skills */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {selectedSkills.length === 0 ? (
+          <p className="text-sm text-zinc-500">No skills selected yet.</p>
+        ) : (
+          selectedSkills.map((skill) => (
+            <span
+              key={skill.tag_id}
+              className="group flex items-center gap-1 rounded-full bg-blue-500/20 px-3 py-1 text-sm text-blue-400"
+            >
+              {skill.name}
+              <button
+                onClick={() => removeSkill(skill)}
+                className="ml-1 text-blue-300 opacity-0 transition group-hover:opacity-100 hover:text-red-400"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Social Media Platforms with proper icons (using Simple Icons)
 const SOCIAL_PLATFORMS = [
-  { value: "youtube", label: "YouTube", icon: Youtube },
-  { value: "tiktok", label: "TikTok", icon: Tiktok },
-  { value: "vimeo", label: "Vimeo", icon: Video },
-  { value: "twitter", label: "Twitter", icon: Twitter },
-  { value: "instagram", label: "Instagram", icon: Instagram },
-  { value: "facebook", label: "Facebook", icon: Facebook },
-  { value: "twitch", label: "Twitch", icon: Twitch },
-  { value: "reddit", label: "Reddit", icon: Reddit },
-  { value: "discord", label: "Discord", icon: MessageCircle }, // Using MessageCircle as fallback
-  { value: "github", label: "GitHub", icon: Github },
-  { value: "linkedin", label: "LinkedIn", icon: Linkedin },
-  { value: "dribbble", label: "Dribbble", icon: Dribbble },
-  { value: "pinterest", label: "Pinterest", icon: Pinterest },
-  { value: "snapchat", label: "Snapchat", icon: Snapchat },
-  { value: "spotify", label: "Spotify", icon: Spotify },
-  { value: "soundcloud", label: "SoundCloud", icon: Soundcloud },
-  { value: "fiverr", label: "Fiverr", icon: Briefcase },
-  { value: "upwork", label: "Upwork", icon: Briefcase },
+  { value: "youtube", label: "YouTube", icon: SiYoutube },
+  { value: "tiktok", label: "TikTok", icon: SiTiktok },
+  { value: "vimeo", label: "Vimeo", icon: SiVimeo },
+  { value: "twitter", label: "Twitter", icon: SiFacebook },
+  { value: "instagram", label: "Instagram", icon: SiInstagram },
+  { value: "facebook", label: "Facebook", icon: SiFacebook },
+  { value: "twitch", label: "Twitch", icon: SiTwitch },
+  { value: "reddit", label: "Reddit", icon: SiReddit },
+  { value: "discord", label: "Discord", icon: SiDiscord },
+  { value: "github", label: "GitHub", icon: SiGithub },
+  { value: "linkedin", label: "LinkedIn", icon: SiSoundcloud },
+  { value: "dribbble", label: "Dribbble", icon: SiDribbble },
+  { value: "pinterest", label: "Pinterest", icon: SiPinterest },
+  { value: "snapchat", label: "Snapchat", icon: SiSnapchat },
+  { value: "spotify", label: "Spotify", icon: SiSpotify },
+  { value: "soundcloud", label: "SoundCloud", icon: SiSoundcloud },
+  { value: "fiverr", label: "Fiverr", icon: SiFiverr },
+  { value: "upwork", label: "Upwork", icon: SiUpwork },
   { value: "other", label: "Other", icon: Link2 },
 ];
 
@@ -179,20 +326,27 @@ const Profile = () => {
   const user = useGlobalState((state) => state.user);
   const [userDetails, setUserDetails] = useState<UserDetail | null>(null);
   const id = useParams().id || user?.account_id;
-  
+  const [availableSkills, setAvailableSkills] = useState<Tag[]>([]);
+  const originalSkillsRef = useRef<SkillObject[]>([]);
+  const originalSocialLinksRef = useRef<SocialLink[]>([]);
+  const originalProfileBioRef = useRef<string>("");
+  const originalProfileTaglineRef = useRef<string>("");
+  const originalProfilePicRef = useRef<number | null>(null);
+
+  // Check if current user owns this profile
+  const isOwner = id == user?.account_id;
+
   // Edit modal states
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editSection, setEditSection] = useState<EditSection>("full");
   const [editFormData, setEditFormData] = useState({
     bio: "",
     tagline: "",
-    skills: [] as string[],
-    badges: [] as { name: string; description: string; icon: string }[],
+    skills: [] as SkillObject[],
     profilePic: null as File | null,
-    socialLinks: [] as { platform: string; url: string }[],
+    socialLinks: [] as SocialLink[],
   });
   const [newSkill, setNewSkill] = useState("");
-  const [newBadge, setNewBadge] = useState({ name: "", description: "", icon: "" });
   const [newSocialLink, setNewSocialLink] = useState({ platform: "", url: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -205,30 +359,58 @@ const Profile = () => {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const response = await api.get(`/api/accounts/profile/${id}`);
-        const profileData = response.data.profile;
-        console.log("Profile response:", profileData);
+        const [isUser, profileResponse, tagsResponse, accountLinkResponse] = await Promise.all([
+          api.get(`/api/accounts/check-user/${id}`),
+          api.get(`/api/accounts/profile/${id}`),
+          api.get(`/api/tags/`),
+          api.get(`api/accounts/links/${id}`)
+        ]);
+        const isCurrentUser = isUser.data.isUser;
+        const profileData = profileResponse.data.profile;
+        const tagsData = tagsResponse.data.tags;
+        const accountLinks = accountLinkResponse.data.links;
+        const userTagResponse = await api.get(`api/tags/users/${profileData.user_id}/tags`);
+        const userTagsData = userTagResponse.data.tags;
+        if (!isCurrentUser) { 
+          toast.error("Profile not found."); 
+          navigate("/*");
+        }
+        
+        originalSkillsRef.current = userTagsData.map((tag: Tag) => ({ tag_id: tag.tag_id, name: tag.name }));
+        originalSocialLinksRef.current = accountLinks || [];
+        originalProfileBioRef.current = profileData.bio || "";
+        originalProfileTaglineRef.current = profileData.tagline || "";
+        originalProfilePicRef.current = profileData.profile_pic_id || null;
+        
+        // Set the available skills from the API
+        setAvailableSkills(tagsData);
+        
+        // Convert user tags to SkillObject format
+        const userSkills = userTagsData.map((tag: Tag) => ({ 
+          tag_id: tag.tag_id, 
+          name: tag.name 
+        }));
+        
         setUserDetails({
           ...profileData,
           joinedDate: profileData.created_at,
-          skills: profileData.skills || ["Problem Solving", "Graphic Designing", "Video Editing", "UI/UX Design", "Motion Graphics"],
-          badges: profileData.badges || [
-            { name: "Certification & Credentials", description: "Verified Professional", icon: "Award" },
-            { name: "Top Rated", description: "Top 10% of freelancers", icon: "CheckCircle" }
-          ],
-          social_links: profileData.social_links || [
-            { platform: "Facebook", url: "facebook.com/john.mahilom.2024" },
-            { platform: "YouTube", url: "youtube.com/@getstartright16" },
-            { platform: "GitHub", url: "github.com/neesh-mura" },
-            { platform: "Twitter", url: "@rexshimura" }
-          ]
+          skills: userSkills,
+          badges: profileData.badges || [],
+          social_links: accountLinks || []
         });
-      } catch (err) {
-        toast.error("Failed to load profile. Please try again.");
+
+      } catch (err:any) {
+        if(err.response && err.response.status === 404) {
+          toast.error("Profile not found.");
+          navigate("/*");
+        } else {
+          console.error('Error fetching profile:', err);
+          toast.error("Failed to load profile. Please try again.");
+        }
       }
     };
     fetchProfile();
-  }, [id]);
+  }, [id, user?.userId]);
 
   const handleEditClick = (section: EditSection = "full") => {
     if (userDetails) {
@@ -236,7 +418,6 @@ const Profile = () => {
         bio: userDetails.bio || "",
         tagline: userDetails.tagline || "",
         skills: userDetails.skills || [],
-        badges: userDetails.badges || [],
         profilePic: null,
         socialLinks: userDetails.social_links || [],
       });
@@ -251,10 +432,16 @@ const Profile = () => {
   };
 
   const handleAddSkill = () => {
-    if (newSkill.trim() && !editFormData.skills.includes(newSkill.trim())) {
+    if (newSkill.trim() && !editFormData.skills.some(s => s.name === newSkill.trim())) {
+      // Find the tag_id for this skill
+      const foundTag = availableSkills.find(tag => tag.name.toLowerCase() === newSkill.trim().toLowerCase());
+      const newSkillObj: SkillObject = {
+        tag_id: foundTag?.tag_id || 0,
+        name: newSkill.trim()
+      };
       setEditFormData(prev => ({
         ...prev,
-        skills: [...prev.skills, newSkill.trim()]
+        skills: [...prev.skills, newSkillObj]
       }));
       setNewSkill("");
     }
@@ -263,24 +450,7 @@ const Profile = () => {
   const handleRemoveSkill = (skillToRemove: string) => {
     setEditFormData(prev => ({
       ...prev,
-      skills: prev.skills.filter(skill => skill !== skillToRemove)
-    }));
-  };
-
-  const handleAddBadge = () => {
-    if (newBadge.name.trim() && newBadge.description.trim()) {
-      setEditFormData(prev => ({
-        ...prev,
-        badges: [...prev.badges, { ...newBadge }]
-      }));
-      setNewBadge({ name: "", description: "", icon: "" });
-    }
-  };
-
-  const handleRemoveBadge = (index: number) => {
-    setEditFormData(prev => ({
-      ...prev,
-      badges: prev.badges.filter((_, i) => i !== index)
+      skills: prev.skills.filter(skill => skill.name !== skillToRemove)
     }));
   };
 
@@ -329,56 +499,278 @@ const Profile = () => {
     }
   };
 
-  const handleSubmitEdit = async () => {
+  // ============================================
+  // INDIVIDUAL SAVE FUNCTIONS FOR EACH SECTION
+  // ============================================
+
+  // Save Bio Only
+  const saveBio = async () => {
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        bio: editFormData.bio,
+        originalBio: originalProfileBioRef.current
+      };
+      
+      const response = await api.put(`/api/accounts/profile/${id}`, payload);
+
+      if (response.data.success) {
+        if (response.data.message === 'No changes detected') {
+          showInfoToast('No changes to save');
+          setIsEditModalOpen(false);
+          return;
+        }
+        
+        originalProfileBioRef.current = editFormData.bio;
+        setUserDetails(prev => ({ ...prev!, bio: editFormData.bio }));
+        toast.success(response.data.message || "Bio updated successfully!");
+        setIsEditModalOpen(false);
+      } else {
+        toast.error(response.data.message || "Failed to update bio");
+      }
+    } catch (error: any) {
+      console.error("Error updating bio:", error);
+      toast.error(error.response?.data?.message || "Failed to update bio. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Save Tagline Only
+  const saveTagline = async () => {
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        tagline: editFormData.tagline,
+        originalTagline: originalProfileTaglineRef.current
+      };
+      
+      const response = await api.put(`/api/accounts/profile/${id}`, payload);
+
+      if (response.data.success) {
+        if (response.data.message === 'No changes detected') {
+          showInfoToast('No changes to save');
+          setIsEditModalOpen(false);
+          return;
+        }
+        
+        originalProfileTaglineRef.current = editFormData.tagline;
+        setUserDetails(prev => ({ ...prev!, tagline: editFormData.tagline }));
+        toast.success(response.data.message || "Tagline updated successfully!");
+        setIsEditModalOpen(false);
+      } else {
+        toast.error(response.data.message || "Failed to update tagline");
+      }
+    } catch (error: any) {
+      console.error("Error updating tagline:", error);
+      toast.error(error.response?.data?.message || "Failed to update tagline. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Save Skills Only
+  const saveSkills = async () => {
+    if (editFormData.skills.length === 0) {
+      toast.error("Please add at least one skill");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        skills: editFormData.skills,
+        originalSkills: originalSkillsRef.current
+      };
+      
+      const response = await api.put(`/api/accounts/profile/${id}`, payload);
+
+      if (response.data.success) {
+        if (response.data.message === 'No changes detected') {
+          showInfoToast('No changes to save');
+          setIsEditModalOpen(false);
+          return;
+        }
+        
+        originalSkillsRef.current = editFormData.skills;
+        setUserDetails(prev => ({ ...prev!, skills: editFormData.skills }));
+        toast.success(response.data.message || "Skills updated successfully!");
+        setIsEditModalOpen(false);
+      } else {
+        toast.error(response.data.message || "Failed to update skills");
+      }
+    } catch (error: any) {
+      console.error("Error updating skills:", error);
+      const errorMessage = error.response?.data?.message || "Failed to update skills. Please try again.";
+      toast.error(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Save Profile Picture Only
+  const saveProfilePicture = async () => {
+    if (!editFormData.profilePic) {
+      toast.error("Please select a profile picture");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const formData = new FormData();
+      formData.append('profile_pic', editFormData.profilePic);
+      formData.append('originalAvatarFileId', String(originalProfilePicRef.current || ''));
       
-      // Only include fields that are being edited
-      if (editSection === "full" || editSection === "bio") {
-        formData.append('bio', editFormData.bio);
-      }
-      if (editSection === "full" || editSection === "tagline") {
-        formData.append('tagline', editFormData.tagline);
-      }
-      if (editSection === "full" || editSection === "skills") {
-        formData.append('skills', JSON.stringify(editFormData.skills));
-      }
-      if (editSection === "full" || editSection === "badges") {
-        formData.append('badges', JSON.stringify(editFormData.badges));
-      }
-      if (editSection === "full" || editSection === "social-links") {
-        formData.append('social_links', JSON.stringify(editFormData.socialLinks));
-      }
-      if (editSection === "full" || editSection === "profile-pic") {
-        if (editFormData.profilePic) {
-          formData.append('profile_pic', editFormData.profilePic);
-        }
-      }
-
       const response = await api.put(`/api/accounts/profile/${id}`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
       if (response.data.success) {
+        if (response.data.message === 'No changes detected') {
+          showInfoToast('No changes to save');
+          setIsEditModalOpen(false);
+          return;
+        }
+        
+        toast.success(response.data.message || "Profile picture updated successfully!");
+        setIsEditModalOpen(false);
+        // Refetch profile to update avatar
+        const profileResponse = await api.get(`/api/accounts/profile/${id}`);
+        const newAvatarId = profileResponse.data.profile.avatar_file_id;
+        originalProfilePicRef.current = newAvatarId;
         setUserDetails(prev => ({
           ...prev!,
-          bio: editSection === "full" || editSection === "bio" ? editFormData.bio : prev!.bio,
-          tagline: editSection === "full" || editSection === "tagline" ? editFormData.tagline : prev!.tagline,
-          skills: editSection === "full" || editSection === "skills" ? editFormData.skills : prev!.skills,
-          badges: editSection === "full" || editSection === "badges" ? editFormData.badges : prev!.badges,
-          social_links: editSection === "full" || editSection === "social-links" ? editFormData.socialLinks : prev!.social_links,
+          avatar_file_id: newAvatarId
         }));
-        toast.success("Profile updated successfully!");
-        setIsEditModalOpen(false);
+      } else {
+        toast.error(response.data.message || "Failed to update profile picture");
       }
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      toast.error("Failed to update profile. Please try again.");
+    } catch (error: any) {
+      console.error("Error updating profile picture:", error);
+      toast.error(error.response?.data?.message || "Failed to update profile picture. Please try again.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Save Social Links Only
+  const saveSocialLinks = async () => {
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        social_links: editFormData.socialLinks,
+        originalSocialMedia: originalSocialLinksRef.current
+      };
+      
+      const response = await api.put(`/api/accounts/profile/${id}`, payload);
+
+      if (response.data.success) {
+        if (response.data.message === 'No changes detected') {
+          showInfoToast('No changes to save');
+          setIsEditModalOpen(false);
+          return;
+        }
+        
+        originalSocialLinksRef.current = editFormData.socialLinks;
+        setUserDetails(prev => ({ ...prev!, social_links: editFormData.socialLinks }));
+        toast.success(response.data.message || "Social links updated successfully!");
+        setIsEditModalOpen(false);
+      } else {
+        toast.error(response.data.message || "Failed to update social links");
+      }
+    } catch (error: any) {
+      console.error("Error updating social links:", error);
+      
+      // Check for URL validation errors
+      const errorMessage = error.response?.data?.message || "";
+      if (errorMessage.includes('Invalid URL') || 
+          errorMessage.includes('URL is required') ||
+          errorMessage.includes('Invalid domain')) {
+        toast.error(errorMessage);
+      } else {
+        toast.error("Failed to update social links. Please try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ============================================
+  // MAIN SAVE FUNCTION FOR ALL FIELDS
+  // ============================================
+  const handleSubmitEdit = async () => {
+    setIsSubmitting(true);
+    try {
+      const payload: any = {
+        bio: editFormData.bio,
+        originalBio: originalProfileBioRef.current,
+        tagline: editFormData.tagline,
+        originalTagline: originalProfileTaglineRef.current,
+        skills: editFormData.skills,
+        originalSkills: originalSkillsRef.current,
+        social_links: editFormData.socialLinks,
+        originalSocialMedia: originalSocialLinksRef.current
+      };
+      
+      const response = await api.put(`/api/accounts/profile/${id}`, payload);
+
+      if (response.data.success) {
+        if (response.data.message === 'No changes detected') {
+          showInfoToast('No changes to save');
+          setIsEditModalOpen(false);
+          return;
+        }
+        
+        originalSkillsRef.current = editFormData.skills;
+        originalSocialLinksRef.current = editFormData.socialLinks;
+        originalProfileBioRef.current = editFormData.bio;
+        originalProfileTaglineRef.current = editFormData.tagline;
+        
+        setUserDetails(prev => ({
+          ...prev!,
+          bio: editFormData.bio,
+          tagline: editFormData.tagline,
+          skills: editFormData.skills,
+          social_links: editFormData.socialLinks,
+        }));
+        toast.success(response.data.message || "Profile updated successfully!");
+        setIsEditModalOpen(false);
+      } else {
+        toast.error(response.data.message || "Failed to update profile");
+      }
+    } catch (error: any) {
+      console.error("Error updating profile:", error);
+      const errorMessage = error.response?.data?.message || "Failed to update profile. Please try again.";
+      toast.error(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ============================================
+  // HANDLE SAVE BASED ON EDIT SECTION
+  // ============================================
+  const handleSave = () => {
+    switch (editSection) {
+      case "bio":
+        saveBio();
+        break;
+      case "tagline":
+        saveTagline();
+        break;
+      case "skills":
+        saveSkills();
+        break;
+      case "profile-pic":
+        saveProfilePicture();
+        break;
+      case "social-links":
+        saveSocialLinks();
+        break;
+      case "full":
+      default:
+        handleSubmitEdit();
+        break;
     }
   };
 
@@ -387,7 +779,6 @@ const Profile = () => {
       case "bio": return "Edit Bio";
       case "tagline": return "Edit Tagline";
       case "skills": return "Edit Skills";
-      case "badges": return "Edit Badges";
       case "profile-pic": return "Edit Profile Picture";
       case "social-links": return "Edit Social Links";
       default: return "Edit Profile";
@@ -556,12 +947,14 @@ const Profile = () => {
                   </span>
                 </div>
               </div>
-              <button 
-                onClick={() => handleEditClick("profile-pic")}
-                className="absolute bottom-0 right-0 rounded-full bg-blue-500 p-1.5 text-white transition hover:bg-blue-600"
-              >
-                <Edit2 className="h-3 w-3" />
-              </button>
+              {isOwner && (
+                <button 
+                  onClick={() => handleEditClick("profile-pic")}
+                  className="absolute bottom-0 right-0 rounded-full bg-blue-500 p-1.5 text-white transition hover:bg-blue-600"
+                >
+                  <Edit2 className="h-3 w-3" />
+                </button>
+              )}
             </div>
 
             <div className="flex-1">
@@ -581,12 +974,14 @@ const Profile = () => {
                     <p className="text-sm text-blue-400 italic">
                       {userDetails?.tagline || "No Tagline Provided"}
                     </p>
-                    <button 
-                      onClick={() => handleEditClick("tagline")}
-                      className="ml-1 text-blue-400/50 hover:text-blue-400 transition"
-                    >
-                      <Edit2 className="h-3 w-3" />
-                    </button>
+                    {isOwner && (
+                      <button 
+                        onClick={() => handleEditClick("tagline")}
+                        className="ml-1 text-blue-400/50 hover:text-blue-400 transition"
+                      >
+                        <Edit2 className="h-3 w-3" />
+                      </button>
+                    )}
                   </div>
                   
                   <p className="text-sm text-zinc-400 mt-1">{userDetails?.email_address || "user@example.com"}</p>
@@ -601,21 +996,23 @@ const Profile = () => {
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button className="flex items-center gap-1 rounded-full bg-yellow-500/20 px-3 py-1 text-xs text-yellow-400 transition hover:bg-yellow-500/30">
-                    <Shield className="h-3 w-3" />
-                    Verify Profile
-                  </button>
-                  <button className="rounded-full border border-white/15 bg-white/5 p-2 text-zinc-400 transition hover:bg-white/10 hover:text-white">
-                    <Share2 className="h-4 w-4" />
-                  </button>
-                  <button 
-                    onClick={() => handleEditClick("full")}
-                    className="rounded-full border border-white/15 bg-white/5 p-2 text-blue-400 transition hover:bg-blue-500/20 hover:text-blue-300"
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </button>
-                </div>
+                {isOwner && (
+                  <div className="flex items-center gap-2">
+                    <button className="flex items-center gap-1 rounded-full bg-yellow-500/20 px-3 py-1 text-xs text-yellow-400 transition hover:bg-yellow-500/30">
+                      <Shield className="h-3 w-3" />
+                      Verify Profile
+                    </button>
+                    <button className="rounded-full border border-white/15 bg-white/5 p-2 text-zinc-400 transition hover:bg-white/10 hover:text-white">
+                      <Share2 className="h-4 w-4" />
+                    </button>
+                    <button 
+                      onClick={() => handleEditClick("full")}
+                      className="rounded-full border border-white/15 bg-white/5 p-2 text-blue-400 transition hover:bg-blue-500/20 hover:text-blue-300"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Bio */}
@@ -624,12 +1021,14 @@ const Profile = () => {
                   <p className="text-sm text-zinc-300 flex-1">
                     {userDetails?.bio || "No bio provided."}
                   </p>
-                  <button 
-                    onClick={() => handleEditClick("bio")}
-                    className="ml-2 text-blue-400/50 hover:text-blue-400 transition flex-shrink-0"
-                  >
-                    <Edit2 className="h-3.5 w-3.5" />
-                  </button>
+                  {isOwner && (
+                    <button 
+                      onClick={() => handleEditClick("bio")}
+                      className="ml-2 text-blue-400/50 hover:text-blue-400 transition flex-shrink-0"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -673,20 +1072,22 @@ const Profile = () => {
             <div className="rounded-xl border border-white/10 bg-white/5 p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-white">Skills</h3>
-                <button 
-                  onClick={() => handleEditClick("skills")}
-                  className="text-xs text-blue-400 hover:text-blue-300"
-                >
-                  <Edit2 className="h-3 w-3" />
-                </button>
+                {isOwner && (
+                  <button 
+                    onClick={() => handleEditClick("skills")}
+                    className="text-xs text-blue-400 hover:text-blue-300"
+                  >
+                    <Edit2 className="h-3 w-3" />
+                  </button>
+                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 {(userDetails?.skills || []).length === 0 ? (
                   <p className="text-sm text-center text-zinc-500">No skills added.</p>
                 ) : (
                   (userDetails?.skills || []).map((skill) => (
-                    <span key={skill} className="rounded-full bg-blue-500/20 px-2.5 py-1 text-xs text-blue-400">
-                      {skill}
+                    <span key={skill.tag_id} className="rounded-full bg-blue-500/20 px-2.5 py-1 text-xs text-blue-400">
+                      {skill.name}
                     </span>
                   ))
                 )}
@@ -696,25 +1097,20 @@ const Profile = () => {
             <div className="rounded-xl border border-white/10 bg-white/5 p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-white">Badges</h3>
-                <button 
-                  onClick={() => handleEditClick("badges")}
-                  className="text-xs text-blue-400 hover:text-blue-300"
-                >
-                  <Edit2 className="h-3 w-3" />
-                </button>
               </div>
               <div className="space-y-2">
-                {(userDetails?.badges || []).map((badge, index) => (
-                  <div key={index} className="flex items-center gap-2 rounded-lg bg-yellow-500/10 p-2">
-                    <Award className="h-4 w-4 text-yellow-400" />
-                    <div className="flex-1">
-                      <p className="text-xs font-medium text-white">{badge.name}</p>
-                      <p className="text-[10px] text-zinc-500">{badge.description}</p>
-                    </div>
-                  </div>
-                ))}
-                {(userDetails?.badges || []).length === 0 && (
+                {(userDetails?.badges || []).length === 0 ? (
                   <p className="text-sm text-center text-zinc-500">No badges earned yet.</p>
+                ) : (
+                  (userDetails?.badges || []).map((badge, index) => (
+                    <div key={index} className="flex items-center gap-2 rounded-lg bg-yellow-500/10 p-2">
+                      <Award className="h-4 w-4 text-yellow-400" />
+                      <div className="flex-1">
+                        <p className="text-xs font-medium text-white">{badge.name}</p>
+                        <p className="text-[10px] text-zinc-500">{badge.description}</p>
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
             </div>
@@ -742,37 +1138,40 @@ const Profile = () => {
             <div className="rounded-xl border border-white/10 bg-white/5 p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-white">Social Links</h3>
-                <button 
-                  onClick={() => handleEditClick("social-links")}
-                  className="text-xs text-blue-400 hover:text-blue-300"
-                >
-                  <Edit2 className="h-3 w-3" />
-                </button>
+                {isOwner && (
+                  <button 
+                    onClick={() => handleEditClick("social-links")}
+                    className="text-xs text-blue-400 hover:text-blue-300"
+                  >
+                    <Edit2 className="h-3 w-3" />
+                  </button>
+                )}
               </div>
               <div className="space-y-2">
-                {(userDetails?.social_links || []).map((link, index) => {
-                  const platform = SOCIAL_PLATFORMS.find(p => 
-                    p.value.toLowerCase() === link.platform.toLowerCase()
-                  );
-                  return (
-                    <a 
-                      key={index} 
-                      href={link.url.startsWith('http') ? link.url : `https://${link.url}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`flex items-center gap-2 text-xs transition hover:text-blue-400 ${getPlatformColor(link.platform)}`}
-                    >
-                      {platform ? (
-                        <platform.icon className="h-3.5 w-3.5" />
-                      ) : (
-                        <Link2 className="h-3.5 w-3.5" />
-                      )}
-                      <span className="text-zinc-400 hover:text-inherit">{link.url}</span>
-                    </a>
-                  );
-                })}
-                {(userDetails?.social_links || []).length === 0 && (
+                {(userDetails?.social_links || []).length === 0 ? (
                   <p className="text-sm text-center text-zinc-500">No social links added.</p>
+                ) : (
+                  (userDetails?.social_links || []).map((link) => {
+                    const platform = SOCIAL_PLATFORMS.find(p => 
+                      p.value.toLowerCase() === link.platform.toLowerCase()
+                    );
+                    return (
+                      <a 
+                        key={link.account_link_id || link.platform}
+                        href={link.url.startsWith('http') ? link.url : `https://${link.url}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`flex items-center gap-2 text-xs transition hover:text-blue-400 ${getPlatformColor(link.platform)}`}
+                      >
+                        {platform ? (
+                          <platform.icon className="h-3.5 w-3.5" />
+                        ) : (
+                          <Link2 className="h-3.5 w-3.5" />
+                        )}
+                        <span className="text-zinc-400 hover:text-inherit">{link.url}</span>
+                      </a>
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -1103,93 +1502,15 @@ const Profile = () => {
                 </div>
               )}
 
-              {/* Skills - Only show for full edit or skills section */}
+              {/* Skills - Using the SkillsSelector component with dynamic skills from API */}
               {(editSection === "full" || editSection === "skills") && (
                 <div>
                   <label className="mb-2 block text-sm font-medium text-zinc-300">Skills</label>
-                  <div className="flex gap-2 mb-2">
-                    <input
-                      type="text"
-                      value={newSkill}
-                      onChange={(e) => setNewSkill(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && handleAddSkill()}
-                      className="flex-1 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      placeholder="Add a skill..."
-                    />
-                    <button
-                      onClick={handleAddSkill}
-                      className="rounded-lg bg-blue-500 px-4 py-2 text-sm text-white transition hover:bg-blue-600"
-                    >
-                      Add
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {editFormData.skills.map((skill, index) => (
-                      <span
-                        key={index}
-                        className="group flex items-center gap-1 rounded-full bg-blue-500/20 px-3 py-1 text-sm text-blue-400"
-                      >
-                        {skill}
-                        <button
-                          onClick={() => handleRemoveSkill(skill)}
-                          className="ml-1 text-blue-300 opacity-0 transition group-hover:opacity-100 hover:text-red-400"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
-                    {editFormData.skills.length === 0 && (
-                      <p className="text-sm text-zinc-500">No skills added yet.</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Badges - Only show for full edit or badges section */}
-              {(editSection === "full" || editSection === "badges") && (
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-zinc-300">Badges</label>
-                  <div className="grid grid-cols-2 gap-2 mb-2">
-                    <input
-                      type="text"
-                      placeholder="Badge name"
-                      value={newBadge.name}
-                      onChange={(e) => setNewBadge(prev => ({ ...prev, name: e.target.value }))}
-                      className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Description"
-                      value={newBadge.description}
-                      onChange={(e) => setNewBadge(prev => ({ ...prev, description: e.target.value }))}
-                      className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-                  <button
-                    onClick={handleAddBadge}
-                    className="mb-3 rounded-lg bg-blue-500 px-4 py-2 text-sm text-white transition hover:bg-blue-600"
-                  >
-                    Add Badge
-                  </button>
-                  <div className="space-y-2">
-                    {editFormData.badges.map((badge, index) => (
-                      <div key={index} className="flex items-center justify-between rounded-lg bg-white/5 p-3">
-                        <div>
-                          <p className="text-sm font-medium text-white">{badge.name}</p>
-                          <p className="text-xs text-zinc-500">{badge.description}</p>
-                        </div>
-                        <button
-                          onClick={() => handleRemoveBadge(index)}
-                          className="text-red-400 transition hover:text-red-300"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))}
-                    {editFormData.badges.length === 0 && (
-                      <p className="text-sm text-zinc-500">No badges added yet.</p>
-                    )}
-                  </div>
+                  <SkillsSelector 
+                    selectedSkills={editFormData.skills}
+                    onSkillsChange={(skills) => setEditFormData(prev => ({ ...prev, skills }))}
+                    availableSkills={availableSkills}
+                  />
                 </div>
               )}
 
@@ -1203,11 +1524,14 @@ const Profile = () => {
                     <select
                       value={newSocialLink.platform}
                       onChange={(e) => setNewSocialLink(prev => ({ ...prev, platform: e.target.value }))}
-                      className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="flex-1 rounded-lg border border-white/10 bg-[#1a1d2e] px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none"
+                      style={{
+                        colorScheme: 'dark',
+                      }}
                     >
-                      <option value="">Select Platform</option>
+                      <option value="" className="bg-[#1a1d2e] text-zinc-400">Select Platform</option>
                       {SOCIAL_PLATFORMS.map((platform) => (
-                        <option key={platform.value} value={platform.value}>
+                        <option key={platform.value} value={platform.value} className="bg-[#1a1d2e] text-white">
                           {platform.label}
                         </option>
                       ))}
@@ -1230,38 +1554,45 @@ const Profile = () => {
 
                   {/* List of social links */}
                   <div className="space-y-2">
-                    {editFormData.socialLinks.map((link, index) => {
-                      const platform = SOCIAL_PLATFORMS.find(p => 
-                        p.value.toLowerCase() === link.platform.toLowerCase()
-                      );
-                      return (
-                        <div key={index} className="flex items-center gap-3 rounded-lg bg-white/5 p-3">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <div className={`flex-shrink-0 ${getPlatformColor(link.platform)}`}>
-                              {platform ? (
-                                <platform.icon className="h-4 w-4" />
-                              ) : (
-                                <Link2 className="h-4 w-4" />
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-white">
-                                {platform ? platform.label : link.platform}
-                              </p>
-                              <p className="text-xs text-zinc-400 truncate">{link.url}</p>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleRemoveSocialLink(index)}
-                            className="text-red-400 transition hover:text-red-300 flex-shrink-0"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                    {editFormData.socialLinks.length === 0 && (
+                    {editFormData.socialLinks.length === 0 ? (
                       <p className="text-sm text-zinc-500 text-center py-4">No social links added yet.</p>
+                    ) : (
+                      editFormData.socialLinks.map((link, index) => {
+                        const platform = SOCIAL_PLATFORMS.find(p => 
+                          p.value.toLowerCase() === link.platform.toLowerCase()
+                        );
+                        return (
+                          <div key={link.account_link_id || index} className="flex items-center gap-3 rounded-lg bg-white/5 p-3">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <div className={`flex-shrink-0 ${getPlatformColor(link.platform)}`}>
+                                {platform ? (
+                                  <platform.icon className="h-4 w-4" />
+                                ) : (
+                                  <Link2 className="h-4 w-4" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-white">
+                                  {platform ? platform.label : link.platform}
+                                </p>
+                                <input
+                                  type="text"
+                                  value={link.url}
+                                  onChange={(e) => handleSocialLinkChange(index, 'url', e.target.value)}
+                                  className="w-full mt-1 rounded-lg border border-white/10 bg-[#1a1d2e] px-2 py-1 text-xs text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                  placeholder="Enter URL..."
+                                />
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleRemoveSocialLink(index)}
+                              className="text-red-400 transition hover:text-red-300 flex-shrink-0"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -1276,7 +1607,7 @@ const Profile = () => {
                   Cancel
                 </button>
                 <button
-                  onClick={handleSubmitEdit}
+                  onClick={handleSave}
                   disabled={isSubmitting}
                   className="flex-1 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
