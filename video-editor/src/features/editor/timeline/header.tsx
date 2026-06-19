@@ -169,6 +169,37 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
       { updateHistory: !0, kind: "update" }
     );
   };
+
+  const doActiveDuplicate = async () => {
+    const before = useStore.getState().trackItemIds;
+
+    dispatch(LAYER_CLONE);
+    await Promise.resolve();
+
+    const after = useStore.getState();
+    const newIds = after.trackItemIds.filter(id => !before.includes(id));
+
+    if (!newIds.length) return;
+
+    const updatedMap = { ...after.trackItemsMap };
+    newIds.forEach(id => {
+      const item = updatedMap[id];
+      if (!item) return;
+      updatedMap[id] = {
+        ...item,
+        details: {
+          ...item.details,
+          locked: false,
+        },
+      };
+    });
+
+    stateManager.updateState(
+      { trackItemsMap: updatedMap },
+      { updateHistory: true, kind: "update" }
+    );
+  };
+
   const changeScale = (newScale: ITimelineScaleState) => {
     const currentTimeMs = (currentFrame / fps) * 1000;
     const playheadPxOld = timeMsToUnits(currentTimeMs, scale.zoom);
@@ -409,9 +440,7 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
                 <TooltipTrigger asChild>
                   <Button
                     disabled={!activeIds.length}
-                    onClick={() => {
-                      dispatch(LAYER_CLONE);
-                    }}
+                    onClick={doActiveDuplicate}
                     variant={"ghost"}
                     size={"icon"}
                     className="disabled:opacity-0 disabled:pointer-events-none"

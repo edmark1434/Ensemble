@@ -75,7 +75,35 @@ export function useKeyboardShortcuts(stateManager: StateManager) {
       if (mod && e.code === "KeyD") {
         e.preventDefault();
         if (!activeIds.length) return;
-        dispatch(LAYER_CLONE);
+
+        const doDuplicate = async () => {
+          const before = useStore.getState().trackItemIds;
+          dispatch(LAYER_CLONE);
+          await Promise.resolve();
+
+          const after = useStore.getState();
+          const newIds = after.trackItemIds.filter(id => !before.includes(id));
+          if (!newIds.length) return;
+
+          const updatedMap = { ...after.trackItemsMap };
+          newIds.forEach(id => {
+            const item = updatedMap[id];
+            if (!item) return;
+            updatedMap[id] = {
+              ...item,
+              details: {
+                ...item.details,
+                locked: false,
+              },
+            };
+          });
+
+          stateManager.updateState(
+            { trackItemsMap: updatedMap },
+            { updateHistory: true, kind: "update" }
+          );
+        };
+        doDuplicate().then(r => {});
       }
 
       // cut

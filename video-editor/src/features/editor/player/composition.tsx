@@ -203,6 +203,13 @@ const Composition = () => {
 
     const subscription = stateEvents.subscribe((obj) => {
       if (obj.key === ENTER_EDIT_MODE) {
+        const incomingId = obj.value?.payload.id;
+        const freshMap = useStore.getState().trackItemsMap;
+
+        if (incomingId && freshMap[incomingId]?.details?.locked) {
+          return;
+        }
+
         if (editableTextId) {
           // get element by  data-text-id={id}
           const element = document.querySelector(
