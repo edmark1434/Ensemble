@@ -33,6 +33,8 @@ import Inbox from "@/pages/user/10_inbox/Main.tsx";
 import SectionPlaceholder from './pages/user/0_config/SectionPlaceholder.tsx'
 
 import JobPostingMain from "@/pages/user/6_jobs/Job_Posting/main.tsx";
+import {CreateJobWizard} from "@/pages/user/6_jobs/Job_Posting/CreateJobWizard.tsx";
+
 import GigMarketplace from "@/pages/user/7_gigs/Gig_Posting/main.tsx";
 
 import AdminLayout from './pages/admin/AdminLayout'
@@ -132,6 +134,7 @@ function App() {
 
           <Route path='/jobs'>
             <Route index element={<JobPostingMain />} />
+            <Route path='create' element={<CreateJobWizard />} />
             <Route path=':id' element={<JobPostingMain />} />
           </Route>
           <Route path='/gigs'>
