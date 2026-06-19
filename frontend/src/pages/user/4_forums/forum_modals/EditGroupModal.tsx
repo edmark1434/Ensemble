@@ -6,7 +6,7 @@ interface Group {
   id: number;
   name: string;
   description: string;
-  tags: string[];
+  tags: { tag: string; tag_id: number }[];
   gradient: string;
 }
 
@@ -14,7 +14,12 @@ interface EditGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
   group: Group;
-  onSave: (updatedData: { name: string; description: string; tags: string[]; gradient: string }) => void;
+  onSave: (updatedData: { 
+    group_name?: string; 
+    description?: string; 
+    tags?: { tag: string; tag_id: number }[]; 
+    gradient?: string 
+  }) => void;
 }
 
 export const gradientOptions = [
@@ -34,24 +39,34 @@ const EditGroupModal: React.FC<EditGroupModalProps> = ({
 }) => {
   const [name, setName] = useState(group.name);
   const [description, setDescription] = useState(group.description);
-  const [tags, setTags] = useState<string[]>(group.tags);
+  const [tags, setTags] = useState<{ tag: string; tag_id: number }[]>(group.tags);
   const [currentTag, setCurrentTag] = useState("");
   const [selectedGradient, setSelectedGradient] = useState(group.gradient);
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; description?: string; tags?: string }>({});
+  
   const defaultGroupDetails = {
     name: group.name,
     description: group.description,
     tags: group.tags,
     gradient: group.gradient,
   };
+
   if (!isOpen) return null;
+
+  // Generate a new tag_id (use timestamp for uniqueness, or you can use a counter)
+  const generateTagId = (): number => {
+    // If there are existing tags, get the max ID + 1, otherwise start at 1
+    const maxId = tags.length > 0 ? Math.max(...tags.map(t => t.tag_id)) : 0;
+    return maxId + 1;
+  };
 
   const handleAddTag = () => {
     const trimmedTag = currentTag.trim();
     if (!trimmedTag) return;
 
-    if (tags.includes(trimmedTag)) {
+    // Check if tag already exists (by tag name)
+    if (tags.some(tag => tag.tag.toLowerCase() === trimmedTag.toLowerCase())) {
       setErrors({ ...errors, tags: "Tag already exists" });
       return;
     }
@@ -61,13 +76,18 @@ const EditGroupModal: React.FC<EditGroupModalProps> = ({
       return;
     }
 
-    setTags([...tags, trimmedTag]);
+    const newTag = {
+      tag: trimmedTag,
+      tag_id: generateTagId()
+    };
+
+    setTags([...tags, newTag]);
     setCurrentTag("");
     if (errors.tags) setErrors({ ...errors, tags: undefined });
   };
 
-  const handleRemoveTag = (tagToRemove: string) => {
-    setTags(tags.filter(tag => tag !== tagToRemove));
+  const handleRemoveTag = (tagToRemove: { tag: string; tag_id: number }) => {
+    setTags(tags.filter(tag => tag.tag_id !== tagToRemove.tag_id));
     if (errors.tags) setErrors({ ...errors, tags: undefined });
   };
 
@@ -94,23 +114,41 @@ const EditGroupModal: React.FC<EditGroupModalProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const updatePayload = (payload:any) => {
-    if(payload.name === defaultGroupDetails.name) delete payload.name;
-    if(payload.description === defaultGroupDetails.description) delete payload.description;
-    if(JSON.stringify(payload.tags) === JSON.stringify(defaultGroupDetails.tags)) delete payload.tags;
-    if(payload.gradient === defaultGroupDetails.gradient) delete payload.gradient;
-    return payload;
-  }
+  const updatePayload = (payload: any) => {
+    const updatedPayload: any = {};
+    
+    if (payload.name !== defaultGroupDetails.name) {
+      updatedPayload.group_name = payload.name.trim();
+    }
+    if (payload.description !== defaultGroupDetails.description) {
+      updatedPayload.description = payload.description.trim();
+    }
+    if (JSON.stringify(payload.tags) !== JSON.stringify(defaultGroupDetails.tags)) {
+      updatedPayload.tags = payload.tags;
+    }
+    if (payload.gradient !== defaultGroupDetails.gradient) {
+      updatedPayload.gradient = payload.gradient;
+    }
+    
+    return updatedPayload;
+  };
 
   const handleSubmit = () => {
-
     if (!validate()) return;
-    let updatedPayload = updatePayload({ name, description, tags, gradient: selectedGradient });
-    if (updatedPayload.name) {
-      updatedPayload.group_name = updatedPayload.name.trim();
-      delete updatedPayload.name;
+    
+    const updatedPayload = updatePayload({ 
+      name, 
+      description, 
+      tags, 
+      gradient: selectedGradient 
+    });
+    
+    if (Object.keys(updatedPayload).length === 0) {
+      // No changes made
+      onClose();
+      return;
     }
-    if (!updatedPayload) return;
+    
     setIsSaving(true);
     
     setTimeout(() => {
@@ -249,11 +287,12 @@ const EditGroupModal: React.FC<EditGroupModalProps> = ({
             <div className="flex flex-wrap gap-2 mt-3">
               {tags.map((tag) => (
                 <div
-                  key={tag}
+                  key={tag.tag_id}
                   className="flex items-center gap-1 rounded-full bg-blue-500/20 px-3 py-1.5 text-xs text-blue-400"
                 >
                   <Tag className="h-3 w-3" />
-                  <span>{tag}</span>
+                  <span>{tag.tag}</span>
+                  <span className="text-[10px] text-zinc-500 ml-1">(ID: {tag.tag_id})</span>
                   <button
                     type="button"
                     onClick={() => handleRemoveTag(tag)}

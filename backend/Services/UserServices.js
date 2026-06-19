@@ -9,7 +9,7 @@ const {
     getEmailandPasswordHashByEmail,
     getEmailandPasswordHashByUsername,
     updateFirebaseUserUuid,
-    getUserByListofIdsRepositories
+    getUserByListofIdsRepositories,
 } = require('../Repositories/UserRepositories');
 const {
     createAccount,
@@ -161,7 +161,7 @@ async function registerUser(signupPayload = {}) {
                 userId: userCredentials.user_id,
                 email: userCredentials.email_address,
                 username: userCredentials.handle,
-                accountId: userCredentials.account_id,
+                account_id: userCredentials.account_id,
                 displayName: userCredentials.display_name,
                 type: userCredentials.type
             }
@@ -350,6 +350,8 @@ async function getCredentials(loginIdentifier){
     }
     return credentials;
 }
+
+
 module.exports = {
     ServiceError,
     fetchAllUsers,

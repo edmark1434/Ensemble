@@ -21,7 +21,6 @@ api.interceptors.response.use(
                     {},
                     { withCredentials: true }
                 );
-
                 if (refreshResponse.status === 200) {
                     return api(originalRequest);
                 }

@@ -12,8 +12,15 @@ async function createForumGroup(req, res) {
         let groupData = req.body;
         groupData.members = [{
             role: "Admin",
-            userId: req.session.userId
+            userId: req.session.userId,
+            joined_at: new Date(),
         }];
+        groupData.tags = groupData.tags.map(tag => {
+            return {
+                tag,
+                tag_id: Math.floor(Math.random() * 1000000),
+            }
+        });
         const newGroupId = await createGroup(groupData);
         res.status(201).json({ message: 'Forum group created successfully', groupId: newGroupId });
     }catch(err){

@@ -4,10 +4,14 @@ const userRoutes = require('./user');
 const staffRoutes = require('./staff');
 const forumRoutes = require('./forum');
 const adminRoutes = require('./admin');
+const accountRoutes = require('./account');
+const tagRoutes = require('./Tag');
 
 router.use('/forum', forumRoutes);
 router.use('/admin', adminRoutes);
 router.use('/staff', staffRoutes);
 router.use('/users', userRoutes);
+router.use('/accounts', accountRoutes);
+router.use('/tags', tagRoutes);
 module.exports = router;
 

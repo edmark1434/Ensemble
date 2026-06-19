@@ -6,6 +6,7 @@ const {
     updateForumDiscussion,
     updateForumDiscussionComments,
     addForumDiscussionCommentRepository,
+    getForumDiscussionByDiscussionIdAndCommentId,
 } = require('../Repositories/ForumDiscussionRepositories');
 
 const discussionPayload = {
@@ -108,8 +109,11 @@ function discussionValidation(payload = {}) {
                 return;
             }
 
-            if (tag.forum_tag_id == null || tag.forum_tag_id === '') {
-                errors.push(`tags[${index}].forum_tag_id is required`);
+            if (tag.tag_id == null || tag.tag_id === '') {
+                errors.push(`tags[${index}].tag_id is required`);
+            }
+            if (tag.tag_name == null || tag.tag_name === '') {
+                errors.push(`tags[${index}].tag_name is required`);
             }
         });
     }
@@ -251,7 +255,17 @@ async function createForumDiscussionServices(discussionPayload) {
         throw new Error(`Invalid discussion payload: ${validationResult.errors.join(', ')}`);
     }
 
-    return await createForumDiscussionRepositories(discussionPayload);
+    return await createForumDiscussionRepositories({
+        ...discussionPayload,
+        created_at: discussionPayload.created_at || new Date(),
+        updated_at: discussionPayload.updated_at || new Date(),
+        deleted_at: discussionPayload.deleted_at ?? null,
+        attachments: Array.isArray(discussionPayload.attachments) ? discussionPayload.attachments : [],
+        tags: Array.isArray(discussionPayload.tags) ? discussionPayload.tags : [],
+        likes: Array.isArray(discussionPayload.likes) ? discussionPayload.likes : [],
+        saves: Array.isArray(discussionPayload.saves) ? discussionPayload.saves : [],
+        comments: Array.isArray(discussionPayload.comments) ? discussionPayload.comments : [],
+    });
 }
 
 async function getForumDiscussionByGroupId(groupId) {
@@ -282,77 +296,388 @@ async function updateForumDiscussionServices(discussionId, payload = {}) {
     if (!discussionId) {
         throw new Error('discussionId is required');
     }
-
+    
+    const discussion = await getForumDiscussionByIdRepository(discussionId);
+    if (!discussion) {
+        throw new Error('Discussion not found');
+    }
+    
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
         throw new Error('update payload must be an object');
     }
 
-    const updateFields = {};
-    const allowedFields = ['title', 'description', 'tags', 'attachments', 'likes', 'saves'];
+    const setFields = {};
+    const pushFields = {};
+    const pullFields = {};
+    const addToSetFields = {};
 
-    allowedFields.forEach((field) => {
-        if (Object.prototype.hasOwnProperty.call(payload, field)) {
-            updateFields[field] = payload[field];
+    // Process each field
+    for (const [field, value] of Object.entries(payload)) {
+        
+        // Handle LIKES - toggle add/remove
+        if (field === 'likes') {
+            if (value.action === 'remove' && value.user_id) {
+                pullFields.likes = { user_id: value.user_id };
+            } else if (value.user_id) {
+                const alreadyLiked = discussion.likes?.some(like => like.user_id === value.user_id);
+                if (!alreadyLiked) {
+                    pushFields.likes = { 
+                        user_id: value.user_id, 
+                        created_at: new Date() 
+                    };
+                }
+            }
         }
-    });
+        
+        // Handle SAVES - toggle add/remove
+        else if (field === 'saves') {
+            if (value.action === 'remove' && value.user_id) {
+                pullFields.saves = { user_id: value.user_id };
+            } else if (value.user_id) {
+                const alreadySaved = discussion.saves?.some(save => save.user_id === value.user_id);
+                if (!alreadySaved) {
+                    pushFields.saves = { 
+                        user_id: value.user_id, 
+                        created_at: new Date() 
+                    };
+                }
+            }
+        }
+        
+        // Handle TAGS - add/remove/replace
+        else if (field === 'tags') {
+            if (value.action === 'remove' && value.tag_id) {
+                pullFields.tags = { tag_id: value.tag_id };
+            } else if (value.action === 'remove-multiple' && Array.isArray(value.tag_ids)) {
+                pullFields.tags = { tag_id: { $in: value.tag_ids } };
+            } else if (value.action === 'add' && value.tag) {
+                addToSetFields.tags = value.tag;
+            } else if (Array.isArray(value)) {
+                setFields.tags = value;
+            } else if (value.tag_id && value.tag_name) {
+                addToSetFields.tags = value;
+            }
+        }
+        
+        // Handle ATTACHMENTS - add/remove
+        else if (field === 'attachments') {
+            if (value.action === 'remove' && value.file_path) {
+                pullFields.attachments = { file_path: value.file_path };
+            } else if (value.action === 'remove-multiple' && Array.isArray(value.file_paths)) {
+                pullFields.attachments = { file_path: { $in: value.file_paths } };
+            } else if (Array.isArray(value)) {
+                pushFields.attachments = { 
+                    $each: value.map(att => ({
+                        ...att,
+                        uploaded_at: new Date()
+                    }))
+                };
+            } else if (value.file_path) {
+                pushFields.attachments = {
+                    ...value,
+                    uploaded_at: new Date()
+                };
+            }
+        }
+        
+        // Handle COMMENTS - remove and edit
+        else if (field === 'comments') {
+            
+            // FIXED: Remove a comment (hard delete - completely remove from array)
+            if (value.action === 'remove' && value.comment_id) {
+                // Use $pull to remove the comment completely
+                const result = await forumDiscussionsCollection.updateOne(
+                    { _id: new ObjectId(discussionId) },
+                    { $pull: { comments: { comment_id: value.comment_id } } }
+                );
+                console.log(`Remove comment result:`, result);
+                console.log(`Removed ${result.modifiedCount} comment(s)`);
+                continue;
+            }
+            
+            // FIXED: Soft delete (mark as deleted but keep in array)
+            else if (value.action === 'soft-delete' && value.comment_id) {
+                const result = await forumDiscussionsCollection.updateOne(
+                    { 
+                        _id: new ObjectId(discussionId),
+                        "comments.comment_id": value.comment_id
+                    },
+                    {
+                        $set: {
+                            "comments.$.deleted_at": new Date(),
+                            "comments.$.comment": "[deleted]",
+                            "comments.$.updated_at": new Date()
+                        }
+                    }
+                );
+                console.log(`Soft delete result:`, result);
+                continue;
+            }
+            
+            // Hard delete (completely remove from array) - same as remove
+            else if (value.action === 'hard-delete' && value.comment_id) {
+                const result = await forumDiscussionsCollection.updateOne(
+                    { _id: new ObjectId(discussionId) },
+                    { $pull: { comments: { comment_id: value.comment_id } } }
+                );
+                console.log(`Hard delete result:`, result);
+                continue;
+            }
+            
+            // FIXED: Remove all comments by a user
+            else if (value.action === 'remove-by-user' && value.user_id) {
+                const result = await forumDiscussionsCollection.updateOne(
+                    { _id: new ObjectId(discussionId) },
+                    { $pull: { comments: { user_id: value.user_id } } }
+                );
+                console.log(`Removed ${result.modifiedCount} comments by user ${value.user_id}`);
+                continue;
+            }
+            
+            // Edit/Update a comment
+            else if (value.action === 'edit' && value.comment_id && value.comment) {
+                const commentToEdit = discussion.comments?.find(c => c.comment_id === value.comment_id);
+                if (!commentToEdit) {
+                    throw new Error('Comment not found');
+                }
+                
+                if (commentToEdit.user_id !== value.user_id && !value.isAdmin) {
+                    throw new Error('Not authorized to edit this comment');
+                }
+                
+                if (commentToEdit.deleted_at) {
+                    throw new Error('Cannot edit deleted comment');
+                }
+                
+                const result = await forumDiscussionsCollection.updateOne(
+                    { 
+                        _id: new ObjectId(discussionId),
+                        "comments.comment_id": value.comment_id
+                    },
+                    {
+                        $set: {
+                            "comments.$.comment": value.comment,
+                            "comments.$.updated_at": new Date(),
+                            "comments.$.is_edited": true
+                        }
+                    }
+                );
+                console.log(`Edit result:`, result);
+                continue;
+            }
+            
+            // Like/Unlike a comment
+            else if (value.action === 'like' && value.comment_id && value.user_id) {
+                const comment = discussion.comments?.find(c => c.comment_id === value.comment_id);
+                const alreadyLiked = comment?.likes?.some(like => like.user_id === value.user_id);
+                
+                if (alreadyLiked) {
+                    await forumDiscussionsCollection.updateOne(
+                        { 
+                            _id: new ObjectId(discussionId),
+                            "comments.comment_id": value.comment_id
+                        },
+                        {
+                            $pull: {
+                                "comments.$.likes": { user_id: value.user_id }
+                            }
+                        }
+                    );
+                } else {
+                    await forumDiscussionsCollection.updateOne(
+                        { 
+                            _id: new ObjectId(discussionId),
+                            "comments.comment_id": value.comment_id
+                        },
+                        {
+                            $push: {
+                                "comments.$.likes": { user_id: value.user_id, created_at: new Date() }
+                            }
+                        }
+                    );
+                }
+                continue;
+            }
+        }
+        
+        // Handle regular fields
+        else if (['title', 'description'].includes(field)) {
+            setFields[field] = value;
+        }
+    }
 
-    if (Object.keys(updateFields).length === 0) {
+    // Always update the timestamp
+    setFields.updated_at = new Date();
+
+    // Build the update document
+    const updateDoc = {};
+    
+    if (Object.keys(setFields).length > 0) {
+        updateDoc.$set = setFields;
+    }
+    
+    if (Object.keys(pushFields).length > 0) {
+        updateDoc.$push = pushFields;
+    }
+    
+    if (Object.keys(pullFields).length > 0) {
+        updateDoc.$pull = pullFields;
+    }
+    
+    if (Object.keys(addToSetFields).length > 0) {
+        updateDoc.$addToSet = addToSetFields;
+    }
+
+    // If no operations, throw error
+    if (Object.keys(updateDoc).length === 0) {
         throw new Error('No valid discussion fields provided for update');
     }
 
-    updateFields.updated_at = new Date();
-    return await updateForumDiscussion(discussionId, updateFields);
+    console.log("Final updateDoc:", JSON.stringify(updateDoc, null, 2));
+    
+    // Update and return success status
+    return await updateForumDiscussion(discussionId, updateDoc);
 }
 
 async function updateForumDiscussionCommentsServices(payload = {}) {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-        throw new Error('update payload must be an object');
+        throw new Error('update payload must be object');
     }
 
-    const { discussionId, commentId, userId } = payload;
+    const { discussionId, commentId, userId, action } = payload;
 
-    if (!discussionId) {
-        throw new Error('discussionId is required');
+    if (!discussionId) throw new Error('discussionId is required');
+    if (!commentId) throw new Error('commentId is required');
+    if (!userId) throw new Error('userId is required');
+    console.log(`Updating comment ${commentId} in discussion ${discussionId} by user ${userId} with action ${action}`);
+    const discussion = await getForumDiscussionByIdRepository(discussionId);
+    if (!discussion) throw new Error('Discussion not found');
+
+    const commentToUpdate = discussion.comments?.find(c => c.comment_id === commentId);
+    console.log(commentToUpdate);
+    if (!commentToUpdate) throw new Error('Comment not found');
+
+    const pullFields = {};
+    const pushFields = {};
+    const setFields = {};
+
+    for (const [field, value] of Object.entries(payload)) {
+        
+        // Handle likes
+        if (field === 'likes') {
+            if (value.action === 'remove' && value.user_id) {
+                // Check if user actually liked it
+                const isLiked = commentToUpdate.likes?.some(like => like.user_id === value.user_id);
+                if (isLiked) {
+                    pullFields['comments.$.likes'] = { user_id: value.user_id };
+                }
+            } else if (value.user_id) {
+                // Check if not already liked
+                const alreadyLiked = commentToUpdate.likes?.some(like => like.user_id === value.user_id);
+                if (!alreadyLiked) {
+                    pushFields['comments.$.likes'] = { 
+                        user_id: value.user_id, 
+                        created_at: new Date() 
+                    };
+                }
+            }
+        }
+        
+        // Handle comment edit
+        else if (field === 'comment') {
+            // Check authorization
+            if (commentToUpdate.user_id !== userId && !payload.isAdmin) {
+                throw new Error('Not authorized to edit this comment');
+            }
+            
+            if (commentToUpdate.deleted_at) {
+                throw new Error('Cannot edit deleted comment');
+            }
+            
+            if (value.action === 'edit' && value.comment) {
+                setFields['comments.$.comment'] = value.comment;
+                setFields['comments.$.is_edited'] = true;
+            } else if (value.comment) {
+                setFields['comments.$.comment'] = value.comment;
+                setFields['comments.$.is_edited'] = true;
+            }
+        }
+        
+        // Handle attachments
+        else if (field === 'attachments') {
+            if (value.action === 'remove' && value.file_path) {
+                pullFields['comments.$.attachments'] = { file_path: value.file_path };
+            } else if (Array.isArray(value)) {
+                pushFields['comments.$.attachments'] = { 
+                    $each: value.map(att => ({
+                        ...att,
+                        uploaded_at: new Date()
+                    }))
+                };
+            } else if (value.file_path) {
+                pushFields['comments.$.attachments'] = {
+                    ...value,
+                    uploaded_at: new Date()
+                };
+            }
+        }
+        
+        // Handle remove entire comment
+        else if (field === 'remove') {
+            if (commentToUpdate.user_id !== userId && !payload.isAdmin) {
+                throw new Error('Not authorized to delete this comment');
+            }
+            
+            // Hard delete
+            const result = await forumDiscussionsCollection.updateOne(
+                { _id: new ObjectId(discussionId) },
+                { $pull: { comments: { comment_id: commentId } } }
+            );
+            return { success: result.modifiedCount > 0, action: 'removed' };
+        }
+        
+        // Handle soft delete
+        else if (field === 'softDelete') {
+            if (commentToUpdate.user_id !== userId && !payload.isAdmin) {
+                throw new Error('Not authorized to delete this comment');
+            }
+            
+            const result = await forumDiscussionsCollection.updateOne(
+                { 
+                    _id: new ObjectId(discussionId),
+                    "comments.comment_id": commentId
+                },
+                {
+                    $set: {
+                        "comments.$.deleted_at": new Date(),
+                        "comments.$.comment": "[deleted]",
+                        "comments.$.updated_at": new Date()
+                    }
+                }
+            );
+            return { success: result.modifiedCount > 0, action: 'soft-deleted' };
+        }
     }
 
-    if (!commentId) {
-        throw new Error('commentId is required');
+    // Build update document
+    const updateDoc = {};
+    if (Object.keys(setFields).length > 0) updateDoc.$set = setFields;
+    if (Object.keys(pushFields).length > 0) updateDoc.$push = pushFields;
+    if (Object.keys(pullFields).length > 0) updateDoc.$pull = pullFields;
+    
+    // Always update timestamp
+    if (updateDoc.$set) {
+        updateDoc.$set['comments.$.updated_at'] = new Date();
+    } else {
+        updateDoc.$set = { 'comments.$.updated_at': new Date() };
     }
 
-    if (!userId) {
-        throw new Error('userId is required');
+    // If no operations, return early
+    if (Object.keys(updateDoc).length === 0) {
+        throw new Error('No valid fields to update');
     }
-
-    const updateFields = {};
-
-    if (Object.prototype.hasOwnProperty.call(payload, 'like')) {
-        updateFields['comments.$.likes'] = payload.like;
-    }
-
-    if (Object.prototype.hasOwnProperty.call(payload, 'comment')) {
-        updateFields['comments.$.comment'] = payload.comment;
-    }
-
-    if (Object.prototype.hasOwnProperty.call(payload, 'saved')) {
-        updateFields['comments.$.saved'] = payload.saved;
-    }
-
-    if (Object.prototype.hasOwnProperty.call(payload, 'comment_reference_id')) {
-        updateFields['comments.$.comment_reference_id'] = payload.comment_reference_id;
-    }
-
-    if (Object.keys(updateFields).length === 0) {
-        throw new Error('No valid comment fields provided for update');
-    }
-
-    updateFields['comments.$.updated_at'] = new Date();
-
-    return await updateForumDiscussionComments({
-        discussionId,
-        commentId,
-        userId,
-        updateFields,
-    });
+    console.log("Final updateDoc for comment update:", JSON.stringify(updateDoc, null, 2));
+    return await updateForumDiscussionComments({ discussionId, commentId, updateFields: updateDoc });
 }
 
 async function addForumDiscussionCommentServices(discussionId, payload = {}) {
@@ -405,4 +730,4 @@ module.exports = {
     updateForumDiscussionServices,
     updateForumDiscussionCommentsServices,
     addForumDiscussionCommentServices,
-}
+};

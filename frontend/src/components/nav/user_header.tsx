@@ -2,7 +2,7 @@ import { Bell, ChevronDown, Settings, LogOut, User, CircleDollarSign } from "luc
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useGlobalState from "@/lib/global_state"; // Ensure this is the correct path
-import axios from "@/lib/axios";
+import api from "@/lib/axios";
 import { signOut } from "firebase/auth";
 import { auth } from "@/pages/firebase";
 
@@ -39,7 +39,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const userInfo = useGlobalState((state) => state.user);
   const [showHeader, setShowHeader] = useState(false);
   const [isCheckingAccess, setIsCheckingAccess] = useState(true);
-
+  const [userCredits, setCredits] = useState(0);
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -56,7 +56,14 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   useEffect(() => {
     const checkRole = async () => {
       try {
-        await axios.get("/api/users/check-user-role");
+
+        const [checkRoleResponse,getWalletResponse] = await Promise.all([
+          api.get("/api/users/check-user-role"),
+          api.get("/api/accounts/wallet", {
+            params: { type: 'account_wallets' },
+          })
+        ]);
+        setCredits(getWalletResponse.data.wallet.balance_credits || 0);
         setShowHeader(true);
       } catch (err) {
         console.error("Error checking user role:", err);
@@ -74,7 +81,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
 
   const executeFinalLogout = async () => {
     try {
-      await axios.get("/api/users/logout");
+      await api.get("/api/users/logout");
       await signOut(auth);
       useGlobalState.getState().clearUser();
     } catch (error) {
@@ -119,7 +126,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
               >
                 <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
                 <CircleDollarSign className="h-4 w-4 text-yellow-500" />
-                <span className="text-sm font-bold text-yellow-200">{credits.toLocaleString()}</span>
+                <span className="text-sm font-bold text-yellow-200">{userCredits.toLocaleString()}</span>
                 {isHovered && (
                   <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] text-white shadow-lg animate-fade-in">
                     Go to Credit Shop
@@ -156,7 +163,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
               >
                 <img src={userAvatar} alt={userName} className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20" />
                 <div className="text-left">
-                  <p className="text-sm font-medium text-white">{userInfo?.displayName || "User"}</p>
+                  <p className="text-sm font-medium text-white">{userInfo?.display_name || userInfo?.displayName || "User"}</p>
                   <p className="text-xs text-zinc-500">Premium Member</p>
                 </div>
                 <ChevronDown className={`h-4 w-4 text-zinc-400 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`} />
@@ -165,11 +172,12 @@ const UserHeader: React.FC<UserHeaderProps> = ({
               {isProfileOpen && (
                 <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/10 bg-[#0d0f1a] shadow-2xl backdrop-blur-xl animate-fade-in">
                   <div className="border-b border-white/10 p-3">
-                    <p className="text-sm font-medium text-white">{userName}</p>
+                    <p className="text-sm font-medium text-white">{ userInfo.username}</p>
                     <p className="text-xs text-zinc-500">{userInfo?.email || "user@ensemble.com"}</p>
                   </div>
                   <div className="p-2">
-                    <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10">
+                    <button onClick={() => { navigate("/profile"); setIsProfileOpen(false); }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10">
                       <User className="h-4 w-4" /> Profile
                     </button>
                     <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10">

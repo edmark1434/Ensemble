@@ -1,13 +1,7 @@
-const { getMongoClient } = require('../lib/mongodb');
-
-function getForumDiscussionsCollection() {
-  const client = getMongoClient();
-  if (!client) {
-    throw new Error('MongoDB is not connected. Set MONGODB_URI in backend/.env to use forum features.');
-  }
-  return client.db('ensemble').collection('forum_discussions');
-}
-
+const { getDB } = require('../lib/mongodb');
+const { ObjectId } = require('mongodb');
+const db = getDB();
+const forumDiscussionsCollection = db.collection('forum_discussions');
 async function createForumDiscussionRepositories(discussionPayload = {}) {
     try {
         const result = await getForumDiscussionsCollection().insertOne(discussionPayload);
@@ -20,7 +14,7 @@ async function createForumDiscussionRepositories(discussionPayload = {}) {
 
 async function getForumDiscussionByGroupId(groupId) {
     try {
-        return await getForumDiscussionsCollection().findOne({ forum_group_id: groupId });
+        return await forumDiscussionsCollection.find({ forum_group_id: groupId }).toArray();
     } catch (err) {
         console.error('Error fetching forum discussion by group ID:', err);
         throw err;
@@ -29,7 +23,7 @@ async function getForumDiscussionByGroupId(groupId) {
 
 async function getForumDiscussionById(discussionId) {
     try {
-        return await getForumDiscussionsCollection().findOne({ _id: discussionId });
+        return await forumDiscussionsCollection.findOne({ _id: new ObjectId(discussionId) });
     } catch (err) {
         console.error('Error fetching forum discussion by ID:', err);
         throw err;
@@ -47,9 +41,9 @@ async function getForumDiscussionsByUserId(userId) {
 
 async function updateForumDiscussion(discussionId, updateFields = {}) {
     try {
-        const result = await getForumDiscussionsCollection().updateOne(
-            { _id: discussionId },
-            { $set: updateFields }
+        const result = await forumDiscussionsCollection.updateOne(
+            { _id: new ObjectId(discussionId) },
+            updateFields
         );
         return result.modifiedCount > 0;
     } catch (err) {
@@ -58,11 +52,11 @@ async function updateForumDiscussion(discussionId, updateFields = {}) {
     }
 }
 
-async function updateForumDiscussionComments({ discussionId, commentId, userId, updateFields = {} }) {
+async function updateForumDiscussionComments({ discussionId, commentId, updateFields = {} }) {
     try {
-        const result = await getForumDiscussionsCollection().updateOne(
-            { _id: discussionId, 'comments.comment_id': commentId, 'comments.user_id': userId },
-            { $set: updateFields }
+        const result = await forumDiscussionsCollection.updateOne(
+            { _id: new ObjectId(discussionId), 'comments.comment_id': commentId,},
+            updateFields
         );
         return result.modifiedCount > 0;
     } catch (err) {
@@ -73,8 +67,8 @@ async function updateForumDiscussionComments({ discussionId, commentId, userId, 
 
 async function addForumDiscussionCommentRepository(discussionId, commentPayload = {}) {
     try {
-        const result = await getForumDiscussionsCollection().updateOne(
-            { _id: discussionId },
+        const result = await forumDiscussionsCollection.updateOne(
+            { _id: new ObjectId(discussionId) },
             {
                 $push: { comments: commentPayload },
                 $set: { updated_at: new Date() },
@@ -88,6 +82,19 @@ async function addForumDiscussionCommentRepository(discussionId, commentPayload 
     }
 }
 
+async function getForumDiscussionByDiscussionIdAndCommentId(discussionId, commentId) {
+    try {
+        const discussion = await forumDiscussionsCollection.findOne(
+            { 'comments.user_id': userId, 'comments.comment_id': commentId }
+        );
+        return discussion;
+    } catch (err) {
+        console.error('Error fetching forum discussion by user ID and comment ID:', err);
+        throw err;
+    }
+}
+
+
 module.exports = {
     createForumDiscussionRepositories,
     getForumDiscussionByGroupId,
@@ -96,4 +103,5 @@ module.exports = {
     updateForumDiscussion,
     updateForumDiscussionComments,
     addForumDiscussionCommentRepository,
+    getForumDiscussionByDiscussionIdAndCommentId,
 }
