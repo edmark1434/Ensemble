@@ -16,7 +16,7 @@ const JobDetailsView: React.FC<JobDetailsViewProps> = ({ job, onClose }) => {
 
         {/* Header Image */}
         <div className="relative h-48 w-full">
-          <img src={job.thumbnail} className="h-full w-full object-cover opacity-40" />
+          <img src={job.thumbnail} className="h-full w-full object-cover opacity-40" alt="" />
           <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-full bg-black/50 text-white hover:bg-white/10 transition">
             <X className="h-5 w-5" />
           </button>
@@ -27,7 +27,7 @@ const JobDetailsView: React.FC<JobDetailsViewProps> = ({ job, onClose }) => {
             <div>
               <h1 className="text-3xl font-bold text-white mb-2">{job.title}</h1>
               <div className="flex flex-wrap gap-3">
-                <span className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-bold uppercase">{job.category}</span>
+                <span className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-bold uppercase border border-blue-500/20">{job.category}</span>
                 <span className="px-3 py-1 rounded-full bg-zinc-800 text-zinc-300 text-xs font-bold uppercase">{job.difficulty}</span>
               </div>
             </div>
@@ -61,9 +61,29 @@ const JobDetailsView: React.FC<JobDetailsViewProps> = ({ job, onClose }) => {
             </div>
           </div>
 
+          {/* Required Skills Section Module */}
+          <div className="mb-8">
+            <h3 className="text-sm uppercase font-bold tracking-wider text-zinc-400 mb-3">Required Technical Skills</h3>
+            <div className="flex flex-wrap gap-2 p-4 rounded-2xl bg-white/5 border border-white/10">
+              {job.skills && job.skills.length > 0 ? (
+                job.skills.map((skill: string) => (
+                  <span
+                    key={skill}
+                    className="px-3 py-1 text-xs font-semibold rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400"
+                  >
+                    {skill}
+                  </span>
+                ))
+              ) : (
+                <span className="text-xs text-zinc-500 italic">No specific technical skill tags declared.</span>
+              )}
+            </div>
+          </div>
+
+          {/* Scope of Work Box Layout */}
           <div className="mb-8">
             <h3 className="text-lg font-bold text-white mb-3">Job Description</h3>
-            <p className="text-zinc-400 text-sm leading-relaxed whitespace-pre-line">
+            <p className="text-zinc-400 text-sm leading-relaxed whitespace-pre-line bg-white/[0.01] border border-white/5 p-4 rounded-xl">
               {job.description}
             </p>
           </div>
