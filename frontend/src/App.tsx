@@ -36,6 +36,7 @@ import JobPostingMain from "@/pages/user/6_jobs/Job_Posting/main.tsx";
 import {CreateJobWizard} from "@/pages/user/6_jobs/Job_Posting/CreateJobWizard.tsx";
 
 import GigMarketplace from "@/pages/user/7_gigs/Gig_Posting/main.tsx";
+import {CreateGigWizard} from "@/pages/user/7_gigs/Gig_Posting/CreateGigWizard.tsx";
 
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
@@ -139,6 +140,7 @@ function App() {
           </Route>
           <Route path='/gigs'>
             <Route index element={<GigMarketplace />} />
+            <Route path='create' element={<CreateGigWizard />} />
             <Route path=':id' element={<GigMarketplace />} />
           </Route>
 
