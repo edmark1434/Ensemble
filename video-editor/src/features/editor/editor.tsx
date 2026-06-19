@@ -221,7 +221,7 @@ const Panels = ({
                   defaultSize={showMenuItem ? 40 : 70}
                   minSize={showMenuItem ? 35 : 50}
                   maxSize={showMenuItem ? 40 : 70}
-                  className="relative bg-card min-w-0 overflow-visible!"
+                  className="relative bg-card min-w-0"
               >
                 <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} />
               </ResizablePanel>
@@ -231,7 +231,7 @@ const Panels = ({
                   defaultSize={30}
                   minSize={30}
                   maxSize={showMenuItem ? 40 : 50}
-                  className="relative bg-card min-w-0 overflow-visible!"
+                  className="relative bg-card min-w-0"
               >
                 <Controls />
               </ResizablePanel>
@@ -367,6 +367,12 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
   }, []);
 
   useKeyboardShortcuts(stateManager);
+
+  useEffect(() => {
+    const lockWindowScroll = () => window.scrollTo(0, 0);
+    window.addEventListener("scroll", lockWindowScroll);
+    return () => window.removeEventListener("scroll", lockWindowScroll);
+  }, []);
 
   return (
     <div className="flex h-screen w-screen flex-col bg-background">
