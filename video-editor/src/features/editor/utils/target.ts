@@ -55,7 +55,7 @@ export const getTargetAbles = (targetType: string): ITargetAbles => {
       };
     case "group":
       return {
-        rotatable: false,
+        rotatable: true,
         resizable: false,
         scalable: true,
         keepRatio: true,
@@ -140,7 +140,7 @@ export const getSelectionByIds = (ids: string[]): SelectionInfo => {
       targets,
       layerType: "group",
       ables: getTargetAbles("group"),
-      controls: []
+      controls: getTargetControls("group")
     };
   }
 };

@@ -407,26 +407,6 @@ export function SceneInteractions({
           }
         });
       }}
-      onDragGroup={({ events }) => {
-        holdGroupPosition = {};
-        for (let i = 0; i < events.length; i++) {
-          const event = events[i];
-          const id = getIdFromClassName(event.target.className);
-          const trackItem = trackItemsMap[id];
-          const left =
-            Number.parseFloat(trackItem?.details.left as string) +
-            event.beforeTranslate[0];
-          const top =
-            Number.parseFloat(trackItem?.details.top as string) +
-            event.beforeTranslate[1];
-          event.target.style.left = `${left}px`;
-          event.target.style.top = `${top}px`;
-          holdGroupPosition[id] = {
-            left: left,
-            top: top
-          };
-        }
-      }}
       onResize={({
                    target,
                    width: nextWidth,
@@ -689,6 +669,26 @@ export function SceneInteractions({
           });
         }
       }}
+      onDragGroup={({ events }) => {
+        holdGroupPosition = {};
+        for (let i = 0; i < events.length; i++) {
+          const event = events[i];
+          const id = getIdFromClassName(event.target.className);
+          const trackItem = trackItemsMap[id];
+          const left =
+            Number.parseFloat(trackItem?.details.left as string) +
+            event.beforeTranslate[0];
+          const top =
+            Number.parseFloat(trackItem?.details.top as string) +
+            event.beforeTranslate[1];
+          event.target.style.left = `${left}px`;
+          event.target.style.top = `${top}px`;
+          holdGroupPosition[id] = {
+            left: left,
+            top: top
+          };
+        }
+      }}
       onDragGroupEnd={() => {
         if (holdGroupPosition) {
           const payload: Record<string, Partial<any>> = {};
@@ -709,6 +709,61 @@ export function SceneInteractions({
           });
           holdGroupPosition = null;
         }
+      }}
+      onScaleGroup={({ events }) => {
+        holdGroupPosition = {};
+        for (const event of events) {
+          const id = getIdFromClassName(event.target.className);
+          const target = event.target as HTMLDivElement;
+          target.style.transform = event.transform;
+          target.style.left = `${parseFloat(target.style.left) + event.drag.beforeTranslate[0]}px`;
+          target.style.top = `${parseFloat(target.style.top) + event.drag.beforeTranslate[1]}px`;
+          holdGroupPosition[id] = {
+            transform: target.style.transform,
+            left: parseFloat(target.style.left),
+            top: parseFloat(target.style.top),
+          };
+        }
+      }}
+      onScaleGroupEnd={() => {
+        if (holdGroupPosition) {
+          const payload: Record<string, any> = {};
+          for (const id of Object.keys(holdGroupPosition)) {
+            if (trackItemsMap[id]?.details?.locked) continue;
+            payload[id] = {
+              details: {
+                transform: holdGroupPosition[id].transform,
+                left: holdGroupPosition[id].left,
+                top: holdGroupPosition[id].top,
+              }
+            };
+          }
+          dispatch(EDIT_OBJECT, { payload });
+          holdGroupPosition = null;
+        }
+      }}
+      onRotateGroup={({ events }) => {
+        for (const event of events) {
+          const target = event.target as HTMLDivElement;
+          target.style.transform = event.transform;
+          target.style.left = `${parseFloat(target.style.left) + event.drag.beforeDist[0]}px`;
+          target.style.top = `${parseFloat(target.style.top) + event.drag.beforeDist[1]}px`;
+        }
+      }}
+      onRotateGroupEnd={() => {
+        const payload: Record<string, any> = {};
+        for (const target of targets) {
+          const id = getIdFromClassName(target.className);
+          if (trackItemsMap[id]?.details?.locked) continue;
+          payload[id] = {
+            details: {
+              transform: (target as HTMLDivElement).style.transform,
+              left: parseFloat((target as HTMLDivElement).style.left),
+              top: parseFloat((target as HTMLDivElement).style.top),
+            }
+          };
+        }
+        dispatch(EDIT_OBJECT, { payload });
       }}
     />
   );
