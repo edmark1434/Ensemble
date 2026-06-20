@@ -164,9 +164,14 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
       };
     });
 
+    const newDuration = Object.values(updatedMap).reduce(
+      (max, item) => Math.max(max, item.display?.to ?? 0),
+      after.duration
+    );
+
     stateManager.updateState(
-      { trackItemsMap: updatedMap },
-      { updateHistory: !0, kind: "update" }
+      { trackItemsMap: updatedMap, duration: newDuration },
+      { updateHistory: true, kind: "update" }
     );
   };
 
