@@ -21,3 +21,19 @@ body {
 .go4109123758 {
   animation: slideInFromRight 0.3s ease-out !important;
 }
+/* For dark theme selects */
+select {
+  background-color: #1a1d2e !important;
+  color: white !important;
+}
+
+select option {
+  background-color: #1a1d2e !important;
+  color: white !important;
+}
+
+select option:hover,
+select option:focus,
+select option:active {
+  background-color: #3b82f6 !important;
+}

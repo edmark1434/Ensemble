@@ -133,14 +133,15 @@ type Group = {
   memberCount: number;
   joined: boolean;
   gradient: string;
-  tags: string[];
+  tags: {
+    tag_id: number;
+    tag: string;
+  }[];
   status: string;
 };
 
 // ==================== CONSTANTS ====================
-const CURRENT_USER_ID = 1;
-const CURRENT_USER_NAME = "John Paul Mahilom";
-const CURRENT_USER_AVATAR = "https://i.pravatar.cc/150?u=john";
+const DEFAULT_AVATAR = "https://i.pravatar.cc/150?u=default";
 
 const gradientOptions = [
   "from-cyan-500 via-blue-500 to-indigo-500",
@@ -180,12 +181,6 @@ const formatAgo = (value: string) => {
   return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
 };
 
-const makeAuthorLabel = (userId: number) => 
-  userId === CURRENT_USER_ID ? CURRENT_USER_NAME : `User ${userId}`;
-
-const makeAuthorAvatar = (userId: number) => 
-  `https://i.pravatar.cc/150?u=${userId}`;
-
 const normalizeImageAttachments = (attachments?: ForumDiscussionAttachment[]): ImageAttachment[] => {
   return (attachments ?? []).map((attachment, index) => ({
     id: `${attachment.file_path}-${index}`,
@@ -194,11 +189,11 @@ const normalizeImageAttachments = (attachments?: ForumDiscussionAttachment[]): I
   }));
 };
 
-const normalizeReplies = (comments?: ForumDiscussionComment[]): Reply[] => {
+const normalizeReplies = (comments?: ForumDiscussionComment[], currentUserId?: number): Reply[] => {
   return (comments ?? []).map((comment, index) => ({
     id: String(comment.comment_id ?? `${comment.user_id}-${index}`),
-    author: makeAuthorLabel(comment.user_id),
-    authorAvatar: makeAuthorAvatar(comment.user_id),
+    author: `User ${comment.user_id}`,
+    authorAvatar: `https://i.pravatar.cc/150?u=${comment.user_id}`,
     content: comment.comment,
     ago: formatAgo(comment.created_at),
     likes: comment.likes?.length ?? 0,
@@ -206,7 +201,7 @@ const normalizeReplies = (comments?: ForumDiscussionComment[]): Reply[] => {
   }));
 };
 
-const normalizeDiscussion = (discussion: ForumDiscussionDocument): Post => {
+const normalizeDiscussion = (discussion: ForumDiscussionDocument, currentUserId?: number): Post => {
   const discussionId = String(discussion._id ?? `${discussion.forum_group_id}-${discussion.user_id}-${discussion.created_at}`);
   const images = normalizeImageAttachments(discussion.attachments);
 
@@ -214,8 +209,8 @@ const normalizeDiscussion = (discussion: ForumDiscussionDocument): Post => {
     id: discussionId,
     groupId: discussion.forum_group_id,
     authorId: discussion.user_id,
-    author: makeAuthorLabel(discussion.user_id),
-    authorAvatar: makeAuthorAvatar(discussion.user_id),
+    author: `User ${discussion.user_id}`,
+    authorAvatar: `https://i.pravatar.cc/150?u=${discussion.user_id}`,
     title: discussion.title,
     content: discussion.description,
     excerpt: discussion.description.length > 180 ? `${discussion.description.slice(0, 180)}...` : discussion.description,
@@ -224,7 +219,7 @@ const normalizeDiscussion = (discussion: ForumDiscussionDocument): Post => {
     saves: discussion.saves?.length ?? 0,
     ago: formatAgo(discussion.created_at),
     date: discussion.created_at,
-    replies: normalizeReplies(discussion.comments),
+    replies: normalizeReplies(discussion.comments, currentUserId),
     tag: discussion.tags?.[0] ? String(discussion.tags[0].forum_tag_id) : undefined,
     tags: discussion.tags ?? [],
     images,
@@ -232,9 +227,9 @@ const normalizeDiscussion = (discussion: ForumDiscussionDocument): Post => {
   };
 };
 
-const normalizeGroup = (group: ForumGroupDocument, index: number): Group => {
+const normalizeGroup = (group: ForumGroupDocument, index: number, currentUserId?: number): Group => {
   const members = group.members ?? [];
-  const joined = members.some((member) => member.userId === CURRENT_USER_ID);
+  const joined = members.some((member) => member.userId === currentUserId);
 
   return {
     id: String(group._id),
@@ -321,6 +316,7 @@ const ReplyInput = ({
   images,
   removeImage,
   isUploading,
+  currentUserAvatar,
 }: {
   postId: string;
   replyText: string;
@@ -330,6 +326,7 @@ const ReplyInput = ({
   images: ImageAttachment[];
   removeImage: (imageId: string) => void;
   isUploading: boolean;
+  currentUserAvatar: string;
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPreview, setShowPreview] = useState(false);
@@ -397,7 +394,7 @@ const ReplyInput = ({
     <div className="mt-4">
       <div className="flex gap-3">
         <img
-          src={CURRENT_USER_AVATAR}
+          src={currentUserAvatar}
           alt="You"
           className="h-8 w-8 shrink-0 rounded-full object-cover ring-2 ring-white/20"
         />
@@ -561,7 +558,12 @@ const Forums = () => {
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [reloadKey, setReloadKey] = useState(0);
   const navigate = useNavigate();
-  const userId = useGlobalState((state) => state.user?.userId);
+  
+  // Get user from global state
+  const user = useGlobalState((state) => state.user);
+  const currentUserId = user?.user_id || 1; // Fallback to 1 if user not found
+  const currentUserAvatar = user?.avatar || DEFAULT_AVATAR;
+
   const [joinedGroups, setJoinedGroups] = useState<Group[]>([]);
   
   const availableFilterGroups = joinedGroups;
@@ -580,10 +582,10 @@ const Forums = () => {
       setLoading(true);
       try {
         const groupsResponse = await api.get<ForumGroupDocument[]>("/api/forum/groups");
-        let normalizedGroups = (groupsResponse.data ?? []).map((group, index) => normalizeGroup(group, index));
+        let normalizedGroups = (groupsResponse.data ?? []).map((group, index) => normalizeGroup(group, index, currentUserId));
         normalizedGroups = normalizedGroups.filter((group) => group.status === "active");
         const userJoinedGroups = normalizedGroups.filter((group) => 
-          group.members.some((member) => member.userId === userId)
+          group.members.some((member) => member.userId === currentUserId)
         );
         
         if (cancelled) return;
@@ -594,7 +596,7 @@ const Forums = () => {
           normalizedGroups.map(async (group) => {
             try {
               const response = await api.get<ForumDiscussionDocument>(`/api/forum/discussions/group/${group.id}`);
-              return response.data ? [normalizeDiscussion(response.data)] : [];
+              return response.data ? [normalizeDiscussion(response.data, currentUserId)] : [];
             } catch {
               return [];
             }
@@ -606,12 +608,12 @@ const Forums = () => {
 
         try {
           const userDiscussionsResponse = await api.get<ForumDiscussionDocument[] | ForumDiscussionDocument>(
-            `/api/forum/discussions/user/${CURRENT_USER_ID}`
+            `/api/forum/discussions/user/${currentUserId}`
           );
           const normalizedMyDiscussions = Array.isArray(userDiscussionsResponse.data)
-            ? userDiscussionsResponse.data.map((discussion) => normalizeDiscussion(discussion))
+            ? userDiscussionsResponse.data.map((discussion) => normalizeDiscussion(discussion, currentUserId))
             : userDiscussionsResponse.data
-              ? [normalizeDiscussion(userDiscussionsResponse.data)]
+              ? [normalizeDiscussion(userDiscussionsResponse.data, currentUserId)]
               : [];
 
           if (!cancelled) {
@@ -632,7 +634,7 @@ const Forums = () => {
 
     loadForumData();
     return () => { cancelled = true; };
-  }, [reloadKey, userId]);
+  }, [reloadKey, currentUserId]);
 
   // ==================== MEMOIZED DATA ====================
   const allDiscussionPosts = useMemo(() => {
@@ -647,9 +649,9 @@ const Forums = () => {
     if (activeTab === "feed") {
       filtered = groupDiscussions.filter((post) => selectedGroupIds.includes(String(post.groupId)));
     } else if (activeTab === "my-discussions") {
-      filtered = myDiscussionPosts.filter((post) => post.authorId === CURRENT_USER_ID);
+      filtered = myDiscussionPosts.filter((post) => post.authorId === currentUserId);
     } else if (activeTab === "saved") {
-      filtered = allDiscussionPosts.filter((post) => post.raw.saves.some((save) => save.user_id === CURRENT_USER_ID));
+      filtered = allDiscussionPosts.filter((post) => post.raw.saves.some((save) => save.user_id === currentUserId));
     } else {
       return [];
     }
@@ -678,7 +680,7 @@ const Forums = () => {
     }
 
     return filtered;
-  }, [activeTab, allDiscussionPosts, groupDiscussions, myDiscussionPosts, searchQuery, selectedGroupIds, sortBy, groupsList]);
+  }, [activeTab, allDiscussionPosts, groupDiscussions, myDiscussionPosts, searchQuery, selectedGroupIds, sortBy, groupsList, currentUserId]);
 
   // Filter groups for Groups and My Groups tabs with search
   const visibleGroups = useMemo(() => {
@@ -752,7 +754,7 @@ const Forums = () => {
     if (!post) return;
 
     const payload = {
-      user_id: CURRENT_USER_ID,
+      user_id: currentUserId,
       comment: replyContent || "",
       comment_id: `cmt_${Date.now()}`,
       comment_reference_id: null,
@@ -773,7 +775,7 @@ const Forums = () => {
       console.error(error);
       showErrorToast("Failed to post reply");
     }
-  }, [replyText, replyImages, allDiscussionPosts, refreshForumData]);
+  }, [replyText, replyImages, allDiscussionPosts, refreshForumData, currentUserId]);
 
   const handleReplyImageUpload = useCallback(async (postId: string, files: FileList | null) => {
     if (!files) return;
@@ -841,7 +843,7 @@ const Forums = () => {
   }) => {
     const payload: ForumDiscussionDocument = {
       forum_group_id: postData.groupId,
-      user_id: CURRENT_USER_ID,
+      user_id: currentUserId,
       title: postData.title,
       description: postData.content,
       created_at: new Date().toISOString(),
@@ -863,7 +865,7 @@ const Forums = () => {
       console.error(error);
       showErrorToast("Failed to create discussion");
     }
-  }, [refreshForumData]);
+  }, [refreshForumData, currentUserId]);
 
   const handleEditPost = useCallback((postId: number, updatedData: { title: string; content: string; tag: string; images?: ImageAttachment[] }) => {
     const updatePosts = (posts: Post[]) =>
@@ -1125,6 +1127,7 @@ const Forums = () => {
                 images={replyImages[post.id] || []}
                 removeImage={(imageId) => removeReplyImage(post.id, imageId)}
                 isUploading={replyUploading[post.id] || false}
+                currentUserAvatar={currentUserAvatar}
               />
             </div>
           )}
@@ -1163,7 +1166,7 @@ const Forums = () => {
             </div>
             <div className="mt-3 flex flex-wrap gap-1">
               {group.tags.slice(0, 3).map((tag) => (
-                <span key={tag} className="rounded-full bg-blue-500/20 px-2 py-0.5 text-[9px] text-blue-400">{tag}</span>
+                <span key={tag.tag_id} className="rounded-full bg-blue-500/20 px-2 py-0.5 text-[9px] text-blue-400">{tag.tag}</span>
               ))}
               {group.tags.length > 3 && (
                 <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] text-zinc-400">+{group.tags.length - 3}</span>
@@ -1223,8 +1226,8 @@ const Forums = () => {
     );
   }
 
-// ==================== MAIN RENDER ====================
-const feedBlocked = activeTab === "feed" && selectedGroupIds.length === 0;
+  // ==================== MAIN RENDER ====================
+  const feedBlocked = activeTab === "feed" && selectedGroupIds.length === 0;
 
   return (
     <div className="min-h-screen bg-[#080a12]">

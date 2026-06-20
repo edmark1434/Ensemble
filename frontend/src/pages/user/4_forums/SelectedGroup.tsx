@@ -1,6 +1,8 @@
 // src/pages/user/4_forums/SelectedGroup.tsx
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import api from "@/lib/axios";
 import {
   Users,
@@ -20,7 +22,6 @@ import {
   Edit3,
   Flag,
   LogOut,
-  Filter,
   X,
   Trash2,
   Shield,
@@ -31,6 +32,8 @@ import {
   Trash2 as TrashIcon,
   Eye,
   Loader2,
+  Reply,
+  ChevronRight,
 } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import NewDiscussionModal from "@/pages/user/4_forums/forum_modals/NewDiscussionModal";
@@ -44,6 +47,7 @@ import RemoveMemberModal from "@/pages/user/4_forums/forum_modals/RemoveMemberMo
 import EditPostModal from "@/pages/user/4_forums/forum_modals/EditPostModal.tsx";
 import DeletePostModal from "@/pages/user/4_forums/forum_modals/DeletePostModal.tsx";
 import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
+import useGlobalState from "@/lib/global_state";
 
 type Tab = "posts" | "members" | "about";
 
@@ -57,23 +61,11 @@ type ImageAttachment = {
   file_path?: string;
 };
 
-// Group type based on your data structure
-type Group = {
-  _id: string;
-  image_url: string;
-  group_name: string;
-  description: string;
-  created_at: string;
-  members: {
-    joined_at: string;
-    role: string;
-    userId: number;
-  }[];
-  tags: string[];
-  gradient?: string;
+type ForumTag = {
+  tag_id: number;
+  tag_name?: string;
 };
 
-// Post/Discussion type based on your data structure
 type Comment = {
   user_id: number;
   comment: string;
@@ -88,9 +80,13 @@ type Comment = {
   likes: {
     user_id: number;
   }[];
+  depth?: number;
+  children?: Comment[];
+  is_edited?: boolean;
 };
 
 type Post = {
+  _id?: string;
   forum_group_id: number;
   user_id: number;
   title: string;
@@ -98,9 +94,7 @@ type Post = {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
-  tags: {
-    forum_tag_id: number;
-  }[];
+  tags: ForumTag[];
   attachments: {
     file_path: string;
   }[];
@@ -113,6 +107,24 @@ type Post = {
   comments: Comment[];
 };
 
+type Group = {
+  _id: string;
+  image_url: string;
+  group_name: string;
+  description: string;
+  created_at: string;
+  members: {
+    joined_at: string;
+    role: string;
+    userId: number;
+  }[];
+  tags: {
+    tag_id: number;
+    tag: string;
+  }[];
+  gradient?: string;
+};
+
 type MemberWithDetails = {
   userId: number;
   role: string;
@@ -121,12 +133,71 @@ type MemberWithDetails = {
   joinedAt: string;
 };
 
-// Current user ID (simulated)
-const CURRENT_USER_ID = 11;
-const CURRENT_USER_NAME = "John Paul Mahilom";
-const CURRENT_USER_AVATAR = "https://i.pravatar.cc/150?u=john";
+const getTagColor = (tagId: number) => {
+  const colors = [
+    "bg-purple-500/20 text-purple-400",
+    "bg-blue-500/20 text-blue-400",
+    "bg-green-500/20 text-green-400",
+    "bg-yellow-500/20 text-yellow-400",
+    "bg-red-500/20 text-red-400",
+    "bg-pink-500/20 text-pink-400",
+    "bg-indigo-500/20 text-indigo-400",
+    "bg-orange-500/20 text-orange-400",
+    "bg-cyan-500/20 text-cyan-400",
+    "bg-emerald-500/20 text-emerald-400",
+  ];
+  return colors[tagId % colors.length];
+};
 
-// Helper: Format date to "ago" string
+const MarkdownComponents = {
+  h1: ({ children }: { children: React.ReactNode }) => (
+    <h1 className="text-2xl font-bold text-white mt-4 mb-2 border-b border-white/10 pb-2">{children}</h1>
+  ),
+  h2: ({ children }: { children: React.ReactNode }) => (
+    <h2 className="text-xl font-bold text-white mt-3 mb-2">{children}</h2>
+  ),
+  h3: ({ children }: { children: React.ReactNode }) => (
+    <h3 className="text-lg font-bold text-white mt-2 mb-1">{children}</h3>
+  ),
+  p: ({ children }: { children: React.ReactNode }) => (
+    <p className="text-zinc-300 mb-2 leading-relaxed">{children}</p>
+  ),
+  strong: ({ children }: { children: React.ReactNode }) => (
+    <strong className="font-bold text-white">{children}</strong>
+  ),
+  em: ({ children }: { children: React.ReactNode }) => (
+    <em className="italic text-zinc-300">{children}</em>
+  ),
+  code: ({ children, className }: { children: React.ReactNode; className?: string }) => {
+    const inline = !className;
+    if (inline) {
+      return <code className="rounded bg-black/50 px-1 py-0.5 text-xs text-green-400 font-mono">{children}</code>;
+    }
+    return (
+      <pre className="rounded-lg bg-black/50 p-3 text-sm text-green-400 overflow-x-auto font-mono my-2">
+        <code>{children}</code>
+      </pre>
+    );
+  },
+  ul: ({ children }: { children: React.ReactNode }) => (
+    <ul className="my-2 space-y-1 list-disc list-inside">{children}</ul>
+  ),
+  ol: ({ children }: { children: React.ReactNode }) => (
+    <ol className="my-2 space-y-1 list-decimal list-inside">{children}</ol>
+  ),
+  li: ({ children }: { children: React.ReactNode }) => (
+    <li className="text-zinc-300">{children}</li>
+  ),
+  a: ({ href, children }: { href?: string; children: React.ReactNode }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline transition-colors">
+      {children}
+    </a>
+  ),
+  blockquote: ({ children }: { children: React.ReactNode }) => (
+    <blockquote className="border-l-4 border-blue-500 pl-4 my-2 text-zinc-400 italic">{children}</blockquote>
+  ),
+};
+
 const getTimeAgo = (dateString: string): string => {
   const date = new Date(dateString);
   const now = new Date();
@@ -142,23 +213,63 @@ const getTimeAgo = (dateString: string): string => {
   return date.toLocaleDateString();
 };
 
-// Helper: Render markdown content
-const renderMarkdownContent = (content: string) => {
-  let html = content
-    .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-white">$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em class="italic text-zinc-300">$1</em>')
-    .replace(/```\n(.*?)\n```/gs, '<pre class="rounded-lg bg-black/50 p-3 text-sm text-green-400 overflow-x-auto"><code>$1</code></pre>')
-    .replace(/`(.*?)`/g, '<code class="rounded bg-black/50 px-1 py-0.5 text-xs text-green-400">$1</code>')
-    .replace(/^- (.*?)$/gm, '<li class="ml-4 text-zinc-300">$1</li>')
-    .replace(/^\d+\. (.*?)$/gm, '<li class="ml-4 text-zinc-300 list-decimal">$1</li>')
-    .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" class="text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">$1</a>')
-    .replace(/\n/g, '<br />');
-
-  html = html.replace(/(<li[^>]*>.*?<\/li>\n?)+/gs, '<ul class="my-2 space-y-1">$&</ul>');
-  return html;
+const buildCommentTree = (comments: Comment[]): Comment[] => {
+  if (!comments || comments.length === 0) return [];
+  
+  const commentMap = new Map<string, Comment>();
+  const rootComments: Comment[] = [];
+  
+  comments.forEach(comment => {
+    commentMap.set(comment.comment_id, { ...comment, children: [] });
+  });
+  
+  comments.forEach(comment => {
+    const commentWithChildren = commentMap.get(comment.comment_id)!;
+    if (comment.comment_reference_id && commentMap.has(comment.comment_reference_id)) {
+      const parent = commentMap.get(comment.comment_reference_id)!;
+      if (!parent.children) parent.children = [];
+      parent.children.push(commentWithChildren);
+    } else {
+      rootComments.push(commentWithChildren);
+    }
+  });
+  
+  rootComments.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  
+  const sortChildren = (comment: Comment) => {
+    if (comment.children && comment.children.length > 0) {
+      comment.children.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      comment.children.forEach(sortChildren);
+    }
+  };
+  rootComments.forEach(sortChildren);
+  
+  const calculateDepth = (comment: Comment, depth: number = 0) => {
+    comment.depth = depth;
+    if (comment.children) {
+      comment.children.forEach(child => calculateDepth(child, depth + 1));
+    }
+  };
+  rootComments.forEach(comment => calculateDepth(comment, 0));
+  
+  return rootComments;
 };
 
-// Image Gallery Component
+const getDepthClass = (depth: number = 0): string => {
+  const maxDepth = 8;
+  const effectiveDepth = Math.min(depth, maxDepth);
+  
+  if (effectiveDepth === 0) return "";
+  if (effectiveDepth === 1) return "ml-4";
+  if (effectiveDepth === 2) return "ml-8";
+  if (effectiveDepth === 3) return "ml-12";
+  if (effectiveDepth === 4) return "ml-16";
+  if (effectiveDepth === 5) return "ml-20";
+  if (effectiveDepth === 6) return "ml-24";
+  if (effectiveDepth === 7) return "ml-28";
+  return "ml-32";
+};
+
 const ImageGallery = ({ attachments }: { attachments?: { file_path: string }[] }) => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
@@ -211,7 +322,6 @@ const ImageGallery = ({ attachments }: { attachments?: { file_path: string }[] }
   );
 };
 
-// Reply Input Component
 const ReplyInput = ({
   replyText,
   updateReplyText,
@@ -219,9 +329,10 @@ const ReplyInput = ({
   uploadImages,
   images,
   removeImage,
-  isUploading
+  isUploading,
+  currentUserAvatar,
+  placeholder = "Write a reply... (Supports **bold**, *italic*, `code`, and images)"
 }: {
-  postId: number;
   replyText: string;
   updateReplyText: (text: string) => void;
   handleReply: () => void;
@@ -229,12 +340,14 @@ const ReplyInput = ({
   images: ImageAttachment[];
   removeImage: (imageId: string) => void;
   isUploading: boolean;
+  currentUserAvatar: string;
+  placeholder?: string;
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPreview, setShowPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const applyFormatting = (format: string, value?: string) => {
+  const applyFormatting = (format: string) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
 
@@ -254,16 +367,12 @@ const ReplyInput = ({
         newCursorPos = start + 1;
         break;
       case "bullet-list":
-        formattedText = selectedText
-          ? selectedText.split("\n").map(line => `- ${line}`).join("\n")
-          : "- ";
-        newCursorPos = start + 2;
-        break;
-      case "numbered-list":
-        formattedText = selectedText
-          ? selectedText.split("\n").map((line, i) => `${i + 1}. ${line}`).join("\n")
-          : "1. ";
-        newCursorPos = start + 3;
+        if (selectedText) {
+          formattedText = selectedText.split("\n").map(line => `- ${line}`).join("\n");
+        } else {
+          formattedText = "- ";
+          newCursorPos = start + 2;
+        }
         break;
       case "code":
         formattedText = `\`${selectedText || "code"}\``;
@@ -282,25 +391,11 @@ const ReplyInput = ({
     }, 0);
   };
 
-  const renderMarkdownPreview = () => {
-    let html = replyText
-      .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-white">$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em class="italic text-zinc-300">$1</em>')
-      .replace(/`(.*?)`/g, '<code class="rounded bg-black/50 px-1 py-0.5 text-xs text-green-400">$1</code>')
-      .replace(/^- (.*?)$/gm, '<li class="ml-4 text-zinc-300">$1</li>')
-      .replace(/^\d+\. (.*?)$/gm, '<li class="ml-4 text-zinc-300 list-decimal">$1</li>')
-      .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" class="text-blue-400 hover:underline" target="_blank">$1</a>')
-      .replace(/\n/g, '<br />');
-
-    html = html.replace(/(<li[^>]*>.*?<\/li>\n?)+/gs, '<ul class="my-2 space-y-1">$&</ul>');
-    return html;
-  };
-
   return (
     <div className="mt-4">
       <div className="flex gap-3">
         <img
-          src={CURRENT_USER_AVATAR}
+          src={currentUserAvatar}
           alt="You"
           className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20 flex-shrink-0"
         />
@@ -349,7 +444,7 @@ const ReplyInput = ({
             <button
               type="button"
               onClick={() => setShowPreview(!showPreview)}
-              className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white ml-auto"
+              className="ml-auto rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
               title={showPreview ? "Edit" : "Preview"}
             >
               {showPreview ? <Edit2 className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
@@ -361,17 +456,16 @@ const ReplyInput = ({
               ref={textareaRef}
               value={replyText}
               onChange={(e) => updateReplyText(e.target.value)}
-              placeholder="Write a reply... (Supports **bold**, *italic*, `code`, and images)"
+              placeholder={placeholder}
               className="w-full rounded-b-lg border border-white/15 border-t-0 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 resize-none"
               rows={3}
             />
           ) : (
             <div className="min-h-[80px] rounded-b-lg border border-white/15 border-t-0 bg-white/5 p-3">
               {replyText.trim() ? (
-                <div
-                  className="text-sm text-zinc-400 prose prose-invert prose-sm max-w-none"
-                  dangerouslySetInnerHTML={{ __html: renderMarkdownPreview() }}
-                />
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
+                  {replyText}
+                </ReactMarkdown>
               ) : (
                 <p className="text-sm text-zinc-500 italic">Nothing to preview...</p>
               )}
@@ -413,7 +507,7 @@ const ReplyInput = ({
             </button>
             <button
               onClick={handleReply}
-              disabled={!replyText.trim() && images.length === 0 || isUploading}
+              disabled={(!replyText.trim() && images.length === 0) || isUploading}
               className="flex items-center gap-1 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isUploading ? (
@@ -439,6 +533,259 @@ const ReplyInput = ({
   );
 };
 
+const CommentItem = ({ 
+  comment, 
+  postId, 
+  membersDetails, 
+  onLike, 
+  onReply,
+  onEditComment,
+  onDeleteComment,
+  replyingTo, 
+  setReplyingTo,
+  replyText,
+  setReplyText,
+  onSendReply,
+  replyImages,
+  onReplyImageUpload,
+  onRemoveReplyImage,
+  isUploading,
+  currentUserId,
+  currentUserAvatar,
+  isLastInThread = false
+}: { 
+  comment: Comment;
+  postId: number;
+  membersDetails: Record<number, { name: string; avatar: string }>;
+  onLike: (postId: number, commentId: string) => void;
+  onReply: (postId: number, commentId: string, authorName: string, authorId: number) => void;
+  onEditComment: (postId: number, commentId: string, newText: string) => void;
+  onDeleteComment: (postId: number, commentId: string) => void;
+  replyingTo: { commentId: string; authorName: string; authorId: number } | null;
+  setReplyingTo: (value: { commentId: string; authorName: string; authorId: number } | null) => void;
+  replyText: string;
+  setReplyText: (text: string) => void;
+  onSendReply: (postId: number, commentId: string) => void;
+  replyImages: ImageAttachment[];
+  onReplyImageUpload: (files: FileList | null) => void;
+  onRemoveReplyImage: (imageId: string) => void;
+  isUploading: boolean;
+  currentUserId: number;
+  currentUserAvatar: string;
+  isLastInThread?: boolean;
+}) => {
+  const [showChildren, setShowChildren] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(comment.comment);
+  const [showCommentMenu, setShowCommentMenu] = useState(false);
+  
+  const commentAuthor = membersDetails[comment.user_id] || { name: "Unknown User", avatar: "https://i.pravatar.cc/150?u=unknown" };
+  const isLiked = comment.likes?.some(like => like.user_id === currentUserId) || false;
+  const isAuthor = comment.user_id === currentUserId;
+  const hasChildren = comment.children && comment.children.length > 0;
+  const childCount = comment.children?.length || 0;
+  const depth = comment.depth || 0;
+  
+  const showContinueThread = depth >= 3 && childCount > 0;
+  const depthClass = getDepthClass(depth);
+
+  const handleEditSubmit = () => {
+    if (editText.trim() && editText !== comment.comment) {
+      onEditComment(postId, comment.comment_id, editText);
+    }
+    setIsEditing(false);
+    setShowCommentMenu(false);
+  };
+
+  const handleDeleteCommentClick = () => {
+    onDeleteComment(postId, comment.comment_id);
+    setShowCommentMenu(false);
+  };
+
+  return (
+    <div className={`${depthClass} mt-2 ${!isLastInThread ? "border-l-2 border-white/10 ml-2 pl-2" : ""}`}>
+      <div className="flex gap-3 py-2">
+        <img
+          src={commentAuthor.avatar}
+          alt={commentAuthor.name}
+          className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20 flex-shrink-0"
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-medium text-white">{commentAuthor.name}</p>
+              <span className="text-xs text-zinc-500">{getTimeAgo(comment.created_at)}</span>
+              {comment.is_edited && (
+                <span className="text-[10px] text-zinc-600">(edited)</span>
+              )}
+              {depth > 0 && (
+                <span className="text-[10px] text-zinc-600">· {depth} level{depth > 1 ? 's' : ''} deep</span>
+              )}
+            </div>
+            
+            {/* Comment actions menu - only for author */}
+            {isAuthor && !comment.deleted_at && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowCommentMenu(!showCommentMenu)}
+                  className="rounded p-1 text-zinc-500 hover:bg-white/10"
+                >
+                  <MoreVertical className="h-3 w-3" />
+                </button>
+                {showCommentMenu && (
+                  <div className="absolute right-0 mt-1 w-28 rounded-lg border border-white/10 bg-[#0d0f1a] shadow-xl z-20">
+                    <button
+                      onClick={() => {
+                        setIsEditing(true);
+                        setShowCommentMenu(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-xs text-zinc-300 hover:bg-white/10"
+                    >
+                      <Edit2 className="h-3 w-3" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={handleDeleteCommentClick}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10"
+                    >
+                      <TrashIcon className="h-3 w-3" />
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          
+          {/* Edit mode or display mode */}
+          {isEditing ? (
+            <div className="mt-2">
+              <textarea
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white"
+                rows={3}
+              />
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={handleEditSubmit}
+                  className="rounded bg-blue-500 px-3 py-1 text-xs text-white"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => setIsEditing(false)}
+                  className="rounded bg-white/10 px-3 py-1 text-xs text-zinc-400"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="mt-1 text-sm text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
+                  {comment.deleted_at ? "[deleted]" : comment.comment}
+                </ReactMarkdown>
+              </div>
+              
+              <ImageGallery attachments={comment.attachments} />
+            </>
+          )}
+          
+          {!comment.deleted_at && (
+            <div className="mt-2 flex items-center gap-3 flex-wrap">
+              <button
+                onClick={() => onLike(postId, comment.comment_id)}
+                className={`inline-flex items-center gap-1 text-xs transition ${
+                  isLiked ? "text-red-400" : "text-zinc-500 hover:text-white"
+                }`}
+              >
+                <Heart className={`h-3 w-3 ${isLiked ? "fill-red-400" : ""}`} />
+                <span>{comment.likes?.length || 0}</span>
+              </button>
+              <button
+                onClick={() => onReply(postId, comment.comment_id, commentAuthor.name, comment.user_id)}
+                className="inline-flex items-center gap-1 text-xs text-zinc-500 transition hover:text-white"
+              >
+                <Reply className="h-3 w-3" />
+                <span>Reply</span>
+              </button>
+            </div>
+          )}
+
+          {replyingTo?.commentId === comment.comment_id && (
+            <div className="mt-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs text-blue-400">Replying to @{replyingTo.authorName}</span>
+                <button
+                  onClick={() => setReplyingTo(null)}
+                  className="text-xs text-zinc-500 hover:text-white"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+              <ReplyInput
+                replyText={replyText}
+                updateReplyText={setReplyText}
+                handleReply={() => onSendReply(postId, comment.comment_id)}
+                uploadImages={onReplyImageUpload}
+                images={replyImages}
+                removeImage={onRemoveReplyImage}
+                isUploading={isUploading}
+                currentUserAvatar={currentUserAvatar}
+                placeholder={`Reply to @${replyingTo.authorName}...`}
+              />
+            </div>
+          )}
+
+          {hasChildren && showChildren && !showContinueThread && (
+            <div className="mt-3">
+              {comment.children!.map((child, index) => (
+                <CommentItem
+                  key={child.comment_id}
+                  comment={child}
+                  postId={postId}
+                  membersDetails={membersDetails}
+                  onLike={onLike}
+                  onReply={onReply}
+                  onEditComment={onEditComment}
+                  onDeleteComment={onDeleteComment}
+                  replyingTo={replyingTo}
+                  setReplyingTo={setReplyingTo}
+                  replyText={replyText}
+                  setReplyText={setReplyText}
+                  onSendReply={onSendReply}
+                  replyImages={replyImages}
+                  onReplyImageUpload={onReplyImageUpload}
+                  onRemoveReplyImage={onRemoveReplyImage}
+                  isUploading={isUploading}
+                  currentUserId={currentUserId}
+                  currentUserAvatar={currentUserAvatar}
+                  isLastInThread={index === comment.children!.length - 1}
+                />
+              ))}
+            </div>
+          )}
+
+          {showContinueThread && (
+            <button
+              onClick={() => setShowChildren(!showChildren)}
+              className="mt-2 flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition"
+            >
+              {showChildren ? (
+                <>Hide {childCount} replies</>
+              ) : (
+                <>Continue this thread ({childCount} replies)</>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SelectedGroup = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -447,14 +794,13 @@ const SelectedGroup = () => {
   const [membersWithDetails, setMembersWithDetails] = useState<MemberWithDetails[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedPostId, setExpandedPostId] = useState<number | null>(null);
-  const [replyText, setReplyText] = useState<{ [key: number]: string }>({});
+  const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
+  const [replyCommentText, setReplyCommentText] = useState<string>("");
   const [isNewDiscussionOpen, setIsNewDiscussionOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("latest");
-  const [selectedCategory, setSelectedCategory] = useState<string>("All");
 
-  // Menu and Modal states
   const [showMenu, setShowMenu] = useState(false);
   const [showMemberMenu, setShowMemberMenu] = useState<number | null>(null);
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
@@ -466,35 +812,48 @@ const SelectedGroup = () => {
   const [showRemoveMemberModal, setShowRemoveMemberModal] = useState(false);
   const [selectedMember, setSelectedMember] = useState<MemberWithDetails | null>(null);
 
-  // Post edit/delete states
-  const [postMenuOpen, setPostMenuOpen] = useState<number | null>(null);
+  const [postMenuOpen, setPostMenuOpen] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [deletingPost, setDeletingPost] = useState<Post | null>(null);
-  const [likedPosts, setLikedPosts] = useState<Set<number>>(new Set());
 
-  // Reply images states
-  const [replyImages, setReplyImages] = useState<{ [key: number]: ImageAttachment[] }>({});
-  const [replyUploading, setReplyUploading] = useState<{ [key: number]: boolean }>({});
-
-  // Helper to get member details
+  const [replyImages, setReplyImages] = useState<{ [key: string]: ImageAttachment[] }>({});
+  const [replyUploading, setReplyUploading] = useState<{ [key: string]: boolean }>({});
   
+  const [replyingTo, setReplyingTo] = useState<{ commentId: string; authorName: string; authorId: number } | null>(null);
+  const [commentReplyImages, setCommentReplyImages] = useState<ImageAttachment[]>([]);
+  const [commentReplyUploading, setCommentReplyUploading] = useState(false);
+  
+  const user = useGlobalState((state) => state.user);
+  const currentUserId = user?.user_id || 1;
+  const currentUserAvatar = user?.avatar || "https://i.pravatar.cc/150?u=default";
+  
+  const getMemberDetails = (userId: number) => {
+    const member = membersWithDetails.find(m => m.userId === userId);
+    return {
+      name: member?.name || `User ${userId}`,
+      avatar: member?.avatar || `https://i.pravatar.cc/150?u=${userId}`,
+    };
+  };
 
-  // Get unique categories from posts
-  const categories = ["All"];
+  const membersDetailsMap = membersWithDetails.reduce((acc, member) => {
+    acc[member.userId] = { name: member.name, avatar: member.avatar };
+    return acc;
+  }, {} as Record<number, { name: string; avatar: string }>);
 
-  // Fetch group and posts data
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      
-      const result = await api.get(`api/forum/groups/${id}`);
+      const [result, result2] = await Promise.all([
+        api.get(`api/forum/groups/${id}`),
+        api.get(`api/forum/discussions/group/${id}`)
+      ]);
       if (!result.data) {
         showErrorToast("Group not found");
         navigate("/forums");
         return;
       }
-    const mockGroup: Group = result.data;
-    const getMemberDetails = await api.post('api/users/list-of-details', { userIds: mockGroup.members.map(m => m.userId) });
+      const mockGroup: Group = result.data;
+      const getMemberDetails = await api.post('api/users/list-of-details', { userIds: mockGroup.members.map(m => m.userId) });
       let memberDetailsList = getMemberDetails.data.usersList;
       for(const member of mockGroup.members) { 
         const details = memberDetailsList.find((details: any) => details.user_id === member.userId);
@@ -510,56 +869,11 @@ const SelectedGroup = () => {
           delete details.avatar_file_id;
         }
       }
-    // Mock posts data matching your structure
-    const mockPosts: Post[] = [
-        {
-          forum_group_id: Number(id),
-          user_id: 101,
-          title: "Best workflow for log footage?",
-          description: "How do you grade S-Log3 for natural skin tones?",
-          created_at: "2026-06-02T10:30:00.000Z",
-          updated_at: "2026-06-02T10:30:00.000Z",
-          deleted_at: null,
-          tags: [
-            { forum_tag_id: 10 },
-            { forum_tag_id: 11 }
-          ],
-          attachments: [
-            { file_path: "uploads/discussions/log-shot-01.jpg" }
-          ],
-          likes: [
-            { user_id: 101 }
-          ],
-          saves: [
-            { user_id: 205 }
-          ],
-          comments: [
-            {
-              user_id: 205,
-              comment: "Try CST first, then primary correction.",
-              comment_id: "cmt_001",
-              comment_reference_id: null,
-              created_at: "2026-06-02T10:35:00.000Z",
-              updated_at: "2026-06-02T10:35:00.000Z",
-              deleted_at: null,
-              attachments: [
-                { file_path: "uploads/comments/example-grade.png" }
-              ],
-              likes: [
-                { user_id: 101 }
-              ]
-            }
-          ]
-        }
-      ];
-
+      console.log("Member details with roles:", memberDetailsList);
+      console.log("Group discussion:", result2.data);
       setGroup(mockGroup);
-      setPosts(mockPosts);
-
-      // Build members with details
-
+      setPosts(result2.data);
       setMembersWithDetails(memberDetailsList);
-
       setLoading(false);
     };
 
@@ -572,31 +886,33 @@ const SelectedGroup = () => {
     { value: "most-commented", label: "Most Commented", icon: <MessageCircle className="h-3 w-3" /> },
   ];
 
-  // Transform posts for UI display
   const displayPosts = posts.map((post, index) => {
-    const authorDetails = membersWithDetails[post.user_id] || { name: "Unknown User", avatar: "https://i.pravatar.cc/150?u=unknown" };
-    const tagName = post.tags.length > 0 ? `Tag ${post.tags[0].forum_tag_id}` : undefined;
+    const authorDetails = getMemberDetails(post.user_id);
+    const isLikedByCurrentUser = post.likes?.some(like => like.user_id === currentUserId) || false;
+    const isSavedByCurrentUser = post.saves?.some(save => save.user_id === currentUserId) || false;
     
     return {
       ...post,
-      id: index,
+      arrayIndex: index,
+      id: post._id || String(index),
       author: authorDetails.name,
       authorAvatar: authorDetails.avatar,
-      excerpt: post.description.substring(0, 150) + (post.description.length > 150 ? "..." : ""),
+      excerpt: post.description,
       ago: getTimeAgo(post.created_at),
-      tag: tagName,
-      likeCount: post.likes.length,
-      commentCount: post.comments.length,
-      isLiked: post.likes.some(like => like.user_id === CURRENT_USER_ID),
-      isSaved: post.saves.some(save => save.user_id === CURRENT_USER_ID),
+      tagsList: post.tags || [],
+      likeCount: post.likes?.length || 0,
+      commentCount: post.comments?.length || 0,
+      isLiked: isLikedByCurrentUser,
+      isSaved: isSavedByCurrentUser,
+      commentTree: buildCommentTree(post.comments || []),
     };
   });
 
-  const toggleExpand = (postId: number) => {
+  const toggleExpand = (postId: string) => {
     setExpandedPostId(expandedPostId === postId ? null : postId);
   };
 
-  const handleReplyImageUpload = async (postId: number, files: FileList | null) => {
+  const handleReplyImageUpload = async (postId: string, files: FileList | null) => {
     if (!files) return;
 
     const newImages: ImageAttachment[] = [];
@@ -644,7 +960,7 @@ const SelectedGroup = () => {
     setReplyUploading(prev => ({ ...prev, [postId]: false }));
   };
 
-  const removeReplyImage = (postId: number, imageId: string) => {
+  const removeReplyImage = (postId: string, imageId: string) => {
     const image = replyImages[postId]?.find(img => img.id === imageId);
     if (image && image.preview.startsWith('blob:')) {
       URL.revokeObjectURL(image.preview);
@@ -655,74 +971,393 @@ const SelectedGroup = () => {
     }));
   };
 
-  const handleReply = (postId: number) => {
-    const replyContent = replyText[postId]?.trim();
-    const replyImageList = replyImages[postId] || [];
+  const handleReply = async (postArrayIndex: number) => {
+    const replyContent = replyText[postArrayIndex]?.trim();
+    const replyImageList = replyImages[postArrayIndex] || [];
 
     if (!replyContent && replyImageList.length === 0) return;
 
     const updatedPosts = [...posts];
-    const postIndex = updatedPosts.findIndex((_, idx) => idx === postId);
+    const currentPost = updatedPosts[postArrayIndex];
     
-    if (postIndex !== -1) {
-      const newComment: Comment = {
-        user_id: CURRENT_USER_ID,
-        comment: replyContent || "",
-        comment_id: `cmt_${Date.now()}`,
-        comment_reference_id: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        deleted_at: null,
-        attachments: replyImageList.map(img => ({ file_path: img.preview })),
-        likes: []
-      };
-      
-      updatedPosts[postIndex].comments.push(newComment);
-      setPosts(updatedPosts);
+    if (!currentPost) {
+      showErrorToast("Post not found");
+      return;
     }
 
-    setReplyText({ ...replyText, [postId]: "" });
-    setReplyImages(prev => ({ ...prev, [postId]: [] }));
-    showSuccessToast("Reply posted successfully!");
+    const newComment: Comment = {
+      user_id: currentUserId,
+      comment: replyContent || "",
+      comment_id: `cmt_${Date.now()}_${Math.random()}`,
+      comment_reference_id: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      deleted_at: null,
+      attachments: replyImageList.map(img => ({ file_path: img.url || img.preview })),
+      likes: []
+    };
+
+    try {
+      const response = await api.post(`api/forum/discussions/${currentPost._id}/comments`, newComment);
+      
+      if (response.status !== 201) {
+        showErrorToast("Failed to post reply. Please try again.");
+        return;
+      }
+      
+      const savedComment = response.data;
+      console.log("Saved comment:", savedComment);
+      
+      if (postArrayIndex !== -1) {
+        updatedPosts[postArrayIndex].comments.push(savedComment || newComment);
+        setPosts(updatedPosts);
+        showSuccessToast("Reply posted successfully!");
+      }
+    } catch (error) {
+      console.error("Error posting reply:", error);
+      showErrorToast("Failed to post reply. Please try again.");
+      return;
+    } finally {
+      setReplyText({ ...replyText, [postArrayIndex]: "" });
+      setReplyImages(prev => ({ ...prev, [postArrayIndex]: [] }));
+    }
+  };
+
+  const handleCommentReply = async (postArrayIndex: number, parentCommentId: string) => {
+    const replyContent = replyCommentText.trim();
+    const replyImageList = commentReplyImages;
+
+    if (!replyContent && replyImageList.length === 0) return;
+
+    const updatedPosts = [...posts];
+    const currentPost = updatedPosts[postArrayIndex];
+    
+    if (!currentPost) {
+      showErrorToast("Post not found");
+      return;
+    }
+
+    const newComment: Comment = {
+      user_id: currentUserId,
+      comment: replyContent || "",
+      comment_id: `cmt_${Date.now()}_${Math.random()}`,
+      comment_reference_id: parentCommentId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      deleted_at: null,
+      attachments: replyImageList.map(img => ({ file_path: img.url || img.preview })),
+      likes: []
+    };
+
+    try {
+      const response = await api.post(`api/forum/discussions/${currentPost._id}/comments`, newComment);
+      
+      if (response.status !== 201) {
+        showErrorToast("Failed to post reply. Please try again.");
+        return;
+      }
+      
+      const savedComment = response.data;
+      console.log("Saved comment reply:", savedComment);
+      
+      updatedPosts[postArrayIndex].comments.push(savedComment || newComment);
+      setPosts(updatedPosts);
+      showSuccessToast("Reply posted successfully!");
+    } catch (error) {
+      console.error("Error posting reply:", error);
+      showErrorToast("Failed to post reply. Please try again.");
+      return;
+    } finally {
+      setReplyCommentText("");
+      setCommentReplyImages([]);
+      setReplyingTo(null);
+    }
   };
 
   const updateReplyText = (postId: number, text: string) => {
     setReplyText({ ...replyText, [postId]: text });
   };
 
-  const handleCreatePost = (postData: {
+  const handleCommentReplyImageUpload = async (files: FileList | null) => {
+    if (!files) return;
+
+    const newImages: ImageAttachment[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+
+      if (!file.type.startsWith("image/")) {
+        showErrorToast(`${file.name} is not an image file`);
+        continue;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        showErrorToast(`${file.name} exceeds 5MB limit`);
+        continue;
+      }
+
+      const preview = URL.createObjectURL(file);
+      const imageId = `${Date.now()}-${i}`;
+
+      newImages.push({
+        id: imageId,
+        file,
+        preview,
+        uploading: true,
+        uploadProgress: 0,
+      });
+    }
+
+    setCommentReplyImages(prev => [...prev, ...newImages]);
+    setCommentReplyUploading(true);
+
+    for (const image of newImages) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setCommentReplyImages(prev =>
+        prev.map(img =>
+          img.id === image.id ? { ...img, uploading: false, url: img.preview } : img
+        )
+      );
+    }
+    setCommentReplyUploading(false);
+  };
+
+  const removeCommentReplyImage = (imageId: string) => {
+    const image = commentReplyImages.find(img => img.id === imageId);
+    if (image && image.preview.startsWith('blob:')) {
+      URL.revokeObjectURL(image.preview);
+    }
+    setCommentReplyImages(prev => prev.filter(img => img.id !== imageId));
+  };
+
+  const handleLikeComment = async (postId: number, commentId: string) => {
+    console.log(`Toggling like for comment ${commentId} in post ${postId}`);
+    const currentPost = posts[postId];
+    const currentComment = currentPost?.comments?.find(c => c.comment_id === commentId);
+    if (!currentComment) return;
+    
+    const isCurrentlyLiked = currentComment.likes?.some(like => like.user_id === currentUserId) || false;
+    
+    // Optimistic update
+    setPosts(prevPosts =>
+      prevPosts.map((post, idx) => {
+        if (idx === postId) {
+          const updatedComments = post.comments.map(comment => {
+            if (comment.comment_id === commentId) {
+              if (isCurrentlyLiked) {
+                return {
+                  ...comment,
+                  likes: comment.likes.filter(like => like.user_id !== currentUserId)
+                };
+              } else {
+                return {
+                  ...comment,
+                  likes: [...comment.likes, { user_id: currentUserId }]
+                };
+              }
+            }
+            return comment;
+          });
+          return { ...post, comments: updatedComments };
+        }
+        return post;
+      })
+    );
+    
+    // Send to backend - matches your backend service
+    try {
+      const payload = isCurrentlyLiked
+        ? { likes: { action: 'remove', user_id: currentUserId } }
+        : { likes: { user_id: currentUserId } };
+      
+      await api.patch(`api/forum/discussions/${currentPost._id}/comments/${commentId}`, payload);
+    } catch (error) {
+      console.error("Error liking comment:", error);
+      // Revert on error
+      setPosts(prevPosts =>
+        prevPosts.map((post, idx) => {
+          if (idx === postId) {
+            const revertedComments = post.comments.map(comment => {
+              if (comment.comment_id === commentId) {
+                if (isCurrentlyLiked) {
+                  return {
+                    ...comment,
+                    likes: [...comment.likes, { user_id: currentUserId }]
+                  };
+                } else {
+                  return {
+                    ...comment,
+                    likes: comment.likes.filter(like => like.user_id !== currentUserId)
+                  };
+                }
+              }
+              return comment;
+            });
+            return { ...post, comments: revertedComments };
+          }
+          return post;
+        })
+      );
+      showErrorToast("Failed to update like status");
+    }
+  };
+
+  const handleEditComment = async (postId: number, commentId: string, newCommentText: string) => {
+    const currentPost = posts[postId];
+    const currentComment = currentPost?.comments?.find(c => c.comment_id === commentId);
+    if (!currentComment) return;
+    
+    // Optimistic update
+    setPosts(prevPosts =>
+      prevPosts.map((post, idx) => {
+        if (idx === postId) {
+          const updatedComments = post.comments.map(comment => {
+            if (comment.comment_id === commentId) {
+              return {
+                ...comment,
+                comment: newCommentText,
+                updated_at: new Date().toISOString(),
+                is_edited: true
+              };
+            }
+            return comment;
+          });
+          return { ...post, comments: updatedComments };
+        }
+        return post;
+      })
+    );
+    
+    try {
+      await api.patch(`api/forum/discussions/${currentPost._id}/comments/${commentId}`, {
+        comment: { action: 'edit', comment: newCommentText }
+      });
+      showSuccessToast("Comment edited successfully");
+    } catch (error) {
+      console.error("Error editing comment:", error);
+      // Revert on error
+      setPosts(prevPosts =>
+        prevPosts.map((post, idx) => {
+          if (idx === postId) {
+            const revertedComments = post.comments.map(comment => {
+              if (comment.comment_id === commentId) {
+                return currentComment;
+              }
+              return comment;
+            });
+            return { ...post, comments: revertedComments };
+          }
+          return post;
+        })
+      );
+      showErrorToast("Failed to edit comment");
+    }
+  };
+
+  const handleDeleteComment = async (postId: number, commentId: string) => {
+    const currentPost = posts[postId];
+    const currentComment = currentPost?.comments?.find(c => c.comment_id === commentId);
+    if (!currentComment) return;
+    
+    // Optimistic update - remove from UI
+    setPosts(prevPosts =>
+      prevPosts.map((post, idx) => {
+        if (idx === postId) {
+          const updatedComments = post.comments.filter(comment => comment.comment_id !== commentId);
+          return { ...post, comments: updatedComments };
+        }
+        return post;
+      })
+    );
+    
+    try {
+      await api.patch(`api/forum/discussions/${currentPost._id}/comments/${commentId}`, {
+        remove: true
+      });
+      showSuccessToast("Comment deleted successfully");
+    } catch (error) {
+      console.error("Error deleting comment:", error);
+      // Revert on error - add back the comment
+      setPosts(prevPosts =>
+        prevPosts.map((post, idx) => {
+          if (idx === postId) {
+            return { ...post, comments: [...post.comments, currentComment] };
+          }
+          return post;
+        })
+      );
+      showErrorToast("Failed to delete comment");
+    }
+  };
+
+  const handleReplyClick = (postId: number, commentId: string, authorName: string, authorId: number) => {
+    setReplyingTo({ commentId, authorName, authorId });
+    setReplyCommentText("");
+    setCommentReplyImages([]);
+  };
+
+  const handleCreatePost = async(postData: {
     title: string;
     content: string;
     groupId: number;
     tag: string;
     images?: ImageAttachment[];
   }) => {
-    const newPost: Post = {
-      forum_group_id: Number(id),
-      user_id: CURRENT_USER_ID,
-      title: postData.title,
-      description: postData.content,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      deleted_at: null,
-      tags: [{ forum_tag_id: 10 }],
-      attachments: postData.images?.map(img => ({ file_path: img.preview })) || [],
-      likes: [],
-      saves: [],
-      comments: [],
+    const tagId = parseInt(postData.tag) || 0;
+    const newTag: ForumTag = { 
+      tag_id: tagId,
+      tag_name: postData.tag 
     };
-
-    setPosts([newPost, ...posts]);
-    showSuccessToast(`"${postData.title}" posted successfully!`);
+    const forum_group_id = postData.groupId;
+    delete postData.groupId;
+    try{
+      const response = await api.post(`api/forum/discussions`, {
+        ...postData,
+        forum_group_id,
+        user_id: currentUserId,
+      });
+      console.log("Create post response:", response);
+      if (response.status !== 201) {
+        showErrorToast("Failed to create post. Please try again.");
+        return;
+      }else {
+        const newPost: Post = {
+        _id: response.data._id || response.data,
+        forum_group_id: Number(id),
+        user_id: currentUserId,
+        title: postData.title,
+        description: postData.content,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        deleted_at: null,
+        tags: postData.tag ? [newTag] : [],
+        attachments: postData.images?.map(img => ({ file_path: img.preview })) || [],
+        likes: [],
+        saves: [],
+        comments: [],
+      };
+      setPosts([newPost, ...posts]);
+        showSuccessToast(`"${postData.title}" posted successfully!`);
+      }
+    }catch(error) {
+      showErrorToast("Failed to create post. Please try again.");
+      return;
+    }
   };
 
   const handleEditPost = (postId: number, updatedData: { title: string; content: string; tag: string; images?: ImageAttachment[] }) => {
+    const updatedTag: ForumTag = { 
+      tag_id: parseInt(updatedData.tag) || 0,
+      tag_name: updatedData.tag 
+    };
+    
     setPosts(prev => prev.map((post, idx) =>
       idx === postId
         ? {
             ...post,
             title: updatedData.title,
             description: updatedData.content,
+            tags: [updatedTag],
             attachments: updatedData.images?.map(img => ({ file_path: img.preview })) || post.attachments,
           }
         : post
@@ -732,7 +1367,7 @@ const SelectedGroup = () => {
 
   const handleDeletePost = () => {
     if (deletingPost) {
-      const postIndex = posts.findIndex((_, idx) => idx === deletingPost.id);
+      const postIndex = posts.findIndex((_, idx) => idx === deletingPost.arrayIndex);
       if (postIndex !== -1) {
         const updatedPosts = [...posts];
         updatedPosts.splice(postIndex, 1);
@@ -746,30 +1381,122 @@ const SelectedGroup = () => {
     }
   };
 
-  const handleLikePost = (postId: number) => {
-    setLikedPosts(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(postId)) {
-        newSet.delete(postId);
+  const handleLikePost = async (postId: string) => {
+    const currentPost = displayPosts.find(p => p.id === postId);
+    if (!currentPost) return;
+    
+    const isCurrentlyLiked = currentPost.isLiked;
+    const postIndex = displayPosts.findIndex(p => p.id === postId);
+    
+    setPosts(prevPosts =>
+      prevPosts.map((post, idx) => {
+        if (idx === postIndex) {
+          const updatedLikes = isCurrentlyLiked
+            ? post.likes.filter(like => like.user_id !== currentUserId)
+            : [...post.likes, { user_id: currentUserId }];
+          return { ...post, likes: updatedLikes };
+        }
+        return post;
+      })
+    );
+    
+    try {
+      const payload = isCurrentlyLiked 
+        ? { likes: { action: 'remove', user_id: currentUserId } }
+        : { likes: { user_id: currentUserId } };
+      
+      const response = await api.patch(`api/forum/discussions/${currentPost._id}`, payload);
+      
+      if (response.status !== 200) {
         setPosts(prevPosts =>
-          prevPosts.map((post, idx) =>
-            idx === postId
-              ? { ...post, likes: post.likes.filter(like => like.user_id !== CURRENT_USER_ID) }
-              : post
-          )
+          prevPosts.map((post, idx) => {
+            if (idx === postIndex) {
+              const revertedLikes = isCurrentlyLiked
+                ? [...post.likes, { user_id: currentUserId }]
+                : post.likes.filter(like => like.user_id !== currentUserId);
+              return { ...post, likes: revertedLikes };
+            }
+            return post;
+          })
         );
+        showErrorToast("Failed to update like status");
       } else {
-        newSet.add(postId);
-        setPosts(prevPosts =>
-          prevPosts.map((post, idx) =>
-            idx === postId
-              ? { ...post, likes: [...post.likes, { user_id: CURRENT_USER_ID }] }
-              : post
-          )
-        );
+        showSuccessToast(isCurrentlyLiked ? "Post unliked" : "Post liked");
       }
-      return newSet;
-    });
+    } catch (error) {
+      console.error("Error liking post:", error);
+      setPosts(prevPosts =>
+        prevPosts.map((post, idx) => {
+          if (idx === postIndex) {
+            const revertedLikes = isCurrentlyLiked
+              ? [...post.likes, { user_id: currentUserId }]
+              : post.likes.filter(like => like.user_id !== currentUserId);
+            return { ...post, likes: revertedLikes };
+          }
+          return post;
+        })
+      );
+      showErrorToast("Failed to update like status");
+    }
+  };
+
+  const handleSavePost = async (postId: string) => {
+    const currentPost = displayPosts.find(p => p.id === postId);
+    if (!currentPost) return;
+    
+    const isCurrentlySaved = currentPost.isSaved;
+    const postIndex = displayPosts.findIndex(p => p.id === postId);
+    
+    setPosts(prevPosts =>
+      prevPosts.map((post, idx) => {
+        if (idx === postIndex) {
+          const updatedSaves = isCurrentlySaved
+            ? post.saves.filter(save => save.user_id !== currentUserId)
+            : [...post.saves, { user_id: currentUserId }];
+          return { ...post, saves: updatedSaves };
+        }
+        return post;
+      })
+    );
+    
+    try {
+      const payload = isCurrentlySaved 
+        ? { saves: { action: 'remove', user_id: currentUserId } }
+        : { saves: { user_id: currentUserId } };
+      
+      const response = await api.patch(`api/forum/discussions/${currentPost._id}`, payload);
+      
+      if (response.status !== 200) {
+        setPosts(prevPosts =>
+          prevPosts.map((post, idx) => {
+            if (idx === postIndex) {
+              const revertedSaves = isCurrentlySaved
+                ? [...post.saves, { user_id: currentUserId }]
+                : post.saves.filter(save => save.user_id !== currentUserId);
+              return { ...post, saves: revertedSaves };
+            }
+            return post;
+          })
+        );
+        showErrorToast("Failed to update save status");
+      } else {
+        showSuccessToast(isCurrentlySaved ? "Post removed from saved" : "Post saved");
+      }
+    } catch (error) {
+      console.error("Error saving post:", error);
+      setPosts(prevPosts =>
+        prevPosts.map((post, idx) => {
+          if (idx === postIndex) {
+            const revertedSaves = isCurrentlySaved
+              ? [...post.saves, { user_id: currentUserId }]
+              : post.saves.filter(save => save.user_id !== currentUserId);
+            return { ...post, saves: revertedSaves };
+          }
+          return post;
+        })
+      );
+      showErrorToast("Failed to update save status");
+    }
   };
 
   const handleEditGroup = async(updatedData: { group_name: string; description: string; tags: string[]; gradient: string }) => {
@@ -777,7 +1504,7 @@ const SelectedGroup = () => {
     try {
       const response = await api.put(`api/forum/groups/${group._id}`, updatedData);
       if (response.status === 200) {
-        showSuccessToast(`Group "${updatedData.group_name}" updated successfully!`);
+        showSuccessToast(`Group "${group.group_name}" updated successfully!`);
         setGroup({
         ...group,
         group_name: updatedData.group_name ?? group.group_name,
@@ -845,7 +1572,7 @@ const SelectedGroup = () => {
     }
   };
 
-  const isOwner = group?.members.some(m => m.userId === CURRENT_USER_ID && m.role === "Admin") || false;
+  const isOwner = group?.members.some(m => m.userId === currentUserId && m.role === "Admin") || false;
   const canEditGroup = isOwner;
   const canEditPermissions = isOwner;
   const canRemoveMembers = isOwner;
@@ -889,7 +1616,6 @@ const SelectedGroup = () => {
       <UserHeader pageTitle={group.group_name} credits={1250} />
 
       <div className="mx-auto max-w-7xl p-6 md:p-8">
-        {/* Back Button and Three Dots Menu Row */}
         <div className="mb-6 flex items-center justify-between">
           <button
             onClick={() => navigate("/forums")}
@@ -899,7 +1625,6 @@ const SelectedGroup = () => {
             Back to Forums
           </button>
 
-          {/* Three Dots Menu */}
           <div className="relative">
             <button
               onClick={() => setShowMenu(!showMenu)}
@@ -977,7 +1702,6 @@ const SelectedGroup = () => {
           </div>
         </div>
 
-        {/* Group Header */}
         <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${group.gradient || ' from-purple-600 via-pink-600 to-red-600'} p-8`}>
           <div className="absolute inset-0 bg-black/50" />
           <div className="relative z-10">
@@ -1011,7 +1735,6 @@ const SelectedGroup = () => {
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="mt-6 border-b border-white/10">
           <div className="flex gap-6">
             <button
@@ -1047,9 +1770,7 @@ const SelectedGroup = () => {
           </div>
         </div>
 
-        {/* Tab Content */}
         <div className="mt-6">
-          {/* Posts Tab */}
           {activeTab === "posts" && (
             <>
               <div className="mb-6 flex justify-end">
@@ -1062,7 +1783,6 @@ const SelectedGroup = () => {
                 </button>
               </div>
 
-              {/* Search and Sort */}
               <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 sm:w-64">
                   <Search className="h-4 w-4 text-zinc-500" />
@@ -1097,7 +1817,6 @@ const SelectedGroup = () => {
                 </div>
               </div>
 
-              {/* Posts List */}
               <div className="space-y-4">
                 {displayPosts.length === 0 ? (
                   <div className="flex flex-col items-center justify-center rounded-xl border border-white/10 bg-white/5 p-12 text-center">
@@ -1107,11 +1826,10 @@ const SelectedGroup = () => {
                   </div>
                 ) : (
                   displayPosts.map((post, idx) => {
-                    const isAuthor = post.user_id === CURRENT_USER_ID;
-                    const isLiked = likedPosts.has(idx);
+                    const isAuthor = post.user_id === currentUserId;
 
                     return (
-                      <div key={idx} className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 transition hover:border-white/20">
+                      <div key={post.id} className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 transition hover:border-white/20">
                         <div className="flex gap-3">
                           <img
                             src={post.authorAvatar}
@@ -1123,22 +1841,29 @@ const SelectedGroup = () => {
                               <div className="flex items-center gap-2 flex-wrap">
                                 <p className="text-sm font-medium text-white">{post.author}</p>
                                 <span className="text-xs text-zinc-500">{post.ago}</span>
-                                {post.tag && (
-                                  <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-[10px] text-purple-400">
-                                    {post.tag}
-                                  </span>
+                                {post.tagsList && post.tagsList.length > 0 && (
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    {post.tagsList.map((tag, tagIdx) => (
+                                      <span 
+                                        key={tag.tag_id || tagIdx} 
+                                        className={`rounded-full px-2 py-0.5 text-[10px] ${getTagColor(tag.tag_id)}`}
+                                      >
+                                        {tag.tag_name || `Tag ${tag.tag_id}`}
+                                      </span>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
 
                               {isAuthor && (
                                 <div className="relative">
                                   <button
-                                    onClick={() => setPostMenuOpen(postMenuOpen === idx ? null : idx)}
+                                    onClick={() => setPostMenuOpen(postMenuOpen === post.id ? null : post.id)}
                                     className="rounded-lg p-1 text-zinc-500 transition hover:bg-white/10 hover:text-white"
                                   >
                                     <MoreVertical className="h-4 w-4" />
                                   </button>
-                                  {postMenuOpen === idx && (
+                                  {postMenuOpen === post.id && (
                                     <div className="absolute right-0 mt-1 w-36 rounded-lg border border-white/10 bg-[#0d0f1a] shadow-xl overflow-hidden z-20">
                                       <button
                                         onClick={() => {
@@ -1166,28 +1891,24 @@ const SelectedGroup = () => {
                               )}
                             </div>
 
-                            <h3
-                              onClick={() => navigate(`/forums/discussion/${idx}`)}
-                              className="mt-1 text-base font-semibold text-white cursor-pointer hover:text-blue-400 transition-colors"
-                            >
-                              {post.title}
-                            </h3>
+                            <h3 className="mt-1 text-base font-semibold text-white">{post.title}</h3>
 
-                            <div
-                              className="mt-2 text-sm text-zinc-400 prose prose-invert prose-sm max-w-none"
-                              dangerouslySetInnerHTML={{ __html: renderMarkdownContent(post.excerpt) }}
-                            />
+                            <div className="mt-2 text-sm text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
+                                {post.description}
+                              </ReactMarkdown>
+                            </div>
 
                             <ImageGallery attachments={post.attachments} />
 
                             <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
                               <button
-                                onClick={() => toggleExpand(idx)}
+                                onClick={() => toggleExpand(post.id)}
                                 className="inline-flex items-center gap-1 text-zinc-500 transition hover:text-white"
                               >
                                 <MessageCircle className="h-3.5 w-3.5" />
                                 <span>{post.commentCount} replies</span>
-                                {expandedPostId === idx ? (
+                                {expandedPostId === post.id ? (
                                   <ChevronUp className="h-3.5 w-3.5" />
                                 ) : (
                                   <ChevronDown className="h-3.5 w-3.5" />
@@ -1195,64 +1916,78 @@ const SelectedGroup = () => {
                               </button>
 
                               <button
-                                onClick={() => handleLikePost(idx)}
+                                onClick={() => handleLikePost(post.id)}
                                 className={`inline-flex items-center gap-1 transition-all duration-200 ${
-                                  isLiked 
+                                  post.isLiked 
                                     ? "text-red-400 hover:text-red-300" 
                                     : "text-zinc-500 hover:text-white"
                                 }`}
                                 type="button"
                               >
-                                <Heart className={`h-3.5 w-3.5 transition-all ${isLiked ? "fill-red-400" : ""}`} />
+                                <Heart className={`h-3.5 w-3.5 transition-all ${post.isLiked ? "fill-red-400" : ""}`} />
                                 <span>{post.likeCount} likes</span>
                               </button>
 
-                              <button className="inline-flex items-center gap-1 text-zinc-500 transition hover:text-white">
-                                <Bookmark className="h-3.5 w-3.5" />
-                                <span>Save</span>
+                              <button
+                                onClick={() => handleSavePost(post.id)}
+                                className={`inline-flex items-center gap-1 transition-all duration-200 ${
+                                  post.isSaved 
+                                    ? "text-yellow-400 hover:text-yellow-300" 
+                                    : "text-zinc-500 hover:text-white"
+                                }`}
+                                type="button"
+                              >
+                                <Bookmark className={`h-3.5 w-3.5 transition-all ${post.isSaved ? "fill-yellow-400" : ""}`} />
+                                <span>{post.isSaved ? "Saved" : "Save"}</span>
                               </button>
                             </div>
 
-                            {/* Expanded Replies */}
-                            {expandedPostId === idx && (
+                            {expandedPostId === post.id && (
                               <div className="mt-4 border-t border-white/10 pt-4">
                                 <div className="space-y-4">
-                                  {post.comments && post.comments.length > 0 ? (
-                                    post.comments.map((comment, commentIdx) => {
-                                      const commentAuthor = getMemberDetails(comment.user_id);
-                                      return (
-                                        <div key={comment.comment_id || commentIdx} className="flex gap-3">
-                                          <img
-                                            src={commentAuthor.avatar}
-                                            alt={commentAuthor.name}
-                                            className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20"
-                                          />
-                                          <div className="flex-1">
-                                            <p className="text-sm font-medium text-white">{commentAuthor.name}</p>
-                                            <div
-                                              className="mt-1 text-sm text-zinc-400 prose prose-invert prose-sm max-w-none"
-                                              dangerouslySetInnerHTML={{ __html: renderMarkdownContent(comment.comment) }}
-                                            />
-                                            <ImageGallery attachments={comment.attachments} />
-                                          </div>
-                                        </div>
-                                      );
-                                    })
+                                  {post.commentTree && post.commentTree.length > 0 ? (
+                                    post.commentTree.map((comment, commentIndex) => (
+                                      <CommentItem
+                                        key={comment.comment_id}
+                                        comment={comment}
+                                        postId={idx}
+                                        membersDetails={membersDetailsMap}
+                                        onLike={handleLikeComment}
+                                        onReply={handleReplyClick}
+                                        onEditComment={handleEditComment}
+                                        onDeleteComment={handleDeleteComment}
+                                        replyingTo={replyingTo}
+                                        setReplyingTo={setReplyingTo}
+                                        replyText={replyCommentText}
+                                        setReplyText={setReplyCommentText}
+                                        onSendReply={handleCommentReply}
+                                        replyImages={commentReplyImages}
+                                        onReplyImageUpload={handleCommentReplyImageUpload}
+                                        onRemoveReplyImage={removeCommentReplyImage}
+                                        isUploading={commentReplyUploading}
+                                        currentUserId={currentUserId}
+                                        currentUserAvatar={currentUserAvatar}
+                                        isLastInThread={commentIndex === post.commentTree.length - 1}
+                                      />
+                                    ))
                                   ) : (
-                                    <p className="text-center text-sm text-zinc-500">No replies yet.</p>
+                                    <p className="text-center text-sm text-zinc-500">No comments yet.</p>
                                   )}
                                 </div>
 
-                                <ReplyInput
-                                  postId={idx}
-                                  replyText={replyText[idx] || ""}
-                                  updateReplyText={(text) => updateReplyText(idx, text)}
-                                  handleReply={() => handleReply(idx)}
-                                  uploadImages={(files) => handleReplyImageUpload(idx, files)}
-                                  images={replyImages[idx] || []}
-                                  removeImage={(imageId) => removeReplyImage(idx, imageId)}
-                                  isUploading={replyUploading[idx] || false}
-                                />
+                                <div className="mt-4 pt-4 border-t border-white/10">
+                                  <ReplyInput
+                                    replyText={replyText[idx] || ""}
+                                    updateReplyText={(text) => updateReplyText(idx, text)}
+                                    handleReply={() => handleReply(idx)}
+                                    uploadImages={(files) => handleReplyImageUpload(String(idx), files)}
+                                    images={replyImages[idx] || []}
+                                    removeImage={(imageId) => removeReplyImage(String(idx), imageId)}
+                                    isUploading={replyUploading[idx] || false}
+                                    currentUserAvatar={currentUserAvatar}
+                                    placeholder="Write a comment..."
+                                  />
+                                </div>
                               </div>
                             )}
                           </div>
@@ -1265,7 +2000,6 @@ const SelectedGroup = () => {
             </>
           )}
 
-          {/* Members Tab */}
           {activeTab === "members" && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {membersWithDetails.map((member) => (
@@ -1278,14 +2012,14 @@ const SelectedGroup = () => {
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-white">{member.name}</p>
                     <div className="flex items-center gap-2">
-                      <p className="text-xs text-zinc-500">Joined {new Date(member.joinedAt).toLocaleDateString()}</p>
+                      <p className="text-xs text-zinc-500">Joined {member.joinedAt.split('T')[0]}</p>
                       {member.role === "Admin" && (
                         <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-400">Admin</span>
                       )}
                     </div>
                   </div>
 
-                  {member.userId !== CURRENT_USER_ID && (
+                  {member.userId !== currentUserId && (
                     <div className="relative">
                       <button
                         onClick={() => setShowMemberMenu(showMemberMenu === member.userId ? null : member.userId)}
@@ -1330,7 +2064,6 @@ const SelectedGroup = () => {
             </div>
           )}
 
-          {/* About Tab */}
           {activeTab === "about" && (
             <div className="space-y-6">
               <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-6">
@@ -1342,8 +2075,8 @@ const SelectedGroup = () => {
                 <h3 className="text-lg font-semibold text-white">Tags</h3>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {group.tags.map((tag) => (
-                    <span key={tag} className="rounded-full bg-blue-500/20 px-3 py-1 text-xs text-blue-400">
-                      {tag}
+                    <span key={tag.tag_id} className="rounded-full bg-blue-500/20 px-3 py-1 text-xs text-blue-400">
+                      {tag.tag}
                     </span>
                   ))}
                 </div>
@@ -1367,12 +2100,11 @@ const SelectedGroup = () => {
         </div>
       </div>
 
-      {/* Modals */}
       <NewDiscussionModal
         isOpen={isNewDiscussionOpen}
         onClose={() => setIsNewDiscussionOpen(false)}
         onCreatePost={handleCreatePost}
-        availableGroups={[{ id: Number(id), name: group.group_name }]}
+        availableGroups={[{ id: group._id, name: group.group_name, tags: group.tags }]}
       />
 
       <EditGroupModal
@@ -1430,38 +2162,19 @@ const SelectedGroup = () => {
         onConfirm={handleRemoveMember}
       />
 
-      {/* Edit Post Modal */}
       <EditPostModal
         isOpen={!!editingPost}
         onClose={() => setEditingPost(null)}
         onSave={handleEditPost}
-        post={editingPost ? { id: displayPosts.findIndex(p => p === editingPost), title: editingPost.title, content: editingPost.description, tag: editingPost.tag || "", images: editingPost.attachments.map(a => ({ id: a.file_path, preview: a.file_path })) } : null}
+        post={editingPost ? { id: displayPosts.findIndex(p => p.id === editingPost.id), title: editingPost.title, content: editingPost.description, tag: editingPost.tags[0]?.tag_name || "", images: editingPost.attachments.map(a => ({ id: a.file_path, preview: a.file_path })) } : null}
       />
 
-      {/* Delete Post Modal */}
       <DeletePostModal
         isOpen={!!deletingPost}
         onClose={() => setDeletingPost(null)}
         onConfirm={handleDeletePost}
         postTitle={deletingPost?.title || ""}
       />
-
-      <style>{`
-        @keyframes fade-in-modal {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes scale-in {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        .animate-fade-in-modal {
-          animation: fade-in-modal 0.2s ease-out;
-        }
-        .animate-scale-in {
-          animation: scale-in 0.2s ease-out;
-        }
-      `}</style>
     </div>
   );
 };

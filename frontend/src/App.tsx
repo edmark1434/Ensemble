@@ -13,6 +13,7 @@ import ResetPasswordPage from "@/pages/auth/ResetPasswordPage.tsx";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage.tsx";
 
 import CreditShop from "@/pages/user/0_config/CreditsShop.tsx";
+import Profile from "@/pages/user/7_profile/Profile.tsx";
 
 import Layout from './components/ui/Layout.tsx'
 
@@ -37,6 +38,7 @@ import {CreateJobWizard} from "@/pages/user/6_jobs/Job_Posting/CreateJobWizard.t
 
 import GigMarketplace from "@/pages/user/7_gigs/Gig_Posting/main.tsx";
 import {CreateGigWizard} from "@/pages/user/7_gigs/Gig_Posting/CreateGigWizard.tsx";
+import Verification from "@/pages/user/9_verification/Verification.tsx";
 
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
@@ -113,6 +115,7 @@ function App() {
         <Route element={<Layout />}>
           <Route path='/home' element={<Home />} />
             <Route path='/credits' element={<CreditShop />} />
+            <Route path='/profile/:id?' element={<Profile />} />
 
           <Route path='/projects' element={<Projects />} />
             <Route path='/projects/select' element={<Projects_Selection />} />
@@ -143,14 +146,14 @@ function App() {
             <Route path='create' element={<CreateGigWizard />} />
             <Route path=':id' element={<GigMarketplace />} />
           </Route>
-
+          <Route path='/verification' element={<Verification />} />
           <Route path='/proposals' element={<SectionPlaceholder title='INCOMING PROPOSALS' />} />
           <Route path='/my-proposals' element={<SectionPlaceholder title='MY PROPOSALS' />} />
           <Route path='/requests' element={<SectionPlaceholder title='INCOMING REQUESTS' />} />
           <Route path='/my-requests' element={<SectionPlaceholder title='MY REQUESTS' />} />
           <Route path='/contracts' element={<SectionPlaceholder title='MY CONTRACTS' />} />
           <Route path='/transactions' element={<SectionPlaceholder title='TRANSACTION HISTORY' />} />
-          <Route path='/inbox' element={<SectionPlaceholder title='INBOX' />} />
+          <Route path='/inbox' element={<Inbox />} />
         </Route>
       </Route>
 

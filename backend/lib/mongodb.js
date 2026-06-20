@@ -36,4 +36,13 @@ function getMongoClient() {
   return client;
 }
 
-module.exports = { connectMongoDB, getMongoClient };
+// Add this function to safely fetch the DB instance dynamically
+function getDB(dbName = 'ensemble') {
+  if (!client) {
+    throw new Error('Database client is not initialized. Make sure connectMongoDB() is called and awaited at server startup.');
+  }
+  return client.db(dbName);
+}
+
+// Export getDB along with your other functions
+module.exports = { connectMongoDB, getMongoClient, getDB };
