@@ -1,16 +1,47 @@
-import { useEffect } from "react";
+import {useEffect, useRef} from "react";
 import { dispatch } from "@designcombo/events";
 import StateManager, {
   ACTIVE_SPLIT,
   LAYER_DELETE,
   LAYER_SELECT,
   HISTORY_UNDO,
-  HISTORY_REDO, ACTIVE_PASTE, LAYER_CLONE, LAYER_COPY,
+  HISTORY_REDO, ACTIVE_PASTE, LAYER_CLONE, LAYER_COPY, TIMELINE_SCALE_CHANGED, EDIT_OBJECT,
 } from "@designcombo/state";
 import { getCurrentTime } from "../utils/time";
 import useStore from "../store/use-store";
+import {timeMsToUnits} from "@designcombo/timeline";
+import {ITimelineScaleState} from "@designcombo/types";
+import {getFitZoomLevel, getNextZoomLevel, getPreviousZoomLevel} from "@/features/editor/utils/timeline";
+import {useTimelineOffsetX} from "@/features/editor/hooks/use-timeline-offset";
 
 export function useKeyboardShortcuts(stateManager: StateManager) {
+  const timelineOffsetX = useTimelineOffsetX();
+  const timelineOffsetXRef = useRef(timelineOffsetX);
+  timelineOffsetXRef.current = timelineOffsetX;
+
+  const applyScale = (newScale: ITimelineScaleState) => {
+    const { fps, scale, timeline, playerRef } = useStore.getState();
+    const currentFrame = playerRef?.current?.getCurrentFrame() ?? 0;
+    const currentTimeMs = (currentFrame / fps) * 1000;
+    const playheadPxOld = timeMsToUnits(currentTimeMs, scale.zoom);
+
+    const currentScrollLeft = timeline && (timeline as any).spacing
+      ? -(timeline as any).viewportTransform[4] + (timeline as any).spacing.left
+      : 0;
+
+    const playheadScreenX = playheadPxOld - currentScrollLeft;
+    const playheadPxNew = timeMsToUnits(currentTimeMs, newScale.zoom);
+    const newScrollLeft = Math.max(0, playheadPxNew - playheadScreenX);
+
+    dispatch(TIMELINE_SCALE_CHANGED, {
+      payload: { scale: newScale }
+    });
+
+    Promise.resolve().then(() => {
+      timeline?.scrollTo({ scrollLeft: newScrollLeft });
+    });
+  };
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
@@ -22,6 +53,13 @@ export function useKeyboardShortcuts(stateManager: StateManager) {
 
       const mod = e.ctrlKey || e.metaKey;
       const { activeIds, playerRef } = useStore.getState();
+
+      // open / close keyboard shortcuts dialog
+      if (mod && e.code === "Slash") {
+        e.preventDefault();
+        const { isShortcutsModalOpen, setShortcutsModalOpen } = useStore.getState();
+        setShortcutsModalOpen(!isShortcutsModalOpen);
+      }
 
       // play / pause
       if (e.code === "Space") {
@@ -157,6 +195,105 @@ export function useKeyboardShortcuts(stateManager: StateManager) {
           );
         };
         doPaste().then(r => {});
+      }
+
+      // zoom in
+      if (mod && (e.code === "Equal" || e.code === "NumpadAdd")) {
+        e.preventDefault();
+        const { scale } = useStore.getState();
+        applyScale(getNextZoomLevel(scale));
+      }
+
+      // zoom out
+      if (mod && (e.code === "Minus" || e.code === "NumpadSubtract")) {
+        e.preventDefault();
+        const { scale } = useStore.getState();
+        applyScale(getPreviousZoomLevel(scale));
+      }
+
+      // zoom to fit
+      if (!mod && e.shiftKey && e.code === "KeyZ") {
+        e.preventDefault();
+        const { scale, duration, activeIds, trackItemsMap } = useStore.getState();
+
+        const selectionStart = activeIds.length > 0
+          ? Math.min(...activeIds.map((id) => trackItemsMap[id]?.display.from ?? 0))
+          : null;
+        const selectionDuration = activeIds.length > 0
+          ? Math.max(...activeIds.map((id) => trackItemsMap[id]?.display.to ?? 0)) -
+          Math.min(...activeIds.map((id) => trackItemsMap[id]?.display.from ?? 0))
+          : null;
+
+        const targetDuration = selectionDuration ?? duration;
+        const fitZoom = getFitZoomLevel(targetDuration, scale.zoom, timelineOffsetXRef.current);
+        applyScale(fitZoom);
+
+        Promise.resolve().then(() => {
+          const { timeline } = useStore.getState();
+          const scrollLeft = selectionStart !== null
+            ? timeMsToUnits(selectionStart, fitZoom.zoom)
+            : 0;
+          timeline?.scrollTo({ scrollLeft: Math.max(0, scrollLeft) });
+        });
+      }
+
+      // toggle timeline maximize / minimize
+      if (e.code === "KeyT") {
+        e.preventDefault();
+        useStore.getState().toggleTimelineFullHeight();
+      }
+
+      // previous frame / previous second
+      if (mod && e.code === "ArrowLeft") {
+        e.preventDefault();
+        const { playerRef, fps } = useStore.getState();
+        const current = playerRef?.current?.getCurrentFrame() ?? 0;
+        const step = e.shiftKey ? fps : 1;
+        playerRef?.current?.seekTo(Math.max(0, current - step));
+      }
+
+      // next frame / next second
+      if (mod && e.code === "ArrowRight") {
+        e.preventDefault();
+        const { playerRef, fps } = useStore.getState();
+        const current = playerRef?.current?.getCurrentFrame() ?? 0;
+        const step = e.shiftKey ? fps : 1;
+        playerRef?.current?.seekTo(current + step);
+      }
+
+      // nudge selected item(s) position
+      if (!mod && (e.code === "ArrowLeft" || e.code === "ArrowRight" || e.code === "ArrowUp" || e.code === "ArrowDown")) {
+        e.preventDefault();
+        const { activeIds, trackItemsMap } = useStore.getState();
+        if (!activeIds.length) return;
+
+        const step = e.shiftKey ? 5 : 1;
+        let dx = 0;
+        let dy = 0;
+        if (e.code === "ArrowLeft") dx = -step;
+        if (e.code === "ArrowRight") dx = step;
+        if (e.code === "ArrowUp") dy = -step;
+        if (e.code === "ArrowDown") dy = step;
+
+        const payload: Record<string, any> = {};
+        activeIds.forEach((id) => {
+          const item = trackItemsMap[id];
+          if (!item || item.details?.locked) return;
+
+          const currentLeft = Number.parseFloat(item.details.left as string) || 0;
+          const currentTop = Number.parseFloat(item.details.top as string) || 0;
+
+          payload[id] = {
+            details: {
+              left: `${currentLeft + dx}px`,
+              top: `${currentTop + dy}px`
+            }
+          };
+        });
+
+        if (Object.keys(payload).length) {
+          dispatch(EDIT_OBJECT, { payload });
+        }
       }
     };
 

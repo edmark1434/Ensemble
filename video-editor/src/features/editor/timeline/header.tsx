@@ -334,7 +334,7 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
                 onClick={doActiveDelete}
                 variant={"secondary"}
                 size={"sm"}
-                className="disabled:opacity-0 disabled:pointer-events-none font-normal"
+                className="disabled:opacity-0 disabled:pointer-events-none font-normal mr-1"
               >
                 Home
               </Button>

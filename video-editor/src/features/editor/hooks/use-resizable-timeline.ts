@@ -2,13 +2,19 @@ import React from "react";
 import useStore from "../store/use-store";
 
 export const useResizbleTimeline = () => {
-  const FULL_HEIGHT = window.innerHeight;
-  const DEFAULT_HEIGHT = window.innerHeight * 0.45;
-
   const [isResizing, setIsResizing] = React.useState(false);
   const timelineContainerRef = React.useRef<HTMLDivElement>(null);
-  const [timelineHeight, setTimelineHeight] = React.useState(DEFAULT_HEIGHT);
-  const { timeline } = useStore();
+  const {
+    timeline,
+    timelineHeight,
+    setTimelineHeight,
+    setTimelineContainerRef,
+    toggleTimelineFullHeight
+  } = useStore();
+
+  React.useEffect(() => {
+    setTimelineContainerRef(timelineContainerRef as React.RefObject<HTMLDivElement>);
+  }, []);
 
   const onMouseDown = (ev: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
     const { y } = timelineContainerRef.current!.getBoundingClientRect();
@@ -17,11 +23,11 @@ export const useResizbleTimeline = () => {
     setIsResizing(true);
 
     const startY = ev.clientY;
-    const timelineHeight = timelineContainerRef.current!.offsetHeight;
+    const startHeight = timelineContainerRef.current!.offsetHeight;
     let currentHeight = 0;
 
     const onMouseMove = (ev: MouseEvent) => {
-      currentHeight = timelineHeight + startY - ev.clientY;
+      currentHeight = startHeight + startY - ev.clientY;
 
       if (currentHeight < 50 || currentHeight >= window.innerHeight * 0.5) {
         ev.preventDefault();
@@ -70,20 +76,8 @@ export const useResizbleTimeline = () => {
 
   React.useEffect(() => {
     if (!timelineContainerRef.current) return;
-
     setTimelineHeight(timelineContainerRef.current.clientHeight);
   }, [timelineContainerRef.current]);
-
-  const toggleFullHeight = () => {
-    const isFull = timelineHeight >= FULL_HEIGHT;
-    const newHeight = isFull ? DEFAULT_HEIGHT : FULL_HEIGHT;
-    setTimelineHeight(newHeight);
-    timelineContainerRef.current!.style.height = `${newHeight}px`;
-    const containerHeight =
-        (document.getElementById("playhead")?.clientHeight || 0) -
-        (document.getElementById("playhead-handle")?.clientHeight || 0);
-    timeline?.resize({ height: containerHeight });
-  };
 
   return {
     timelineContainerRef,
@@ -91,6 +85,6 @@ export const useResizbleTimeline = () => {
     onMouseMove,
     onMouseOut,
     timelineHeight,
-    toggleFullHeight
+    toggleFullHeight: toggleTimelineFullHeight
   };
 };

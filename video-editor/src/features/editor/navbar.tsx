@@ -42,6 +42,7 @@ import { ModeToggle } from "@/components/ui/mode-toggle";
 import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
 import {Input} from "@/components/ui/input";
 import {cn} from "@/lib/utils";
+import useStore from "./store/use-store";
 
 export default function Navbar({
   user,
@@ -58,7 +59,7 @@ export default function Navbar({
   const isLargeScreen = useIsLargeScreen();
   const isMediumScreen = useIsMediumScreen();
   const isSmallScreen = useIsSmallScreen();
-  const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
+  const { isShortcutsModalOpen, setShortcutsModalOpen } = useStore();
 
   const handleUndo = () => {
     dispatch(HISTORY_UNDO);
@@ -186,7 +187,7 @@ export default function Navbar({
           <Tooltip delayDuration={10}>
             <TooltipTrigger asChild>
               <Button
-                  onClick={() => setIsShortcutsModalOpen(true)}
+                  onClick={() => setShortcutsModalOpen(true)}
                   className="hover:!bg-accent/30"
                   variant="ghost"
                   size="icon"
@@ -215,7 +216,7 @@ export default function Navbar({
       </div>
       <ShortcutsModal
         open={isShortcutsModalOpen}
-        onOpenChange={setIsShortcutsModalOpen}
+        onOpenChange={setShortcutsModalOpen}
       />
     </div>
   );

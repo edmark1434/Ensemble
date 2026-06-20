@@ -46,9 +46,18 @@ interface ITimelineStore {
   };
   viewTimeline: boolean;
   setViewTimeline: (viewTimeline: boolean) => void;
+
+  timelineHeight: number;
+  setTimelineHeight: (height: number) => void;
+  timelineContainerRef: React.RefObject<HTMLDivElement> | null;
+  setTimelineContainerRef: (ref: React.RefObject<HTMLDivElement>) => void;
+  toggleTimelineFullHeight: () => void;
+
+  isShortcutsModalOpen: boolean;
+  setShortcutsModalOpen: (open: boolean) => void;
 }
 
-const useStore = create<ITimelineStore>((set) => ({
+const useStore = create<ITimelineStore>((set, get) => ({
   compositions: [],
   structure: [],
   setCompositions: (compositions) => set({ compositions }),
@@ -100,7 +109,34 @@ const useStore = create<ITimelineStore>((set) => ({
   },
   setPlayerRef: (playerRef: React.RefObject<PlayerRef> | null) =>
     set({ playerRef }),
-  setSceneMoveableRef: (ref) => set({ sceneMoveableRef: ref })
+  setSceneMoveableRef: (ref) => set({ sceneMoveableRef: ref }),
+
+  timelineHeight: typeof window !== "undefined" ? window.innerHeight * 0.45 : 0,
+  timelineContainerRef: null,
+  setTimelineHeight: (height: number) => set({ timelineHeight: height }),
+  setTimelineContainerRef: (ref: React.RefObject<HTMLDivElement>) =>
+    set({ timelineContainerRef: ref }),
+  toggleTimelineFullHeight: () => {
+    const { timelineHeight, timelineContainerRef, timeline } = get();
+    const FULL_HEIGHT = window.innerHeight;
+    const DEFAULT_HEIGHT = window.innerHeight * 0.45;
+    const isFull = timelineHeight >= FULL_HEIGHT;
+    const newHeight = isFull ? DEFAULT_HEIGHT : FULL_HEIGHT;
+
+    if (timelineContainerRef?.current) {
+      timelineContainerRef.current.style.height = `${newHeight}px`;
+    }
+
+    const containerHeight =
+      (document.getElementById("playhead")?.clientHeight || 0) -
+      (document.getElementById("playhead-handle")?.clientHeight || 0);
+    timeline?.resize({ height: containerHeight });
+
+    set({ timelineHeight: newHeight });
+  },
+
+  isShortcutsModalOpen: false,
+  setShortcutsModalOpen: (open) => set({ isShortcutsModalOpen: open }),
 }));
 
 export default useStore;
