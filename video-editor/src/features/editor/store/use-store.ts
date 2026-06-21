@@ -60,6 +60,7 @@ interface ITimelineStore {
   markers: IMarker[];
   addMarker: (timeMs: number, type?: "marker" | "comment") => void;
   removeMarker: (id: string) => void;
+  playheadSnapped: boolean;
 }
 
 export interface IMarker {
@@ -165,6 +166,7 @@ const useStore = create<ITimelineStore>((set, get) => ({
   removeMarker: (id) => set((state) => ({
     markers: state.markers.filter((m) => m.id !== id)
   })),
+  playheadSnapped: false,
 }));
 
 export default useStore;

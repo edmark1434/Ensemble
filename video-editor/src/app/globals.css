@@ -148,6 +148,7 @@
   --shadow-2xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.43);
   --tracking-normal: 0.025em;
   --card-track: oklch(91.817% 0.005 290);
+  --primary-canvas: #5a4a8a;
 }
 
 .dark {
@@ -209,6 +210,7 @@
     0px 1px 3px 0px hsl(0 0% 0% / 0.17), 0px 8px 10px -1px hsl(0 0% 0% / 0.17);
   --shadow-2xl: 0px 1px 3px 0px hsl(0 0% 0% / 0.43);
   --card-track: oklch(17% 0.004 290);
+  --primary-canvas: #9b30c2;
 }
 
 @layer base {

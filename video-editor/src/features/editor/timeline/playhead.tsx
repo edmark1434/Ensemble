@@ -14,7 +14,7 @@ import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
 import { useTheme } from "next-themes";
 const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
   const playheadRef = useRef<HTMLDivElement>(null);
-  const { playerRef, fps, scale, markers } = useStore();
+  const { playerRef, fps, scale, markers, playheadSnapped } = useStore();
   const currentFrame = useCurrentPlayerFrame(playerRef);
   const position =
     timeMsToUnits((currentFrame / fps) * 1000, scale.zoom) - scrollLeft;
@@ -102,8 +102,9 @@ const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
   const markerColor = activeMarker
     ? (activeMarker.type === "comment" ? "#f43f5e" : "var(--primary)")
     : null;
-
-  const playheadColor = markerColor ?? color;
+  const playheadColor = playheadSnapped
+    ? `color-mix(in oklch, var(--primary) 50%, var(--card))`
+    : markerColor ?? color;
 
   return (
     <div

@@ -1,12 +1,16 @@
-import TimelineBase from "@designcombo/timeline";
+import TimelineBase, {Rect, timeMsToUnits} from "@designcombo/timeline";
 import Video from "./video";
 import { throttle } from "lodash";
 import Audio from "./audio";
 import { TimelineOptions } from "@designcombo/timeline";
 import { ITimelineScaleState } from "@designcombo/types";
+import useStore from "../../store/use-store";
 
 class Timeline extends TimelineBase {
   public isShiftKey: boolean = false;
+  private guideAnchors: any[] = [];
+  private isSnappedToPlayhead: boolean = false;
+
   constructor(
       canvasEl: HTMLCanvasElement,
       options: Partial<TimelineOptions> & {
@@ -38,6 +42,14 @@ class Timeline extends TimelineBase {
 
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
+
+    this.on("before:transform", this.addMarkerAndPlayheadGuides);
+    this.on("object:modified", this.removeMarkerAndPlayheadGuides);
+    this.on("mouse:up", this.removeMarkerAndPlayheadGuides);
+
+    this.on("object:moving", this.checkPlayheadSnap);
+    this.on("object:modified", this.clearPlayheadSnap);
+    this.on("mouse:up", this.clearPlayheadSnap);
   }
 
   private handleWheel = (e: WheelEvent) => {
@@ -68,11 +80,80 @@ class Timeline extends TimelineBase {
     }
   };
 
+  private addMarkerAndPlayheadGuides = () => {
+    this.removeMarkerAndPlayheadGuides();
+
+    const { playerRef, fps, markers } = useStore.getState();
+    const currentFrame = playerRef?.current?.getCurrentFrame() ?? 0;
+    const playheadMs = (currentFrame / fps) * 1000;
+
+    const positions = [
+      timeMsToUnits(playheadMs, this.scale.zoom),
+      ...markers.map((m) => timeMsToUnits(m.timeMs, this.scale.zoom)),
+    ];
+
+    this.guideAnchors = positions.map(
+      (x) =>
+        new Rect({
+          left: x + 1,
+          top: 0,
+          width: 0,
+          height: 2000,
+          selectable: false,
+          evented: false,
+          excludeFromExport: true,
+          opacity: 0,
+        })
+    );
+
+    this.add(...this.guideAnchors);
+  };
+
+  private removeMarkerAndPlayheadGuides = () => {
+    if (!this.guideAnchors.length) return;
+    this.remove(...this.guideAnchors);
+    this.guideAnchors = [];
+  };
+
+  private checkPlayheadSnap = () => {
+    const { playerRef, fps } = useStore.getState();
+    const currentFrame = playerRef?.current?.getCurrentFrame() ?? 0;
+    const playheadMs = (currentFrame / fps) * 1000;
+    const playheadX = timeMsToUnits(playheadMs, this.scale.zoom);
+
+    const active = this.getActiveObjects();
+    const snapped = active.some((obj: any) => {
+      const left = obj.left;
+      const right = obj.left + obj.width;
+      return Math.abs(left - playheadX) < 2 || Math.abs(right - playheadX) < 2;
+    });
+
+    if (snapped !== this.isSnappedToPlayhead) {
+      this.isSnappedToPlayhead = snapped;
+      useStore.getState().setState({ playheadSnapped: snapped });
+    }
+  };
+
+  private clearPlayheadSnap = () => {
+    if (this.isSnappedToPlayhead) {
+      this.isSnappedToPlayhead = false;
+      useStore.getState().setState({ playheadSnapped: false });
+    }
+  };
+
   public purge(): void {
     super.purge();
     window.removeEventListener("keydown", this.handleKeyDown);
     window.removeEventListener("keyup", this.handleKeyUp);
     this.upperCanvasEl?.removeEventListener('wheel', this.handleWheel);
+
+    this.off("before:transform", this.addMarkerAndPlayheadGuides);
+    this.off("object:modified", this.removeMarkerAndPlayheadGuides);
+    this.off("mouse:up", this.removeMarkerAndPlayheadGuides);
+
+    this.off("object:moving", this.checkPlayheadSnap);
+    this.off("object:modified", this.clearPlayheadSnap);
+    this.off("mouse:up", this.clearPlayheadSnap);
   }
 
   public setViewportPos(posX: number, posY: number) {

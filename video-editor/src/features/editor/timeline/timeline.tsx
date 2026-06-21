@@ -194,6 +194,10 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       guideLineColor: "#ffffff"
     });
 
+    canvas.guideLineColor = getComputedStyle(document.documentElement)
+      .getPropertyValue("--primary-canvas")
+      .trim() + "80";
+
     canvas.initScrollbars({
       offsetX: TIMELINE_OFFSET_CANVAS_LEFT + timelineOffsetX,
       offsetY: 0,

@@ -4,7 +4,9 @@ class Helper extends HelperBase {
   static type = "Helper";
 
   constructor(props: HelperProps) {
-    props.activeGuideFill = "#ffffff";
+    props.activeGuideFill = getComputedStyle(document.documentElement)
+      .getPropertyValue("--primary-canvas")
+      .trim() + "80";
     super(props);
   }
 }
