@@ -74,7 +74,7 @@ const IconPlayerPauseFilled = ({ size }: { size: number }) => (
 );
 
 const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
-  const { fps, duration } = useStore();
+  const { fps, duration, markers } = useStore();
   const currentFrame = useCurrentPlayerFrame(playerRef);
   const [playing, setPlaying] = useState(false);
   useUpdateAnsestors({ playing, playerRef });
@@ -94,6 +94,22 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
 
   const handlePlay = () => dispatch(PLAYER_PLAY);
   const handlePause = () => dispatch(PLAYER_PAUSE);
+
+  const durationFrames = Math.round((duration / 1000) * fps);
+
+  const sortedMarkers = [...markers]
+    .map((m) => ({ ...m, frame: Math.round((m.timeMs / 1000) * fps) }))
+    .sort((a, b) => a.frame - b.frame);
+
+  const prevMarker = [...sortedMarkers].reverse().find((m) => m.frame < currentFrame);
+  const nextMarker = sortedMarkers.find((m) => m.frame > currentFrame);
+
+  const handleJumpToPrev = () => {
+    playerRef?.current?.seekTo(prevMarker ? prevMarker.frame : 0);
+  };
+  const handleJumpToNext = () => {
+    playerRef?.current?.seekTo(nextMarker ? nextMarker.frame : durationFrames);
+  };
 
   return (
     <div className="flex flex-col w-full h-full">
@@ -120,11 +136,18 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
           <div className="flex justify-center gap-1">
             <Tooltip delayDuration={10}>
               <TooltipTrigger asChild>
-                <Button className="hidden lg:inline-flex" onClick={() => {}} variant={"ghost"} size={"icon"}>
+                <Button
+                  className="hidden lg:inline-flex"
+                  onClick={handleJumpToPrev}
+                  disabled={currentFrame === 0}
+                  variant={"ghost"}
+                  size={"icon"}>
                   <ArrowLeftToLine size={14} />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={"bottom"} align="center" sideOffset={1}>Jump to last marker</TooltipContent>
+              <TooltipContent side={"bottom"} align="center" sideOffset={1}>
+                {prevMarker ? "Jump to last marker" : "Jump to start"}
+              </TooltipContent>
             </Tooltip>
 
             <Tooltip delayDuration={10}>
@@ -138,11 +161,18 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
 
             <Tooltip delayDuration={10}>
               <TooltipTrigger asChild>
-                <Button className="hidden lg:inline-flex" onClick={() => {}} variant={"ghost"} size={"icon"}>
+                <Button
+                  className="hidden lg:inline-flex"
+                  onClick={handleJumpToNext}
+                  disabled={currentFrame >= durationFrames}
+                  variant={"ghost"}
+                  size={"icon"}>
                   <ArrowRightToLine size={14} />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={"bottom"} align="center" sideOffset={1}>Jump to next marker</TooltipContent>
+              <TooltipContent side={"bottom"} align="center" sideOffset={1}>
+                {nextMarker ? "Jump to next marker" : "Jump to end"}
+              </TooltipContent>
             </Tooltip>
           </div>
 
@@ -320,17 +350,16 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
     const timelineContainer = document.getElementById("timeline-container");
     if (!timelineContainer) return;
 
+    const containerWidth = document.getElementById("timeline-header")?.clientWidth || 0;
+    const containerHeight =
+      (document.getElementById("playhead")?.clientHeight || 0) -
+      (document.getElementById("playhead-handle")?.clientHeight || 0) - 26;
+
     timeline?.resize(
-      {
-        height: timelineContainer.clientHeight - 90,
-        width: timelineContainer.clientWidth - 40,
-      },
-      {
-        force: true,
-      },
+      { height: containerHeight, width: containerWidth },
+      { force: true },
     );
 
-    // Trigger zoom recalculation when timeline is resized
     setTimeout(() => {
       sceneRef.current?.recalculateZoom();
     }, 100);

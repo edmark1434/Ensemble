@@ -14,7 +14,7 @@ import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
 import { useTheme } from "next-themes";
 const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
   const playheadRef = useRef<HTMLDivElement>(null);
-  const { playerRef, fps, scale } = useStore();
+  const { playerRef, fps, scale, markers } = useStore();
   const currentFrame = useCurrentPlayerFrame(playerRef);
   const position =
     timeMsToUnits((currentFrame / fps) * 1000, scale.zoom) - scrollLeft;
@@ -95,6 +95,16 @@ const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
+  const MARKER_SNAP_MS = 1000 / fps - 1;
+  const currentTimeMs = (currentFrame / fps) * 1000;
+  const activeMarker = markers.find(m => Math.abs(m.timeMs - currentTimeMs) < MARKER_SNAP_MS);
+
+  const markerColor = activeMarker
+    ? (activeMarker.type === "comment" ? "#f43f5e" : "var(--primary)")
+    : null;
+
+  const playheadColor = markerColor ?? color;
+
   return (
     <div
       ref={playheadRef}
@@ -117,7 +127,7 @@ const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
         id="playhead-handle"
         style={{
           borderRadius: "0 0 4px 4px",
-          backgroundColor: color
+          backgroundColor: playheadColor,
         }}
         className="absolute top-0 h-4 w-2 -translate-x-1/2 transform text-xs font-semibold text-zinc-800"
       />
@@ -125,7 +135,7 @@ const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
         <div className="absolute top-0 h-full w-3 -translate-x-1/2 transform" />
         <div
           className="absolute top-0 h-full w-0.5 -translate-x-1/2 transform"
-          style={{ backgroundColor: color }}
+          style={{ backgroundColor: playheadColor }}
         />
       </div>
     </div>

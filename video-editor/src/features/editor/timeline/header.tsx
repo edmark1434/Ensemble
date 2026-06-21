@@ -39,72 +39,50 @@ import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
 import {timeMsToUnits} from "@designcombo/timeline";
 import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
 
-const IconPlayerPlayFilled = ({ size }: { size: number }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width={size}
-    viewBox="0 0 24 24"
-    fill="currentColor"
-  >
-    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-    <path d="M6 4v16a1 1 0 0 0 1.524 .852l13 -8a1 1 0 0 0 0 -1.704l-13 -8a1 1 0 0 0 -1.524 .852z" />
+const IconAddMarker = ({ size }: { size: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 2.5 24 24" fill="none" stroke="currentColor"
+       stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="lucide lucide-tag-icon lucide-tag">
+    <g transform="rotate(225 12 12)">
+      <path
+        d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/>
+    </g>
   </svg>
 );
 
-const IconPlayerPauseFilled = ({ size }: { size: number }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width={size}
-    viewBox="0 0 24 24"
-    fill="currentColor"
-  >
-    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-    <path d="M9 4h-2a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h2a2 2 0 0 0 2 -2v-12a2 2 0 0 0 -2 -2z" />
-    <path d="M17 4h-2a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h2a2 2 0 0 0 2 -2v-12a2 2 0 0 0 -2 -2z" />
-  </svg>
-);
-const IconPlayerSkipBack = ({ size }: { size: number }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-    <path d="M20 5v14l-12 -7z" />
-    <path d="M4 5l0 14" />
+const IconRemoveMarker = ({size}: { size: number }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 2.5 24 24" fill="none" stroke="currentColor"
+       stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+       className="lucide lucide-tag-plus-icon lucide-tag-plus">
+    <g transform="scale(-1 1) translate(-24 0) rotate(225 12 12)">
+      <path
+        d="m16.5 6.5-3.914-3.914A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l1.79-1.79"/>
+      {/*<path d="m22.5 9.5-5 5"/>*/}
+      <path d="M15 13h8"/>
+      <path d="M19 9v8"/>
+    </g>
   </svg>
 );
 
-const IconPlayerSkipForward = ({ size }: { size: number }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-    <path d="M4 5v14l12 -7z" />
-    <path d="M20 5l0 14" />
-  </svg>
-);
-const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
+const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
   toggleFullHeight: () => void;
   timelineHeight: number;
   stateManager: StateManager;
 }) => {
   const [playing, setPlaying] = useState(false);
-  const { duration, fps, scale, playerRef, activeIds, timeline, trackItemsMap } = useStore();
+  const {
+    duration,
+    fps,
+    scale,
+    playerRef,
+    activeIds,
+    timeline,
+    trackItemsMap,
+    markers,
+    addMarker,
+    removeMarker
+  } = useStore();
   const isLargeScreen = useIsLargeScreen();
-  useUpdateAnsestors({ playing, playerRef });
+  useUpdateAnsestors({playing, playerRef});
 
   const currentFrame = useCurrentPlayerFrame(playerRef);
   const timelineOffsetX = useTimelineOffsetX();
@@ -227,14 +205,6 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
     });
   };
 
-  const handlePlay = () => {
-    dispatch(PLAYER_PLAY);
-  };
-
-  const handlePause = () => {
-    dispatch(PLAYER_PAUSE);
-  };
-
   useEffect(() => {
     playerRef?.current?.addEventListener("play", () => {
       setPlaying(true);
@@ -302,6 +272,18 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
     }, {} as Record<string, any>);
 
     dispatch(EDIT_OBJECT, { payload });
+  };
+
+  const currentTimeMs = (currentFrame / fps) * 1000;
+  const isMarkerActive = markers.some(
+    (m) => Math.abs(m.timeMs - currentTimeMs) < (1000 / fps - 1)
+  );
+
+  const toggleMarker = () => {
+    const existing = markers.find(
+      (m) => Math.abs(m.timeMs - currentTimeMs) < (1000 / fps - 1)
+    );
+    existing ? removeMarker(existing.id) : addMarker(currentTimeMs);
   };
 
   return (
@@ -512,6 +494,22 @@ const Header = ({ toggleFullHeight, timelineHeight, stateManager }: {
                 </TooltipContent>
               </Tooltip>
             )}
+
+            <Tooltip delayDuration={10}>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={toggleMarker}
+                  variant={"ghost"}
+                  size={"icon"}
+                  className={`disabled:opacity-0 disabled:pointer-events-none ${isMarkerActive ? "text-primary hover:text-primary" : ""}`}
+                >
+                  {isMarkerActive ? <IconRemoveMarker size={16} /> : <IconAddMarker size={16} />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                {isMarkerActive ? "Remove marker" : "Add marker"}
+              </TooltipContent>
+            </Tooltip>
           </div>
 
           <div className="flex items-center justify-center gap-1">

@@ -49,7 +49,7 @@ const SHORTCUTS: ShortcutCategory[] = [
   {
     title: "Timeline",
     items: [
-      { label: "Maximize or minimize", keys: ["T"] },
+      { label: "Maximize or minimize", keys: ["`"] },
 
       { label: "Zoom in", keys: ["Ctrl", "+"] },
       { label: "Zoom out", keys: ["Ctrl", "-"] },
@@ -62,8 +62,17 @@ const SHORTCUTS: ShortcutCategory[] = [
 
       { label: "Skip back 1s", keys: ["Ctrl", "Shift", "🡠"] },
       { label: "Skip forward 1s", keys: ["Ctrl", "Shift", "🡢"] },
+    ]
+  },
+  {
+    title: "Timeline",
+    items: [
+      { label: "Jump to start", keys: ["Home"] },
+      { label: "Jump to end", keys: ["End"] },
 
-      { label: "Add or remove markers", keys: ["M"], disabled: true }
+      { label: "Add or remove markers", keys: ["M"] },
+      { label: "Jump to last marker", keys: ["Ctrl", "Shift", "M"] },
+      { label: "Jump to next marker", keys: ["Shift", "M"] },
     ]
   },
   {
@@ -85,7 +94,7 @@ const SHORTCUTS: ShortcutCategory[] = [
 export function ShortcutsModal({ open, onOpenChange }: ShortcutsModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="md:max-w-5xl w-full max-w-5xl border bg-card px-2 py-8 gap-6 overflow-hidden">
+      <DialogContent className="md:max-w-6xl w-full max-w-5xl border bg-card px-2 py-8 gap-6 overflow-hidden">
         <DialogHeader className="px-6 -mt-0.75 flex flex-row gap-4">
           <DialogTitle className="text-lg font-semibold">Keyboard shortcuts</DialogTitle>
           <KbdGroup>
@@ -99,13 +108,20 @@ export function ShortcutsModal({ open, onOpenChange }: ShortcutsModalProps) {
           </KbdGroup>
         </DialogHeader>
         <div className="px-6">
-          <div className="grid grid-cols-3 gap-12">
+          <div className="grid grid-cols-4 gap-12">
             {SHORTCUTS.map((category, index) => (
               <div
-                key={category.title}
+                key={category.title + index}
                 className="flex flex-col gap-6 relative"
               >
-                <h3 className="text-sm font-semibold">{category.title}</h3>
+                <h3
+                  className={cn(
+                    "text-sm font-semibold",
+                    index > 0 && SHORTCUTS[index - 1].title === category.title && "invisible"
+                  )}
+                >
+                  {category.title}
+                </h3>
                 <div className="flex flex-col gap-5">
                   {category.items.map((item) => (
                     <div
@@ -131,7 +147,7 @@ export function ShortcutsModal({ open, onOpenChange }: ShortcutsModalProps) {
                     </div>
                   ))}
                 </div>
-                {index < SHORTCUTS.length - 1 && (
+                {index < SHORTCUTS.length - 1 && SHORTCUTS[index + 1].title !== category.title && (
                   <>
                     <div className="md:hidden">
                       <Separator className="my-4 bg-zinc-800" />

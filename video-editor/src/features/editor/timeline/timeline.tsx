@@ -127,11 +127,10 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     if (!canvasEl || !timelineContainerEl) return;
 
     const containerWidth =
-      (document.getElementById("timeline-header")?.clientWidth || 0) - 70;
+      (document.getElementById("timeline-header")?.clientWidth || 0);
     const containerHeight =
       (document.getElementById("playhead")?.clientHeight || 0) -
-      (document.getElementById("playhead-handle")?.clientHeight || 0) -
-      40;
+      (document.getElementById("playhead-handle")?.clientHeight || 0) - 26;
     const canvas = new CanvasTimeline(canvasEl, {
       width: containerWidth,
       height: containerHeight,
@@ -146,7 +145,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       state: stateManager,
       duration,
       spacing: {
-        left: TIMELINE_OFFSET_CANVAS_LEFT,
+        left: TIMELINE_OFFSET_CANVAS_LEFT + timelineOffsetX,
         right: TIMELINE_OFFSET_CANVAS_RIGHT
       },
       sizesMap: {
@@ -196,22 +195,26 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     });
 
     canvas.initScrollbars({
-      offsetX: 16,
+      offsetX: TIMELINE_OFFSET_CANVAS_LEFT + timelineOffsetX,
       offsetY: 0,
-      extraMarginX: 50,
+      extraMarginX: 0,
       extraMarginY: 0,
-      scrollbarWidth: 8,
+      scrollbarWidth: 6,
       scrollbarColor: "rgba(255, 255, 255, 1)"
     });
 
     canvas.onViewportChange((left: number) => {
-      setScrollLeft(left + 16);
+      const computed = left + TIMELINE_OFFSET_CANVAS_LEFT + timelineOffsetX;
+      console.log("raw left:", left, "computed:", computed);
+      setScrollLeft(Math.max(0, computed));
     });
 
     canvasRef.current = canvas;
 
     setCanvasSize({ width: containerWidth, height: containerHeight });
     setTimeline(canvas);
+
+    canvas.scrollTo({ scrollLeft: 0 });
 
     // watch for state changes on canvas items
     canvas.state.subscribeToUpdateItemDetails(({ trackItemsMap }) => {
@@ -386,7 +389,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     <div
       ref={timelineContainerRef}
       id="timeline-container"
-      className="relative w-full overflow-hidden bg-card"
+      className="relative w-full overflow-hidden bg-card py-0"
       style={{
         height: `${timelineHeight}px`,
         borderTopWidth: "1px",
@@ -411,7 +414,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       <div className="flex">
         <div
           style={{
-            width: timelineOffsetX
+            width: 0
           }}
           className="relative flex-none"
         />

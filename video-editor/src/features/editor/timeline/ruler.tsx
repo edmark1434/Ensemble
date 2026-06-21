@@ -10,6 +10,7 @@ import { formatTimelineUnit } from "../utils/format";
 import useStore from "../store/use-store";
 import { debounce } from "lodash";
 import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
+import {timeMsToUnits} from "@designcombo/timeline";
 
 interface RulerProps {
   height?: number;
@@ -26,17 +27,19 @@ interface RulerProps {
 const Ruler = (props: RulerProps) => {
   const timelineOffsetX = useTimelineOffsetX();
   const {
-    height = 40, // Increased height to give space for the text
+    height = 32, // Increased height to give space for the text
     longLineSize = 8,
     shortLineSize = 10,
     offsetX = timelineOffsetX + TIMELINE_OFFSET_CANVAS_LEFT,
-    textOffsetY = 17, // Place the text above the lines but inside the canvas
+    textOffsetY = 13, // Place the text above the lines but inside the canvas
     textFormat = formatTimelineUnit,
     scrollLeft = 0,
     onClick,
-    onScroll
+    onScroll,
   } = props;
-  const { scale } = useStore();
+
+  const { scale, markers } = useStore();
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [canvasContext, setCanvasContext] =
     useState<CanvasRenderingContext2D | null>(null);
@@ -197,7 +200,7 @@ const Ruler = (props: RulerProps) => {
           context.strokeStyle = "#18181b"; // Red for long lines
         }
 
-        const origin = 18; // Increase the origin to start lines lower, below the text
+        const origin = 13; // Increase the origin to start lines lower, below the text
 
         const [x1, y1] = [pos, origin];
         const [x2, y2] = [x1, y1 + lineSize];
@@ -448,6 +451,46 @@ const Ruler = (props: RulerProps) => {
           touchAction: "none" // Prevent default touch behaviors
         }}
       />
+
+      {[...markers]
+        .sort((a, b) => {
+          if (a.type === b.type) return 0;
+          return a.type === "comment" ? 1 : -1;
+        })
+        .map((marker) => {
+          const x = timeMsToUnits(marker.timeMs, scale.zoom) - scrollLeft + offsetX;
+          if (x < 0 || x > canvasSize.width) return null;
+          const color = marker.color
+            ?? (marker.type === "comment" ? "#f43f5e" : "var(--primary)");
+          return (
+            <div
+              key={marker.id}
+              style={{
+                position: "absolute",
+                left: x,
+                bottom: 0,
+                top: "0%",
+                width: 2,
+                backgroundColor: color,
+                pointerEvents: "none",
+                zIndex: 5,
+                transform: "translateX(-50%)",
+              }}
+            >
+              <div style={{
+                position: "absolute",
+                top: -1,
+                left: 1,
+                transform: "translateX(-50%)",
+                width: 8,
+                height: "52%",
+                backgroundColor: color,
+                borderRadius: "0 0 4px 4px",
+              }} />
+            </div>
+          );
+        })
+      }
     </div>
   );
 };

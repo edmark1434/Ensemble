@@ -13,6 +13,7 @@ import { Moveable } from "@interactify/toolkit";
 import { PlayerRef } from "@remotion/player";
 import { create } from "zustand";
 import {TIMELINE_ZOOM_LEVELS} from "@/features/editor/constants/scale";
+import {nanoid} from "nanoid";
 
 interface ITimelineStore {
   duration: number;
@@ -55,6 +56,18 @@ interface ITimelineStore {
 
   isShortcutsModalOpen: boolean;
   setShortcutsModalOpen: (open: boolean) => void;
+
+  markers: IMarker[];
+  addMarker: (timeMs: number, type?: "marker" | "comment") => void;
+  removeMarker: (id: string) => void;
+}
+
+export interface IMarker {
+  id: string;
+  timeMs: number;
+  label?: string;
+  color?: string;
+  type: "marker" | "comment";
 }
 
 const useStore = create<ITimelineStore>((set, get) => ({
@@ -137,6 +150,21 @@ const useStore = create<ITimelineStore>((set, get) => ({
 
   isShortcutsModalOpen: false,
   setShortcutsModalOpen: (open) => set({ isShortcutsModalOpen: open }),
+
+  markers: [],
+  addMarker: (timeMs, type = "marker") => set((state) => ({
+    markers: [
+      ...state.markers,
+      {
+        id: nanoid(),
+        timeMs,
+        type,
+      }
+    ]
+  })),
+  removeMarker: (id) => set((state) => ({
+    markers: state.markers.filter((m) => m.id !== id)
+  })),
 }));
 
 export default useStore;

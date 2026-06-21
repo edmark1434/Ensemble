@@ -243,7 +243,7 @@ export function useKeyboardShortcuts(stateManager: StateManager) {
       }
 
       // toggle timeline maximize / minimize
-      if (e.code === "KeyT") {
+      if (e.code === "Backquote") {
         e.preventDefault();
         useStore.getState().toggleTimelineFullHeight();
       }
@@ -299,6 +299,60 @@ export function useKeyboardShortcuts(stateManager: StateManager) {
         if (Object.keys(payload).length) {
           dispatch(EDIT_OBJECT, { payload });
         }
+      }
+
+      // add / remove marker
+      if (!mod && !e.shiftKey && e.code === "KeyM") {
+        e.preventDefault();
+        const { playerRef, fps, markers, addMarker, removeMarker } = useStore.getState();
+        const currentFrame = playerRef?.current?.getCurrentFrame() ?? 0;
+        const timeMs = (currentFrame / fps) * 1000;
+        const existing = markers.find(m => Math.abs(m.timeMs - timeMs) < (1000 / fps - 1));
+        existing ? removeMarker(existing.id) : addMarker(timeMs);
+      }
+
+      // previous marker / jump to start
+      if (mod && e.shiftKey && e.code === "KeyM") {
+        e.preventDefault();
+        const { playerRef, fps, markers } = useStore.getState();
+        const currentFrame = playerRef?.current?.getCurrentFrame() ?? 0;
+
+        const sortedMarkers = [...markers]
+          .map((m) => ({ ...m, frame: Math.round((m.timeMs / 1000) * fps) }))
+          .sort((a, b) => a.frame - b.frame);
+        const prevMarker = [...sortedMarkers].reverse().find((m) => m.frame < currentFrame);
+
+        playerRef?.current?.seekTo(prevMarker ? prevMarker.frame : 0);
+      }
+
+      // next marker / jump to end
+      if (!mod && e.shiftKey && e.code === "KeyM") {
+        e.preventDefault();
+        const { playerRef, fps, markers, duration } = useStore.getState();
+        const currentFrame = playerRef?.current?.getCurrentFrame() ?? 0;
+        const lastFrame = Math.round((duration / 1000) * fps);
+
+        const sortedMarkers = [...markers]
+          .map((m) => ({ ...m, frame: Math.round((m.timeMs / 1000) * fps) }))
+          .sort((a, b) => a.frame - b.frame);
+        const nextMarker = sortedMarkers.find((m) => m.frame > currentFrame);
+
+        playerRef?.current?.seekTo(nextMarker ? nextMarker.frame : lastFrame);
+      }
+
+      // jump to start
+      if (e.code === "Home") {
+        e.preventDefault();
+        const { playerRef } = useStore.getState();
+        playerRef?.current?.seekTo(0);
+      }
+
+      // jump to end
+      if (e.code === "End") {
+        e.preventDefault();
+        const { playerRef, fps, duration } = useStore.getState();
+        const lastFrame = Math.round((duration / 1000) * fps);
+        playerRef?.current?.seekTo(lastFrame);
       }
     };
 
