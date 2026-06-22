@@ -122,7 +122,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                 )}
              </button>
 
-             {/* Navigation - Scrollable */}
+             {/* Navigation - Always Scrollable */}
              <nav className="flex-1 overflow-y-auto px-3 py-5 scrollbar-thin">
                 {/* 1. Main Menu */}
                 <div>
@@ -141,13 +141,13 @@ const UserNav: React.FC<UserNavProps> = () => {
                                </NavLink>
                             ) : (
                                /* Collapsed Floating Display for Primary Items (No Children) */
-                               <div className="group relative flex flex-col items-center">
+                               <div className="group static flex flex-col items-center">
                                   <NavLink to={to} className={linkClassName}>
                                      <Icon className="h-4 w-4 shrink-0" />
                                   </NavLink>
 
-                                  {/* Floating Title Display */}
-                                  <div className="absolute left-full top-0 pl-2 hidden group-hover:block z-50 pointer-events-none">
+                                  {/* Floating Title Display - Anchored left-20 to clear scroll viewport limits */}
+                                  <div className="absolute left-20 pl-2 hidden group-hover:block z-50 pointer-events-none">
                                      <div className="rounded-lg border border-white/10 bg-[#0d0f1a] px-3 py-2 shadow-2xl animate-fade-in whitespace-nowrap">
                                         <span className="text-xs font-medium text-zinc-200">{label}</span>
                                      </div>
@@ -194,12 +194,13 @@ const UserNav: React.FC<UserNavProps> = () => {
                       </div>
                    ) : (
                       /* Collapsed Menu Flyout Item for Jobs (With Children) */
-                      <div className="group relative flex flex-col items-center">
+                      <div className="group static flex flex-col items-center">
                          <div className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors group-hover:bg-white/5 group-hover:text-white cursor-pointer">
                             <BriefcaseBusiness className="h-4 w-4" />
                          </div>
 
-                         <div className="absolute left-full top-0 pl-2 hidden w-52 group-hover:block z-50">
+                         {/* Uses absolute left-20 to breakout of overflow hidden container contexts */}
+                         <div className="absolute left-20 pl-2 hidden w-52 group-hover:block z-50">
                             <div className="rounded-xl border border-white/10 bg-[#0d0f1a] p-1.5 shadow-2xl animate-fade-in">
                                <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 border-b border-white/5 mb-1">Jobs</p>
                                <ul className="space-y-0.5">
@@ -241,12 +242,13 @@ const UserNav: React.FC<UserNavProps> = () => {
                       </div>
                    ) : (
                       /* Collapsed Menu Flyout Item for Gigs (With Children) */
-                      <div className="group relative flex flex-col items-center">
+                      <div className="group static flex flex-col items-center">
                          <div className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors group-hover:bg-white/5 group-hover:text-white cursor-pointer">
                             <MicVocal className="h-4 w-4" />
                          </div>
 
-                         <div className="absolute left-full top-0 pl-2 hidden w-52 group-hover:block z-50">
+                         {/* Uses absolute left-20 to breakout of overflow hidden container contexts */}
+                         <div className="absolute left-20 pl-2 hidden w-52 group-hover:block z-50">
                             <div className="rounded-xl border border-white/10 bg-[#0d0f1a] p-1.5 shadow-2xl animate-fade-in">
                                <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 border-b border-white/5 mb-1">Gigs</p>
                                <ul className="space-y-0.5">
@@ -285,13 +287,13 @@ const UserNav: React.FC<UserNavProps> = () => {
                                </NavLink>
                             ) : (
                                /* Collapsed Floating Display for Activity Items (No Children) */
-                               <div className="group relative flex flex-col items-center">
+                               <div className="group static flex flex-col items-center">
                                   <NavLink to={to} className={linkClassName}>
                                      <Icon className="h-4 w-4 shrink-0" />
                                   </NavLink>
 
-                                  {/* Floating Title Display */}
-                                  <div className="absolute left-full top-0 pl-2 hidden group-hover:block z-50 pointer-events-none">
+                                  {/* Floating Title Display - Anchored left-20 to clear scroll viewport limits */}
+                                  <div className="absolute left-20 pl-2 hidden group-hover:block z-50 pointer-events-none">
                                      <div className="rounded-lg border border-white/10 bg-[#0d0f1a] px-3 py-2 shadow-2xl animate-fade-in whitespace-nowrap">
                                         <span className="text-xs font-medium text-zinc-200">{label}</span>
                                      </div>
