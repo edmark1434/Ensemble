@@ -43,6 +43,7 @@ import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
 import {Input} from "@/components/ui/input";
 import {cn} from "@/lib/utils";
 import useStore from "./store/use-store";
+import {Kbd, KbdGroup} from "@/components/ui/kbd";
 
 export default function Navbar({
   user,
@@ -128,8 +129,16 @@ export default function Navbar({
                 <Icons.undo width={20} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="top" align="center" sideOffset={1}>
+            <TooltipContent
+              side="top" align="center" sideOffset={1}
+              className={"flex gap-2 items-center"}
+            >
               Undo
+              <KbdGroup>
+                <Kbd>Ctrl</Kbd>
+                <span>+</span>
+                <Kbd>Z</Kbd>
+              </KbdGroup>
             </TooltipContent>
           </Tooltip>
 
@@ -145,8 +154,18 @@ export default function Navbar({
                 <Icons.redo width={20} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="top" align="center" sideOffset={1}>
+            <TooltipContent
+              side="top" align="center" sideOffset={1}
+              className={"flex gap-2 items-center"}
+            >
               Redo
+              <KbdGroup>
+                <Kbd>Ctrl</Kbd>
+                <span>+</span>
+                <Kbd>Shift</Kbd>
+                <span>+</span>
+                <Kbd>Z</Kbd>
+              </KbdGroup>
             </TooltipContent>
           </Tooltip>
 
@@ -195,8 +214,16 @@ export default function Navbar({
                 <Keyboard size={20} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="bottom" align="center" sideOffset={1}>
+            <TooltipContent
+              side="bottom" align="center" sideOffset={1}
+              className={"flex gap-2 items-center"}
+            >
               Keyboard shortcuts
+              <KbdGroup>
+                <Kbd>Ctrl</Kbd>
+                <span>+</span>
+                <Kbd>/</Kbd>
+              </KbdGroup>
             </TooltipContent>
           </Tooltip>
 

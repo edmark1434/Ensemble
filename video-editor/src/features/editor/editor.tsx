@@ -42,6 +42,7 @@ import {cn} from "@/lib/utils";
 import {useKeyboardShortcuts} from './hooks/use-keyboard-shortcuts'
 import {timeMsToUnits} from "@designcombo/timeline";
 import {useTimelineOffsetX} from "@/features/editor/hooks/use-timeline-offset";
+import {Kbd, KbdGroup} from "@/components/ui/kbd";
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -182,8 +183,26 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
                   <ArrowLeftToLine size={14} />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={"bottom"} align="center" sideOffset={1}>
-                {prevMarker ? "Jump to last marker" : "Jump to start"}
+              <TooltipContent
+                side={"bottom"} align="center" sideOffset={1}
+                className={"flex gap-2 items-center"}
+              >
+                {prevMarker ? (
+                  <>
+                    Jump to last marker
+                    <KbdGroup>
+                      <Kbd>Ctrl</Kbd>
+                      <span>+</span>
+                      <Kbd>Shift</Kbd>
+                      <span>+</span>
+                      <Kbd>M</Kbd>
+                    </KbdGroup>
+                  </>
+                ) : (
+                  <>
+                    Jump to start <Kbd>Home</Kbd>
+                  </>
+                )}
               </TooltipContent>
             </Tooltip>
 
@@ -193,7 +212,12 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
                   {playing ? <IconPlayerPauseFilled size={14} /> : <IconPlayerPlayFilled size={14} />}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={"bottom"} align="center" sideOffset={1}>{playing ? "Pause" : "Play"}</TooltipContent>
+              <TooltipContent
+                side={"bottom"} align="center" sideOffset={1}
+                className={"flex gap-2 items-center"}
+              >
+                {playing ? "Pause" : "Play"} <Kbd>Space</Kbd>
+              </TooltipContent>
             </Tooltip>
 
             <Tooltip delayDuration={10}>
@@ -207,8 +231,24 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
                   <ArrowRightToLine size={14} />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={"bottom"} align="center" sideOffset={1}>
-                {nextMarker ? "Jump to next marker" : "Jump to end"}
+              <TooltipContent
+                side={"bottom"} align="center" sideOffset={1}
+                className={"flex gap-2 items-center"}
+              >
+                {nextMarker ? (
+                  <>
+                    Jump to next marker
+                    <KbdGroup>
+                      <Kbd>Shift</Kbd>
+                      <span>+</span>
+                      <Kbd>M</Kbd>
+                    </KbdGroup>
+                  </>
+                ) : (
+                  <>
+                    Jump to end <Kbd>End</Kbd>
+                  </>
+                )}
               </TooltipContent>
             </Tooltip>
           </div>
@@ -220,7 +260,17 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
                   <Volume2 size={16} />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={"bottom"} align="center" sideOffset={1}>Mute</TooltipContent>
+              <TooltipContent
+                side={"bottom"} align="center" sideOffset={1}
+                className={"flex gap-2 items-center"}
+              >
+                Mute
+                <KbdGroup>
+                  <Kbd>Ctrl</Kbd>
+                  <span>+</span>
+                  <Kbd>M</Kbd>
+                </KbdGroup>
+              </TooltipContent>
             </Tooltip>
 
             <Tooltip delayDuration={10}>
@@ -229,7 +279,19 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
                   <Maximize size={16} />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={"bottom"} align="center" sideOffset={1}>Full screen</TooltipContent>
+              <TooltipContent
+                side={"bottom"} align="center" sideOffset={1}
+                className={"flex gap-2 items-center"}
+              >
+                Full screen
+                <KbdGroup>
+                  <Kbd>Ctrl</Kbd>
+                  <span>+</span>
+                  <Kbd>Shift</Kbd>
+                  <span>+</span>
+                  <Kbd>F</Kbd>
+                </KbdGroup>
+              </TooltipContent>
             </Tooltip>
           </div>
         </div>

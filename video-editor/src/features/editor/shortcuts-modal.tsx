@@ -40,7 +40,7 @@ const SHORTCUTS: ShortcutCategory[] = [
       { label: "Cut", keys: ["Ctrl", "X"] },
       { label: "Paste", keys: ["Ctrl", "V"] },
 
-      { label: "Delete", keys: ["Delete"] },
+      { label: "Delete", keys: ["Del"] },
 
       { label: "Undo", keys: ["Ctrl", "Z"] },
       { label: "Redo", keys: ["Ctrl", "Shift", "Z"] },
@@ -55,24 +55,28 @@ const SHORTCUTS: ShortcutCategory[] = [
       { label: "Zoom out", keys: ["Ctrl", "-"] },
       { label: "Zoom to fit", keys: ["Shift", "Z"] },
 
-      { label: "Split", keys: ["Ctrl", "B"] },
-
       { label: "Last frame", keys: ["Ctrl", "🡠"] },
       { label: "Next frame", keys: ["Ctrl", "🡢"] },
 
-      { label: "Skip back 1s", keys: ["Ctrl", "Shift", "🡠"] },
-      { label: "Skip forward 1s", keys: ["Ctrl", "Shift", "🡢"] },
+      { label: "Jump by 1s", keys: ["Ctrl", "Shift", "🡠 or 🡢"] },
+
+      { label: "Jump to start", keys: ["Home"] },
+      { label: "Jump to end", keys: ["End"] },
     ]
   },
   {
     title: "Timeline",
     items: [
-      { label: "Jump to start", keys: ["Home"] },
-      { label: "Jump to end", keys: ["End"] },
-
       { label: "Add or remove markers", keys: ["M"] },
       { label: "Jump to last marker", keys: ["Ctrl", "Shift", "M"] },
       { label: "Jump to next marker", keys: ["Shift", "M"] },
+
+      { label: "Split", keys: ["Ctrl", "B"] },
+      { label: "Delete left", keys: ["Q"], disabled: true },
+      { label: "Delete right", keys: ["W"], disabled: true },
+
+      { label: "Extend to playhead", keys: ["Shift", "E"], disabled: true },
+      { label: "Move to playhead", keys: ["Ctrl", "Shift", "E"], disabled: true },
     ]
   },
   {

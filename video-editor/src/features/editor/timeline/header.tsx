@@ -38,6 +38,7 @@ import { useIsLargeScreen } from "@/hooks/use-media-query";
 import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
 import {timeMsToUnits} from "@designcombo/timeline";
 import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
+import {Kbd, KbdGroup} from "@/components/ui/kbd";
 
 const IconAddMarker = ({ size }: { size: number }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 2.5 24 24" fill="none" stroke="currentColor"
@@ -395,8 +396,16 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
                     <SquareSplitHorizontal size={16} />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                <TooltipContent
+                  side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
                   Split
+                  <KbdGroup>
+                    <Kbd>Ctrl</Kbd>
+                    <span>+</span>
+                    <Kbd>B</Kbd>
+                  </KbdGroup>
                 </TooltipContent>
               </Tooltip>
             )}
@@ -414,8 +423,16 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
                     <Copy size={16} />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                <TooltipContent
+                  side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
                   Copy
+                  <KbdGroup>
+                    <Kbd>Ctrl</Kbd>
+                    <span>+</span>
+                    <Kbd>C</Kbd>
+                  </KbdGroup>
                 </TooltipContent>
               </Tooltip>
             )}
@@ -433,8 +450,16 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
                     <CopyPlus size={16} />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                <TooltipContent
+                  side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
                   Duplicate
+                  <KbdGroup>
+                    <Kbd>Ctrl</Kbd>
+                    <span>+</span>
+                    <Kbd>D</Kbd>
+                  </KbdGroup>
                 </TooltipContent>
               </Tooltip>
             )}
@@ -452,8 +477,16 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
                     <Scissors size={16} />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+                <TooltipContent
+                  side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
                   Cut
+                  <KbdGroup>
+                    <Kbd>Ctrl</Kbd>
+                    <span>+</span>
+                    <Kbd>X</Kbd>
+                  </KbdGroup>
                 </TooltipContent>
               </Tooltip>
             )}
@@ -469,8 +502,16 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
                   <ClipboardPaste size={16} />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+              <TooltipContent
+                side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                className={"flex gap-2 items-center"}
+              >
                 Paste
+                <KbdGroup>
+                  <Kbd>Ctrl</Kbd>
+                  <span>+</span>
+                  <Kbd>V</Kbd>
+                </KbdGroup>
               </TooltipContent>
             </Tooltip>
 
@@ -487,8 +528,11 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
                     <Trash size={16} />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
-                  Delete
+                <TooltipContent
+                  side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
+                  Delete <Kbd>Del</Kbd>
                 </TooltipContent>
               </Tooltip>
             )}
@@ -504,8 +548,11 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
                   {isMarkerActive ? <IconRemoveMarker size={16} /> : <IconAddMarker size={16} />}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
-                {isMarkerActive ? "Remove marker" : "Add marker"}
+              <TooltipContent
+                side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                className={"flex gap-2 items-center"}
+              >
+                {isMarkerActive ? "Remove marker" : "Add marker"} <Kbd>M</Kbd>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -530,8 +577,11 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
                   {isFull ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
-                {isFull ? "Minimize" : "Maximize"}
+              <TooltipContent
+                side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+                className={"flex gap-2 items-center"}
+              >
+                {isFull ? "Minimize" : "Maximize"} <Kbd>`</Kbd>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -596,8 +646,16 @@ const ZoomControl = ({
               <ZoomOut size={16} />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+          <TooltipContent
+            side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+            className={"flex gap-2 items-center"}
+          >
             Zoom out
+            <KbdGroup>
+              <Kbd>Ctrl</Kbd>
+              <span>+</span>
+              <Kbd>-</Kbd>
+            </KbdGroup>
           </TooltipContent>
         </Tooltip>
 
@@ -623,8 +681,16 @@ const ZoomControl = ({
               <ZoomIn size={16} />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+          <TooltipContent
+            side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+            className={"flex gap-2 items-center"}
+          >
             Zoom in
+            <KbdGroup>
+              <Kbd>Ctrl</Kbd>
+              <span>+</span>
+              <Kbd>+</Kbd>
+            </KbdGroup>
           </TooltipContent>
         </Tooltip>
 
@@ -634,8 +700,16 @@ const ZoomControl = ({
               <Fullscreen size={16} />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side={isFull ? "bottom" : "top"} align="center" sideOffset={1}>
+          <TooltipContent
+            side={isFull ? "bottom" : "top"} align="center" sideOffset={1}
+            className={"flex gap-2 items-center"}
+          >
             Zoom to fit
+            <KbdGroup>
+              <Kbd>Shift</Kbd>
+              <span>+</span>
+              <Kbd>Z</Kbd>
+            </KbdGroup>
           </TooltipContent>
         </Tooltip>
       </div>
