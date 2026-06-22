@@ -31,7 +31,7 @@ import useLayoutStore from "./store/use-layout-store";
 import ControlItemHorizontal from "./control-item-horizontal";
 import { design } from "./mock";
 import { Separator } from "@/components/ui/separator";
-import {ArrowLeftToLine, ArrowRightToLine, Maximize, Volume2, VolumeOff} from "lucide-react";
+import {ArrowLeftToLine, ArrowRightToLine, Maximize, Minimize, Volume2, VolumeOff} from "lucide-react";
 import {frameToTimeString, timeToString} from "./utils/time";
 import {useCurrentPlayerFrame} from "@/features/editor/hooks/use-current-frame";
 import {Button} from "@/components/ui/button";
@@ -77,12 +77,17 @@ const IconPlayerPauseFilled = ({ size }: { size: number }) => (
 );
 
 const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
-  const { fps, duration, markers, timeline, scale } = useStore();
+  const { fps, duration, markers, timeline, scale, trackItemIds, muted, setMuted } = useStore();
   const currentFrame = useCurrentPlayerFrame(playerRef);
   const [playing, setPlaying] = useState(false);
   const timelineOffsetX = useTimelineOffsetX();
   const offsetX = TIMELINE_OFFSET_CANVAS_LEFT + timelineOffsetX;
   useUpdateAnsestors({ playing, playerRef });
+
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const sceneContainerRef = useRef<HTMLDivElement>(null);
+  const hideTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   useEffect(() => {
     const onPlay = () => setPlaying(true);
@@ -142,160 +147,203 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
     playerRef?.current?.seekTo(frame);
     scrollTimelineToFrame(frame, prevMarker ? "marker" : "start");
   };
-
   const handleJumpToNext = () => {
     const frame = nextMarker ? nextMarker.frame : durationFrames;
     playerRef?.current?.seekTo(frame);
     scrollTimelineToFrame(frame, nextMarker ? "marker" : "end");
   };
 
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  const handleMouseMove = () => {
+    setShowControls(true);
+    clearTimeout(hideTimeoutRef.current);
+    if (isFullscreen) {
+      hideTimeoutRef.current = setTimeout(() => setShowControls(false), 3000);
+    }
+  };
+
+  useEffect(() => {
+    return () => clearTimeout(hideTimeoutRef.current);
+  }, []);
+
+  const handleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      sceneContainerRef.current?.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
+  const handleMute = () => {
+    const newMuted = !muted;
+    playerRef?.current?.setVolume(newMuted ? 0 : 1);
+    setMuted(newMuted);
+  };
+
   return (
-    <div className="flex flex-col w-full h-full">
-        <div className="flex-1 relative overflow-hidden">
-          <CropModal />
-          <Scene ref={sceneRef} stateManager={stateManager} />
+    <div
+      ref={sceneContainerRef}
+      data-scene-container=""
+      className="flex flex-col w-full h-full"
+      onMouseMove={handleMouseMove}
+    >
+      <div className="flex-1 relative overflow-hidden">
+        <CropModal />
+        <Scene ref={sceneRef} stateManager={stateManager} />
+      </div>
+
+      <div className={cn(
+        "grid grid-cols-3 items-center p-2 pt-0 bg-card transition-opacity duration-300",
+        isFullscreen && " pt-2 absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-sm",
+        isFullscreen && !showControls && "opacity-0 pointer-events-none"
+      )}>
+        <div className="text-xs flex items-center gap-1 px-2">
+        <span
+          className="font-medium text-zinc-200"
+          id="video-current-time"
+          data-current-time={currentFrame / fps}
+        >
+          {frameToTimeString({ frame: currentFrame }, { fps })}
+        </span>
+          <span className="text-zinc-500">|</span>
+          <span className="text-muted-foreground">
+          {timeToString({ time: duration })}
+        </span>
         </div>
 
-        <div className="grid grid-cols-3 items-center p-2 pt-1 bg-card">
-          <div className="text-xs flex items-center gap-1 px-2">
-          <span
-            className="font-medium text-zinc-200"
-            id="video-current-time"
-            data-current-time={currentFrame / fps}
-          >
-            {frameToTimeString({ frame: currentFrame }, { fps })}
-          </span>
-            <span className="text-zinc-500">|</span>
-            <span className="text-muted-foreground">
-            {timeToString({ time: duration })}
-          </span>
-          </div>
+        <div className="flex justify-center gap-1">
+          <Tooltip delayDuration={10}>
+            <TooltipTrigger asChild>
+              <Button
+                className="hidden lg:inline-flex"
+                onClick={handleJumpToPrev}
+                disabled={currentFrame === 0}
+                variant={"ghost"}
+                size={"icon"}>
+                <ArrowLeftToLine size={14} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent
+              side={"bottom"} align="center" sideOffset={1}
+              className={"flex gap-2 items-center"}
+            >
+              {prevMarker ? (
+                <>
+                  Jump to last marker
+                  <KbdGroup>
+                    <Kbd>Ctrl</Kbd>
+                    <span>+</span>
+                    <Kbd>Shift</Kbd>
+                    <span>+</span>
+                    <Kbd>M</Kbd>
+                  </KbdGroup>
+                </>
+              ) : (
+                <>
+                  Jump to start <Kbd>Home</Kbd>
+                </>
+              )}
+            </TooltipContent>
+          </Tooltip>
 
-          <div className="flex justify-center gap-1">
-            <Tooltip delayDuration={10}>
-              <TooltipTrigger asChild>
-                <Button
-                  className="hidden lg:inline-flex"
-                  onClick={handleJumpToPrev}
-                  disabled={currentFrame === 0}
-                  variant={"ghost"}
-                  size={"icon"}>
-                  <ArrowLeftToLine size={14} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent
-                side={"bottom"} align="center" sideOffset={1}
-                className={"flex gap-2 items-center"}
-              >
-                {prevMarker ? (
-                  <>
-                    Jump to last marker
-                    <KbdGroup>
-                      <Kbd>Ctrl</Kbd>
-                      <span>+</span>
-                      <Kbd>Shift</Kbd>
-                      <span>+</span>
-                      <Kbd>M</Kbd>
-                    </KbdGroup>
-                  </>
-                ) : (
-                  <>
-                    Jump to start <Kbd>Home</Kbd>
-                  </>
-                )}
-              </TooltipContent>
-            </Tooltip>
+          <Tooltip delayDuration={10}>
+            <TooltipTrigger asChild>
+              <Button onClick={() => { playing ? handlePause() : handlePlay(); }} variant={"ghost"} size={"icon"}>
+                {playing ? <IconPlayerPauseFilled size={14} /> : <IconPlayerPlayFilled size={14} />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent
+              side={"bottom"} align="center" sideOffset={1}
+              className={"flex gap-2 items-center"}
+            >
+              {playing ? "Pause" : "Play"} <Kbd>Space</Kbd>
+            </TooltipContent>
+          </Tooltip>
 
-            <Tooltip delayDuration={10}>
-              <TooltipTrigger asChild>
-                <Button onClick={() => { playing ? handlePause() : handlePlay(); }} variant={"ghost"} size={"icon"}>
-                  {playing ? <IconPlayerPauseFilled size={14} /> : <IconPlayerPlayFilled size={14} />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent
-                side={"bottom"} align="center" sideOffset={1}
-                className={"flex gap-2 items-center"}
-              >
-                {playing ? "Pause" : "Play"} <Kbd>Space</Kbd>
-              </TooltipContent>
-            </Tooltip>
+          <Tooltip delayDuration={10}>
+            <TooltipTrigger asChild>
+              <Button
+                className="hidden lg:inline-flex"
+                onClick={handleJumpToNext}
+                disabled={currentFrame >= durationFrames}
+                variant={"ghost"}
+                size={"icon"}>
+                <ArrowRightToLine size={14} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent
+              side={"bottom"} align="center" sideOffset={1}
+              className={"flex gap-2 items-center"}
+            >
+              {nextMarker ? (
+                <>
+                  Jump to next marker
+                  <KbdGroup>
+                    <Kbd>Shift</Kbd>
+                    <span>+</span>
+                    <Kbd>M</Kbd>
+                  </KbdGroup>
+                </>
+              ) : (
+                <>
+                  Jump to end <Kbd>End</Kbd>
+                </>
+              )}
+            </TooltipContent>
+          </Tooltip>
+        </div>
 
-            <Tooltip delayDuration={10}>
-              <TooltipTrigger asChild>
-                <Button
-                  className="hidden lg:inline-flex"
-                  onClick={handleJumpToNext}
-                  disabled={currentFrame >= durationFrames}
-                  variant={"ghost"}
-                  size={"icon"}>
-                  <ArrowRightToLine size={14} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent
-                side={"bottom"} align="center" sideOffset={1}
-                className={"flex gap-2 items-center"}
-              >
-                {nextMarker ? (
-                  <>
-                    Jump to next marker
-                    <KbdGroup>
-                      <Kbd>Shift</Kbd>
-                      <span>+</span>
-                      <Kbd>M</Kbd>
-                    </KbdGroup>
-                  </>
-                ) : (
-                  <>
-                    Jump to end <Kbd>End</Kbd>
-                  </>
-                )}
-              </TooltipContent>
-            </Tooltip>
-          </div>
+        <div className="flex justify-end gap-1">
+          <Tooltip delayDuration={10}>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={handleMute}
+                disabled={trackItemIds.length === 0}
+                variant={"ghost"}
+                size={"icon"}>
+                {muted ? <VolumeOff size={16} /> : <Volume2 size={16} />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent
+              side={"bottom"} align="center" sideOffset={1}
+              className={"flex gap-2 items-center"}
+            >
+              {muted ? "Unmute" : "Mute"}
+              <KbdGroup>
+                <Kbd>Ctrl</Kbd>
+                <span>+</span>
+                <Kbd>M</Kbd>
+              </KbdGroup>
+            </TooltipContent>
+          </Tooltip>
 
-          <div className="flex justify-end gap-1">
-            <Tooltip delayDuration={10}>
-              <TooltipTrigger asChild>
-                <Button onClick={() => {}} variant={"ghost"} size={"icon"}>
-                  <Volume2 size={16} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent
-                side={"bottom"} align="center" sideOffset={1}
-                className={"flex gap-2 items-center"}
-              >
-                Mute
-                <KbdGroup>
-                  <Kbd>Ctrl</Kbd>
-                  <span>+</span>
-                  <Kbd>M</Kbd>
-                </KbdGroup>
-              </TooltipContent>
-            </Tooltip>
-
-            <Tooltip delayDuration={10}>
-              <TooltipTrigger asChild>
-                <Button onClick={() => {}} variant={"ghost"} size={"icon"}>
-                  <Maximize size={16} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent
-                side={"bottom"} align="center" sideOffset={1}
-                className={"flex gap-2 items-center"}
-              >
-                Full screen
-                <KbdGroup>
-                  <Kbd>Ctrl</Kbd>
-                  <span>+</span>
-                  <Kbd>Shift</Kbd>
-                  <span>+</span>
-                  <Kbd>F</Kbd>
-                </KbdGroup>
-              </TooltipContent>
-            </Tooltip>
-          </div>
+          <Tooltip delayDuration={10}>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={handleFullscreen}
+                disabled={trackItemIds.length === 0}
+                variant={"ghost"}
+                size={"icon"}>
+                {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent
+              side={"bottom"} align="center" sideOffset={1}
+              className={"flex gap-2 items-center"}
+            >
+              {isFullscreen ? "Exit full screen" : "Full screen"} <Kbd>F</Kbd>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
+    </div>
   );
 };
 

@@ -391,6 +391,26 @@ export function useKeyboardShortcuts(stateManager: StateManager) {
         playerRef?.current?.seekTo(lastFrame);
         scrollTimelineToFrame(lastFrame, "end");
       }
+
+      // fullscreen
+      if (!mod && !e.shiftKey && e.code === "KeyF") {
+        e.preventDefault();
+        if (!document.fullscreenElement) {
+          document.querySelector<HTMLElement>("[data-scene-container]")
+            ?.requestFullscreen();
+        } else {
+          document.exitFullscreen();
+        }
+      }
+
+      // mute preview
+      if (mod && !e.shiftKey && e.code === "KeyM") {
+        e.preventDefault();
+        const { playerRef, muted, setMuted } = useStore.getState();
+        const newMuted = !muted;
+        playerRef?.current?.setVolume(newMuted ? 0 : 1);
+        setMuted(newMuted);
+      }
     };
 
     window.addEventListener("keydown", handler);

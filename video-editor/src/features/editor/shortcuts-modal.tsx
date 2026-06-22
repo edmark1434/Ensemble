@@ -82,7 +82,7 @@ const SHORTCUTS: ShortcutCategory[] = [
   {
     title: "Canvas",
     items: [
-      { label: "Full screen", keys: ["Ctrl", "Shift", "F"], disabled: true },
+      { label: "Full screen", keys: ["F"], disabled: true },
       { label: "Mute preview", keys: ["Ctrl", "M"], disabled: true },
 
       { label: "Move up 1 px", keys: ["🡡"] },
