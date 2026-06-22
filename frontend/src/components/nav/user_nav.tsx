@@ -123,7 +123,7 @@ const UserNav: React.FC<UserNavProps> = () => {
              </button>
 
              {/* Navigation - Scrollable */}
-             <nav className="flex-1 overflow-y-visible px-3 py-5 scrollbar-thin">
+             <nav className="flex-1 overflow-y-auto px-3 py-5 scrollbar-thin">
                 {/* 1. Main Menu */}
                 <div>
                    {!isCollapsed && (
