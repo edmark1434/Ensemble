@@ -38,9 +38,12 @@ import {CreateJobWizard} from "@/pages/user/6_jobs/Job_Posting/CreateJobWizard.t
 
 import GigMarketplace from "@/pages/user/7_gigs/Gig_Posting/main.tsx";
 import {CreateGigWizard} from "@/pages/user/7_gigs/Gig_Posting/CreateGigWizard.tsx";
+
 import Verification from "@/pages/user/9_verification/Verification.tsx";
 
 import TransactionHistoryMain from "@/pages/user/11_transactionhistory/main.tsx";
+
+import UserProfilesList from "@/components/nav/user_profiles_list.tsx";
 
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
@@ -118,6 +121,7 @@ function App() {
           <Route path='/home' element={<Home />} />
             <Route path='/credits' element={<CreditShop />} />
             <Route path='/profile/:id?' element={<Profile />} />
+            <Route path='/search/user/:query' element={<UserProfilesList />} />
 
           <Route path='/projects' element={<Projects />} />
             <Route path='/projects/select' element={<Projects_Selection />} />
