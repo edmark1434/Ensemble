@@ -337,10 +337,6 @@ const BasicText = ({
 
   const components = [
     {
-      key: "textPreset",
-      component: <PresetText trackItem={trackItem} properties={properties} />
-    },
-    {
       key: "textControls",
       component: (
         <TextControls
@@ -394,7 +390,7 @@ const BasicText = ({
   ];
 
   return (
-    <div className="flex lg:h-[calc(100vh-84px)] flex-1 flex-col overflow-hidden min-h-[340px]">
+    <div className="flex h-full flex-1 flex-col overflow-hidden min-h-0">
       <ScrollArea className="h-full">
         <div className="flex flex-col gap-2 px-4 py-4">
           {components

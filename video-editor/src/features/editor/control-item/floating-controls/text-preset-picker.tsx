@@ -5,7 +5,7 @@ import { ITrackItem } from "@designcombo/types";
 import { CircleOff, XIcon } from "lucide-react";
 import useLayoutStore from "../../store/use-layout-store";
 import { useRef } from "react";
-import useClickOutside from "../../hooks/useClickOutside";
+import useClickOutside from "../../hooks/use-click-outside";
 import Draggable from "react-draggable";
 
 interface IBoxShadow {
@@ -22,6 +22,7 @@ interface ITextPreset {
   borderWidth: number;
   borderColor: string;
   boxShadow?: IBoxShadow;
+  fontWeight: string;
 }
 
 export const NONE_PRESET: ITextPreset = {
@@ -29,51 +30,58 @@ export const NONE_PRESET: ITextPreset = {
   color: "#ffffff",
   borderRadius: 0,
   borderWidth: 0,
-  borderColor: "transparent"
+  borderColor: "transparent",
+  fontWeight: "normal"
 };
 
 export const TEXT_PRESETS: ITextPreset[] = [
   {
     backgroundColor: "#000",
     color: "#fff",
-    borderRadius: 20,
+    borderRadius: 30,
     borderWidth: 0,
-    borderColor: "transparent"
+    borderColor: "transparent",
+    fontWeight: "bold"
   },
   {
     backgroundColor: "#fff",
     color: "#000",
-    borderRadius: 20,
+    borderRadius: 30,
     borderWidth: 0,
-    borderColor: "transparent"
+    borderColor: "transparent",
+    fontWeight: "bold"
   },
   {
     borderWidth: 12,
     borderColor: "#000",
     borderRadius: 0,
     backgroundColor: "transparent",
-    color: "#fff"
+    color: "#fff",
+    fontWeight: "bold"
   },
   {
     borderWidth: 12,
     borderColor: "#fff",
     borderRadius: 0,
     backgroundColor: "transparent",
-    color: "#000"
+    color: "#000",
+    fontWeight: "bold"
   },
   {
     backgroundColor: "#8120fd",
     color: "#fff",
-    borderRadius: 20,
+    borderRadius: 30,
     borderWidth: 0,
-    borderColor: "transparent"
+    borderColor: "transparent",
+    fontWeight: "bold"
   },
   {
     backgroundColor: "#ffde00",
     color: "#000",
-    borderRadius: 20,
+    borderRadius: 30,
     borderWidth: 0,
-    borderColor: "transparent"
+    borderColor: "transparent",
+    fontWeight: "bold"
   },
   {
     backgroundColor: "transparent",
@@ -81,7 +89,8 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderRadius: 10,
     borderWidth: 12,
     borderColor: "#0f1fac",
-    boxShadow: { color: "#0f1fac", x: -12, y: 12, blur: 0 }
+    boxShadow: { color: "#0f1fac", x: -12, y: 12, blur: 0 },
+    fontWeight: "bold"
   },
   {
     backgroundColor: "transparent",
@@ -89,14 +98,16 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderRadius: 10,
     borderWidth: 12,
     borderColor: "#000",
-    boxShadow: { color: "#000", x: -12, y: 12, blur: 0 }
+    boxShadow: { color: "#000", x: -12, y: 12, blur: 0 },
+    fontWeight: "bold"
   },
   {
     backgroundColor: "#000",
     color: "#6af1af",
-    borderRadius: 20,
+    borderRadius: 30,
     borderWidth: 0,
-    borderColor: "transparent"
+    borderColor: "transparent",
+    fontWeight: "bold"
   },
   {
     backgroundColor: "transparent",
@@ -104,7 +115,8 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderRadius: 10,
     borderWidth: 12,
     borderColor: "#dd4882",
-    boxShadow: { color: "#dd4882", x: 0, y: 0, blur: 100 }
+    boxShadow: { color: "#dd4882", x: 0, y: 0, blur: 100 },
+    fontWeight: "bold"
   },
   {
     backgroundColor: "transparent",
@@ -112,7 +124,8 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderRadius: 10,
     borderWidth: 0,
     borderColor: "transparent",
-    boxShadow: { color: "#5ed869", x: 8, y: 8, blur: 0 }
+    boxShadow: { color: "#5ed869", x: 8, y: 8, blur: 0 },
+    fontWeight: "bold"
   },
   {
     backgroundColor: "transparent",
@@ -120,21 +133,24 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderRadius: 10,
     borderWidth: 0,
     borderColor: "transparent",
-    boxShadow: { color: "#b12019", x: 8, y: 8, blur: 0 }
+    boxShadow: { color: "#b12019", x: 8, y: 8, blur: 0 },
+    fontWeight: "bold"
   },
   {
     backgroundColor: "transparent",
     color: "#eed955",
     borderRadius: 10,
     borderWidth: 12,
-    borderColor: "#000000"
+    borderColor: "#000000",
+    fontWeight: "bold"
   },
   {
     backgroundColor: "transparent",
     color: "#5ba2eb",
     borderRadius: 10,
     borderWidth: 12,
-    borderColor: "#ffffff"
+    borderColor: "#ffffff",
+    fontWeight: "bold"
   }
 ];
 

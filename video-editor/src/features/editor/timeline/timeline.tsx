@@ -209,7 +209,6 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
 
     canvas.onViewportChange((left: number) => {
       const computed = left + TIMELINE_OFFSET_CANVAS_LEFT + timelineOffsetX;
-      console.log("raw left:", left, "computed:", computed);
       setScrollLeft(Math.max(0, computed));
     });
 

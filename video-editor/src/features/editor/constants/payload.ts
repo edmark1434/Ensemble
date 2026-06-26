@@ -9,9 +9,9 @@ export const TEXT_ADD_PAYLOAD = {
   },
   type: "text",
   details: {
-    text: "New text",
+    text: "Text",
     fontSize: 120,
-    width: 800,
+    width: 600,
     fontUrl: DEFAULT_FONT.url,
     fontFamily: DEFAULT_FONT.postScriptName,
     color: "#ffffff",
@@ -24,6 +24,7 @@ export const TEXT_ADD_PAYLOAD = {
       x: 0,
       y: 0,
       blur: 0
-    }
+    },
+    fontWeight: "normal",
   }
 };

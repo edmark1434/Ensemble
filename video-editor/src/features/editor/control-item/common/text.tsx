@@ -50,26 +50,37 @@ export const TextControls = ({
   handleChangeOpacity
 }: TextControlsProps) => {
   return (
-    <div className="flex flex-col gap-2 py-4">
-      <Label className="font-sans text-xs font-semibold">Styles</Label>
-      <FontFamily
-        handleChangeFont={onChangeFontFamily}
-        fontFamilyDisplay={properties.fontFamilyDisplay}
-      />
+    <div className="flex flex-col gap-4">
+      <Label className="font-sans text-sm font-semibold">Typography</Label>
 
-      <FontStyle
-        selectedFont={selectedFont}
-        handleChangeFontStyle={handleChangeFontStyle}
-      />
-      <FontSize value={properties.fontSize} onChange={onChangeFontSize} />
-      <FontColor
-        value={properties.color}
-        handleColorChange={handleColorChange}
-      />
-      <FontBackground
-        value={properties.backgroundColor}
-        handleColorChange={handleBackgroundChange}
-      />
+      <div className="flex flex-col gap-2">
+        <FontFamily
+          handleChangeFont={onChangeFontFamily}
+          fontFamilyDisplay={properties.fontFamilyDisplay}
+        />
+
+        <div className="flex gap-2">
+          <FontStyle
+            selectedFont={selectedFont}
+            handleChangeFontStyle={handleChangeFontStyle}
+          />
+          <FontSize value={properties.fontSize} onChange={onChangeFontSize} />
+        </div>
+      </div>
+
+      <Label className="font-sans text-sm font-semibold pt-4">Fill</Label>
+
+      <div className="flex gap-2">
+        <FontColor
+          value={properties.color}
+          handleColorChange={handleColorChange}
+        />
+        <FontBackground
+          value={properties.backgroundColor}
+          handleColorChange={handleBackgroundChange}
+        />
+      </div>
+
       <Alignment value={properties.textAlign} onChange={onChangeTextAlign} />
       <TextDecoration
         value={properties.textDecoration}
@@ -111,18 +122,18 @@ const FontBackground = ({
   };
 
   return (
-    <div className="flex gap-2">
-      <div className="flex flex-1 items-center text-sm text-muted-foreground">
-        Fill
+    <div className="flex flex-col gap-2 flex-1">
+      <div className="flex flex-1 items-center text-xs text-muted-foreground">
+        Background
       </div>
       {isLargeScreen ? (
-        <div className="relative w-32">
+        <div className="relative w-full">
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
               <div className="relative">
                 <div
                   style={{ background: localValue || "#ffffff" }}
-                  className="absolute left-0.5 top-0.5 h-7 w-7 flex-none cursor-pointer rounded-md border border-border"
+                  className="absolute left-1 top-1 h-6 w-6 flex-none cursor-pointer rounded-md border border-border"
                 />
 
                 <Input
@@ -208,18 +219,18 @@ const FontColor = ({
   };
 
   return (
-    <div className="flex gap-2">
-      <div className="flex flex-1 items-center text-sm text-muted-foreground">
-        Color
+    <div className="flex flex-col gap-2 flex-1">
+      <div className="flex flex-1 items-center text-xs text-muted-foreground">
+        Text
       </div>
       {isLargeScreen ? (
-        <div className="relative w-32">
+        <div className="relative w-full">
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
               <div className="relative">
                 <div
                   style={{ background: localValue || "#ffffff" }}
-                  className="absolute left-0.5 top-0.5 h-7 w-7 flex-none cursor-pointer rounded-md border border-border"
+                  className="absolute left-1 top-1 h-6 w-6 flex-none cursor-pointer rounded-md border border-border"
                 />
 
                 <Input
@@ -307,11 +318,8 @@ const FontSize = ({
   };
 
   return (
-    <div className="flex gap-2">
-      <div className="flex flex-1 items-center text-sm text-muted-foreground">
-        Size
-      </div>
-      <div className="relative w-32">
+    <div className="flex gap-2 flex-1">
+      <div className="relative w-full">
         <Input
           className="h-8"
           value={localValue}
@@ -342,7 +350,7 @@ const FontFamily = ({
   fontFamilyDisplay: string;
 }) => {
   const isLargeScreen = useIsLargeScreen();
-  const { setFloatingControl, trackItem } = useLayoutStore();
+  const { setFloatingControl, trackItem, floatingControl } = useLayoutStore();
   const { compactFonts } = useDataState();
   const [value, setValue] = useState("");
   const [fonts, setFonts] = useState<ICompactFont[]>(compactFonts);
@@ -355,15 +363,12 @@ const FontFamily = ({
 
   return (
     <div className="flex gap-2">
-      <div className="flex flex-1 items-center text-sm text-muted-foreground">
-        Font
-      </div>
       {isLargeScreen ? (
-        <div className="relative w-32">
+        <div className="relative w-full">
           <Button
-            className="flex h-8 w-32 items-center justify-between text-sm"
+            className="flex h-8 w-full items-center justify-between text-sm"
             variant="secondary"
-            onClick={() => setFloatingControl("font-family-picker")}
+            onClick={() => setFloatingControl(floatingControl === "font-family-picker" ? "" : "font-family-picker")}
           >
             <div className="w-full overflow-hidden text-left">
               <p className="truncate">{fontFamilyDisplay}</p>
@@ -437,11 +442,11 @@ const FontStyle = ({
   handleChangeFontStyle: (font: IFont) => void;
 }) => {
   return (
-    <div className="flex gap-2">
-      <div className="flex flex-1 items-center text-sm text-muted-foreground">
-        Weight
-      </div>
-      <div className="relative w-32">
+    <div className="flex gap-2 flex-1">
+      {/*<div className="flex flex-1 items-center text-sm text-muted-foreground">*/}
+      {/*  Weight*/}
+      {/*</div>*/}
+      <div className="relative w-full">
         <Popover>
           <PopoverTrigger asChild>
             <Button

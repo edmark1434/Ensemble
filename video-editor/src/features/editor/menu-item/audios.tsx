@@ -3,13 +3,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { dispatch } from "@designcombo/events";
 import { ADD_AUDIO, ADD_ITEMS } from "@designcombo/state";
 import { IAudio } from "@designcombo/types";
-import { Loader2, Music, Music2, Search } from "lucide-react";
-import React, { useCallback, useEffect, useState } from "react";
+import {Loader2, Music, Music2, Pause, Play, Search} from "lucide-react";
+import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import { generateId } from "@designcombo/timeline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { debounce } from "lodash";
-import { AudioItem } from "./audio-item";
+import {useIsDraggingOverTimeline} from "@/features/editor/hooks/is-dragging-over-timeline";
 
 export const Audios = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -189,16 +189,144 @@ export const Audios = () => {
         {hasMore && uniqueResults.length > 0 && (
           <div className="py-4 flex justify-center">
             <Button
+              size="sm"
+              variant="outline"
               onClick={loadMore}
               disabled={isMoreLoading}
-              className="bg-primary/60 hover:bg-primary/80"
             >
-              {isMoreLoading && <Loader2 className="animate-spin" size={12} />}
-              Load More
+              {isMoreLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                "Load more"
+              )}
             </Button>
           </div>
         )}
       </ScrollArea>
     </div>
+  );
+};
+
+const AudioItem = ({
+   item,
+   onAdd,
+   playingId,
+   setPlayingId
+}: {
+  item: Partial<IAudio>;
+  onAdd: (payload: Partial<IAudio>) => void;
+  playingId: string | null;
+  setPlayingId: (id: string | null) => void;
+}) => {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [duration, setDuration] = useState<string>("--:--");
+  const isPlaying = playingId === item.id;
+  const isDraggingOverTimeline = useIsDraggingOverTimeline();
+
+  useEffect(() => {
+    if (isPlaying) {
+      audioRef.current?.play();
+    } else {
+      audioRef.current?.pause();
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+      }
+    }
+  }, [isPlaying]);
+
+  const togglePlay = () => {
+    if (isPlaying) {
+      setPlayingId(null);
+    } else {
+      setPlayingId(item.id!);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      const seconds = Math.round(audioRef.current.duration);
+      const min = Math.floor(seconds / 60);
+      const sec = seconds % 60;
+      setDuration(`${min}:${sec.toString().padStart(2, "0")}`);
+    }
+  };
+
+  const style = useMemo(
+    () => ({
+      backgroundImage:
+        "url(https://cdn.designcombo.dev/thumbnails/music-preview.png)",
+      backgroundSize: "cover",
+      width: "120px",
+      height: "120px",
+      border: "1px solid var(--primary)",
+      borderRadius: "6px"
+    }),
+    []
+  );
+
+  return (
+    <Draggable
+      data={item}
+      renderCustomPreview={<div style={style} />}
+      shouldDisplayPreview={!isDraggingOverTimeline}
+    >
+      <div className="group relative flex items-center gap-3 p-2 bg-secondary rounded-md border hover:opacity-80 transition-colors">
+        <audio
+          ref={audioRef}
+          src={item.details?.src}
+          onEnded={() => setPlayingId(null)}
+          onLoadedMetadata={handleLoadedMetadata}
+          className="hidden"
+        />
+
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 rounded-full bg-black/10 dark:bg-white/5 hover:bg-black/15 dark:hover:bg-white/10 shrink-0"
+          onClick={togglePlay}
+        >
+          {isPlaying ? (
+            <Pause className="size-4 fill-current" />
+          ) : (
+            <Play className="size-4 fill-current ml-0.5" />
+          )}
+        </Button>
+
+        <div
+          onClick={() => onAdd(item)}
+          className="flex flex-col min-w-0 flex-1 cursor-pointer"
+        >
+          <span className="text-sm font-medium truncate mb-0.5 text-zinc-900 dark:text-zinc-300">
+            {item.name}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {item.metadata?.author && `${item.metadata.author} · `}{duration}
+          </span>
+        </div>
+
+        {isPlaying && (
+          <div className="flex items-end gap-[2px] h-4 shrink-0">
+            {[...Array(5)].map((_, i) => (
+              <span
+                key={i}
+                className="w-[3px] bg-primary rounded-full"
+                style={{
+                  height: "100%",
+                  animationName: "wave-bar",
+                  animationDelay: `${i * 0.15}s`,
+                  animationDuration: "0.8s",
+                  animationIterationCount: "infinite",
+                  animationTimingFunction: "ease-in-out",
+                  display: "inline-block",
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </Draggable>
   );
 };

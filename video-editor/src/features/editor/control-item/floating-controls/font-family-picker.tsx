@@ -1,15 +1,27 @@
-import { useRef, useState } from "react";
-import useDataState from "../../store/use-data-state";
-import { SearchIcon, X } from "lucide-react";
+import React, { useRef, useState } from "react";
+import { X, SearchIcon, Loader2, ChevronDown } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import Draggable from "react-draggable";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import useLayoutStore from "../../store/use-layout-store";
-import useClickOutside from "../../hooks/useClickOutside";
+import useClickOutside from "../../hooks/use-click-outside";
 import { ICompactFont, IFont } from "../../interfaces/editor";
 import { loadFonts } from "../../utils/fonts";
 import { dispatch } from "@designcombo/events";
 import { EDIT_OBJECT } from "@designcombo/state";
 import { ITrackItem } from "@designcombo/types";
+import { useGoogleFonts, FontCategory } from "../../hooks/use-google-fonts";
+import { getDefaultFont, itemToFonts } from "../../utils/fetch-google-fonts";
+
+// ---------------------------------------------------------------------------
+// Font change handler (kept export-compatible with old signature for callers
+// that import onChangeFontFamily directly)
+// ---------------------------------------------------------------------------
 
 export const onChangeFontFamily = async (
   font: ICompactFont,
@@ -18,82 +30,226 @@ export const onChangeFontFamily = async (
   const fontName = font.default.postScriptName;
   const fontUrl = font.default.url;
 
-  await loadFonts([
-    {
-      name: fontName,
-      url: fontUrl
-    }
-  ]);
+  await loadFonts([{ name: fontName, url: fontUrl }]);
 
   dispatch(EDIT_OBJECT, {
     payload: {
       [trackItem?.id as string]: {
         details: {
           fontFamily: fontName,
-          fontUrl: fontUrl
-        }
-      }
-    }
+          fontUrl: fontUrl,
+        },
+      },
+    },
   });
 };
+
+// Internal handler that works directly with IFont (from the new fetch layer)
+const applyFont = async (font: IFont, trackItem: ITrackItem) => {
+  await loadFonts([{ name: font.postScriptName, url: font.url }]);
+
+  dispatch(EDIT_OBJECT, {
+    payload: {
+      [trackItem.id as string]: {
+        details: {
+          fontFamily: font.postScriptName,
+          fontUrl: font.url,
+        },
+      },
+    },
+  });
+};
+
+// ---------------------------------------------------------------------------
+// Category labels
+// ---------------------------------------------------------------------------
+
+const CATEGORY_LABELS: Record<FontCategory, string> = {
+  "sans-serif": "Sans",
+  serif: "Serif",
+  display: "Display",
+  handwriting: "Script",
+  monospace: "Mono",
+};
+
+// ---------------------------------------------------------------------------
+// Font preview — renders the family name in the actual font via a style tag
+// ---------------------------------------------------------------------------
+
+const FontPreviewRow = ({
+                          family,
+                          onClick,
+                        }: {
+  family: string;
+  onClick: () => void;
+}) => {
+  const safeId = family.replace(/\s+/g, "-").toLowerCase();
+
+  return (
+    <>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}&display=swap');`}</style>
+      <div
+        id={safeId}
+        onClick={onClick}
+        className="cursor-pointer px-3 py-2 rounded hover:bg-zinc-800/50 transition-colors"
+      >
+        <span
+          style={{ fontFamily: `"${family}", sans-serif`, fontSize: "15px" }}
+          className="leading-none"
+        >
+          {family}
+        </span>
+      </div>
+    </>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export default function FontFamilyPicker() {
-  const { compactFonts } = useDataState();
-  const [search, setSearch] = useState("");
   const { setFloatingControl, trackItem } = useLayoutStore();
-
-  const filteredFonts = compactFonts.filter((font) =>
-    font.family.toLowerCase().includes(search.toLowerCase())
-  );
-
   const floatingRef = useRef<HTMLDivElement>(null);
-  useClickOutside(floatingRef as React.RefObject<HTMLElement>, () =>
-    setFloatingControl("")
-  );
+  const [categoryOpen, setCategoryOpen] = useState(false);
+
+  const {
+    visibleItems,
+    loading,
+    error,
+    filteredCount,
+    hasMore,
+    loadMore,
+    search,
+    setSearch,
+    category,
+    setCategory,
+    availableCategories,
+  } = useGoogleFonts();
+
+  const handleSelectFont = async (family: string) => {
+    if (!trackItem) return;
+
+    const font = getDefaultFont(
+      visibleItems.find((item) => item.family === family) ?? {
+        family,
+        category: "sans-serif",
+        subsets: [],
+        tags: [],
+        variants: [{ variant: "regular", url: "" }],
+      }
+    );
+
+    await applyFont(font, trackItem);
+  };
+
+  const selectedCategoryLabel =
+    category ? (CATEGORY_LABELS[category] ?? category) : "All";
 
   return (
     <div
       ref={floatingRef}
-      className="absolute left-full top-2 z-200 ml-2 w-56 bg-card p-0 border"
+      className="w-xs bg-card border flex flex-col rounded-lg"
     >
-      <div className="handle flex cursor-grab justify-between px-2 py-4">
+      {/* Header */}
+      <div className="handle flex cursor-grab justify-between items-center p-4">
         <p className="text-sm font-bold">Fonts</p>
-        <div className="h-4 w-4" onClick={() => setFloatingControl("")}>
-          <X className="h-4 w-4 cursor-pointer font-extrabold text-muted-foreground" />
-        </div>
-      </div>
-      <div className="flex items-center p-2">
-        <SearchIcon className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search font..."
-          className="w-full rounded-md bg-transparent p-1 text-sm text-muted-foreground outline-none"
+        <X
+          className="h-4 w-4 cursor-pointer text-muted-foreground"
+          onClick={() => setFloatingControl("")}
         />
       </div>
-      <ScrollArea className="h-[400px] w-full py-2">
-        {filteredFonts.length > 0 ? (
-          filteredFonts.map((font, index) => (
-            <div
-              key={index}
-              onClick={() => {
-                if (trackItem) {
-                  onChangeFontFamily(font, trackItem);
-                }
-              }}
-              className="cursor-pointer px-2 py-1 hover:bg-zinc-800/50"
+
+      {/* Search */}
+      <div className="relative px-4">
+        <SearchIcon className="absolute left-7 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Search fonts..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
+      {/* Category filter */}
+      {availableCategories.length > 0 && (
+        <div className="px-4 mt-3">
+          <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                className="flex h-8 w-full items-center justify-between text-sm"
+                variant="secondary"
+              >
+                <div className="w-full overflow-hidden text-left">
+                  <p className="truncate">{selectedCategoryLabel}</p>
+                </div>
+                <ChevronDown className="text-muted-foreground" size={14} />
+              </Button>
+            </PopoverTrigger>
+
+            <PopoverContent
+              className="z-[200] p-0 py-1"
+              style={{ width: "var(--radix-popover-trigger-width)" }}
             >
-              <img
-                style={{ filter: "invert(100%)" }}
-                src={font.default.preview}
-                alt={font.family}
-              />
-            </div>
-          ))
-        ) : (
-          <p className="py-2 text-center text-sm text-muted-foreground">
-            No font found
+              {/* "All" option */}
+              <div
+                onClick={() => {
+                  setCategory(null);
+                  setCategoryOpen(false);
+                }}
+                className="flex h-8 cursor-pointer items-center px-3 text-sm text-zinc-200 hover:bg-zinc-800/50"
+              >
+                All
+              </div>
+
+              {availableCategories.map((cat) => (
+                <div
+                  key={cat}
+                  onClick={() => {
+                    setCategory(cat);
+                    setCategoryOpen(false);
+                  }}
+                  className="flex h-8 cursor-pointer items-center px-3 text-sm text-zinc-200 hover:bg-zinc-800/50"
+                >
+                  {CATEGORY_LABELS[cat] ?? cat}
+                </div>
+              ))}
+            </PopoverContent>
+          </Popover>
+        </div>
+      )}
+
+      {/* List */}
+      <ScrollArea className="h-[400px] w-full px-4 mt-4">
+        {loading ? (
+          <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Loading fonts...</span>
+          </div>
+        ) : error ? (
+          <p className="py-4 text-center text-sm text-red-500">{error}</p>
+        ) : visibleItems.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            No fonts found
           </p>
+        ) : (
+          <>
+            {visibleItems.map((item) => (
+              <FontPreviewRow
+                key={item.family}
+                family={item.family}
+                onClick={() => handleSelectFont(item.family)}
+              />
+            ))}
+
+            {hasMore && (
+              <div className="flex justify-center py-4">
+                <Button size="sm" variant="outline" onClick={loadMore}>
+                  Load more
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </ScrollArea>
     </div>

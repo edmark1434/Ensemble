@@ -6,7 +6,7 @@ import { ITrackItem, ITrackItemsMap } from "@designcombo/types";
 import { CircleOff, XIcon } from "lucide-react";
 import useLayoutStore from "../../store/use-layout-store";
 import { useEffect, useRef, useState } from "react";
-import useClickOutside from "../../hooks/useClickOutside";
+import useClickOutside from "../../hooks/use-click-outside";
 import useStore from "../../store/use-store";
 import { groupBy } from "lodash";
 import { loadFonts } from "../../utils/fonts";

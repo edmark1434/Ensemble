@@ -6,7 +6,7 @@ import useStore from "../../store/use-store";
 import { Animation, presets } from "../../player/animated";
 import React, { useRef } from "react";
 import useLayoutStore from "../../store/use-layout-store";
-import useClickOutside from "../../hooks/useClickOutside";
+import useClickOutside from "../../hooks/use-click-outside";
 import { Easing } from "remotion";
 import { PresetName } from "../../player/animated/presets";
 import { ScrollArea } from "@/components/ui/scroll-area";
