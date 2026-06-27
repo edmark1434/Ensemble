@@ -1,4 +1,4 @@
-import { Gem, LayoutDashboard, ShoppingBag, Ticket } from "lucide-react";
+import { Gem, LayoutDashboard, ShieldAlert, ShoppingBag, Ticket } from "lucide-react";
 import type { ComponentType } from "react";
 import { NavLink } from "react-router-dom";
 
@@ -12,6 +12,7 @@ const navItems: NavItem[] = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/moderator/marketplace" },
   { label: "Marketplace Control", icon: ShoppingBag, to: "/moderator/marketplace/marketplace-control" },
   { label: "Ticket Management", icon: Ticket, to: "/moderator/marketplace/ticket-management" },
+  { label: "Restrictions", icon: ShieldAlert, to: "/moderator/marketplace/restrictions" },
 ];
 
 const navClassName = (isActive: boolean) =>

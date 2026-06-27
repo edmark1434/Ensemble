@@ -1,7 +1,14 @@
-const { getDB } = require('../lib/mongodb');
+const { getMongoClient } = require('../lib/mongodb');
 const { ObjectId } = require('mongodb');
-const db = getDB();
-const forumDiscussionsCollection = db.collection('forum_discussions');
+
+function getForumDiscussionsCollection() {
+    const client = getMongoClient();
+    if (!client) {
+        throw new Error('MongoDB is not connected. Set MONGODB_URI in backend/.env to use forum features.');
+    }
+    return client.db('ensemble').collection('forum_discussions');
+}
+
 async function createForumDiscussionRepositories(discussionPayload = {}) {
     try {
         const result = await getForumDiscussionsCollection().insertOne(discussionPayload);
@@ -14,7 +21,7 @@ async function createForumDiscussionRepositories(discussionPayload = {}) {
 
 async function getForumDiscussionByGroupId(groupId) {
     try {
-        return await forumDiscussionsCollection.find({ forum_group_id: groupId }).toArray();
+        return await getForumDiscussionsCollection().find({ forum_group_id: groupId }).toArray();
     } catch (err) {
         console.error('Error fetching forum discussion by group ID:', err);
         throw err;
@@ -23,7 +30,7 @@ async function getForumDiscussionByGroupId(groupId) {
 
 async function getForumDiscussionById(discussionId) {
     try {
-        return await forumDiscussionsCollection.findOne({ _id: new ObjectId(discussionId) });
+        return await getForumDiscussionsCollection().findOne({ _id: new ObjectId(discussionId) });
     } catch (err) {
         console.error('Error fetching forum discussion by ID:', err);
         throw err;
@@ -41,7 +48,7 @@ async function getForumDiscussionsByUserId(userId) {
 
 async function updateForumDiscussion(discussionId, updateFields = {}) {
     try {
-        const result = await forumDiscussionsCollection.updateOne(
+        const result = await getForumDiscussionsCollection().updateOne(
             { _id: new ObjectId(discussionId) },
             updateFields
         );
@@ -54,7 +61,7 @@ async function updateForumDiscussion(discussionId, updateFields = {}) {
 
 async function updateForumDiscussionComments({ discussionId, commentId, updateFields = {} }) {
     try {
-        const result = await forumDiscussionsCollection.updateOne(
+        const result = await getForumDiscussionsCollection().updateOne(
             { _id: new ObjectId(discussionId), 'comments.comment_id': commentId,},
             updateFields
         );
@@ -67,7 +74,7 @@ async function updateForumDiscussionComments({ discussionId, commentId, updateFi
 
 async function addForumDiscussionCommentRepository(discussionId, commentPayload = {}) {
     try {
-        const result = await forumDiscussionsCollection.updateOne(
+        const result = await getForumDiscussionsCollection().updateOne(
             { _id: new ObjectId(discussionId) },
             {
                 $push: { comments: commentPayload },
@@ -84,7 +91,7 @@ async function addForumDiscussionCommentRepository(discussionId, commentPayload 
 
 async function getForumDiscussionByDiscussionIdAndCommentId(discussionId, commentId) {
     try {
-        const discussion = await forumDiscussionsCollection.findOne(
+        const discussion = await getForumDiscussionsCollection().findOne(
             { 'comments.user_id': userId, 'comments.comment_id': commentId }
         );
         return discussion;

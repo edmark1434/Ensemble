@@ -202,7 +202,7 @@ function formatRoleLabel(role) {
     'Support Moderator': 'Support',
     'Jobs N Gigs Moderator': 'Jobs & Gigs',
     'Forum Moderator': 'Forum',
-    'Dispute Moderator': 'Disputes',
+    'Marketplace Moderator': 'Marketplace',
   };
   return labels[role] || role;
 }
