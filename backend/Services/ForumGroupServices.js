@@ -4,6 +4,7 @@ const {
     getAllForumGroups,
     getForumGroupsByMemberId,
     updateForumGroupRepositories,
+    updateForumGroupMembers,
     deleteForumGroupRepositories,
 } = require('../Repositories/ForumGroupRepositories');
 const dotenv = require('dotenv');
@@ -63,6 +64,14 @@ async function updateForumGroupServices(groupId, updatePayload) {
     return await updateForumGroupRepositories(groupId, updatePayload);
 }
 
+async function updateForumGroupMembersServices(groupId, updatePayload) {
+    dataValidation({ groupId }, 'update');
+    if(!updatePayload || updatePayload.length === 0){
+        throw new Error('Update payload is required to update group members');
+    }
+    return await updateForumGroupMembers(groupId, updatePayload);
+}
+
 async function deleteForumGroupServices(groupId) {
     dataValidation({ groupId }, 'update');
     return await deleteForumGroupRepositories(groupId);
@@ -74,5 +83,6 @@ module.exports = {
     listForumGroupsByMemberId,
     getForumGroup,
     updateForumGroupServices,
+    updateForumGroupMembersServices,
     deleteForumGroupServices,
 }

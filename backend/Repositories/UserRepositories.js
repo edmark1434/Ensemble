@@ -22,6 +22,16 @@ async function getUserById(userId) {
     }
 }
 
+async function getNameByUserId(userId) {
+    try {
+        const result = await pool.query('SELECT first_name, last_name FROM users WHERE user_id = $1', [userId]);
+        return result.rows[0];
+    } catch (err) {
+        console.error(`Error fetching name for user with id ${userId}:`, err);
+        throw err;
+    }
+}
+
 async function getUserByListofIdsRepositories(userIds) { 
     try {
         const {rows} = await pool.query('SELECT json_agg(user_data) as users_list FROM (SELECT user_id,first_name, last_name,a.avatar_file_id FROM users inner join accounts as a on users.account_id = a.account_id WHERE user_id = ANY($1)) as user_data', [userIds]);
@@ -34,7 +44,7 @@ async function getUserByListofIdsRepositories(userIds) {
 
 // Create a new user in the database with the provided details and return the created user
 async function createUser({
-    accountId = null,
+    account_id = null,
     firstName = null,
     lastName = null,
     emailAddress,
@@ -54,7 +64,7 @@ async function createUser({
             VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING user_id, first_name, last_name, email_address, firebase_user_uuid`,
             [
-                accountId,
+                account_id,
                 firstName,
                 lastName,
                 emailAddress,
@@ -205,5 +215,7 @@ module.exports = {
     getEmailandPasswordHashByEmail,
     getEmailandPasswordHashByUsername,
     updateFirebaseUserUuid,
-    getUserByIdFromAccountId
+    getUserByIdFromAccountId,
+    getUserByListofIdsRepositories,
+    getNameByUserId
 };

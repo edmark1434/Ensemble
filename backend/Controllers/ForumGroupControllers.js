@@ -4,6 +4,7 @@ const {
     listForumGroupsByMemberId,
     getForumGroup,
     updateForumGroupServices,
+    updateForumGroupMembersServices,
     deleteForumGroupServices,
 } = require('../Services/ForumGroupServices');
 
@@ -69,6 +70,19 @@ async function updateForumGroupController(req, res) {
     }
 }
 
+async function updateForumGroupMembersController(req, res){
+    const user_id =  req.session?.userId || req.body.user_id;
+
+    try{
+        const result = await updateForumGroupMembersServices(req.params.groupId, {userId: user_id, joined_at: new Date(), role: 'Member'});
+        res.status(200).json({ message: 'Forum group members updated successfully', result });
+    }
+    catch(err){
+        console.error('Error updating forum group members:', err);
+        res.status(400).json({ error: err.message });
+    }
+}
+
 async function deleteForumGroupController(req, res) {
     try {
         const result = await deleteForumGroupServices(req.params.groupId);
@@ -85,5 +99,6 @@ module.exports = {
     getForumGroupsByMemberIdController,
     getForumGroupByIdController,
     updateForumGroupController,
+    updateForumGroupMembersController,
     deleteForumGroupController,
 }

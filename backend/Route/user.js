@@ -11,7 +11,8 @@ const {
     LogoutUsers,
     getCurrentUser,
     CheckUserRole,
-    getUsersByListOfIdsController
+    getUsersByListOfIdsController,
+    getNameByUserIdController
 } = require('../controllers/UserControllers');
 
 router.get('/', [checkSession, requireAuth], getAllUsers);
@@ -31,5 +32,7 @@ router.get('/check-user-role', [checkSession, requireAuth], CheckUserRole);
 router.get('/:email', [checkSession, requireAuth], getUserByEmail);
 
 router.post('/list-of-details',[checkSession, requireAuth], getUsersByListOfIdsController);
+
+router.get('/name/:userId', [checkSession, requireAuth], getNameByUserIdController);
 
 module.exports = router;
