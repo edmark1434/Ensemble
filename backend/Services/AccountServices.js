@@ -118,5 +118,6 @@ module.exports = {
     getAccountWalletService,
     getProfileServices,
     getAccountLinkByAccountIdService,
-    checkUserAccountIdService
+    checkUserAccountIdService,
+    checkAccountIdService
 };

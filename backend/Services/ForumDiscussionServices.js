@@ -7,8 +7,14 @@ const {
     updateForumDiscussionComments,
     addForumDiscussionCommentRepository,
     getForumDiscussionByDiscussionIdAndCommentId,
+    getForumDiscussionSavedByUserId,
+    deleteForumDiscussion,
 } = require('../Repositories/ForumDiscussionRepositories');
+const { getDB } = require('../lib/mongodb');
+const { ObjectId } = require('mongodb');
+const db = getDB();
 
+const forumDiscussionsCollection = db.collection('forum_discussions');
 const discussionPayload = {
     forum_group_id: null,
     user_id: null,
@@ -360,7 +366,7 @@ async function updateForumDiscussionServices(discussionId, payload = {}) {
         }
         
         // Handle ATTACHMENTS - add/remove
-        else if (field === 'attachments') {
+        else if (field === 'images') {
             if (value.action === 'remove' && value.file_path) {
                 pullFields.attachments = { file_path: value.file_path };
             } else if (value.action === 'remove-multiple' && Array.isArray(value.file_paths)) {
@@ -720,6 +726,20 @@ async function addForumDiscussionCommentServices(discussionId, payload = {}) {
     return await addForumDiscussionCommentRepository(discussionId, commentPayload);
 }
 
+async function getForumDiscussionSavedByUserIdServices(userId) {
+    if (!userId) {
+        throw new Error('userId is required');
+    }
+    return await getForumDiscussionSavedByUserId(userId);
+}
+
+async function deleteForumDiscussionServices(discussionId) {
+    if (!discussionId) {
+        throw new Error('discussionId is required');
+    }
+    return await deleteForumDiscussion(discussionId);
+}
+
 module.exports = {
     discussionPayload,
     discussionValidation,
@@ -730,4 +750,6 @@ module.exports = {
     updateForumDiscussionServices,
     updateForumDiscussionCommentsServices,
     addForumDiscussionCommentServices,
+    getForumDiscussionSavedByUserIdServices,
+    deleteForumDiscussionServices
 };

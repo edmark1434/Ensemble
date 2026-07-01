@@ -41,15 +41,15 @@ async function getAccountWalletController(req, res) {
     }
 
     try {
-        const cachedData = await redisClient.get(`account_wallet:${account_id}:${type}`);
+        // const cachedData = await redisClient.get(`account_wallet:${account_id}:${type}`);
         
-        if (cachedData) {
-            return res.status(200).json({
-                success: true,
-                message: 'Wallet fetched successfully',
-                wallet: JSON.parse(cachedData),
-            });
-        }
+        // if (cachedData) {
+        //     return res.status(200).json({
+        //         success: true,
+        //         message: 'Wallet fetched successfully',
+        //         wallet: JSON.parse(cachedData),
+        //     });
+        // }
 
         const wallet = await getAccountWalletService(account_id, type);
         if (!wallet) {

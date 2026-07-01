@@ -10,6 +10,7 @@ const {
     getEmailandPasswordHashByUsername,
     updateFirebaseUserUuid,
     getUserByListofIdsRepositories,
+    getNameByUserId
 } = require('../Repositories/UserRepositories');
 const {
     createAccount,
@@ -179,7 +180,7 @@ async function registerUser(signupPayload = {}) {
 
     //create the user in the database with the associated account ID and return the created user information along with the account ID
     const user = await createUser({
-        accountId: account.account_id,
+        account_id: account.account_id,
         firstName,
         lastName,
         emailAddress,
@@ -192,7 +193,7 @@ async function registerUser(signupPayload = {}) {
             userId: user.user_id,
             email: user.email_address,
             username: account.handle,
-            accountId: account.account_id,
+            account_id: account.account_id,
             displayName: account.display_name,
             type: account.type
         },
@@ -351,6 +352,9 @@ async function getCredentials(loginIdentifier){
     return credentials;
 }
 
+async function getNameByUserIdServices(userId) {
+    return await getNameByUserId(userId);
+}
 
 module.exports = {
     ServiceError,
@@ -363,5 +367,6 @@ module.exports = {
     createSessionId,
     logout,
     getCredentials,
-    getUsersByListOfIdsServices
+    getUsersByListOfIdsServices,
+    getNameByUserIdServices
 };
