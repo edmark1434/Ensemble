@@ -98,8 +98,30 @@ export const fetchAllFontItems = async (): Promise<GoogleFontApiItem[]> => {
  * Returns a flat list of IFont objects for a given family item.
  * Useful when you need to load a specific family's variants.
  */
+const WEIGHT_ORDER: Record<string, number> = {
+  "100": 1,
+  "200": 2,
+  "300": 3,
+  "400": 4,
+  "500": 5,
+  "600": 6,
+  "700": 7,
+  "800": 8,
+  "900": 9,
+};
+
+const variantWeight = (variant: string): number => {
+  const match = variant.match(/^(\d+)/);
+  if (match) return WEIGHT_ORDER[match[1]] ?? 99;
+  if (variant === "regular") return WEIGHT_ORDER["400"];
+  if (variant === "italic") return WEIGHT_ORDER["400"] + 0.5;
+  return 99;
+};
+
 export const itemToFonts = (item: GoogleFontApiItem): IFont[] =>
-  item.variants.map((variant) => toIFont(item, variant));
+  [...item.variants]
+    .sort((a, b) => variantWeight(a.variant) - variantWeight(b.variant))
+    .map((variant) => toIFont(item, variant));
 
 /**
  * Gets the default (Regular or first available) IFont for a family item.

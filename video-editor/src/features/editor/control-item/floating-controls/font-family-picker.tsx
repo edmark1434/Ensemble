@@ -17,6 +17,7 @@ import { EDIT_OBJECT } from "@designcombo/state";
 import { ITrackItem } from "@designcombo/types";
 import { useGoogleFonts, FontCategory } from "../../hooks/use-google-fonts";
 import { getDefaultFont, itemToFonts } from "../../utils/fetch-google-fonts";
+import useDataState from "@/features/editor/store/use-data-state";
 
 // ---------------------------------------------------------------------------
 // Font change handler (kept export-compatible with old signature for callers
@@ -77,9 +78,9 @@ const CATEGORY_LABELS: Record<FontCategory, string> = {
 // ---------------------------------------------------------------------------
 
 const FontPreviewRow = ({
-                          family,
-                          onClick,
-                        }: {
+  family,
+  onClick,
+}: {
   family: string;
   onClick: () => void;
 }) => {
@@ -130,17 +131,27 @@ export default function FontFamilyPicker() {
   const handleSelectFont = async (family: string) => {
     if (!trackItem) return;
 
-    const font = getDefaultFont(
-      visibleItems.find((item) => item.family === family) ?? {
-        family,
-        category: "sans-serif",
-        subsets: [],
-        tags: [],
-        variants: [{ variant: "regular", url: "" }],
-      }
-    );
+    const item = visibleItems.find((item) => item.family === family) ?? {
+      family,
+      category: "sans-serif",
+      subsets: [],
+      tags: [],
+      variants: [{ variant: "regular", url: "" }],
+    };
 
-    await applyFont(font, trackItem);
+    const styles = itemToFonts(item);
+    const defaultFont = getDefaultFont(item);
+
+    const { fonts, compactFonts, setFonts, setCompactFonts } = useDataState.getState();
+
+    if (!fonts.some((f) => f.postScriptName === defaultFont.postScriptName)) {
+      setFonts([...fonts, ...styles]);
+    }
+    if (!compactFonts.some((f) => f.family === item.family)) {
+      setCompactFonts([...compactFonts, { family: item.family, styles, default: defaultFont }]);
+    }
+
+    await applyFont(defaultFont, trackItem);
   };
 
   const selectedCategoryLabel =
@@ -177,7 +188,7 @@ export default function FontFamilyPicker() {
           <Popover open={categoryOpen} onOpenChange={setCategoryOpen}>
             <PopoverTrigger asChild>
               <Button
-                className="flex h-8 w-full items-center justify-between text-sm"
+                className="flex w-full items-center justify-between text-sm"
                 variant="secondary"
               >
                 <div className="w-full overflow-hidden text-left">
@@ -188,7 +199,7 @@ export default function FontFamilyPicker() {
             </PopoverTrigger>
 
             <PopoverContent
-              className="z-[200] p-0 py-1"
+              className="z-[200] p-0"
               style={{ width: "var(--radix-popover-trigger-width)" }}
             >
               {/* "All" option */}
@@ -197,7 +208,7 @@ export default function FontFamilyPicker() {
                   setCategory(null);
                   setCategoryOpen(false);
                 }}
-                className="flex h-8 cursor-pointer items-center px-3 text-sm text-zinc-200 hover:bg-zinc-800/50"
+                className="flex cursor-pointer items-center px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
               >
                 All
               </div>
@@ -209,7 +220,7 @@ export default function FontFamilyPicker() {
                     setCategory(cat);
                     setCategoryOpen(false);
                   }}
-                  className="flex h-8 cursor-pointer items-center px-3 text-sm text-zinc-200 hover:bg-zinc-800/50"
+                  className="flex cursor-pointer items-center px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
                 >
                   {CATEGORY_LABELS[cat] ?? cat}
                 </div>

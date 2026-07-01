@@ -1,9 +1,10 @@
-import { FC, useEffect, useState } from "react";
+import React, { FC, useEffect, useState } from "react";
 import tinycolor from "tinycolor2";
 import { checkFormat } from "./utils";
-import { getAlphaValue, onlyDigits, onlyLatins } from "./helpers";
+import { getAlphaValue, onlyDigits, onlyHex } from "./helpers";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 import { Input } from "../ui/input";
+import {Button} from "@/components/ui/button";
 
 interface IChange {
   hex: string;
@@ -42,7 +43,7 @@ const InputRgba: FC<TProps> = ({
   const onChangeHex = (hex: string) => {
     setColor({
       ...color,
-      hex
+      hex: hex.toUpperCase()
     });
   };
 
@@ -60,7 +61,7 @@ const InputRgba: FC<TProps> = ({
       }
     } else {
       setColor({
-        hex,
+        hex: hex.toUpperCase(),
         alpha
       });
       onChange({
@@ -72,7 +73,7 @@ const InputRgba: FC<TProps> = ({
 
   useEffect(() => {
     setColor({
-      hex,
+      hex: hex.toUpperCase(),
       alpha
     });
   }, [hex, alpha]);
@@ -80,41 +81,42 @@ const InputRgba: FC<TProps> = ({
   return (
     <div
       style={{
-        gridTemplateColumns: "5fr 2fr"
+        gridTemplateColumns: "4fr 2fr"
       }}
       className="grid gap-2"
     >
       <div className="relative">
-        <Popover>
-          <PopoverTrigger className="absolute left-3 top-0 flex h-full items-center gap-1 border-r border-black/15 pr-2 text-sm font-medium">
-            Hex
-            <svg
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="4"
-              viewBox="0 0 48 48"
-              aria-hidden="true"
-              focusable="false"
-              width={12}
-              className="text-muted-foreground"
-            >
-              <path d="M39.6 17.443 24.043 33 8.487 17.443" />
-            </svg>
-          </PopoverTrigger>
-          <PopoverContent className="w-16">
-            <div>Hex</div>
-          </PopoverContent>
-        </Popover>
+        {/*<Popover>*/}
+        {/*  <PopoverTrigger className="absolute left-3 top-0 flex h-full items-center gap-1 border-r border-black/15 pr-2 text-sm font-medium">*/}
+        {/*    Hex*/}
+        {/*    <svg*/}
+        {/*      fill="none"*/}
+        {/*      stroke="currentColor"*/}
+        {/*      strokeWidth="4"*/}
+        {/*      viewBox="0 0 48 48"*/}
+        {/*      aria-hidden="true"*/}
+        {/*      focusable="false"*/}
+        {/*      width={12}*/}
+        {/*      className="text-muted-foreground"*/}
+        {/*    >*/}
+        {/*      <path d="M39.6 17.443 24.043 33 8.487 17.443" />*/}
+        {/*    </svg>*/}
+        {/*  </PopoverTrigger>*/}
+        {/*  <PopoverContent className="w-16">*/}
+        {/*    <div>Hex</div>*/}
+        {/*  </PopoverContent>*/}
+        {/*</Popover>*/}
         <Input
           value={color.hex}
-          onChange={(e) => onChangeHex(onlyLatins(e.target.value))}
+          onChange={(e) => onChangeHex(onlyHex(e.target.value))}
           onBlur={onHandleSubmit}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               onHandleSubmit();
             }
           }}
-          className="pl-[70px]"
+          className="px-3"
+          // className="pl-[70px]"
         />
       </div>
       <div className="relative">
@@ -127,11 +129,15 @@ const InputRgba: FC<TProps> = ({
               onHandleSubmit();
             }
           }}
-          className="pl-2"
+          className="px-3"
         />
-        <div className="pointer-events-none absolute bottom-0 right-3 top-0 flex w-2.5 items-center justify-center pt-0.5">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="pointer-events-none absolute right-2 top-1/2 h-6 w-6 -translate-y-1/2 p-0 text-muted-foreground"
+        >
           %
-        </div>
+        </Button>
       </div>
     </div>
   );

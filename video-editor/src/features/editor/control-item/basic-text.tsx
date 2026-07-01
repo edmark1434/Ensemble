@@ -24,10 +24,26 @@ interface ITextControlProps {
   opacityDisplay: string;
   textAlign: string;
   textDecoration: string;
+  textDecorationLines: string;
+  textDecorationColor: string;
   borderWidth: number;
   borderColor: string;
   opacity: number;
   boxShadow: IBoxShadow;
+}
+
+const DECORATION_LINE_VALUES = ["underline", "overline", "line-through"];
+
+function splitTextDecoration(raw: string | undefined): { lines: string; color: string } {
+  const tokens = (raw || "").trim().split(/\s+/).filter(Boolean);
+  const lines = tokens.filter((t) => DECORATION_LINE_VALUES.includes(t)).join(" ");
+  const color = tokens.find((t) => t.startsWith("#")) ?? "";
+  return { lines, color };
+}
+
+function joinTextDecoration(lines: string, color: string): string {
+  const parts = [lines, color].filter(Boolean);
+  return parts.length > 0 ? parts.join(" ") : "none";
 }
 
 const getStyleNameFromFontName = (fontName: string) => {
@@ -38,6 +54,48 @@ const getStyleNameFromFontName = (fontName: string) => {
   return styleName;
 };
 
+// outside the component
+const resolveFontFromDetails = (
+  details: (ITrackItem & IText)["details"],
+  fonts: IFont[],
+  compactFonts: ICompactFont[]
+): ICompactFont | undefined => {
+  const fontFamily = details.fontFamily || DEFAULT_FONT.postScriptName;
+  const currentFont = fonts.find((font) => font.postScriptName === fontFamily);
+  if (!currentFont) return undefined;
+
+  const matched = compactFonts.find((font) => font.family === currentFont.family);
+  if (!matched) return undefined;
+
+  return { ...matched, name: getStyleNameFromFontName(currentFont.postScriptName) };
+};
+
+const getPropertiesFromDetails = (
+  details: (ITrackItem & IText)["details"],
+  fontFamilyDisplay?: string
+): ITextControlProps => {
+  const opacity = details.opacity ?? 1;
+  const { lines, color } = splitTextDecoration(details.textDecoration);
+  return {
+    color: details.color || "#ffffff",
+    colorDisplay: details.color || "#ffffff",
+    backgroundColor: details.backgroundColor || "transparent",
+    fontSize: details.fontSize || 62,
+    fontSizeDisplay: `${details.fontSize || 62}px`,
+    fontFamily: details.fontFamily,
+    fontFamilyDisplay: fontFamilyDisplay || details.fontFamily,
+    opacity,
+    opacityDisplay: `${opacity}%`,
+    textAlign: details.textAlign || "left",
+    textDecoration: details.textDecoration || "none",
+    textDecorationLines: lines,
+    textDecorationColor: color,
+    borderWidth: details.borderWidth || 0,
+    borderColor: details.borderColor || "#000000",
+    boxShadow: details.boxShadow || { color: "#000000", x: 0, y: 0, blur: 0 },
+  };
+};
+
 const BasicText = ({
   trackItem,
   type
@@ -46,78 +104,29 @@ const BasicText = ({
   type?: string;
 }) => {
   const showAll = !type;
-  const [properties, setProperties] = useState<ITextControlProps>({
-    color: "#000000",
-    colorDisplay: "#000000",
-    backgroundColor: "transparent",
-    fontSize: 12,
-    fontSizeDisplay: "12px",
-    fontFamily: "Open Sans",
-    fontFamilyDisplay: "Open Sans",
-    opacity: 1,
-    opacityDisplay: "100%",
-    textAlign: "left",
-    textDecoration: "none",
-    borderWidth: 0,
-    borderColor: "#000000",
-    boxShadow: {
-      color: "#000000",
-      x: 0,
-      y: 0,
-      blur: 0
-    }
-  });
+  const { compactFonts, fonts } = useDataState(); // moved above the useStates
 
-  const [selectedFont, setSelectedFont] = useState<ICompactFont>({
-    family: "Open Sans",
-    styles: [],
-    default: DEFAULT_FONT,
-    name: "Regular"
-  });
-  const { compactFonts, fonts } = useDataState();
+  const initialFont =
+    resolveFontFromDetails(trackItem.details, fonts, compactFonts) ?? {
+      family: DEFAULT_FONT.family,
+      styles: [],
+      default: DEFAULT_FONT,
+      name: "Regular"
+    };
+
+  const [selectedFont, setSelectedFont] = useState<ICompactFont>(initialFont);
+
+  const [properties, setProperties] = useState<ITextControlProps>(() =>
+    getPropertiesFromDetails(trackItem.details, initialFont.family)
+  );
 
   useEffect(() => {
-    const fontFamily =
-      trackItem.details.fontFamily || DEFAULT_FONT.postScriptName;
-    const currentFont = fonts.find(
-      (font) => font.postScriptName === fontFamily
-    );
+    const resolved = resolveFontFromDetails(trackItem.details, fonts, compactFonts);
+    if (!resolved) return;
 
-    if (!currentFont) return;
-
-    const selectedFont = compactFonts.find(
-      (font) => font.family === currentFont?.family
-    );
-
-    if (!selectedFont) return;
-
-    setSelectedFont({
-      ...selectedFont,
-      name: getStyleNameFromFontName(currentFont.postScriptName)
-    });
-
-    setProperties({
-      color: trackItem.details.color || "#ffffff",
-      colorDisplay: trackItem.details.color || "#ffffff",
-      backgroundColor: trackItem.details.backgroundColor || "transparent",
-      fontSize: trackItem.details.fontSize || 62,
-      fontSizeDisplay: `${trackItem.details.fontSize || 62}px`,
-      fontFamily: selectedFont?.family || "Open Sans",
-      fontFamilyDisplay: selectedFont?.family || "Open Sans",
-      opacity: trackItem.details.opacity || 1,
-      opacityDisplay: `${trackItem.details.opacity.toString() || "100"}%`,
-      textAlign: trackItem.details.textAlign || "left",
-      textDecoration: trackItem.details.textDecoration || "none",
-      borderWidth: trackItem.details.borderWidth || 0,
-      borderColor: trackItem.details.borderColor || "#000000",
-      boxShadow: trackItem.details.boxShadow || {
-        color: "#000000",
-        x: 0,
-        y: 0,
-        blur: 0
-      }
-    });
-  }, [trackItem.id]);
+    setSelectedFont(resolved);
+    setProperties(getPropertiesFromDetails(trackItem.details, resolved.family));
+  }, [trackItem.details]);
 
   const handleChangeFontStyle = async (font: IFont) => {
     const fontName = font.postScriptName;
@@ -193,7 +202,7 @@ const BasicText = ({
         ...prev,
         opacity: v
       } as ITextControlProps;
-    }); // Update local state
+    });
   };
 
   const onChangeBoxShadow = (boxShadow: IBoxShadow) => {
@@ -318,20 +327,27 @@ const BasicText = ({
     });
   };
 
-  const onChangeTextDecoration = (v: string) => {
-    setProperties({
-      ...properties,
-      textDecoration: v
-    });
-
+  const onChangeTextDecorationLines = (v: string) => {
+    const combined = joinTextDecoration(v, properties.textDecorationColor);
+    setProperties((prev) => ({
+      ...prev,
+      textDecoration: combined,
+      textDecorationLines: v
+    } as ITextControlProps));
     dispatch(EDIT_OBJECT, {
-      payload: {
-        [trackItem.id]: {
-          details: {
-            textDecoration: v
-          }
-        }
-      }
+      payload: { [trackItem.id]: { details: { textDecoration: combined } } }
+    });
+  };
+
+  const onChangeTextDecorationColor = (v: string) => {
+    const combined = joinTextDecoration(properties.textDecorationLines, v);
+    setProperties((prev) => ({
+      ...prev,
+      textDecoration: combined,
+      textDecorationColor: v
+    } as ITextControlProps));
+    dispatch(EDIT_OBJECT, {
+      payload: { [trackItem.id]: { details: { textDecoration: combined } } }
     });
   };
 
@@ -349,7 +365,8 @@ const BasicText = ({
           handleColorChange={handleColorChange}
           handleBackgroundChange={handleBackgroundChange}
           onChangeTextAlign={onChangeTextAlign}
-          onChangeTextDecoration={onChangeTextDecoration}
+          onChangeTextDecorationLines={onChangeTextDecorationLines}
+          onChangeTextDecorationColor={onChangeTextDecorationColor}
           handleChangeOpacity={handleChangeOpacity}
         />
       )

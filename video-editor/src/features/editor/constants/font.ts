@@ -1,3 +1,4 @@
+// dont use this anymore
 export const DEFAULT_FONT = {
   id: "font_outfit_default",
   family: "Outfit",

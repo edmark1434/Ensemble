@@ -43,6 +43,7 @@ import {useKeyboardShortcuts} from './hooks/use-keyboard-shortcuts'
 import {timeMsToUnits} from "@designcombo/timeline";
 import {useTimelineOffsetX} from "@/features/editor/hooks/use-timeline-offset";
 import {Kbd, KbdGroup} from "@/components/ui/kbd";
+import {seedDefaultFont} from "@/features/editor/utils/seed-default-font";
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -492,6 +493,10 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
         url: SECONDARY_FONT_URL,
       },
     ]);
+  }, []);
+
+  useEffect(() => {
+    seedDefaultFont().then(r => {});
   }, []);
 
   const handleTimelineResize = () => {

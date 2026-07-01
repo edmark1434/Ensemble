@@ -14,6 +14,9 @@ export const onlyDigits = (string: string) => {
   return string ? string.substring(0, 3).replace(/[^\d]/g, "") : ""; // Replaced substr with substring
 };
 
-export const onlyLatins = (string: string) => {
-  return string ? string.substring(0, 7) : string;
+export const onlyHex = (string: string) => {
+  if (!string) return string;
+  return string.startsWith("#")
+    ? string.substring(0, 7)
+    : string.substring(0, 6);
 };
