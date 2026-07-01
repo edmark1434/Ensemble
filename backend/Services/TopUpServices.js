@@ -230,10 +230,10 @@ async function processTopUpPaymentByCards(req, res) {
 },
 
         success_return_url:
-            "https://heavy-rules-hope.loca.lt/credits?success",
+            "https://cork-zero-spyglass.ngrok-free.dev/credits?success",
 
         cancel_return_url:
-            "https://heavy-rules-hope.loca.lt/credits?cancel",
+            "https://cork-zero-spyglass.ngrok-free.dev/credits?cancel",
 
     };
 
