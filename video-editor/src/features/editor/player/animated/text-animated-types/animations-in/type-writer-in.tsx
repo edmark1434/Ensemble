@@ -41,24 +41,32 @@ export default function TypeWriterIn({
   return (
     <div
       style={{
-        textAlign: "center"
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        textAlign: "center",
+        whiteSpace: "pre-line",
+        width: style.width,
+        height: style.height,
+        overflow: "hidden",
       }}
     >
-      <span
-        style={{
-          fontSize: style.fontSize
-        }}
-      >
-        {visibleText}
-      </span>
+    <span
+      style={{
+        fontSize: style.fontSize,
+      }}
+    >
+      {visibleText}
+    </span>
       <span
         style={{
           color: "#60a5fa",
-          opacity: frame % 15 < 7 ? 1 : 0
+          opacity: frame % 15 < 7 ? 1 : 0,
         }}
       >
-        |
-      </span>
+      |
+    </span>
     </div>
   );
 }

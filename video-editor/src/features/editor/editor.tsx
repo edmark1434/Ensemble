@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/resizable";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { getCompactFontData, loadFonts } from "./utils/fonts";
-import {SECONDARY_FONT, SECONDARY_FONT_URL, TIMELINE_OFFSET_CANVAS_LEFT} from "./constants/constants";
+import {TIMELINE_OFFSET_CANVAS_LEFT} from "./constants/constants";
 import MenuList from "./menu-list";
 import { ControlItem } from "./control-item";
 import { MenuItem } from "./menu-item";
@@ -484,15 +484,6 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
   useEffect(() => {
     setCompactFonts(getCompactFontData(FONTS));
     setFonts(FONTS);
-  }, []);
-
-  useEffect(() => {
-    loadFonts([
-      {
-        name: SECONDARY_FONT,
-        url: SECONDARY_FONT_URL,
-      },
-    ]);
   }, []);
 
   useEffect(() => {

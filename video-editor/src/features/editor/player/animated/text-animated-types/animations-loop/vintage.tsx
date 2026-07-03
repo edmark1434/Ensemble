@@ -13,6 +13,8 @@ const Vintage = ({
   details: {
     fontSize: number;
     color: string;
+    width: number;
+    height: number;
   };
   fps: number;
 }) => {
@@ -27,8 +29,8 @@ const Vintage = ({
   return (
     <div
       style={{
-        width: "100%",
-        height: "100%",
+        width: details.width,
+        height: details.height,
         position: "relative"
       }}
     >
@@ -42,7 +44,9 @@ const Vintage = ({
             key={i}
             style={{
               position: "absolute",
-              transform: `translate(${dx * 4}px, ${dy * 4}px)`,
+              top: "50%",
+              left: "50%",
+              transform: `translate(-50%, -50%) translate(${dx * 4}px, ${dy * 4}px)`,
               fontWeight: "bold",
               fontSize: details.fontSize,
               zIndex: i,

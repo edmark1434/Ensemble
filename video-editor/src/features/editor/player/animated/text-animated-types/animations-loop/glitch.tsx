@@ -1,13 +1,27 @@
-const GlitchText = ({ text, frame }: { text: string; frame: number }) => {
+import {ITextDetails} from "@designcombo/types";
+
+const GlitchText = ({
+  text,
+  frame,
+  details,
+}: {
+  text: string;
+  frame: number;
+  details: ITextDetails;
+}) => {
   const glitchIntensity = Math.sin(frame / 10) * 10;
   const rgbOffset = Math.sin(frame / 5) * 10;
 
   return (
-    <span
+    <div
       style={{
-        display: "inline-block",
+        width: details.width,
+        height: details.height,
         position: "relative",
-        opacity: 0.8
+        opacity: 0.8,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
       }}
     >
       <div
@@ -33,7 +47,7 @@ const GlitchText = ({ text, frame }: { text: string; frame: number }) => {
       <div style={{ color: "white" }}>
         <span style={{ paddingInline: "10px" }}>{text}</span>
       </div>
-    </span>
+    </div>
   );
 };
 

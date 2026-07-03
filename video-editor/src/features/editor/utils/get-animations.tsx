@@ -28,21 +28,23 @@ export const getAnimations = (
   let animationTimed = null;
   if (animation?.in) {
     animationIn = [];
-    animation.in.composition.forEach((comp) => {
-      if (animation.in.name.includes("slide")) {
-        animationIn.push(getSlideAnimation(animation.in.name, comp, item));
-      } else {
-        animationIn.push({
-          property: comp.property,
-          from: comp.from,
-          to: comp.to,
-          durationInFrames: comp.durationInFrames,
-          ease: Easing[comp.easing as keyof typeof Easing] as (
-            t: number
-          ) => number
-        });
-      }
-    });
+    if (animation.in?.name) {
+      animation.in.composition.forEach((comp) => {
+        if (animation.in.name.includes("slide")) {
+          animationIn.push(getSlideAnimation(animation.in.name, comp, item));
+        } else {
+          animationIn.push({
+            property: comp.property,
+            from: comp.from,
+            to: comp.to,
+            durationInFrames: comp.durationInFrames,
+            ease: Easing[comp.easing as keyof typeof Easing] as (
+              t: number
+            ) => number
+          });
+        }
+      });
+    }
   }
   if (animation?.out) {
     animationOut = [];

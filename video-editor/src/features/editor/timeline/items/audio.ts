@@ -11,7 +11,6 @@ import {
 } from "@remotion/media-utils";
 import { IMetadata, ITrim } from "@designcombo/types";
 import { createAudioControls } from "../controls";
-import { SECONDARY_FONT } from "../../constants/constants";
 
 const MAX_CANVAS_WIDTH = 12000; // Keep canvas size reasonable
 const CANVAS_SAFE_DRAWING = 2000;
@@ -24,6 +23,10 @@ interface AudioProps extends TrimmableProps {
   metadata?: { name?: string; [key: string]: any };
   volume: number;
 }
+
+const getUIFont = () =>
+  getComputedStyle(document.body).getPropertyValue("--font-outfit").trim() ||
+  "sans-serif";
 
 class Audio extends Trimmable {
   static type = "Audio";
@@ -154,7 +157,7 @@ class Audio extends Trimmable {
   public drawTextIdentity(ctx: CanvasRenderingContext2D) {
     ctx.save();
     ctx.translate(-this.width / 2, -this.height / 2);
-    ctx.font = `400 12px ${SECONDARY_FONT}`;
+    ctx.font = `400 12px ${getUIFont()}`;
     ctx.fillStyle = "rgba(255, 255, 255,1)";
     ctx.textAlign = "left";
     ctx.clip();

@@ -2,7 +2,7 @@ import { ITextDetails, ITrackItem } from "@designcombo/types";
 
 export const createPreviewDetails = (width: number, height: number): ITextDetails =>
   ({
-    text: "oten",
+    text: "Text",
     fontSize: 32,
     width,
     height,

@@ -31,7 +31,8 @@ export const Animations = ({ properties, trackItem }: PresetTextProps) => {
 const SelectaAnimation = ({ trackItem }: { trackItem: ITrackItem & IText }) => {
   const { setFloatingControl, setAnimationPickerInitialTab } = useLayoutStore();
   const isLargeScreen = useIsLargeScreen();
-  const { activeIds, trackItemsMap } = useStore();
+  const activeIds = useStore((state) => state.activeIds);
+  const trackItemsMap = useStore((state) => state.trackItemsMap);
   const {
     inDuration,
     outDuration,
@@ -39,8 +40,11 @@ const SelectaAnimation = ({ trackItem }: { trackItem: ITrackItem & IText }) => {
     maxValues,
     handleInChange,
     handleOutChange,
-    handleLoopChange
   } = useAnimationDuration();
+
+  const currentItem = trackItemsMap[activeIds[0]];
+  const hasInAnimation = !!currentItem?.animations?.in;
+  const hasOutAnimation = !!currentItem?.animations?.out;
 
   const [inputIn, setInputIn] = useState(
     String(formatearNumero(inDuration / 1000))
@@ -61,20 +65,6 @@ const SelectaAnimation = ({ trackItem }: { trackItem: ITrackItem & IText }) => {
   useEffect(() => {
     setInputOut(String(formatearNumero(outDuration / 1000)));
   }, [outDuration]);
-
-  const handleDurationInput = (
-    value: string,
-    setLocal: (v: string) => void,
-    max: number,
-    onChange: (duration: number) => void
-  ) => {
-    setLocal(value);
-    if (value === "") return;
-    const seconds = Number(value);
-    if (Number.isNaN(seconds) || seconds < 0) return;
-    const ms = Math.min(seconds * 1000, Math.max(0, max));
-    onChange(ms);
-  };
 
   const openPicker = (tab: "in" | "out" | "loop") => {
     setAnimationPickerInitialTab(tab);
@@ -104,7 +94,6 @@ const SelectaAnimation = ({ trackItem }: { trackItem: ITrackItem & IText }) => {
   );
 
   const getAnimationLabel = (type: "in" | "out" | "loop") => {
-    const currentItem = trackItemsMap[activeIds[0]];
     const presetKey = currentItem?.animations?.[type]?.name;
     if (!presetKey) return "None";
     return presets[presetKey as keyof typeof presets]?.name ?? "None";
@@ -117,7 +106,7 @@ const SelectaAnimation = ({ trackItem }: { trackItem: ITrackItem & IText }) => {
           <div className="flex gap-2">
             <div className="flex flex-col gap-2 flex-1">
               <div className="flex flex-1 items-center text-xs text-muted-foreground">
-                In Animation
+                In
               </div>
               <div className="relative w-full">
                 <Button
@@ -132,44 +121,20 @@ const SelectaAnimation = ({ trackItem }: { trackItem: ITrackItem & IText }) => {
                 </Button>
               </div>
             </div>
-            <DurationInputSlider
-              label="In Duration"
-              valueMs={inDuration}
-              maxMs={maxValues.in}
-              onChangeMs={handleInChange}
-            />
+            {hasInAnimation && (
+              <DurationInputSlider
+                label="Duration"
+                valueMs={inDuration}
+                maxMs={maxValues.in}
+                onChangeMs={handleInChange}
+              />
+            )}
           </div>
 
           <div className="flex gap-2">
             <div className="flex flex-col gap-2 flex-1">
               <div className="flex flex-1 items-center text-xs text-muted-foreground">
-                Loop Animation
-              </div>
-              <div className="relative w-full">
-                <Button
-                  className="flex w-full items-center justify-between text-sm"
-                  variant="secondary"
-                  onClick={() => openPicker("loop")}
-                >
-                  <div className="w-full text-left">
-                    <p className="truncate">{getAnimationLabel("loop")}</p>
-                  </div>
-                  <ChevronDown className="text-muted-foreground" size={14} />
-                </Button>
-              </div>
-            </div>
-            <DurationInputSlider
-              label="Loop Duration"
-              valueMs={loopDuration}
-              maxMs={maxValues.loop}
-              onChangeMs={handleLoopChange}
-            />
-          </div>
-
-          <div className="flex gap-2">
-            <div className="flex flex-col gap-2 flex-1">
-              <div className="flex flex-1 items-center text-xs text-muted-foreground">
-                Out Animation
+                Out
               </div>
               <div className="relative w-full">
                 <Button
@@ -184,12 +149,34 @@ const SelectaAnimation = ({ trackItem }: { trackItem: ITrackItem & IText }) => {
                 </Button>
               </div>
             </div>
-            <DurationInputSlider
-              label="Out Duration"
-              valueMs={outDuration}
-              maxMs={maxValues.out}
-              onChangeMs={handleOutChange}
-            />
+            {hasOutAnimation && (
+              <DurationInputSlider
+                label="Duration"
+                valueMs={outDuration}
+                maxMs={maxValues.out}
+                onChangeMs={handleOutChange}
+              />
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            <div className="flex flex-col gap-2 flex-1">
+              <div className="flex flex-1 items-center text-xs text-muted-foreground">
+                Loop
+              </div>
+              <div className="relative w-full">
+                <Button
+                  className="flex w-full items-center justify-between text-sm"
+                  variant="secondary"
+                  onClick={() => openPicker("loop")}
+                >
+                  <div className="w-full text-left">
+                    <p className="truncate">{getAnimationLabel("loop")}</p>
+                  </div>
+                  <ChevronDown className="text-muted-foreground" size={14} />
+                </Button>
+              </div>
+            </div>
           </div>
         </>
       ) : (

@@ -15,14 +15,13 @@ export const AnimationDuration = ({
     maxValues,
     handleInChange,
     handleOutChange,
-    handleLoopChange
   } = useAnimationDuration();
 
   return (
     <div className="flex flex-col gap-3 p-4">
       {activeTab === "in" && item?.animations?.in && (
         <DurationInputSlider
-          label="Animation In Duration"
+          label="Duration"
           valueMs={inDuration}
           maxMs={maxValues.in}
           onChangeMs={handleInChange}
@@ -30,18 +29,10 @@ export const AnimationDuration = ({
       )}
       {activeTab === "out" && item?.animations?.out && (
         <DurationInputSlider
-          label="Animation Out Duration"
+          label="Duration"
           valueMs={outDuration}
           maxMs={maxValues.out}
           onChangeMs={handleOutChange}
-        />
-      )}
-      {activeTab === "loop" && item?.animations?.loop && (
-        <DurationInputSlider
-          label="Animation Loop Duration"
-          valueMs={loopDuration}
-          maxMs={maxValues.loop}
-          onChangeMs={handleLoopChange}
         />
       )}
     </div>

@@ -1,10 +1,10 @@
-import { X } from "lucide-react";
+import {Ban, X} from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ADD_ANIMATION } from "@designcombo/state";
+import {ADD_ANIMATION, EDIT_OBJECT} from "@designcombo/state";
 import { dispatch } from "@designcombo/events";
 import useStore from "../../store/use-store";
 import { Animation, presets } from "../../player/animated";
-import React, {useEffect, useRef, useState} from "react";
+import React, {useEffect, useMemo, useRef, useState} from "react";
 import useLayoutStore from "../../store/use-layout-store";
 import useClickOutside from "../../hooks/use-click-outside";
 import { Easing } from "remotion";
@@ -20,8 +20,29 @@ export const createPresetButtons = (
   activeIds: string[],
   animationType: "text" | "media",
   trackItemsMap: any
-) =>
-  Object.keys(presets)
+) => {
+  const currentItem = trackItemsMap?.[activeIds[0]];
+  const isNoneSelected = !currentItem?.animations?.[type];
+
+  const noneButton = (
+    <div
+      key="none"
+      className="flex cursor-pointer flex-col gap-2 text-center text-xs text-muted-foreground items-center justify-start"
+      onClick={() => clearAnimation(type, activeIds, trackItemsMap)}
+    >
+      <div
+        className={cn(
+          "relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md bg-zinc-800 group",
+          isNoneSelected ? "border border-primary" : ""
+        )}
+      >
+        <Ban className="text-muted-foreground" size={24} />
+      </div>
+      <div>None</div>
+    </div>
+  );
+
+  const presetButtons = Object.keys(presets)
     .filter(filter)
     .map((presetKey) => {
       const preset = presets[presetKey as "scaleIn"];
@@ -34,8 +55,8 @@ export const createPresetButtons = (
 
       let isSelected = false;
       if (trackItemsMap) {
-        const currentItem = trackItemsMap[activeIds[0]];
-        const animations = currentItem?.animations;
+        const activeItem = trackItemsMap[activeIds[0]];
+        const animations = activeItem?.animations;
         isSelected = ["in", "out", "loop"].some(
           (t) => animations?.[t]?.name === presetKey
         );
@@ -64,6 +85,9 @@ export const createPresetButtons = (
         </div>
       );
     });
+
+  return [noneButton, ...presetButtons];
+};
 
 const applyAnimation = (
   presetName: PresetName,
@@ -128,38 +152,74 @@ const applyAnimation = (
     }
   });
 };
+
+export const clearAnimation = (
+  type: "in" | "out" | "loop",
+  activeIds: string[],
+  trackItemsMap: any
+) => {
+  if (!activeIds.length) {
+    console.warn("No active ID to clear the animation from.");
+    return;
+  }
+
+  dispatch(EDIT_OBJECT, {
+    payload: {
+      [activeIds[0]]: {
+        animations: {
+          [type]: undefined
+        }
+      }
+    }
+  });
+};
+
 export default function AnimationPicker({
   animationType = "media"
 }: {
   animationType?: "text" | "media";
 }) {
-  const { activeIds, trackItemsMap } = useStore();
+  const activeIds = useStore((state) => state.activeIds);
+  const currentItem = useStore((state) => state.trackItemsMap[state.activeIds[0]]);
+  const trackItemsMap = useStore((state) => state.trackItemsMap);
   const { animationPickerInitialTab } = useLayoutStore();
   const [activeTab, setActiveTab] = useState<"in" | "out" | "loop">(animationPickerInitialTab);
-  const currentItem = trackItemsMap[activeIds[0]];
   const hasCurrentTabAnimation = !!currentItem?.animations?.[activeTab];
 
-  const presetInButtons = createPresetButtons(
-    (key) => key.includes("In"),
-    "in",
-    activeIds,
-    animationType,
-    trackItemsMap
+  const presetInButtons = useMemo(
+    () =>
+      createPresetButtons(
+        (key) => key.includes("In"),
+        "in",
+        activeIds,
+        animationType,
+        trackItemsMap
+      ),
+    [activeIds[0], currentItem?.animations?.in?.name, animationType]
   );
-  const presetOutButtons = createPresetButtons(
-    (key) => key.includes("Out"),
-    "out",
-    activeIds,
-    animationType,
-    trackItemsMap
+  const presetOutButtons = useMemo(
+    () =>
+      createPresetButtons(
+        (key) => key.includes("Out"),
+        "out",
+        activeIds,
+        animationType,
+        trackItemsMap
+      ),
+    [activeIds[0], currentItem?.animations?.out?.name, animationType]
   );
-  const presetLoopButtons = createPresetButtons(
-    (key) => key.includes("Loop"),
-    "loop",
-    activeIds,
-    animationType,
-    trackItemsMap
+  const presetLoopButtons = useMemo(
+    () =>
+      createPresetButtons(
+        (key) => key.includes("Loop"),
+        "loop",
+        activeIds,
+        animationType,
+        trackItemsMap
+      ),
+    [activeIds[0], currentItem?.animations?.loop?.name, animationType]
   );
+
   const { setFloatingControl } = useLayoutStore();
   const floatingRef = useRef<HTMLDivElement>(null);
 
@@ -197,7 +257,7 @@ export default function AnimationPicker({
         </TabsContent>
         <TabsContent value="loop">
           <ScrollArea className="h-[400px] w-full px-4">
-            <div className={`grid grid-cols-2 gap-2 ${hasCurrentTabAnimation ? "pb-0" : "pb-4"}`}>{presetLoopButtons}</div>
+            <div className={`grid grid-cols-2 gap-2 pb-4`}>{presetLoopButtons}</div>
           </ScrollArea>
         </TabsContent>
         <TabsContent value="out">
@@ -206,7 +266,7 @@ export default function AnimationPicker({
           </ScrollArea>
         </TabsContent>
       </Tabs>
-      {hasCurrentTabAnimation && <AnimationDuration activeTab={activeTab} />}
+      {hasCurrentTabAnimation && activeTab !== "loop" && <AnimationDuration activeTab={activeTab} />}
     </div>
   );
 }

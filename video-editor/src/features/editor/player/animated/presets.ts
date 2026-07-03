@@ -283,7 +283,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Type Writer"
+    name: "Type Writer Out"
   },
   greatThinkersAnimationOut: {
     property: "greatThinkersTextAnimationOut",
@@ -415,7 +415,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Type Writer"
+    name: "Type Writer In"
   },
   animatedTextIn: {
     property: "animatedTextIn",

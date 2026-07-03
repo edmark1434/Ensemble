@@ -124,7 +124,7 @@ export const TextAnimated: React.FC<{
   const animOut = durationInFrames - animationTextOutFrames;
   const validAnimIn = textAnimationNameIn ? animInFrom >= frame : false;
   const validAnimOut = textAnimationNameOut ? animOut < frame : false;
-  if (!validAnimOut && !validAnimIn) {
+  if (!validAnimOut && !validAnimIn && !textAnimationNameLoop) {
     return (
       <div
         style={{

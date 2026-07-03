@@ -19,23 +19,22 @@ export const DurationInputSlider = ({
   const safeMaxMs = Math.max(0, maxMs);
   const safeMaxSeconds = formatearNumero(safeMaxMs / 1000);
 
-  // Local buffer so dragging/typing feels instant, same idea as Opacity's
-  // localValue — resynced from the real value whenever it changes upstream.
-  const [localMs, setLocalMs] = useState(valueMs);
+  const [localMs, setLocalMs] = useState(Math.min(valueMs, safeMaxMs));
   const [inputValue, setInputValue] = useState(
-    String(formatearNumero(valueMs / 1000))
+    String(formatearNumero(Math.min(valueMs, safeMaxMs) / 1000))
   );
-
-  useEffect(() => {
-    setLocalMs(valueMs);
-    setInputValue(String(formatearNumero(valueMs / 1000)));
-  }, [valueMs]);
 
   const commitMs = (ms: number) => {
     const clamped = Math.min(Math.max(0, ms), safeMaxMs);
     setLocalMs(clamped);
     onChangeMs(clamped);
   };
+
+  useEffect(() => {
+    const clamped = Math.min(valueMs, safeMaxMs);
+    setLocalMs(clamped);
+    setInputValue(String(formatearNumero(clamped / 1000)));
+  }, [valueMs, safeMaxMs]);
 
   return (
     <div className="flex flex-col gap-2 flex-1">
