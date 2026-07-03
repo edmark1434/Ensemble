@@ -18,9 +18,14 @@ import {
   Heart,
   Eye,
   Loader2,
+  UserPlus,
+  CheckCircle,
+  Reply,
 } from "lucide-react";
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import UserHeader from "@/components/nav/user_header";
 import NewDiscussionModal from "@/pages/user/4_forums/forum_modals/NewDiscussionModal.tsx";
 import CreateGroupModal from "@/pages/user/4_forums/forum_modals/CreateGroupModal.tsx";
@@ -33,111 +38,77 @@ import useGlobalState from "@/lib/global_state";
 // ==================== TYPES ====================
 type ForumTab = "feed" | "groups" | "my-groups" | "my-discussions" | "saved";
 
-type ImageAttachment = {
-  id: string;
-  file?: File;
-  preview: string;
-  url?: string;
-  uploading?: boolean;
-  uploadProgress?: number;
+type ForumTag = {
+  tag_id: number;
+  tag_name?: string;
 };
 
-type ForumGroupMember = {
-  role: string;
-  userId: number;
-};
-
-type ForumGroupDocument = {
-  _id: string;
-  image_url?: string | null;
-  group_name: string;
-  description?: string;
-  members?: ForumGroupMember[];
-  tags?: string[];
-  status?: string;
-};
-
-type ForumDiscussionTag = {
-  forum_tag_id: number;
-};
-
-type ForumDiscussionAttachment = {
-  file_path: string;
-};
-
-type ForumDiscussionComment = {
+type Comment = {
   user_id: number;
   comment: string;
-  comment_id: string | number | null;
-  comment_reference_id: string | number | null;
+  comment_id: string;
+  comment_reference_id: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
-  attachments?: ForumDiscussionAttachment[];
-  likes?: { user_id: number }[];
-};
-
-type ForumDiscussionDocument = {
-  _id?: string;
-  forum_group_id: string | number;
-  user_id: number;
-  title: string;
-  description: string;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-  tags: ForumDiscussionTag[];
-  attachments: ForumDiscussionAttachment[];
-  likes: { user_id: number }[];
-  saves: { user_id: number }[];
-  comments: ForumDiscussionComment[];
-};
-
-type Reply = {
-  id: string;
-  author: string;
-  authorAvatar: string;
-  content: string;
-  ago: string;
-  likes: number;
-  images?: ImageAttachment[];
+  attachments: {
+    file_path: string;
+  }[];
+  likes: {
+    user_id: number;
+  }[];
+  depth?: number;
+  children?: Comment[];
+  is_edited?: boolean;
 };
 
 type Post = {
-  id: string;
-  groupId: string | number;
-  authorId: number;
-  author: string;
-  authorAvatar?: string;
+  _id?: string;
+  forum_group_id: number;
+  user_id: number;
   title: string;
   content: string;
-  excerpt: string;
-  likes: number;
-  comments: number;
-  saves: number;
-  ago: string;
-  date: string;
-  replies?: Reply[];
-  tag?: string;
-  tags: ForumDiscussionTag[];
-  images?: ImageAttachment[];
-  raw: ForumDiscussionDocument;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  tags: ForumTag[];
+  attachments: {
+    file_path: string;
+  }[];
+  likes: {
+    user_id: number;
+  }[];
+  saves: {
+    user_id: number;
+  }[];
+  comments: Comment[];
 };
 
 type Group = {
-  id: string;
-  name: string;
-  description: string;
-  imageUrl: string | null;
-  members: ForumGroupMember[];
-  memberCount: number;
-  joined: boolean;
-  gradient: string;
+  _id: string;
+  image_url: string;
+  group_name: string;
+  content: string;
+  created_at: string;
+  members: {
+    joined_at: string;
+    role: string;
+    userId: number;
+  }[];
   tags: {
     tag_id: number;
     tag: string;
   }[];
-  status: string;
+  gradient?: string;
+  status?: string;
+};
+
+type MemberWithDetails = {
+  userId: number;
+  role: string;
+  name: string;
+  avatar: string;
+  joinedAt: string;
 };
 
 // ==================== CONSTANTS ====================
@@ -165,120 +136,167 @@ const sortOptions = [
   { value: "most-commented", label: "Most Commented", icon: <MessageCircle className="h-3 w-3" /> },
 ];
 
+const getTagColor = (tagId: number) => {
+  const colors = [
+    "bg-purple-500/20 text-purple-400",
+    "bg-blue-500/20 text-blue-400",
+    "bg-green-500/20 text-green-400",
+    "bg-yellow-500/20 text-yellow-400",
+    "bg-red-500/20 text-red-400",
+    "bg-pink-500/20 text-pink-400",
+    "bg-indigo-500/20 text-indigo-400",
+    "bg-orange-500/20 text-orange-400",
+    "bg-cyan-500/20 text-cyan-400",
+    "bg-emerald-500/20 text-emerald-400",
+  ];
+  return colors[tagId % colors.length];
+};
+
+// ==================== MARKDOWN COMPONENTS ====================
+const MarkdownComponents = {
+  h1: ({ children }: { children: React.ReactNode }) => (
+    <h1 className="text-2xl font-bold text-white mt-4 mb-2 border-b border-white/10 pb-2">{children}</h1>
+  ),
+  h2: ({ children }: { children: React.ReactNode }) => (
+    <h2 className="text-xl font-bold text-white mt-3 mb-2">{children}</h2>
+  ),
+  h3: ({ children }: { children: React.ReactNode }) => (
+    <h3 className="text-lg font-bold text-white mt-2 mb-1">{children}</h3>
+  ),
+  p: ({ children }: { children: React.ReactNode }) => (
+    <p className="text-zinc-300 mb-2 leading-relaxed">{children}</p>
+  ),
+  strong: ({ children }: { children: React.ReactNode }) => (
+    <strong className="font-bold text-white">{children}</strong>
+  ),
+  em: ({ children }: { children: React.ReactNode }) => (
+    <em className="italic text-zinc-300">{children}</em>
+  ),
+  code: ({ children, className }: { children: React.ReactNode; className?: string }) => {
+    const inline = !className;
+    if (inline) {
+      return <code className="rounded bg-black/50 px-1 py-0.5 text-xs text-green-400 font-mono">{children}</code>;
+    }
+    return (
+      <pre className="rounded-lg bg-black/50 p-3 text-sm text-green-400 overflow-x-auto font-mono my-2">
+        <code>{children}</code>
+      </pre>
+    );
+  },
+  ul: ({ children }: { children: React.ReactNode }) => (
+    <ul className="my-2 space-y-1 list-disc list-inside">{children}</ul>
+  ),
+  ol: ({ children }: { children: React.ReactNode }) => (
+    <ol className="my-2 space-y-1 list-decimal list-inside">{children}</ol>
+  ),
+  li: ({ children }: { children: React.ReactNode }) => (
+    <li className="text-zinc-300">{children}</li>
+  ),
+  a: ({ href, children }: { href?: string; children: React.ReactNode }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline transition-colors">
+      {children}
+    </a>
+  ),
+  blockquote: ({ children }: { children: React.ReactNode }) => (
+    <blockquote className="border-l-4 border-blue-500 pl-4 my-2 text-zinc-400 italic">{children}</blockquote>
+  ),
+};
+
 // ==================== UTILITIES ====================
-const formatAgo = (value: string) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Just now";
+const getTimeAgo = (dateString: string): string => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
 
-  const diffMs = Date.now() - date.getTime();
-  const diffMinutes = Math.max(1, Math.floor(diffMs / 60000));
-  if (diffMinutes < 60) return `${diffMinutes} min ago`;
-
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
-
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins} min ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  return date.toLocaleDateString();
 };
 
-const normalizeImageAttachments = (attachments?: ForumDiscussionAttachment[]): ImageAttachment[] => {
-  return (attachments ?? []).map((attachment, index) => ({
-    id: `${attachment.file_path}-${index}`,
-    preview: attachment.file_path,
-    url: attachment.file_path,
-  }));
-};
-
-const normalizeReplies = (comments?: ForumDiscussionComment[], currentUserId?: number): Reply[] => {
-  return (comments ?? []).map((comment, index) => ({
-    id: String(comment.comment_id ?? `${comment.user_id}-${index}`),
-    author: `User ${comment.user_id}`,
-    authorAvatar: `https://i.pravatar.cc/150?u=${comment.user_id}`,
-    content: comment.comment,
-    ago: formatAgo(comment.created_at),
-    likes: comment.likes?.length ?? 0,
-    images: normalizeImageAttachments(comment.attachments),
-  }));
-};
-
-const normalizeDiscussion = (discussion: ForumDiscussionDocument, currentUserId?: number): Post => {
-  const discussionId = String(discussion._id ?? `${discussion.forum_group_id}-${discussion.user_id}-${discussion.created_at}`);
-  const images = normalizeImageAttachments(discussion.attachments);
-
-  return {
-    id: discussionId,
-    groupId: discussion.forum_group_id,
-    authorId: discussion.user_id,
-    author: `User ${discussion.user_id}`,
-    authorAvatar: `https://i.pravatar.cc/150?u=${discussion.user_id}`,
-    title: discussion.title,
-    content: discussion.description,
-    excerpt: discussion.description.length > 180 ? `${discussion.description.slice(0, 180)}...` : discussion.description,
-    likes: discussion.likes?.length ?? 0,
-    comments: discussion.comments?.length ?? 0,
-    saves: discussion.saves?.length ?? 0,
-    ago: formatAgo(discussion.created_at),
-    date: discussion.created_at,
-    replies: normalizeReplies(discussion.comments, currentUserId),
-    tag: discussion.tags?.[0] ? String(discussion.tags[0].forum_tag_id) : undefined,
-    tags: discussion.tags ?? [],
-    images,
-    raw: discussion,
+const buildCommentTree = (comments: Comment[]): Comment[] => {
+  if (!comments || comments.length === 0) return [];
+  
+  const commentMap = new Map<string, Comment>();
+  const rootComments: Comment[] = [];
+  
+  comments.forEach(comment => {
+    commentMap.set(comment.comment_id, { ...comment, children: [] });
+  });
+  
+  comments.forEach(comment => {
+    const commentWithChildren = commentMap.get(comment.comment_id)!;
+    if (comment.comment_reference_id && commentMap.has(comment.comment_reference_id)) {
+      const parent = commentMap.get(comment.comment_reference_id)!;
+      if (!parent.children) parent.children = [];
+      parent.children.push(commentWithChildren);
+    } else {
+      rootComments.push(commentWithChildren);
+    }
+  });
+  
+  rootComments.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  
+  const sortChildren = (comment: Comment) => {
+    if (comment.children && comment.children.length > 0) {
+      comment.children.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      comment.children.forEach(sortChildren);
+    }
   };
-};
-
-const normalizeGroup = (group: ForumGroupDocument, index: number, currentUserId?: number): Group => {
-  const members = group.members ?? [];
-  const joined = members.some((member) => member.userId === currentUserId);
-
-  return {
-    id: String(group._id),
-    name: group.group_name,
-    description: group.description ?? "",
-    imageUrl: group.image_url ?? null,
-    members,
-    memberCount: members.length,
-    joined,
-    gradient: gradientOptions[index % gradientOptions.length],
-    tags: group.tags ?? [],
-    status: group.status || "active",
+  rootComments.forEach(sortChildren);
+  
+  const calculateDepth = (comment: Comment, depth: number = 0) => {
+    comment.depth = depth;
+    if (comment.children) {
+      comment.children.forEach(child => calculateDepth(child, depth + 1));
+    }
   };
+  rootComments.forEach(comment => calculateDepth(comment, 0));
+  
+  return rootComments;
 };
 
-const renderMarkdownContent = (content: string) => {
-  let html = content
-    .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-white">$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em class="italic text-zinc-300">$1</em>')
-    .replace(/```\n(.*?)\n```/gs, '<pre class="rounded-lg bg-black/50 p-3 text-sm text-green-400 overflow-x-auto"><code>$1</code></pre>')
-    .replace(/`(.*?)`/g, '<code class="rounded bg-black/50 px-1 py-0.5 text-xs text-green-400">$1</code>')
-    .replace(/^- (.*?)$/gm, '<li class="ml-4 text-zinc-300">$1</li>')
-    .replace(/^\d+\. (.*?)$/gm, '<li class="ml-4 text-zinc-300 list-decimal">$1</li>')
-    .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" class="text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">$1</a>')
-    .replace(/\n/g, '<br />');
-
-  html = html.replace(/(<li[^>]*>.*?<\/li>\n?)+/gs, '<ul class="my-2 space-y-1">$&</ul>');
-  return html;
+const getDepthClass = (depth: number = 0): string => {
+  const maxDepth = 8;
+  const effectiveDepth = Math.min(depth, maxDepth);
+  
+  if (effectiveDepth === 0) return "";
+  if (effectiveDepth === 1) return "ml-4";
+  if (effectiveDepth === 2) return "ml-8";
+  if (effectiveDepth === 3) return "ml-12";
+  if (effectiveDepth === 4) return "ml-16";
+  if (effectiveDepth === 5) return "ml-20";
+  if (effectiveDepth === 6) return "ml-24";
+  if (effectiveDepth === 7) return "ml-28";
+  return "ml-32";
 };
 
 // ==================== COMPONENTS ====================
-const ImageGallery = ({ images }: { images?: ImageAttachment[] }) => {
+const ImageGallery = ({ attachments }: { attachments?: { file_path: string }[] }) => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  if (!images || images.length === 0) return null;
+  if (!attachments || attachments.length === 0) return null;
 
   return (
     <>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-        {images.map((image, idx) => (
+        {attachments.map((attachment, idx) => (
           <button
-            key={image.id || idx}
-            onClick={() => setSelectedImage(image.preview)}
+            key={idx}
+            onClick={() => setSelectedImage(attachment.file_path)}
             className="group relative overflow-hidden rounded-lg border border-white/10 bg-white/5 transition-all hover:scale-105 hover:border-white/20"
           >
             <img
-              src={image.preview}
+              src={attachment.file_path}
               alt={`Post image ${idx + 1}`}
               className="h-32 w-full object-cover transition-all group-hover:scale-110"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = "https://placehold.co/400x300?text=Image+Not+Found";
+              }}
             />
             <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition group-hover:opacity-100">
               <ImageIcon className="h-6 w-6 text-white" />
@@ -288,7 +306,10 @@ const ImageGallery = ({ images }: { images?: ImageAttachment[] }) => {
       </div>
 
       {selectedImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm" onClick={() => setSelectedImage(null)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
+          onClick={() => setSelectedImage(null)}
+        >
           <button
             onClick={() => setSelectedImage(null)}
             className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20"
@@ -308,7 +329,6 @@ const ImageGallery = ({ images }: { images?: ImageAttachment[] }) => {
 };
 
 const ReplyInput = ({
-  postId,
   replyText,
   updateReplyText,
   handleReply,
@@ -317,8 +337,8 @@ const ReplyInput = ({
   removeImage,
   isUploading,
   currentUserAvatar,
+  placeholder = "Write a reply... (Supports **bold**, *italic*, `code`, and images)"
 }: {
-  postId: string;
   replyText: string;
   updateReplyText: (text: string) => void;
   handleReply: () => void;
@@ -327,12 +347,13 @@ const ReplyInput = ({
   removeImage: (imageId: string) => void;
   isUploading: boolean;
   currentUserAvatar: string;
+  placeholder?: string;
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showPreview, setShowPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const applyFormatting = (format: string, value?: string) => {
+  const applyFormatting = (format: string) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
 
@@ -352,16 +373,16 @@ const ReplyInput = ({
         newCursorPos = start + 1;
         break;
       case "bullet-list":
-        formattedText = selectedText ? selectedText.split("\n").map((line) => `- ${line}`).join("\n") : "- ";
-        newCursorPos = start + 2;
+        if (selectedText) {
+          formattedText = selectedText.split("\n").map(line => `- ${line}`).join("\n");
+        } else {
+          formattedText = "- ";
+          newCursorPos = start + 2;
+        }
         break;
       case "code":
         formattedText = `\`${selectedText || "code"}\``;
         newCursorPos = start + 1;
-        break;
-      case "insertText":
-        formattedText = value || "";
-        newCursorPos = start + (value?.length || 0);
         break;
       default:
         return;
@@ -376,43 +397,54 @@ const ReplyInput = ({
     }, 0);
   };
 
-  const renderMarkdownPreview = () => {
-    let html = replyText
-      .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-white">$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em class="italic text-zinc-300">$1</em>')
-      .replace(/`(.*?)`/g, '<code class="rounded bg-black/50 px-1 py-0.5 text-xs text-green-400">$1</code>')
-      .replace(/^- (.*?)$/gm, '<li class="ml-4 text-zinc-300">$1</li>')
-      .replace(/^\d+\. (.*?)$/gm, '<li class="ml-4 text-zinc-300 list-decimal">$1</li>')
-      .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" class="text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">$1</a>')
-      .replace(/\n/g, '<br />');
-
-    html = html.replace(/(<li[^>]*>.*?<\/li>\n?)+/gs, '<ul class="my-2 space-y-1">$&</ul>');
-    return html;
-  };
-
   return (
     <div className="mt-4">
       <div className="flex gap-3">
         <img
           src={currentUserAvatar}
           alt="You"
-          className="h-8 w-8 shrink-0 rounded-full object-cover ring-2 ring-white/20"
+          className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20 flex-shrink-0"
         />
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-1 rounded-t-lg border border-white/15 border-b-0 bg-white/5 px-2 py-1">
-            <button type="button" onClick={() => applyFormatting("bold")} className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white" title="Bold">
+            <button
+              type="button"
+              onClick={() => applyFormatting("bold")}
+              className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              title="Bold"
+            >
               <strong className="text-xs">B</strong>
             </button>
-            <button type="button" onClick={() => applyFormatting("italic")} className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white" title="Italic">
+            <button
+              type="button"
+              onClick={() => applyFormatting("italic")}
+              className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              title="Italic"
+            >
               <em className="text-xs">I</em>
             </button>
-            <button type="button" onClick={() => applyFormatting("bullet-list")} className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white" title="Bullet List">
+            <button
+              type="button"
+              onClick={() => applyFormatting("bullet-list")}
+              className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              title="Bullet List"
+            >
               <span className="text-xs">•</span>
             </button>
-            <button type="button" onClick={() => applyFormatting("code")} className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white" title="Code">
+            <button
+              type="button"
+              onClick={() => applyFormatting("code")}
+              className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              title="Code"
+            >
               <span className="text-xs">{'<>'}</span>
             </button>
-            <button type="button" onClick={() => fileInputRef.current?.click()} className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white" title="Upload Image">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              title="Upload Image"
+            >
               <ImageIcon className="h-3 w-3" />
             </button>
             <button
@@ -430,25 +462,31 @@ const ReplyInput = ({
               ref={textareaRef}
               value={replyText}
               onChange={(e) => updateReplyText(e.target.value)}
-              placeholder="Write a reply... (Supports **bold**, *italic*, `code`, and images)"
-              className="w-full resize-none rounded-b-lg border border-white/15 border-t-0 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+              placeholder={placeholder}
+              className="w-full rounded-b-lg border border-white/15 border-t-0 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 resize-none"
               rows={3}
             />
           ) : (
-            <div className="min-h-20 rounded-b-lg border border-white/15 border-t-0 bg-white/5 p-3">
+            <div className="min-h-[80px] rounded-b-lg border border-white/15 border-t-0 bg-white/5 p-3">
               {replyText.trim() ? (
-                <div className="prose prose-invert prose-sm max-w-none text-sm text-zinc-400" dangerouslySetInnerHTML={{ __html: renderMarkdownPreview() }} />
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
+                  {replyText}
+                </ReactMarkdown>
               ) : (
-                <p className="text-sm italic text-zinc-500">Nothing to preview...</p>
+                <p className="text-sm text-zinc-500 italic">Nothing to preview...</p>
               )}
             </div>
           )}
 
           {images.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 mt-2">
               {images.map((image) => (
                 <div key={image.id} className="group relative">
-                  <img src={image.preview} alt="Upload preview" className="h-16 w-16 rounded-lg object-cover border border-white/10" />
+                  <img
+                    src={image.preview}
+                    alt="Upload preview"
+                    className="h-16 w-16 rounded-lg object-cover border border-white/10"
+                  />
                   {image.uploading && (
                     <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/70">
                       <Loader2 className="h-4 w-4 animate-spin text-white" />
@@ -456,7 +494,7 @@ const ReplyInput = ({
                   )}
                   <button
                     onClick={() => removeImage(image.id)}
-                    className="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
+                    className="absolute -top-1 -right-1 rounded-full bg-red-500 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -476,9 +514,13 @@ const ReplyInput = ({
             <button
               onClick={handleReply}
               disabled={(!replyText.trim() && images.length === 0) || isUploading}
-              className="flex items-center gap-1 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-1 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+              {isUploading ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Send className="h-3 w-3" />
+              )}
               Post Reply
             </button>
           </div>
@@ -490,7 +532,6 @@ const ReplyInput = ({
             multiple
             className="hidden"
             onChange={(e) => uploadImages(e.target.files)}
-            data-post-id={postId}
           />
         </div>
       </div>
@@ -498,42 +539,559 @@ const ReplyInput = ({
   );
 };
 
-const SidebarSkeleton = () => (
-  <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-4">
-    <div className="mb-2 h-5 w-24 animate-pulse rounded bg-white/10" />
-    <div className="mb-3 h-3 w-32 animate-pulse rounded bg-white/5" />
-    <div className="flex flex-wrap gap-2">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="h-7 w-16 animate-pulse rounded-full bg-white/10" />
-      ))}
-    </div>
-  </div>
-);
+// ==================== COMMENT ITEM COMPONENT ====================
+// ==================== COMMENT ITEM COMPONENT ====================
+const CommentItem = ({ 
+  comment, 
+  postId, 
+  membersDetails, 
+  onLike, 
+  onReply,
+  onEditComment,
+  onDeleteComment,
+  replyingTo, 
+  setReplyingTo,
+  replyText,
+  setReplyText,
+  onSendReply,
+  replyImages,
+  onReplyImageUpload,
+  onRemoveReplyImage,
+  isUploading,
+  currentUserId,
+  currentUserName,
+  currentUserAvatar,
+  isLastInThread = false,
+  isCollapsed = false,
+  onToggleCollapse
+}: { 
+  comment: Comment;
+  postId: number;
+  membersDetails: Record<number, { name: string; avatar: string }>;
+  onLike: (postId: number, commentId: string) => void;
+  onReply: (postId: number, commentId: string, authorName: string, authorId: number) => void;
+  onEditComment: (postId: number, commentId: string, newText: string) => void;
+  onDeleteComment: (postId: number, commentId: string) => void;
+  replyingTo: { commentId: string; authorName: string; authorId: number } | null;
+  setReplyingTo: (value: { commentId: string; authorName: string; authorId: number } | null) => void;
+  replyText: string;
+  setReplyText: (text: string) => void;
+  onSendReply: (postId: number, commentId: string) => void;
+  replyImages: ImageAttachment[];
+  onReplyImageUpload: (files: FileList | null) => void;
+  onRemoveReplyImage: (imageId: string) => void;
+  isUploading: boolean;
+  currentUserName: string;
+  currentUserId: number;
+  currentUserAvatar: string;
+  isLastInThread?: boolean;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+}) => {
+  // Initialize showChildren based on isCollapsed - collapsed by default
+  const [showChildren, setShowChildren] = useState(!isCollapsed);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(comment.comment);
+  const [showCommentMenu, setShowCommentMenu] = useState(false);
+  
+  // Get comment author
+  let commentAuthor;
+  if (comment.user_id === currentUserId) {
+    commentAuthor = { name: currentUserName, avatar: currentUserAvatar };
+  } else if (membersDetails[comment.user_id]) {
+    commentAuthor = membersDetails[comment.user_id];
+  } else {
+    commentAuthor = { name: `User ${comment.user_id}`, avatar: `https://i.pravatar.cc/150?u=${comment.user_id}` };
+  }
+  
+  const isLiked = comment.likes?.some(like => like.user_id === currentUserId) || false;
+  const isAuthor = comment.user_id === currentUserId;
+  const hasChildren = comment.children && comment.children.length > 0;
+  const childCount = comment.children?.length || 0;
+  const depth = comment.depth || 0;
+  
+  const showContinueThread = depth >= 3 && childCount > 0;
+  const depthClass = getDepthClass(depth);
 
-const PostCardSkeleton = () => (
-  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-    <div className="flex gap-3">
-      <div className="h-10 w-10 animate-pulse rounded-full bg-white/10" />
-      <div className="flex-1">
-        <div className="flex items-center gap-2">
-          <div className="h-4 w-32 animate-pulse rounded bg-white/10" />
-          <div className="h-3 w-20 animate-pulse rounded bg-white/5" />
-        </div>
-        <div className="mt-2 h-5 w-3/4 animate-pulse rounded bg-white/10" />
-        <div className="mt-2 space-y-2">
-          <div className="h-4 w-full animate-pulse rounded bg-white/5" />
-          <div className="h-4 w-2/3 animate-pulse rounded bg-white/5" />
-        </div>
-        <div className="mt-3 flex gap-4">
-          <div className="h-6 w-16 animate-pulse rounded-full bg-white/10" />
-          <div className="h-4 w-20 animate-pulse rounded bg-white/5" />
-          <div className="h-4 w-16 animate-pulse rounded bg-white/5" />
-          <div className="h-4 w-12 animate-pulse rounded bg-white/5" />
+  const handleEditSubmit = () => {
+    if (editText.trim() && editText !== comment.comment) {
+      onEditComment(postId, comment.comment_id, editText);
+    }
+    setIsEditing(false);
+    setShowCommentMenu(false);
+  };
+
+  const handleDeleteCommentClick = () => {
+    onDeleteComment(postId, comment.comment_id);
+    setShowCommentMenu(false);
+  };
+
+  // Determine if we should show the collapse button
+  const shouldShowCollapse = hasChildren && depth >= 0;
+
+  // Update showChildren when isCollapsed changes from parent
+  useEffect(() => {
+    if (isCollapsed) {
+      setShowChildren(false);
+    }
+  }, [isCollapsed]);
+
+  // Handle toggle
+  const handleToggleChildren = () => {
+    if (onToggleCollapse) {
+      onToggleCollapse();
+    } else {
+      setShowChildren(!showChildren);
+    }
+  };
+
+  // Determine if children should be visible
+  const childrenVisible = !isCollapsed && showChildren;
+
+  return (
+    <div className={`${depthClass} mt-2 ${!isLastInThread ? "border-l-2 border-white/10 ml-2 pl-2" : ""}`}>
+      <div className="flex gap-3 py-2">
+        <img
+          src={commentAuthor.avatar}
+          alt={commentAuthor.name}
+          className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20 flex-shrink-0"
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-medium text-white">{commentAuthor.name}</p>
+              <span className="text-xs text-zinc-500">{getTimeAgo(comment.created_at)}</span>
+              {comment.is_edited && (
+                <span className="text-[10px] text-zinc-600">(edited)</span>
+              )}
+              {depth > 0 && (
+                <span className="text-[10px] text-zinc-600">· {depth} level{depth > 1 ? 's' : ''} deep</span>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-1">
+              {/* Collapse button - only for comments with children */}
+              {shouldShowCollapse && (
+                <button
+                  onClick={handleToggleChildren}
+                  className="rounded p-1 text-zinc-500 hover:bg-white/10 transition"
+                  title={isCollapsed || !showChildren ? "Expand thread" : "Collapse thread"}
+                >
+                  {isCollapsed || !showChildren ? (
+                    <ChevronDown className="h-3 w-3" />
+                  ) : (
+                    <ChevronUp className="h-3 w-3" />
+                  )}
+                </button>
+              )}
+              
+              {/* Comment actions menu */}
+              {isAuthor && !comment.deleted_at && (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowCommentMenu(!showCommentMenu)}
+                    className="rounded p-1 text-zinc-500 hover:bg-white/10"
+                  >
+                    <MoreVertical className="h-3 w-3" />
+                  </button>
+                  {showCommentMenu && (
+                    <div className="absolute right-0 mt-1 w-28 rounded-lg border border-white/10 bg-[#0d0f1a] shadow-xl z-20">
+                      <button
+                        onClick={() => {
+                          setIsEditing(true);
+                          setShowCommentMenu(false);
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-xs text-zinc-300 hover:bg-white/10"
+                      >
+                        <Edit2 className="h-3 w-3" />
+                        Edit
+                      </button>
+                      <button
+                        onClick={handleDeleteCommentClick}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10"
+                      >
+                        <TrashIcon className="h-3 w-3" />
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          {/* Comment content */}
+          {isEditing ? (
+            <div className="mt-2">
+              <textarea
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white"
+                rows={3}
+              />
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={handleEditSubmit}
+                  className="rounded bg-blue-500 px-3 py-1 text-xs text-white"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => setIsEditing(false)}
+                  className="rounded bg-white/10 px-3 py-1 text-xs text-zinc-400"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="mt-1 text-sm text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
+                  {comment.deleted_at ? "[deleted]" : comment.comment}
+                </ReactMarkdown>
+              </div>
+              
+              <ImageGallery attachments={comment.attachments} />
+            </>
+          )}
+          
+          {/* Action buttons - only show when not collapsed */}
+          {!comment.deleted_at && !isCollapsed && (
+            <div className="mt-2 flex items-center gap-3 flex-wrap">
+              <button
+                onClick={() => onLike(postId, comment.comment_id)}
+                className={`inline-flex items-center gap-1 text-xs transition ${
+                  isLiked ? "text-red-400" : "text-zinc-500 hover:text-white"
+                }`}
+              >
+                <Heart className={`h-3 w-3 ${isLiked ? "fill-red-400" : ""}`} />
+                <span>{comment.likes?.length || 0}</span>
+              </button>
+              <button
+                onClick={() => onReply(postId, comment.comment_id, commentAuthor.name, comment.user_id)}
+                className="inline-flex items-center gap-1 text-xs text-zinc-500 transition hover:text-white"
+              >
+                <Reply className="h-3 w-3" />
+                <span>Reply</span>
+              </button>
+              {hasChildren && (
+                <button
+                  onClick={handleToggleChildren}
+                  className="inline-flex items-center gap-1 text-xs text-zinc-500 transition hover:text-white"
+                >
+                  {showChildren ? (
+                    <ChevronUp className="h-3 w-3" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3" />
+                  )}
+                  <span>{childCount} {childCount === 1 ? 'reply' : 'replies'}</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Reply input */}
+          {replyingTo?.commentId === comment.comment_id && !isCollapsed && (
+            <div className="mt-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs text-blue-400">Replying to @{replyingTo.authorName}</span>
+                <button
+                  onClick={() => setReplyingTo(null)}
+                  className="text-xs text-zinc-500 hover:text-white"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+              <ReplyInput
+                replyText={replyText}
+                updateReplyText={setReplyText}
+                handleReply={() => onSendReply(postId, comment.comment_id)}
+                uploadImages={onReplyImageUpload}
+                images={replyImages}
+                removeImage={onRemoveReplyImage}
+                isUploading={isUploading}
+                currentUserAvatar={currentUserAvatar}
+                placeholder={`Reply to @${replyingTo.authorName}...`}
+              />
+            </div>
+          )}
+
+          {/* Collapsed state - show summary */}
+          {isCollapsed && hasChildren && (
+            <div className="mt-2 text-xs text-zinc-500">
+              <button
+                onClick={handleToggleChildren}
+                className="hover:text-white transition"
+              >
+                View {childCount} {childCount === 1 ? 'reply' : 'replies'}
+              </button>
+            </div>
+          )}
+
+          {/* Children comments */}
+          {childrenVisible && hasChildren && !showContinueThread && (
+            <div className="mt-3">
+              {comment.children!.map((child, index) => (
+                <CommentItem
+                  key={child.comment_id}
+                  comment={child}
+                  postId={postId}
+                  membersDetails={membersDetails}
+                  onLike={onLike}
+                  onReply={onReply}
+                  onEditComment={onEditComment}
+                  onDeleteComment={onDeleteComment}
+                  replyingTo={replyingTo}
+                  setReplyingTo={setReplyingTo}
+                  replyText={replyText}
+                  setReplyText={setReplyText}
+                  onSendReply={onSendReply}
+                  replyImages={replyImages}
+                  onReplyImageUpload={onReplyImageUpload}
+                  onRemoveReplyImage={onRemoveReplyImage}
+                  isUploading={isUploading}
+                  currentUserId={currentUserId}
+                  currentUserAvatar={currentUserAvatar}
+                  currentUserName={currentUserName}
+                  isLastInThread={index === comment.children!.length - 1}
+                  isCollapsed={isCollapsed}
+                  onToggleCollapse={onToggleCollapse}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Continue thread button */}
+          {!isCollapsed && showContinueThread && (
+            <button
+              onClick={handleToggleChildren}
+              className="mt-2 flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition"
+            >
+              {showChildren ? (
+                <>Hide {childCount} replies</>
+              ) : (
+                <>Continue this thread ({childCount} replies)</>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
+
+// Replace the renderPostCard function inside the main Forums component with this:
+
+const renderPostCard = (post: any, showGroupName: boolean = true) => {
+  const group = groupsList.find((item) => String(item._id) === String(post.forum_group_id));
+  const isExpanded = expandedPostId === post.id;
+  const isLiked = post.isLiked;
+  const isSaved = post.isSaved;
+
+  // Use useMemo to initialize collapsedComments only when post changes
+  const [collapsedComments, setCollapsedComments] = useState<Set<string>>(() => {
+    // Recursive function to get all comment IDs from the comment tree
+    const getAllCommentIds = (comments: Comment[]): string[] => {
+      let ids: string[] = [];
+      comments.forEach(comment => {
+        ids.push(comment.comment_id);
+        if (comment.children && comment.children.length > 0) {
+          ids = ids.concat(getAllCommentIds(comment.children));
+        }
+      });
+      return ids;
+    };
+
+    // Get all comment IDs from the post's comment tree
+    const allCommentIds = post.commentTree ? getAllCommentIds(post.commentTree) : [];
+    return new Set(allCommentIds);
+  });
+
+  const toggleCollapse = (commentId: string) => {
+    setCollapsedComments(prev => {
+      const next = new Set(prev);
+      if (next.has(commentId)) {
+        next.delete(commentId);
+      } else {
+        next.add(commentId);
+      }
+      return next;
+    });
+  };
+
+  return (
+    <div key={post.id} className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 transition hover:border-white/20">
+      <div className="flex gap-3">
+        <img src={post.authorAvatar} alt={post.author} className="h-10 w-10 rounded-full object-cover ring-2 ring-white/20" />
+        <div className="flex-1">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-medium text-white">{post.author}</p>
+              <span className="text-xs text-zinc-500">{post.ago}</span>
+              {showGroupName && group && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] text-cyan-400">
+                  {group.group_name}
+                </span>
+              )}
+              {post.tagsList && post.tagsList.length > 0 && (
+                <div className="flex items-center gap-1 flex-wrap">
+                  {post.tagsList.map((tag: ForumTag, tagIdx: number) => (
+                    <span 
+                      key={tag.tag_id || tagIdx} 
+                      className={`rounded-full px-2 py-0.5 text-[10px] ${getTagColor(tag.tag_id)}`}
+                    >
+                      {tag.tag_name || `Tag ${tag.tag_id}`}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {post.user_id === currentUserId && (
+              <div className="relative">
+                <button
+                  onClick={() => setPostMenuOpen(postMenuOpen === post.id ? null : post.id)}
+                  className="rounded-lg p-1 text-zinc-500 transition hover:bg-white/10 hover:text-white"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </button>
+                {postMenuOpen === post.id && (
+                  <div className="absolute right-0 mt-1 w-36 rounded-lg border border-white/10 bg-[#0d0f1a] shadow-xl overflow-hidden z-20">
+                    <button
+                      onClick={() => {
+                        setEditingPost(post);
+                        setPostMenuOpen(null);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => {
+                        setDeletingPost(post);
+                        setPostMenuOpen(null);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-400 transition hover:bg-red-500/10"
+                    >
+                      <TrashIcon className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <h3 className="mt-1 text-base font-semibold text-white">{post.title}</h3>
+
+          <div className="mt-2 text-sm text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
+              {post.content}
+            </ReactMarkdown>
+          </div>
+
+          <ImageGallery attachments={post.attachments} />
+
+          <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
+            <button
+              onClick={() => toggleExpand(post.id)}
+              className="inline-flex items-center gap-1 text-zinc-500 transition hover:text-white"
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+              <span>{post.commentCount} replies</span>
+              {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+
+            <button
+              onClick={() => handleLikePost(post.id)}
+              className={`inline-flex items-center gap-1 transition-all duration-200 ${
+                isLiked 
+                  ? "text-red-400 hover:text-red-300" 
+                  : "text-zinc-500 hover:text-white"
+              }`}
+              type="button"
+            >
+              <Heart className={`h-3.5 w-3.5 transition-all ${isLiked ? "fill-red-400" : ""}`} />
+              <span>{post.likeCount} likes</span>
+            </button>
+
+            <button
+              onClick={() => handleSavePost(post.id)}
+              className={`inline-flex items-center gap-1 transition-all duration-200 ${
+                isSaved 
+                  ? "text-yellow-400 hover:text-yellow-300" 
+                  : "text-zinc-500 hover:text-white"
+              }`}
+              type="button"
+            >
+              <Bookmark className={`h-3.5 w-3.5 transition-all ${isSaved ? "fill-yellow-400" : ""}`} />
+              <span>{isSaved ? "Saved" : "Save"}</span>
+            </button>
+          </div>
+
+          {isExpanded && (
+            <div className="mt-4 border-t border-white/10 pt-4">
+              <div className="space-y-4">
+                {post.commentTree && post.commentTree.length > 0 ? (
+                  post.commentTree.map((comment: Comment, commentIndex: number) => {
+                    // Check if this comment should be collapsed
+                    const isCommentCollapsed = collapsedComments.has(comment.comment_id);
+                    
+                    return (
+                      <CommentItem
+                        key={comment.comment_id}
+                        comment={comment}
+                        postId={post.arrayIndex}
+                        membersDetails={membersDetailsMap}
+                        onLike={handleLikeComment}
+                        onReply={handleReplyClick}
+                        onEditComment={() => {}}
+                        onDeleteComment={() => {}}
+                        replyingTo={replyingTo}
+                        setReplyingTo={setReplyingTo}
+                        replyText={replyCommentText}
+                        setReplyText={setReplyCommentText}
+                        onSendReply={handleCommentReply}
+                        replyImages={commentReplyImages}
+                        onReplyImageUpload={handleCommentReplyImageUpload}
+                        onRemoveReplyImage={removeCommentReplyImage}
+                        isUploading={commentReplyUploading}
+                        currentUserId={currentUserId}
+                        currentUserName={currentUserName}
+                        currentUserAvatar={currentUserAvatar}
+                        isLastInThread={commentIndex === post.commentTree.length - 1}
+                        isCollapsed={isCommentCollapsed}
+                        onToggleCollapse={() => toggleCollapse(comment.comment_id)}
+                      />
+                    );
+                  })
+                ) : (
+                  <p className="text-center text-sm text-zinc-500">No comments yet.</p>
+                )}
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-white/10">
+                <ReplyInput
+                  replyText={replyText[post.arrayIndex] || ""}
+                  updateReplyText={(text) => updateReplyText(post.arrayIndex, text)}
+                  handleReply={() => handleReply(post.arrayIndex)}
+                  uploadImages={(files) => handleReplyImageUpload(String(post.arrayIndex), files)}
+                  images={replyImages[post.arrayIndex] || []}
+                  removeImage={(imageId) => removeReplyImage(String(post.arrayIndex), imageId)}
+                  isUploading={replyUploading[post.arrayIndex] || false}
+                  currentUserAvatar={currentUserAvatar}
+                  placeholder="Write a comment..."
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ==================== MAIN COMPONENT ====================
 const Forums = () => {
@@ -544,28 +1102,33 @@ const Forums = () => {
   const [sortBy, setSortBy] = useState("latest");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState<Record<string, string>>({});
-  const [replyImages, setReplyImages] = useState<Record<string, ImageAttachment[]>>({});
-  const [replyUploading, setReplyUploading] = useState<Record<string, boolean>>({});
-  const [groupsList, setGroupsList] = useState<Group[]>([]);
-  const [groupDiscussions, setGroupDiscussions] = useState<Post[]>([]);
-  const [myDiscussionPosts, setMyDiscussionPosts] = useState<Post[]>([]);
+  const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
+  const [replyCommentText, setReplyCommentText] = useState<string>("");
   const [isNewDiscussionOpen, setIsNewDiscussionOpen] = useState(false);
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
   const [postMenuOpen, setPostMenuOpen] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [deletingPost, setDeletingPost] = useState<Post | null>(null);
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [replyImages, setReplyImages] = useState<{ [key: string]: ImageAttachment[] }>({});
+  const [replyUploading, setReplyUploading] = useState<{ [key: string]: boolean }>({});
+  const [replyingTo, setReplyingTo] = useState<{ commentId: string; authorName: string; authorId: number } | null>(null);
+  const [commentReplyImages, setCommentReplyImages] = useState<ImageAttachment[]>([]);
+  const [commentReplyUploading, setCommentReplyUploading] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [joiningGroupId, setJoiningGroupId] = useState<string | null>(null);
+  const [groupsList, setGroupsList] = useState<Group[]>([]);
+  const [groupDiscussions, setGroupDiscussions] = useState<Post[]>([]);
+  const [myDiscussionPosts, setMyDiscussionPosts] = useState<Post[]>([]);
+  const [savedDiscussions, setSavedDiscussions] = useState<Post[]>([]);
+  const [membersDetailsMap, setMembersDetailsMap] = useState<Record<number, { name: string; avatar: string }>>({});
   const navigate = useNavigate();
   
-  // Get user from global state
   const user = useGlobalState((state) => state.user);
-  const currentUserId = user?.user_id || 1; // Fallback to 1 if user not found
+  const currentUserId = user?.user_id || user?.userId || 1;
+  const currentUserName = user?.displayName || user?.name || "Unknown User";
   const currentUserAvatar = user?.avatar || DEFAULT_AVATAR;
 
   const [joinedGroups, setJoinedGroups] = useState<Group[]>([]);
-  
   const availableFilterGroups = joinedGroups;
 
   // ==================== EFFECTS ====================
@@ -575,46 +1138,86 @@ const Forums = () => {
     }
   }, [joinedGroups]);
 
+  // Load all forum data including member details
   useEffect(() => {
     let cancelled = false;
 
     const loadForumData = async () => {
       setLoading(true);
       try {
-        const groupsResponse = await api.get<ForumGroupDocument[]>("/api/forum/groups");
-        let normalizedGroups = (groupsResponse.data ?? []).map((group, index) => normalizeGroup(group, index, currentUserId));
+        const groupsResponse = await api.get<Group[]>("/api/forum/groups");
+        let normalizedGroups = (groupsResponse.data ?? []).map((group, index) => ({
+          ...group,
+          id: group._id,
+          gradient: gradientOptions[index % gradientOptions.length],
+          joined: group.members?.some((member) => member.userId === currentUserId) || false,
+        }));
         normalizedGroups = normalizedGroups.filter((group) => group.status === "active");
         const userJoinedGroups = normalizedGroups.filter((group) => 
-          group.members.some((member) => member.userId === currentUserId)
+          group.members?.some((member) => member.userId === currentUserId)
         );
         
         if (cancelled) return;
         setJoinedGroups(userJoinedGroups);
         setGroupsList(normalizedGroups);
-
-        const discussionResponses = await Promise.all(
+        
+        // Collect all user IDs from all discussions
+        const allDiscussionResponses = await Promise.all(
           normalizedGroups.map(async (group) => {
             try {
-              const response = await api.get<ForumDiscussionDocument>(`/api/forum/discussions/group/${group.id}`);
-              return response.data ? [normalizeDiscussion(response.data, currentUserId)] : [];
+              const response = await api.get<Post[]>(`/api/forum/discussions/group/${group.id}`);
+              return response.data || [];
             } catch {
               return [];
             }
           })
         );
+        const allDiscussions = allDiscussionResponses.flat();
+
+        // Collect all user IDs from posts and comments
+        const userIds = new Set<number>();
+        allDiscussions.forEach((post: Post) => {
+          if (post.user_id) userIds.add(post.user_id);
+          post.comments?.forEach((comment: Comment) => {
+            if (comment.user_id) userIds.add(comment.user_id);
+          });
+        });
+
+        // Fetch member details for all users
+        if (userIds.size > 0) {
+          const memberDetailsResponse = await api.post('api/users/list-of-details', { 
+            userIds: Array.from(userIds) 
+          });
+          const memberDetailsList = memberDetailsResponse.data.usersList || [];
+          
+          // Build members details map
+          const detailsMap: Record<number, { name: string; avatar: string }> = {};
+          memberDetailsList.forEach((details: any) => {
+            detailsMap[details.user_id] = {
+              name: `${details.first_name} ${details.last_name}`,
+              avatar: details.avatar_file_id ? `api/files/${details.avatar_file_id}` : `https://i.pravatar.cc/150?u=${details.user_id}`,
+            };
+          });
+          
+          // Add current user if not in map
+          if (!detailsMap[currentUserId]) {
+            detailsMap[currentUserId] = {
+              name: currentUserName,
+              avatar: currentUserAvatar,
+            };
+          }
+          
+          setMembersDetailsMap(detailsMap);
+        }
 
         if (cancelled) return;
-        setGroupDiscussions(discussionResponses.flat());
+        setGroupDiscussions(allDiscussions);
 
         try {
-          const userDiscussionsResponse = await api.get<ForumDiscussionDocument[] | ForumDiscussionDocument>(
-            `/api/forum/discussions/user/${currentUserId}`
-          );
+          const userDiscussionsResponse = await api.get<Post[]>(`/api/forum/user/discussions`);
           const normalizedMyDiscussions = Array.isArray(userDiscussionsResponse.data)
-            ? userDiscussionsResponse.data.map((discussion) => normalizeDiscussion(discussion, currentUserId))
-            : userDiscussionsResponse.data
-              ? [normalizeDiscussion(userDiscussionsResponse.data, currentUserId)]
-              : [];
+            ? userDiscussionsResponse.data
+            : [];
 
           if (!cancelled) {
             setMyDiscussionPosts(normalizedMyDiscussions);
@@ -636,66 +1239,39 @@ const Forums = () => {
     return () => { cancelled = true; };
   }, [reloadKey, currentUserId]);
 
-  // ==================== MEMOIZED DATA ====================
-  const allDiscussionPosts = useMemo(() => {
-    const uniquePosts = new Map<string, Post>();
-    [...groupDiscussions, ...myDiscussionPosts].forEach((post) => uniquePosts.set(post.id, post));
-    return Array.from(uniquePosts.values());
-  }, [groupDiscussions, myDiscussionPosts]);
+  // Load saved discussions when "saved" tab is active
+  useEffect(() => {
+    const getSavedUserDiscussions = async () => {
+      try {
+        const savedDiscussionsResponse = await api.get("api/forum/discussions/saved");
+        setSavedDiscussions(savedDiscussionsResponse.data || []);
+      } catch (error) {
+        console.error("Error loading saved discussions:", error);
+        setSavedDiscussions([]);
+      }
+    };
 
-  const visiblePosts = useMemo(() => {
-    let filtered: Post[] = [];
-
-    if (activeTab === "feed") {
-      filtered = groupDiscussions.filter((post) => selectedGroupIds.includes(String(post.groupId)));
-    } else if (activeTab === "my-discussions") {
-      filtered = myDiscussionPosts.filter((post) => post.authorId === currentUserId);
-    } else if (activeTab === "saved") {
-      filtered = allDiscussionPosts.filter((post) => post.raw.saves.some((save) => save.user_id === currentUserId));
-    } else {
-      return [];
+    if (activeTab === 'saved') {
+      getSavedUserDiscussions();
     }
+  }, [activeTab]);
 
-    // Apply search filter - searches through group names, post titles, content, and authors
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter((post) => {
-        const group = groupsList.find((g) => String(g.id) === String(post.groupId));
-        const matchesGroup = group?.name.toLowerCase().includes(query) ?? false;
-        const matchesTitle = post.title.toLowerCase().includes(query);
-        const matchesContent = post.excerpt.toLowerCase().includes(query);
-        const matchesAuthor = post.author.toLowerCase().includes(query);
-        
-        return matchesGroup || matchesTitle || matchesContent || matchesAuthor;
+  // ==================== JOIN GROUP ====================
+  const joinGroup = async (groupId: string) => {
+    setJoiningGroupId(groupId);
+    try {
+      await api.put(`/api/forum/groups/members/${groupId}`, {
+        user_id: currentUserId,
       });
+      showSuccessToast("Successfully joined group");
+      setReloadKey((value) => value + 1);
+    } catch (error) {
+      console.error(error);
+      showErrorToast("Failed to join group");
+    } finally {
+      setJoiningGroupId(null);
     }
-
-    // Apply sorting
-    if (sortBy === "latest") {
-      filtered = [...filtered].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    } else if (sortBy === "most-liked") {
-      filtered = [...filtered].sort((a, b) => b.likes - a.likes);
-    } else if (sortBy === "most-commented") {
-      filtered = [...filtered].sort((a, b) => b.comments - a.comments);
-    }
-
-    return filtered;
-  }, [activeTab, allDiscussionPosts, groupDiscussions, myDiscussionPosts, searchQuery, selectedGroupIds, sortBy, groupsList, currentUserId]);
-
-  // Filter groups for Groups and My Groups tabs with search
-  const visibleGroups = useMemo(() => {
-    let groups = activeTab === "my-groups" ? joinedGroups : groupsList;
-    
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      groups = groups.filter((group) => 
-        group.name.toLowerCase().includes(query) || 
-        group.description.toLowerCase().includes(query)
-      );
-    }
-    
-    return groups;
-  }, [activeTab, groupsList, joinedGroups, searchQuery]);
+  };
 
   // ==================== HANDLERS ====================
   const refreshForumData = useCallback(() => setReloadKey((value) => value + 1), []);
@@ -716,74 +1292,103 @@ const Forums = () => {
     setExpandedPostId((current) => (current === postId ? null : postId));
   }, []);
 
-  const updateReplyText = useCallback((postId: string, text: string) => {
-    setReplyText((prev) => ({ ...prev, [postId]: text }));
+  const updateReplyText = useCallback((postId: number, text: string) => {
+    setReplyText({ ...replyText, [postId]: text });
   }, []);
 
-  const handleLikePost = useCallback((postId: string) => {
-    setLikedPosts((prev) => {
-      const next = new Set(prev);
-      if (next.has(postId)) {
-        next.delete(postId);
-        setGroupDiscussions((items) => items.map((post) => 
-          post.id === postId ? { ...post, likes: Math.max(0, post.likes - 1) } : post
-        ));
-        setMyDiscussionPosts((items) => items.map((post) => 
-          post.id === postId ? { ...post, likes: Math.max(0, post.likes - 1) } : post
-        ));
-      } else {
-        next.add(postId);
-        setGroupDiscussions((items) => items.map((post) => 
-          post.id === postId ? { ...post, likes: post.likes + 1 } : post
-        ));
-        setMyDiscussionPosts((items) => items.map((post) => 
-          post.id === postId ? { ...post, likes: post.likes + 1 } : post
-        ));
-      }
-      return next;
-    });
-  }, []);
-
-  const handleReply = useCallback(async (postId: string) => {
-    const replyContent = replyText[postId]?.trim();
-    const replyImageList = replyImages[postId] ?? [];
-
-    if (!replyContent && replyImageList.length === 0) return;
-
-    const post = allDiscussionPosts.find((item) => item.id === postId);
-    if (!post) return;
-
-    const payload = {
-      user_id: currentUserId,
-      comment: replyContent || "",
-      comment_id: `cmt_${Date.now()}`,
-      comment_reference_id: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      deleted_at: null,
-      attachments: replyImageList.map((image) => ({ file_path: image.url || image.preview })),
-      likes: [],
-    };
-
-    try {
-      await api.post(`/api/forum/discussions/${post.id}/comments`, payload);
-      setReplyText((prev) => ({ ...prev, [postId]: "" }));
-      setReplyImages((prev) => ({ ...prev, [postId]: [] }));
-      showSuccessToast("Reply posted successfully!");
-      refreshForumData();
-    } catch (error) {
-      console.error(error);
-      showErrorToast("Failed to post reply");
+  // ==================== DISPLAY POSTS ====================
+  const displayPosts = useMemo(() => {
+    let posts: Post[] = [];
+    
+    if (activeTab === "feed") {
+      posts = groupDiscussions.filter((post) => selectedGroupIds.includes(String(post.forum_group_id)));
+    } else if (activeTab === "my-discussions") {
+      posts = myDiscussionPosts.filter((post) => post.user_id === currentUserId);
+    } else if (activeTab === "saved") {
+      posts = savedDiscussions;
+    } else {
+      return [];
     }
-  }, [replyText, replyImages, allDiscussionPosts, refreshForumData, currentUserId]);
 
-  const handleReplyImageUpload = useCallback(async (postId: string, files: FileList | null) => {
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      posts = posts.filter((post) => {
+        const group = groupsList.find((g) => String(g._id) === String(post.forum_group_id));
+        const matchesGroup = group?.group_name.toLowerCase().includes(query) ?? false;
+        const matchesTitle = post.title.toLowerCase().includes(query);
+        const matchesContent = post.content.toLowerCase().includes(query);
+        return matchesGroup || matchesTitle || matchesContent;
+      });
+    }
+
+    // Sort
+    if (sortBy === "latest") {
+      posts = [...posts].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    } else if (sortBy === "most-liked") {
+      posts = [...posts].sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0));
+    } else if (sortBy === "most-commented") {
+      posts = [...posts].sort((a, b) => (b.comments?.length || 0) - (a.comments?.length || 0));
+    }
+
+    return posts.map((post, index) => {
+      // Get user details from membersDetailsMap
+      let authorName, authorAvatar;
+      if (post.user_id === currentUserId) {
+        authorName = currentUserName;
+        authorAvatar = currentUserAvatar;
+      } else if (membersDetailsMap[post.user_id]) {
+        authorName = membersDetailsMap[post.user_id].name;
+        authorAvatar = membersDetailsMap[post.user_id].avatar;
+      } else {
+        authorName = `User ${post.user_id}`;
+        authorAvatar = `https://i.pravatar.cc/150?u=${post.user_id}`;
+      }
+      
+      const isLiked = post.likes?.some(like => like.user_id === currentUserId) || false;
+      const isSaved = post.saves?.some(save => save.user_id === currentUserId) || false;
+      
+      return {
+        ...post,
+        arrayIndex: index,
+        id: post._id || String(index),
+        author: authorName,
+        authorAvatar: authorAvatar,
+        excerpt: post.content,
+        ago: getTimeAgo(post.created_at),
+        tagsList: post.tags || [],
+        likeCount: post.likes?.length || 0,
+        commentCount: post.comments?.length || 0,
+        isLiked,
+        isSaved,
+        commentTree: buildCommentTree(post.comments || []),
+      };
+    });
+  }, [activeTab, groupDiscussions, myDiscussionPosts, savedDiscussions, selectedGroupIds, searchQuery, sortBy, groupsList, currentUserId, membersDetailsMap, currentUserName, currentUserAvatar]);
+
+  const visibleGroups = useMemo(() => {
+    let groups = activeTab === "my-groups" ? joinedGroups : groupsList;
+    
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      groups = groups.filter((group) => 
+        group.group_name.toLowerCase().includes(query) || 
+        group.content.toLowerCase().includes(query)
+      );
+    }
+    
+    return groups;
+  }, [activeTab, groupsList, joinedGroups, searchQuery]);
+
+  // ==================== REPLY HANDLERS ====================
+  const handleReplyImageUpload = async (postId: string, files: FileList | null) => {
     if (!files) return;
 
     const newImages: ImageAttachment[] = [];
 
-    for (let index = 0; index < files.length; index += 1) {
-      const file = files[index];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+
       if (!file.type.startsWith("image/")) {
         showErrorToast(`${file.name} is not an image file`);
         continue;
@@ -794,110 +1399,461 @@ const Forums = () => {
         continue;
       }
 
+      const preview = URL.createObjectURL(file);
+      const imageId = `${Date.now()}-${i}`;
+
       newImages.push({
-        id: `${Date.now()}-${index}`,
+        id: imageId,
         file,
-        preview: URL.createObjectURL(file),
+        preview,
         uploading: true,
         uploadProgress: 0,
       });
     }
 
-    setReplyImages((prev) => ({
+    setReplyImages(prev => ({
       ...prev,
-      [postId]: [...(prev[postId] ?? []), ...newImages],
+      [postId]: [...(prev[postId] || []), ...newImages]
     }));
-    setReplyUploading((prev) => ({ ...prev, [postId]: true }));
+    setReplyUploading(prev => ({ ...prev, [postId]: true }));
 
     for (const image of newImages) {
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      setReplyImages((prev) => ({
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setReplyImages(prev => ({
         ...prev,
-        [postId]: (prev[postId] ?? []).map((item) => 
-          item.id === image.id ? { ...item, uploading: false, url: item.preview } : item
-        ),
+        [postId]: prev[postId].map(img =>
+          img.id === image.id ? { ...img, uploading: false, url: img.preview } : img
+        )
       }));
     }
+    setReplyUploading(prev => ({ ...prev, [postId]: false }));
+  };
 
-    setReplyUploading((prev) => ({ ...prev, [postId]: false }));
-  }, []);
-
-  const removeReplyImage = useCallback((postId: string, imageId: string) => {
-    const image = replyImages[postId]?.find((item) => item.id === imageId);
-    if (image?.preview.startsWith("blob:")) {
+  const removeReplyImage = (postId: string, imageId: string) => {
+    const image = replyImages[postId]?.find(img => img.id === imageId);
+    if (image && image.preview.startsWith('blob:')) {
       URL.revokeObjectURL(image.preview);
     }
-
-    setReplyImages((prev) => ({
+    setReplyImages(prev => ({
       ...prev,
-      [postId]: (prev[postId] ?? []).filter((item) => item.id !== imageId),
+      [postId]: prev[postId]?.filter(img => img.id !== imageId) || []
     }));
-  }, [replyImages]);
+  };
 
-  const handleCreatePost = useCallback(async (postData: {
-    title: string;
-    content: string;
-    groupId: string;
-    tag: string;
-    images?: ImageAttachment[];
-  }) => {
-    const payload: ForumDiscussionDocument = {
-      forum_group_id: postData.groupId,
+  const handleReply = async (postArrayIndex: number) => {
+    const replyContent = replyText[postArrayIndex]?.trim();
+    const replyImageList = replyImages[postArrayIndex] || [];
+
+    if (!replyContent && replyImageList.length === 0) return;
+
+    const updatedPosts = [...groupDiscussions];
+    const currentPost = updatedPosts[postArrayIndex];
+    
+    if (!currentPost) {
+      showErrorToast("Post not found");
+      return;
+    }
+
+    const newComment: Comment = {
       user_id: currentUserId,
-      title: postData.title,
-      description: postData.content,
+      comment: replyContent || "",
+      comment_id: `cmt_${Date.now()}_${Math.random()}`,
+      comment_reference_id: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       deleted_at: null,
-      tags: postData.tag ? [{ forum_tag_id: Number.isNaN(Number(postData.tag)) ? 0 : Number(postData.tag) }] : [],
-      attachments: (postData.images ?? []).map((image) => ({ file_path: image.url || image.preview })),
-      likes: [],
-      saves: [],
-      comments: [],
+      attachments: replyImageList.map(img => ({ file_path: img.url || img.preview })),
+      likes: []
     };
 
     try {
-      await api.post("/api/forum/discussions", payload);
+      const response = await api.post(`api/forum/discussions/${currentPost._id}/comments`, newComment);
+      
+      if (response.status !== 201) {
+        showErrorToast("Failed to post reply. Please try again.");
+        return;
+      }
+      
+      const savedComment = response.data;
+      console.log("Saved comment:", savedComment);
+      
+      if (postArrayIndex !== -1) {
+        updatedPosts[postArrayIndex].comments.push(savedComment || newComment);
+        setGroupDiscussions(updatedPosts);
+        showSuccessToast("Reply posted successfully!");
+      }
+    } catch (error) {
+      console.error("Error posting reply:", error);
+      showErrorToast("Failed to post reply. Please try again.");
+      return;
+    } finally {
+      setReplyText({ ...replyText, [postArrayIndex]: "" });
+      setReplyImages(prev => ({ ...prev, [postArrayIndex]: [] }));
+    }
+  };
+
+  const handleCommentReply = async (postArrayIndex: number, parentCommentId: string) => {
+    const replyContent = replyCommentText.trim();
+    const replyImageList = commentReplyImages;
+
+    if (!replyContent && replyImageList.length === 0) return;
+
+    const updatedPosts = [...groupDiscussions];
+    const currentPost = updatedPosts[postArrayIndex];
+    
+    if (!currentPost) {
+      showErrorToast("Post not found");
+      return;
+    }
+
+    const newComment: Comment = {
+      user_id: currentUserId,
+      comment: replyContent || "",
+      comment_id: `cmt_${Date.now()}_${Math.random()}`,
+      comment_reference_id: parentCommentId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      deleted_at: null,
+      attachments: replyImageList.map(img => ({ file_path: img.url || img.preview })),
+      likes: []
+    };
+
+    try {
+      const response = await api.post(`api/forum/discussions/${currentPost._id}/comments`, newComment);
+      
+      if (response.status !== 201) {
+        showErrorToast("Failed to post reply. Please try again.");
+        return;
+      }
+      
+      const savedComment = response.data;
+      console.log("Saved comment reply:", savedComment);
+      
+      updatedPosts[postArrayIndex].comments.push(savedComment || newComment);
+      setGroupDiscussions(updatedPosts);
+      showSuccessToast("Reply posted successfully!");
+    } catch (error) {
+      console.error("Error posting reply:", error);
+      showErrorToast("Failed to post reply. Please try again.");
+      return;
+    } finally {
+      setReplyCommentText("");
+      setCommentReplyImages([]);
+      setReplyingTo(null);
+    }
+  };
+
+  const handleCommentReplyImageUpload = async (files: FileList | null) => {
+    if (!files) return;
+
+    const newImages: ImageAttachment[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+
+      if (!file.type.startsWith("image/")) {
+        showErrorToast(`${file.name} is not an image file`);
+        continue;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        showErrorToast(`${file.name} exceeds 5MB limit`);
+        continue;
+      }
+
+      const preview = URL.createObjectURL(file);
+      const imageId = `${Date.now()}-${i}`;
+
+      newImages.push({
+        id: imageId,
+        file,
+        preview,
+        uploading: true,
+        uploadProgress: 0,
+      });
+    }
+
+    setCommentReplyImages(prev => [...prev, ...newImages]);
+    setCommentReplyUploading(true);
+
+    for (const image of newImages) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setCommentReplyImages(prev =>
+        prev.map(img =>
+          img.id === image.id ? { ...img, uploading: false, url: img.preview } : img
+        )
+      );
+    }
+    setCommentReplyUploading(false);
+  };
+
+  const removeCommentReplyImage = (imageId: string) => {
+    const image = commentReplyImages.find(img => img.id === imageId);
+    if (image && image.preview.startsWith('blob:')) {
+      URL.revokeObjectURL(image.preview);
+    }
+    setCommentReplyImages(prev => prev.filter(img => img.id !== imageId));
+  };
+
+  const handleReplyClick = (postId: number, commentId: string, authorName: string, authorId: number) => {
+    setReplyingTo({ commentId, authorName, authorId });
+    setReplyCommentText("");
+    setCommentReplyImages([]);
+  };
+
+  // ==================== LIKE HANDLERS ====================
+  const handleLikePost = async (postId: string) => {
+    const currentPost = displayPosts.find(p => p.id === postId);
+    if (!currentPost) return;
+    
+    const isCurrentlyLiked = currentPost.isLiked;
+    const postIndex = displayPosts.findIndex(p => p.id === postId);
+    
+    // Optimistic update
+    setGroupDiscussions(prevPosts =>
+      prevPosts.map((post, idx) => {
+        if (idx === postIndex) {
+          const updatedLikes = isCurrentlyLiked
+            ? post.likes.filter(like => like.user_id !== currentUserId)
+            : [...post.likes, { user_id: currentUserId }];
+          return { ...post, likes: updatedLikes };
+        }
+        return post;
+      })
+    );
+    
+    try {
+      const payload = isCurrentlyLiked 
+        ? { likes: { action: 'remove', user_id: currentUserId } }
+        : { likes: { user_id: currentUserId } };
+      
+      await api.patch(`api/forum/discussions/${currentPost._id}`, payload);
+    } catch (error) {
+      console.error("Error liking post:", error);
+      // Revert on error
+      setGroupDiscussions(prevPosts =>
+        prevPosts.map((post, idx) => {
+          if (idx === postIndex) {
+            const revertedLikes = isCurrentlyLiked
+              ? [...post.likes, { user_id: currentUserId }]
+              : post.likes.filter(like => like.user_id !== currentUserId);
+            return { ...post, likes: revertedLikes };
+          }
+          return post;
+        })
+      );
+      showErrorToast("Failed to update like status");
+    }
+  };
+
+  const handleLikeComment = async (postId: number, commentId: string) => {
+    const currentPost = groupDiscussions[postId];
+    const currentComment = currentPost?.comments?.find(c => c.comment_id === commentId);
+    if (!currentComment) return;
+    
+    const isCurrentlyLiked = currentComment.likes?.some(like => like.user_id === currentUserId) || false;
+    
+    setGroupDiscussions(prevPosts =>
+      prevPosts.map((post, idx) => {
+        if (idx === postId) {
+          const updatedComments = post.comments.map(comment => {
+            if (comment.comment_id === commentId) {
+              if (isCurrentlyLiked) {
+                return {
+                  ...comment,
+                  likes: comment.likes.filter(like => like.user_id !== currentUserId)
+                };
+              } else {
+                return {
+                  ...comment,
+                  likes: [...comment.likes, { user_id: currentUserId }]
+                };
+              }
+            }
+            return comment;
+          });
+          return { ...post, comments: updatedComments };
+        }
+        return post;
+      })
+    );
+    
+    try {
+      const payload = isCurrentlyLiked
+        ? { likes: { action: 'remove', user_id: currentUserId } }
+        : { likes: { user_id: currentUserId } };
+      
+      await api.patch(`api/forum/discussions/${currentPost._id}/comments/${commentId}`, payload);
+    } catch (error) {
+      console.error("Error liking comment:", error);
+      setGroupDiscussions(prevPosts =>
+        prevPosts.map((post, idx) => {
+          if (idx === postId) {
+            const revertedComments = post.comments.map(comment => {
+              if (comment.comment_id === commentId) {
+                if (isCurrentlyLiked) {
+                  return {
+                    ...comment,
+                    likes: [...comment.likes, { user_id: currentUserId }]
+                  };
+                } else {
+                  return {
+                    ...comment,
+                    likes: comment.likes.filter(like => like.user_id !== currentUserId)
+                  };
+                }
+              }
+              return comment;
+            });
+            return { ...post, comments: revertedComments };
+          }
+          return post;
+        })
+      );
+      showErrorToast("Failed to update like status");
+    }
+  };
+
+  // ==================== SAVE POST ====================
+  const handleSavePost = async (postId: string) => {
+    const currentPost = displayPosts.find(p => p.id === postId);
+    if (!currentPost) return;
+    
+    const isCurrentlySaved = currentPost.isSaved;
+    const postIndex = displayPosts.findIndex(p => p.id === postId);
+    
+    setGroupDiscussions(prevPosts =>
+      prevPosts.map((post, idx) => {
+        if (idx === postIndex) {
+          const updatedSaves = isCurrentlySaved
+            ? post.saves.filter(save => save.user_id !== currentUserId)
+            : [...post.saves, { user_id: currentUserId }];
+          return { ...post, saves: updatedSaves };
+        }
+        return post;
+      })
+    );
+    
+    try {
+      const payload = isCurrentlySaved 
+        ? { saves: { action: 'remove', user_id: currentUserId } }
+        : { saves: { user_id: currentUserId } };
+      
+      await api.patch(`api/forum/discussions/${currentPost._id}`, payload);
+      
+      // Refresh saved list if on saved tab
+      if (activeTab === 'saved' || !isCurrentlySaved) {
+        const savedDiscussionsResponse = await api.get("api/forum/discussions/saved");
+        setSavedDiscussions(savedDiscussionsResponse.data || []);
+      }
+      
+      showSuccessToast(isCurrentlySaved ? "Post removed from saved" : "Post saved");
+    } catch (error) {
+      console.error("Error saving post:", error);
+      setGroupDiscussions(prevPosts =>
+        prevPosts.map((post, idx) => {
+          if (idx === postIndex) {
+            const revertedSaves = isCurrentlySaved
+              ? [...post.saves, { user_id: currentUserId }]
+              : post.saves.filter(save => save.user_id !== currentUserId);
+            return { ...post, saves: revertedSaves };
+          }
+          return post;
+        })
+      );
+      showErrorToast("Failed to update save status");
+    }
+  };
+
+  // ==================== CREATE/EDIT/DELETE POST ====================
+  const handleCreatePost = async (postData: {
+    title: string;
+    content: string;
+    groupId: number;
+    tag: string;
+    images?: ImageAttachment[];
+  }) => {
+    const tagId = parseInt(postData.tag) || 0;
+    const newTag: ForumTag = { 
+      tag_id: tagId,
+      tag_name: postData.tag 
+    };
+    const forum_group_id = postData.groupId;
+    delete postData.groupId;
+    
+    try {
+      const response = await api.post(`api/forum/discussions`, {
+        ...postData,
+        forum_group_id,
+        user_id: currentUserId,
+        tags: postData.tag ? [newTag] : [],
+      });
+      
+      if (response.status !== 201) {
+        showErrorToast("Failed to create post. Please try again.");
+        return;
+      }
+      
+      const newPost: Post = {
+        _id: response.data._id || response.data,
+        forum_group_id: Number(forum_group_id),
+        user_id: currentUserId,
+        title: postData.title,
+        content: postData.content,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        deleted_at: null,
+        tags: postData.tag ? [newTag] : [],
+        attachments: postData.images?.map(img => ({ file_path: img.preview })) || [],
+        likes: [],
+        saves: [],
+        comments: [],
+      };
+      
+      setGroupDiscussions([newPost, ...groupDiscussions]);
       showSuccessToast(`"${postData.title}" posted successfully!`);
       setIsNewDiscussionOpen(false);
-      refreshForumData();
     } catch (error) {
       console.error(error);
-      showErrorToast("Failed to create discussion");
+      showErrorToast("Failed to create post. Please try again.");
     }
-  }, [refreshForumData, currentUserId]);
+  };
 
-  const handleEditPost = useCallback((postId: number, updatedData: { title: string; content: string; tag: string; images?: ImageAttachment[] }) => {
-    const updatePosts = (posts: Post[]) =>
-      posts.map((post) =>
-        post.id === String(postId)
-          ? {
-              ...post,
-              title: updatedData.title,
-              content: updatedData.content,
-              excerpt: updatedData.content.length > 180 ? `${updatedData.content.slice(0, 180)}...` : updatedData.content,
-              tag: updatedData.tag,
-              images: updatedData.images,
-            }
-          : post
-      );
+  const handleEditPost = (postId: number, updatedData: { title: string; content: string; tag: string; images?: ImageAttachment[] }) => {
+    const updatedTag: ForumTag = { 
+      tag_id: parseInt(updatedData.tag) || 0,
+      tag_name: updatedData.tag 
+    };
+    
+    setGroupDiscussions(prev => prev.map((post, idx) =>
+      idx === postId
+        ? {
+            ...post,
+            title: updatedData.title,
+            content: updatedData.content,
+            tags: [updatedTag],
+            attachments: updatedData.images?.map(img => ({ file_path: img.preview })) || post.attachments,
+          }
+        : post
+    ));
+    showSuccessToast("Post updated successfully!");
+  };
 
-    setGroupDiscussions((prev) => updatePosts(prev));
-    setMyDiscussionPosts((prev) => updatePosts(prev));
-    showSuccessToast("Post updated successfully");
-    refreshForumData();
-  }, [refreshForumData]);
-
-  const handleDeletePost = useCallback(() => {
-    if (!deletingPost) return;
-
-    setGroupDiscussions((prev) => prev.filter((post) => post.id !== deletingPost.id));
-    setMyDiscussionPosts((prev) => prev.filter((post) => post.id !== deletingPost.id));
-    if (expandedPostId === deletingPost.id) setExpandedPostId(null);
-    setDeletingPost(null);
-    showSuccessToast(`"${deletingPost.title}" has been deleted`);
-    refreshForumData();
-  }, [deletingPost, expandedPostId, refreshForumData]);
+  const handleDeletePost = () => {
+    if (deletingPost) {
+      const postIndex = groupDiscussions.findIndex((_, idx) => idx === deletingPost.arrayIndex);
+      if (postIndex !== -1) {
+        const updatedPosts = [...groupDiscussions];
+        updatedPosts.splice(postIndex, 1);
+        setGroupDiscussions(updatedPosts);
+      }
+      showSuccessToast(`"${deletingPost.title}" has been deleted`);
+      setDeletingPost(null);
+      if (expandedPostId === deletingPost.id) {
+        setExpandedPostId(null);
+      }
+    }
+  };
 
   const handleActionClick = useCallback(() => {
     if (activeTab === "groups" || activeTab === "my-groups") {
@@ -945,15 +1901,15 @@ const Forums = () => {
             <div className="flex flex-wrap gap-2">
               {availableFilterGroups.map((group) => (
                 <button
-                  key={group.id}
-                  onClick={() => toggleGroupFilter(group.id)}
+                  key={group._id}
+                  onClick={() => toggleGroupFilter(group._id)}
                   className={`rounded-full px-3 py-1 text-xs transition-all duration-200 ${
-                    selectedGroupIds.includes(group.id)
+                    selectedGroupIds.includes(group._id)
                       ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
                       : "border border-white/15 bg-white/5 text-zinc-400 hover:border-white/30 hover:text-white"
                   }`}
                 >
-                  {group.name}
+                  {group.group_name}
                 </button>
               ))}
               {availableFilterGroups.length === 0 && (
@@ -987,43 +1943,50 @@ const Forums = () => {
     </div>
   );
 
-  const renderPostCard = (post: Post, showGroupName: boolean = true) => {
-    const group = groupsList.find((item) => String(item.id) === String(post.groupId));
-    const isLiked = likedPosts.has(post.id);
+  const renderPostCard = (post: any, showGroupName: boolean = true) => {
+    const group = groupsList.find((item) => String(item._id) === String(post.forum_group_id));
     const isExpanded = expandedPostId === post.id;
+    const isLiked = post.isLiked;
+    const isSaved = post.isSaved;
 
     return (
-      <div key={post.id} className="group relative overflow-hidden rounded-xl border border-white/10 bg-linear-to-br from-white/5 to-transparent transition-all duration-300 hover:border-white/20 hover:bg-white/10">
-        <div className="p-4">
-          <div className="mb-3 flex items-start gap-3">
-            <img src={post.authorAvatar} alt={post.author} className="h-10 w-10 rounded-full object-cover ring-2 ring-white/20" />
+      <div key={post.id} className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 transition hover:border-white/20">
+        <div className="flex gap-3">
+          <img src={post.authorAvatar} alt={post.author} className="h-10 w-10 rounded-full object-cover ring-2 ring-white/20" />
+          <div className="flex-1">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-sm font-medium text-white">{post.author}</p>
+                <span className="text-xs text-zinc-500">{post.ago}</span>
+                {showGroupName && group && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] text-cyan-400">
+                    {group.group_name}
+                  </span>
+                )}
+                {post.tagsList && post.tagsList.length > 0 && (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {post.tagsList.map((tag: ForumTag, tagIdx: number) => (
+                      <span 
+                        key={tag.tag_id || tagIdx} 
+                        className={`rounded-full px-2 py-0.5 text-[10px] ${getTagColor(tag.tag_id)}`}
+                      >
+                        {tag.tag_name || `Tag ${tag.tag_id}`}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-            <div className="flex-1">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-medium text-white">{post.author}</p>
-                  <span className="text-xs text-zinc-500">{post.ago}</span>
-                  {showGroupName && group && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] text-cyan-400">
-                      {group.name}
-                    </span>
-                  )}
-                  {post.tag && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/20 px-2 py-0.5 text-[10px] text-purple-400">
-                      {post.tag}
-                    </span>
-                  )}
-                </div>
-
+              {post.user_id === currentUserId && (
                 <div className="relative">
                   <button
-                    onClick={() => setPostMenuOpen((current) => (current === post.id ? null : post.id))}
+                    onClick={() => setPostMenuOpen(postMenuOpen === post.id ? null : post.id)}
                     className="rounded-lg p-1 text-zinc-500 transition hover:bg-white/10 hover:text-white"
                   >
                     <MoreVertical className="h-4 w-4" />
                   </button>
                   {postMenuOpen === post.id && (
-                    <div className="absolute right-0 z-20 mt-1 w-36 overflow-hidden rounded-lg border border-white/10 bg-[#0d0f1a] shadow-xl">
+                    <div className="absolute right-0 mt-1 w-36 rounded-lg border border-white/10 bg-[#0d0f1a] shadow-xl overflow-hidden z-20">
                       <button
                         onClick={() => {
                           setEditingPost(post);
@@ -1047,90 +2010,106 @@ const Forums = () => {
                     </div>
                   )}
                 </div>
-              </div>
+              )}
+            </div>
 
-              <h3
-                onClick={() => navigate(`/forums/discussion/${post.id}`)}
-                className="mt-1 cursor-pointer text-base font-semibold text-white transition-colors hover:text-blue-400"
+            <h3 className="mt-1 text-base font-semibold text-white">{post.title}</h3>
+
+            <div className="mt-2 text-sm text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
+                {post.content}
+              </ReactMarkdown>
+            </div>
+
+            <ImageGallery attachments={post.attachments} />
+
+            <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
+              <button
+                onClick={() => toggleExpand(post.id)}
+                className="inline-flex items-center gap-1 text-zinc-500 transition hover:text-white"
               >
-                {post.title}
-              </h3>
+                <MessageCircle className="h-3.5 w-3.5" />
+                <span>{post.commentCount} replies</span>
+                {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </button>
 
-              <div className="prose prose-invert prose-sm mt-2 max-w-none text-sm text-zinc-400" dangerouslySetInnerHTML={{ __html: renderMarkdownContent(post.excerpt) }} />
+              <button
+                onClick={() => handleLikePost(post.id)}
+                className={`inline-flex items-center gap-1 transition-all duration-200 ${
+                  isLiked 
+                    ? "text-red-400 hover:text-red-300" 
+                    : "text-zinc-500 hover:text-white"
+                }`}
+                type="button"
+              >
+                <Heart className={`h-3.5 w-3.5 transition-all ${isLiked ? "fill-red-400" : ""}`} />
+                <span>{post.likeCount} likes</span>
+              </button>
 
-              <ImageGallery images={post.images} />
-
-              <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
-                <button onClick={() => toggleExpand(post.id)} className="inline-flex items-center gap-1 text-zinc-500 transition hover:text-white" type="button">
-                  <MessageCircle className="h-3.5 w-3.5" />
-                  <span>{post.comments} replies</span>
-                  {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                </button>
-
-                <button
-                  onClick={() => handleLikePost(post.id)}
-                  className={`inline-flex items-center gap-1 transition-all duration-200 ${
-                    isLiked ? "text-red-400 hover:text-red-300" : "text-zinc-500 hover:text-white"
-                  }`}
-                  type="button"
-                >
-                  <Heart className={`h-3.5 w-3.5 transition-all ${isLiked ? "fill-red-400" : ""}`} />
-                  <span>{post.likes} likes</span>
-                </button>
-
-                <button className="inline-flex items-center gap-1 text-zinc-500 transition hover:text-white" type="button">
-                  <Bookmark className="h-3.5 w-3.5" />
-                  <span>Save</span>
-                </button>
-              </div>
+              <button
+                onClick={() => handleSavePost(post.id)}
+                className={`inline-flex items-center gap-1 transition-all duration-200 ${
+                  isSaved 
+                    ? "text-yellow-400 hover:text-yellow-300" 
+                    : "text-zinc-500 hover:text-white"
+                }`}
+                type="button"
+              >
+                <Bookmark className={`h-3.5 w-3.5 transition-all ${isSaved ? "fill-yellow-400" : ""}`} />
+                <span>{isSaved ? "Saved" : "Save"}</span>
+              </button>
             </div>
+
+            {isExpanded && (
+              <div className="mt-4 border-t border-white/10 pt-4">
+                <div className="space-y-4">
+                  {post.commentTree && post.commentTree.length > 0 ? (
+                    post.commentTree.map((comment: Comment, commentIndex: number) => (
+                      <CommentItem
+                        key={comment.comment_id}
+                        comment={comment}
+                        postId={post.arrayIndex}
+                        membersDetails={membersDetailsMap}
+                        onLike={handleLikeComment}
+                        onReply={handleReplyClick}
+                        onEditComment={() => {}}
+                        onDeleteComment={() => {}}
+                        replyingTo={replyingTo}
+                        setReplyingTo={setReplyingTo}
+                        replyText={replyCommentText}
+                        setReplyText={setReplyCommentText}
+                        onSendReply={handleCommentReply}
+                        replyImages={commentReplyImages}
+                        onReplyImageUpload={handleCommentReplyImageUpload}
+                        onRemoveReplyImage={removeCommentReplyImage}
+                        isUploading={commentReplyUploading}
+                        currentUserId={currentUserId}
+                        currentUserName={currentUserName}
+                        currentUserAvatar={currentUserAvatar}
+                        isLastInThread={commentIndex === post.commentTree.length - 1}
+                      />
+                    ))
+                  ) : (
+                    <p className="text-center text-sm text-zinc-500">No comments yet.</p>
+                  )}
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-white/10">
+                  <ReplyInput
+                    replyText={replyText[post.arrayIndex] || ""}
+                    updateReplyText={(text) => updateReplyText(post.arrayIndex, text)}
+                    handleReply={() => handleReply(post.arrayIndex)}
+                    uploadImages={(files) => handleReplyImageUpload(String(post.arrayIndex), files)}
+                    images={replyImages[post.arrayIndex] || []}
+                    removeImage={(imageId) => removeReplyImage(String(post.arrayIndex), imageId)}
+                    isUploading={replyUploading[post.arrayIndex] || false}
+                    currentUserAvatar={currentUserAvatar}
+                    placeholder="Write a comment..."
+                  />
+                </div>
+              </div>
+            )}
           </div>
-
-          {isExpanded && (
-            <div className="animate-fade-in border-t border-white/10 pt-4">
-              <div className="space-y-4">
-                {post.replies && post.replies.length > 0 ? (
-                  post.replies.map((reply) => (
-                    <div key={reply.id} className="flex gap-3">
-                      <img src={reply.authorAvatar} alt={reply.author} className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20" />
-                      <div className="flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-medium text-white">{reply.author}</p>
-                          <span className="text-xs text-zinc-500">{reply.ago}</span>
-                        </div>
-                        <div className="prose prose-invert prose-sm mt-1 max-w-none text-sm text-zinc-400" dangerouslySetInnerHTML={{ __html: renderMarkdownContent(reply.content) }} />
-                        <ImageGallery images={reply.images} />
-                        <div className="mt-2 flex items-center gap-3">
-                          <button className="inline-flex items-center gap-1 text-xs text-zinc-500 transition hover:text-white">
-                            <ThumbsUp className="h-3 w-3" />
-                            <span>{reply.likes}</span>
-                          </button>
-                          <button className="inline-flex items-center gap-1 text-xs text-zinc-500 transition hover:text-white">
-                            <MessageCircle className="h-3 w-3" />
-                            <span>Reply</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="py-4 text-center text-sm text-zinc-500">No replies yet. Be the first to reply!</p>
-                )}
-              </div>
-
-              <ReplyInput
-                postId={post.id}
-                replyText={replyText[post.id] || ""}
-                updateReplyText={(text) => updateReplyText(post.id, text)}
-                handleReply={() => handleReply(post.id)}
-                uploadImages={(files) => handleReplyImageUpload(post.id, files)}
-                images={replyImages[post.id] || []}
-                removeImage={(imageId) => removeReplyImage(post.id, imageId)}
-                isUploading={replyUploading[post.id] || false}
-                currentUserAvatar={currentUserAvatar}
-              />
-            </div>
-          )}
         </div>
       </div>
     );
@@ -1140,12 +2119,12 @@ const Forums = () => {
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {visibleGroups.map((group) => (
         <div
-          key={group.id}
-          onClick={() => navigate(`/forums/group/${group.id}`)}
+          key={group._id}
+          onClick={() => navigate(`/forums/group/${group._id}`)}
           className="group relative cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-linear-to-br from-white/5 to-transparent transition-all duration-300 hover:scale-[1.02] hover:border-white/20 hover:bg-white/10"
         >
-          {group.imageUrl ? (
-            <img src={group.imageUrl} alt={group.name} className="h-24 w-full object-cover" />
+          {group.image_url ? (
+            <img src={group.image_url} alt={group.group_name} className="h-24 w-full object-cover" />
           ) : (
             <div className={`h-24 bg-linear-to-r ${group.gradient}`} />
           )}
@@ -1153,22 +2132,41 @@ const Forums = () => {
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="text-xs text-zinc-500">Forum Group</p>
-                <h3 className="mt-1 text-sm font-semibold text-white">{group.name}</h3>
+                <h3 className="mt-1 text-sm font-semibold text-white">{group.group_name}</h3>
               </div>
-              {group.joined && (
-                <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] text-emerald-400">Joined</span>
+              {!group.joined ? (
+                <button
+                  className="flex items-center gap-1 rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] text-blue-400 transition hover:bg-blue-500/30 hover:scale-105 disabled:opacity-50"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    joinGroup(group._id);
+                  }}
+                  disabled={joiningGroupId === group._id}
+                >
+                  {joiningGroupId === group._id ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <UserPlus className="h-3 w-3" />
+                  )}
+                  Join
+                </button>
+              ) : (
+                <span className="flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] text-emerald-400">
+                  <CheckCircle className="h-3 w-3" />
+                  Joined
+                </span>
               )}
             </div>
-            <p className="mt-1 line-clamp-2 text-xs text-zinc-400">{group.description}</p>
+            <p className="mt-1 line-clamp-2 text-xs text-zinc-400">{group.content}</p>
             <div className="mt-2 flex items-center gap-2">
               <Users className="h-3 w-3 text-zinc-500" />
-              <p className="text-xs text-zinc-500">{group.memberCount} members</p>
+              <p className="text-xs text-zinc-500">{group.members?.length || 0} members</p>
             </div>
             <div className="mt-3 flex flex-wrap gap-1">
-              {group.tags.slice(0, 3).map((tag) => (
+              {group.tags?.slice(0, 3).map((tag) => (
                 <span key={tag.tag_id} className="rounded-full bg-blue-500/20 px-2 py-0.5 text-[9px] text-blue-400">{tag.tag}</span>
               ))}
-              {group.tags.length > 3 && (
+              {group.tags?.length > 3 && (
                 <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] text-zinc-400">+{group.tags.length - 3}</span>
               )}
             </div>
@@ -1207,7 +2205,15 @@ const Forums = () => {
             <div className="h-10 w-36 animate-pulse rounded-full bg-white/10" />
           </div>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
-            <div><SidebarSkeleton /></div>
+            <div><div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-4">
+              <div className="mb-2 h-5 w-24 animate-pulse rounded bg-white/10" />
+              <div className="mb-3 h-3 w-32 animate-pulse rounded bg-white/5" />
+              <div className="flex flex-wrap gap-2">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="h-7 w-16 animate-pulse rounded-full bg-white/10" />
+                ))}
+              </div>
+            </div></div>
             <div>
               <div className="mb-4 h-10 w-full animate-pulse rounded-full bg-white/5" />
               <div className="mb-4 flex gap-2 border-b border-white/10 pb-3">
@@ -1217,7 +2223,30 @@ const Forums = () => {
               </div>
               <div className="mb-4 h-4 w-48 animate-pulse rounded bg-white/5" />
               <div className="space-y-4">
-                {[1, 2, 3, 4].map((i) => (<PostCardSkeleton key={i} />))}
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                    <div className="flex gap-3">
+                      <div className="h-10 w-10 animate-pulse rounded-full bg-white/10" />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="h-4 w-32 animate-pulse rounded bg-white/10" />
+                          <div className="h-3 w-20 animate-pulse rounded bg-white/5" />
+                        </div>
+                        <div className="mt-2 h-5 w-3/4 animate-pulse rounded bg-white/10" />
+                        <div className="mt-2 space-y-2">
+                          <div className="h-4 w-full animate-pulse rounded bg-white/5" />
+                          <div className="h-4 w-2/3 animate-pulse rounded bg-white/5" />
+                        </div>
+                        <div className="mt-3 flex gap-4">
+                          <div className="h-6 w-16 animate-pulse rounded-full bg-white/10" />
+                          <div className="h-4 w-20 animate-pulse rounded bg-white/5" />
+                          <div className="h-4 w-16 animate-pulse rounded bg-white/5" />
+                          <div className="h-4 w-12 animate-pulse rounded bg-white/5" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -1252,18 +2281,14 @@ const Forums = () => {
           </button>
         </div>
 
-        {/* Dynamic grid layout - changes based on active tab */}
         <div className={`grid grid-cols-1 gap-6 ${activeTab === "feed" ? "lg:grid-cols-[280px_1fr]" : "lg:grid-cols-1"}`}>
-          {/* Sidebar - only visible when active tab is "feed" */}
           {activeTab === "feed" && (
             <div>
               {renderFilterSidebar()}
             </div>
           )}
 
-          {/* Main Content - takes full width when sidebar is hidden */}
           <div className={activeTab === "feed" ? "" : "mx-auto w-full max-w-4xl"}>
-            {/* Search Bar */}
             <div className="mb-4 flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5">
               <Search className="h-4 w-4 text-zinc-500" />
               <input
@@ -1279,7 +2304,6 @@ const Forums = () => {
               )}
             </div>
 
-            {/* Tabs */}
             <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-white/10 pb-3">
               {tabOptions.map((tab) => (
                 <button
@@ -1300,7 +2324,6 @@ const Forums = () => {
               ))}
             </div>
 
-            {/* Groups View */}
             {(activeTab === "groups" || activeTab === "my-groups") && (
               <>
                 {visibleGroups.length === 0 ? (
@@ -1322,7 +2345,6 @@ const Forums = () => {
               </>
             )}
 
-            {/* Feed View */}
             {activeTab === "feed" && (
               <div className="space-y-4">
                 {feedBlocked ? (
@@ -1333,7 +2355,7 @@ const Forums = () => {
                     "Select All My Groups",
                     selectAllGroups
                   )
-                ) : visiblePosts.length === 0 ? (
+                ) : displayPosts.length === 0 ? (
                   renderEmptyState(
                     <MessageCircle className="mb-3 h-8 w-8 text-zinc-500" />,
                     searchQuery ? "No matching discussions" : "No discussions yet",
@@ -1345,19 +2367,18 @@ const Forums = () => {
                   <>
                     <p className="text-sm text-zinc-500">
                       {searchQuery 
-                        ? `Found ${visiblePosts.length} discussion${visiblePosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
-                        : `Showing ${visiblePosts.length} discussions from your joined groups`}
+                        ? `Found ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
+                        : `Showing ${displayPosts.length} discussions from your joined groups`}
                     </p>
-                    {visiblePosts.map((post) => renderPostCard(post, true))}
+                    {displayPosts.map((post) => renderPostCard(post, true))}
                   </>
                 )}
               </div>
             )}
 
-            {/* My Discussions View */}
             {activeTab === "my-discussions" && (
               <div className="space-y-4">
-                {visiblePosts.length === 0 ? (
+                {displayPosts.length === 0 ? (
                   renderEmptyState(
                     <MessageCircle className="mb-3 h-8 w-8 text-zinc-500" />,
                     searchQuery ? "No matching discussions" : "No discussions yet",
@@ -1369,32 +2390,31 @@ const Forums = () => {
                   <>
                     <p className="text-sm text-zinc-500">
                       {searchQuery 
-                        ? `Found ${visiblePosts.length} discussion${visiblePosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
-                        : `Showing ${visiblePosts.length} discussions created by you`}
+                        ? `Found ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
+                        : `Showing ${displayPosts.length} discussions created by you`}
                     </p>
-                    {visiblePosts.map((post) => renderPostCard(post, true))}
+                    {displayPosts.map((post) => renderPostCard(post, true))}
                   </>
                 )}
               </div>
             )}
 
-            {/* Saved View */}
             {activeTab === "saved" && (
               <div className="space-y-4">
-                {visiblePosts.length === 0 ? (
+                {displayPosts.length === 0 ? (
                   renderEmptyState(
                     <Bookmark className="mb-3 h-8 w-8 text-zinc-500" />,
-                    searchQuery ? "No matching saved discussions" : "Saved Discussions",
+                    searchQuery ? "No matching saved discussions" : "No saved discussions yet",
                     searchQuery ? `No saved discussions found matching "${searchQuery}"` : "Bookmark discussions to see them here"
                   )
                 ) : (
                   <>
                     <p className="text-sm text-zinc-500">
                       {searchQuery 
-                        ? `Found ${visiblePosts.length} saved discussion${visiblePosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
-                        : `${visiblePosts.length} saved discussion${visiblePosts.length !== 1 ? "s" : ""}`}
+                        ? `Found ${displayPosts.length} saved discussion${displayPosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
+                        : `${displayPosts.length} saved discussion${displayPosts.length !== 1 ? "s" : ""}`}
                     </p>
-                    {visiblePosts.map((post) => renderPostCard(post, true))}
+                    {displayPosts.map((post) => renderPostCard(post, true))}
                   </>
                 )}
               </div>
@@ -1403,12 +2423,11 @@ const Forums = () => {
         </div>
       </div>
 
-      {/* Modals */}
       <NewDiscussionModal
         isOpen={isNewDiscussionOpen}
         onClose={() => setIsNewDiscussionOpen(false)}
         onCreatePost={handleCreatePost}
-        availableGroups={joinedGroups.map((group) => ({ id: group.id, name: group.name, tags: group.tags }))}
+        availableGroups={joinedGroups.map((group) => ({ id: group._id, name: group.group_name, tags: group.tags }))}
       />
 
       <CreateGroupModal
@@ -1423,7 +2442,13 @@ const Forums = () => {
         isOpen={!!editingPost}
         onClose={() => setEditingPost(null)}
         onSave={handleEditPost}
-        post={editingPost ? { id: Number.parseInt(editingPost.id, 10) || 0, title: editingPost.title, content: editingPost.content, tag: editingPost.tag || "", images: editingPost.images } : null}
+        post={editingPost ? { 
+          id: editingPost.arrayIndex, 
+          title: editingPost.title, 
+          content: editingPost.content, 
+          tag: editingPost.tags[0]?.tag_name || "", 
+          images: editingPost.attachments.map(a => ({ id: a.file_path, preview: a.file_path })) 
+        } : null}
       />
 
       <DeletePostModal

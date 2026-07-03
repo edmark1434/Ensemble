@@ -42,6 +42,7 @@ async function resetSeedTables() {
       user_reports,
       disputes,
       violations,
+      marketplace_listings,
       platform_settings,
       staff,
       users,
@@ -52,10 +53,45 @@ async function resetSeedTables() {
   });
 }
 
+async function seedMarketplaceListings(userAccountIds, staffByRole) {
+  const marketplaceStaffId = staffByRole['Marketplace Moderator'] || null;
+  const categories = ['3D Models', 'UI Kits', 'Audio', 'Stock Photos', 'Templates', 'Icons'];
+  const statuses = ['pending', 'pending', 'approved', 'approved', 'rejected', 'pending', 'approved', 'rejected'];
+
+  for (let i = 0; i < statuses.length; i++) {
+    const status = statuses[i];
+    const isReviewed = status !== 'pending';
+    const listingNumber = `LST-${30000 + i}`;
+    await pool.query(
+      `INSERT INTO marketplace_listings (
+        listing_number, submitted_by_account_id, title, description, category,
+        price_credits, thumbnail_url, status, rejection_reason,
+        reviewed_by_staff_id, reviewed_at, created_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, NOW() - ($12 || ' hours')::interval)`,
+      [
+        listingNumber,
+        userAccountIds[i % userAccountIds.length],
+        cap(faker.commerce.productName(), 255),
+        faker.commerce.productDescription(),
+        categories[i % categories.length],
+        faker.number.int({ min: 50, max: 5000 }),
+        faker.image.urlPicsumPhotos(),
+        status,
+        status === 'rejected' ? 'Asset preview did not match final deliverable.' : null,
+        isReviewed ? marketplaceStaffId : null,
+        isReviewed ? new Date() : null,
+        String(faker.number.int({ min: 2, max: 200 })),
+      ]
+    );
+  }
+
+  console.log(`✅ Seeded ${statuses.length} marketplace listings`);
+}
+
 async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   const supportStaffId = staffByRole['Support Moderator'];
   const adminStaffId = staffByRole.Admin;
-  const disputeStaffId = staffByRole['Dispute Moderator'] || adminStaffId;
+  const marketplaceStaffId = staffByRole['Marketplace Moderator'] || supportStaffId;
 
   const reports = [
     ['RPT-10001', userAccountIds[0], 'member', 'u-3', '@noisy_creator', 'Harassment', 'Repeated hostile messages in forum thread.', 'open', 'high'],
@@ -80,10 +116,10 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   }
 
   const disputes = [
-    ['DIS-21123', 'Feedback dispute after delivery', 'Buyer contests quality rating on completed gig.', 'resolved', 'medium', userAccountIds[1], userAccountIds[3], 'job', 'JOB-8821', disputeStaffId, 2500],
-    ['DIS-21124', 'Payment not released from escrow', 'Seller claims buyer abandoned milestone review.', 'open', 'high', userAccountIds[4], userAccountIds[0], 'contract', 'CTR-4410', disputeStaffId, 12000],
+    ['DIS-21123', 'Feedback dispute after delivery', 'Buyer contests quality rating on completed gig.', 'resolved', 'medium', userAccountIds[1], userAccountIds[3], 'job', 'JOB-8821', adminStaffId, 2500],
+    ['DIS-21124', 'Payment not released from escrow', 'Seller claims buyer abandoned milestone review.', 'open', 'high', userAccountIds[4], userAccountIds[0], 'contract', 'CTR-4410', adminStaffId, 12000],
     ['DIS-21125', 'Asset license disagreement', 'Marketplace buyer disputes commercial usage rights.', 'under_review', 'high', userAccountIds[2], userAccountIds[6], 'marketplace', 'LST-992', adminStaffId, 4500],
-    ['DIS-21126', 'Team revenue split', 'Members disagree on credit distribution.', 'open', 'medium', userAccountIds[5], userAccountIds[7], 'team', 'team-1', disputeStaffId, 8000],
+    ['DIS-21126', 'Team revenue split', 'Members disagree on credit distribution.', 'open', 'medium', userAccountIds[5], userAccountIds[7], 'team', 'team-1', adminStaffId, 8000],
     ['DIS-21127', 'Refund window expired', 'Buyer requests refund outside policy window.', 'resolved', 'low', userAccountIds[8], userAccountIds[9], 'marketplace', 'LST-118', supportStaffId, 900],
   ];
 
@@ -112,9 +148,10 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     ['TKT-50003', 'Credits missing after package purchase', 'billing', 'high', 'open', userAccountIds[4], adminStaffId, 'Admin', null, disputeIds[1]],
     ['TKT-50004', 'Forum group ownership transfer', 'community', 'medium', 'in_progress', userAccountIds[2], staffByRole['Forum Moderator'] || supportStaffId, 'Forum Moderator', reportIds[1], null],
     ['TKT-50005', 'How to invite team members?', 'general', 'low', 'resolved', userAccountIds[6], supportStaffId, 'Support Moderator', null, null],
-    ['TKT-50006', 'Marketplace listing rejected', 'marketplace', 'medium', 'open', userAccountIds[7], supportStaffId, 'Support Moderator', reportIds[2], null],
+    ['TKT-50006', 'Marketplace listing rejected', 'marketplace', 'medium', 'open', userAccountIds[7], marketplaceStaffId, 'Marketplace Moderator', reportIds[2], null],
     ['TKT-50007', 'Two-factor not receiving codes', 'security', 'high', 'open', userAccountIds[1], adminStaffId, 'Admin', null, null],
-    ['TKT-50008', 'Dispute escalation request', 'dispute', 'high', 'in_progress', userAccountIds[5], disputeStaffId, 'Dispute Moderator', null, disputeIds[3]],
+    ['TKT-50008', 'Dispute escalation request', 'dispute', 'high', 'in_progress', userAccountIds[5], adminStaffId, 'Admin', null, disputeIds[3]],
+    ['TKT-50009', 'Asset purchase never delivered', 'marketplace', 'high', 'in_progress', userAccountIds[9], marketplaceStaffId, 'Marketplace Moderator', null, null],
   ];
 
   const ticketIds = [];
@@ -178,7 +215,7 @@ async function seed() {
     const STAFF_SEED = [
       { role: 'Admin', handle: 'admin', email: 'admin@ensemble.dev', firstName: 'Platform', lastName: 'Admin' },
       { role: 'Support Moderator', handle: 'support_moderator', email: 'support@ensemble.dev', firstName: 'Support', lastName: 'Moderator' },
-      { role: 'Dispute Moderator', handle: 'dispute_moderator', email: 'disputes@ensemble.dev', firstName: 'Dispute', lastName: 'Moderator' },
+      { role: 'Marketplace Moderator', handle: 'marketplace_moderator', email: 'marketplace@ensemble.dev', firstName: 'Marketplace', lastName: 'Moderator' },
       { role: 'Jobs N Gigs Moderator', handle: 'jobs_n_gigs_moderator', email: 'jobs@ensemble.dev', firstName: 'Jobs', lastName: 'Moderator' },
       { role: 'Forum Moderator', handle: 'forum_moderator', email: 'forum@ensemble.dev', firstName: 'Forum', lastName: 'Moderator' },
     ];
@@ -248,6 +285,7 @@ async function seed() {
 
     await ensureDefaultSettings();
     await seedTicketsAndDisputes(userAccountIds, staffByRole);
+    await seedMarketplaceListings(userAccountIds, staffByRole);
 
     console.log('');
     console.log('🔑 Staff login (password: staff123):');

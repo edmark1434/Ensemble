@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, Settings, LogOut, User, CircleDollarSign } from "lucide-react";
+import { Bell, ChevronDown, Settings, LogOut, User, CircleDollarSign, Search } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useGlobalState from "@/lib/global_state"; // Ensure this is the correct path
@@ -33,6 +33,9 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
+  // Header Search Input State
+  const [headerSearchInput, setHeaderSearchInput] = useState("");
+
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
 
@@ -40,6 +43,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const [showHeader, setShowHeader] = useState(false);
   const [isCheckingAccess, setIsCheckingAccess] = useState(true);
   const [userCredits, setCredits] = useState(0);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -56,8 +60,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   useEffect(() => {
     const checkRole = async () => {
       try {
-
-        const [checkRoleResponse,getWalletResponse] = await Promise.all([
+        const [checkRoleResponse, getWalletResponse] = await Promise.all([
           api.get("/api/users/check-user-role"),
           api.get("/api/accounts/wallet", {
             params: { type: 'account_wallets' },
@@ -77,6 +80,14 @@ const UserHeader: React.FC<UserHeaderProps> = ({
 
   const handleTopUp = () => {
     navigate("/credits");
+  };
+
+  const handleHeaderSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (headerSearchInput.trim()) {
+      navigate(`/search/user/${encodeURIComponent(headerSearchInput.trim())}`);
+      setHeaderSearchInput(""); // Clear field after redirection triggers
+    }
   };
 
   const executeFinalLogout = async () => {
@@ -106,16 +117,32 @@ const UserHeader: React.FC<UserHeaderProps> = ({
             (!isCollapsed ? "md:p-0" : "md:pl-20")
         }`}
       >
-        <div className="flex items-center justify-between px-6 py-4 md:px-8">
-          {/* Left Side */}
-          <div>
-            <h1 className="text-xl font-semibold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+        <div className="flex items-center justify-between px-6 py-4 md:px-8 gap-4">
+
+          {/* Left Side (Title & Global Profile Search Bar Row) */}
+          <div className="flex items-center gap-8 flex-1 min-w-0">
+            <h1 className="text-xl font-semibold text-white shrink-0 hidden sm:block" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
               {pageTitle}
             </h1>
+
+            {/* Inline Navigation Search Bar Input */}
+            <form onSubmit={handleHeaderSearchSubmit} className="relative w-full max-w-xs group">
+              <Search
+                onClick={handleHeaderSearchSubmit}
+                className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500 group-hover:text-blue-400 transition-colors cursor-pointer"
+              />
+              <input
+                type="text"
+                placeholder="Search creators..."
+                value={headerSearchInput}
+                onChange={(e) => setHeaderSearchInput(e.target.value)}
+                className="w-full rounded-full border border-white/10 bg-white/5 pl-9 pr-4 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder-zinc-500"
+              />
+            </form>
           </div>
 
           {/* Right Side */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 shrink-0">
             {/* Credits */}
             <div className="relative">
               <button
@@ -162,7 +189,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
                 className="flex items-center gap-2 rounded-lg p-1 transition hover:bg-white/10"
               >
                 <img src={userAvatar} alt={userName} className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20" />
-                <div className="text-left">
+                <div className="text-left hidden md:block">
                   <p className="text-sm font-medium text-white">{userInfo?.display_name || userInfo?.displayName || "User"}</p>
                   <p className="text-xs text-zinc-500">Premium Member</p>
                 </div>
@@ -172,7 +199,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
               {isProfileOpen && (
                 <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/10 bg-[#0d0f1a] shadow-2xl backdrop-blur-xl animate-fade-in">
                   <div className="border-b border-white/10 p-3">
-                    <p className="text-sm font-medium text-white">{ userInfo.username}</p>
+                    <p className="text-sm font-medium text-white">{ userInfo?.username }</p>
                     <p className="text-xs text-zinc-500">{userInfo?.email || "user@ensemble.com"}</p>
                   </div>
                   <div className="p-2">

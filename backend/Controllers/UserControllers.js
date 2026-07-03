@@ -9,7 +9,8 @@ const {
     createSessionId,
     logout,
     getCredentials,
-    getUsersByListOfIdsServices
+    getUsersByListOfIdsServices,
+    getNameByUserIdServices
 } = require('../services/UserServices');
 const jwt = require('jsonwebtoken');
 
@@ -37,10 +38,11 @@ async function getUsersByListOfIdsController(req, res) {
         const usersList = await getUsersByListOfIdsServices(userIds);
         res.status(200).json({usersList,message: 'Users fetched successfully'});
     } catch (err) {
+        console.error('Error fetching users by list of IDs:', err);
         if(err instanceof ServiceError){
             return res.status(err.statusCode).json({ error: err.message });
         }
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: 'Internal server error'});
     }
 }
 
@@ -308,6 +310,32 @@ async function CheckUserRole(req,res){
         success: true
     });
 }
+
+async function getNameByUserIdController(req, res) {
+    const userId = req.params.userId;
+    try {
+        const name = await getNameByUserIdServices(userId);
+        if (!name) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found',
+            });
+        }
+    } catch (err) {
+        console.error('Error fetching name by user ID:', err);
+        if (err instanceof ServiceError) {
+            return res.status(err.statusCode).json({
+                success: false,
+                message: err.message,
+            });
+        }
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+        });
+    }
+}
+
 module.exports = {
     getAllUsers,
     signup,
@@ -317,6 +345,7 @@ module.exports = {
     LogoutUsers,
     getCurrentUser,
     CheckUserRole,
-    getUsersByListOfIdsController
-
+    getUsersByListOfIdsController,
+    getNameByUserIdController,
+    getNameByUserIdController
 };

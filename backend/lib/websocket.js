@@ -2,7 +2,8 @@
 const { Server } = require("socket.io");
 let io;
 
-function initSocket(httpServer) {
+async function initSocket(httpServer) {
+  console.log("Socket.IO WebSocket server initialized");
   if (!io) {
     io = new Server(httpServer, {
       cors: { origin: "*" },

@@ -111,7 +111,7 @@ Default seeded passwords:
 |------|-------|-------------------|--------|
 | Admin | `admin@ensemble.dev` | `admin` | http://localhost:5173/admin |
 | Support Moderator | `support@ensemble.dev` | `support_moderator` | http://localhost:5173/staff |
-| Dispute Moderator | `disputes@ensemble.dev` | `dispute_moderator` | http://localhost:5173/staff |
+| Marketplace Moderator | `marketplace@ensemble.dev` | `marketplace_moderator` | http://localhost:5173/staff |
 | Jobs N Gigs Moderator | `jobs@ensemble.dev` | `jobs_n_gigs_moderator` | http://localhost:5173/staff |
 | Forum Moderator | `forum@ensemble.dev` | `forum_moderator` | http://localhost:5173/staff |
 
