@@ -261,7 +261,6 @@ const AudioItem = ({
       backgroundSize: "cover",
       width: "120px",
       height: "120px",
-      border: "1px solid var(--primary)",
       borderRadius: "6px"
     }),
     []
@@ -273,7 +272,7 @@ const AudioItem = ({
       renderCustomPreview={<div style={style} />}
       shouldDisplayPreview={!isDraggingOverTimeline}
     >
-      <div className="group relative flex items-center gap-3 p-2 bg-secondary rounded-md border hover:opacity-80 transition-colors">
+      <div className="group relative flex items-center gap-3 p-2 bg-secondary rounded-md hover:opacity-80 transition-colors">
         <audio
           ref={audioRef}
           src={item.details?.src}

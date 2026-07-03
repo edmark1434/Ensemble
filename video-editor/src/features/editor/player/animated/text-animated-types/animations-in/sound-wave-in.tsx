@@ -1,12 +1,18 @@
 import { ITextDetails } from "@designcombo/types";
 import { interpolate } from "remotion";
 
+const ALIGN_TO_JUSTIFY: Record<string, string> = {
+  left: "flex-start",
+  center: "center",
+  right: "flex-end"
+};
+
 const SoundWaveIn = ({
-  text,
-  frame,
-  animationTextInFrames,
-  details
-}: {
+                       text,
+                       frame,
+                       animationTextInFrames,
+                       details
+                     }: {
   text: string;
   frame: number;
   animationTextInFrames: number;
@@ -27,43 +33,33 @@ const SoundWaveIn = ({
   const waveBlur =
     frame < waveDisappearStart
       ? interpolate(frame, [0, waveDisappearStart], [20, 0], {
-          extrapolateRight: "clamp"
-        })
+        extrapolateRight: "clamp"
+      })
       : interpolate(frame, [waveDisappearStart, waveDisappearEnd], [0, 40], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp"
-        });
-  // Opacidad: de 0.7 a 1, luego a 0
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp"
+      });
   const waveOpacity =
     frame < waveDisappearStart
       ? interpolate(frame, [0, waveDisappearStart], [0.7, 1], {
-          extrapolateRight: "clamp"
-        })
+        extrapolateRight: "clamp"
+      })
       : interpolate(frame, [waveDisappearStart, waveDisappearEnd], [1, 0], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp"
-        });
+        extrapolateLeft: "clamp",
+        extrapolateRight: "clamp"
+      });
+
+  const justify = ALIGN_TO_JUSTIFY[details.textAlign] ?? "center";
 
   const trails = [];
   for (let i = trailCount; i > 0; i--) {
-    // Cada trail está más atrás en el tiempo
     const trailFrame = Math.max(frame - i * 2, 0);
-
-    // Escalado y estiramiento X para el efecto de eco
     const trailScale = interpolate(
       trailFrame,
       [0, waveDisappearStart],
       [0.5, 1],
       { extrapolateRight: "clamp" }
     );
-    // const trailScaleX = interpolate(
-    //   trailFrame,
-    //   [0, waveDisappearStart],
-    //   [2.5, 1],
-    //   { extrapolateRight: "clamp" },
-    // );
-
-    // Opacidad más baja para los trails lejanos
     const trailOpacity = interpolate(
       trailFrame,
       [0, waveDisappearStart],
@@ -76,8 +72,10 @@ const SoundWaveIn = ({
         key={i}
         style={{
           position: "absolute",
-          top: 0,
-          left: 0,
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: justify,
           opacity: trailOpacity,
           transform: `scale(${trailScale * 2})`,
           pointerEvents: "none"
@@ -87,10 +85,13 @@ const SoundWaveIn = ({
       </span>
     );
   }
+
   return (
     <div
       style={{
         display: "flex",
+        alignItems: "center",
+        justifyContent: justify,
         width: details.width,
         height: details.height,
         transform: `scale(${baseScale})`,
@@ -98,9 +99,11 @@ const SoundWaveIn = ({
       }}
     >
       {/* Texto wave */}
-
       <span
         style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: justify,
           width: details.width,
           height: details.height,
           background: "transparent",
@@ -112,25 +115,28 @@ const SoundWaveIn = ({
       <span
         style={{
           position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: justify,
           opacity: waveOpacity,
-          width: details.width,
-          height: details.height,
           transform: `scaleX(${waveScaleX})`,
           filter: `blur(${waveBlur * 3}px)`
         }}
       >
         {text}
       </span>
-      {/* </span> */}
       <span
         style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: justify,
           opacity: mainOpacity,
           filter: `blur(${mainBlur}px)`,
           transform: `scale(${mainScale})`,
-          fontSize: parseFloat(details.fontSize.toString()),
-          position: "absolute",
-          width: details.width,
-          height: details.height
+          fontSize: parseFloat(details.fontSize.toString())
         }}
       >
         <div

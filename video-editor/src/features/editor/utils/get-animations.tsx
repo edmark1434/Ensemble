@@ -70,7 +70,7 @@ export const getAnimations = (
   };
 };
 
-const getSlideAnimation = (
+export const getSlideAnimation = (
   type: string,
   anim: ICompositionAnimation,
   item: ITrackItem

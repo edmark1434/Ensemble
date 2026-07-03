@@ -157,6 +157,9 @@ export default function FontFamilyPicker() {
   const selectedCategoryLabel =
     category ? (CATEGORY_LABELS[category] ?? category) : "All";
 
+  // useClickOutside(floatingRef as React.RefObject<HTMLElement>, () =>
+  //   setFloatingControl("")
+  // );
   return (
     <div
       ref={floatingRef}
@@ -164,7 +167,7 @@ export default function FontFamilyPicker() {
     >
       {/* Header */}
       <div className="handle flex cursor-grab justify-between items-center p-4">
-        <p className="text-sm font-bold">Fonts</p>
+        <p className="text-sm font-medium">Fonts</p>
         <X
           className="h-4 w-4 cursor-pointer text-muted-foreground"
           onClick={() => setFloatingControl("")}

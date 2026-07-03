@@ -26,7 +26,11 @@ const useLayoutStore = create<ILayoutState>((set) => ({
   setControItemDrawerOpen: (controItemDrawerOpen) =>
     set({ controItemDrawerOpen }),
   setTypeControlItem: (typeControlItem) => set({ typeControlItem }),
-  setLabelControlItem: (labelControlItem) => set({ labelControlItem })
+  setLabelControlItem: (labelControlItem) => set({ labelControlItem }),
+
+  animationPickerInitialTab: "in",
+  setAnimationPickerInitialTab: (tab) =>
+    set({ animationPickerInitialTab: tab }),
 }));
 
 export default useLayoutStore;

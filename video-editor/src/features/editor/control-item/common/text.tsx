@@ -32,6 +32,7 @@ import { useIsLargeScreen } from "@/hooks/use-media-query";
 import {RadioGroup, RadioGroupItem} from "@/components/ui/radio-group";
 import { useResolvedLineHeight } from "../../hooks/use-resolved-line-height";
 import {Slider} from "@/components/ui/slider";
+import { formatColorDisplay } from "@/components/color-picker/helpers";
 
 interface TextControlsProps {
   trackItem: ITrackItem & any;
@@ -47,12 +48,6 @@ interface TextControlsProps {
   onChangeTextDecorationColor: (v: string) => void;
   handleChangeOpacity: (v: number) => void;
 }
-
-const formatColorDisplay = (v: string): string => {
-  if (!v || v === "") return "Auto";
-  if (v === "transparent") return "Transparent";
-  return v.toUpperCase();
-};
 
 export const TextControls = ({
   trackItem,
@@ -71,7 +66,7 @@ export const TextControls = ({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
-        <Label className="font-sans text-sm font-semibold">Appearance</Label>
+        <Label className="font-sans text-sm font-medium">Appearance</Label>
         <div className="flex flex-col gap-2">
           <Opacity
             onChange={(v: number) => handleChangeOpacity(v)}
@@ -82,7 +77,7 @@ export const TextControls = ({
       </div>
 
       <div className="flex flex-col gap-3">
-        <Label className="font-sans text-sm font-semibold">Typography</Label>
+        <Label className="font-sans text-sm font-medium">Typography</Label>
         <div className="flex flex-col gap-2">
           <FontFamily
             handleChangeFont={onChangeFontFamily}
@@ -120,8 +115,22 @@ export const TextControls = ({
       </div>
 
       <div className="flex flex-col gap-3">
-        <Label className="font-sans text-sm font-semibold">Color</Label>
-        <div className="flex gap-2">
+        <Label className="font-sans text-sm font-medium">Decoration</Label>
+        <div className="flex flex-col gap-2">
+          <TextDecorationLines
+            value={properties.textDecorationLines}
+            onChange={onChangeTextDecorationLines}
+          />
+          <TextDecorationColor
+            value={properties.textDecorationColor}
+            onChange={onChangeTextDecorationColor}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <Label className="font-sans text-sm font-medium">Fill</Label>
+        <div className="flex flex-col gap-2">
           <FontColor
             value={properties.color}
             handleColorChange={handleColorChange}
@@ -132,33 +141,6 @@ export const TextControls = ({
           />
         </div>
       </div>
-
-      <div className="flex flex-col gap-3">
-        <Label className="font-sans text-sm font-semibold">Decoration</Label>
-        <div className="flex gap-2">
-          <TextDecorationLines
-            value={properties.textDecorationLines}
-            onChange={onChangeTextDecorationLines}
-          />
-          <TextDecorationColor
-            value={properties.textDecorationColor}
-            onChange={onChangeTextDecorationColor}
-          />
-
-        </div>
-      </div>
-
-
-
-
-
-      <div className="flex gap-2">
-
-      </div>
-
-
-
-
     </div>
   );
 };
@@ -188,6 +170,9 @@ const FontBackground = ({
     }
   };
 
+  const fullHex = localValue || "#ffffffff";
+  const solidColor = fullHex.slice(0, 7);
+
   return (
     <div className="flex flex-col gap-2 flex-1">
       <div className="flex flex-1 items-center text-xs text-muted-foreground">
@@ -195,10 +180,30 @@ const FontBackground = ({
       </div>
       {isLargeScreen ? (
         <div className="relative w-full flex gap-1">
-          <div
-            style={{ background: localValue || "#ffffff" }}
-            className="h-9 w-9 flex-none rounded-md border border-border"
-          />
+          <div className="relative h-9 w-9 flex-none overflow-hidden rounded-md border border-border">
+            {/* Left half: solid, alpha stripped */}
+            <div
+              className="absolute inset-y-0 left-0 w-1/2"
+              style={{ background: solidColor }}
+            />
+
+            {/* Right half: checkerboard + real color with actual alpha */}
+            <div className="absolute inset-y-0 right-0 w-1/2 overflow-hidden">
+              <div
+                className="absolute inset-0 rounded-r-md"
+                style={{
+                  backgroundImage:
+                    'url(\'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"><path fill="white" d="M1,0H2V1H1V0ZM0,1H1V2H0V1Z"/><path fill="gray" d="M0,0H1V1H0V0ZM1,1H2V2H1V1Z"/></svg>\')',
+                  backgroundSize: "6px",
+                  backgroundRepeat: "repeat"
+                }}
+              />
+              <div
+                className="absolute inset-0"
+                style={{ background: fullHex }}
+              />
+            </div>
+          </div>
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -218,7 +223,7 @@ const FontBackground = ({
               className="w-3xs bg-card border flex flex-col gap-4 rounded-lg"
             >
               <div className="handle flex cursor-grab justify-between items-center">
-                <p className="text-sm font-bold">Color</p>
+                <p className="text-sm font-medium">Color</p>
                 <X
                   className="h-4 w-4 cursor-pointer text-muted-foreground"
                   onClick={() => setOpen(false)}
@@ -282,17 +287,40 @@ const FontColor = ({
     }
   };
 
+  const fullHex = localValue || "#ffffffff";
+  const solidColor = fullHex.slice(0, 7);
+
   return (
     <div className="flex flex-col gap-2 flex-1">
       <div className="flex flex-1 items-center text-xs text-muted-foreground">
-        Text
+        Text color
       </div>
       {isLargeScreen ? (
         <div className="relative w-full flex gap-1">
-          <div
-            style={{ background: localValue || "#ffffff" }}
-            className="h-9 w-9 flex-none rounded-md border border-border"
-          />
+          <div className="relative h-9 w-9 flex-none overflow-hidden rounded-md border border-border">
+            {/* Left half: solid, alpha stripped */}
+            <div
+              className="absolute inset-y-0 left-0 w-1/2"
+              style={{ background: solidColor }}
+            />
+
+            {/* Right half: checkerboard + real color with actual alpha */}
+            <div className="absolute inset-y-0 right-0 w-1/2 overflow-hidden">
+              <div
+                className="absolute inset-0 rounded-r-md"
+                style={{
+                  backgroundImage:
+                    'url(\'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"><path fill="white" d="M1,0H2V1H1V0ZM0,1H1V2H0V1Z"/><path fill="gray" d="M0,0H1V1H0V0ZM1,1H2V2H1V1Z"/></svg>\')',
+                  backgroundSize: "6px",
+                  backgroundRepeat: "repeat"
+                }}
+              />
+              <div
+                className="absolute inset-0"
+                style={{ background: fullHex }}
+              />
+            </div>
+          </div>
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -312,7 +340,7 @@ const FontColor = ({
               className="w-3xs bg-card border flex flex-col gap-4 rounded-lg"
             >
               <div className="handle flex cursor-grab justify-between items-center">
-                <p className="text-sm font-bold">Color</p>
+                <p className="text-sm font-medium">Color</p>
                 <X
                   className="h-4 w-4 cursor-pointer text-muted-foreground"
                   onClick={() => setOpen(false)}
@@ -558,9 +586,9 @@ const TextDecorationLines = ({
 
   return (
     <div className="flex flex-col gap-2 flex-1">
-      <div className="flex flex-1 items-center text-xs text-muted-foreground">
-        Lines
-      </div>
+      {/*<div className="flex flex-1 items-center text-xs text-muted-foreground">*/}
+      {/*  Lines*/}
+      {/*</div>*/}
       <div className="flex gap-2">
         <div className="relative w-full">
           <ToggleGroup
@@ -627,17 +655,40 @@ const TextDecorationColor = ({
       ? "Auto"
       : localValue;
 
+  const fullHex = localValue || "#ffffffff";
+  const solidColor = fullHex.slice(0, 7);
+
   return (
     <div className="flex flex-col gap-2 flex-1">
-      <div className="flex flex-1 items-center text-xs text-muted-foreground">
-        Color
-      </div>
+      {/*<div className="flex flex-1 items-center text-xs text-muted-foreground">*/}
+      {/*  Color*/}
+      {/*</div>*/}
       {isLargeScreen ? (
         <div className="relative w-full flex gap-1">
-          <div
-            style={{ background: localValue || "#ffffff" }}
-            className="h-9 w-9 flex-none rounded-md border border-border"
-          />
+          <div className="relative h-9 w-9 flex-none overflow-hidden rounded-md border border-border">
+            {/* Left half: solid, alpha stripped */}
+            <div
+              className="absolute inset-y-0 left-0 w-1/2"
+              style={{ background: solidColor }}
+            />
+
+            {/* Right half: checkerboard + real color with actual alpha */}
+            <div className="absolute inset-y-0 right-0 w-1/2 overflow-hidden">
+              <div
+                className="absolute inset-0 rounded-r-md"
+                style={{
+                  backgroundImage:
+                    'url(\'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"><path fill="white" d="M1,0H2V1H1V0ZM0,1H1V2H0V1Z"/><path fill="gray" d="M0,0H1V1H0V0ZM1,1H2V2H1V1Z"/></svg>\')',
+                  backgroundSize: "6px",
+                  backgroundRepeat: "repeat"
+                }}
+              />
+              <div
+                className="absolute inset-0"
+                style={{ background: fullHex }}
+              />
+            </div>
+          </div>
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -657,7 +708,7 @@ const TextDecorationColor = ({
               className="w-3xs bg-card border flex flex-col gap-4 rounded-lg"
             >
               <div className="handle flex cursor-grab justify-between items-center">
-                <p className="text-sm font-bold">Color</p>
+                <p className="text-sm font-medium">Color</p>
                 <X
                   className="h-4 w-4 cursor-pointer text-muted-foreground"
                   onClick={() => setOpen(false)}

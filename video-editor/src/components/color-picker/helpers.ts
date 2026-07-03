@@ -16,7 +16,15 @@ export const onlyDigits = (string: string) => {
 
 export const onlyHex = (string: string) => {
   if (!string) return string;
-  return string.startsWith("#")
-    ? string.substring(0, 7)
-    : string.substring(0, 6);
+
+  const hasHash = string.startsWith("#");
+  const rest = (hasHash ? string.slice(1) : string).replace(/[^0-9a-fA-F]/g, "");
+
+  return hasHash ? `#${rest}`.substring(0, 7) : rest.substring(0, 6);
+};
+
+export const formatColorDisplay = (v: string): string => {
+  if (!v || v === "") return "Auto";
+  if (v === "transparent") return "Transparent";
+  return v.toUpperCase();
 };

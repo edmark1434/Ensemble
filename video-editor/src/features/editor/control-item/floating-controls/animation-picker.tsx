@@ -4,13 +4,15 @@ import { ADD_ANIMATION } from "@designcombo/state";
 import { dispatch } from "@designcombo/events";
 import useStore from "../../store/use-store";
 import { Animation, presets } from "../../player/animated";
-import React, { useRef } from "react";
+import React, {useEffect, useRef, useState} from "react";
 import useLayoutStore from "../../store/use-layout-store";
 import useClickOutside from "../../hooks/use-click-outside";
 import { Easing } from "remotion";
 import { PresetName } from "../../player/animated/presets";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AnimationDuration } from "../common/animation-duration";
+import {cn} from "@/lib/utils";
+import { LazyPresetPreview } from "./animation-preset-preview/preset-preview-scene";
 
 export const createPresetButtons = (
   filter: (key: string) => boolean,
@@ -24,49 +26,40 @@ export const createPresetButtons = (
     .map((presetKey) => {
       const preset = presets[presetKey as "scaleIn"];
 
-      const style = React.useMemo(
-        () => ({
-          backgroundImage: `url(${preset.previewUrl})`,
-          backgroundSize: "cover",
-          width: "60px",
-          height: "60px",
-          borderRadius: "8px"
-        }),
-        [preset.previewUrl]
-      );
       if (
         animationType === "media" &&
         preset.property?.toLowerCase().includes("text")
       )
-        return;
-      let borderColor = "";
+        return null;
+
+      let isSelected = false;
       if (trackItemsMap) {
         const currentItem = trackItemsMap[activeIds[0]];
         const animations = currentItem?.animations;
-
-        const isSelected = ["in", "out", "loop"].some(
-          (type) => animations?.[type]?.name === presetKey
+        isSelected = ["in", "out", "loop"].some(
+          (t) => animations?.[t]?.name === presetKey
         );
-
-        if (isSelected) {
-          borderColor = "border-[#006239]";
-        }
       }
 
       return (
         <div
           key={presetKey}
-          className={`flex cursor-pointer flex-col gap-2 text-center text-xs text-muted-foreground items-center justify-center border ${borderColor}`}
+          className="flex cursor-pointer flex-col gap-2 text-center text-xs text-muted-foreground items-center justify-start"
           onClick={() =>
-            applyAnimation(
-              presetKey as PresetName,
-              type,
-              activeIds,
-              trackItemsMap
-            )
+            applyAnimation(presetKey as PresetName, type, activeIds, trackItemsMap)
           }
         >
-          <div style={style} draggable={false} />
+          <div
+            className={cn(
+              "relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md bg-zinc-800 group",
+              isSelected ? "border border-primary" : ""
+            )}
+          >
+            <LazyPresetPreview presetKey={presetKey as PresetName} type={type} />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+              <div className="rounded-full p-1" />
+            </div>
+          </div>
           <div>{preset.name}</div>
         </div>
       );
@@ -141,6 +134,10 @@ export default function AnimationPicker({
   animationType?: "text" | "media";
 }) {
   const { activeIds, trackItemsMap } = useStore();
+  const { animationPickerInitialTab } = useLayoutStore();
+  const [activeTab, setActiveTab] = useState<"in" | "out" | "loop">(animationPickerInitialTab);
+  const currentItem = trackItemsMap[activeIds[0]];
+  const hasCurrentTabAnimation = !!currentItem?.animations?.[activeTab];
 
   const presetInButtons = createPresetButtons(
     (key) => key.includes("In"),
@@ -172,43 +169,44 @@ export default function AnimationPicker({
   return (
     <div
       ref={floatingRef}
-      className="absolute left-full top-2 z-200 ml-2 w-56 bg-card p-0 border"
+      className="w-xs bg-card border flex flex-col rounded-lg"
     >
-      <div className="handle flex cursor-grab items-center justify-between px-4 py-3">
-        <p className="text-sm font-bold">Animations</p>
-        <div className="h-4 w-4" onClick={() => setFloatingControl("")}>
-          <X className="h-3 w-3 cursor-pointer font-extrabold text-muted-foreground" />
-        </div>
+      <div className="handle flex cursor-grab justify-between items-center p-4">
+        <p className="text-sm font-medium">Animations</p>
+        <X
+          className="h-4 w-4 cursor-pointer text-muted-foreground"
+          onClick={() => setFloatingControl("")}
+        />
       </div>
 
-      <Tabs defaultValue="in" className="w-full px-2">
-        <TabsList className="grid w-full grid-cols-3">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as "in" | "out" | "loop")}
+        className="w-full"
+      >
+        <TabsList className="h-9 mx-4 w-[calc(100%-32px)]">
           <TabsTrigger value="in">In</TabsTrigger>
           <TabsTrigger value="loop">Loop</TabsTrigger>
           <TabsTrigger value="out">Out</TabsTrigger>
         </TabsList>
 
         <TabsContent value="in">
-          <ScrollArea className="h-[400px] w-full py-2">
-            <div className="grid grid-cols-3 gap-2 py-4">{presetInButtons}</div>
+          <ScrollArea className="h-[400px] w-full px-4">
+            <div className={`grid grid-cols-2 gap-2 ${hasCurrentTabAnimation ? "pb-0" : "pb-4"}`}>{presetInButtons}</div>
           </ScrollArea>
         </TabsContent>
         <TabsContent value="loop">
-          <ScrollArea className="h-[400px] w-full py-2">
-            <div className="grid grid-cols-3 gap-2 py-4">
-              {presetLoopButtons}
-            </div>
+          <ScrollArea className="h-[400px] w-full px-4">
+            <div className={`grid grid-cols-2 gap-2 ${hasCurrentTabAnimation ? "pb-0" : "pb-4"}`}>{presetLoopButtons}</div>
           </ScrollArea>
         </TabsContent>
         <TabsContent value="out">
-          <ScrollArea className="h-[400px] w-full py-2">
-            <div className="grid grid-cols-3 gap-2 py-4">
-              {presetOutButtons}
-            </div>
+          <ScrollArea className="h-[400px] w-full px-4">
+            <div className={`grid grid-cols-2 gap-2 ${hasCurrentTabAnimation ? "pb-0" : "pb-4"}`}>{presetOutButtons}</div>
           </ScrollArea>
         </TabsContent>
       </Tabs>
-      <AnimationDuration />
+      {hasCurrentTabAnimation && <AnimationDuration activeTab={activeTab} />}
     </div>
   );
 }

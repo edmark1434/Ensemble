@@ -372,14 +372,10 @@ const BasicText = ({
       )
     },
     {
-      key: "animations",
-      component: <Animations trackItem={trackItem} properties={properties} />
-    },
-    {
       key: "fontStroke",
       component: (
         <Outline
-          label="Font stroke"
+          label="Stroke"
           onChageBorderWidth={(v: number) => onChangeBorderWidth(v)}
           onChangeBorderColor={(v: string) => onChangeBorderColor(v)}
           valueBorderWidth={properties.borderWidth as number}
@@ -391,7 +387,7 @@ const BasicText = ({
       key: "fontShadow",
       component: (
         <Shadow
-          label="Font shadow"
+          label="Shadow"
           onChange={(v: IBoxShadow) => onChangeBoxShadow(v)}
           value={
             properties.boxShadow ?? {
@@ -403,13 +399,17 @@ const BasicText = ({
           }
         />
       )
-    }
+    },
+    {
+      key: "animations",
+      component: <Animations trackItem={trackItem} properties={properties} />
+    },
   ];
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden min-h-0">
       <ScrollArea className="h-full">
-        <div className="flex flex-col gap-2 px-4 py-4">
+        <div className="flex flex-col gap-6 p-4">
           {components
             .filter((comp) => showAll || comp.key === type)
             .map((comp) => (

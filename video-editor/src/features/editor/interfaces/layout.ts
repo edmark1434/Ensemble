@@ -39,4 +39,7 @@ export interface ILayoutState {
   setControItemDrawerOpen: (controItemDrawerOpen: boolean) => void;
   setTypeControlItem: (typeControlItem: string) => void;
   setLabelControlItem: (labelControlItem: string) => void;
+
+  animationPickerInitialTab: "in" | "out" | "loop";
+  setAnimationPickerInitialTab: (tab: "in" | "out" | "loop") => void;
 }

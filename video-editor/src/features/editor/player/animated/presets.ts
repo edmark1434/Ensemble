@@ -70,7 +70,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Pulse Animation Loop"
+    name: "Pulse Loop"
   },
   glitchAnimationLoop: {
     property: "glitchTextAnimationLoop",
@@ -79,7 +79,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Glitch Animation Loop"
+    name: "Glitch Loop"
   },
   countDownAnimationIn: {
     property: "countDownTextAnimationIn",
@@ -88,7 +88,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Count Down Animation In"
+    name: "Count Down In"
   },
   soundWaveIn: {
     property: "soundWaveTextAnimationIn",
@@ -97,7 +97,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Sound Wave Animation In"
+    name: "Sound Wave In"
   },
   backgroundAnimationOut: {
     property: "backgroundTextAnimationOut",
@@ -106,7 +106,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Background Animation Out"
+    name: "Background Out"
   },
   backgroundAnimationIn: {
     property: "backgroundTextAnimationIn",
@@ -115,7 +115,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Background Animation In"
+    name: "Background In"
   },
   textFontChangeAnimationLoop: {
     property: "textFontChangeAnimationLoop",
@@ -124,7 +124,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Font Change Animation Loop",
+    name: "Font Change Loop",
     details: {
       fonts: [
         {
@@ -157,7 +157,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Vintage Animation Loop"
+    name: "Vintage Loop"
   },
   shakyLettersTextAnimationLoop: {
     property: "shakyLettersTextAnimationLoop",
@@ -166,7 +166,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Shaky Letters Animation Loop"
+    name: "Shaky Letters Loop"
   },
   shakeTextAnimationLoop: {
     property: "shakeTextAnimationLoop",
@@ -175,7 +175,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Shake Text Animation Loop"
+    name: "Shake Text Loop"
   },
   rotate3dAnimationLoop: {
     property: "rotate3dTextAnimationLoop",
@@ -184,7 +184,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Rotate 3D Animation Loop"
+    name: "Rotate 3D Loop"
   },
   heartbeatAnimationLoop: {
     property: "heartbeatTextAnimationLoop",
@@ -193,7 +193,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Heartbeat Animation Loop"
+    name: "Heartbeat Loop"
   },
   spinAnimationLoop: {
     property: "spinTextAnimationLoop",
@@ -202,7 +202,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Spin Animation Loop"
+    name: "Spin Loop"
   },
   waveAnimationLoop: {
     property: "waveTextAnimationLoop",
@@ -211,7 +211,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Wave Animation Loop"
+    name: "Wave Loop"
   },
   descompressAnimationIn: {
     property: "descompressTextAnimationIn",
@@ -220,7 +220,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Descompress Animation In"
+    name: "Decompress In"
   },
   dropAnimationIn: {
     property: "dropTextAnimationIn",
@@ -229,7 +229,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Drop Animation In"
+    name: "Drop In"
   },
   dropAnimationOut: {
     property: "dropTextAnimationOut",
@@ -238,7 +238,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Drop Animation Out"
+    name: "Drop Out"
   },
   descompressAnimationOut: {
     property: "descompressTextAnimationOut",
@@ -247,7 +247,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Descompress Animation Out"
+    name: "Decompress Out"
   },
   vogueAnimationLoop: {
     property: "vogueTextAnimationLoop",
@@ -256,7 +256,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Vogue Animation Loop"
+    name: "Vogue Loop"
   },
   dragonFlyAnimationLoop: {
     property: "dragonFlyTextAnimationLoop",
@@ -265,7 +265,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Dragon Fly Animation Loop"
+    name: "Dragon Fly Loop"
   },
   billboardAnimationLoop: {
     property: "billboardTextAnimationLoop",
@@ -274,7 +274,7 @@ export const presets: Record<PresetName, Animation> = {
     durationInFrames: 30,
     ease: Easing.linear,
     previewUrl: "https://cdn.designcombo.dev/animations/scaleAndRotate.webp",
-    name: "Billboard Animation Loop"
+    name: "Billboard Loop"
   },
   typeWriterOut: {
     property: "typeWriterTextAnimationOut",
