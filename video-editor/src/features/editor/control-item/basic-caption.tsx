@@ -31,12 +31,28 @@ interface ITextControlProps {
   opacityDisplay: string;
   textAlign: string;
   textDecoration: string;
+  textDecorationLines: string;
+  textDecorationColor: string;
   borderWidth: number;
   borderColor: string;
   opacity: number;
   boxShadow: IBoxShadow;
   isKeywordColor: string;
   preservedColorKeyWord: boolean;
+}
+
+const DECORATION_LINE_VALUES = ["underline", "overline", "line-through"];
+
+function splitTextDecoration(raw: string | undefined): { lines: string; color: string } {
+  const tokens = (raw || "").trim().split(/\s+/).filter(Boolean);
+  const lines = tokens.filter((t) => DECORATION_LINE_VALUES.includes(t)).join(" ");
+  const color = tokens.find((t) => t.startsWith("#")) ?? "";
+  return { lines, color };
+}
+
+function joinTextDecoration(lines: string, color: string): string {
+  const parts = [lines, color].filter(Boolean);
+  return parts.length > 0 ? parts.join(" ") : "none";
 }
 
 const getStyleNameFromFontName = (fontName: string) => {
@@ -80,6 +96,8 @@ const BasicCaption = ({
     opacityDisplay: "100%",
     textAlign: "left",
     textDecoration: "none",
+    textDecorationLines: "",
+    textDecorationColor: "",
     borderWidth: 0,
     borderColor: "#000000",
     boxShadow: {
@@ -114,6 +132,11 @@ const BasicCaption = ({
         name: getStyleNameFromFontName(currentFont.postScriptName)
       });
     }
+
+    const { lines, color: decorationColor } = splitTextDecoration(
+      trackItem.details.textDecoration
+    );
+
     setProperties({
       color: trackItem.details.color || "#ffffff",
       colorDisplay: trackItem.details.color || "#ffffff",
@@ -125,6 +148,8 @@ const BasicCaption = ({
       opacityDisplay: `${(trackItem.details.opacity || 1) * 100 || "100"}%`,
       textAlign: trackItem.details.textAlign || "left",
       textDecoration: trackItem.details.textDecoration || "none",
+      textDecorationLines: lines,
+      textDecorationColor: decorationColor,
       borderWidth: trackItem.details.borderWidth || 0,
       borderColor: trackItem.details.borderColor || "#000000",
       appearedColor: trackItem.details.appearedColor || "#ffffff",
@@ -139,7 +164,7 @@ const BasicCaption = ({
         blur: 0
       }
     });
-  }, [trackItem]);
+  }, [trackItem.details]);
 
   const handleChangeFontStyle = async (font: IFont) => {
     const fontName = font.postScriptName;
@@ -321,20 +346,27 @@ const BasicCaption = ({
     });
   };
 
-  const onChangeTextDecoration = (v: string) => {
-    setProperties({
-      ...properties,
-      textDecoration: v
-    });
-
+  const onChangeTextDecorationLines = (v: string) => {
+    const combined = joinTextDecoration(v, properties.textDecorationColor);
+    setProperties((prev) => ({
+      ...prev,
+      textDecoration: combined,
+      textDecorationLines: v
+    } as ITextControlProps));
     dispatch(EDIT_OBJECT, {
-      payload: {
-        [trackItem.id]: {
-          details: {
-            textDecoration: v
-          }
-        }
-      }
+      payload: { [trackItem.id]: { details: { textDecoration: combined } } }
+    });
+  };
+
+  const onChangeTextDecorationColor = (v: string) => {
+    const combined = joinTextDecoration(properties.textDecorationLines, v);
+    setProperties((prev) => ({
+      ...prev,
+      textDecoration: combined,
+      textDecorationColor: v
+    } as ITextControlProps));
+    dispatch(EDIT_OBJECT, {
+      payload: { [trackItem.id]: { details: { textDecoration: combined } } }
     });
   };
 
@@ -443,7 +475,8 @@ const BasicCaption = ({
           onChangeFontSize={onChangeFontSize}
           handleColorChange={handleColorChange}
           onChangeTextAlign={onChangeTextAlign}
-          onChangeTextDecoration={onChangeTextDecoration}
+          onChangeTextDecorationLines={onChangeTextDecorationLines}
+          onChangeTextDecorationColor={onChangeTextDecorationColor}
           handleChangeOpacity={handleChangeOpacity}
           handleBackgroundChange={(v: string) => console.log(v)}
         />

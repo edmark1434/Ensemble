@@ -15,7 +15,6 @@ import {
 } from "../../utils/filmstrip";
 import { getFileFromUrl } from "../../utils/file";
 import { createMediaControls } from "../controls";
-import { SECONDARY_FONT } from "../../constants/constants";
 
 // Type declaration for MP4Clip to avoid SSR issues
 type MP4ClipType = any;
@@ -26,6 +25,10 @@ const EMPTY_FILMSTRIP: Filmstrip = {
   thumbnailsCount: 0,
   widthOnScreen: 0
 };
+
+const getUIFont = () =>
+  getComputedStyle(document.body).getPropertyValue("--font-outfit").trim() ||
+  "sans-serif";
 
 interface VideoProps extends TrimmableProps {
   aspectRatio: number;
@@ -512,7 +515,7 @@ class Video extends Trimmable {
     ctx.save();
     ctx.translate(-this.width / 2, -this.height / 2);
     ctx.translate(0, 14);
-    ctx.font = `400 12px ${SECONDARY_FONT}`;
+    ctx.font = `400 12px ${getUIFont()}`;
     ctx.fillStyle = "#f4f4f5";
     ctx.textAlign = "left";
     ctx.clip();

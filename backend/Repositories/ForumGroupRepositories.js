@@ -88,6 +88,22 @@ async function updateForumGroupRepositories(groupId, updateData) {
     }
 }
 
+async function updateForumGroupMembers(groupId, updateData) {
+    try {
+        const forumGroupsCollection = getForumDb().collection('forum_groups');
+        const result = await forumGroupsCollection.updateOne(
+            { _id: new ObjectId(groupId), status: 'active' },
+            { $push: {
+                members: updateData
+            } }
+        );
+        return result;
+    }catch(err) {
+        console.error(`Error updating forum group members with id ${groupId}:`, err);
+        throw err;
+    }
+}
+
 async function deleteForumGroupRepositories(groupId) {
     try {
         const forumGroupsCollection = getForumDb().collection('forum_groups');
@@ -108,5 +124,6 @@ module.exports = {
     getAllForumGroups,
     getForumGroupsByMemberId,
     updateForumGroupRepositories,
+    updateForumGroupMembers,
     deleteForumGroupRepositories,
 }

@@ -1,7 +1,6 @@
 import { Control, Resizable, ResizableProps } from "@designcombo/timeline";
 import { IDisplay } from "@designcombo/types";
 import { createResizeControls } from "../controls";
-import { SECONDARY_FONT } from "../../constants/constants";
 
 interface CaptionsProps extends ResizableProps {
   tScale: number;
@@ -9,6 +8,10 @@ interface CaptionsProps extends ResizableProps {
   text: string;
   hidden: boolean;
 }
+
+const getUIFont = () =>
+  getComputedStyle(document.body).getPropertyValue("--font-outfit").trim() ||
+  "sans-serif";
 
 class Caption extends Resizable {
   static type = "Caption";
@@ -42,7 +45,7 @@ class Caption extends Resizable {
   public drawTextIdentity(ctx: CanvasRenderingContext2D) {
     ctx.save();
     ctx.translate(-this.width / 2, -this.height / 2);
-    ctx.font = `400 12px ${SECONDARY_FONT}`;
+    ctx.font = `400 12px ${getUIFont()}`;
     ctx.fillStyle = "rgba(255, 255, 255,1)";
     ctx.textAlign = "left";
     ctx.clip();

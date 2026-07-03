@@ -13,6 +13,7 @@ import ResetPasswordPage from "@/pages/auth/ResetPasswordPage.tsx";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage.tsx";
 
 import CreditShop from "@/pages/user/0_config/CreditsShop.tsx";
+import Checkout from "@/pages/payment/checkout.tsx";
 import Profile from "@/pages/user/7_profile/Profile.tsx";
 
 import Layout from './components/ui/Layout.tsx'
@@ -57,9 +58,12 @@ import SystemSettingsPage from './pages/admin/systemSettings/SystemSettingsPage'
 import StaffPortalLayout from './pages/staff/StaffPortalLayout'
 import StaffDashboard from './pages/staff/StaffDashboard'
 
-import DisputeModeratorLayout from './pages/moderator/dispute-moderator/Layout'
 import ForumModeratorLayout from './pages/moderator/forum-moderator/Layout'
 import MarketplaceModeratorLayout from './pages/moderator/marketplace-moderator/Layout'
+import MarketplaceModeratorDashboard from './pages/moderator/marketplace-moderator/Dashboard'
+import MarketplaceControl from './pages/moderator/marketplace-moderator/MarketplaceControl'
+import MarketplaceTicketManagement from './pages/moderator/marketplace-moderator/TicketManagement'
+import MarketplaceRestrictions from './pages/moderator/marketplace-moderator/Restrictions'
 import SupportModeratorLayout from './pages/moderator/support-moderator/Layout'
 import ModeratorSectionPlaceholder from './pages/moderator/SectionPlaceholder'
 import RouteMiddleware from './lib/RouteMiddleware'
@@ -120,6 +124,7 @@ function App() {
         <Route element={<Layout />}>
           <Route path='/home' element={<Home />} />
             <Route path='/credits' element={<CreditShop />} />
+            <Route path='/credits/checkout' element={<Checkout />} />
             <Route path='/profile/:id?' element={<Profile />} />
             <Route path='/search/user/:query' element={<UserProfilesList />} />
 
@@ -184,13 +189,6 @@ function App() {
         </Route>
 
         {/* Moderator Routes */}
-        <Route path='/moderator/dispute' element={<DisputeModeratorLayout />}>
-          <Route index element={<ModeratorSectionPlaceholder title='DISPUTE MODERATOR' />} />
-          <Route path='dispute-management' element={<ModeratorSectionPlaceholder title='DISPUTE MANAGEMENT' />} />
-          <Route path='ticket-management' element={<ModeratorSectionPlaceholder title='TICKET MANAGEMENT' />} />
-          <Route path='user-team' element={<ModeratorSectionPlaceholder title='USER & TEAM' />} />
-        </Route>
-
         <Route path='/moderator/forum' element={<ForumModeratorLayout />}>
           <Route index element={<ModeratorSectionPlaceholder title='FORUM MODERATOR' />} />
           <Route path='forum-management' element={<ModeratorSectionPlaceholder title='FORUM MANAGEMENT' />} />
@@ -199,9 +197,10 @@ function App() {
         </Route>
 
         <Route path='/moderator/marketplace' element={<MarketplaceModeratorLayout />}>
-          <Route index element={<ModeratorSectionPlaceholder title='MARKETPLACE MODERATOR' />} />
-          <Route path='marketplace-control' element={<ModeratorSectionPlaceholder title='MARKETPLACE CONTROL' />} />
-          <Route path='ticket-management' element={<ModeratorSectionPlaceholder title='TICKET MANAGEMENT' />} />
+          <Route index element={<MarketplaceModeratorDashboard />} />
+          <Route path='marketplace-control' element={<MarketplaceControl />} />
+          <Route path='ticket-management' element={<MarketplaceTicketManagement />} />
+          <Route path='restrictions' element={<MarketplaceRestrictions />} />
         </Route>
 
         <Route path='/moderator/support' element={<SupportModeratorLayout />}>

@@ -18,20 +18,16 @@ const Opacity = ({
   }, [value]);
 
   return (
-    <div className="flex gap-2">
-      <div className="flex flex-1 items-center text-sm text-muted-foreground">
+    <div className="flex flex-col gap-2 flex-1">
+      <div className="flex flex-1 items-center text-xs text-muted-foreground">
         Opacity
       </div>
       <div
-        className="w-32"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 80px"
-        }}
+        className="w-full flex gap-2"
       >
         <Input
           max={100}
-          className="h-8 w-11 px-2 text-center text-sm"
+          className="w-15 text-center text-sm"
           type="number"
           onChange={(e) => {
             const newValue = Number(e.target.value);
@@ -44,17 +40,16 @@ const Opacity = ({
         />
         <Slider
           id="opacity"
-          value={[localValue]} // Use local state for slider value
+          value={[localValue]}
           onValueChange={(e) => {
-            setLocalValue(e[0]); // Update local state
-          }}
-          onValueCommit={() => {
-            onChange(localValue); // Propagate value to parent when user commits change
+            setLocalValue(e[0]);
+            onChange(e[0]); // propagate immediately on every drag tick
           }}
           min={0}
           max={100}
           step={1}
           aria-label="Opacity"
+          className="w-full"
         />
       </div>
     </div>

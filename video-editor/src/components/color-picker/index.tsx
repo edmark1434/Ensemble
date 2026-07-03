@@ -35,7 +35,7 @@ const ColorPicker: FC<IPropsMain> = ({
     return (
       <div className="w-full">
         <Tabs defaultValue="solid" className="w-full">
-          <TabsList>
+          <TabsList className="h-9 w-full">
             <TabsTrigger value="solid">Solid</TabsTrigger>
             <TabsTrigger value="gradient">Gradient</TabsTrigger>
           </TabsList>

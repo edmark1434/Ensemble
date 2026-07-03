@@ -8,7 +8,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import useStore from "../../store/use-store";
 import { createPresetButtons } from "../floating-controls/animation-picker";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AnimationDuration } from "./animation-duration";
+import React, { useEffect, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { formatearNumero, useAnimationDuration } from "../../hooks/use-animation-duration";
+import { presets } from "../../player/animated";
+import {DurationInputSlider} from "@/features/editor/control-item/common/duration-input-slider";
+
 interface PresetTextProps {
   trackItem: ITrackItem & any;
   properties: any;
@@ -16,17 +21,55 @@ interface PresetTextProps {
 
 export const Animations = ({ properties, trackItem }: PresetTextProps) => {
   return (
-    <div className="flex flex-col gap-2 py-4">
-      <Label className="font-sans text-xs font-semibold">Animations</Label>
+    <div className="flex flex-col gap-3">
+      <Label className="font-sans text-sm font-medium">Animations</Label>
       <SelectaAnimation trackItem={trackItem} />
     </div>
   );
 };
 
 const SelectaAnimation = ({ trackItem }: { trackItem: ITrackItem & IText }) => {
-  const { setFloatingControl } = useLayoutStore();
+  const { setFloatingControl, setAnimationPickerInitialTab } = useLayoutStore();
   const isLargeScreen = useIsLargeScreen();
-  const { activeIds, trackItemsMap } = useStore();
+  const activeIds = useStore((state) => state.activeIds);
+  const trackItemsMap = useStore((state) => state.trackItemsMap);
+  const {
+    inDuration,
+    outDuration,
+    loopDuration,
+    maxValues,
+    handleInChange,
+    handleOutChange,
+  } = useAnimationDuration();
+
+  const currentItem = trackItemsMap[activeIds[0]];
+  const hasInAnimation = !!currentItem?.animations?.in;
+  const hasOutAnimation = !!currentItem?.animations?.out;
+
+  const [inputIn, setInputIn] = useState(
+    String(formatearNumero(inDuration / 1000))
+  );
+  const [inputLoop, setInputLoop] = useState(
+    String(formatearNumero(loopDuration / 1000))
+  );
+  const [inputOut, setInputOut] = useState(
+    String(formatearNumero(outDuration / 1000))
+  );
+
+  useEffect(() => {
+    setInputIn(String(formatearNumero(inDuration / 1000)));
+  }, [inDuration]);
+  useEffect(() => {
+    setInputLoop(String(formatearNumero(loopDuration / 1000)));
+  }, [loopDuration]);
+  useEffect(() => {
+    setInputOut(String(formatearNumero(outDuration / 1000)));
+  }, [outDuration]);
+
+  const openPicker = (tab: "in" | "out" | "loop") => {
+    setAnimationPickerInitialTab(tab);
+    setFloatingControl("animation-picker");
+  };
 
   const presetInButtons = createPresetButtons(
     (key) => key.includes("In"),
@@ -49,26 +92,95 @@ const SelectaAnimation = ({ trackItem }: { trackItem: ITrackItem & IText }) => {
     trackItem.type === "text" ? "text" : "media",
     trackItemsMap
   );
+
+  const getAnimationLabel = (type: "in" | "out" | "loop") => {
+    const presetKey = currentItem?.animations?.[type]?.name;
+    if (!presetKey) return "None";
+    return presets[presetKey as keyof typeof presets]?.name ?? "None";
+  };
+
   return (
-    <div className="flex gap-2 py-0 flex-col lg:flex-row">
-      <div className=" flex-1 items-center text-sm text-muted-foreground hidden lg:flex">
-        Animation
-      </div>
+    <div className="flex flex-col gap-2">
       {isLargeScreen ? (
-        <div className="relative w-32">
-          <Button
-            className="flex h-8 w-full items-center justify-between text-sm"
-            variant="secondary"
-            onClick={() => setFloatingControl("animation-picker")}
-          >
-            <div className="w-full text-left">
-              <p className="truncate">None</p>
+        <>
+          <div className="flex gap-2">
+            <div className="flex flex-col gap-2 flex-1">
+              <div className="flex flex-1 items-center text-xs text-muted-foreground">
+                In
+              </div>
+              <div className="relative w-full">
+                <Button
+                  className="flex w-full items-center justify-between text-sm"
+                  variant="secondary"
+                  onClick={() => openPicker("in")}
+                >
+                  <div className="w-full text-left">
+                    <p className="truncate">{getAnimationLabel("in")}</p>
+                  </div>
+                  <ChevronDown className="text-muted-foreground" size={14} />
+                </Button>
+              </div>
             </div>
-            <ChevronDown className="text-muted-foreground" size={14} />
-          </Button>
-        </div>
+            {hasInAnimation && (
+              <DurationInputSlider
+                label="Duration"
+                valueMs={inDuration}
+                maxMs={maxValues.in}
+                onChangeMs={handleInChange}
+              />
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            <div className="flex flex-col gap-2 flex-1">
+              <div className="flex flex-1 items-center text-xs text-muted-foreground">
+                Out
+              </div>
+              <div className="relative w-full">
+                <Button
+                  className="flex w-full items-center justify-between text-sm"
+                  variant="secondary"
+                  onClick={() => openPicker("out")}
+                >
+                  <div className="w-full text-left">
+                    <p className="truncate">{getAnimationLabel("out")}</p>
+                  </div>
+                  <ChevronDown className="text-muted-foreground" size={14} />
+                </Button>
+              </div>
+            </div>
+            {hasOutAnimation && (
+              <DurationInputSlider
+                label="Duration"
+                valueMs={outDuration}
+                maxMs={maxValues.out}
+                onChangeMs={handleOutChange}
+              />
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            <div className="flex flex-col gap-2 flex-1">
+              <div className="flex flex-1 items-center text-xs text-muted-foreground">
+                Loop
+              </div>
+              <div className="relative w-full">
+                <Button
+                  className="flex w-full items-center justify-between text-sm"
+                  variant="secondary"
+                  onClick={() => openPicker("loop")}
+                >
+                  <div className="w-full text-left">
+                    <p className="truncate">{getAnimationLabel("loop")}</p>
+                  </div>
+                  <ChevronDown className="text-muted-foreground" size={14} />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </>
       ) : (
-        <div className="flex w-full  flex-col gap-6">
+        <div className="flex w-full flex-col gap-6">
           <Tabs defaultValue="in" className="w-full">
             <TabsList className="p-0 grid w-full grid-cols-3">
               <TabsTrigger value="in">In</TabsTrigger>
@@ -97,7 +209,6 @@ const SelectaAnimation = ({ trackItem }: { trackItem: ITrackItem & IText }) => {
               </ScrollArea>
             </TabsContent>
           </Tabs>
-          <AnimationDuration />
         </div>
       )}
     </div>

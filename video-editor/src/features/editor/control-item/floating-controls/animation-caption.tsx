@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { Animation, presets } from "../../player/animated";
 import useLayoutStore from "../../store/use-layout-store";
-import useClickOutside from "../../hooks/useClickOutside";
+import useClickOutside from "../../hooks/use-click-outside";
 import { PresetName } from "../../player/animated/presets";
 import { groupCaptionItems } from "./caption-preset-picker";
 import useStore from "../../store/use-store";

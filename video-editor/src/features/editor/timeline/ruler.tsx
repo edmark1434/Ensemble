@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   PREVIEW_FRAME_WIDTH,
-  SECONDARY_FONT,
   SMALL_FONT_SIZE,
   TIMELINE_OFFSET_CANVAS_LEFT
 } from "../constants/constants";
@@ -23,6 +22,10 @@ interface RulerProps {
   onClick?: (units: number) => void;
   onScroll?: (scrollLeft: number) => void;
 }
+
+const getUIFont = () =>
+  getComputedStyle(document.body).getPropertyValue("--font-outfit").trim() ||
+  "sans-serif";
 
 const Ruler = (props: RulerProps) => {
   const timelineOffsetX = useTimelineOffsetX();
@@ -66,8 +69,7 @@ const Ruler = (props: RulerProps) => {
     setCanvasContext(context);
 
     const tryDraw = async () => {
-      // wait for the specific font face to be available
-      await document.fonts.load(`${SMALL_FONT_SIZE}px "${SECONDARY_FONT}"`);
+      await document.fonts.load(`${SMALL_FONT_SIZE}px ${getUIFont()}`);
       resize(canvas, context, scrollLeft);
     };
 
@@ -146,7 +148,7 @@ const Ruler = (props: RulerProps) => {
     context.strokeStyle = "#71717a";
     context.fillStyle = "#71717a";
     context.lineWidth = 1;
-    context.font = `${SMALL_FONT_SIZE}px ${SECONDARY_FONT}`;
+    context.font = `${SMALL_FONT_SIZE}px ${getUIFont()}`;
     context.textBaseline = "top";
 
     context.translate(0.5, 0);

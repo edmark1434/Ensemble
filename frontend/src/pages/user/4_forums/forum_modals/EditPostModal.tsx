@@ -14,7 +14,10 @@ import {
   Image as ImageIcon,
   Trash2,
   Upload,
-  Loader2
+  Loader2,
+  Tag,
+  XCircle,
+  ChevronDown
 } from "lucide-react";
 import { showErrorToast } from "@/components/utility/toast";
 
@@ -27,17 +30,23 @@ interface ImageAttachment {
   uploadProgress?: number;
 }
 
+interface Tag {
+  tag_id: number;
+  tag_name: string;
+}
+
 interface EditPostModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (postId: number, updatedData: { title: string; content: string; tag: string; images?: ImageAttachment[] }) => void;
+  onSave: (postId: number, updatedData: { title: string; content: string; tags: Tag[]; images?: ImageAttachment[] }) => void;
   post: {
     id: number;
     title: string;
     content: string;
-    tag: string;
+    tags: Tag[];
     images?: ImageAttachment[];
   } | null;
+  availableTags?: Tag[];
 }
 
 // Rich text toolbar component
@@ -194,16 +203,30 @@ const EditPostModal: React.FC<EditPostModalProps> = ({
   onClose,
   onSave,
   post,
+  availableTags = [],
 }) => {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [selectedTag, setSelectedTag] = useState("");
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
-  const [errors, setErrors] = useState<{ title?: string; content?: string; tag?: string }>({});
+  const [errors, setErrors] = useState<{ title?: string; content?: string; tags?: string }>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Apply text formatting
   const applyFormatting = (format: string, value?: string) => {
@@ -278,7 +301,6 @@ const EditPostModal: React.FC<EditPostModalProps> = ({
       }
 
       const preview = URL.createObjectURL(file);
-        // eslint-disable-next-line react-hooks/purity
       const imageId = `${Date.now()}-${i}`;
 
       newImages.push({
@@ -324,6 +346,19 @@ const EditPostModal: React.FC<EditPostModalProps> = ({
     setImages(prev => prev.filter(img => img.id !== imageId));
   };
 
+  // Tag handlers
+  const addTag = (tag: Tag) => {
+    if (!selectedTags.find(t => t.tag_id === tag.tag_id)) {
+      setSelectedTags([...selectedTags, tag]);
+    }
+    setIsDropdownOpen(false);
+    if (errors.tags) setErrors({ ...errors, tags: undefined });
+  };
+
+  const removeTag = (tagId: number) => {
+    setSelectedTags(prev => prev.filter(t => t.tag_id !== tagId));
+  };
+
   // Render markdown preview
   const renderMarkdownPreview = () => {
     let html = content
@@ -344,9 +379,9 @@ const EditPostModal: React.FC<EditPostModalProps> = ({
   // Initialize form when post changes
   useEffect(() => {
     if (post && isOpen) {
-      setTitle(post.title);
-      setContent(post.content);
-      setSelectedTag(post.tag);
+      setTitle(post.title || "");
+      setContent(post.content || "");
+      setSelectedTags(post.tags || []);
       setImages(post.images || []);
     }
   }, [post, isOpen]);
@@ -365,14 +400,14 @@ const EditPostModal: React.FC<EditPostModalProps> = ({
   if (!isOpen || !post) return null;
 
   const validate = (): boolean => {
-    const newErrors: { title?: string; content?: string; tag?: string } = {};
+    const newErrors: { title?: string; content?: string; tags?: string } = {};
     if (!title.trim()) newErrors.title = "Title is required";
     else if (title.length < 5) newErrors.title = "Title must be at least 5 characters";
 
     if (!content.trim()) newErrors.content = "Content is required";
     else if (content.length < 20) newErrors.content = "Content must be at least 20 characters";
 
-    if (!selectedTag) newErrors.tag = "Please select a category/tag";
+    if (selectedTags.length === 0) newErrors.tags = "Please select at least one tag";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -393,7 +428,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({
       onSave(post.id, {
         title: title.trim(),
         content: content.trim(),
-        tag: selectedTag,
+        tags: selectedTags,
         images: images,
       });
       setIsSaving(false);
@@ -401,10 +436,15 @@ const EditPostModal: React.FC<EditPostModalProps> = ({
     }, 500);
   };
 
+  // Get available tags that are not already selected
+  const availableTagsList = availableTags.filter(
+    tag => !selectedTags.find(t => t.tag_id === tag.tag_id)
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in-modal">
-      <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0d0f1a] shadow-2xl animate-scale-in">
-        <div className="flex items-center justify-between border-b border-white/10 p-4">
+      <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0d0f1a] shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between border-b border-white/10 p-4 sticky top-0 bg-[#0d0f1a] z-10">
           <div className="flex items-center gap-2">
             <Edit3 className="h-5 w-5 text-blue-400" />
             <h3 className="text-xl font-semibold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
@@ -429,34 +469,82 @@ const EditPostModal: React.FC<EditPostModalProps> = ({
         </div>
 
         <div className="p-6">
-          {/* Category / Tag Selection */}
+          {/* Tags Selection - Dropdown */}
           <div className="mb-4">
             <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-zinc-500">
-              Category / Tag *
+              Tags * (Select one or more)
             </label>
-            <div className="relative">
-              <select
-                value={selectedTag}
-                onChange={(e) => {
-                  setSelectedTag(e.target.value);
-                  if (errors.tag) setErrors({ ...errors, tag: undefined });
-                }}
+            
+            {/* Selected Tags Display */}
+            {selectedTags.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {selectedTags.map((tag) => (
+                  <span
+                    key={tag.tag_id}
+                    className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-3 py-1 text-xs text-blue-400"
+                  >
+                    <Tag className="h-3 w-3" />
+                    {tag.tag_name}
+                    <button
+                      type="button"
+                      onClick={() => removeTag(tag.tag_id)}
+                      className="ml-1 rounded-full p-0.5 hover:bg-white/10"
+                    >
+                      <XCircle className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Dropdown for selecting tags */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 className={`w-full rounded-lg border ${
-                  errors.tag ? "border-red-500/50" : "border-white/15"
-                } bg-white/5 px-4 py-2.5 text-sm text-white focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50`}
+                  errors.tags ? "border-red-500/50" : "border-white/15"
+                } bg-white/5 px-4 py-2.5 text-sm text-white flex items-center justify-between transition hover:bg-white/10`}
               >
-                <option value="" className="bg-[#0d0f1a]">Select a category</option>
-                <option value="General" className="bg-[#0d0f1a]">General</option>
-                <option value="Question" className="bg-[#0d0f1a]">Question</option>
-                <option value="Tutorial" className="bg-[#0d0f1a]">Tutorial</option>
-                <option value="Discussion" className="bg-[#0d0f1a]">Discussion</option>
-                <option value="Feedback" className="bg-[#0d0f1a]">Feedback</option>
-              </select>
+                <span className={availableTagsList.length === 0 ? "text-zinc-500" : "text-white"}>
+                  {availableTagsList.length === 0 
+                    ? "No more tags available" 
+                    : `Select tags (${availableTagsList.length} available)`}
+                </span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${isDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {/* Dropdown menu */}
+              {isDropdownOpen && availableTagsList.length > 0 && (
+                <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-lg border border-white/10 bg-[#0d0f1a] shadow-xl z-20">
+                  <div className="p-1">
+                    {availableTagsList.map((tag) => (
+                      <button
+                        key={tag.tag_id}
+                        type="button"
+                        onClick={() => addTag(tag)}
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10"
+                      >
+                        <Tag className="h-3.5 w-3.5 text-blue-400" />
+                        {tag.tag_name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-            {errors.tag && (
+
+            {errors.tags && (
               <p className="mt-1 text-xs text-red-400 flex items-center gap-1">
                 <AlertCircle className="h-3 w-3" />
-                {errors.tag}
+                {errors.tags}
+              </p>
+            )}
+
+            {/* Show count of selected tags */}
+            {selectedTags.length > 0 && (
+              <p className="mt-1 text-xs text-zinc-500">
+                {selectedTags.length} tag{selectedTags.length > 1 ? "s" : ""} selected
               </p>
             )}
           </div>

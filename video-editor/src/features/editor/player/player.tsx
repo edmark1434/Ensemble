@@ -11,11 +11,16 @@ const Player = () => {
     setPlayerRef(playerRef as React.RefObject<PlayerRef>);
   }, []);
 
+  const safeDurationInFrames = (() => {
+    const frames = Math.round((duration / 1000) * fps) + 1;
+    return Number.isFinite(frames) && frames > 0 ? frames : 1;
+  })();
+
   return (
     <RemotionPlayer
       ref={playerRef}
       component={Composition}
-      durationInFrames={Math.round((duration / 1000) * fps) + 1 || 1}
+      durationInFrames={safeDurationInFrames}
       compositionWidth={size.width}
       compositionHeight={size.height}
       className={`h-full w-full bg-[${background.value}]`}

@@ -20,18 +20,17 @@ const FontChange = ({
   return (
     <div
       style={{
-        width: "100%",
-        height: "100%",
+        width: details.width,
+        height: details.height,
         position: "relative",
         background: "transparent",
-        perspective: 1000 // necesaria para el efecto 3D
+        perspective: 1000,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
       }}
     >
-      <div
-        style={{
-          fontFamily: totalFonts[fontIndex].fontFamily
-        }}
-      >
+      <div style={{ fontFamily: totalFonts[fontIndex].fontFamily }}>
         {text}
       </div>
     </div>

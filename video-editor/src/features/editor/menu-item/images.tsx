@@ -3,18 +3,34 @@ import { dispatch } from "@designcombo/events";
 import { generateId } from "@designcombo/timeline";
 import Draggable from "@/components/shared/draggable";
 import { IImage } from "@designcombo/types";
-import React, { useState, useEffect } from "react";
+import React, {useState, useEffect, useRef} from "react";
 import { useIsDraggingOverTimeline } from "../hooks/is-dragging-over-timeline";
 import { ADD_ITEMS } from "@designcombo/state";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2 } from "lucide-react";
+import {Search, Loader2, PlusIcon} from "lucide-react";
 import { usePexelsImages } from "@/hooks/use-pexels-images";
 import { ImageLoading } from "@/components/ui/image-loading";
+import {useMasonryColumns} from "@/features/editor/hooks/use-masonry-columns";
 
 export const Images = () => {
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
   const [searchQuery, setSearchQuery] = useState("");
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  const COLUMN_WIDTH = 120;
+  const GAP = 8;
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      setContainerWidth(entries[0].contentRect.width);
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   const {
     images: pexelsImages,
@@ -92,6 +108,7 @@ export const Images = () => {
 
   // Use Pexels images if available, otherwise fall back to static images
   const displayImages = pexelsImages;
+  const columns = useMasonryColumns(displayImages, COLUMN_WIDTH, containerWidth, GAP);
 
   return (
     <div className="flex h-full w-full flex-col min-h-0 overflow-hidden">
@@ -131,7 +148,7 @@ export const Images = () => {
       </div>
 
       {pexelsError && (
-        <div className="px-4 pb-2">
+        <div className="px-4">
           <div className="text-sm text-red-500 bg-red-50 dark:bg-red-950/20 p-2 rounded">
             {pexelsError}
           </div>
@@ -139,41 +156,28 @@ export const Images = () => {
       )}
 
       <ScrollArea className="flex-1 px-4 h-full">
-        <div className="max-h-full">
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
-            {displayImages.map((image, index) => {
-              return (
+        <div ref={containerRef} className="flex gap-2 max-h-full">
+          {columns.map((columnItems, colIndex) => (
+            <div key={colIndex} className="flex flex-1 flex-col gap-2 min-w-0">
+              {columnItems.map((image, i) => (
                 <ImageItem
-                  key={image.id || index}
+                  key={image.id || `${colIndex}-${i}`}
                   image={image}
                   shouldDisplayPreview={!isDraggingOverTimeline}
                   handleAddImage={handleAddImage}
                 />
-              );
-            })}
-          </div>
-          {pexelsLoading && <ImageLoading message="Searching for images..." />}
-          {/* Pagination */}
-          {hasNextPage && (
-            <div className="flex items-center justify-center p-4">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleLoadMore}
-                disabled={pexelsLoading}
-              >
-                {pexelsLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Loading...
-                  </>
-                ) : (
-                  "Load More"
-                )}
-              </Button>
+              ))}
             </div>
-          )}
+          ))}
         </div>
+        {pexelsLoading && <ImageLoading message="Searching for images..." />}
+        {hasNextPage && (
+          <div className="flex items-center justify-center p-4">
+            <Button size="sm" variant="outline" onClick={handleLoadMore} disabled={pexelsLoading}>
+              {pexelsLoading ? (<><Loader2 className="h-4 w-4 mr-2 animate-spin" />Loading...</>) : "Load more"}
+            </Button>
+          </div>
+        )}
       </ScrollArea>
     </div>
   );
@@ -188,12 +192,17 @@ const ImageItem = ({
   image: Partial<IImage>;
   shouldDisplayPreview: boolean;
 }) => {
+  const width = (image.details as any)?.width;
+  const height = (image.details as any)?.height;
+
   const style = React.useMemo(
     () => ({
       backgroundImage: `url(${image.preview})`,
       backgroundSize: "cover",
-      width: "80px",
-      height: "80px"
+      width: "120px",
+      height: "120px",
+      border: "1px solid var(--primary)",
+      borderRadius: "6px"
     }),
     [image.preview]
   );
@@ -208,19 +217,23 @@ const ImageItem = ({
         onClick={() =>
           handleAddImage({
             id: generateId(),
-            details: {
-              src: image.details?.src
-            }
+            details: { src: image.details?.src }
           } as IImage)
         }
-        className="flex aspect-square w-full items-center justify-center overflow-hidden bg-background pb-2 cursor-pointer"
+        className="relative flex w-full items-center justify-center overflow-hidden cursor-pointer group rounded-md"
       >
         <img
           draggable={false}
           src={image.preview}
-          className="h-full w-full rounded-md object-cover"
+          style={{ aspectRatio: width && height ? `${width} / ${height}` : undefined }}
+          className="w-full rounded-md object-cover"
           alt="Visual content"
         />
+        <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+          <div className="rounded-full p-1">
+            <PlusIcon className="h-6 w-6 fill-current" />
+          </div>
+        </div>
       </div>
     </Draggable>
   );

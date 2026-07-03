@@ -1,5 +1,5 @@
 // src/pages/user/4_forums/SelectedGroup.tsx
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -824,7 +824,7 @@ const SelectedGroup = () => {
   const [commentReplyUploading, setCommentReplyUploading] = useState(false);
   
   const user = useGlobalState((state) => state.user);
-  const currentUserId = user?.user_id || 1;
+  const currentUserId = user?.user_id || user?.userId || 1;
   const currentUserAvatar = user?.avatar || "https://i.pravatar.cc/150?u=default";
   
   const getMemberDetails = (userId: number) => {
@@ -843,38 +843,44 @@ const SelectedGroup = () => {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      const [result, result2] = await Promise.all([
-        api.get(`api/forum/groups/${id}`),
-        api.get(`api/forum/discussions/group/${id}`)
-      ]);
-      if (!result.data) {
-        showErrorToast("Group not found");
-        navigate("/forums");
-        return;
-      }
-      const mockGroup: Group = result.data;
-      const getMemberDetails = await api.post('api/users/list-of-details', { userIds: mockGroup.members.map(m => m.userId) });
-      let memberDetailsList = getMemberDetails.data.usersList;
-      for(const member of mockGroup.members) { 
-        const details = memberDetailsList.find((details: any) => details.user_id === member.userId);
-        if (details) {
-          details.name = `${details.first_name} ${details.last_name}`;
-          details.role = member.role;
-          details.avatar = details.avatar_file_id ? `api/files/${details.avatar_file_id}` : `https://i.pravatar.cc/150?u=${details.user_id}`;
-          details.joinedAt = member.joined_at;
-          details.userId = details.user_id;
-          delete details.first_name;
-          delete details.last_name;
-          delete details.user_id;
-          delete details.avatar_file_id;
+      try {
+        const [result, result2] = await Promise.all([
+          api.get(`api/forum/groups/${id}`),
+          api.get(`api/forum/discussions/group/${id}`)
+        ]);
+        if (!result.data) {
+          showErrorToast("Group not found");
+          navigate("/forums");
+          return;
         }
+        const mockGroup: Group = result.data;
+        const getMemberDetails = await api.post('api/users/list-of-details', { userIds: mockGroup.members.map(m => m.userId) });
+        let memberDetailsList = getMemberDetails.data.usersList;
+        for(const member of mockGroup.members) { 
+          const details = memberDetailsList.find((details: any) => details.user_id === member.userId);
+          if (details) {
+            details.name = `${details.first_name} ${details.last_name}`;
+            details.role = member.role;
+            details.avatar = details.avatar_file_id ? `api/files/${details.avatar_file_id}` : `https://i.pravatar.cc/150?u=${details.user_id}`;
+            details.joinedAt = member.joined_at;
+            details.userId = details.user_id;
+            delete details.first_name;
+            delete details.last_name;
+            delete details.user_id;
+            delete details.avatar_file_id;
+          }
+        }
+        console.log("Member details with roles:", memberDetailsList);
+        console.log("Group discussion:", result2.data);
+        setGroup(mockGroup);
+        setPosts(result2.data);
+        setMembersWithDetails(memberDetailsList);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        showErrorToast("Failed to load group data");
+      } finally {
+        setLoading(false);
       }
-      console.log("Member details with roles:", memberDetailsList);
-      console.log("Group discussion:", result2.data);
-      setGroup(mockGroup);
-      setPosts(result2.data);
-      setMembersWithDetails(memberDetailsList);
-      setLoading(false);
     };
 
     fetchData();
@@ -886,18 +892,49 @@ const SelectedGroup = () => {
     { value: "most-commented", label: "Most Commented", icon: <MessageCircle className="h-3 w-3" /> },
   ];
 
-  const displayPosts = posts.map((post, index) => {
+  // Filter and sort posts
+  const filteredAndSortedPosts = useMemo(() => {
+    let filtered = [...posts];
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter((post) => {
+        const matchesTitle = post.title.toLowerCase().includes(query);
+        const matchesContent = post.description.toLowerCase().includes(query);
+        const matchesAuthor = getMemberDetails(post.user_id).name.toLowerCase().includes(query);
+        const matchesTags = post.tags?.some(tag => 
+          tag.tag_name?.toLowerCase().includes(query)
+        ) || false;
+        return matchesTitle || matchesContent || matchesAuthor || matchesTags;
+      });
+    }
+
+    // Sort
+    if (sortBy === "latest") {
+      filtered = filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    } else if (sortBy === "most-liked") {
+      filtered = filtered.sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0));
+    } else if (sortBy === "most-commented") {
+      filtered = filtered.sort((a, b) => (b.comments?.length || 0) - (a.comments?.length || 0));
+    }
+
+    return filtered;
+  }, [posts, searchQuery, sortBy]);
+
+  const displayPosts = filteredAndSortedPosts.map((post, index) => {
     const authorDetails = getMemberDetails(post.user_id);
     const isLikedByCurrentUser = post.likes?.some(like => like.user_id === currentUserId) || false;
     const isSavedByCurrentUser = post.saves?.some(save => save.user_id === currentUserId) || false;
-    
     return {
       ...post,
       arrayIndex: index,
       id: post._id || String(index),
+      _id: post._id,
       author: authorDetails.name,
       authorAvatar: authorDetails.avatar,
       excerpt: post.description,
+      content: post.description, // Add this for the JSX to display content
       ago: getTimeAgo(post.created_at),
       tagsList: post.tags || [],
       likeCount: post.likes?.length || 0,
@@ -1138,7 +1175,6 @@ const SelectedGroup = () => {
     
     const isCurrentlyLiked = currentComment.likes?.some(like => like.user_id === currentUserId) || false;
     
-    // Optimistic update
     setPosts(prevPosts =>
       prevPosts.map((post, idx) => {
         if (idx === postId) {
@@ -1164,7 +1200,6 @@ const SelectedGroup = () => {
       })
     );
     
-    // Send to backend - matches your backend service
     try {
       const payload = isCurrentlyLiked
         ? { likes: { action: 'remove', user_id: currentUserId } }
@@ -1173,7 +1208,6 @@ const SelectedGroup = () => {
       await api.patch(`api/forum/discussions/${currentPost._id}/comments/${commentId}`, payload);
     } catch (error) {
       console.error("Error liking comment:", error);
-      // Revert on error
       setPosts(prevPosts =>
         prevPosts.map((post, idx) => {
           if (idx === postId) {
@@ -1207,7 +1241,6 @@ const SelectedGroup = () => {
     const currentComment = currentPost?.comments?.find(c => c.comment_id === commentId);
     if (!currentComment) return;
     
-    // Optimistic update
     setPosts(prevPosts =>
       prevPosts.map((post, idx) => {
         if (idx === postId) {
@@ -1235,7 +1268,6 @@ const SelectedGroup = () => {
       showSuccessToast("Comment edited successfully");
     } catch (error) {
       console.error("Error editing comment:", error);
-      // Revert on error
       setPosts(prevPosts =>
         prevPosts.map((post, idx) => {
           if (idx === postId) {
@@ -1259,7 +1291,6 @@ const SelectedGroup = () => {
     const currentComment = currentPost?.comments?.find(c => c.comment_id === commentId);
     if (!currentComment) return;
     
-    // Optimistic update - remove from UI
     setPosts(prevPosts =>
       prevPosts.map((post, idx) => {
         if (idx === postId) {
@@ -1277,7 +1308,6 @@ const SelectedGroup = () => {
       showSuccessToast("Comment deleted successfully");
     } catch (error) {
       console.error("Error deleting comment:", error);
-      // Revert on error - add back the comment
       setPosts(prevPosts =>
         prevPosts.map((post, idx) => {
           if (idx === postId) {
@@ -1300,14 +1330,9 @@ const SelectedGroup = () => {
     title: string;
     content: string;
     groupId: number;
-    tag: string;
+    tags: { tag_id: number; tag_name: string }[];
     images?: ImageAttachment[];
   }) => {
-    const tagId = parseInt(postData.tag) || 0;
-    const newTag: ForumTag = { 
-      tag_id: tagId,
-      tag_name: postData.tag 
-    };
     const forum_group_id = postData.groupId;
     delete postData.groupId;
     try{
@@ -1330,7 +1355,7 @@ const SelectedGroup = () => {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         deleted_at: null,
-        tags: postData.tag ? [newTag] : [],
+        tags: postData.tags || [],
         attachments: postData.images?.map(img => ({ file_path: img.preview })) || [],
         likes: [],
         saves: [],
@@ -1345,39 +1370,85 @@ const SelectedGroup = () => {
     }
   };
 
-  const handleEditPost = (postId: number, updatedData: { title: string; content: string; tag: string; images?: ImageAttachment[] }) => {
-    const updatedTag: ForumTag = { 
-      tag_id: parseInt(updatedData.tag) || 0,
-      tag_name: updatedData.tag 
-    };
-    
-    setPosts(prev => prev.map((post, idx) =>
-      idx === postId
-        ? {
-            ...post,
-            title: updatedData.title,
-            description: updatedData.content,
-            tags: [updatedTag],
-            attachments: updatedData.images?.map(img => ({ file_path: img.preview })) || post.attachments,
-          }
-        : post
-    ));
-    showSuccessToast("Post updated successfully!");
+  // Updated handleEditPost with proper sync
+  const handleEditPost = async (postId: string, updatedData: { title: string; content: string; tags: { tag_id: number; tag_name: string }[]; images?: ImageAttachment[] }) => {
+    try {
+      // Find the current post using the _id string
+      const currentPost = posts.find(post => post._id === postId);
+      if (!currentPost) {
+        showErrorToast("Post not found");
+        return;
+      }
+
+      // Find the index of the post for updating the local state
+      const postIndex = posts.findIndex(post => post._id === postId);
+
+      // Prepare payload - backend expects 'description' not 'content'
+      const payload = {
+        title: updatedData.title,
+        description: updatedData.content,
+        tags: updatedData.tags || [],
+      };
+
+      console.log("Updating post with _id:", postId);
+      console.log("Payload:", payload);
+
+      // Use the _id for the API call
+      const response = await api.patch(`api/forum/discussions/${postId}`, payload);
+      
+      if (response.status === 200) {
+        // Update local state using the index
+        setPosts(prev => prev.map((post, idx) =>
+          idx === postIndex
+            ? {
+                ...post,
+                title: updatedData.title,
+                description: updatedData.content, // This is what the backend expects
+                tags: updatedData.tags || [],
+                attachments: updatedData.images?.map(img => ({ file_path: img.preview })) || post.attachments,
+                updated_at: new Date().toISOString(),
+              }
+            : post
+        ));
+        
+        // Force a re-render by updating a state that triggers useMemo
+        // The posts state update above should already trigger this
+        
+        showSuccessToast("Post updated successfully!");
+        setEditingPost(null);
+        setPostMenuOpen(null);
+      } else {
+        showErrorToast(response.data?.error || "Failed to update post");
+      }
+    } catch (error: any) {
+      console.error("Error updating post:", error);
+      const errorMessage = error.response?.data?.error || error.message || "Failed to update post. Please try again.";
+      showErrorToast(errorMessage);
+    }
   };
 
-  const handleDeletePost = () => {
-    if (deletingPost) {
-      const postIndex = posts.findIndex((_, idx) => idx === deletingPost.arrayIndex);
-      if (postIndex !== -1) {
-        const updatedPosts = [...posts];
-        updatedPosts.splice(postIndex, 1);
-        setPosts(updatedPosts);
+  const handleDeletePost = async() => {
+    console.log("Deleting post:", deletingPost);
+    try{
+      const response = await api.delete(`api/forum/discussions/${deletingPost?._id}`);
+      if (response.status === 200) {
+        if (deletingPost) {
+          const postIndex = posts.findIndex((_, idx) => idx === deletingPost.arrayIndex);
+          if (postIndex !== -1) {
+            const updatedPosts = [...posts];
+            updatedPosts.splice(postIndex, 1);
+            setPosts(updatedPosts);
+          }
+          showSuccessToast(`"${deletingPost.title}" has been deleted`);
+          setDeletingPost(null);
+          if (expandedPostId === deletingPost.id) {
+            setExpandedPostId(null);
+          }
+        }
       }
-      showSuccessToast(`"${deletingPost.title}" has been deleted`);
-      setDeletingPost(null);
-      if (expandedPostId === deletingPost.id) {
-        setExpandedPostId(null);
-      }
+    }catch(error) {
+      console.error("Error deleting post:", error);
+      showErrorToast("Failed to delete post. Please try again.");
     }
   };
 
@@ -1792,6 +1863,14 @@ const SelectedGroup = () => {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="text-zinc-500 hover:text-white"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -1895,7 +1974,7 @@ const SelectedGroup = () => {
 
                             <div className="mt-2 text-sm text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
                               <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
-                                {post.description}
+                                {post.content || post.description}
                               </ReactMarkdown>
                             </div>
 
@@ -2166,7 +2245,18 @@ const SelectedGroup = () => {
         isOpen={!!editingPost}
         onClose={() => setEditingPost(null)}
         onSave={handleEditPost}
-        post={editingPost ? { id: displayPosts.findIndex(p => p.id === editingPost.id), title: editingPost.title, content: editingPost.description, tag: editingPost.tags[0]?.tag_name || "", images: editingPost.attachments.map(a => ({ id: a.file_path, preview: a.file_path })) } : null}
+        post={editingPost ? { 
+          id: editingPost._id || editingPost.id, 
+          title: editingPost.title || "", 
+          content: editingPost.content || editingPost.description || "", 
+          tags: Array.isArray(editingPost.tags) 
+            ? editingPost.tags.map(t => ({ tag_id: t.tag_id, tag_name: t.tag_name || '' }))
+            : [],
+          images: Array.isArray(editingPost.attachments) 
+            ? editingPost.attachments.map(a => ({ id: a.file_path, preview: a.file_path })) 
+            : []
+        } : null}
+        availableTags={group?.tags?.map(t => ({ tag_id: t.tag_id, tag_name: t.tag })) || []}
       />
 
       <DeletePostModal

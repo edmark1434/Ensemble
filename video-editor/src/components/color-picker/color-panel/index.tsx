@@ -65,7 +65,7 @@ const Panel: FC<TPropsMain> = ({ alpha, hex, colorBoardHeight, onChange }) => {
           setChange={setChange}
         />
         <div className="flex flex-col gap-4">
-          <div className="h-2.5">
+          <div className="h-3">
             <Ribbon
               rootPrefixCls="color-picker-panel"
               color={state.color}
@@ -73,7 +73,7 @@ const Panel: FC<TPropsMain> = ({ alpha, hex, colorBoardHeight, onChange }) => {
               setChange={setChange}
             />
           </div>
-          <div className="h-2.5">
+          <div className="h-3">
             <Alpha
               alpha={state.alpha}
               color={state.color}

@@ -175,7 +175,7 @@ function buildTeamHistory(teamName, status) {
     activeDispute: caution
       ? {
           title: 'Scam Dispute',
-          handler: 'Susan (Dispute Moderator)',
+          handler: 'Susan (Admin)',
           against: 'Graphitee',
           reason: 'Client reported deliverables not matching scope.',
           status: 'On-going',

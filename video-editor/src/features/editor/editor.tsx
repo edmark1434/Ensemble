@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/resizable";
 import { ImperativePanelHandle } from "react-resizable-panels";
 import { getCompactFontData, loadFonts } from "./utils/fonts";
-import {SECONDARY_FONT, SECONDARY_FONT_URL, TIMELINE_OFFSET_CANVAS_LEFT} from "./constants/constants";
+import {TIMELINE_OFFSET_CANVAS_LEFT} from "./constants/constants";
 import MenuList from "./menu-list";
 import { ControlItem } from "./control-item";
 import { MenuItem } from "./menu-item";
@@ -43,6 +43,7 @@ import {useKeyboardShortcuts} from './hooks/use-keyboard-shortcuts'
 import {timeMsToUnits} from "@designcombo/timeline";
 import {useTimelineOffsetX} from "@/features/editor/hooks/use-timeline-offset";
 import {Kbd, KbdGroup} from "@/components/ui/kbd";
+import {seedDefaultFont} from "@/features/editor/utils/seed-default-font";
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -357,6 +358,7 @@ const Panels = ({
 }: any) => {
   const { showMenuItem } = useLayoutStore();
   const menuPanelRef = useRef<ImperativePanelHandle>(null);
+  const controlsPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (showMenuItem) {
@@ -372,7 +374,6 @@ const Panels = ({
           <div className="flex h-full flex-1">
             <div className="flex w-[54px] h-full bg-card border-r border-border/80">
               <MenuList />
-              <FloatingControl />
             </div>
 
             <Separator orientation="vertical" />
@@ -395,9 +396,9 @@ const Panels = ({
               <ResizableHandle className={cn("bg-border/90", !showMenuItem && "hidden")} />
 
               <ResizablePanel
-                  defaultSize={showMenuItem ? 40 : 70}
-                  minSize={showMenuItem ? 35 : 50}
-                  maxSize={showMenuItem ? 40 : 70}
+                  defaultSize={showMenuItem ? 45 : 75}
+                  minSize={showMenuItem ? 40 : 55}
+                  maxSize={showMenuItem ? 45 : 75}
                   className="relative bg-card min-w-0"
               >
                 <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} />
@@ -405,13 +406,15 @@ const Panels = ({
 
               <ResizableHandle className="bg-border/90" />
               <ResizablePanel
-                  defaultSize={30}
-                  minSize={30}
-                  maxSize={showMenuItem ? 40 : 50}
+                  defaultSize={25}
+                  minSize={25}
+                  maxSize={showMenuItem ? 35 : 45}
                   className="relative bg-card min-w-0"
               >
-                <Controls />
+                <Controls panelRef={controlsPanelRef} />
               </ResizablePanel>
+
+              <FloatingControl anchorRef={controlsPanelRef} />
             </ResizablePanelGroup>
           </div>
         </div>
@@ -445,10 +448,9 @@ const Panels = ({
 //   );
 // };
 
-const Controls = () => {
+const Controls = ({ panelRef }: { panelRef: React.RefObject<HTMLDivElement | null> }) => {
   return (
-    // h-[calc(100vh-52px)]
-    <div className="bg-card w-full flex flex-none h-full">
+    <div ref={panelRef} className="bg-card w-full flex flex-none h-full relative">
       <div className="flex w-full">
         <ControlItem />
       </div>
@@ -485,12 +487,7 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
   }, []);
 
   useEffect(() => {
-    loadFonts([
-      {
-        name: SECONDARY_FONT,
-        url: SECONDARY_FONT_URL,
-      },
-    ]);
+    seedDefaultFont().then(r => {});
   }, []);
 
   const handleTimelineResize = () => {
@@ -562,18 +559,6 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
       <div className="flex flex-1 h-[calc(100vh-52px)]">
         {isLargeScreen ? (
           <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-            {/*<ResizablePanel*/}
-            {/*  defaultSize={30}*/}
-            {/*  minSize={20}*/}
-            {/*  maxSize={40}*/}
-            {/*  className="max-w-7xl relative bg-card min-w-0 overflow-visible!"*/}
-            {/*>*/}
-            {/*  <Sidebar />*/}
-            {/*  <FloatingControl />*/}
-            {/*</ResizablePanel>*/}
-
-            {/*<ResizableHandle className="bg-border/90" />*/}
-
             <ResizablePanel
               defaultSize={40}
               minSize={40}
@@ -588,18 +573,6 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
                 isLargeScreen={isLargeScreen}
               />
             </ResizablePanel>
-
-            {/*<ResizableHandle className="bg-border/90" />*/}
-
-            {/*<ResizablePanel*/}
-            {/*    defaultSize={30}*/}
-            {/*    minSize={20}*/}
-            {/*    maxSize={40}*/}
-            {/*    className="max-w-7xl relative bg-card min-w-0 overflow-visible!"*/}
-            {/*>*/}
-            {/*  <Controls />*/}
-            {/*  <FloatingControl />*/}
-            {/*</ResizablePanel>*/}
           </ResizablePanelGroup>
         ) : (
           <Panels

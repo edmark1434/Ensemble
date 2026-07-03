@@ -1,5 +1,5 @@
 import { generateId } from "@designcombo/timeline";
-import { DEFAULT_FONT } from "./font";
+// import { DEFAULT_FONT } from "./font";
 
 export const TEXT_ADD_PAYLOAD = {
   id: generateId(),
@@ -9,11 +9,11 @@ export const TEXT_ADD_PAYLOAD = {
   },
   type: "text",
   details: {
-    text: "New text",
+    text: "Text",
     fontSize: 120,
-    width: 800,
-    fontUrl: DEFAULT_FONT.url,
-    fontFamily: DEFAULT_FONT.postScriptName,
+    width: 600,
+    fontFamily: "",  // filled at dispatch time
+    fontUrl: "",     // filled at dispatch time
     color: "#ffffff",
     wordWrap: "break-word",
     textAlign: "center",
@@ -24,6 +24,7 @@ export const TEXT_ADD_PAYLOAD = {
       x: 0,
       y: 0,
       blur: 0
-    }
+    },
+    fontWeight: "normal",
   }
 };

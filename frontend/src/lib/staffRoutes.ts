@@ -10,12 +10,13 @@ const MODERATOR_ROLES = [
   'Support Moderator',
   'Jobs N Gigs Moderator',
   'Forum Moderator',
-  'Dispute Moderator',
+  'Marketplace Moderator',
 ] as const;
 
 export const STAFF_HOME_BY_ROLE: Record<string, string> = {
   Admin: ADMIN_DASHBOARD,
   ...Object.fromEntries(MODERATOR_ROLES.map((role) => [role, STAFF_PORTAL_DASHBOARD])),
+  'Marketplace Moderator': '/moderator/marketplace',
 };
 
 export function getStaffHomePath(role?: string | null): string {

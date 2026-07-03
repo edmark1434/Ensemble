@@ -46,7 +46,15 @@ const TypeWriterOut = ({
   return (
     <div
       style={{
-        textAlign: "center"
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        textAlign: "center",
+        whiteSpace: "pre-line",
+        width: details.width,
+        height: details.height,
+        overflow: "hidden",
       }}
     >
       <span

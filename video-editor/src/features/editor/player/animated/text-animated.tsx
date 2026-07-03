@@ -124,12 +124,21 @@ export const TextAnimated: React.FC<{
   const animOut = durationInFrames - animationTextOutFrames;
   const validAnimIn = textAnimationNameIn ? animInFrom >= frame : false;
   const validAnimOut = textAnimationNameOut ? animOut < frame : false;
-  if (!validAnimOut && !validAnimIn) {
+  if (!validAnimOut && !validAnimIn && !textAnimationNameLoop) {
     return (
       <div
         style={{
           whiteSpace: "pre-line",
-          maxWidth: "100%"
+          width: details.width,
+          height: details.height,
+          display: "flex",
+          alignItems: "center",
+          justifyContent:
+            details.textAlign === "left"
+              ? "flex-start"
+              : details.textAlign === "right"
+                ? "flex-end"
+                : "center"
         }}
       >
         {text}
@@ -170,7 +179,21 @@ export const TextAnimated: React.FC<{
   const AnimationComponentLoop = animationsLoop[textAnimationNameLoop];
 
   return (
-    <>
+    <div
+      style={{
+        width: details.width,
+        height: details.height,
+        display: "flex",
+        flexDirection: "column",
+        alignItems:
+          details.textAlign === "left"
+            ? "flex-start"
+            : details.textAlign === "right"
+              ? "flex-end"
+              : "center",
+        justifyContent: "center"
+      }}
+    >
       {lines.map((line, rowIndex) => (
         <div key={rowIndex}>
           {line.split("").map((char, index) => {
@@ -221,6 +244,6 @@ export const TextAnimated: React.FC<{
           })}
         </div>
       ))}
-    </>
+    </div>
   );
 };

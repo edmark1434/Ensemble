@@ -3,29 +3,38 @@ import { interpolate } from "remotion";
 const Rotate3d = ({
   frame,
   durationInFrames,
-  text
+  text,
+  details
 }: {
   text: string;
   frame: number;
   durationInFrames: number;
+  details: { width: number; height: number };
 }) => {
   const rotation = interpolate(frame, [0, durationInFrames / 2], [0, 360]);
-  const rotation2 = rotation - 90;
+  const rotation2 = rotation - 180;
 
   return (
     <div
       style={{
-        width: "100%",
-        height: "100%",
+        width: details.width,
+        height: details.height,
         position: "relative",
         background: "transparent",
-        perspective: 1000 // necesaria para el efecto 3D
+        perspective: 1000,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
       }}
     >
       <div
         style={{
-          transform: `rotateY(${rotation}deg)`,
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: `translate(-50%, -50%) rotateY(${rotation}deg)`,
           transformStyle: "preserve-3d",
+          backfaceVisibility: "hidden",
           background: "transparent"
         }}
       >
@@ -33,10 +42,12 @@ const Rotate3d = ({
       </div>
       <div
         style={{
-          transform: `rotateY(${rotation2}deg)`,
-          transformStyle: "preserve-3d",
           position: "absolute",
-          top: 0,
+          top: "50%",
+          left: "50%",
+          transform: `translate(-50%, -50%) rotateY(${rotation2}deg)`,
+          transformStyle: "preserve-3d",
+          backfaceVisibility: "hidden",
           background: "transparent"
         }}
       >

@@ -12,7 +12,6 @@ app.set('trust proxy', 1);
 
 // Websocket server setup
 const httpServer = createServer(app);
-initSocket(httpServer);
 
 const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
 
@@ -32,7 +31,7 @@ async function startServer() {
     // 1. Await database connections FIRST
     await connectPostgresDB();
     await connectMongoDB(); 
-
+    await initSocket(httpServer);
     // 2. Load API routes ONLY after database setups are fully initialized
     const apiRoutes = require('./Route/api');
     app.use('/api', apiRoutes);

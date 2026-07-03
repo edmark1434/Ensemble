@@ -129,6 +129,24 @@ CREATE TABLE IF NOT EXISTS violations (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Marketplace asset listing requests (Marketplace Moderator approval queue)
+CREATE TABLE IF NOT EXISTS marketplace_listings (
+    listing_id SERIAL PRIMARY KEY,
+    listing_number VARCHAR(20) UNIQUE NOT NULL,
+    submitted_by_account_id INTEGER REFERENCES accounts(account_id),
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    category VARCHAR(50),
+    price_credits INTEGER NOT NULL DEFAULT 0,
+    thumbnail_url TEXT,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    rejection_reason TEXT,
+    reviewed_by_staff_id INTEGER REFERENCES staff(staff_id),
+    reviewed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -143,5 +161,6 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_user_reports_status ON user_reports(status);
 CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status);
 CREATE INDEX IF NOT EXISTS idx_support_tickets_assigned ON support_tickets(assigned_staff_id);
+CREATE INDEX IF NOT EXISTS idx_marketplace_listings_status ON marketplace_listings(status);
 CREATE INDEX IF NOT EXISTS idx_disputes_status ON disputes(status);
 CREATE INDEX IF NOT EXISTS idx_ticket_messages_ticket ON ticket_messages(ticket_id);

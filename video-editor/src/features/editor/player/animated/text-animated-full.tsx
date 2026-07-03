@@ -123,7 +123,7 @@ export const renderFullTextAnimation = ({
   // Animaciones en bucle
   if (!validAnimIn && !validAnimOut) {
     if (textAnimationNameLoop === "spinAnimationLoop") {
-      return <Spin text={text} frame={frame} fps={fps} />;
+      return <Spin text={text} frame={frame} fps={fps} details={details} />;
     }
 
     if (textAnimationNameLoop === "rotate3dAnimationLoop") {
@@ -132,6 +132,7 @@ export const renderFullTextAnimation = ({
           text={text}
           frame={frame}
           durationInFrames={durationInFrames}
+          details={details}
         />
       );
     }
@@ -148,7 +149,7 @@ export const renderFullTextAnimation = ({
     }
 
     if (textAnimationNameLoop === "shakeTextAnimationLoop") {
-      return <ShakeText text={text} frame={frame} />;
+      return <ShakeText text={text} frame={frame} details={details} />;
     }
 
     if (textAnimationNameLoop === "vintageAnimationLoop") {
@@ -156,7 +157,7 @@ export const renderFullTextAnimation = ({
     }
 
     if (textAnimationNameLoop === "glitchAnimationLoop") {
-      return <GlitchText text={text} frame={frame} />;
+      return <GlitchText text={text} frame={frame} details={details} />;
     }
   }
 

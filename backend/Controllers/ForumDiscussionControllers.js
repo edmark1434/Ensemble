@@ -7,6 +7,8 @@ const {
     updateForumDiscussionServices,
     updateForumDiscussionCommentsServices,
     addForumDiscussionCommentServices,
+    getForumDiscussionSavedByUserIdServices,
+    deleteForumDiscussionServices
 } = require('../Services/ForumDiscussionServices');
 
 async function createForumDiscussionController(req, res) {
@@ -38,7 +40,8 @@ async function getForumDiscussionByIdController(req, res) {
 
 async function getForumDiscussionsByUserIdController(req, res) {
     try {
-        const discussions = await getForumDiscussionsByUserIdServices(req.params.userId);
+        const { userId } = req.session;
+        const discussions = await getForumDiscussionsByUserIdServices(userId);
         res.status(200).json(discussions);
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -79,6 +82,30 @@ async function addForumDiscussionCommentController(req, res) {
     }
 }
 
+async function getForumDiscussionSavedByUserIdController(req, res) {
+    try {
+        const userId = req.session?.userId;
+        const savedDiscussions = await getForumDiscussionSavedByUserIdServices(userId);
+        res.status(200).json(savedDiscussions);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+}
+
+async function deleteForumDiscussionController(req, res) {
+    try {
+        const deleted = await deleteForumDiscussionServices(req.params.discussionId);
+        if (deleted) {
+            res.status(200).json({ message: 'Discussion deleted successfully' });
+        }
+        else {
+            res.status(404).json({ message: 'Discussion not found' });
+        }
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+}
+
 module.exports = {
     discussionPayload,
     createForumDiscussionController,
@@ -88,4 +115,6 @@ module.exports = {
     updateForumDiscussionController,
     updateForumDiscussionCommentsController,
     addForumDiscussionCommentController,
+    getForumDiscussionSavedByUserIdController,
+    deleteForumDiscussionController
 };

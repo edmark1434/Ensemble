@@ -4,17 +4,33 @@ import { dispatch } from "@designcombo/events";
 import { ADD_VIDEO } from "@designcombo/state";
 import { generateId } from "@designcombo/timeline";
 import { IVideo } from "@designcombo/types";
-import React, { useState, useEffect } from "react";
+import React, {useState, useEffect, useRef} from "react";
 import { useIsDraggingOverTimeline } from "../hooks/is-dragging-over-timeline";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Loader2, PlusIcon } from "lucide-react";
 import { usePexelsVideos } from "@/hooks/use-pexels-videos";
 import { ImageLoading } from "@/components/ui/image-loading";
+import {useMasonryColumns} from "@/features/editor/hooks/use-masonry-columns";
 
 export const Videos = () => {
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
   const [searchQuery, setSearchQuery] = useState("");
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  const COLUMN_WIDTH = 120;
+  const GAP = 8;
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      setContainerWidth(entries[0].contentRect.width);
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   const {
     videos: pexelsVideos,
@@ -80,6 +96,7 @@ export const Videos = () => {
 
   // Use Pexels videos if available, otherwise fall back to static videos
   const displayVideos = pexelsVideos;
+  const columns = useMasonryColumns(displayVideos, COLUMN_WIDTH, containerWidth, GAP);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -119,7 +136,7 @@ export const Videos = () => {
       </div>
 
       {pexelsError && (
-        <div className="px-4 pb-2">
+        <div className="px-4">
           <div className="text-sm text-red-500 bg-red-50 dark:bg-red-950/20 p-2 rounded">
             {pexelsError}
           </div>
@@ -127,41 +144,41 @@ export const Videos = () => {
       )}
 
       <ScrollArea className="flex-1 px-4 max-h-full">
-        <div className="max-h-full">
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
-            {displayVideos.map((video, index) => {
-              return (
+        <div ref={containerRef} className="flex gap-2 max-h-full">
+          {columns.map((columnItems, colIndex) => (
+            <div key={colIndex} className="flex flex-1 flex-col gap-2 min-w-0">
+              {columnItems.map((video, i) => (
                 <VideoItem
-                  key={video.id || index}
+                  key={video.id || `${colIndex}-${i}`}
                   video={video}
                   shouldDisplayPreview={!isDraggingOverTimeline}
                   handleAddImage={handleAddVideo}
                 />
-              );
-            })}
-          </div>
-          {pexelsLoading && <ImageLoading message="Searching for videos..." />}
-          {/* Pagination */}
-          {hasNextPage && (
-            <div className="flex items-center justify-center p-4">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleLoadMore}
-                disabled={pexelsLoading}
-              >
-                {pexelsLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Loading...
-                  </>
-                ) : (
-                  "Load More"
-                )}
-              </Button>
+              ))}
             </div>
-          )}
+          ))}
         </div>
+        {pexelsLoading && <ImageLoading message="Searching for videos..." />}
+        {/* Pagination */}
+        {hasNextPage && (
+          <div className="flex items-center justify-center p-4">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleLoadMore}
+              disabled={pexelsLoading}
+            >
+              {pexelsLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                "Load more"
+              )}
+            </Button>
+          </div>
+        )}
       </ScrollArea>
     </div>
   );
@@ -176,12 +193,17 @@ const VideoItem = ({
   video: Partial<IVideo>;
   shouldDisplayPreview: boolean;
 }) => {
+  const width = (video.details as any)?.width;
+  const height = (video.details as any)?.height;
+
   const style = React.useMemo(
     () => ({
       backgroundImage: `url(${video.preview})`,
       backgroundSize: "cover",
-      width: "80px",
-      height: "80px"
+      width: "120px",
+      height: "120px",
+      border: "1px solid var(--primary)",
+      borderRadius: "6px"
     }),
     [video.preview]
   );
@@ -209,12 +231,13 @@ const VideoItem = ({
             }
           } as any)
         }
-        className="relative aspect-square flex w-full items-center justify-center overflow-hidden bg-background pb-2 group cursor-pointer"
+        className="relative flex w-full items-center justify-center overflow-hidden group cursor-pointer rounded-md"
       >
         <img
           draggable={false}
           src={video.preview}
-          className="h-full w-full rounded-md object-cover"
+          style={{ aspectRatio: width && height ? `${width} / ${height}` : undefined }}
+          className="w-full rounded-md object-cover"
           alt="Video preview"
         />
         {/* Play button overlay */}
@@ -225,7 +248,7 @@ const VideoItem = ({
         </div>
         {/* Duration badge */}
         {(video.details as any)?.duration && (
-          <div className="absolute bottom-3 right-2 bg-black/90 text-primary/90 text-xs px-1 py-0.5 rounded">
+          <div className="absolute bottom-3 right-2 bg-secondary/90 text-secondary-foreground/90 text-xs px-1 py-0.5 rounded">
             {Math.round((video.details as any).duration)}s
           </div>
         )}
