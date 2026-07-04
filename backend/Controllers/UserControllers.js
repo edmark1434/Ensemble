@@ -13,12 +13,14 @@ const {
     getNameByUserIdServices
 } = require('../services/UserServices');
 const jwt = require('jsonwebtoken');
+const dotenv = require('dotenv');
+dotenv.config();
 
 function setAccessTokenCookie(res, accessToken) {
     res.cookie('accessToken', accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        sameSite: 'None',
         maxAge: 60 * 60 * 1000, // 1 hour
     });
 }
@@ -54,6 +56,7 @@ async function setupRefreshTokenCookie(res,result){
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
                 maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+                sameSite: 'None',
             }
         );
 }
@@ -64,6 +67,7 @@ async function createSessionIdCookie(res,credentials){
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        sameSite: 'None',
     });
 }
 async function signup(req, res) {
