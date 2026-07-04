@@ -20,7 +20,7 @@ function setAccessTokenCookie(res, accessToken) {
     res.cookie('accessToken', accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'None',
+        sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
         maxAge: 60 * 60 * 1000, // 1 hour
     });
 }
@@ -56,7 +56,7 @@ async function setupRefreshTokenCookie(res,result){
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
                 maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-                sameSite: 'None',
+                sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
             }
         );
 }
@@ -67,7 +67,7 @@ async function createSessionIdCookie(res,credentials){
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-        sameSite: 'None',
+        sameSite: process.env.NODE_ENV === 'production' ? 'None' : 'Lax',
     });
 }
 async function signup(req, res) {

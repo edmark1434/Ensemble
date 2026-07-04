@@ -21,7 +21,6 @@ app.use(cors({
   origin: [
     'https://ensemble-snowy.vercel.app',
     'http://localhost:5173'
-
   ],
   credentials: true,
 }));
