@@ -16,11 +16,21 @@ import {
   X,
   Receipt,
   Sparkles,
+  CreditCard,
+  Plus,
 } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import api from "@/lib/axios";
 
 // Interfaces
+interface Feature {
+  feature_id: number;
+  feature_key: string;
+  name: string;
+  description: string;
+  value: string;
+}
+
 interface CheckoutItem {
   id: string;
   name: string;
@@ -29,12 +39,28 @@ interface CheckoutItem {
   price: string;
   priceValue: number;
   icon?: React.ReactNode;
-  features?: string[];
+  features?: Feature[];
   planName?: string;
   originalPrice?: string;
   savings?: string;
   isCustom?: boolean;
 }
+
+interface PaymentMethod {
+  payment_token_id: string;
+  channel_code: string;
+  type: string;
+  status: string;
+  is_default: boolean;
+  display_name: string;
+  card_brand: string | null;
+  masked_card_number: string | null;
+  card_exp_month: string | null;
+  card_exp_year: string | null;
+  customer_reference_id: string;
+}
+
+type PaymentOption = "checkout" | "saved_payment";
 
 const CheckoutPage: React.FC = () => {
   const location = useLocation();
@@ -44,6 +70,11 @@ const CheckoutPage: React.FC = () => {
   const [checkoutItem, setCheckoutItem] = useState<CheckoutItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [referenceNumber, setReferenceNumber] = useState<string | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string | null>(null);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(false);
+  const [showAddPayment, setShowAddPayment] = useState(false);
+  const [selectedPaymentOption, setSelectedPaymentOption] = useState<PaymentOption>("checkout");
 
   const userCurrentCredits = 1250;
 
@@ -51,47 +82,115 @@ const CheckoutPage: React.FC = () => {
     const state = location.state as { item: CheckoutItem };
     if (state?.item) {
       setCheckoutItem(state.item);
+      fetchPaymentMethods();
     } else {
       navigate("/credits");
     }
   }, [location, navigate]);
 
-  const handlePayment = async () => {
-    if (!checkoutItem) return;
+  const fetchPaymentMethods = async () => {
+    setLoadingPaymentMethods(true);
+    try {
+      // Simulate API call - replace with actual API
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Mock payment methods - replace with actual API response
+      const mockPaymentMethods: PaymentMethod[] = [
+        {
+          payment_token_id: "tok_123",
+          channel_code: "credit_card",
+          type: "card",
+          status: "active",
+          is_default: true,
+          display_name: "Visa ending in 1234",
+          card_brand: "Visa",
+          masked_card_number: "**** **** **** 1234",
+          card_exp_month: "12",
+          card_exp_year: "2026",
+          customer_reference_id: "cust_123"
+        },
+        {
+          payment_token_id: "tok_456",
+          channel_code: "credit_card",
+          type: "card",
+          status: "active",
+          is_default: false,
+          display_name: "Mastercard ending in 5678",
+          card_brand: "Mastercard",
+          masked_card_number: "**** **** **** 5678",
+          card_exp_month: "08",
+          card_exp_year: "2025",
+          customer_reference_id: "cust_123"
+        },
+        {
+          payment_token_id: "tok_789",
+          channel_code: "gcash",
+          type: "ewallet",
+          status: "active",
+          is_default: false,
+          display_name: "GCash",
+          card_brand: null,
+          masked_card_number: null,
+          card_exp_month: null,
+          card_exp_year: null,
+          customer_reference_id: "cust_123"
+        }
+      ];
+      
+      setPaymentMethods(mockPaymentMethods);
+      
+      // Set default selected payment method
+      const defaultMethod = mockPaymentMethods.find(m => m.is_default);
+      if (defaultMethod) {
+        setSelectedPaymentMethod(defaultMethod.payment_token_id);
+      } else if (mockPaymentMethods.length > 0) {
+        setSelectedPaymentMethod(mockPaymentMethods[0].payment_token_id);
+      }
+    } catch (error) {
+      console.error("Error fetching payment methods:", error);
+    } finally {
+      setLoadingPaymentMethods(false);
+    }
+  };
 
+  const handleAddPaymentMethod = () => {
+    setShowAddPayment(true);
+    // Simulate redirect to add payment method
+    setTimeout(() => {
+      setShowAddPayment(false);
+      // After adding, refresh payment methods
+      fetchPaymentMethods();
+    }, 1500);
+  };
+
+  const handlePayWithCheckout = async () => {
+    if (!checkoutItem) return;
+    
+    console.log("🔵 [TOPUP] Paying with Checkout");
+    console.log("📦 Item:", checkoutItem);
+    
     setIsProcessing(true);
     setError(null);
 
     try {
       const payload = {
-        paymentMethod: "GCASH",
-        paymentType: "EWALLET",
-        channelCode: "GCASH",
         amount: checkoutItem.priceValue,
         currency: "PHP",
         itemName: checkoutItem.name,
         itemType: checkoutItem.type,
         credits: checkoutItem.credits || 0,
-        customer: {
-          mobileNumber: "",
-          fullName: "",
-        },
-        savePaymentMethod: false,
-        timestamp: new Date().toISOString(),
       };
-
-      let endpoint = "api/payment/topup";
-      if (checkoutItem.type === "subscription") {
-        endpoint = "api/payment/subscription";
-      }
-
-      const response = await api.post(endpoint, JSON.stringify(payload), {
+      
+      console.log("📤 Checkout Payload:", payload);
+      
+      const response = await api.post("api/payment/topup", payload, {
         headers: {
           "Content-Type": "application/json",
         },
       });
 
       const data = response.data;
+      console.log("✅ Checkout Response:", data);
 
       if (data.redirect_url) {
         window.location.href = data.redirect_url;
@@ -102,13 +201,119 @@ const CheckoutPage: React.FC = () => {
         setError("Payment initiation failed. Please try again.");
       }
     } catch (error: any) {
-      console.error("❌ Payment Error:", error);
+      console.error("❌ Checkout Payment Error:", error);
+      setError(error.message || "Payment failed. Please try again.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handlePayWithSavedPayment = async () => {
+    if (!checkoutItem) return;
+    
+    if (!selectedPaymentMethod) {
+      setError("Please select a payment method");
+      return;
+    }
+
+    console.log("💳 [TOPUP] Paying with Saved Payment Method");
+    console.log("📦 Item:", checkoutItem);
+    console.log("💳 Payment Method ID:", selectedPaymentMethod);
+    
+    setIsProcessing(true);
+    setError(null);
+
+    try {
+      const payload = {
+        amount: checkoutItem.priceValue,
+        currency: "PHP",
+        itemName: checkoutItem.name,
+        itemType: checkoutItem.type,
+        credits: checkoutItem.credits || 0,
+        paymentMethodId: selectedPaymentMethod,
+      };
+      
+      console.log("📤 Saved Payment Payload:", payload);
+      
+      const response = await api.post("api/payment/topup", payload, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = response.data;
+      console.log("✅ Saved Payment Response:", data);
+
+      if (data.redirect_url) {
+        window.location.href = data.redirect_url;
+      } else if (data.reference_id) {
+        setReferenceNumber(data.reference_id);
+        setIsSuccess(true);
+      } else {
+        setError("Payment initiation failed. Please try again.");
+      }
+    } catch (error: any) {
+      console.error("❌ Saved Payment Error:", error);
       if (error.response?.data?.error?.message) {
         setError(error.response.data.error.message);
       } else if (error.response?.data?.message) {
         setError(error.response.data.message);
       } else {
         setError(error.message || "Payment failed. Please try again.");
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSubscribe = async () => {
+    if (!checkoutItem) return;
+    
+    if (!selectedPaymentMethod) {
+      setError("Please select a payment method");
+      return;
+    }
+
+    console.log("🔄 [SUBSCRIPTION] Subscribing to plan");
+    console.log("📦 Plan:", checkoutItem);
+    console.log("💳 Payment Method ID:", selectedPaymentMethod);
+    
+    setIsProcessing(true);
+    setError(null);
+
+    try {
+      const payload = {
+        planId: checkoutItem.id,
+        paymentMethodId: selectedPaymentMethod,
+      };
+      
+      console.log("📤 Subscription Payload:", payload);
+      
+      const response = await api.post("api/payment/subscription", payload, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = response.data;
+      console.log("✅ Subscription Response:", data);
+
+      if (data.redirect_url) {
+        window.location.href = data.redirect_url;
+      } else if (data.reference_id) {
+        setReferenceNumber(data.reference_id);
+        setIsSuccess(true);
+      } else {
+        setError("Subscription initiation failed. Please try again.");
+      }
+    } catch (error: any) {
+      console.error("❌ Subscription Error:", error);
+      if (error.response?.data?.error?.message) {
+        setError(error.response.data.error.message);
+      } else if (error.response?.data?.message) {
+        setError(error.response.data.message);
+      } else {
+        setError(error.message || "Subscription failed. Please try again.");
       }
     } finally {
       setIsProcessing(false);
@@ -146,6 +351,21 @@ const CheckoutPage: React.FC = () => {
     if (checkoutItem.type === "custom") return "Custom Top-up";
     if (checkoutItem.type === "topup") return "Credit Pack";
     return "Subscription";
+  };
+
+  const getPaymentMethodIcon = (method: PaymentMethod) => {
+    if (method.type === "ewallet") {
+      if (method.channel_code === "gcash") return "📱";
+      return "💳";
+    }
+    if (method.card_brand) {
+      const brand = method.card_brand.toLowerCase();
+      if (brand.includes("visa")) return "💳";
+      if (brand.includes("mastercard")) return "💳";
+      if (brand.includes("amex")) return "💳";
+      return "💳";
+    }
+    return "💳";
   };
 
   if (!checkoutItem) {
@@ -192,6 +412,8 @@ const CheckoutPage: React.FC = () => {
   }
 
   const isOneTime = checkoutItem.type === "topup" || checkoutItem.type === "custom";
+  const isSubscription = checkoutItem.type === "subscription";
+  const hasSavedPaymentMethods = paymentMethods.length > 0;
 
   return (
     <div className="h-screen bg-[#080a12] text-white flex flex-col overflow-hidden relative">
@@ -200,7 +422,7 @@ const CheckoutPage: React.FC = () => {
       <div className="absolute top-[10%] left-[-10%] w-[500px] h-[500px] bg-blue-500/5 filter blur-[140px] pointer-events-none" />
       <div className="absolute bottom-[10%] right-[-10%] w-[500px] h-[500px] bg-teal-500/5 filter blur-[140px] pointer-events-none" />
 
-      <div className="flex-1 relative z-10 p-4 md:p-6 overflow-hidden">
+      <div className="flex-1 relative z-10 p-4 md:p-6 overflow-y-auto">
         <div className="w-full max-w-4xl mx-auto">
           {/* Back Button */}
           <button
@@ -226,7 +448,7 @@ const CheckoutPage: React.FC = () => {
 
           <h1 className="text-xl md:text-2xl font-bold mb-5">Checkout</h1>
 
-          {/* Two-column layout: item detail (left) + sticky summary (right) */}
+          {/* Two-column layout */}
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-5 items-start">
             {/* LEFT: Item detail card */}
             <div className="space-y-4">
@@ -272,20 +494,202 @@ const CheckoutPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Plan Features */}
-              {checkoutItem.type === "subscription" && checkoutItem.features && (
+              {/* Payment Methods Section - For Top-up with saved methods or Subscription */}
+              {isOneTime && hasSavedPaymentMethods && (
                 <div className="bg-[#0d0f1a]/80 backdrop-blur-md border border-[#1e2130] rounded-2xl p-5">
-                  <p className="text-sm font-semibold text-white mb-3">What's included</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {checkoutItem.features.map((feature, idx) => (
-                      <div key={idx} className="flex items-center gap-2 text-sm text-zinc-300">
-                        <div className="h-5 w-5 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-                          <Check className="h-3 w-3 text-emerald-400" />
-                        </div>
-                        <span>{feature}</span>
-                      </div>
-                    ))}
+                  <h3 className="text-sm font-semibold text-white mb-3">Choose payment option</h3>
+                  
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-3 p-3 rounded-xl border border-[#1e2130] hover:border-zinc-600 cursor-pointer transition-all">
+                      <input
+                        type="radio"
+                        name="paymentOption"
+                        value="checkout"
+                        checked={selectedPaymentOption === "checkout"}
+                        onChange={() => {
+                          setSelectedPaymentOption("checkout");
+                          setSelectedPaymentMethod(null);
+                        }}
+                        className="h-4 w-4 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 bg-transparent border-zinc-600"
+                      />
+                      <span className="text-sm text-white">Pay with Checkout</span>
+                    </label>
+                    <label className="flex items-center gap-3 p-3 rounded-xl border border-[#1e2130] hover:border-zinc-600 cursor-pointer transition-all">
+                      <input
+                        type="radio"
+                        name="paymentOption"
+                        value="saved_payment"
+                        checked={selectedPaymentOption === "saved_payment"}
+                        onChange={() => setSelectedPaymentOption("saved_payment")}
+                        className="h-4 w-4 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 bg-transparent border-zinc-600"
+                      />
+                      <span className="text-sm text-white">Pay with saved payment method</span>
+                    </label>
                   </div>
+
+                  {/* Show saved payment methods only when "saved_payment" is selected */}
+                  {selectedPaymentOption === "saved_payment" && (
+                    <div className="mt-3">
+                      {loadingPaymentMethods ? (
+                        <div className="flex items-center justify-center py-4">
+                          <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+                        </div>
+                      ) : paymentMethods.length > 0 ? (
+                        <div className="space-y-2">
+                          {paymentMethods.map((method) => (
+                            <label
+                              key={method.payment_token_id}
+                              className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                                selectedPaymentMethod === method.payment_token_id
+                                  ? "border-blue-500/50 bg-blue-500/10"
+                                  : "border-[#1e2130] hover:border-zinc-600"
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="paymentMethod"
+                                value={method.payment_token_id}
+                                checked={selectedPaymentMethod === method.payment_token_id}
+                                onChange={() => setSelectedPaymentMethod(method.payment_token_id)}
+                                className="h-4 w-4 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 bg-transparent border-zinc-600"
+                              />
+                              <div className="flex-1 flex items-center gap-3">
+                                <span className="text-xl">{getPaymentMethodIcon(method)}</span>
+                                <div>
+                                  <p className="text-sm font-medium text-white">{method.display_name}</p>
+                                  {method.masked_card_number && (
+                                    <p className="text-xs text-zinc-400">
+                                      Expires {method.card_exp_month}/{method.card_exp_year}
+                                    </p>
+                                  )}
+                                  {method.is_default && (
+                                    <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                                      Default
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </label>
+                          ))}
+                          
+                          {/* Add new payment method */}
+                          <button
+                            onClick={handleAddPaymentMethod}
+                            className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-[#1e2130] hover:border-zinc-600 transition-colors text-sm text-zinc-400 hover:text-white"
+                          >
+                            {showAddPayment ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Plus className="h-4 w-4" />
+                                Add new payment method
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="text-center py-4">
+                          <p className="text-sm text-zinc-400 mb-3">No saved payment methods</p>
+                          <button
+                            onClick={handleAddPaymentMethod}
+                            className="flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-[#1e2130] hover:border-zinc-600 transition-colors text-sm text-zinc-400 hover:text-white w-full"
+                          >
+                            {showAddPayment ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Plus className="h-4 w-4" />
+                                Add your first payment method
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* For Subscription - Always show payment methods */}
+              {isSubscription && (
+                <div className="bg-[#0d0f1a]/80 backdrop-blur-md border border-[#1e2130] rounded-2xl p-5">
+                  <h3 className="text-sm font-semibold text-white mb-3">Choose payment method</h3>
+                  
+                  {loadingPaymentMethods ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+                    </div>
+                  ) : paymentMethods.length > 0 ? (
+                    <div className="space-y-2">
+                      {paymentMethods.map((method) => (
+                        <label
+                          key={method.payment_token_id}
+                          className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                            selectedPaymentMethod === method.payment_token_id
+                              ? "border-blue-500/50 bg-blue-500/10"
+                              : "border-[#1e2130] hover:border-zinc-600"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="paymentMethod"
+                            value={method.payment_token_id}
+                            checked={selectedPaymentMethod === method.payment_token_id}
+                            onChange={() => setSelectedPaymentMethod(method.payment_token_id)}
+                            className="h-4 w-4 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 bg-transparent border-zinc-600"
+                          />
+                          <div className="flex-1 flex items-center gap-3">
+                            <span className="text-xl">{getPaymentMethodIcon(method)}</span>
+                            <div>
+                              <p className="text-sm font-medium text-white">{method.display_name}</p>
+                              {method.masked_card_number && (
+                                <p className="text-xs text-zinc-400">
+                                  Expires {method.card_exp_month}/{method.card_exp_year}
+                                </p>
+                              )}
+                              {method.is_default && (
+                                <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                                  Default
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </label>
+                      ))}
+                      
+                      {/* Add new payment method */}
+                      <button
+                        onClick={handleAddPaymentMethod}
+                        className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-[#1e2130] hover:border-zinc-600 transition-colors text-sm text-zinc-400 hover:text-white"
+                      >
+                        {showAddPayment ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Plus className="h-4 w-4" />
+                            Add new payment method
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-sm text-zinc-400 mb-3">No saved payment methods</p>
+                      <button
+                        onClick={handleAddPaymentMethod}
+                        className="flex items-center justify-center gap-2 p-3 rounded-xl border border-dashed border-[#1e2130] hover:border-zinc-600 transition-colors text-sm text-zinc-400 hover:text-white w-full"
+                      >
+                        {showAddPayment ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Plus className="h-4 w-4" />
+                            Add your first payment method
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -295,7 +699,7 @@ const CheckoutPage: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium text-emerald-300">Secure payment</p>
                   <p className="text-xs text-zinc-400 mt-0.5">
-                    Your payment is encrypted end-to-end. We never store your GCash credentials.
+                    Your payment is encrypted end-to-end. We never store your payment credentials.
                   </p>
                 </div>
               </div>
@@ -336,23 +740,53 @@ const CheckoutPage: React.FC = () => {
               </div>
 
               <div className="p-5 pt-0 space-y-2.5">
-                <button
-                  onClick={handlePayment}
-                  disabled={isProcessing}
-                  className="w-full py-3.5 bg-gradient-to-r from-blue-500 to-purple-600 text-sm font-bold text-white rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      Pay {checkoutItem.price} with GCash
-                      <ArrowRight className="h-4 w-4" />
-                    </>
-                  )}
-                </button>
+                {/* Pay button - Top-up */}
+                {isOneTime && (
+                  <button
+                    onClick={() => {
+                      if (hasSavedPaymentMethods && selectedPaymentOption === "saved_payment") {
+                        handlePayWithSavedPayment();
+                      } else {
+                        handlePayWithCheckout();
+                      }
+                    }}
+                    disabled={isProcessing || (hasSavedPaymentMethods && selectedPaymentOption === "saved_payment" && !selectedPaymentMethod)}
+                    className="w-full py-3.5 bg-gradient-to-r from-blue-500 to-purple-600 text-sm font-bold text-white rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        Pay {checkoutItem.price}
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {/* Subscribe button - Subscription */}
+                {isSubscription && (
+                  <button
+                    onClick={handleSubscribe}
+                    disabled={isProcessing || !selectedPaymentMethod}
+                    className="w-full py-3.5 bg-gradient-to-r from-blue-500 to-purple-600 text-sm font-bold text-white rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        Subscribe Now
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
+                  </button>
+                )}
 
                 <button
                   onClick={() => navigate("/credits")}
