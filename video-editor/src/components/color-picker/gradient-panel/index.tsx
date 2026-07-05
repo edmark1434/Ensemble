@@ -342,6 +342,7 @@ const arePropsEqual = (prevProps: any, nextProps: any) => {
     arraysEqual(prevProps.color.stops, nextProps.color.stops) &&
     prevProps.color.modifier === nextProps.color.modifier &&
     prevProps.color.type === nextProps.color.type &&
+    prevProps.color.gradient === nextProps.color.gradient &&
     shallowEqual(prevProps.activeColor, nextProps.activeColor)
   ) {
     return true;
