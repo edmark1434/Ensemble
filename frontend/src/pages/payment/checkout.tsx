@@ -82,70 +82,29 @@ const CheckoutPage: React.FC = () => {
     const state = location.state as { item: CheckoutItem };
     if (state?.item) {
       setCheckoutItem(state.item);
-      fetchPaymentMethods();
     } else {
       navigate("/credits");
     }
   }, [location, navigate]);
 
+  useEffect(() => {
+    fetchPaymentMethods();
+  }, []);
   const fetchPaymentMethods = async () => {
     setLoadingPaymentMethods(true);
     try {
-      // Simulate API call - replace with actual API
-      await new Promise(resolve => setTimeout(resolve, 800));
+      const response = await api.get("api/payment/payment-methods");
+      console.log("📥 Fetched Payment Methods:", response.data);
+      setPaymentMethods(response.data.paymentMethods || []);
+      // setPaymentMethods(mockPaymentMethods);
       
-      // Mock payment methods - replace with actual API response
-      const mockPaymentMethods: PaymentMethod[] = [
-        {
-          payment_token_id: "tok_123",
-          channel_code: "credit_card",
-          type: "card",
-          status: "active",
-          is_default: true,
-          display_name: "Visa ending in 1234",
-          card_brand: "Visa",
-          masked_card_number: "**** **** **** 1234",
-          card_exp_month: "12",
-          card_exp_year: "2026",
-          customer_reference_id: "cust_123"
-        },
-        {
-          payment_token_id: "tok_456",
-          channel_code: "credit_card",
-          type: "card",
-          status: "active",
-          is_default: false,
-          display_name: "Mastercard ending in 5678",
-          card_brand: "Mastercard",
-          masked_card_number: "**** **** **** 5678",
-          card_exp_month: "08",
-          card_exp_year: "2025",
-          customer_reference_id: "cust_123"
-        },
-        {
-          payment_token_id: "tok_789",
-          channel_code: "gcash",
-          type: "ewallet",
-          status: "active",
-          is_default: false,
-          display_name: "GCash",
-          card_brand: null,
-          masked_card_number: null,
-          card_exp_month: null,
-          card_exp_year: null,
-          customer_reference_id: "cust_123"
-        }
-      ];
-      
-      setPaymentMethods(mockPaymentMethods);
-      
-      // Set default selected payment method
-      const defaultMethod = mockPaymentMethods.find(m => m.is_default);
-      if (defaultMethod) {
-        setSelectedPaymentMethod(defaultMethod.payment_token_id);
-      } else if (mockPaymentMethods.length > 0) {
-        setSelectedPaymentMethod(mockPaymentMethods[0].payment_token_id);
-      }
+      // // Set default selected payment method
+      // const defaultMethod = mockPaymentMethods.find(m => m.is_default);
+      // if (defaultMethod) {
+      //   setSelectedPaymentMethod(defaultMethod.payment_token_id);
+      // } else if (mockPaymentMethods.length > 0) {
+      //   setSelectedPaymentMethod(mockPaymentMethods[0].payment_token_id);
+      // }
     } catch (error) {
       console.error("Error fetching payment methods:", error);
     } finally {

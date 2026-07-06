@@ -15,7 +15,22 @@ async function initSocket(httpServer) {
       socket.on("disconnect", () => {
         console.log("Client disconnected:", socket.id);
       });
+
+      socket.on("joinRoom", (roomId) => {
+        socket.join(roomId);
+        console.log(`Client ${socket.id} joined room ${roomId}`);
+        io.to(roomId).emit("newMessage", { message: "A new user has joined the room." });
+      });
+
+      socket.on("leaveRoom", (roomId) => {
+        socket.leave(roomId);
+        console.log(`Client ${socket.id} left room ${roomId}`);
+      
+      });
+
     });
+
+
   }
 
   return io;

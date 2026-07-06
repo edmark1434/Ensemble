@@ -64,45 +64,6 @@ async function getConversationByConvoId(convoId) {
     }
 }
 
-async function getConversationByAccountId(account_id) {
-    try {
-        const inboxes = await InboxCollection.find({
-            "members.account_id": String(account_id) || account_id
-        }).toArray();
-
-        if (!inboxes.length) {
-            return [];
-        }
-
-        const conversationIds = inboxes.map(
-            inbox => inbox._id.toString()
-        );
-
-        const messages = await MessageCollection.find({
-            conversation_id: { $in: conversationIds }
-        }).toArray();
-
-        // Group messages by conversation_id
-        const messagesMap = messages.reduce((acc, message) => {
-            if (!acc[message.conversation_id]) {
-                acc[message.conversation_id] = [];
-            }
-
-            acc[message.conversation_id].push(message);
-            return acc;
-        }, {});
-
-        // Attach messages to each conversation
-        return inboxes.map(inbox => ({
-            ...inbox,
-            messages: messagesMap[inbox._id.toString()] || []
-        }));
-
-    } catch (err) {
-        console.error('Error fetching conversations for user:', err);
-        throw err;
-    }
-}
 
 async function checkInboxExists(inboxId) {
     try{
@@ -114,12 +75,25 @@ async function checkInboxExists(inboxId) {
     }
 }
 
+async function getInboxByAccountId(account_id, conversation_type) {
+    try{
+        const inboxes = await InboxCollection.find({
+            "members.account_id": String(account_id) || account_id,
+            conversation_type: conversation_type
+        }).toArray();
+        return inboxes;
+    }catch(err){
+        console.error('Error fetching inbox by account ID:', err);
+        throw err;
+    }
+}
+
 module.exports = {
     createInboxRepositories,
     createMessageRepositories,
     updateMessageRepositories,
     updateInboxRepositories,
     getConversationByConvoId,
-    getConversationByAccountId,
-    checkInboxExists
+    checkInboxExists,
+    getInboxByAccountId
 }
