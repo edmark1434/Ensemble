@@ -15,7 +15,8 @@ const {
     updateUserCustomerId,
     updatePayment,
     createPaymentMethodForUser,
-    paymentMethodExists
+    paymentMethodExists,
+    getAllPaymentMethodsByUserId
 } = require("../Repositories/PaymentRepositories");
 const redisClient = require('../lib/redis');
 
@@ -415,9 +416,22 @@ const customerPayload = customerId
         
 }
 
+async function getAllPaymentMethodsByUserIdService(req, res) {
+    const user_id = req.session.userId;
+    try{
+        const paymentMethods = await getAllPaymentMethodsByUserId(user_id);
+        res.status(200).json({ paymentMethods });
+    }catch(err){
+        console.error("Error fetching payment methods:", err);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+}
+
+
 module.exports = {
     xenditWebhookHandler,
     processSubscriptionPayment,
     processTopUpPayment,
     savePaymentMethod,
+    getAllPaymentMethodsByUserIdService,
 };

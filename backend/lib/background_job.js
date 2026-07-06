@@ -7,7 +7,7 @@ const {
     updateTopUpStatus,
     updateWalletFromTopUp
 } = require("../Repositories/PaymentRepositories");
-const { savePaymentMethod } = require("../Services/TopUpServices");
+const { savePaymentMethod } = require("../Services/PaymentServices");
 const config = {
     auth: {
         username: process.env.XENDIT_API_KEY,

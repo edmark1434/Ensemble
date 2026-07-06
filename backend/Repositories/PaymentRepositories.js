@@ -433,6 +433,23 @@ async function getActivePaymentSessions(LIMIT = process.env.ACTIVE_PAYMENT_LIMIT
     }
 }
 
+async function getAllPaymentMethodsByUserId(userId) {
+    try{
+        const query = `
+            SELECT payment_token_id,channel_code, type, status, is_default, display_name, card_brand,
+            masked_card_number, card_exp_month, card_exp_year, customer_reference_id from payment_methods
+            WHERE user_id = $1
+        `
+        const result = await pool.query(query, [userId]);
+        return result.rows;
+    }catch(err){
+        console.error("Error fetching payment methods by user ID:", err);
+        throw err;
+    }
+
+}
+
+
 module.exports = {
     createTopUpPayment,
     createPaymentMethod,
@@ -449,4 +466,5 @@ module.exports = {
     createPaymentMethodForUser,
     paymentMethodExists,
     getActivePaymentSessions,
+    getAllPaymentMethodsByUserId,
 };
