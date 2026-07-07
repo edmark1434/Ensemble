@@ -6,6 +6,7 @@ const { createServer } = require('http');
 const { initSocket } = require('./lib/websocket');
 const { connectMongoDB } = require('./lib/mongodb');
 const { connectPostgresDB } = require('./lib/database');
+const { startPaymentReconciliationJob } = require('./lib/background_job');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -17,7 +18,10 @@ const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 // Middleware configuration
 app.use(cors({
-  origin: allowedOrigin,
+  origin: [
+    'https://ensemble-snowy.vercel.app',
+    'http://localhost:5173'
+  ],
   credentials: true,
 }));
 app.use(cookieParser());
@@ -32,6 +36,7 @@ async function startServer() {
     await connectPostgresDB();
     await connectMongoDB(); 
     await initSocket(httpServer);
+    startPaymentReconciliationJob(); // Start the background job after DB connections
     // 2. Load API routes ONLY after database setups are fully initialized
     const apiRoutes = require('./Route/api');
     app.use('/api', apiRoutes);

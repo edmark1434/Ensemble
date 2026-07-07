@@ -20,7 +20,7 @@ export const TEXT_ADD_PAYLOAD = {
     borderWidth: 0,
     borderColor: "#000000",
     boxShadow: {
-      color: "#ffffff",
+      color: "transparent",
       x: 0,
       y: 0,
       blur: 0

@@ -92,7 +92,7 @@ const getPropertiesFromDetails = (
     textDecorationColor: color,
     borderWidth: details.borderWidth || 0,
     borderColor: details.borderColor || "#000000",
-    boxShadow: details.boxShadow || { color: "#000000", x: 0, y: 0, blur: 0 },
+    boxShadow: details.boxShadow
   };
 };
 
@@ -389,14 +389,7 @@ const BasicText = ({
         <Shadow
           label="Shadow"
           onChange={(v: IBoxShadow) => onChangeBoxShadow(v)}
-          value={
-            properties.boxShadow ?? {
-              color: "#000000",
-              x: 0,
-              y: 0,
-              blur: 0
-            }
-          }
+          value={properties.boxShadow}
         />
       )
     },

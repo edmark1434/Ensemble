@@ -1,6 +1,4 @@
-const { getDB } = require("../lib/mongodb");
-
-const { getMongoClient } = require('../lib/mongodb');
+const { getMongoClient,getDB } = require('../lib/mongodb');
 const { ObjectId } = require('mongodb');
 const db = getDB();
 async function createForumDiscussionRepositories(discussionPayload = {}) {

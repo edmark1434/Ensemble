@@ -5,7 +5,8 @@ const {
     updateInboxRepositories,
     getConversationByConvoId,
     getConversationByAccountId,
-    checkInboxExists
+    checkInboxExists,
+    getInboxByAccountId
 } = require("../Repositories/InboxRepositories");
 const {
     checkAccountIdService
@@ -182,12 +183,14 @@ async function getConversationByConvoIdServices(convoId){
     return await getConversationByConvoId(convoId);
 }
 
-async function getConversationByAccountIdServices(accountId){
+async function getInboxByAccountIdServices(accountId, conversation_type){
     if(!checkAccountIdService(accountId)){
         throw new Error('Invalid account ID');
     }
-    return await getConversationByAccountId(accountId);
+    return await getInboxByAccountId(accountId, conversation_type);
 }
+
+
 
 module.exports = {
     createInboxServices,
@@ -195,6 +198,6 @@ module.exports = {
     updateMessageServices,
     updateInboxServices,
     getConversationByConvoIdServices,
-    getConversationByAccountIdServices
+    getInboxByAccountIdServices
 };
 
