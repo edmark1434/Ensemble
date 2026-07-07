@@ -7,6 +7,8 @@ import StaffLoginPage from './pages/auth/StaffLoginPage'
 import SignupPage from './pages/auth/Signuppage'
 import EmailVerification from './pages/EmailVerification'
 
+import AccountSetup from "@/pages/account_setup/accountsetup.tsx";
+
 import NotFound from "@/pages/user/0_config/NotFound.tsx";
 
 import ResetPasswordPage from "@/pages/auth/ResetPasswordPage.tsx";
@@ -103,6 +105,7 @@ function App() {
         <Route path='/verify-email' element={<EmailVerification />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/account-setup" element={<AccountSetup />} />
 
         {/* Modular Public Dropdown Landing Pages */}
         {/* Nested structural grouping under the /landing prefix path */}
