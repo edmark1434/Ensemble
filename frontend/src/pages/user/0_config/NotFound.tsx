@@ -23,16 +23,16 @@ const NotFound = () => {
           {/* 404 Card */}
           <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 via-white/5 to-transparent p-12 backdrop-blur-sm transition-all duration-500 hover:border-cyan-500/30 hover:shadow-2xl hover:shadow-cyan-500/10">
 
-            {/* Animated Gradient Border */}
-            <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-cyan-500/30 via-yellow-500/30 to-purple-500/30 opacity-40 animate-gradient-xy" />
+            {/* Animated Gradient Border - Added pointer-events-none */}
+            <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-cyan-500/30 via-yellow-500/30 to-purple-500/30 opacity-40 animate-gradient-xy pointer-events-none" />
 
-            {/* Moving Light Effect */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-shimmer" />
+            {/* Moving Light Effect - Added pointer-events-none */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-shimmer pointer-events-none" />
 
-            {/* Decorative Blurs */}
-            <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-cyan-500/30 blur-3xl animate-float-pulse" />
-            <div className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full bg-yellow-500/20 blur-3xl animate-breathing" />
-            <div className="absolute -bottom-20 -left-20 h-48 w-48 rounded-full bg-purple-500/30 blur-3xl animate-float-pulse-delayed" />
+            {/* Decorative Blurs - Added pointer-events-none so they don't block clicks */}
+            <div className="absolute -right-20 -top-20 h-48 w-48 rounded-full bg-cyan-500/30 blur-3xl animate-float-pulse pointer-events-none" />
+            <div className="absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full bg-yellow-500/20 blur-3xl animate-breathing pointer-events-none" />
+            <div className="absolute -bottom-20 -left-20 h-48 w-48 rounded-full bg-purple-500/30 blur-3xl animate-float-pulse-delayed pointer-events-none" />
 
             {/* 404 Number */}
             <div className="mb-6">
@@ -71,10 +71,10 @@ const NotFound = () => {
             </p>
 
             {/* Action Buttons */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-center relative z-20">
               <button
                 onClick={() => navigate(-1)}
-                className="group flex items-center justify-center gap-2 rounded-full border border-white/15 bg-white/5 px-6 py-2.5 text-sm font-medium text-zinc-300 transition-all duration-300 hover:border-white/30 hover:bg-white/10 hover:text-white"
+                className="group flex items-center justify-center gap-2 rounded-full border border-white/15 bg-white/5 px-7 py-3 text-sm font-medium text-zinc-300 transition-all duration-200 hover:border-white/30 hover:bg-white/10 hover:text-white hover:scale-105 active:scale-95 cursor-pointer outline-none focus:ring-2 focus:ring-cyan-500/50"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 <ArrowLeft className="h-4 w-4 transition-transform duration-300 group-hover:-translate-x-1" />
@@ -83,7 +83,7 @@ const NotFound = () => {
 
               <button
                 onClick={() => navigate("/home")}
-                className="group flex items-center justify-center gap-2 rounded-full bg-white px-6 py-2.5 text-sm font-medium text-black shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl active:scale-95 active:bg-gradient-to-r active:from-cyan-500 active:via-yellow-500 active:to-purple-600 active:text-white"
+                className="group flex items-center justify-center gap-2 rounded-full bg-white px-7 py-3 text-sm font-medium text-black shadow-lg transition-all duration-200 hover:scale-105 hover:shadow-xl active:scale-95 active:bg-gradient-to-r active:from-cyan-500 active:via-yellow-500 active:to-purple-600 active:text-white cursor-pointer outline-none focus:ring-2 focus:ring-white/50"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 <Home className="h-4 w-4 transition-transform duration-300 group-hover:rotate-12" />
