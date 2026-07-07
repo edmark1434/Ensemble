@@ -64,8 +64,8 @@ interface UserNavProps {
 const UserNav: React.FC<UserNavProps> = () => {
     const navigate = useNavigate();
     const [isCollapsed, setIsCollapsed] = useState(false);
-    const [isJobsOpen, setIsJobsOpen] = useState(true);
-    const [isGigsOpen, setIsGigsOpen] = useState(true);
+    const [isJobsOpen, setIsJobsOpen] = useState(false);
+    const [isGigsOpen, setIsGigsOpen] = useState(false);
 
     const primaryNavState = primaryNavInitial;
     const jobsState = jobsItemsInitial;
