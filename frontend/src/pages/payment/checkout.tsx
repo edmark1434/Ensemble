@@ -42,6 +42,8 @@ interface CheckoutItem {
   features?: Feature[];
   planName?: string;
   originalPrice?: string;
+  trialDays?: number;
+  isUserEligibleForTrial?: boolean;
   savings?: string;
   isCustom?: boolean;
 }
@@ -151,8 +153,8 @@ const CheckoutPage: React.FC = () => {
       const data = response.data;
       console.log("✅ Checkout Response:", data);
 
-      if (data.redirect_url) {
-        window.location.href = data.redirect_url;
+      if (data.paymentLink) {
+        window.location.href = data.paymentLink;
       } else if (data.reference_id) {
         setReferenceNumber(data.reference_id);
         setIsSuccess(true);
@@ -194,17 +196,17 @@ const CheckoutPage: React.FC = () => {
       
       console.log("📤 Saved Payment Payload:", payload);
       
-      const response = await api.post("api/payment/topup", payload, {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      // const response = await api.post("api/payment/topup", payload, {
+      //   headers: {
+      //     "Content-Type": "application/json",
+      //   },
+      // });
 
       const data = response.data;
       console.log("✅ Saved Payment Response:", data);
 
-      if (data.redirect_url) {
-        window.location.href = data.redirect_url;
+      if (data.paymentLink) {
+        window.location.href = data.paymentLink;
       } else if (data.reference_id) {
         setReferenceNumber(data.reference_id);
         setIsSuccess(true);
@@ -257,8 +259,8 @@ const CheckoutPage: React.FC = () => {
       const data = response.data;
       console.log("✅ Subscription Response:", data);
 
-      if (data.redirect_url) {
-        window.location.href = data.redirect_url;
+      if (data.paymentLink) {
+        window.location.href = data.paymentLink;
       } else if (data.reference_id) {
         setReferenceNumber(data.reference_id);
         setIsSuccess(true);
@@ -515,12 +517,11 @@ const CheckoutPage: React.FC = () => {
                               <div className="flex-1 flex items-center gap-3">
                                 <span className="text-xl">{getPaymentMethodIcon(method)}</span>
                                 <div>
-                                  <p className="text-sm font-medium text-white">{method.display_name}</p>
-                                  {method.masked_card_number && (
+                                  <p className="text-sm font-medium text-white">{method.channel_code}</p>
                                     <p className="text-xs text-zinc-400">
-                                      Expires {method.card_exp_month}/{method.card_exp_year}
+                                      {method.display_name !== method.channel_code && method.display_name}
+                                      {method.masked_card_number && ` • ${method.masked_card_number}`}
                                     </p>
-                                  )}
                                   {method.is_default && (
                                     <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
                                       Default
@@ -600,7 +601,7 @@ const CheckoutPage: React.FC = () => {
                           <div className="flex-1 flex items-center gap-3">
                             <span className="text-xl">{getPaymentMethodIcon(method)}</span>
                             <div>
-                              <p className="text-sm font-medium text-white">{method.display_name}</p>
+                              <p className="text-sm font-medium text-white">{method.masked_card_number && method.card_brand ? method.card_brand + " " + method.masked_card_number : method.display_name}</p>
                               {method.masked_card_number && (
                                 <p className="text-xs text-zinc-400">
                                   Expires {method.card_exp_month}/{method.card_exp_year}
@@ -686,11 +687,22 @@ const CheckoutPage: React.FC = () => {
                     <span className="text-white font-medium">Monthly</span>
                   </div>
                 )}
-
+                {checkoutItem.type === "subscription" && checkoutItem.isUserEligibleForTrial && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-zinc-400">Billing Starts at</span>
+                    <span className="text-white font-medium">
+                      {(() => {
+                        const date = new Date();
+                        date.setDate(date.getDate() + checkoutItem?.trialDays);
+                        return date.toLocaleDateString();
+                      })()}
+                    </span>
+                  </div>
+                )}
                 <div className="border-t border-dashed border-white/10 pt-3 mt-1">
                   <div className="flex justify-between items-baseline">
                     <span className="text-sm font-semibold text-zinc-300">Total due today</span>
-                    <span className="text-2xl font-extrabold text-white">{checkoutItem.price}</span>
+                    <span className="text-2xl font-extrabold text-white">{checkoutItem.isUserEligibleForTrial ? "Free" : checkoutItem.price}</span>
                   </div>
                   <p className="text-[11px] text-zinc-500 text-right mt-0.5">
                     {isOneTime ? "One-time charge" : "Then monthly, cancel anytime"}

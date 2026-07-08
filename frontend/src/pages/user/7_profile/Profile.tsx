@@ -54,6 +54,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
 import toast from "react-hot-toast";
+import socket from "@/lib/socket";
 
 type TabType = "portfolio" | "services" | "job-posts" | "projects" | "assets" | "history";
 
@@ -356,25 +357,42 @@ const Profile = () => {
     return () => clearTimeout(timer);
   }, []);
 
+
+  useEffect(() =>{
+    socket.connect();
+    socket.on("connect", () => {
+      console.log("Connected to WebSocket server with ID:", socket.id);
+    });
+    return () => {
+      socket.off("connect");
+    }
+  },[]);
+
+
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const [isUser, profileResponse, tagsResponse, accountLinkResponse] = await Promise.all([
+        const [isUser] = await Promise.all([
           api.get(`/api/accounts/check-user/${id}`),
+        ]);
+        const isCurrentUser = isUser.data.isUser;
+        if (isCurrentUser === false) { 
+          toast.error("Profile not found."); 
+          navigate("/*");
+          return;
+        }
+        const [ profileResponse, tagsResponse, accountLinkResponse] = await Promise.all([
           api.get(`/api/accounts/profile/${id}`),
           api.get(`/api/tags/`),
           api.get(`api/accounts/links/${id}`)
         ]);
-        const isCurrentUser = isUser.data.isUser;
         const profileData = profileResponse.data.profile;
         const tagsData = tagsResponse.data.tags;
         const accountLinks = accountLinkResponse.data.links;
+
         const userTagResponse = await api.get(`api/tags/users/${profileData.user_id}/tags`);
         const userTagsData = userTagResponse.data.tags;
-        if (!isCurrentUser) { 
-          toast.error("Profile not found."); 
-          navigate("/*");
-        }
+        
         
         originalSkillsRef.current = userTagsData.map((tag: Tag) => ({ tag_id: tag.tag_id, name: tag.name }));
         originalSocialLinksRef.current = accountLinks || [];
@@ -405,7 +423,6 @@ const Profile = () => {
           navigate("/*");
         } else {
           console.error('Error fetching profile:', err);
-          toast.error("Failed to load profile. Please try again.");
         }
       }
     };
@@ -869,6 +886,18 @@ const Profile = () => {
     );
   };
 
+  // Handle sending a message
+  const handleSendMessage = async() => {
+    
+    const existingInbox = await api.post(`/api/inbox/two-accounts`, {
+      recipientId: id,
+      conversation_type: "direct"
+    });
+    console.log("Existing Inbox:", existingInbox.data);
+
+    // Navigate to messages page with this user's ID
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#080a12]">
@@ -996,7 +1025,9 @@ const Profile = () => {
                     </span>
                   </div>
                 </div>
-                {isOwner && (
+
+                {/* Action Buttons - Conditionally render based on ownership */}
+                {isOwner ? (
                   <div className="flex items-center gap-2">
                     <button className="flex items-center gap-1 rounded-full bg-yellow-500/20 px-3 py-1 text-xs text-yellow-400 transition hover:bg-yellow-500/30">
                       <Shield className="h-3 w-3" />
@@ -1010,6 +1041,19 @@ const Profile = () => {
                       className="rounded-full border border-white/15 bg-white/5 p-2 text-blue-400 transition hover:bg-blue-500/20 hover:text-blue-300"
                     >
                       <Edit2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={handleSendMessage}
+                      className="flex items-center gap-2 rounded-full bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-600 shadow-lg shadow-blue-500/25"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      Message
+                    </button>
+                    <button className="rounded-full border border-white/15 bg-white/5 p-2 text-zinc-400 transition hover:bg-white/10 hover:text-white">
+                      <Share2 className="h-4 w-4" />
                     </button>
                   </div>
                 )}

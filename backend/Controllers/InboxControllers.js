@@ -4,7 +4,8 @@ const {
     updateMessageServices,
     updateInboxServices,
     getConversationByConvoIdServices,
-    getInboxByAccountIdServices
+    getInboxByAccountIdServices,
+    checkInboxByTwoAccountIdsServices
 } = require("../Services/InboxServices");
 
 async function createInboxController(req, res) {
@@ -76,11 +77,23 @@ async function getInboxByAccountIdController(req, res) {
     }
 }
 
+async function checkInboxByTwoAccountIdsController(req, res) {
+    try {
+        const { account_id } = req.session;
+        const messagePayload = req.body;
+        const result = await checkInboxByTwoAccountIdsServices(messagePayload, account_id);
+        res.status(200).json(result);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+}
+
 module.exports = {
     createInboxController,
     createMessageController,
     updateMessageController,
     updateInboxController,
     getConversationByConvoIdController,
-    getInboxByAccountIdController
+    getInboxByAccountIdController,
+    checkInboxByTwoAccountIdsController
 }

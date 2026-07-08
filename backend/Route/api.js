@@ -9,9 +9,11 @@ const accountRoutes = require('./account');
 const tagRoutes = require('./Tag');
 const inboxRoutes = require('./inbox');
 const paymentRoutes = require('./payment');
+const subscriptionRoutes = require('./subscription');
 
 router.use('/inbox', inboxRoutes);
 router.use('/payment', paymentRoutes);
+router.use('/subscription', subscriptionRoutes);
 router.use('/forum', forumRoutes);
 router.use('/admin', adminRoutes);
 router.use('/moderator', moderatorRoutes);

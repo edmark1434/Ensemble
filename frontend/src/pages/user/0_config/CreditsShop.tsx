@@ -12,7 +12,6 @@ import {
 import UserHeader from "@/components/nav/user_header";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/axios";
-
 // ---- Data models ----
 interface CreditPack {
   id: string;
@@ -35,6 +34,7 @@ interface Membership {
   description: string;
   price: number;
   billing_period: string;
+  days_of_trials: number;
   features: Feature[];
 }
 
@@ -70,13 +70,24 @@ const CreditShop: React.FC = () => {
   const [showCustom, setShowCustom] = useState(false);
   const [customCredits, setCustomCredits] = useState<number>(100);
   const [memberships, setMemberships] = useState<Membership[]>([]);
-
+  const [isUserSubscribed, setIsUserSubscribed] = useState(false);
   useEffect(() => {
     const fetchMemberships = async () => {
       try {
-        const response = await api.get("api/payment/plans");
-        const plansData = response.data.plans || [];
+        const [planResponse, userSubscriptionResponse] = await Promise.all([
+          api.get("api/subscription/plans"),
+          api.get("api/subscription"), // Fetch user's current subscription
+        ]);
+        const plansData = planResponse.data.plans || [];
+        const userSubscriptionData = userSubscriptionResponse.data.subscription;
+        if (userSubscriptionData && userSubscriptionData.xendit_plan_id && userSubscriptionData.trial_ends_at 
+          && userSubscriptionData.trial_starts_at
+        ) {
+          setIsUserSubscribed(true);
+        }
+        console.log("Fetched user subscription:", userSubscriptionData);
         console.log("Fetched memberships:", plansData);
+        console.log("Is user subscribed:", isUserSubscribed);
         setMemberships(plansData);
       } catch (error) {
         console.error("Error fetching memberships:", error);
@@ -126,6 +137,8 @@ const CreditShop: React.FC = () => {
       price: formatPHP(membership.price),
       priceValue: membership.price,
       features: membership.features || [],
+      trialDays: membership.days_of_trials || 0,
+      isUserEligibleForTrial: !isUserSubscribed && membership.days_of_trials > 0,
     });
   };
 
@@ -336,7 +349,7 @@ const CreditShop: React.FC = () => {
             {memberships.map((tier) => {
               const isFree = tier.price === 0;
               const isPopular = tier.plan_id === 2; // Premium is popular
-              
+              const hasFreeTrial = tier.days_of_trials > 0;
               return (
                 <div
                   key={tier.plan_id}
@@ -397,7 +410,7 @@ const CreditShop: React.FC = () => {
                         : "border border-zinc-700 text-white hover:bg-zinc-800"
                     }`}
                   >
-                    {isFree ? "Current Plan" : "Subscribe Now"}
+                    {isFree ? "Current Plan" : hasFreeTrial && isUserSubscribed === false ? `Start Free Trial (${tier.days_of_trials} days)` : "Subscribe"}
                   </button>
                 </div>
               );
