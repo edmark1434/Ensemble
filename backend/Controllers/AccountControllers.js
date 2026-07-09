@@ -1,6 +1,7 @@
 const { createNewAccount, fetchAllAccounts, getAccountByHandleService,
     getAccountWalletService, getProfileServices, getAccountLinkByAccountIdService,
-    checkUserAccountIdService
+    checkUserAccountIdService,
+    getDisplayNameByAccountIdService,
 } = require("../services/AccountServices");
 const redisClient = require('../lib/redis');
 async function createAccount(req, res) {
@@ -127,11 +128,29 @@ async function checkUserAccountIdController(req, res) {
     }
 }
 
+async function getDisplayNameByAccountIdController(req, res) {
+    const { accountIds } = req.body; // Expecting an array of account IDs in the request body
+    if (!Array.isArray(accountIds) || accountIds.length === 0) {
+        return res.status(400).json({ success: false, message: 'A non-empty array of account IDs is required' });
+    }
+    try {
+        const displayNames = await getDisplayNameByAccountIdService(accountIds);
+        return res.status(200).json({ success: true, message: 'Display names fetched successfully', displayNames });
+    }catch (err) {
+        console.error(`Error fetching display names for accountIds ${accountIds}:`, err);
+        return res.status(500).json({
+            success: false,
+            message: err.message,
+        });
+    }
+}
+
 module.exports = {
     createAccount,
     getAccountByHandle,
     getAccountWalletController,
     getProfileController,
     getAccountLinkByAccountIdController,
-    checkUserAccountIdController
+    checkUserAccountIdController,
+    getDisplayNameByAccountIdController
 };
