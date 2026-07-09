@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Code, X, Briefcase, Cpu, Layers, ExternalLink, Globe } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import LightPillar from "@/components/ui/LightPillar"; // Adjust this path if needed
+import TargetCursor from "@/components/ui/TargetCursor"; // Adjust this path if needed
 
 // Expanded mock data featuring updated universal socials (GitHub, LinkedIn, Instagram)
 const TEAM_MEMBERS = [
@@ -88,6 +89,37 @@ const PageAboutUs: React.FC = () => {
   const navigate = useNavigate();
   const [selectedMember, setSelectedMember] = useState<typeof TEAM_MEMBERS[0] | null>(null);
 
+  // Audio elements refs to keep overlap fluid
+  const hoverAudioRef = useRef<HTMLAudioElement | null>(null);
+  const clickAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const initAudio = () => {
+    if (!hoverAudioRef.current) {
+      hoverAudioRef.current = new Audio("/sounds/hover.mp3");
+      hoverAudioRef.current.volume = 0.2; // Soft subtle target lock blip
+    }
+    if (!clickAudioRef.current) {
+      clickAudioRef.current = new Audio("/sounds/click.mp3");
+      clickAudioRef.current.volume = 0.35; // Crisp snap selection tick
+    }
+  };
+
+  const playHover = useCallback(() => {
+    initAudio();
+    if (hoverAudioRef.current) {
+      hoverAudioRef.current.currentTime = 0;
+      hoverAudioRef.current.play().catch(() => {});
+    }
+  }, []);
+
+  const playClick = useCallback(() => {
+    initAudio();
+    if (clickAudioRef.current) {
+      clickAudioRef.current.currentTime = 0;
+      clickAudioRef.current.play().catch(() => {});
+    }
+  }, []);
+
   const renderSocialIcon = (type: string) => {
     switch (type) {
       case "github":
@@ -108,7 +140,17 @@ const PageAboutUs: React.FC = () => {
   return (
     <div style={{ background: "#080a12", minHeight: "100vh", color: "#fff", padding: "80px 24px", position: "relative", overflowX: "hidden" }}>
 
-      {/* ─── LightPillar Ambient Background Layer ─── */}
+      {/* ─── Premium Target Cursor System ─── */}
+      <TargetCursor
+        targetSelector=".cursor-target"
+        spinDuration={2.5}
+        hideDefaultCursor={true}
+        parallaxOn={true}
+        cursorColor="rgba(255, 255, 255, 0.4)"
+        cursorColorOnTarget="#8b0000" // Turns into crimson red upon targeting components
+      />
+
+      {/* ─── LightPillar Ambient Dark Background Layer ─── */}
       <div
         style={{
           position: "absolute",
@@ -122,15 +164,15 @@ const PageAboutUs: React.FC = () => {
         }}
       >
         <LightPillar
-          topColor="#8b0000"      // 👈 Dark Crimson Red
-          bottomColor="#4a0005"   // 👈 Moody Ruby/Wine Red
-          intensity={0.6}         // 👈 Dimmed brightness (was 1.5) for a darker atmosphere
-          rotationSpeed={0.15}    // Slowed down movement subtly
-          glowAmount={0.003}      // 👈 Narrowed spread (was 0.015) to keep it dark and sharp
+          topColor="#8b0000"      // Moody Crimson Red
+          bottomColor="#4a0005"   // Dark Ruby Sub backdrop
+          intensity={0.6}         // Dimmed for sleek contrast atmosphere
+          rotationSpeed={0.15}
+          glowAmount={0.003}      // Narrow spotlight concentration beam
           pillarWidth={4.5}
           pillarHeight={0.3}
-          noiseIntensity={0.06}   // Added a tiny bit more grit to the grain
-          pillarRotation={90}
+          noiseIntensity={0.06}
+          pillarRotation={90}     // Lay horizontally across layout axis
           mixBlendMode="screen"
           quality="high"
         />
@@ -138,7 +180,7 @@ const PageAboutUs: React.FC = () => {
 
       <style>{`
         .member-card {
-          background: rgba(13, 15, 26, 0.8); /* Bumped opacity slightly to pop against red hues */
+          background: rgba(13, 15, 26, 0.8); 
           border: 1px solid #1e2130;
           border-radius: 24px;
           overflow: hidden;
@@ -148,9 +190,9 @@ const PageAboutUs: React.FC = () => {
           cursor: pointer;
         }
         .member-card:hover {
-          border-color: #8b0000; /* 👈 Swapped hover border highlight color to match theme red */
+          border-color: #8b0000; 
           background: rgba(17, 20, 34, 0.9);
-          box-shadow: 0 30px 60px -12px rgba(139, 0, 0, 0.15); /* Subtle red shadow accent */
+          box-shadow: 0 30px 60px -12px rgba(139, 0, 0, 0.15); 
         }
         .banner-container {
           width: 100%;
@@ -182,7 +224,7 @@ const PageAboutUs: React.FC = () => {
           transition: color 0.2s;
         }
         .config-link:hover {
-          color: #ef4444; /* Swapped inline link hover to slate-red */
+          color: #ef4444; 
         }
         .project-cube {
           position: relative;
@@ -241,14 +283,16 @@ const PageAboutUs: React.FC = () => {
 
       <div style={{ maxWidth: 1200, margin: "0 auto", position: "relative", zIndex: 2 }}>
 
-        {/* Animated header layout */}
+        {/* Header layout */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
         >
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => { playClick(); navigate(-1); }}
+            onMouseEnter={playHover}
+            className="cursor-target"
             style={{ background: "none", border: "none", color: "#7a8499", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 40, fontSize: 14, fontWeight: 600, transition: "color 0.2s" }}
             onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "#fff"; }}
             onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "#7a8499"; }}
@@ -262,20 +306,26 @@ const PageAboutUs: React.FC = () => {
           </p>
         </motion.div>
 
-        {/* Animated section divider & container */}
+        {/* Section divider & Team grid wrapper */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2, duration: 0.6 }}
           style={{ borderTop: "1px solid #1e2130", paddingTop: 48, marginBottom: 40 }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 32, flexWrap: "wrap", gap: 12 }}>
+          {/* Identity block displaying public png asset cleanly matched to left line */}
+          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32 }}>
+            <img
+              src="/logo/ravenlabs.png"
+              alt="RavenLabs Logo"
+              style={{ width: 44, height: 44, objectFit: "contain", borderRadius: 8 }}
+            />
             <div>
-              <h2 style={{ fontSize: 12, color: "#8b0000", fontWeight: 700, textTransform: "uppercase", letterSpacing: 3, marginBottom: 6 }}>
+              <h2 style={{ fontSize: 12, color: "#f15c5c", fontWeight: 700, textTransform: "uppercase", letterSpacing: 3, marginBottom: 6 }}>
                 Engineered By
               </h2>
               <p style={{ fontSize: 20, fontWeight: 800, margin: 0, color: "#fff" }}>
-                RavenLabs Dev Group
+                RavenLabs Development
               </p>
             </div>
           </div>
@@ -285,8 +335,9 @@ const PageAboutUs: React.FC = () => {
             {TEAM_MEMBERS.map((member, idx) => (
               <motion.div
                 key={idx}
-                className="member-card"
-                onClick={() => setSelectedMember(member)}
+                className="member-card cursor-target"
+                onMouseEnter={playHover}
+                onClick={() => { playClick(); setSelectedMember(member); }}
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 whileHover={{ y: -8 }}
@@ -317,9 +368,9 @@ const PageAboutUs: React.FC = () => {
                   </p>
 
                   <div style={{ display: "flex", gap: 14, color: "rgba(255,255,255,0.25)", alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
-                    <Code size={16} style={{ cursor: "pointer", transition: "color 0.2s" }} onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "#8b0000"; }} onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "inherit"; }} />
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ cursor: "pointer", transition: "color 0.2s" }} onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "#fff"; }} onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "inherit"; }}><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" /><path d="M9 18c-4.51 2-5-2-7-2" /></svg>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ cursor: "pointer", transition: "color 0.2s" }} onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "#0a66c2"; }} onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "inherit"; }}><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" /><rect width="4" height="12" x="2" y="9" /><circle cx="4" cy="4" r="2" /></svg>
+                    <Code size={16} className="cursor-target" onMouseEnter={playHover} onClick={playClick} style={{ cursor: "pointer", transition: "color 0.2s" }} />
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="cursor-target" onMouseEnter={playHover} onClick={playClick} style={{ cursor: "pointer", transition: "color 0.2s" }}><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" /><path d="M9 18c-4.51 2-5-2-7-2" /></svg>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="cursor-target" onMouseEnter={playHover} onClick={playClick} style={{ cursor: "pointer", transition: "color 0.2s" }}><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" /><rect width="4" height="12" x="2" y="9" /><circle cx="4" cy="4" r="2" /></svg>
                   </div>
                 </div>
               </motion.div>
@@ -337,7 +388,7 @@ const PageAboutUs: React.FC = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.6 }}
               exit={{ opacity: 0 }}
-              onClick={() => setSelectedMember(null)}
+              onClick={() => { playClick(); setSelectedMember(null); }}
               style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "#000", zIndex: 100, cursor: "pointer" }}
             />
 
@@ -365,7 +416,7 @@ const PageAboutUs: React.FC = () => {
               }}
             >
 
-              {/* Image rendered directly into the background with low opacity */}
+              {/* Drawer Content Area */}
               <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", zIndex: 0, pointerEvents: "none", overflow: "hidden" }}>
                 <img
                   src={selectedMember.img}
@@ -375,9 +426,11 @@ const PageAboutUs: React.FC = () => {
                 <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at top right, transparent 20%, #0b0e17 80%)" }} />
               </div>
 
-              {/* Close Button */}
+              {/* Close Drawer Button */}
               <button
-                onClick={() => setSelectedMember(null)}
+                onClick={() => { playClick(); setSelectedMember(null); }}
+                onMouseEnter={playHover}
+                className="cursor-target"
                 style={{ position: "absolute", top: 24, right: 24, width: 36, height: 36, borderRadius: "50%", background: "rgba(30, 33, 48, 0.4)", border: "1px solid rgba(255,255,255,0.08)", color: "#7a8499", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", backdropFilter: "blur(4px)", zIndex: 10, transition: "color 0.2s" }}
                 onMouseEnter={(e) => e.currentTarget.style.color = "#fff"}
                 onMouseLeave={(e) => e.currentTarget.style.color = "#7a8499"}
@@ -385,7 +438,6 @@ const PageAboutUs: React.FC = () => {
                 <X size={18} />
               </button>
 
-              {/* Drawer Content Area */}
               <div style={{ padding: "48px 32px", flex: 1, position: "relative", zIndex: 1 }}>
                 <h2 style={{ fontSize: 26, fontWeight: 800, color: "#fff", marginBottom: 4, marginTop: 0 }}>{selectedMember.name}</h2>
                 <p style={{ color: "#ef4444", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 36, marginTop: 0 }}>{selectedMember.role}</p>
@@ -421,17 +473,15 @@ const PageAboutUs: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Combined Stacked layout for Socials then Projects below it */}
                   <div style={{ borderTop: "1px solid #1e2130", paddingTop: 28, display: "flex", flexDirection: "column", gap: 28 }}>
-
-                    {/* Socials Section */}
+                    {/* Social links */}
                     <div>
                       <div style={{ color: "#7a8499", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 14 }}>
                         Socials
                       </div>
                       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
                         {selectedMember.socials?.map((social, i) => (
-                          <a key={i} href={social.url} target="_blank" rel="noreferrer" className="config-link">
+                          <a key={i} href={social.url} target="_blank" rel="noreferrer" onMouseEnter={playHover} onClick={playClick} className="config-link cursor-target">
                             {renderSocialIcon(social.type)}
                             <span>{social.name}</span>
                           </a>
@@ -439,26 +489,21 @@ const PageAboutUs: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Projects Section */}
+                    {/* Projects portfolio cubes */}
                     <div>
                       <div style={{ color: "#7a8499", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 14 }}>
                         Projects
                       </div>
-
-                      {/* Grid containing 4 visual project cubes */}
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                         {selectedMember.projects?.map((project, i) => (
-                          <a key={i} href={project.url} className="project-cube">
+                          <a key={i} href={project.url} onMouseEnter={playHover} onClick={playClick} className="project-cube cursor-target">
                             <img
                               src={project.img}
                               alt=""
                               className="project-cube-img"
-                              onError={(e) => {
-                                e.currentTarget.style.display = "none";
-                              }}
+                              onError={(e) => { e.currentTarget.style.display = "none"; }}
                             />
                             <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(11,14,23,0.95) 0%, rgba(11,14,23,0.2) 100%)", zIndex: 1 }} />
-
                             <div className="project-cube-title">
                               <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>{project.name}</span>
                               <ExternalLink size={11} style={{ flexShrink: 0, opacity: 0.6 }} />
@@ -467,7 +512,6 @@ const PageAboutUs: React.FC = () => {
                         ))}
                       </div>
                     </div>
-
                   </div>
 
                 </div>
