@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Code, X, Briefcase, Cpu, Layers, ExternalLink, Globe } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import LightPillar from "@/components/ui/LightPillar"; // Adjust this path if needed
 
 // Expanded mock data featuring updated universal socials (GitHub, LinkedIn, Instagram)
 const TEAM_MEMBERS = [
@@ -91,8 +92,6 @@ const PageAboutUs: React.FC = () => {
     switch (type) {
       case "github":
         return <Code size={14} />;
-      case "instagram":
-        return <Instagram size={14} />;
       case "linkedin":
         return (
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -109,9 +108,37 @@ const PageAboutUs: React.FC = () => {
   return (
     <div style={{ background: "#080a12", minHeight: "100vh", color: "#fff", padding: "80px 24px", position: "relative", overflowX: "hidden" }}>
 
+      {/* ─── LightPillar Ambient Background Layer ─── */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          zIndex: 0,
+          opacity: 0.75,
+          pointerEvents: "none"
+        }}
+      >
+        <LightPillar
+          topColor="#8b0000"      // 👈 Dark Crimson Red
+          bottomColor="#4a0005"   // 👈 Moody Ruby/Wine Red
+          intensity={0.6}         // 👈 Dimmed brightness (was 1.5) for a darker atmosphere
+          rotationSpeed={0.15}    // Slowed down movement subtly
+          glowAmount={0.003}      // 👈 Narrowed spread (was 0.015) to keep it dark and sharp
+          pillarWidth={4.5}
+          pillarHeight={0.3}
+          noiseIntensity={0.06}   // Added a tiny bit more grit to the grain
+          pillarRotation={90}
+          mixBlendMode="screen"
+          quality="high"
+        />
+      </div>
+
       <style>{`
         .member-card {
-          background: rgba(13, 15, 26, 0.45);
+          background: rgba(13, 15, 26, 0.8); /* Bumped opacity slightly to pop against red hues */
           border: 1px solid #1e2130;
           border-radius: 24px;
           overflow: hidden;
@@ -121,9 +148,9 @@ const PageAboutUs: React.FC = () => {
           cursor: pointer;
         }
         .member-card:hover {
-          border-color: #3b82f6;
-          background: rgba(17, 20, 34, 0.7);
-          box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.5);
+          border-color: #8b0000; /* 👈 Swapped hover border highlight color to match theme red */
+          background: rgba(17, 20, 34, 0.9);
+          box-shadow: 0 30px 60px -12px rgba(139, 0, 0, 0.15); /* Subtle red shadow accent */
         }
         .banner-container {
           width: 100%;
@@ -155,7 +182,7 @@ const PageAboutUs: React.FC = () => {
           transition: color 0.2s;
         }
         .config-link:hover {
-          color: #60a5fa;
+          color: #ef4444; /* Swapped inline link hover to slate-red */
         }
         .project-cube {
           position: relative;
@@ -172,7 +199,7 @@ const PageAboutUs: React.FC = () => {
           transition: border-color 0.2s, box-shadow 0.2s;
         }
         .project-cube:hover {
-          border-color: #3b82f6;
+          border-color: #8b0000;
           box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
         }
         .project-cube-img {
@@ -210,7 +237,7 @@ const PageAboutUs: React.FC = () => {
       `}</style>
 
       {/* Decorative ambient background blur */}
-      <div style={{ position: "absolute", width: "600px", height: "600px", background: "rgba(59, 130, 246, 0.03)", filter: "blur(140px)", top: "20%", right: "-10%", pointerEvents: "none" }} />
+      <div style={{ position: "absolute", width: "600px", height: "600px", background: "rgba(139, 0, 0, 0.02)", filter: "blur(140px)", top: "20%", right: "-10%", pointerEvents: "none" }} />
 
       <div style={{ maxWidth: 1200, margin: "0 auto", position: "relative", zIndex: 2 }}>
 
@@ -244,7 +271,7 @@ const PageAboutUs: React.FC = () => {
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 32, flexWrap: "wrap", gap: 12 }}>
             <div>
-              <h2 style={{ fontSize: 12, color: "#3b82f6", fontWeight: 700, textTransform: "uppercase", letterSpacing: 3, marginBottom: 6 }}>
+              <h2 style={{ fontSize: 12, color: "#8b0000", fontWeight: 700, textTransform: "uppercase", letterSpacing: 3, marginBottom: 6 }}>
                 Engineered By
               </h2>
               <p style={{ fontSize: 20, fontWeight: 800, margin: 0, color: "#fff" }}>
@@ -285,14 +312,14 @@ const PageAboutUs: React.FC = () => {
                   <h3 style={{ fontSize: 17, fontWeight: 700, color: "#fff", marginBottom: 6, marginTop: 0 }}>
                     {member.name}
                   </h3>
-                  <p style={{ color: "#3b82f6", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, margin: "0 0 20px 0" }}>
+                  <p style={{ color: "#ef4444", fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, margin: "0 0 20px 0" }}>
                     {member.role}
                   </p>
 
                   <div style={{ display: "flex", gap: 14, color: "rgba(255,255,255,0.25)", alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
-                    <Code size={16} style={{ cursor: "pointer", transition: "color 0.2s" }} onMouseEnter={(e: React.MouseEvent<SVGSVGElement>) => { e.currentTarget.style.color = "#3b82f6"; }} onMouseLeave={(e: React.MouseEvent<SVGSVGElement>) => { e.currentTarget.style.color = "inherit"; }} />
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ cursor: "pointer", transition: "color 0.2s" }} onMouseEnter={(e: React.MouseEvent<SVGSVGElement>) => { e.currentTarget.style.color = "#fff"; }} onMouseLeave={(e: React.MouseEvent<SVGSVGElement>) => { e.currentTarget.style.color = "inherit"; }}><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" /><path d="M9 18c-4.51 2-5-2-7-2" /></svg>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ cursor: "pointer", transition: "color 0.2s" }} onMouseEnter={(e: React.MouseEvent<SVGSVGElement>) => { e.currentTarget.style.color = "#0a66c2"; }} onMouseLeave={(e: React.MouseEvent<SVGSVGElement>) => { e.currentTarget.style.color = "inherit"; }}><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" /><rect width="4" height="12" x="2" y="9" /><circle cx="4" cy="4" r="2" /></svg>
+                    <Code size={16} style={{ cursor: "pointer", transition: "color 0.2s" }} onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "#8b0000"; }} onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "inherit"; }} />
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ cursor: "pointer", transition: "color 0.2s" }} onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "#fff"; }} onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "inherit"; }}><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" /><path d="M9 18c-4.51 2-5-2-7-2" /></svg>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ cursor: "pointer", transition: "color 0.2s" }} onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "#0a66c2"; }} onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "inherit"; }}><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" /><rect width="4" height="12" x="2" y="9" /><circle cx="4" cy="4" r="2" /></svg>
                   </div>
                 </div>
               </motion.div>
@@ -361,7 +388,7 @@ const PageAboutUs: React.FC = () => {
               {/* Drawer Content Area */}
               <div style={{ padding: "48px 32px", flex: 1, position: "relative", zIndex: 1 }}>
                 <h2 style={{ fontSize: 26, fontWeight: 800, color: "#fff", marginBottom: 4, marginTop: 0 }}>{selectedMember.name}</h2>
-                <p style={{ color: "#3b82f6", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 36, marginTop: 0 }}>{selectedMember.role}</p>
+                <p style={{ color: "#ef4444", fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 36, marginTop: 0 }}>{selectedMember.role}</p>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
                   <div>
@@ -387,7 +414,7 @@ const PageAboutUs: React.FC = () => {
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                       {selectedMember.skills.map((skill, i) => (
-                        <span key={i} style={{ background: "rgba(59, 130, 246, 0.08)", border: "1px solid rgba(59, 130, 246, 0.15)", color: "#60a5fa", padding: "6px 12px", borderRadius: "12px", fontSize: 12, fontWeight: 600 }}>
+                        <span key={i} style={{ background: "rgba(239, 68, 68, 0.08)", border: "1px solid rgba(239, 68, 68, 0.15)", color: "#f87171", padding: "6px 12px", borderRadius: "12px", fontSize: 12, fontWeight: 600 }}>
                           {skill}
                         </span>
                       ))}
