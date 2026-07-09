@@ -7,8 +7,6 @@ import StaffLoginPage from './pages/auth/StaffLoginPage'
 import SignupPage from './pages/auth/Signuppage'
 import EmailVerification from './pages/EmailVerification'
 
-import AccountSetup from "@/pages/account_setup/accountsetup.tsx";
-
 import NotFound from "@/pages/user/0_config/NotFound.tsx";
 
 import ResetPasswordPage from "@/pages/auth/ResetPasswordPage.tsx";
@@ -50,7 +48,7 @@ import UserProfilesList from "@/components/nav/user_profiles_list.tsx";
 
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
-import AdminSectionPlaceholder from './pages/admin/AdminSectionPlaceholder'
+// import AdminSectionPlaceholder from './pages/admin/AdminSectionPlaceholder'
 import UserTeamPage from './pages/admin/userTeam/UserTeamPage'
 import CreditEconomyPage from './pages/admin/creditEconomy/CreditEconomyPage'
 import ModerationPage from './pages/admin/moderation/ModerationPage'
@@ -59,6 +57,14 @@ import TicketManagementPage from './pages/admin/ticketManagement/TicketManagemen
 import SystemSettingsPage from './pages/admin/systemSettings/SystemSettingsPage'
 import StaffPortalLayout from './pages/staff/StaffPortalLayout'
 import StaffDashboard from './pages/staff/StaffDashboard'
+
+// Account Setup Routes
+import VerifyEmail from "@/pages/setup_account/00_VerifyEmail.tsx";
+import PersonalDetails from "@/pages/setup_account/01_PersonalDetails.tsx";
+import UploadImage from "@/pages/setup_account/02_UploadImage.tsx";
+import ProfileSetup from "@/pages/setup_account/03_ProfileSetup.tsx";
+import Survey from "@/pages/setup_account/04_Survey.tsx";
+import Preview from "@/pages/setup_account/05_Preview.tsx";
 
 import ForumModeratorLayout from './pages/moderator/forum-moderator/Layout'
 import MarketplaceModeratorLayout from './pages/moderator/marketplace-moderator/Layout'
@@ -96,6 +102,15 @@ function App() {
       <Route path="/admin" element={<AdminLoginPage />} />
       <Route path="/staff" element={<StaffLoginPage />} />
 
+        <Route path="/setup">
+          <Route path="verify-email" element={<VerifyEmail />} />
+          <Route path="personal-details" element={<PersonalDetails />} />
+          <Route path="upload-image" element={<UploadImage />} />
+          <Route path="profile-setup" element={<ProfileSetup />} />
+          <Route path="survey" element={<Survey />} />
+          <Route path="preview" element={<Preview />} />
+        </Route>
+
       <Route element={<RouteMiddleware />}>
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
@@ -105,7 +120,7 @@ function App() {
         <Route path='/verify-email' element={<EmailVerification />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
-        <Route path="/account-setup" element={<AccountSetup />} />
+
 
         {/* Modular Public Dropdown Landing Pages */}
         {/* Nested structural grouping under the /landing prefix path */}
