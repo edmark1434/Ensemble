@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import type { FC } from "react";
 import { useNavigate } from "react-router-dom";
 import ScrollToTop from "@/components/utility/scroll_to_top.tsx";
@@ -6,6 +6,7 @@ import ScrollToTop from "@/components/utility/scroll_to_top.tsx";
 // Modular Split Section Imports
 import NavLanding from "../pages/landing/nav_Landing";
 import SectionHero from "../pages/landing/section_Hero";
+import SectionGallery from "@/pages/landing/section_gallery.tsx";
 import SectionHowItWorks from "../pages/landing/section_HowItWorks";
 import SectionFeatures from "../pages/landing/section_Features";
 import SectionCallForAction from "../pages/landing/section_CallForAction";
@@ -73,14 +74,77 @@ const LandingPage: FC = () => {
   useGlobalStyle(GLOBAL_CSS);
   const navigate = useNavigate();
 
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isMuted, setIsMuted] = useState<boolean>(false);
+  const targetVolume = 0.25; // Balanced volume mix
+
+  // Enhanced fading routine to emphasize the gradual build-up
+  const fadeInAudio = (audio: HTMLAudioElement) => {
+    audio.volume = 0; // Absolute silence at start
+    audio.play()
+      .then(() => {
+        // Steps up volume slower (0.005) every 40ms to create an explicit audible curve
+        const fadeInterval = setInterval(() => {
+          if (audio.volume < targetVolume) {
+            audio.volume = Math.min(audio.volume + 0.005, targetVolume);
+          } else {
+            clearInterval(fadeInterval);
+          }
+        }, 40);
+      })
+      .catch(() => {
+        console.log("Autoplay blocked at 0.8s. Hooking fallback interaction gesture listener...");
+
+        // Gesture fallback: fires the fade seamlessly on first touch
+        const playAndFadeOnFirstClick = () => {
+          document.removeEventListener("click", playAndFadeOnFirstClick);
+          fadeInAudio(audio);
+        };
+        document.addEventListener("click", playAndFadeOnFirstClick);
+      });
+  };
+
+  useEffect(() => {
+    // 1. Fire a 0.8-second (800ms) delay timer on page mount
+    const timer = setTimeout(() => {
+      if (audioRef.current) {
+        fadeInAudio(audioRef.current);
+      }
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  const toggleAudio = () => {
+    if (!audioRef.current) return;
+
+    if (isMuted) {
+      audioRef.current.volume = targetVolume;
+      audioRef.current.play()
+        .then(() => setIsMuted(false))
+        .catch(err => console.log("Playback interaction error:", err));
+    } else {
+      audioRef.current.pause();
+      setIsMuted(true);
+    }
+  };
+
   const handleStartAction = () => {
     navigate("/signup");
   };
 
   return (
     <div style={{ background: T.bg, minHeight: "100vh", overflowX: "hidden" }}>
+      {/* Background Music Resource Initialization Loop */}
+      <audio ref={audioRef} src="/sounds/bgm_landing.mp3" loop />
+
       {/* 1. Header Navigation Module */}
-      <NavLanding onLogin={() => navigate("/login")} onSignup={handleStartAction} />
+      <NavLanding
+        onLogin={() => navigate("/login")}
+        onSignup={handleStartAction}
+        isMuted={isMuted}
+        onToggleAudio={toggleAudio}
+      />
 
       {/* 2. Full Video Backdrop Hero Module */}
       <SectionHero onStart={handleStartAction} />
@@ -88,16 +152,19 @@ const LandingPage: FC = () => {
       {/* 3. Operational Performance Stats Module */}
       <StatsBar />
 
-      {/* 4. Multi-Intent 3-Way Structural Flow Module */}
+      {/* 4. Interactive WebGL Curvature Showcase */}
+      <SectionGallery />
+
+      {/* 5. Multi-Intent 3-Way Structural Flow Module */}
       <SectionHowItWorks />
 
-      {/* 5. Marketplace Value Grid Module */}
+      {/* 6. Marketplace Value Grid Module */}
       <SectionFeatures />
 
-      {/* 6. Action Acquisition Strip Module */}
+      {/* 7. Action Acquisition Strip Module */}
       <SectionCallForAction onStart={handleStartAction} />
 
-      {/* 7. Directory Tree Architecture Footer Module */}
+      {/* 8. Directory Tree Architecture Footer Module */}
       <SectionFooter />
 
       <ScrollToTop />

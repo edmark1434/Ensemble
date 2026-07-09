@@ -34,7 +34,6 @@ const NavDropdown: FC<DropdownProps> = ({ label, items, isOpen, onToggle, onItem
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      // Changed 'mousedown' to 'click' to let internal items finish their onClick sequences first
       if (ref.current && !ref.current.contains(e.target as Node)) {
         onToggle(false);
       }
@@ -47,7 +46,7 @@ const NavDropdown: FC<DropdownProps> = ({ label, items, isOpen, onToggle, onItem
     <div ref={ref} style={{ position: "relative" }}>
       <button
         onClick={(e) => {
-          e.stopPropagation(); // Prevents immediate close trigger via global listener
+          e.stopPropagation();
           onToggle(!isOpen);
         }}
         style={{
@@ -82,13 +81,13 @@ const NavDropdown: FC<DropdownProps> = ({ label, items, isOpen, onToggle, onItem
           padding: "6px 0",
           minWidth: 200,
           boxShadow: "0 18px 44px rgba(0,0,0,.72)",
-          zIndex: 9999, // Raised to ensure it hovers over the hero video elements
+          zIndex: 9999,
         }}>
           {items.map((item, i) => (
             <button
               key={i}
               onClick={(e) => {
-                e.stopPropagation(); // Stop routing conflicts
+                e.stopPropagation();
                 onItemClick(item);
                 onToggle(false);
               }}
@@ -127,9 +126,11 @@ const NavDropdown: FC<DropdownProps> = ({ label, items, isOpen, onToggle, onItem
 interface NavLandingProps {
   onLogin: () => void;
   onSignup: () => void;
+  isMuted: boolean;
+  onToggleAudio: () => void;
 }
 
-const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup }) => {
+const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup, isMuted, onToggleAudio }) => {
   const navigate = useNavigate();
   const [openDD, setOpenDD] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState<boolean>(false);
@@ -166,7 +167,7 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup }) => {
     <nav style={{
       position: "fixed",
       top: 0, left: 0, right: 0,
-      zIndex: 5000, // Keeps global navbar stack securely over section layers
+      zIndex: 5000,
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
@@ -193,6 +194,8 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup }) => {
           label="Support"
           items={["FAQ", "Ask our Chatbot", "Submit a Ticket", "Support Us", "Send a Feedback"]}
           isOpen={openDD === "support"}
+          isOpen={openDD === "support"}
+          isOpen={openDD === "support"}
           onToggle={toggle("support")}
           onItemClick={handleDropdownItemAction}
         />
@@ -217,7 +220,41 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup }) => {
         </button>
       </div>
 
-      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+
+        {/* Audio Toggle Switch Controller */}
+        <button
+          onClick={onToggleAudio}
+          title={isMuted ? "Play ambient music" : "Mute ambient music"}
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            color: isMuted ? T_NAV.dim : "#3b82f6",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "32px",
+            height: "32px",
+            borderRadius: "50%",
+            cursor: "pointer",
+            transition: "all .2s ease",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "rgba(255,255,255,0.08)";
+            if (isMuted) e.currentTarget.style.color = "#fff";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+            e.currentTarget.style.color = isMuted ? T_NAV.dim : "#3b82f6";
+          }}
+        >
+          {isMuted ? (
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
+          ) : (
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+          )}
+        </button>
+
         <button
           onClick={onLogin}
           style={{
