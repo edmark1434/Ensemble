@@ -142,10 +142,10 @@ const customerPayload = customerId
         },
 
         success_return_url:
-            `${process.env.FRONTEND_URL}/credits?success`,
+            `https://app.com/credits?success`,
 
         cancel_return_url:
-            `${process.env.FRONTEND_URL}/credits?cancel`,
+            `https://app.com/credits?cancel`,
 
     };
     const topUpPayload = {
@@ -264,10 +264,10 @@ async function createPaymentToken(req, res) {
                 country: "PH",
                 ...customerPayload,
                 success_return_url:
-                    `${process.env.FRONTEND_URL}/credits?success`,
+                    `https://app.com/credits?success`,
 
                 cancel_return_url:
-                    `${process.env.FRONTEND_URL}/credits?cancel`,
+                    `https://app.com/credits?cancel`,
             },
             {
                 auth: {
@@ -344,7 +344,7 @@ async function savePaymentMethod(data) {
                                 user_id: payment.user_id,
                                 payment_token_id: data.payment_token_id,
                                 channel_code: response.data.channel_code,
-                                type: ['GCASH','PAYMAYA','SHOPEEPAY','GRABPAY'].includes(response.data.channel_code) ? 'E-WALLET' : response.data.channel_code,
+                                type: ['GCASH','PAYMAYA','SHOPEEPAY','GRABPAY'].includes(response.data.channel_code) ? 'E-WALLET' : ['UBP_DIRECT_DEBIT','BPI_DIRECT_DEBIT','UBP_EADA'].includes(response.data.channel_code) ? 'DIRECT-DEBIT' : response.data.channel_code,
                                 status:response.data.status,
                                 is_default: false,
                                 display_name: response.data.channel_code,
@@ -427,6 +427,87 @@ async function getAllPaymentMethodsByUserIdService(req, res) {
     }
 }
 
+async function paymentSessionCompleteWebhookHandler(req, res) {
+    console.log("📬 Payment Session Complete Webhook Received:", req.body);
+    const { event, data } = req.body;
+    const hasToken = data.payment_token_id ? true : false;
+    if(hasToken){
+                const response = await axios.get(
+                    `https://api.xendit.co/v3/payment_tokens/${data.payment_token_id}`,
+                    {
+                        auth: {
+                            username: process.env.XENDIT_API_KEY,
+                            password: ""
+                        },
+                        headers: {
+                            "Content-Type": "application/json",
+                            "api-version": "2024-11-11"
+                        }
+                    }
+                );
+                                console.log("✅ Xendit Payment Token Response:", response.data);
+                
+                const checkExistingPaymentMethod = await paymentMethodExists(
+                    { user_id: parseInt(data.metadata.userId), payment_token_id: data.payment_token_id }
+                );
+                if(!checkExistingPaymentMethod){
+                    if(response.data.channel_code === 'CARDS'){
+                        const checkExistingCard = await paymentMethodExists(
+                            { user_id: parseInt(data.metadata.userId), fingerprint: response.data.channel_properties.card_details.fingerprint }
+                        )
+                        if(!checkExistingCard){
+                            await createPaymentMethodForUser({
+                                user_id: parseInt(data.metadata.userId),
+                                payment_token_id: data.payment_token_id,
+                                channel_code: response.data.channel_code,
+                                type: response.data.channel_properties.card_details.type,
+                                status:response.data.status,
+                                is_default: false,
+                                display_name: `${response.data.channel_properties.card_details.cardholder_first_name} ${response.data.channel_properties.card_details.cardholder_last_name}`,
+                                card_brand: response.data.channel_properties.card_details.network,
+                                masked_card_number: response.data.channel_properties.card_details.masked_card_number,
+                                card_exp_month: response.data.channel_properties.card_details.expiry_month,
+                                card_exp_year: response.data.channel_properties.card_details.expiry_year,
+                                customer_reference_id: response.data.reference_id,
+                                fingerprint: response.data.channel_properties.card_details.fingerprint
+                            });
+                        }
+                    }else{
+                        if(response.data.channel_code === 'PAYMAYA' || response.data.channel_code === 'SHOPEEPAY' || response.data.channel_code === 'UBP_DIRECT_DEBIT'){
+                            const checkExistingCard = await paymentMethodExists(
+                                { user_id: parseInt(data.metadata.userId), channel_code: response.data.channel_code, display_name: response.data.token_details.account_number ?? response.data.token_details.masked_bank_account_number }
+                            )
+                            if(checkExistingCard){
+                                console.log("Payment method already exists for user:", data.metadata.userId, "with channel code:", response.data.channel_code);
+                                return;
+                            }
+                        }
+                        await createPaymentMethodForUser({
+                                user_id: parseInt(data.metadata.userId),
+                                payment_token_id: data.payment_token_id,
+                                channel_code: response.data.channel_code,
+                                type: ['GCASH','PAYMAYA','SHOPEEPAY','GRABPAY','GCASH_LINK_AND_PAY'].includes(response.data.channel_code) ? 'E-WALLET' : ['UBP_DIRECT_DEBIT','BPI_DIRECT_DEBIT','UBP_EADA'].includes(response.data.channel_code) ? 'DIRECT-DEBIT' : response.data.channel_code,
+                                status:response.data.status,
+                                is_default: false,
+                                display_name: response.data.token_details.account_number || response.data.token_details.masked_bank_account_number || response.data.channel_code,
+                                card_brand: null,
+                                masked_card_number: null,
+                                card_exp_month: null,
+                                card_exp_year: null,
+                                customer_reference_id: response.data.reference_id,
+                                fingerprint: null
+                        })
+                    }
+                }
+                console.log("Payment Session Complete Webhook Processed Successfully",response.data);
+
+            }
+}
+
+async function paymentSessionExpiredWebhookHandler(req, res) {
+    console.log("📬 Payment Session Expired Webhook Received:", req.body);
+}
+
 
 module.exports = {
     xenditWebhookHandler,
@@ -434,4 +515,6 @@ module.exports = {
     processTopUpPayment,
     savePaymentMethod,
     getAllPaymentMethodsByUserIdService,
+    paymentSessionCompleteWebhookHandler,
+    paymentSessionExpiredWebhookHandler,
 };

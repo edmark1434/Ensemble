@@ -10,7 +10,7 @@ async function getAllPlanRepositories() {
                 p.description,
                 p.amount_php_cents as price,
                 p.billing_period,
-
+                p.days_of_trials,
                 COALESCE(
                     json_agg(
                         json_build_object(
@@ -50,6 +50,17 @@ async function getAllPlanRepositories() {
     }
 }
 
+async function getSubcriptionByUserIdRepositories(userId) {
+    try{
+        const query = `SELECT * FROM subscriptions WHERE user_id = $1`;
+        const result = await pool.query(query, [userId]);
+        return result.rows;
+    }catch(err){
+        console.error("Error fetching subscription:", err);
+        throw err;
+    }
+}
 module.exports = {
-    getAllPlanRepositories
+    getAllPlanRepositories,
+    getSubcriptionByUserIdRepositories
 };

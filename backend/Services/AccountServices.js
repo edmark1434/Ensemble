@@ -1,6 +1,7 @@
 const { getAllAccounts, createAccount, getAccountByHandle, getAccountWalletRepositories,
     checkAccountId, getProfileRepositories, getAccountLinkByAccountIdRepositories,
-    checkUserAccountIdRepositories
+    checkUserAccountIdRepositories,
+    getDisplayNameByAccountId
  } = require("../Repositories/AccountRepositories");
 const redisClient = require('../lib/redis');
 
@@ -111,6 +112,20 @@ async function checkUserAccountIdService(accountId) {
     }
 }
 
+async function getDisplayNameByAccountIdService(listOfAccountIds) {
+    if (!Array.isArray(listOfAccountIds) || listOfAccountIds.length === 0) {
+        throw new Error('A non-empty array of account IDs is required');
+    }
+    try {
+        const displayNames = await getDisplayNameByAccountId(listOfAccountIds);
+        return displayNames;
+    }
+    catch (err) {
+        console.error('Error fetching display names:', err);
+        throw err;
+    }
+}
+
 module.exports = {
     fetchAllAccounts,
     createNewAccount,
@@ -119,5 +134,6 @@ module.exports = {
     getProfileServices,
     getAccountLinkByAccountIdService,
     checkUserAccountIdService,
-    checkAccountIdService
+    checkAccountIdService,
+    getDisplayNameByAccountIdService
 };

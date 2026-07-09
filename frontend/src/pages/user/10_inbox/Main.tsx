@@ -68,7 +68,7 @@ interface Inbox {
 interface Message {
   _id: string;
   conversation_id: string;
-  sender_id: string;
+  sender_id: number | string;
   message_type: string;
   message_content: string;
   message_id_reply: string;
@@ -106,6 +106,25 @@ const Inbox = () => {
     if (!trimmed) return;
     console.log("Sending message:", trimmed);
     setMessageInput("");
+
+    console.log("Selected conversation:", selectedConversation);
+    const messagePayload: Message = {
+      _id: `${Date.now()}-${Math.random()}`, // Temporary ID for optimistic UI
+      conversation_id: selectedConversation?._id || "",
+      sender_id: user?.account_id || "",
+      message_type: "text",
+      message_content: trimmed,
+      message_id_reply: "",
+      attachments: [],
+      links: [],
+      message_react: [],
+      read_by: [],
+      is_edited: false,
+      deleted_at: new Date(),
+      created_at: new Date(),
+      updated_at: new Date()
+    };
+    socket.emit("sendMessage", messagePayload);
   };
 
   // Socket connection
@@ -115,6 +134,20 @@ const Inbox = () => {
       console.log("Connected:", socket.id);
     });
     
+    socket.on("newMessage", (message: any) => {
+      console.log("Received new message:", message);
+
+      setMessages(prev => {
+        const exists = prev.some(m => m._id === message._id);
+
+        if (exists) {
+          return prev;
+        }
+
+        return [...prev, message];
+      });
+    });
+
     socket.on("disconnect", () => {
       console.log("Disconnected");
     });
@@ -124,7 +157,7 @@ const Inbox = () => {
       socket.off("disconnect");
       socket.disconnect();
     };
-  }, [messages]);
+  }, []);
 
   // Fetch inbox data when tab changes
   useEffect(() => {
@@ -133,10 +166,47 @@ const Inbox = () => {
       try {
         const response = await api.get(`api/inbox/${activeTab}`);
         console.log('Fetched inbox:', response.data);
-        setInboxList(response.data);
-        if (response.data.length > 0) {
-          setSelectedConversation(response.data[0]);
-        }else{
+        const recepientsNames = response.data.map((inbox: Inbox) => {
+          return inbox.members.map(member => member.account_id).filter(id => id !== user?.account_id);
+        });
+        const namesResponse = await api.post('api/accounts/display-names', { accountIds: recepientsNames.flat() });
+        const displayNameMap = Object.fromEntries(
+          namesResponse.data.displayNames.map((item: any) => [
+            item.account_id,
+            item.display_name,
+          ])
+        );
+        const inboxWithNames = response.data.map((inbox: Inbox) => {
+          const recipient = inbox.members.find(
+            member => member.account_id !== user?.account_id
+          );
+
+          return {
+            ...inbox,
+            conversation_name: displayNameMap[recipient?.account_id] || inbox.conversation_name,
+          };
+        });
+
+        setInboxList(activeTab === 'direct' ? inboxWithNames : response.data);
+        
+        // FIX: Update selected conversation with the new data
+        if (inboxWithNames.length > 0) {
+          // If there's a currently selected conversation, find it in the updated list
+          if (selectedConversation) {
+            const updatedSelected = inboxWithNames.find(
+              (inbox: Inbox) => inbox._id === selectedConversation._id
+            );
+            if (updatedSelected) {
+              setSelectedConversation(updatedSelected);
+            } else {
+              // If the selected conversation is no longer in the list, select the first one
+              setSelectedConversation(inboxWithNames[0]);
+            }
+          } else {
+            // If no conversation is selected, select the first one
+            setSelectedConversation(inboxWithNames[0]);
+          }
+        } else {
           setSelectedConversation(null);
         }                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
       } catch (error) {
@@ -146,7 +216,7 @@ const Inbox = () => {
       }
     };
     fetchInbox();
-  }, [activeTab]);
+  }, [activeTab]); // Removed selectedConversation from dependencies to avoid infinite loop
 
   useEffect(() => {
     if (!selectedConversation) return;

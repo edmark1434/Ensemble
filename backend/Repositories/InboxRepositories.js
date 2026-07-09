@@ -18,7 +18,7 @@ async function createInboxRepositories(inboxPayload = {}) {
 async function createMessageRepositories(messagePayload = {}) {
     try{
         const result = await MessageCollection.insertOne(messagePayload);
-        return result;
+        return result.insertedId;
     }catch(err){
         console.error('Error creating message:', err);
         throw err;
@@ -76,14 +76,66 @@ async function checkInboxExists(inboxId) {
 }
 
 async function getInboxByAccountId(account_id, conversation_type) {
-    try{
-        const inboxes = await InboxCollection.find({
-            "members.account_id": String(account_id) || account_id,
-            conversation_type: conversation_type
-        }).toArray();
+    try {
+        const inboxes = await InboxCollection.aggregate([
+            {
+                $match: {
+                    "members.account_id": account_id,
+                    conversation_type
+                }
+            },
+            {
+                $lookup: {
+                    from: "messages",
+                    let: {
+                        conversationId: { $toString: "$_id" }
+                    },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $eq: [
+                                        "$conversation_id",
+                                        "$$conversationId"
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            $limit: 1 // We only need to know if at least one message exists
+                        }
+                    ],
+                    as: "messageExists"
+                }
+            },
+            {
+                $match: {
+                    "messageExists.0": { $exists: true }
+                }
+            },
+            {
+                $project: {
+                    messageExists: 0
+                }
+            }
+        ]).toArray();
+
         return inboxes;
+    } catch (err) {
+        console.error("Error fetching inbox by account ID:", err);
+        throw err;
+    }
+}
+
+async function getInboxByTwoAccountIds(accountId1, accountId2, conversation_type) {
+    try{
+        const inbox = await InboxCollection.findOne({
+            "members.account_id": { $all: [String(accountId1), String(accountId2)] },
+            conversation_type: conversation_type
+        });
+        return inbox;
     }catch(err){
-        console.error('Error fetching inbox by account ID:', err);
+        console.error('Error fetching inbox by two account IDs:', err);
         throw err;
     }
 }
@@ -95,5 +147,6 @@ module.exports = {
     updateInboxRepositories,
     getConversationByConvoId,
     checkInboxExists,
-    getInboxByAccountId
+    getInboxByAccountId,
+    getInboxByTwoAccountIds
 }
