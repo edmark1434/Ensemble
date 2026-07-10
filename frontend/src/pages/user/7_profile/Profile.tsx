@@ -7,25 +7,26 @@ import toast from "react-hot-toast";
 import socket from "@/lib/socket";
 
 // Modularized Profile Sub-Components
-import { TopSection_ProfileDisplay } from "./TopSection_ProfileDisplay";
-import { MeritSection_ProfileDisplay } from "./MeritSection_ProfileDisplay";
-import { BadgeSideSection_ProfileDisplay } from "./BadgeSideSection_ProfileDisplay";
-import { SkillsSideSection_ProfileDisplay } from "./SkillsSideSection_ProfileDisplay";
-import { SocialLinksSection_ProfileDisplay } from "./SocialLinksSection_ProfileDisplay";
-import { DetailsListBody_ProfileDisplay } from "./DetailsListBody_ProfileDisplay";
-import type { TabType } from "./DetailsListBody_ProfileDisplay";
+import { TopSection_ProfileDisplay } from "./Displays/TopSection_ProfileDisplay.tsx";
+import { MeritSection_ProfileDisplay } from "./Displays/MeritSection_ProfileDisplay.tsx";
+import { BadgeSideSection_ProfileDisplay } from "./Displays/BadgeSideSection_ProfileDisplay.tsx";
+import { SkillsSideSection_ProfileDisplay } from "./Displays/SkillsSideSection_ProfileDisplay.tsx";
+import { SocialLinksSection_ProfileDisplay } from "./Displays/SocialLinksSection_ProfileDisplay.tsx";
+import { MainBody } from "./Displays/Body/MainBody.tsx";
+import type { TabType } from "./Displays/Body/MainBody.tsx";
 
 // Badges Registry & Type Infrastructure
 import { badgesRegistry } from "@/pages/user/7_profile/Utilities/BadgesRegistry.ts";
-import type { BadgeMetadata } from "./BadgeSideSection_ProfileDisplay";
+import type { BadgeMetadata } from "./Displays/BadgeSideSection_ProfileDisplay.tsx";
 
 // System Modals
-import AvatarEditModal from "@/pages/user/7_profile/AvatarEditModal.tsx";
-import ProfileEditModal from "@/pages/user/7_profile/ProfileEditModal.tsx";
-import { BadgeEditModal } from "./BadgeEditModal.tsx"; // Imported the badge curation selector modal asset
+import AvatarEditModal from "@/pages/user/7_profile/Edits/AvatarEditModal.tsx";
+import ProfileEditModal from "@/pages/user/7_profile/Edits/ProfileEditModal.tsx";
+import { BadgeEditModal } from "./Edits/BadgeEditModal.tsx";
+import SkillsEditModal from "@/pages/user/7_profile/Edits/SkillsEditModal.tsx";
 
 interface SkillObject {
-  tag_id: number;
+  tag_id: number | string;
   name: string;
   proficiency: "beginner" | "intermediate" | "advanced" | "expert";
   years: number;
@@ -79,7 +80,8 @@ export default function Profile() {
   const [availableSkills, setAvailableSkills] = useState<{ tag_id: number; name: string }[]>([]);
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false); // State control loop flag for the Curation Modal
+  const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
+  const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
 
   const isOwner = id == user?.account_id;
 
@@ -185,11 +187,31 @@ export default function Profile() {
     }
   };
 
-  // Callback operation to safely update selected array lists from modal configuration pipelines
   const saveSelectedBadges = (updatedBadgesList: BadgeMetadata[]) => {
     setUserDetails((prev) => (prev ? { ...prev, badges: updatedBadgesList } : null));
     toast.success("Account showcase badge selection updated.");
     setIsBadgeModalOpen(false);
+  };
+
+  const saveSkillsCuration = (updatedSkillsList: SkillObject[]) => {
+    setUserDetails((prev) => (prev ? { ...prev, skills: updatedSkillsList } : null));
+    toast.success("Capabilities matrix configuration updated.");
+    setIsSkillsModalOpen(false);
+  };
+
+  // ADDED: Callback method to save updated social links payload
+  const saveSocialLinks = async (updatedLinksList: SocialLink[]) => {
+    try {
+      // 1. Persist mutation changes to local runtime state layout first
+      setUserDetails((prev) => (prev ? { ...prev, social_links: updatedLinksList } : null));
+
+      // 2. Optional API payload sync backend channel if required:
+      // await api.put(`/api/accounts/links/${id}`, { links: updatedLinksList });
+
+      toast.success("Network integration routing configurations updated.");
+    } catch (e) {
+      toast.error("Failed to synchronize social network pipeline configurations.");
+    }
   };
 
   return (
@@ -236,26 +258,29 @@ export default function Profile() {
         {/* Layout Matrix Grid Panels Split */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr]">
 
-          {/* Left Sidebar Columns */}
-          <div className="space-y-4">
+          {/* Left Sidebar Column */}
+          <div className="space-y-4 h-fit">
             <BadgeSideSection_ProfileDisplay
               loading={loading}
               badges={userDetails?.badges}
-              onEditClick={() => setIsBadgeModalOpen(true)} // Toggles choice collection modal selection overlay frame
+              onEditClick={() => setIsBadgeModalOpen(true)}
             />
             <SkillsSideSection_ProfileDisplay
               loading={loading}
               skills={userDetails?.skills}
+              onEditClick={isOwner ? () => setIsSkillsModalOpen(true) : undefined}
             />
+            {/* FIXED: Attached saveSocialLinks callback and user validation wrapper */}
             <SocialLinksSection_ProfileDisplay
               loading={loading}
               socialLinks={userDetails?.social_links}
+              onSaveLinks={isOwner ? saveSocialLinks : undefined}
             />
           </div>
 
           {/* Right Main Activity Feeds Panels */}
           <div className="space-y-4">
-            <DetailsListBody_ProfileDisplay
+            <MainBody
               loading={loading}
               activeTab={activeTab}
               onTabChange={(tab) => setActiveTab(tab)}
@@ -291,6 +316,15 @@ export default function Profile() {
         onClose={() => setIsBadgeModalOpen(false)}
         currentlyDisplayedBadges={userDetails?.badges || []}
         onSave={saveSelectedBadges}
+      />
+
+      {/* Standalone Skills Matrix Curation Modal Overlay */}
+      <SkillsEditModal
+        isOpen={isSkillsModalOpen}
+        onClose={() => setIsSkillsModalOpen(false)}
+        currentSkills={userDetails?.skills || []}
+        onSave={saveSkillsCuration}
+        availableSkillsList={availableSkills}
       />
     </div>
   );
