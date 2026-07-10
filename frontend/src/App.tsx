@@ -45,6 +45,7 @@ import Verification from "@/pages/user/9_verification/Verification.tsx";
 import TransactionHistoryMain from "@/pages/user/11_transactionhistory/main.tsx";
 
 import UserProfilesList from "@/components/nav/user_profiles_list.tsx";
+import {VerificationStatus} from "@/pages/user/7_profile/VerificationStatus/VerificationStatus.tsx";
 
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
@@ -144,6 +145,7 @@ function App() {
             <Route path='/credits' element={<CreditShop />} />
             <Route path='/credits/checkout' element={<Checkout />} />
             <Route path='/profile/:id?' element={<Profile />} />
+            <Route path='/account-verification-status' element={<VerificationStatus />} />
             <Route path='/search/user/:query' element={<UserProfilesList />} />
 
           <Route path='/projects' element={<Projects />} />
