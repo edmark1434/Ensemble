@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import ShapeGrid from "@/components/ui/ShapeGrid"; // Adjust this path to match your folder structure
+
 const HIW_DATA = {
   hire: [
     { title: "Posting jobs is always free", img: "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&w=800&q=80" },
@@ -21,8 +23,41 @@ const SectionHowItWorks: React.FC = () => {
   const [tab, setTab] = useState<"hire" | "work" | "edit">("hire");
 
   return (
-    <section id="how-it-works" style={{ background: "#080a12", padding: "100px 60px", borderBottom: "1px solid #1e2130" }}>
-      <div style={{ maxWidth: 1300, margin: "0 auto" }}>
+    <section
+      id="how-it-works"
+      style={{
+        position: "relative",
+        overflow: "hidden",
+        background: "#080a12",
+        padding: "100px 60px",
+        borderBottom: "1px solid #1e2130"
+      }}
+    >
+      {/* ─── ShapeGrid Background Layer ─── */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          zIndex: 0,
+          opacity: 0.4, // Subtle opacity so it doesn't overpower the layout cards
+        }}
+      >
+        <ShapeGrid
+          speed={0.4}
+          squareSize={48}
+          direction="diagonal"
+          borderColor="#1e2130" // Matches your core layout border color
+          hoverFillColor="#13162b" // Smooth deep tint glow when hovering over shapes
+          shape="square"
+          hoverTrailAmount={5}
+        />
+      </div>
+
+      {/* ─── Main Content Foreground Layer ─── */}
+      <div style={{ maxWidth: 1300, margin: "0 auto", position: "relative", zIndex: 1 }}>
 
         {/* Header with 3-Way Switcher */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 48 }}>

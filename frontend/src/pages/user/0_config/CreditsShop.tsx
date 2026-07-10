@@ -11,8 +11,8 @@ import {
 } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import { useNavigate } from "react-router-dom";
-
-// ---- Data models: minimal fields only ----
+import api from "@/lib/axios";
+// ---- Data models ----
 interface CreditPack {
   id: string;
   name: string;
@@ -20,14 +20,22 @@ interface CreditPack {
   credits: number;
 }
 
-interface Membership {
-  id: string;
+interface Feature {
+  feature_id: number;
+  feature_key: string;
   name: string;
+  description: string;
+  value: string;
+}
+
+interface Membership {
+  plan_id: number;
+  name: string;
+  description: string;
   price: number;
-  features: string[];
-  buttonText: string;
-  isPrimary: boolean;
-  popular?: boolean;
+  billing_period: string;
+  days_of_trials: number;
+  features: Feature[];
 }
 
 interface CheckoutItem {
@@ -37,7 +45,7 @@ interface CheckoutItem {
   credits?: number;
   price: string;
   priceValue: number;
-  features?: string[];
+  features?: Feature[];
   isCustom?: boolean;
 }
 
@@ -48,69 +56,10 @@ const creditPacks: CreditPack[] = [
   { id: "vault", name: "Vault", price: 1599, credits: 1600 },
 ];
 
-const memberships: Membership[] = [
-  {
-    id: "free",
-    name: "Free",
-    price: 0,
-    features: [
-      "720p export",
-      "Standard export speed",
-      "Low render queue priority",
-      "Watermarked export",
-      "Basic tools",
-      "3 collaborators",
-      "3 collaborative projects",
-      "1 asset post",
-    ],
-    buttonText: "Current plan",
-    isPrimary: false,
-  },
-  {
-    id: "premium",
-    name: "Premium",
-    price: 599,
-    features: [
-      "1080p export",
-      "Accelerated export speed",
-      "Priority render queue",
-      "No watermark",
-      "Premium tools + AI",
-      "10 collaborators",
-      "10 collaborative projects",
-      "20 asset posts",
-      "+30% profile visibility",
-      "Premium badge",
-    ],
-    buttonText: "Upgrade to Premium",
-    isPrimary: true,
-    popular: true,
-  },
-  {
-    id: "business",
-    name: "Business",
-    price: 3500,
-    features: [
-      "2K–4K export",
-      "Maximum export speed",
-      "Top render queue priority",
-      "No watermark",
-      "Premium tools + AI",
-      "20 collaborators",
-      "20 collaborative projects",
-      "Unlimited asset posts",
-      "+90% profile visibility",
-      "Business badge",
-    ],
-    buttonText: "Upgrade to Business",
-    isPrimary: true,
-  },
-];
-
 const formatPHP = (value: number) =>
   `₱${value.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
-const CREDIT_RATE = 1.25; // pesos per credit for custom top-ups
+const CREDIT_RATE = 1.25;
 
 const CreditShop: React.FC = () => {
   const navigate = useNavigate();
@@ -120,10 +69,34 @@ const CreditShop: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"topup" | "membership">("topup");
   const [showCustom, setShowCustom] = useState(false);
   const [customCredits, setCustomCredits] = useState<number>(100);
-
+  const [memberships, setMemberships] = useState<Membership[]>([]);
+  const [isUserSubscribed, setIsUserSubscribed] = useState(false);
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 500);
-    return () => clearTimeout(timer);
+    const fetchMemberships = async () => {
+      try {
+        const [planResponse, userSubscriptionResponse] = await Promise.all([
+          api.get("api/subscription/plans"),
+          api.get("api/subscription"), // Fetch user's current subscription
+        ]);
+        const plansData = planResponse.data.plans || [];
+        const userSubscriptionData = userSubscriptionResponse.data.subscription;
+        if (userSubscriptionData && userSubscriptionData.xendit_plan_id && userSubscriptionData.trial_ends_at 
+          && userSubscriptionData.trial_starts_at
+        ) {
+          setIsUserSubscribed(true);
+        }
+        console.log("Fetched user subscription:", userSubscriptionData);
+        console.log("Fetched memberships:", plansData);
+        console.log("Is user subscribed:", isUserSubscribed);
+        setMemberships(plansData);
+      } catch (error) {
+        console.error("Error fetching memberships:", error);
+        setMemberships([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMemberships();
   }, []);
 
   const navigateToCheckout = (item: CheckoutItem) => {
@@ -156,14 +129,16 @@ const CreditShop: React.FC = () => {
   };
 
   const handleMembershipCheckout = (membership: Membership) => {
-    if (membership.id === "free") return;
+    if (membership.price === 0) return;
     navigateToCheckout({
-      id: membership.id,
+      id: String(membership.plan_id),
       name: membership.name,
       type: "subscription",
       price: formatPHP(membership.price),
       priceValue: membership.price,
-      features: membership.features,
+      features: membership.features || [],
+      trialDays: membership.days_of_trials || 0,
+      isUserEligibleForTrial: !isUserSubscribed && membership.days_of_trials > 0,
     });
   };
 
@@ -371,60 +346,75 @@ const CreditShop: React.FC = () => {
         {/* MEMBERSHIP */}
         {activeTab === "membership" && (
           <div className="grid gap-4 md:grid-cols-3 items-stretch">
-            {memberships.map((tier) => (
-              <div
-                key={tier.id}
-                className={`flex flex-col justify-between rounded-lg border p-6 ${
-                  tier.popular
-                    ? "border-white/40 bg-zinc-900/50"
-                    : "border-zinc-800 bg-zinc-900/30"
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold text-white flex items-center gap-1.5">
-                      {tier.id !== "free" && <Crown className="h-3.5 w-3.5 text-zinc-400" />}
-                      {tier.name}
-                    </h3>
-                    {tier.popular && (
-                      <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white">
-                        Most popular
-                      </span>
-                    )}
-                  </div>
-
-                  <p className="text-3xl font-semibold text-white mb-1">
-                    {formatPHP(tier.price)}
-                    {tier.price > 0 && <span className="text-sm font-normal text-zinc-500"> /mo</span>}
-                  </p>
-
-                  <div className="h-px bg-zinc-800 my-5" />
-
-                  <ul className="space-y-2.5 mb-6">
-                    {tier.features.map((feature, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-sm text-zinc-300">
-                        <Check className="h-4 w-4 text-zinc-500 flex-shrink-0 mt-0.5" />
-                        <span>{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <button
-                  onClick={() => handleMembershipCheckout(tier)}
-                  disabled={tier.id === "free"}
-                  className={`w-full rounded-md py-2.5 text-sm font-medium transition-colors ${
-                    tier.id === "free"
-                      ? "border border-zinc-800 text-zinc-500 cursor-default"
-                      : tier.popular
-                      ? "bg-white text-zinc-950 hover:bg-zinc-200"
-                      : "border border-zinc-700 text-white hover:bg-zinc-800"
+            {memberships.map((tier) => {
+              const isFree = tier.price === 0;
+              const isPopular = tier.plan_id === 2; // Premium is popular
+              const hasFreeTrial = tier.days_of_trials > 0;
+              return (
+                <div
+                  key={tier.plan_id}
+                  className={`flex flex-col justify-between rounded-lg border p-6 ${
+                    isPopular
+                      ? "border-white/40 bg-zinc-900/50"
+                      : "border-zinc-800 bg-zinc-900/30"
                   }`}
                 >
-                  {tier.buttonText}
-                </button>
-              </div>
-            ))}
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-semibold text-white flex items-center gap-1.5">
+                        {!isFree && <Crown className="h-3.5 w-3.5 text-zinc-400" />}
+                        {tier.name}
+                      </h3>
+                      {isPopular && (
+                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white">
+                          Most popular
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-zinc-400 mb-4">{tier.description}</p>
+                    <p className="text-3xl font-semibold text-white mb-1">
+                      {isFree ? "Free" : formatPHP(tier.price)}
+                      {tier.billing_period === "MONTH" && !isFree && (
+                        <span className="text-sm font-normal text-zinc-500"> /mo</span>
+                      )}
+                    </p>
+
+                    <div className="h-px bg-zinc-800 my-5" />
+                    <ul className="space-y-2.5 mb-6">
+                      {tier.features && tier.features.length > 0 ? (
+                        tier.features.map((feature) => (
+                          <li key={feature.feature_id} className="flex items-start gap-2 text-sm">
+                            <Check className="h-4 w-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                            <span className="text-zinc-300">
+                              {feature.description}{" "}
+                              <span className="font-semibold text-white/90 bg-white/5 px-2 py-0.5 rounded-md border border-white/10">
+                                {feature.value}
+                              </span>
+                            </span>
+                          </li>
+                        ))
+                      ) : (
+                        <li className="text-sm text-zinc-500">No features available</li>
+                      )}
+                    </ul>
+                  </div>
+
+                  <button
+                    onClick={() => handleMembershipCheckout(tier)}
+                    disabled={isFree}
+                    className={`w-full rounded-md py-2.5 text-sm font-medium transition-colors ${
+                      isFree
+                        ? "border border-zinc-800 text-zinc-500 cursor-default"
+                        : isPopular
+                        ? "bg-white text-zinc-950 hover:bg-zinc-200"
+                        : "border border-zinc-700 text-white hover:bg-zinc-800"
+                    }`}
+                  >
+                    {isFree ? "Current Plan" : hasFreeTrial && isUserSubscribed === false ? `Start Free Trial (${tier.days_of_trials} days)` : "Subscribe"}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
 

@@ -7,6 +7,7 @@ import {
   Video,
   BarChart3
 } from "lucide-react";
+import Aurora from "@/components/ui/Aurora"; // Adjust path as needed
 
 const ALL_FEATURES = [
   {
@@ -57,7 +58,17 @@ const SectionFeatures: React.FC = () => {
   const [activeTab, setActiveTab] = useState(0);
 
   return (
-    <section id="features" style={{ background: "#080a12", padding: "100px 40px", position: "relative" }}>
+    <section id="features" style={{ background: "#080a12", padding: "100px 40px", position: "relative", overflow: "hidden" }}>
+
+      {/* ─── Aurora WebGL Background Layer ─── */}
+      <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", zIndex: 0, opacity: 0.35 }}>
+        <Aurora
+          colorStops={["#A855F7", "#080a12", "#3B82F6"]} // Blends your brand purple, background dark, and blue
+          blend={0.6}
+          amplitude={1.2}
+          speed={0.5}
+        />
+      </div>
 
       {/* Global CSS for Hardware-Accelerated Tab Shifting */}
       <style>{`
@@ -110,7 +121,8 @@ const SectionFeatures: React.FC = () => {
         }
       `}</style>
 
-      <div style={{ maxWidth: 1300, margin: "0 auto" }}>
+      {/* ─── Main Content Foreground Layer ─── */}
+      <div style={{ maxWidth: 1300, margin: "0 auto", position: "relative", zIndex: 1 }}>
 
         {/* Header Block */}
         <div style={{ textAlign: "center", marginBottom: "64px" }}>

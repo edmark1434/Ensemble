@@ -179,6 +179,18 @@ async function checkUserAccountIdRepositories(accountId) {
     }
 }
 
+async function getDisplayNameByAccountId(listOfAccountIds) {
+    try {
+        const placeholders = listOfAccountIds.map((_, index) => `$${index + 1}`).join(',');
+        const queryText = `SELECT account_id, display_name FROM accounts WHERE account_id IN (${placeholders})`;
+        const result = await pool.query(queryText, listOfAccountIds);
+        return result.rows;
+    } catch (err) {
+        console.error(`Error fetching display names for accounts ${listOfAccountIds.join(', ')}:`, err);
+        throw err;
+    }
+}
+
 module.exports = {
     getAllAccounts,
     getAccountById,
@@ -188,5 +200,6 @@ module.exports = {
     checkAccountId,
     getProfileRepositories,
     getAccountLinkByAccountIdRepositories,
-    checkUserAccountIdRepositories
+    checkUserAccountIdRepositories,
+    getDisplayNameByAccountId
 };

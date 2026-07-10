@@ -7,7 +7,7 @@ const {
     updateTopUpStatus,
     updateWalletFromTopUp
 } = require("../Repositories/PaymentRepositories");
-
+const { savePaymentMethod } = require("../Services/PaymentServices");
 const config = {
     auth: {
         username: process.env.XENDIT_API_KEY,
@@ -90,7 +90,7 @@ async function reconcilePayment(payment) {
                             status: "EXPIRED",
                             UPDATED_AT: new Date()
                         });
-
+                        await updateTopUpStatus(payment.reference_id, 'EXPIRED',payment.payment_id ?? null,payment.channel_code ?? null);
                     }
 
                     return;
@@ -177,6 +177,7 @@ async function reconcilePayment(payment) {
                 }
                 const result = await updateTopUpStatus(payment.reference_id, status,payload.payment_id, payload.channel_code);
                 await updateWalletFromTopUp(payment.user_id, result.credits_granted);
+                await savePaymentMethod(paymentRequest);
             }
         }
 

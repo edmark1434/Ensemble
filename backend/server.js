@@ -33,9 +33,11 @@ async function startServer() {
     console.log('Connecting to databases...');
     
     // 1. Await database connections FIRST
-    await connectPostgresDB();
-    await connectMongoDB(); 
-    await initSocket(httpServer);
+    await Promise.all([
+      await connectPostgresDB(),
+      await connectMongoDB(),
+      await initSocket(httpServer)
+    ]);
     startPaymentReconciliationJob(); // Start the background job after DB connections
     // 2. Load API routes ONLY after database setups are fully initialized
     const apiRoutes = require('./Route/api');

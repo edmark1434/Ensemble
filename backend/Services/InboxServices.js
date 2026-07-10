@@ -4,8 +4,9 @@ const {
     updateMessageRepositories,
     updateInboxRepositories,
     getConversationByConvoId,
-    getConversationByAccountId,
-    checkInboxExists
+    checkInboxExists,
+    getInboxByAccountId,
+    getInboxByTwoAccountIds
 } = require("../Repositories/InboxRepositories");
 const {
     checkAccountIdService
@@ -69,9 +70,9 @@ function dataValidation(payload = {}) {
 
     if (
         payload.sender_id !== undefined &&
-        typeof payload.sender_id !== "string"
+        typeof payload.sender_id !== "number"
     ) {
-        ErrorMessages.push("sender_id must be a string");
+        ErrorMessages.push("sender_id must be a number");
     }
 
     if (
@@ -182,12 +183,43 @@ async function getConversationByConvoIdServices(convoId){
     return await getConversationByConvoId(convoId);
 }
 
-async function getConversationByAccountIdServices(accountId){
+async function getInboxByAccountIdServices(accountId, conversation_type){
     if(!checkAccountIdService(accountId)){
         throw new Error('Invalid account ID');
     }
-    return await getConversationByAccountId(accountId);
+    return await getInboxByAccountId(accountId, conversation_type);
 }
+
+async function checkInboxByTwoAccountIdsServices(messagePayload,account_id){
+    if(!checkAccountIdService(account_id) || !checkAccountIdService(messagePayload.recipientId)){
+        throw new Error('Invalid account ID(s)');
+    }
+     try{
+        const { recipientId, conversation_type } = messagePayload;
+        let inbox = await getInboxByTwoAccountIds(account_id, recipientId, conversation_type);
+        console.log(`Inbox found for accounts ${account_id} and ${recipientId}:`, inbox);
+        if(!inbox){
+            inbox = await createInboxServices({
+                conversation_name: "",
+                conversation_type: conversation_type,
+                members: [
+                    { account_id: account_id, role: "member", joined_at: new Date() },
+                    { account_id: parseInt(recipientId), role: "member", joined_at: new Date() }
+                ],
+                pinned_messages: [],
+                created_at: new Date(),
+                updated_at: new Date()
+            });
+            console.log(`New inbox created for accounts ${account_id} and ${recipientId}:`, inbox);
+        }
+        return inbox.insertedId ? inbox.insertedId : inbox._id; // Return the new inbox ID or existing inbox ID
+    }catch(err){
+        console.error("Error handling direct message:", err);
+    }
+}
+
+
+
 
 module.exports = {
     createInboxServices,
@@ -195,6 +227,7 @@ module.exports = {
     updateMessageServices,
     updateInboxServices,
     getConversationByConvoIdServices,
-    getConversationByAccountIdServices
+    getInboxByAccountIdServices,
+    checkInboxByTwoAccountIdsServices
 };
 

@@ -169,6 +169,8 @@ async function loginCredentials(req, res) {
                 account_id: credentials.account_id,
                 type: credentials.type,
                 role: credentials.role,
+                userId: credentials.user_id,
+                displayName: credentials.display_name,
                 staffId: credentials.staff_id
             },
         });
