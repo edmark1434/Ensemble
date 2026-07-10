@@ -2,7 +2,13 @@ const { createNewAccount, fetchAllAccounts, getAccountByHandleService,
     getAccountWalletService, getProfileServices, getAccountLinkByAccountIdService,
     checkUserAccountIdService,
     getDisplayNameByAccountIdService,
+    updateAndInsertAccountProfileServices,
+    updateAccountProfileServices,
 } = require("../services/AccountServices");
+const { getUserOnboardingStep,
+     updateUserDetails
+ } = require('../Repositories/UserRepositories');
+
 const redisClient = require('../lib/redis');
 async function createAccount(req, res) {
     try {
@@ -145,6 +151,52 @@ async function getDisplayNameByAccountIdController(req, res) {
     }
 }
 
+async function updateAndInsertAccountProfileController(req, res) {
+    const { account_id } = req.session;
+    const profileData = req.body;
+    try {
+        const fileId = await updateAndInsertAccountProfileServices(account_id, profileData);
+        await updateUserOnboardingStep(req.session.userId);
+        return res.status(200).json({ success: true, message: 'Profile updated/inserted successfully', file: fileId });
+    }catch (err) {
+        console.error(`Error updating/inserting profile for accountId ${account_id}:`, err);
+        return res.status(500).json({
+            success: false,
+            message: err.message,
+        });
+    }
+}
+
+async function updateAccountProfileIdController(req, res) {
+    const { account_id,userId } = req.session;
+    const { fileId } = req.body;
+    if (!fileId) {
+        return res.status(400).json({ success: false, message: 'File ID is required' });
+    }
+    try {
+        await Promise.all([
+            updateAccountProfileServices(account_id, fileId),
+            updateUserOnboardingStep(userId)
+        ]);
+        return res.status(200).json({ success: true, message: 'Profile updated successfully' });
+    } catch (err) {
+        console.error(`Error updating profile for accountId ${account_id}:`, err);
+        return res.status(500).json({
+            success: false,
+            message: err.message,
+        });
+    }
+}
+
+async function updateUserOnboardingStep(userId) {
+    let steps = 2;
+    steps = parseInt(steps, 10) + 1;
+    await Promise.all([
+        redisClient.set(`session:${userId}`, steps, { EX: 60 * 60 * 24 * 30 }),
+        updateUserDetails(userId, { onboarding_step: steps })
+    ]);
+}
+
 module.exports = {
     createAccount,
     getAccountByHandle,
@@ -152,5 +204,7 @@ module.exports = {
     getProfileController,
     getAccountLinkByAccountIdController,
     checkUserAccountIdController,
-    getDisplayNameByAccountIdController
+    getDisplayNameByAccountIdController,
+    updateAndInsertAccountProfileController,
+    updateAccountProfileIdController,
 };
