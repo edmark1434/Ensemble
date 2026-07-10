@@ -17,13 +17,15 @@ interface GlobalState {
   isAuthenticated: boolean
   isLoading:       boolean
   accessToken:     string | null
+  signUpData:      any | null
 
   // Actions
   setUser:            (user: any) => void
   setIsAuthenticated: (isAuthenticated: boolean) => void
   setIsLoading:       (isLoading: boolean) => void
   clearUser:          () => void
-  setAccessToken:     (accessToken: string) => void
+  setAccessToken: (accessToken: string) => void
+  setSignUpData: (data: any) => void
 }
 
 // Pass type to create<GlobalState>
@@ -32,14 +34,16 @@ const useGlobalState = create<GlobalState>((set) => ({
   user:            null,
   isAuthenticated: false,
   isLoading:       false,
-  accessToken:     null,
+  accessToken: null,
+  signUpData: null,
 
   // Actions
   setUser:            (user) => set({ user, isAuthenticated: true }),
   setIsAuthenticated: (isAuthenticated) => set({ isAuthenticated }),
   setIsLoading:       (isLoading) => set({ isLoading }),
   clearUser:          () => set({ user: null, isAuthenticated: false }),
-  setAccessToken:     (accessToken) => set({ accessToken }),
+  setAccessToken: (accessToken) => set({ accessToken }),
+  setSignUpData: (data) => set({ signUpData: data }),
 }))
 
 export default useGlobalState

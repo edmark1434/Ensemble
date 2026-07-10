@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, ArrowLeft, Plus, X, Film, Link2 } from "lucide-react";
 import ShapeGrid from "../../components/ui/ShapeGrid";
@@ -16,17 +16,6 @@ const T = {
   fontBody:    "'Plus Jakarta Sans', sans-serif",
 };
 
-const ROLE_SUGGESTIONS = [
-  "Short-Form Video Editor",
-  "Cinematic Colorist",
-  "Motion Graphics Artist",
-  "Commercial Video Editor",
-  "Documentary Film Editor",
-  "VFX Compositor",
-  "Post-Production Supervisor",
-  "YouTube Content Editor"
-];
-
 interface SkillNode {
   name: string;
   proficiency: string;
@@ -40,7 +29,6 @@ interface SocialLinkNode {
 
 export default function ProfileSetup() {
   const navigate = useNavigate();
-  const roleDropdownRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
@@ -49,27 +37,12 @@ export default function ProfileSetup() {
 
   // Part 1 States
   const [title, setTitle] = useState("");
-  const [showSuggestions, setShowSuggestions] = useState(false);
   const [bio, setBio] = useState("");
 
   // Part 2 States
   const [skills, setSkills] = useState<SkillNode[]>([]);
   const [currentSkill, setCurrentSkill] = useState("");
   const [socials, setSocials] = useState<SocialLinkNode[]>([{ platform: "Instagram", url: "" }]);
-
-  const filteredSuggestions = ROLE_SUGGESTIONS.filter((t) =>
-    t.toLowerCase().includes(title.toLowerCase())
-  );
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (roleDropdownRef.current && !roleDropdownRef.current.contains(event.target as Node)) {
-        setShowSuggestions(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const handleAddSkill = () => {
     const cleaned = currentSkill.trim();
@@ -229,36 +202,6 @@ export default function ProfileSetup() {
           border-color: ${T.borderFoc};
         }
 
-        .suggestions-box {
-          position: absolute;
-          top: calc(100% + 4px);
-          left: 0;
-          right: 0;
-          background: ${T.bgInput};
-          border: 1px solid ${T.border};
-          border-radius: 10px;
-          z-index: 50;
-          max-height: 180px;
-          overflow-y: auto;
-          box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-        }
-
-        .suggestion-item {
-          padding: 10px 14px;
-          color: #e2e8f0;
-          font-size: 14px;
-          cursor: pointer;
-          text-align: left;
-          background: none;
-          width: 100%;
-          border: none;
-        }
-
-        .suggestion-item:hover {
-          background: rgba(74, 111, 165, 0.15);
-          color: ${T.text};
-        }
-
         .skills-rack-container {
           background: rgba(19, 21, 31, 0.6);
           border: 1px solid ${T.border};
@@ -387,40 +330,19 @@ export default function ProfileSetup() {
             {/* ================= PART 1: TAGLINE & BIO ================= */}
             {subStep === 1 && (
               <>
-                <div className="input-group" ref={roleDropdownRef}>
+                <div className="input-group">
                   <span className="input-label">Editor Role / Tagline *</span>
-                  <div style={{ position: "relative", width: "100%" }}>
-                    <input
-                      type="text"
-                      value={title}
-                      onChange={(e) => {
-                        setTitle(e.target.value);
-                        setShowSuggestions(true);
-                        if (errors.title) setErrors({ ...errors, title: "" });
-                      }}
-                      onFocus={() => setShowSuggestions(true)}
-                      placeholder="e.g. Short-Form Video Editor"
-                      className="form-input"
-                      style={{ borderColor: errors.title ? T.error : T.border }}
-                    />
-                  </div>
-                  {showSuggestions && filteredSuggestions.length > 0 && (
-                    <div className="suggestions-box">
-                      {filteredSuggestions.map((suggestion, index) => (
-                        <button
-                          key={index}
-                          type="button"
-                          className="suggestion-item"
-                          onClick={() => {
-                            setTitle(suggestion);
-                            setShowSuggestions(false);
-                          }}
-                        >
-                          {suggestion}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => {
+                      setTitle(e.target.value);
+                      if (errors.title) setErrors({ ...errors, title: "" });
+                    }}
+                    placeholder="e.g. Short-Form Video Editor"
+                    className="form-input"
+                    style={{ borderColor: errors.title ? T.error : T.border }}
+                  />
                   {errors.title && <span className="error-text">{errors.title}</span>}
                 </div>
 
@@ -440,7 +362,7 @@ export default function ProfileSetup() {
                       resize: "none",
                       fontFamily: "inherit",
                       lineHeight: "1.5"
-                }}
+                    }}
                   />
                   {errors.bio && <span className="error-text">{errors.bio}</span>}
                 </div>

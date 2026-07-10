@@ -138,7 +138,7 @@ const customerPayload = customerId
         metadata: {
             item_name: `${req.body.itemName}`,
             credits: `${req.body.credits}`,
-            user_id: `${accountName.user_id || req.session.userId}`
+            user_id: `${accountName.user_id || req.session.userId }`
         },
 
         success_return_url:
@@ -417,7 +417,7 @@ const customerPayload = customerId
 }
 
 async function getAllPaymentMethodsByUserIdService(req, res) {
-    const user_id = req.session.userId;
+    const user_id = req.session.userId || req.session.user_id;
     try{
         const paymentMethods = await getAllPaymentMethodsByUserId(user_id);
         res.status(200).json({ paymentMethods });

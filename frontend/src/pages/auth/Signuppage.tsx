@@ -443,8 +443,8 @@ export default function SignupPage({
   const [, setPrivacyAccepted] = useState(false);
 
   const globalState = useGlobalState();
-  const setUser = globalState?.setUser;
   const setIsAuthenticated = globalState?.setIsAuthenticated;
+  const setSignUpData = globalState?.setSignUpData;
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -484,7 +484,7 @@ export default function SignupPage({
 
     try {
       const res = await axios.post(
-        `${import.meta.env.VITE_BASE_URL}/api/users/signup`,
+        `${import.meta.env.VITE_BASE_URL}/api/users/signup-save-session`,
         {
           firstName: form.firstName,
           lastName: form.lastName,
@@ -496,24 +496,22 @@ export default function SignupPage({
       );
 
       if (res.status === 200 && res.data.success) {
-        if (setUser) setUser(res.data.credentials);
-        if (setIsAuthenticated) setIsAuthenticated(true);
-        if (onSuccess) onSuccess();
-        navigate(`/verify-email?email=${encodeURIComponent(form.email)}`);
+        if (setSignUpData) setSignUpData(res.data.credentials);
+        // if (setUser) setUser(res.data.credentials);
+        // if (setIsAuthenticated) setIsAuthenticated(true);
+        // if (onSuccess) onSuccess();
+        // navigate(`/verify-email?email=${encodeURIComponent(form.email)}`);
+        navigate("/setup/verify-email");
+        return;
       } else {
         setErrors({ email: res.data.message || "Signup failed. Please try again." });
       }
     } catch (err: any) {
-      console.error("Signup request failed:", err);
-      if (err.response?.data?.message) {
-        setErrors({ email: err.response.data.message });
-      } else {
-        setErrors({ email: "Network error. Please try again." });
-      }
+      setErrors(err.response?.data?.details);
     } finally {
       setLoading(false);
     }
-  }, [form, validate, onSuccess, setUser, setIsAuthenticated, navigate]);
+  }, [form, validate, onSuccess, setSignUpData, setIsAuthenticated, navigate]);
 
   const handleBack = () => {
     if (onBack) {
