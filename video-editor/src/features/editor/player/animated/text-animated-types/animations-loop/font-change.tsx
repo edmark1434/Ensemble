@@ -1,40 +1,21 @@
-import { ITextDetails } from "@designcombo/types";
+import { FullBlockAnimationProps, renderFullBlock } from "./full-block-animation";
 
-const FontChange = ({
-  frame,
-  text,
-  details,
-  animationFonts
-}: {
-  text: string;
-  frame: number;
-  details: ITextDetails;
-  animationFonts: { fontFamily: string; url: string }[];
-}) => {
+const FontChange = (props: FullBlockAnimationProps) => {
+  const { frame, durationInFrames, animationTextInFrames, animationTextOutFrames, details, animationFonts } = props;
+
+  const loopDuration = durationInFrames - animationTextInFrames - animationTextOutFrames;
+  const loopFrame = Math.min(Math.max(frame - animationTextInFrames, 0), loopDuration);
+
   const totalFonts = [{ fontFamily: details.fontFamily }, ...animationFonts];
-  const cycleDuration = 30; // Duración de un ciclo completo en frames
-  const framesPerFont = cycleDuration / totalFonts.length; // Frames por cada fuente
 
-  const fontIndex = Math.floor((frame % cycleDuration) / framesPerFont);
+  const cyclesCount = Math.max(1, Math.round(loopDuration / 30));
+  const cycleLen = loopDuration / cyclesCount;
+  const framesPerFont = cycleLen / totalFonts.length;
 
-  return (
-    <div
-      style={{
-        width: details.width,
-        height: details.height,
-        position: "relative",
-        background: "transparent",
-        perspective: 1000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center"
-      }}
-    >
-      <div style={{ fontFamily: totalFonts[fontIndex].fontFamily }}>
-        {text}
-      </div>
-    </div>
-  );
+  const t = loopFrame % cycleLen;
+  const fontIndex = Math.min(Math.floor(t / framesPerFont), totalFonts.length - 1);
+
+  return renderFullBlock(props, { fontFamily: totalFonts[fontIndex].fontFamily });
 };
 
 export default FontChange;

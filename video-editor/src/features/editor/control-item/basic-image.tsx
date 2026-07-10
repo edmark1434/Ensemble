@@ -191,7 +191,7 @@ const BasicImage = ({
                 setCropTarget(trackItem);
               }}
             >
-              <Crop size={18} />
+              <Crop size={16} />
             </Button>
           </div>
         </div>

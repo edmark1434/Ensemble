@@ -1,4 +1,5 @@
 import { spring } from "remotion";
+import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
 
 const AnimatedTextIn = ({
   char,
@@ -6,7 +7,8 @@ const AnimatedTextIn = ({
   frame,
   fps,
   textLength,
-  animationTextInFrames
+  animationTextInFrames,
+  colorStyle,
 }: {
   char: string;
   index: number;
@@ -14,6 +16,11 @@ const AnimatedTextIn = ({
   fps: number;
   textLength: number;
   animationTextInFrames: number;
+  colorStyle: {
+    isGradient: boolean;
+    shadowStrokeStyle: React.CSSProperties;
+    fillStyle: React.CSSProperties;
+  };
 }) => {
   // Adjust delay based on total frames available for the entire animation
   const totalDelay = animationTextInFrames;
@@ -45,17 +52,13 @@ const AnimatedTextIn = ({
   });
 
   return (
-    <span
-      key={index}
-      style={{
-        display: "inline-block",
-        opacity,
-        transform: `translateY(${y}px) rotate(${rotate}deg)`,
-        transition: "all 0.05s ease-out"
-      }}
-    >
-      {char === " " ? " " : char}
-    </span>
+    <AnimatedChar
+      char={char}
+      animationStyle={{ opacity, transform: `translateY(${y}px) rotate(${rotate}deg)`, transition: "all 0.05s ease-out" }}
+      isGradient={colorStyle.isGradient}
+      shadowStrokeStyle={colorStyle.shadowStrokeStyle}
+      fillStyle={colorStyle.fillStyle}
+    />
   );
 };
 

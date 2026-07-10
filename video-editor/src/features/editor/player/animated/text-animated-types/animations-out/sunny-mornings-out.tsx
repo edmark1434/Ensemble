@@ -1,4 +1,5 @@
 import { interpolate, spring } from "remotion";
+import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
 
 const SunnyMorningsAnimationOut = ({
   char,
@@ -7,7 +8,8 @@ const SunnyMorningsAnimationOut = ({
   fps,
   textLength,
   animationTextOutFrames,
-  durationInFrames
+  durationInFrames,
+  colorStyle
 }: {
   char: string;
   index: number;
@@ -16,6 +18,11 @@ const SunnyMorningsAnimationOut = ({
   textLength: number;
   animationTextOutFrames: number;
   durationInFrames: number;
+  colorStyle: {
+    isGradient: boolean;
+    shadowStrokeStyle: React.CSSProperties;
+    fillStyle: React.CSSProperties;
+  };
 }) => {
   const exitStart = durationInFrames - animationTextOutFrames;
   const delayPerChar = animationTextOutFrames / textLength;
@@ -37,16 +44,13 @@ const SunnyMorningsAnimationOut = ({
   });
 
   return (
-    <span
-      key={index}
-      style={{
-        display: "inline-block",
-        transform: `scale(${scale})`,
-        opacity
-      }}
-    >
-      {char === " " ? " " : char}
-    </span>
+    <AnimatedChar
+      char={char}
+      animationStyle={{ transform: `scale(${scale})`, opacity }}
+      isGradient={colorStyle.isGradient}
+      shadowStrokeStyle={colorStyle.shadowStrokeStyle}
+      fillStyle={colorStyle.fillStyle}
+    />
   );
 };
 export default SunnyMorningsAnimationOut;

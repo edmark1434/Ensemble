@@ -33,6 +33,7 @@ import {RadioGroup, RadioGroupItem} from "@/components/ui/radio-group";
 import { useResolvedLineHeight } from "../../hooks/use-resolved-line-height";
 import {Slider} from "@/components/ui/slider";
 import { formatColorDisplay } from "@/components/color-picker/helpers";
+import {ColorPickerField} from "@/features/editor/control-item/common/color-picker-field";
 
 interface TextControlsProps {
   trackItem: ITrackItem & any;
@@ -146,235 +147,47 @@ export const TextControls = ({
 };
 
 const FontBackground = ({
-                          value,
-                          handleColorChange
-                        }: {
+  value,
+  handleColorChange
+}: {
   value: string;
   handleColorChange: (color: string) => void;
 }) => {
-  const [localValue, setLocalValue] = useState<string>(value);
-  const [open, setOpen] = useState(false);
-  const isLargeScreen = useIsLargeScreen();
-  const { setControItemDrawerOpen, setTypeControlItem, setLabelControlItem } =
-    useLayoutStore();
-
-  useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
-
-  const handleColorClick = () => {
-    if (!isLargeScreen) {
-      setControItemDrawerOpen(true);
-      setTypeControlItem("backgroundColor");
-      setLabelControlItem("Background Color");
-    }
-  };
-
-  const fullHex = localValue || "#ffffffff";
-  const solidColor = fullHex.slice(0, 7);
-
   return (
     <div className="flex flex-col gap-2 flex-1">
       <div className="flex flex-1 items-center text-xs text-muted-foreground">
         Background
       </div>
-      {isLargeScreen ? (
-        <div className="relative w-full flex gap-1">
-          <div className="relative h-9 w-9 flex-none overflow-hidden rounded-md border border-border">
-            {/* Left half: solid, alpha stripped */}
-            <div
-              className="absolute inset-y-0 left-0 w-1/2"
-              style={{ background: solidColor }}
-            />
-
-            {/* Right half: checkerboard + real color with actual alpha */}
-            <div className="absolute inset-y-0 right-0 w-1/2 overflow-hidden">
-              <div
-                className="absolute inset-0 rounded-r-md"
-                style={{
-                  backgroundImage:
-                    'url(\'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"><path fill="white" d="M1,0H2V1H1V0ZM0,1H1V2H0V1Z"/><path fill="gray" d="M0,0H1V1H0V0ZM1,1H2V2H1V1Z"/></svg>\')',
-                  backgroundSize: "6px",
-                  backgroundRepeat: "repeat"
-                }}
-              />
-              <div
-                className="absolute inset-0"
-                style={{ background: fullHex }}
-              />
-            </div>
-          </div>
-          <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                className="flex-1 flex w-full items-center justify-between text-sm px-3"
-                variant="secondary"
-              >
-                <div className="w-full overflow-hidden text-left">
-                  <p className="truncate">
-                    {formatColorDisplay(localValue)}
-                  </p>
-                </div>
-                <ChevronDown className="text-muted-foreground" size={14} />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              side="bottom" align="start"
-              className="w-3xs bg-card border flex flex-col gap-4 rounded-lg"
-            >
-              <div className="handle flex cursor-grab justify-between items-center">
-                <p className="text-sm font-medium">Color</p>
-                <X
-                  className="h-4 w-4 cursor-pointer text-muted-foreground"
-                  onClick={() => setOpen(false)}
-                />
-              </div>
-
-              <ColorPicker
-                value={localValue}
-                format="hex"
-                gradient={true}
-                solid={true}
-                onChange={(v: string) => {
-                  setLocalValue(v);
-                  handleColorChange(v);
-                }}
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
-      ) : (
-        <div className="relative w-32">
-          <div className="relative" onClick={handleColorClick}>
-            <div
-              style={{ background: localValue || "#ffffff" }}
-              className="absolute left-0.5 top-0.5 h-7 w-7 flex-none rounded-md border border-border"
-            />
-            <Input
-              className="pointer-events-none pl-10"
-              value={formatColorDisplay(localValue)}
-              onChange={() => {}}
-            />
-          </div>
-        </div>
-      )}
+      <ColorPickerField
+        value={value}
+        onChange={handleColorChange}
+        gradient={true}
+        mobileControlType="backgroundColor"
+        mobileControlLabel="Background Color"
+      />
     </div>
   );
 };
 
 const FontColor = ({
-                     value,
-                     handleColorChange
-                   }: {
+  value,
+  handleColorChange
+}: {
   value: string;
   handleColorChange: (color: string) => void;
 }) => {
-  const [localValue, setLocalValue] = useState<string>(value);
-  const [open, setOpen] = useState(false);
-  const isLargeScreen = useIsLargeScreen();
-  const { setControItemDrawerOpen, setTypeControlItem, setLabelControlItem } =
-    useLayoutStore();
-
-  useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
-
-  const handleColorClick = () => {
-    if (!isLargeScreen) {
-      setControItemDrawerOpen(true);
-      setTypeControlItem("color");
-      setLabelControlItem("Color");
-    }
-  };
-
-  const fullHex = localValue || "#ffffffff";
-  const solidColor = fullHex.slice(0, 7);
-
   return (
     <div className="flex flex-col gap-2 flex-1">
       <div className="flex flex-1 items-center text-xs text-muted-foreground">
         Text color
       </div>
-      {isLargeScreen ? (
-        <div className="relative w-full flex gap-1">
-          <div className="relative h-9 w-9 flex-none overflow-hidden rounded-md border border-border">
-            {/* Left half: solid, alpha stripped */}
-            <div
-              className="absolute inset-y-0 left-0 w-1/2"
-              style={{ background: solidColor }}
-            />
-
-            {/* Right half: checkerboard + real color with actual alpha */}
-            <div className="absolute inset-y-0 right-0 w-1/2 overflow-hidden">
-              <div
-                className="absolute inset-0 rounded-r-md"
-                style={{
-                  backgroundImage:
-                    'url(\'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"><path fill="white" d="M1,0H2V1H1V0ZM0,1H1V2H0V1Z"/><path fill="gray" d="M0,0H1V1H0V0ZM1,1H2V2H1V1Z"/></svg>\')',
-                  backgroundSize: "6px",
-                  backgroundRepeat: "repeat"
-                }}
-              />
-              <div
-                className="absolute inset-0"
-                style={{ background: fullHex }}
-              />
-            </div>
-          </div>
-          <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                className="flex-1 flex w-full items-center justify-between text-sm px-3"
-                variant="secondary"
-              >
-                <div className="w-full overflow-hidden text-left">
-                  <p className="truncate">
-                    {formatColorDisplay(localValue)}
-                  </p>
-                </div>
-                <ChevronDown className="text-muted-foreground" size={14} />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              side="bottom" align="start"
-              className="w-3xs bg-card border flex flex-col gap-4 rounded-lg"
-            >
-              <div className="handle flex cursor-grab justify-between items-center">
-                <p className="text-sm font-medium">Color</p>
-                <X
-                  className="h-4 w-4 cursor-pointer text-muted-foreground"
-                  onClick={() => setOpen(false)}
-                />
-              </div>
-
-              <ColorPicker
-                value={localValue}
-                format="hex"
-                gradient={true}
-                solid={true}
-                onChange={(v: string) => {
-                  setLocalValue(v);
-                  handleColorChange(v);
-                }}
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
-      ) : (
-        <div className="relative w-32">
-          <div className="relative" onClick={handleColorClick}>
-            <div
-              style={{ background: localValue || "#ffffff" }}
-              className="absolute left-0.5 top-0.5 h-7 w-7 flex-none rounded-md border border-border"
-            />
-            <Input
-              className="pointer-events-none pl-10"
-              value={formatColorDisplay(localValue)}
-              onChange={() => {}}
-            />
-          </div>
-        </div>
-      )}
+      <ColorPickerField
+        value={value}
+        onChange={handleColorChange}
+        gradient={true}
+        mobileControlType="color"
+        mobileControlLabel="Color"
+      />
     </div>
   );
 };
@@ -626,119 +439,21 @@ const TextDecorationLines = ({
 };
 
 const TextDecorationColor = ({
-                               value,
-                               onChange
-                             }: {
+  value,
+  onChange
+}: {
   value: string;
   onChange: (v: string) => void;
 }) => {
-  const [localValue, setLocalValue] = useState<string>(value);
-  const [open, setOpen] = useState(false);
-  const isLargeScreen = useIsLargeScreen();
-  const { setControItemDrawerOpen, setTypeControlItem, setLabelControlItem } =
-    useLayoutStore();
-
-  useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
-
-  const handleColorClick = () => {
-    if (!isLargeScreen) {
-      setControItemDrawerOpen(true);
-      setTypeControlItem("textDecorationColor");
-      setLabelControlItem("Decoration Color");
-    }
-  };
-
-  const displayValue =
-    localValue === ""
-      ? "Auto"
-      : localValue;
-
-  const fullHex = localValue || "#ffffffff";
-  const solidColor = fullHex.slice(0, 7);
-
   return (
     <div className="flex flex-col gap-2 flex-1">
-      {/*<div className="flex flex-1 items-center text-xs text-muted-foreground">*/}
-      {/*  Color*/}
-      {/*</div>*/}
-      {isLargeScreen ? (
-        <div className="relative w-full flex gap-1">
-          <div className="relative h-9 w-9 flex-none overflow-hidden rounded-md border border-border">
-            {/* Left half: solid, alpha stripped */}
-            <div
-              className="absolute inset-y-0 left-0 w-1/2"
-              style={{ background: solidColor }}
-            />
-
-            {/* Right half: checkerboard + real color with actual alpha */}
-            <div className="absolute inset-y-0 right-0 w-1/2 overflow-hidden">
-              <div
-                className="absolute inset-0 rounded-r-md"
-                style={{
-                  backgroundImage:
-                    'url(\'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"><path fill="white" d="M1,0H2V1H1V0ZM0,1H1V2H0V1Z"/><path fill="gray" d="M0,0H1V1H0V0ZM1,1H2V2H1V1Z"/></svg>\')',
-                  backgroundSize: "6px",
-                  backgroundRepeat: "repeat"
-                }}
-              />
-              <div
-                className="absolute inset-0"
-                style={{ background: fullHex }}
-              />
-            </div>
-          </div>
-          <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                className="flex-1 flex w-full items-center justify-between text-sm px-3"
-                variant="secondary"
-              >
-                <div className="w-full overflow-hidden text-left">
-                  <p className="truncate">
-                    {formatColorDisplay(localValue)}
-                  </p>
-                </div>
-                <ChevronDown className="text-muted-foreground" size={14} />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              side="bottom" align="start"
-              className="w-3xs bg-card border flex flex-col gap-4 rounded-lg"
-            >
-              <div className="handle flex cursor-grab justify-between items-center">
-                <p className="text-sm font-medium">Color</p>
-                <X
-                  className="h-4 w-4 cursor-pointer text-muted-foreground"
-                  onClick={() => setOpen(false)}
-                />
-              </div>
-
-              <ColorPicker
-                value={localValue}
-                format="hex"
-                gradient={false}
-                solid={true}
-                onChange={(v: string) => {
-                  setLocalValue(v);
-                  onChange(v);
-                }}
-              />
-            </PopoverContent>
-          </Popover>
-        </div>
-      ) : (
-        <div className="relative w-32">
-          <div className="relative" onClick={handleColorClick}>
-            <div
-              style={{ background: localValue || "#ffffff" }}
-              className="absolute left-0.5 top-0.5 h-7 w-7 flex-none rounded-md border border-border"
-            />
-            <Input className="pointer-events-none pl-10" value={formatColorDisplay(localValue)} onChange={() => {}} />
-          </div>
-        </div>
-      )}
+      <ColorPickerField
+        value={value}
+        onChange={onChange}
+        gradient={false}
+        mobileControlType="textDecorationColor"
+        mobileControlLabel="Decoration Color"
+      />
     </div>
   );
 };
@@ -893,9 +608,6 @@ const FontLineHeight = ({
     } else {
       const num = Number(value);
       setLocalValue(Number.isNaN(num) ? "Auto" : Math.round(num * fontSize));
-      console.log("num", num);
-      console.log("fontSize", fontSize);
-      console.log("result", Math.round(num * fontSize));
     }
   }, [value]);
 
@@ -1091,7 +803,8 @@ const FontLetterSpacing = ({ id, value }: { id: string; value: string | number }
               const newValue = e.target.value;
               if (
                 newValue === "" ||
-                (!Number.isNaN(Number(newValue)) && Number(newValue) >= 0)
+                newValue === "-" ||
+                !Number.isNaN(Number(newValue))
               ) {
                 setLocalValue(newValue);
               }
@@ -1169,7 +882,8 @@ const FontWordSpacing = ({ id, value }: { id: string; value: string | number }) 
               const newValue = e.target.value;
               if (
                 newValue === "" ||
-                (!Number.isNaN(Number(newValue)) && Number(newValue) >= 0)
+                newValue === "-" ||
+                !Number.isNaN(Number(newValue))
               ) {
                 setLocalValue(newValue);
               }
