@@ -6,7 +6,7 @@ import { IPropsPanel, TCoords } from "./types";
 import styled from "@emotion/styled";
 
 const GradientStopPreview = styled.div<{ stops: string }>`
-  height: 10px;
+  height: 8px;
   width: 100%;
   border-radius: 6px;
   position: relative;
@@ -34,28 +34,28 @@ const GradientStopMarkerContainer = styled.div`
 `;
 
 const GradientMarker = styled.div`
-  height: 14px;
-  width: 14px;
+  height: 16px;
+  width: 16px;
   position: absolute;
   background: currentColor;
-  margin: -11px 0 0 -7px;
+  margin: -12px 0 0 -8px;
   border-radius: 100%;
   transition: opacity 0.15s;
   cursor: grab;
   user-select: none;
 
-  &::before {
-    position: absolute;
-    content: "";
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: url('data:image/svg+xml;utf8, <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"><path fill="white" d="M1,0H2V1H1V0ZM0,1H1V2H0V1Z"/><path fill="gray" d="M0,0H1V1H0V0ZM1,1H2V2H1V1Z"/></svg>');
-    background-size: 4px;
-    border-radius: 100%;
-    z-index: -1;
-  }
+  //&::before {
+  //  position: absolute;
+  //  content: "";
+  //  top: 0;
+  //  left: 0;
+  //  width: 100%;
+  //  height: 100%;
+  //  background: url('data:image/svg+xml;utf8, <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"><path fill="white" d="M1,0H2V1H1V0ZM0,1H1V2H0V1Z"/><path fill="gray" d="M0,0H1V1H0V0ZM1,1H2V2H1V1Z"/></svg>');
+  //  background-size: 4px;
+  //  border-radius: 100%;
+  //  z-index: -1;
+  //}
 `;
 
 const Markers: FC<IPropsPanel> = ({
@@ -341,9 +341,9 @@ const Markers: FC<IPropsPanel> = ({
                 left: `${Math.abs(Math.min(position, 100))}%`,
                 color: rgba,
                 opacity: isHide ? 0 : 1,
-                borderWidth: isActive ? 3 : 2,
                 borderStyle: "solid",
-                borderColor: "#ffffff"
+                borderWidth: 2,
+                borderColor: isActive ? "var(--primary)" : "#ffffff"
               }}
               onTouchStart={(e) => onTouchStart(e, color)}
               onMouseDown={(e) => onMouseDown(e, color)}

@@ -1,4 +1,5 @@
 import { spring } from "remotion";
+import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
 
 const GetThinkersAnimationIn = ({
   char,
@@ -6,7 +7,8 @@ const GetThinkersAnimationIn = ({
   frame,
   fps,
   textLength,
-  animationTextInFrames
+  animationTextInFrames,
+  colorStyle
 }: {
   char: string;
   index: number;
@@ -14,6 +16,11 @@ const GetThinkersAnimationIn = ({
   fps: number;
   textLength: number;
   animationTextInFrames: number;
+  colorStyle: {
+    isGradient: boolean;
+    shadowStrokeStyle: React.CSSProperties;
+    fillStyle: React.CSSProperties;
+  };
 }) => {
   const totalDuration = animationTextInFrames;
   const delayFactor = totalDuration / textLength;
@@ -28,15 +35,13 @@ const GetThinkersAnimationIn = ({
   });
 
   return (
-    <span
-      key={index}
-      style={{
-        display: "inline-block",
-        opacity
-      }}
-    >
-      {char === " " ? " " : char}
-    </span>
+    <AnimatedChar
+      char={char}
+      animationStyle={{ opacity }}
+      isGradient={colorStyle.isGradient}
+      shadowStrokeStyle={colorStyle.shadowStrokeStyle}
+      fillStyle={colorStyle.fillStyle}
+    />
   );
 };
 

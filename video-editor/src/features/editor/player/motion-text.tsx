@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useCurrentFrame } from "remotion";
 import { TextAnimated } from "./animated/text-animated";
 import { ITextDetails } from "@designcombo/types";
+import { getTextColorStyle } from "@/features/editor/player/styles";
+
+// inline editing is now disabled
 
 const TextLayer: React.FC<{
   id: string;
@@ -20,122 +23,74 @@ const TextLayer: React.FC<{
   durationInFrames: number;
   animationFonts: { fontFamily: string; url: string }[];
 }> = ({
-  id,
-  content,
-  editable,
-  style = {},
-  onChange,
-  onBlur,
-  fps,
-  textAnimationNameIn,
-  textAnimationNameOut,
-  textAnimationNameLoop,
-  details,
-  animationTextInFrames,
-  animationTextOutFrames,
-  animationTextLoopFrames,
-  durationInFrames,
-  animationFonts
-}) => {
-  const [data, setData] = useState(content);
-  const divRef = useRef<HTMLDivElement>(null);
+        id,
+        content,
+        style = {},
+        fps,
+        textAnimationNameIn,
+        textAnimationNameOut,
+        textAnimationNameLoop,
+        details,
+        animationTextInFrames,
+        animationTextOutFrames,
+        animationTextLoopFrames,
+        durationInFrames,
+        animationFonts
+      }) => {
+  const frame = useCurrentFrame();
 
-  useEffect(() => {
-    if (editable && divRef.current) {
-      const element = divRef.current;
-      element.focus();
-      const selection = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(element);
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-    } else {
-      const selection = window.getSelection();
-      selection?.removeAllRanges();
-    }
-  }, [editable]);
-
-  useEffect(() => {
-    if (data !== content) {
-      setData(content);
-    }
-  }, [content]);
-  // Function to move caret to the end
-  const moveCaretToEnd = () => {
-    if (divRef.current) {
-      const selection = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(divRef.current);
-      range.collapse(false); // Collapse the range to the end of the content
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-    }
-  };
-
-  // OnClick handler to move caret if all text is selected
-  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    const selection = window.getSelection();
-    const element = divRef.current;
-
-    if (selection?.rangeCount && element) {
-      const range = selection.getRangeAt(0);
-      if (range.endOffset - range.startOffset === element.textContent?.length) {
-        // All text is selected, move caret to the end
-        moveCaretToEnd();
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (!editable && divRef.current) {
-      divRef.current.style.height = "100%";
-    }
-  }, [editable]);
+  // Same windowing TextAnimated uses internally (animInFrom >= frame for the
+  // in-animation, animOut < frame for the out-animation), scoped to only the
+  // background-color-swap animations. During those windows, BackgroundIn/Out
+  // paint and own their own box (swappedBoxColor); the static
+  // details.backgroundColor box behind them is what shows through as a solid
+  // block outside revealWidth, so it needs to be suppressed only for the
+  // duration those animations are actually active.
+  const inBackgroundAnimWindow =
+    textAnimationNameIn === "backgroundAnimationIn" && animationTextInFrames >= frame;
+  const outBackgroundAnimWindow =
+    textAnimationNameOut === "backgroundAnimationOut" &&
+    durationInFrames - animationTextOutFrames < frame;
+  const suppressStaticBackground = inBackgroundAnimWindow || outBackgroundAnimWindow;
 
   return (
     <div
       data-text-id={id}
-      ref={divRef}
-      contentEditable={editable}
-      onClick={handleClick}
-      onInput={(ev) => onChange?.(id, (ev.target as any).innerText)}
-      onBlur={(ev) => onBlur?.(id, (ev.target as any).innerText)}
+      contentEditable={false}
       style={{
         height: "100%",
         boxShadow: "none",
         outline: "none",
         ...style,
-        pointerEvents: editable ? "auto" : "none",
-        userSelect: editable ? "text" : "none",
+        ...(suppressStaticBackground
+          ? { backgroundColor: "transparent", backgroundImage: "none" }
+          : {}),
+        pointerEvents: "none",
+        userSelect: "none",
         whiteSpace: "pre-line",
         width: "100%",
         display: "flex",
         alignItems: "center",
         flexDirection: "column",
-        justifyContent: "center"
+        justifyContent: "center",
       }}
       suppressContentEditableWarning
-      // dangerouslySetInnerHTML={{ __html: content }}
       className="designcombo_textLayer"
     >
-      {!editable ? (
-        <TextAnimated
-          textAnimationNameIn={textAnimationNameIn}
-          textAnimationNameOut={textAnimationNameOut}
-          textAnimationNameLoop={textAnimationNameLoop}
-          text={content}
-          fps={fps}
-          details={details}
-          animationTextInFrames={animationTextInFrames}
-          animationTextOutFrames={animationTextOutFrames}
-          animationTextLoopFrames={animationTextLoopFrames}
-          durationInFrames={durationInFrames}
-          animationFonts={animationFonts}
-        />
-      ) : (
-        content
-      )}
+      <TextAnimated
+        textAnimationNameIn={textAnimationNameIn}
+        textAnimationNameOut={textAnimationNameOut}
+        textAnimationNameLoop={textAnimationNameLoop}
+        text={content}
+        fps={fps}
+        details={details}
+        animationTextInFrames={animationTextInFrames}
+        animationTextOutFrames={animationTextOutFrames}
+        animationTextLoopFrames={animationTextLoopFrames}
+        durationInFrames={durationInFrames}
+        animationFonts={animationFonts}
+        textColorStyle={getTextColorStyle(details.color)}
+      />
     </div>
   );
 };

@@ -54,13 +54,13 @@ const Background = styled.div`
 
 const Pointer = styled.span<{ left: number; backgroundColor: string }>`
   position: absolute;
-  top: -2.5px;
+  top: -4px;
   display: block;
   height: 16px;
   width: 16px;
   border-radius: 50%;
   margin-left: -8px;
-  border: solid 1px #ffffff;
+  border: solid 2px #ffffff;
   cursor: grab;
   left: ${(props) => props.left}%;
   background-color: ${(props) => props.backgroundColor};

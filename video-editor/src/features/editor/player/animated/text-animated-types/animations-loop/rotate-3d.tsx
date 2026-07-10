@@ -1,57 +1,38 @@
 import { interpolate } from "remotion";
+import { FullBlockAnimationProps, renderBlockContent } from "./full-block-animation";
 
-const Rotate3d = ({
-  frame,
-  durationInFrames,
-  text,
-  details
-}: {
-  text: string;
-  frame: number;
-  durationInFrames: number;
-  details: { width: number; height: number };
-}) => {
-  const rotation = interpolate(frame, [0, durationInFrames / 2], [0, 360]);
+const Rotate3d = (props: FullBlockAnimationProps) => {
+  const { frame, durationInFrames, animationTextInFrames, animationTextOutFrames } = props;
+
+  const loopDuration = durationInFrames - animationTextInFrames - animationTextOutFrames;
+  const loopFrame = frame - animationTextInFrames;
+
+  const rotation = interpolate(loopFrame, [0, loopDuration / 2], [0, 360]);
   const rotation2 = rotation - 180;
 
+  const blockContent = renderBlockContent(props);
+
   return (
-    <div
-      style={{
-        width: details.width,
-        height: details.height,
-        position: "relative",
-        background: "transparent",
-        perspective: 1000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center"
-      }}
-    >
+    <div style={{ display: "grid", perspective: 1000 }}>
       <div
         style={{
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: `translate(-50%, -50%) rotateY(${rotation}deg)`,
+          gridArea: "1 / 1",
+          transform: `rotateY(${rotation}deg)`,
           transformStyle: "preserve-3d",
           backfaceVisibility: "hidden",
-          background: "transparent"
         }}
       >
-        {text}
+        {blockContent}
       </div>
       <div
         style={{
-          position: "absolute",
-          top: "50%",
-          left: "50%",
-          transform: `translate(-50%, -50%) rotateY(${rotation2}deg)`,
+          gridArea: "1 / 1",
+          transform: `rotateY(${rotation2}deg)`,
           transformStyle: "preserve-3d",
           backfaceVisibility: "hidden",
-          background: "transparent"
         }}
       >
-        {text}
+        {blockContent}
       </div>
     </div>
   );

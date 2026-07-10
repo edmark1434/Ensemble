@@ -19,10 +19,16 @@ const Panel: FC<TPropsMain> = ({ alpha, hex, colorBoardHeight, onChange }) => {
 
   useEffect(() => {
     if (!change) {
-      setState({
-        color: colorConvert,
-        alpha
-      });
+      const next = new TinyColor(hex) as ITinyColor;
+      next.alpha = alpha;
+
+      // Black/white/gray have no real hue — tinycolor defaults it to 0 (red),
+      // which would otherwise snap the ribbon back on every reconstruction.
+      if (next.saturation === 0 || next.brightness === 0) {
+        next.hue = state.color.hue;
+      }
+
+      setState({ color: next, alpha });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hex, alpha]);
@@ -65,7 +71,7 @@ const Panel: FC<TPropsMain> = ({ alpha, hex, colorBoardHeight, onChange }) => {
           setChange={setChange}
         />
         <div className="flex flex-col gap-4">
-          <div className="h-3">
+          <div className="h-2">
             <Ribbon
               rootPrefixCls="color-picker-panel"
               color={state.color}
@@ -73,7 +79,7 @@ const Panel: FC<TPropsMain> = ({ alpha, hex, colorBoardHeight, onChange }) => {
               setChange={setChange}
             />
           </div>
-          <div className="h-3">
+          <div className="h-2">
             <Alpha
               alpha={state.alpha}
               color={state.color}

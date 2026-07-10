@@ -121,9 +121,6 @@ const Composition = () => {
     const minHeight = tempMeasure.clientHeight;
     document.body.removeChild(tempMeasure);
 
-    console.log("handleflopchange rawtext", rawText);
-    console.log("handleflopchange minheight", minHeight);
-
     // only grow height if box is too short
     let finalHeight = currentHeight;
     if (minHeight > currentHeight) {
@@ -141,61 +138,54 @@ const Composition = () => {
     sceneMoveableRef?.current?.moveable.forceUpdate();
 
     // only dispatch if something actually changed
-    if (finalWidth !== currentWidth || finalHeight !== currentHeight) {
+    if (
+      (finalWidth !== currentWidth || finalHeight !== currentHeight) &&
+      !isNaN(finalWidth) && finalWidth > 0 &&
+      !isNaN(finalHeight) && finalHeight > 0
+    ) {
       dispatch(EDIT_OBJECT, {
-        payload: {
-          [id]: {
-            details: {
-              width: finalWidth,
-              height: finalHeight,
-            }
-          }
-        }
+        payload: { [id]: { details: { width: finalWidth, height: finalHeight } } }
       });
     }
   };
 
   const onTextBlur = (id: string, _: string) => {
     const elRef = document.querySelector(`.id-${id}`) as HTMLDivElement;
-    const textDiv = elRef.firstElementChild?.firstElementChild
-      ?.firstElementChild as HTMLDivElement;
+    const textEl = document.querySelector(`[data-text-id="${id}"]`) as HTMLDivElement;
+    if (!elRef || !textEl) return;
+
     const {
-      fontFamily,
-      fontSize,
-      fontWeight,
-      letterSpacing,
-      lineHeight,
-      textShadow,
-      webkitTextStroke,
-      textTransform
-    } = textDiv.style;
-    const { width } = elRef.style;
-    if (!elRef.innerText) return;
+      fontFamily, fontSize, fontWeight, letterSpacing,
+      lineHeight, textShadow, webkitTextStroke, textTransform,
+      wordSpacing, wordBreak
+    } = textEl.style;
+
+    if (!textEl.innerText) return;
+
+    const rawWidth = parseFloat(elRef.style.width);
+    const width = isNaN(rawWidth) ? `${elRef.clientWidth}px` : elRef.style.width;
+
     const newHeight = calculateTextHeight({
       family: fontFamily,
       fontSize,
-      fontWeight,
-      letterSpacing,
       lineHeight,
-      text: elRef.innerText || "",
-      textShadow: textShadow,
+      letterSpacing,
+      wordSpacing,
+      textShadow,
       webkitTextStroke,
-      width,
-      id: id,
-      textTransform
+      textTransform,
+      wordBreak: wordBreak || "normal",
+      text: textEl.innerText || "",
+      width
     });
-    dispatch(EDIT_OBJECT, {
-      payload: {
-        [id]: {
-          details: {
-            height: newHeight
-          }
-        }
-      }
-    });
+
+    if (isNaN(newHeight) || newHeight <= 0) return;
+
+    dispatch(EDIT_OBJECT, { payload: { [id]: { details: { height: newHeight } } } });
   };
 
-  //   handle track and track item events - updates
+  // handle track and track item events - updates
+  // inline editing now disabled
   useEffect(() => {
     const stateEvents = subject.pipe(
       filter(({ key }) => key.startsWith(ENTER_EDIT_MODE))
@@ -210,42 +200,12 @@ const Composition = () => {
           return;
         }
 
-        if (editableTextId) {
-          // get element by  data-text-id={id}
-          const element = document.querySelector(
-            `[data-text-id="${editableTextId}"]`
-          ) as HTMLDivElement;
-
-          let text = "";
-          if (element) {
-            for (let i = 0; i < element.childNodes.length; i++) {
-              const node = element.childNodes[i];
-              if (node.nodeType === Node.TEXT_NODE) {
-                const nodeText = node.textContent || "";
-                text += nodeText;
-              } else if (node.nodeType === Node.ELEMENT_NODE) {
-                const nodeText = node.textContent || "";
-                text += `\n${nodeText}`;
-              }
-            }
-          }
-
-          if (trackItemIds.includes(editableTextId)) {
-            const freshMap = useStore.getState().trackItemsMap;
-            const item = freshMap[editableTextId];
-            if (item) {
-              dispatch(EDIT_OBJECT, {
-                payload: {
-                  [editableTextId]: {
-                    details: {
-                      text: text || ""
-                    }
-                  }
-                }
-              });
-            }
-          }
-        }
+        // Inline contentEditable is disabled in TextLayer now, so the
+        // data-text-id div can never contain a raw text node to scrape —
+        // it's always TextAnimated's element tree. The old DOM read-back
+        // here was walking that tree and prefixing "\n" per element node,
+        // corrupting details.text on every switch. No-op until the sidebar
+        // textarea replaces inline editing (that'll dispatch text directly).
         setEditableTextId(obj.value?.payload.id);
       }
     });

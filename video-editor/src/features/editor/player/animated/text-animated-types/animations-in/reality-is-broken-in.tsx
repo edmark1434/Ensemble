@@ -1,4 +1,5 @@
 import { interpolate, spring } from "remotion";
+import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
 
 const RealityIsBrokenAnimationIn = ({
   char,
@@ -6,7 +7,8 @@ const RealityIsBrokenAnimationIn = ({
   frame,
   fps,
   textLength,
-  animationTextInFrames
+  animationTextInFrames,
+  colorStyle
 }: {
   char: string;
   index: number;
@@ -14,6 +16,11 @@ const RealityIsBrokenAnimationIn = ({
   fps: number;
   textLength: number;
   animationTextInFrames: number;
+  colorStyle: {
+    isGradient: boolean;
+    shadowStrokeStyle: React.CSSProperties;
+    fillStyle: React.CSSProperties;
+  };
 }) => {
   const totalDuration = animationTextInFrames;
   const delayFactor = totalDuration / textLength;
@@ -54,17 +61,17 @@ const RealityIsBrokenAnimationIn = ({
   );
 
   return (
-    <span
-      key={index}
-      style={{
-        display: "inline-block",
+    <AnimatedChar
+      char={char}
+      animationStyle={{
         transformOrigin: "0 100%",
         transform: `translateY(${translateY}em) translateX(${translateX}em) rotateZ(${rotateZ}deg)`,
         opacity
       }}
-    >
-      {char === " " ? " " : char}
-    </span>
+      isGradient={colorStyle.isGradient}
+      shadowStrokeStyle={colorStyle.shadowStrokeStyle}
+      fillStyle={colorStyle.fillStyle}
+    />
   );
 };
 

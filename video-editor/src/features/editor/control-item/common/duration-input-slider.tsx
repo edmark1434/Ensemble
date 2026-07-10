@@ -10,6 +10,8 @@ interface DurationInputSliderProps {
   onChangeMs: (ms: number) => void;
 }
 
+const MIN_DURATION_MS = 330; // 10 frames
+
 export const DurationInputSlider = ({
   label,
   valueMs,
@@ -18,23 +20,25 @@ export const DurationInputSlider = ({
 }: DurationInputSliderProps) => {
   const safeMaxMs = Math.max(0, maxMs);
   const safeMaxSeconds = formatearNumero(safeMaxMs / 1000);
+  // if max available is smaller than the floor, floor can't exceed max
+  const floorMs = Math.min(MIN_DURATION_MS, safeMaxMs);
 
-  const [localMs, setLocalMs] = useState(Math.min(valueMs, safeMaxMs));
+  const [localMs, setLocalMs] = useState(Math.min(Math.max(valueMs, floorMs), safeMaxMs));
   const [inputValue, setInputValue] = useState(
-    String(formatearNumero(Math.min(valueMs, safeMaxMs) / 1000))
+    String(formatearNumero(Math.min(Math.max(valueMs, floorMs), safeMaxMs) / 1000))
   );
 
   const commitMs = (ms: number) => {
-    const clamped = Math.min(Math.max(0, ms), safeMaxMs);
+    const clamped = Math.min(Math.max(floorMs, ms), safeMaxMs);
     setLocalMs(clamped);
     onChangeMs(clamped);
   };
 
   useEffect(() => {
-    const clamped = Math.min(valueMs, safeMaxMs);
+    const clamped = Math.min(Math.max(valueMs, floorMs), safeMaxMs);
     setLocalMs(clamped);
     setInputValue(String(formatearNumero(clamped / 1000)));
-  }, [valueMs, safeMaxMs]);
+  }, [valueMs, safeMaxMs, floorMs]);
 
   return (
     <div className="flex flex-col gap-2 flex-1">
@@ -44,7 +48,7 @@ export const DurationInputSlider = ({
       <div className="w-full flex items-center gap-2">
         <Input
           type="number"
-          min={0}
+          min={floorMs / 1000}
           max={safeMaxSeconds}
           step={0.1}
           className="w-16 shrink-0 text-center text-sm"
@@ -60,7 +64,7 @@ export const DurationInputSlider = ({
         />
         <Slider
           value={[localMs]}
-          min={0}
+          min={floorMs}
           max={safeMaxMs}
           step={1}
           onValueChange={(v) => {

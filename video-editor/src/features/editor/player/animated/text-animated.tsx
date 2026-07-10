@@ -1,6 +1,7 @@
 import { ITextDetails } from "@designcombo/types";
 import React, { useMemo } from "react";
 import { useCurrentFrame } from "remotion";
+import {getCharLayerStyles, getLineHeightPx, getWrappedTextLayout} from "../styles";
 import AnimatedTextIn from "./text-animated-types/animations-in/text-animated-in";
 import SunnyMorningsAnimationIn from "./text-animated-types/animations-in/sunny-mornings-in";
 import DominoDreamsIn from "./text-animated-types/animations-in/domino-dreams-in";
@@ -26,7 +27,19 @@ import Heartbeat from "./text-animated-types/animations-loop/heartbeat";
 import Wave from "./text-animated-types/animations-loop/wave";
 import ShakyLettersText from "./text-animated-types/animations-loop/shaky-letters-text";
 import PulseText from "./text-animated-types/animations-loop/pulse";
-import { renderFullTextAnimation } from "./text-animated-full";
+import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
+import TypeWriterIn from "@/features/editor/player/animated/text-animated-types/animations-in/type-writer-in";
+import SoundWaveIn from "@/features/editor/player/animated/text-animated-types/animations-in/sound-wave-in";
+import BackgroundIn from "./text-animated-types/animations-in/background-in";
+import CountDownIn from "@/features/editor/player/animated/text-animated-types/animations-in/count-down-in";
+import TypeWriterOut from "@/features/editor/player/animated/text-animated-types/animations-out/type-writer-out";
+import BackgroundOut from "@/features/editor/player/animated/text-animated-types/animations-out/background-out";
+import Spin from "@/features/editor/player/animated/text-animated-types/animations-loop/spin";
+import Rotate3d from "@/features/editor/player/animated/text-animated-types/animations-loop/rotate-3d";
+import FontChange from "@/features/editor/player/animated/text-animated-types/animations-loop/font-change";
+import ShakeText from "@/features/editor/player/animated/text-animated-types/animations-loop/shake-text";
+import Vintage from "@/features/editor/player/animated/text-animated-types/animations-loop/vintage";
+import Glitch from "@/features/editor/player/animated/text-animated-types/animations-loop/glitch";
 
 const animationsIn: { [key: string]: React.FC<any> } = {
   animatedTextIn: AnimatedTextIn,
@@ -62,36 +75,25 @@ const animationsLoop: { [key: string]: React.FC<any> } = {
   pulseAnimationLoop: PulseText
 };
 
-const getTextLines = (
-  text: string,
-  width: number,
-  fontSize: number
-): string[] => {
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
+const animationsFullIn: { [key: string]: React.FC<any> } = {
+  typeWriterIn: TypeWriterIn,
+  backgroundAnimationIn: BackgroundIn,
+  soundWaveIn: SoundWaveIn,
+  countDownAnimationIn: CountDownIn,
+};
 
-  if (!context) return [];
+const animationsFullOut: { [key: string]: React.FC<any> } = {
+  typeWriterOut: TypeWriterOut,
+  backgroundAnimationOut: BackgroundOut,
+};
 
-  context.font = `${fontSize}px Arial`;
-  const words = text.split(" ");
-  let lines: string[] = [];
-  let currentLine = "";
-
-  words.forEach((word) => {
-    const testLine = currentLine ? `${currentLine} ${word}` : word;
-    const textWidth = context.measureText(testLine).width;
-
-    if (textWidth > width) {
-      lines.push(currentLine);
-      currentLine = word;
-    } else {
-      currentLine = testLine;
-    }
-  });
-
-  if (currentLine) lines.push(currentLine);
-
-  return lines;
+const animationsFullLoop: { [key: string]: React.FC<any> } = {
+  spinAnimationLoop: Spin,
+  rotate3dAnimationLoop: Rotate3d,
+  textFontChangeAnimationLoop: FontChange,
+  shakeTextAnimationLoop: ShakeText,
+  vintageAnimationLoop: Vintage,
+  glitchAnimationLoop: Glitch,
 };
 
 export const TextAnimated: React.FC<{
@@ -106,6 +108,7 @@ export const TextAnimated: React.FC<{
   animationTextLoopFrames: number;
   durationInFrames: number;
   animationFonts: { fontFamily: string; url: string }[];
+  textColorStyle: React.CSSProperties;
 }> = ({
   text,
   fps,
@@ -117,28 +120,82 @@ export const TextAnimated: React.FC<{
   animationTextOutFrames,
   animationTextLoopFrames,
   durationInFrames,
-  animationFonts
+  animationFonts,
+  textColorStyle,
 }) => {
   const frame = useCurrentFrame();
   const animInFrom = animationTextInFrames;
   const animOut = durationInFrames - animationTextOutFrames;
   const validAnimIn = textAnimationNameIn ? animInFrom >= frame : false;
   const validAnimOut = textAnimationNameOut ? animOut < frame : false;
+
   if (!validAnimOut && !validAnimIn && !textAnimationNameLoop) {
+    const isGradient = /^(linear|radial)-gradient\(/i.test((details.color || "").trim());
+    if (isGradient) {
+      return (
+        <div
+          style={{
+            position: "relative",
+            width: details.width,
+            height: details.height,
+            display: "flex",
+            alignItems: "center",
+            justifyContent:
+              details.textAlign === "left" ? "flex-start" : details.textAlign === "right" ? "flex-end" : "center"
+          }}
+        >
+          <div
+            style={{
+              whiteSpace: "pre-line",
+              width: "100%",
+              height: "100%",
+              position: "absolute",
+              display: "flex",
+              alignItems: "center",
+              justifyContent:
+                details.textAlign === "left" ? "flex-start" : details.textAlign === "right" ? "flex-end" : "center",
+              color: "transparent",
+              textDecoration: "none #000000",
+              wordBreak: details.wordBreak || "normal",
+            }}
+          >
+            {text}
+          </div>
+          <div
+            style={{
+              ...textColorStyle,
+              whiteSpace: "pre-line",
+              width: "100%",
+              height: "100%",
+              position: "absolute",
+              display: "flex",
+              alignItems: "center",
+              justifyContent:
+                details.textAlign === "left" ? "flex-start" : details.textAlign === "right" ? "flex-end" : "center",
+              WebkitTextStroke: "0px transparent",
+              textShadow: "none",
+              textDecoration: details.textDecoration || "none",
+              wordBreak: details.wordBreak || "normal",
+            }}
+          >
+            {text}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div
         style={{
+          ...textColorStyle,
           whiteSpace: "pre-line",
           width: details.width,
-          height: details.height,
+          height: details.height ?? ((Number(details.lineHeight) ?? 1) * details.fontSize),
           display: "flex",
           alignItems: "center",
           justifyContent:
-            details.textAlign === "left"
-              ? "flex-start"
-              : details.textAlign === "right"
-                ? "flex-end"
-                : "center"
+            details.textAlign === "left" ? "flex-start" : details.textAlign === "right" ? "flex-end" : "center",
+          wordBreak: details.wordBreak || "normal",
         }}
       >
         {text}
@@ -146,37 +203,85 @@ export const TextAnimated: React.FC<{
     );
   }
 
-  const lines = getTextLines(text, details.width, details.fontSize);
-
-  const fullTextAnimation = renderFullTextAnimation({
-    frame,
+  const letterSpacingValue = parseFloat(details.letterSpacing as any) || 0;
+  const { lines, charLeftOffsets, lineStarts } = getWrappedTextLayout(
     text,
-    details,
-    fps,
-    durationInFrames,
-    animationTextInFrames,
-    animationTextOutFrames,
-    animationTextLoopFrames,
-    animationFonts,
-    validAnimIn,
-    validAnimOut,
-    textAnimationNameIn,
-    textAnimationNameOut,
-    textAnimationNameLoop
-  });
-
-  if (fullTextAnimation) {
-    return fullTextAnimation;
-  }
-
-  const maxTextLengthInLine = lines.reduce(
-    (max, line) => Math.max(max, line.length),
-    0
+    details.width,
+    details.fontSize,
+    details.fontFamily,
+    details.fontWeight,
+    details.textAlign,
+    details.wordBreak,
+    letterSpacingValue
   );
+
+  const lineHeightPx = getLineHeightPx(details);
+  const totalBlockHeight = lines.length * lineHeightPx;
+  const verticalOffset = Math.max((details.height - totalBlockHeight) / 2, 0);
+
+  const maxTextLengthInLine = lines.reduce((max, line) => Math.max(max, line.length), 0);
 
   const AnimationComponentIn = animationsIn[textAnimationNameIn];
   const AnimationComponentOut = animationsOut[textAnimationNameOut];
   const AnimationComponentLoop = animationsLoop[textAnimationNameLoop];
+
+  let AnimationComponentFullIn = null;
+  let AnimationComponentFullOut = null;
+  let AnimationComponentFullLoop = null;
+
+  if (validAnimIn && textAnimationNameIn) {
+    AnimationComponentFullIn = animationsFullIn[textAnimationNameIn];
+  }
+  if (validAnimOut && textAnimationNameOut) {
+    AnimationComponentFullOut = animationsFullOut[textAnimationNameOut];
+  }
+  if (!validAnimIn && !validAnimOut && textAnimationNameLoop) {
+    AnimationComponentFullLoop = animationsFullLoop[textAnimationNameLoop];
+  }
+
+  const ActiveFullBlockComponent = AnimationComponentFullIn ?? AnimationComponentFullOut ?? AnimationComponentFullLoop;
+
+  if (ActiveFullBlockComponent) {
+    const getColorStyle = (left: number, top: number) =>
+      getCharLayerStyles(
+          details.color,
+          { left, top },
+          { width: details.width, height: details.height },
+          details.textDecoration,
+          details.fontSize
+        );
+
+    return (
+      <div
+        style={{
+          width: details.width,
+            height: details.height,
+            display: "flex",
+            flexDirection: "column",
+            alignItems:
+            details.textAlign === "left" ? "flex-start" : details.textAlign === "right" ? "flex-end" : "center",
+            justifyContent: "center"
+        }}
+      >
+        <ActiveFullBlockComponent
+          text={text}
+          lines={lines}
+          lineStarts={lineStarts}
+          lineHeightPx={lineHeightPx}
+          verticalOffset={verticalOffset}
+          frame={frame}
+          fps={fps}
+          details={details}
+          animationTextInFrames={animationTextInFrames}
+          animationTextOutFrames={animationTextOutFrames}
+          animationTextLoopFrames={animationTextLoopFrames}
+          durationInFrames={durationInFrames}
+          animationFonts={animationFonts}
+          getColorStyle={getColorStyle}
+        />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -186,21 +291,25 @@ export const TextAnimated: React.FC<{
         display: "flex",
         flexDirection: "column",
         alignItems:
-          details.textAlign === "left"
-            ? "flex-start"
-            : details.textAlign === "right"
-              ? "flex-end"
-              : "center",
+          details.textAlign === "left" ? "flex-start" : details.textAlign === "right" ? "flex-end" : "center",
         justifyContent: "center"
       }}
     >
       {lines.map((line, rowIndex) => (
         <div key={rowIndex}>
           {line.split("").map((char, index) => {
+            const colorStyle = getCharLayerStyles(
+              details.color,
+              { left: charLeftOffsets[rowIndex][index], top: verticalOffset + rowIndex * lineHeightPx },
+              { width: details.width, height: details.height },
+              details.textDecoration,
+              details.fontSize
+            );
+
+            let charEl;
             if (validAnimIn && AnimationComponentIn) {
-              return (
+              charEl = (
                 <AnimationComponentIn
-                  key={index}
                   char={char}
                   index={index}
                   frame={frame}
@@ -208,13 +317,12 @@ export const TextAnimated: React.FC<{
                   fps={fps}
                   animationTextInFrames={animationTextInFrames}
                   details={details}
+                  colorStyle={colorStyle}
                 />
               );
-            }
-            if (validAnimOut && AnimationComponentOut) {
-              return (
+            } else if (validAnimOut && AnimationComponentOut) {
+              charEl = (
                 <AnimationComponentOut
-                  key={index}
                   char={char}
                   index={index}
                   frame={frame}
@@ -223,24 +331,47 @@ export const TextAnimated: React.FC<{
                   animationTextOutFrames={animationTextOutFrames}
                   durationInFrames={durationInFrames}
                   details={details}
+                  colorStyle={colorStyle}
                 />
               );
-            }
-            if (textAnimationNameLoop && !validAnimIn && !validAnimOut) {
-              return (
+            } else if (textAnimationNameLoop && !validAnimIn && !validAnimOut) {
+              charEl = (
                 <AnimationComponentLoop
-                  key={index}
                   char={char}
                   index={index}
                   frame={frame}
                   textLength={maxTextLengthInLine}
                   fps={fps}
-                  animationTextLoopFrames={animationTextLoopFrames}
+                  animationTextInFrames={animationTextInFrames}
+                  animationTextOutFrames={animationTextOutFrames}
+                  durationInFrames={durationInFrames}
                   details={details}
+                  colorStyle={colorStyle}
+                />
+              );
+            } else {
+              charEl = (
+                <AnimatedChar
+                  char={char}
+                  animationStyle={{}}
+                  isGradient={colorStyle.isGradient}
+                  shadowStrokeStyle={colorStyle.shadowStrokeStyle}
+                  fillStyle={colorStyle.fillStyle}
                 />
               );
             }
-            return <span key={index}>{char}</span>;
+
+            return (
+              <span
+                key={index}
+                style={{
+                  display: "inline-block",
+                  marginRight: "-0.05ch"
+                }}
+              >
+                {charEl}
+              </span>
+            );
           })}
         </div>
       ))}

@@ -1,15 +1,37 @@
+import { AnimatedChar } from "@/features/editor/player/animated/text-animated-types/animated-char";
+
 const Heartbeat = ({
   char,
   frame,
-  fps
+  fps,
+  durationInFrames,
+  animationTextInFrames,
+  animationTextOutFrames,
+  colorStyle,
 }: {
   char: string;
   frame: number;
   fps: number;
+  durationInFrames: number;
+  animationTextInFrames: number;
+  animationTextOutFrames: number;
+  colorStyle: {
+    isGradient: boolean;
+    shadowStrokeStyle: React.CSSProperties;
+    fillStyle: React.CSSProperties;
+  };
 }) => {
-  const time = frame / fps;
-  const cycleDuration = 1;
-  const cycleTime = time % cycleDuration;
+  const loopDuration = durationInFrames - animationTextInFrames - animationTextOutFrames;
+  const loopFrame = Math.min(Math.max(frame - animationTextInFrames, 0), loopDuration);
+
+  // original beat was 1 cycle/sec; round to a whole number of beats
+  // over loopDuration so the rest state (scale 1) lands exactly at the end
+  const loopSeconds = loopDuration / fps;
+  const beats = Math.max(1, Math.round(loopSeconds / 1));
+  const cycleDuration = loopSeconds / beats;
+
+  const time = loopFrame / fps;
+  const cycleTime = (time % cycleDuration) / cycleDuration; // normalized 0-1, same semantics as original (cycleDuration was 1)
 
   let scale = 1;
   if (cycleTime < 0.2 || (cycleTime >= 0.3 && cycleTime < 0.5)) {
@@ -17,14 +39,13 @@ const Heartbeat = ({
   }
 
   return (
-    <span
-      style={{
-        display: "inline-block",
-        transform: `scale(${scale})`
-      }}
-    >
-      {char}
-    </span>
+    <AnimatedChar
+      char={char}
+      animationStyle={{ transform: `scale(${scale})` }}
+      isGradient={colorStyle.isGradient}
+      shadowStrokeStyle={colorStyle.shadowStrokeStyle}
+      fillStyle={colorStyle.fillStyle}
+    />
   );
 };
 export default Heartbeat;

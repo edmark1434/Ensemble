@@ -1,10 +1,13 @@
+import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
+
 const DropAnimationOut = ({
   char,
   index,
   frame,
   fps,
   animationTextOutFrames,
-  durationInFrames
+  durationInFrames,
+  colorStyle
 }: {
   char: string;
   index: number;
@@ -12,6 +15,11 @@ const DropAnimationOut = ({
   fps: number;
   animationTextOutFrames: number;
   durationInFrames: number;
+  colorStyle: {
+    isGradient: boolean;
+    shadowStrokeStyle: React.CSSProperties;
+    fillStyle: React.CSSProperties;
+  };
 }) => {
   const startTime = (durationInFrames - animationTextOutFrames) / fps;
   const endTime = durationInFrames / fps;
@@ -26,16 +34,13 @@ const DropAnimationOut = ({
   const opacity = 1 - progress;
 
   return (
-    <span
-      key={index}
-      style={{
-        display: "inline-block",
-        transform: `scale(${scale})`,
-        opacity: opacity
-      }}
-    >
-      {char === " " ? " " : char}
-    </span>
+    <AnimatedChar
+      char={char}
+      animationStyle={{ transform: `scale(${scale})`, opacity }}
+      isGradient={colorStyle.isGradient}
+      shadowStrokeStyle={colorStyle.shadowStrokeStyle}
+      fillStyle={colorStyle.fillStyle}
+    />
   );
 };
 

@@ -56,7 +56,7 @@ const Pointer = styled.span<{
   border-radius: 16px;
   width: 16px;
   height: 16px;
-  border: solid 1px #ffffff;
+  border: solid 2px #ffffff;
   left: ${({ left }) => left};
   top: ${({ top }) => top};
   z-index: 5;

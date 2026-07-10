@@ -116,7 +116,8 @@ const InputRgba: FC<TProps> = ({
             }
           }}
           className="px-3"
-          // className="pl-[70px]"
+          autoFocus={false}
+          tabIndex={-1}
         />
       </div>
       <div className="relative">
@@ -130,6 +131,8 @@ const InputRgba: FC<TProps> = ({
             }
           }}
           className="px-3"
+          autoFocus={false}
+          tabIndex={-1}
         />
         <Button
           size="sm"
