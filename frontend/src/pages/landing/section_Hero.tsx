@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import type { CSSProperties, FC } from "react";
 import { Search } from "lucide-react";
 
 interface HeroProps {
   onStart: () => void;
+  isMuted?: boolean;
 }
 
 const T_HERO = {
@@ -12,16 +13,26 @@ const T_HERO = {
 
 const INTENT_INDEX = { hire: 0, work: 1, edit: 2 } as const;
 
-const SectionHero: FC<HeroProps> = ({ onStart }) => {
+const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
   const [mounted, setMounted] = useState<boolean>(false);
   const [intent, setIntent] = useState<"hire" | "work" | "edit">("hire");
   const [isSwitching, setIsSwitching] = useState<boolean>(false);
   const [slideDirection, setSlideDirection] = useState<"left" | "right">("right");
   const [searchVal, setSearchVal] = useState("");
 
+  // Sound references
+  const hoverAudioRef = useRef<HTMLAudioElement | null>(null);
+  const clickAudioRef = useRef<HTMLAudioElement | null>(null);
+
   useEffect(() => {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
+
+    // Initializing interface sound effects
+    hoverAudioRef.current = new Audio("/sounds/minimalhover.mp3");
+    clickAudioRef.current = new Audio("/sounds/softclick.mp3");
+
+    hoverAudioRef.current.volume = 0.25;
+    clickAudioRef.current.volume = 0.4;
 
     const styleEl = document.createElement("style");
     styleEl.textContent = `
@@ -45,8 +56,21 @@ const SectionHero: FC<HeroProps> = ({ onStart }) => {
     return () => { document.head.removeChild(styleEl); };
   }, []);
 
+  const playHoverSound = () => {
+    if (isMuted || !hoverAudioRef.current) return;
+    hoverAudioRef.current.currentTime = 0;
+    hoverAudioRef.current.play().catch(() => {});
+  };
+
+  const playClickSound = () => {
+    if (isMuted || !clickAudioRef.current) return;
+    clickAudioRef.current.currentTime = 0;
+    clickAudioRef.current.play().catch(() => {});
+  };
+
   const handleIntentTransition = (targetMode: "hire" | "work" | "edit") => {
     if (targetMode === intent) return;
+    playClickSound();
 
     const currentIdx = INTENT_INDEX[intent];
     const targetIdx = INTENT_INDEX[targetMode];
@@ -65,7 +89,6 @@ const SectionHero: FC<HeroProps> = ({ onStart }) => {
     return { title: "Video Editing Features:", items: ["Real-time Sync", "Auto Dead-Air Clean", "AI Caption Nav", "Multi-cam Edit"] };
   }, [intent]);
 
-  // Initial load animation for the whole container
   const animLoad = (delay = 0): CSSProperties => ({
     opacity: mounted ? 1 : 0,
     transform: mounted ? "translateY(0)" : "translateY(20px)",
@@ -100,12 +123,12 @@ const SectionHero: FC<HeroProps> = ({ onStart }) => {
       <div style={{ maxWidth: "1400px", width: "100%", margin: "0 auto", position: "relative", zIndex: 3 }}>
         <div style={{ maxWidth: "800px" }}>
 
-          {/* STATIC BADGE - No animation on switch */}
+          {/* STATIC BADGE */}
           <div style={{ ...animLoad(0), display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(59, 130, 246, 0.15)", border: "1px solid rgba(59, 130, 246, 0.25)", padding: "6px 14px", borderRadius: "100px", marginBottom: "24px", backdropFilter: "blur(8px)" }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: "#3b82f6", textTransform: "uppercase", letterSpacing: 0.5 }}>Collaborative Video Editing & Creative Marketplace</span>
           </div>
 
-          {/* SLIDING CONTENT - Headline and Paragraph */}
+          {/* SLIDING CONTENT */}
           <div key={`text-${intent}`} className={isSwitching ? "opacity-0" : (slideDirection === "right" ? "slide-from-right" : "slide-from-left")}>
             <h1 style={{ fontSize: "clamp(42px, 5.5vw, 64px)", fontWeight: 800, lineHeight: 1.1, letterSpacing: "-0.03em", marginBottom: "24px", color: "#fff" }}>
               {intent === "hire" && "Work at the speed of your ambition"}
@@ -120,12 +143,25 @@ const SectionHero: FC<HeroProps> = ({ onStart }) => {
             </p>
           </div>
 
-          {/* FADING BUTTONS - Uses fade instead of swipe */}
+          {/* FADING BUTTONS */}
           <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)", padding: 4, borderRadius: 12, width: "fit-content", marginBottom: "24px", backdropFilter: "blur(12px)" }}>
             {(["hire", "work", "edit"] as const).map((mode) => (
               <button
                 key={mode}
                 onClick={() => handleIntentTransition(mode)}
+                onMouseEnter={(e) => {
+                  playHoverSound();
+                  if (intent !== mode) {
+                    e.currentTarget.style.background = "rgba(255,255,255,0.05)";
+                    e.currentTarget.style.color = "#fff";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (intent !== mode) {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = T_HERO.muted;
+                  }
+                }}
                 className={!isSwitching && intent === mode ? "fade-only" : ""}
                 style={{
                   padding: "8px 20px",
@@ -134,7 +170,7 @@ const SectionHero: FC<HeroProps> = ({ onStart }) => {
                   fontSize: 13,
                   fontWeight: 600,
                   cursor: "pointer",
-                  transition: "all 0.2s",
+                  transition: "all 0.2s ease",
                   background: intent === mode ? "rgba(255,255,255,0.1)" : "transparent",
                   color: intent === mode ? "#fff" : T_HERO.muted
                 }}
@@ -157,7 +193,17 @@ const SectionHero: FC<HeroProps> = ({ onStart }) => {
                   style={{ width: "100%", background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: 14, paddingRight: 12 }}
                 />
                 <button
-                  onClick={onStart}
+                  onClick={() => {
+                    playClickSound();
+                    onStart();
+                  }}
+                  onMouseEnter={(e) => {
+                    playHoverSound();
+                    e.currentTarget.style.background = "#dde3ed";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "#fff";
+                  }}
                   style={{ background: "#fff", color: "#000", border: "none", fontWeight: 700, fontSize: 13, padding: "10px 24px", borderRadius: "100px", cursor: "pointer", transition: "all 0.2s" }}
                 >
                   Search
@@ -165,7 +211,19 @@ const SectionHero: FC<HeroProps> = ({ onStart }) => {
               </div>
             ) : (
               <button
-                onClick={onStart}
+                onClick={() => {
+                  playClickSound();
+                  onStart();
+                }}
+                onMouseEnter={(e) => {
+                  playHoverSound();
+                  e.currentTarget.style.background = "#dde3ed";
+                  e.currentTarget.style.transform = "scale(1.02)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "#fff";
+                  e.currentTarget.style.transform = "scale(1)";
+                }}
                 style={{
                   background: "#fff",
                   color: "#080a12",
@@ -194,7 +252,12 @@ const SectionHero: FC<HeroProps> = ({ onStart }) => {
             {dynamicTags.items.map(tag => (
               <button
                 key={tag}
-                onClick={() => intent !== "edit" && setSearchVal(tag)}
+                onClick={() => {
+                  if (intent !== "edit") {
+                    playClickSound();
+                    setSearchVal(tag);
+                  }
+                }}
                 disabled={intent === "edit"}
                 style={{
                   background: "rgba(255,255,255,0.06)",
@@ -210,14 +273,17 @@ const SectionHero: FC<HeroProps> = ({ onStart }) => {
                 }}
                 onMouseEnter={(e) => {
                   if (intent !== "edit") {
+                    playHoverSound();
                     e.currentTarget.style.borderColor = "rgba(255,255,255,0.3)";
                     e.currentTarget.style.color = "#fff";
+                    e.currentTarget.style.background = "rgba(255,255,255,0.1)";
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (intent !== "edit") {
                     e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
                     e.currentTarget.style.color = "rgba(255,255,255,0.75)";
+                    e.currentTarget.style.background = "rgba(255,255,255,0.06)";
                   }
                 }}
               >
