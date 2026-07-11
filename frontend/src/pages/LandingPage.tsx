@@ -9,6 +9,7 @@ import SectionHero from "../pages/landing/section_Hero";
 import SectionGallery from "@/pages/landing/section_gallery.tsx";
 import SectionHowItWorks from "../pages/landing/section_HowItWorks";
 import SectionFeatures from "../pages/landing/section_Features";
+import SectionScrollText from "../pages/landing/section_ScrollText"; // <-- Our New Section File
 import SectionCallForAction from "../pages/landing/section_CallForAction";
 import SectionFooter from "../pages/landing/section_Footer";
 
@@ -160,6 +161,9 @@ const LandingPage: FC = () => {
 
       {/* 6. Marketplace Value Grid Module */}
       <SectionFeatures />
+
+      {/* 6.5 Isolated Scrolling Text Module */}
+      <SectionScrollText />
 
       {/* 7. Action Acquisition Strip Module */}
       <SectionCallForAction onStart={handleStartAction} />
