@@ -9,7 +9,7 @@ import SectionHero from "../pages/landing/section_Hero";
 import SectionGallery from "@/pages/landing/section_gallery.tsx";
 import SectionHowItWorks from "../pages/landing/section_HowItWorks";
 import SectionFeatures from "../pages/landing/section_Features";
-import SectionScrollText from "../pages/landing/section_ScrollText"; // <-- Our New Section File
+import SectionScrollText from "../pages/landing/section_ScrollText";
 import SectionCallForAction from "../pages/landing/section_CallForAction";
 import SectionFooter from "../pages/landing/section_Footer";
 
@@ -50,6 +50,62 @@ function useGlobalStyle(css: string): void {
   }, []);
 }
 
+// ─── Animated Counter Sub-Component ──────────────────────────────────────────
+interface CounterProps {
+  targetValue: string;
+  duration?: number;
+}
+
+const AnimatedCounter: FC<CounterProps> = ({ targetValue, duration = 2000 }) => {
+  const [count, setCount] = useState<string>("0");
+
+  useEffect(() => {
+    // Extract raw numerical values and any string suffixes/prefixes
+    const numericPart = parseFloat(targetValue.replace(/[^0-9.]/g, ""));
+    const suffix = targetValue.replace(/[0-9.,]/g, "");
+    const hasComma = targetValue.includes(",");
+
+    if (isNaN(numericPart)) {
+      setCount(targetValue);
+      return;
+    }
+
+    let startTimestamp: number | null = null;
+    const step = (timestamp: number) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+
+      // Calculate active numeric step position
+      const currentCount = progress * numericPart;
+
+      // Format output based on original value characteristics
+      let formattedCount = "";
+      if (targetValue.includes(".")) {
+        // Handle decimals (e.g., 4.8★)
+        formattedCount = currentCount.toFixed(1);
+      } else {
+        // Handle whole numbers
+        formattedCount = Math.floor(currentCount).toString();
+      }
+
+      // Restore standard thousands comma separation if original had it
+      if (hasComma) {
+        formattedCount = Math.floor(currentCount).toLocaleString();
+      }
+
+      setCount(`${formattedCount}${suffix}`);
+
+      if (progress < 1) {
+        window.requestAnimationFrame(step);
+      }
+    };
+
+    window.requestAnimationFrame(step);
+  }, [targetValue, duration]);
+
+  return <>{count}</>;
+};
+
 // ─── Stats Bar Component ───────────────────────────────────────────────────
 const STATS = [
   { value: "200+",   label: "Verified Clients" },
@@ -62,7 +118,10 @@ const StatsBar: FC = () => (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, maxWidth: 840, margin: "0 auto", textAlign: "center" }}>
       {STATS.map((s) => (
         <div key={s.label}>
-          <div style={{ fontFamily: T.fontDisplay, fontSize: 32, fontWeight: 800, color: "#fff", letterSpacing: -1 }}>{s.value}</div>
+          <div style={{ fontFamily: T.fontDisplay, fontSize: 32, fontWeight: 800, color: "#fff", letterSpacing: -1 }}>
+            {/* Smooth 60fps counting frame injector */}
+            <AnimatedCounter targetValue={s.value} duration={2000} />
+          </div>
           <div style={{ color: T.muted, fontSize: 13, marginTop: 4 }}>{s.label}</div>
         </div>
       ))}
@@ -148,28 +207,28 @@ const LandingPage: FC = () => {
       />
 
       {/* 2. Full Video Backdrop Hero Module */}
-      <SectionHero onStart={handleStartAction} />
+      <SectionHero onStart={handleStartAction} isMuted={isMuted} />
 
       {/* 3. Operational Performance Stats Module */}
       <StatsBar />
 
       {/* 4. Interactive WebGL Curvature Showcase */}
-      <SectionGallery />
+      <SectionGallery isMuted={isMuted} />
 
       {/* 5. Multi-Intent 3-Way Structural Flow Module */}
-      <SectionHowItWorks />
+      <SectionHowItWorks isMuted={isMuted} />
 
       {/* 6. Marketplace Value Grid Module */}
-      <SectionFeatures />
+      <SectionFeatures isMuted={isMuted} />
 
       {/* 6.5 Isolated Scrolling Text Module */}
-      <SectionScrollText />
+      <SectionScrollText isMuted={isMuted} />
 
       {/* 7. Action Acquisition Strip Module */}
-      <SectionCallForAction onStart={handleStartAction} />
+      <SectionCallForAction onStart={handleStartAction} isMuted={isMuted} />
 
       {/* 8. Directory Tree Architecture Footer Module */}
-      <SectionFooter />
+      <SectionFooter isMuted={isMuted} />
 
       <ScrollToTop />
     </div>
