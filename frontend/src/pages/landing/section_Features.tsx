@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Users,
   Zap,
@@ -8,6 +8,11 @@ import {
   BarChart3
 } from "lucide-react";
 import Aurora from "@/components/ui/Aurora"; // Adjust path as needed
+
+// Added interface props to support global audio control
+interface FeaturesProps {
+  isMuted?: boolean;
+}
 
 const ALL_FEATURES = [
   {
@@ -54,8 +59,27 @@ const ALL_FEATURES = [
   },
 ];
 
-const SectionFeatures: React.FC = () => {
+const SectionFeatures: React.FC<FeaturesProps> = ({ isMuted = false }) => {
   const [activeTab, setActiveTab] = useState(0);
+  const hoverAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    // Initialize standard hover audio configuration
+    hoverAudioRef.current = new Audio("/sounds/minimalhover.mp3");
+    hoverAudioRef.current.volume = 0.25;
+  }, []);
+
+  const playHoverSound = () => {
+    if (isMuted || !hoverAudioRef.current) return;
+    hoverAudioRef.current.currentTime = 0; // Rewind for rapid continuous trigger updates
+    hoverAudioRef.current.play().catch(() => {});
+  };
+
+  const handleTabActivation = (idx: number) => {
+    if (activeTab === idx) return;
+    playHoverSound(); // Trigger sound cleanly on target change
+    setActiveTab(idx);
+  };
 
   return (
     <section id="features" style={{ background: "#080a12", padding: "100px 40px", position: "relative", overflow: "hidden" }}>
@@ -63,7 +87,7 @@ const SectionFeatures: React.FC = () => {
       {/* ─── Aurora WebGL Background Layer ─── */}
       <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", zIndex: 0, opacity: 0.35 }}>
         <Aurora
-          colorStops={["#A855F7", "#080a12", "#3B82F6"]} // Blends your brand purple, background dark, and blue
+          colorStops={["#A855F7", "#080a12", "#3B82F6"]}
           blend={0.6}
           amplitude={1.2}
           speed={0.5}
@@ -139,7 +163,6 @@ const SectionFeatures: React.FC = () => {
 
           {/* Left Panel: Hero Image Mirror Viewport */}
           <div style={{ position: "relative" }}>
-            {/* Soft Ambient Colorful Background Glow behind the current image asset frame */}
             <div style={{
               position: "absolute",
               width: "120%",
@@ -170,8 +193,8 @@ const SectionFeatures: React.FC = () => {
               <button
                 key={f.id}
                 className={`feature-tab ${activeTab === idx ? "active" : ""}`}
-                onClick={() => setActiveTab(idx)}
-                onMouseEnter={() => setActiveTab(idx)} // Instant hover activation hooks intent instantly
+                onClick={() => handleTabActivation(idx)}
+                onMouseEnter={() => handleTabActivation(idx)} // Triggers hover sound & toggles active layout instantly
               >
                 <div style={{ display: "flex", gap: "16px", alignItems: "flex-start" }}>
                   <div
