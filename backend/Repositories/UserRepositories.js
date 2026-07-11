@@ -50,6 +50,7 @@ async function createUser({
     emailAddress,
     passwordHash,
     firebaseUserUuid = null,
+    isEmailVerified = false,
 }) {
     try {
         const result = await pool.query(
@@ -59,9 +60,10 @@ async function createUser({
                 last_name,
                 email_address,
                 password_hash,
-                firebase_user_uuid
+                firebase_user_uuid,
+                is_email_verified,
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING user_id, first_name, last_name, email_address, firebase_user_uuid`,
             [
                 account_id,
@@ -70,6 +72,7 @@ async function createUser({
                 emailAddress,
                 passwordHash,
                 firebaseUserUuid,
+                isEmailVerified
             ]
         );
         return result.rows[0];
@@ -206,6 +209,58 @@ async function getUserByIdFromAccountId(accountId) {
         throw err;
     }
 }
+
+async function updateUserDetails(userId, updates) {
+    try {
+        if (!userId) {
+            throw new Error("userId is required.");
+        }
+
+        if (!updates || Object.keys(updates).length === 0) {
+            throw new Error("No fields to update.");
+        }
+
+        const setClauses = [];
+        const values = [];
+        let index = 1;
+
+        for (const [column, value] of Object.entries(updates)) {
+            if (value === undefined) continue;
+
+            setClauses.push(`${column} = $${index}`);
+            values.push(value);
+            index++;
+        }
+
+        // Always update updated_at
+        values.push(userId);
+
+        const query = `
+            UPDATE users
+            SET ${setClauses.join(", ")}
+            WHERE user_id = $${index}
+            RETURNING *;
+        `;
+
+        const result = await pool.query(query, values);
+
+        return result.rows[0];
+    } catch (err) {
+        console.error("Error updating user:", err);
+        throw err;
+    }
+}
+
+async function getUserOnboardingStep(userId) {
+    try {
+        const result = await pool.query('SELECT completed_onboarding FROM users WHERE user_id = $1', [userId]);
+        return result.rows[0];
+    } catch (err) {
+        console.error("Error fetching user onboarding step:", err);
+        throw err;
+    }
+}
+
 //exports all the repository functions for use in other parts of the application
 module.exports = {
     getAllUsers,
@@ -217,5 +272,7 @@ module.exports = {
     updateFirebaseUserUuid,
     getUserByIdFromAccountId,
     getUserByListofIdsRepositories,
-    getNameByUserId
+    getNameByUserId,
+    updateUserDetails,
+    getUserOnboardingStep,
 };

@@ -335,7 +335,7 @@ export default function LoginPage({
   const [loading, setLoading]   = useState(false);
   const [errors, setErrors]     = useState<LoginErrors>({});
   const [pageLoaded, setPageLoaded] = useState(false);
-  const { setUser, setIsAuthenticated } = useGlobalState()
+  const { setUser, setIsAuthenticated,setSignUpData } = useGlobalState()
   const navigate = useNavigate();
 
   // Trigger page load animation
@@ -362,7 +362,14 @@ export default function LoginPage({
         { email, password },
         { withCredentials: true }
       );
-      if(result.status === 200 && result.data.success){
+      if (result.status === 200 && result.data.success) {
+
+        if (result.data.existSession) {
+          console.log("Existing session found. Redirecting to email verification...",result.data.credentials);
+          setSignUpData(result.data.credentials);
+          navigate("/setup/verify-email");
+          return;
+        }
         setUser(result.data.credentials ?? result.data.user);
         setIsAuthenticated(true);
         onSuccess?.();

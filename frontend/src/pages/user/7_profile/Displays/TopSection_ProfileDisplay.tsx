@@ -8,7 +8,10 @@ interface TopSectionProps {
   name?: string;
   middleName?: string;
   suffix?: string;
-  role?: "Freelancer" | "Client" | "Freelancer & Client" | "Casual";
+  role?: {
+    role_id: number;
+    role_name: string;
+  }[];
   tagline?: string;
   location?: string;
   emailAddress?: string;

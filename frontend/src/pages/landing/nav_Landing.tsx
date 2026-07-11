@@ -27,10 +27,23 @@ interface DropdownProps {
   isOpen: boolean;
   onToggle: (val: boolean) => void;
   onItemClick: (item: string) => void;
+  onParentHover: () => void;
+  onChildHover: () => void;
+  onActionClick: () => void;
 }
 
-const NavDropdown: FC<DropdownProps> = ({ label, items, isOpen, onToggle, onItemClick }) => {
+const NavDropdown: FC<DropdownProps> = ({
+  label,
+  items,
+  isOpen,
+  onToggle,
+  onItemClick,
+  onParentHover,
+  onChildHover,
+  onActionClick
+}) => {
   const ref = useRef<HTMLDivElement>(null);
+  const [isHovered, setIsHovered] = useState(false); // Track visual feedback manually
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -47,12 +60,19 @@ const NavDropdown: FC<DropdownProps> = ({ label, items, isOpen, onToggle, onItem
       <button
         onClick={(e) => {
           e.stopPropagation();
+          onActionClick();
           onToggle(!isOpen);
         }}
+        onMouseEnter={() => {
+          setIsHovered(true);
+          onParentHover();
+        }}
+        onMouseLeave={() => setIsHovered(false)}
         style={{
           background: "none",
           border: "none",
-          color: isOpen ? "#fff" : T_NAV.dim,
+          // Highlight text instantly to white when dropdown is open OR hovered
+          color: (isOpen || isHovered) ? "#fff" : T_NAV.dim,
           fontSize: 13,
           cursor: "pointer",
           display: "flex",
@@ -61,7 +81,7 @@ const NavDropdown: FC<DropdownProps> = ({ label, items, isOpen, onToggle, onItem
           padding: "5px 9px",
           borderRadius: 6,
           fontFamily: T_NAV.fontBody,
-          transition: "color .15s",
+          transition: "color .15s ease",
         }}
       >
         {label}
@@ -88,8 +108,18 @@ const NavDropdown: FC<DropdownProps> = ({ label, items, isOpen, onToggle, onItem
               key={i}
               onClick={(e) => {
                 e.stopPropagation();
+                onActionClick();
                 onItemClick(item);
                 onToggle(false);
+              }}
+              onMouseEnter={(e) => {
+                onChildHover();
+                e.currentTarget.style.background = "#1a2436";
+                e.currentTarget.style.color = "#fff";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.color = "#bbb";
               }}
               style={{
                 display: "block",
@@ -103,14 +133,6 @@ const NavDropdown: FC<DropdownProps> = ({ label, items, isOpen, onToggle, onItem
                 cursor: "pointer",
                 fontFamily: T_NAV.fontBody,
                 transition: "all .12s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#1a2436";
-                e.currentTarget.style.color = "#fff";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "transparent";
-                e.currentTarget.style.color = "#bbb";
               }}
             >
               {item}
@@ -135,11 +157,43 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup, isMuted, onToggleA
   const [openDD, setOpenDD] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState<boolean>(false);
 
+  // Sound element refs
+  const hoverAudioRef = useRef<HTMLAudioElement | null>(null);
+  const minimalHoverAudioRef = useRef<HTMLAudioElement | null>(null);
+  const softClickAudioRef = useRef<HTMLAudioElement | null>(null);
+
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 12);
     window.addEventListener("scroll", handleScroll);
+
+    hoverAudioRef.current = new Audio("/sounds/hover.mp3");
+    minimalHoverAudioRef.current = new Audio("/sounds/minimalhover.mp3");
+    softClickAudioRef.current = new Audio("/sounds/softclick.mp3");
+
+    hoverAudioRef.current.volume = 0.25;
+    minimalHoverAudioRef.current.volume = 0.25;
+    softClickAudioRef.current.volume = 0.4;
+
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  const playHover = () => {
+    if (isMuted || !hoverAudioRef.current) return;
+    hoverAudioRef.current.currentTime = 0;
+    hoverAudioRef.current.play().catch(() => {});
+  };
+
+  const playMinimalHover = () => {
+    if (isMuted || !minimalHoverAudioRef.current) return;
+    minimalHoverAudioRef.current.currentTime = 0;
+    minimalHoverAudioRef.current.play().catch(() => {});
+  };
+
+  const playSoftClick = () => {
+    if (isMuted || !softClickAudioRef.current) return;
+    softClickAudioRef.current.currentTime = 0;
+    softClickAudioRef.current.play().catch(() => {});
+  };
 
   const toggle = (name: string) => (val: boolean) => setOpenDD(val ? name : null);
 
@@ -177,7 +231,14 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup, isMuted, onToggleA
       borderBottom: `1px solid ${scrolled ? "rgba(255,255,255,.09)" : "rgba(255,255,255,.05)"}`,
       transition: "background .3s, border-color .3s",
     }}>
-      <div onClick={() => navigate("/")} style={{ cursor: "pointer" }}>
+      <div
+        onClick={() => {
+          playSoftClick();
+          navigate("/");
+        }}
+        onMouseEnter={playHover}
+        style={{ cursor: "pointer" }}
+      >
         <Logo />
       </div>
 
@@ -188,20 +249,32 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup, isMuted, onToggleA
           isOpen={openDD === "about"}
           onToggle={toggle("about")}
           onItemClick={handleDropdownItemAction}
+          onParentHover={playHover}
+          onChildHover={playMinimalHover}
+          onActionClick={playSoftClick}
         />
 
         <NavDropdown
           label="Support"
           items={["FAQ", "Ask our Chatbot", "Submit a Ticket", "Support Us", "Send a Feedback"]}
           isOpen={openDD === "support"}
-          isOpen={openDD === "support"}
-          isOpen={openDD === "support"}
           onToggle={toggle("support")}
           onItemClick={handleDropdownItemAction}
+          onParentHover={playHover}
+          onChildHover={playMinimalHover}
+          onActionClick={playSoftClick}
         />
 
         <button
-          onClick={() => navigate("/landing/Pricing")}
+          onClick={() => {
+            playSoftClick();
+            navigate("/landing/Pricing");
+          }}
+          onMouseEnter={(e) => {
+            playHover();
+            e.currentTarget.style.color = "#fff"; // Toggle parent highlight manually on standard links
+          }}
+          onMouseLeave={(e) => (e.currentTarget.style.color = T_NAV.dim)}
           style={{
             background: "none",
             border: "none",
@@ -211,10 +284,8 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup, isMuted, onToggleA
             padding: "5px 9px",
             borderRadius: 6,
             fontFamily: T_NAV.fontBody,
-            transition: "color .15s",
+            transition: "color .15s ease",
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "#fff")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = T_NAV.dim)}
         >
           Pricing
         </button>
@@ -224,7 +295,13 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup, isMuted, onToggleA
 
         {/* Audio Toggle Switch Controller */}
         <button
-          onClick={onToggleAudio}
+          onClick={() => {
+            if (!softClickAudioRef.current) return;
+            softClickAudioRef.current.currentTime = 0;
+            softClickAudioRef.current.play().catch(() => {});
+            onToggleAudio();
+          }}
+          onMouseEnter={playHover}
           title={isMuted ? "Play ambient music" : "Mute ambient music"}
           style={{
             background: "rgba(255,255,255,0.04)",
@@ -239,10 +316,6 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup, isMuted, onToggleA
             cursor: "pointer",
             transition: "all .2s ease",
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "rgba(255,255,255,0.08)";
-            if (isMuted) e.currentTarget.style.color = "#fff";
-          }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background = "rgba(255,255,255,0.04)";
             e.currentTarget.style.color = isMuted ? T_NAV.dim : "#3b82f6";
@@ -256,7 +329,15 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup, isMuted, onToggleA
         </button>
 
         <button
-          onClick={onLogin}
+          onClick={() => {
+            playSoftClick();
+            onLogin();
+          }}
+          onMouseEnter={(e) => {
+            playHover();
+            e.currentTarget.style.color = "#fff";
+          }}
+          onMouseLeave={(e) => (e.currentTarget.style.color = T_NAV.dim)}
           style={{
             background: "none",
             border: "none",
@@ -266,15 +347,25 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup, isMuted, onToggleA
             padding: "7px 14px",
             borderRadius: 20,
             fontFamily: T_NAV.fontBody,
-            transition: "color .15s",
+            transition: "color .15s ease",
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "#fff")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = T_NAV.dim)}
         >
           Log in
         </button>
         <button
-          onClick={onSignup}
+          onClick={() => {
+            playSoftClick();
+            onSignup();
+          }}
+          onMouseEnter={(e) => {
+            playHover();
+            e.currentTarget.style.background = "#dde3ed";
+            e.currentTarget.style.transform = "scale(1.02)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "#fff";
+            e.currentTarget.style.transform = "scale(1)";
+          }}
           style={{
             background: "#fff",
             border: "none",
@@ -286,14 +377,6 @@ const NavLanding: FC<NavLandingProps> = ({ onLogin, onSignup, isMuted, onToggleA
             borderRadius: 20,
             fontFamily: T_NAV.fontBody,
             transition: "background .15s, transform .1s",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#dde3ed";
-            e.currentTarget.style.transform = "scale(1.02)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "#fff";
-            e.currentTarget.style.transform = "scale(1)";
           }}
         >
           Sign up

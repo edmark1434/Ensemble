@@ -23,7 +23,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import useGlobalState from "@/lib/global_state";
 import { APP_VERSION } from "@/version.tsx";
-
+import api from "@/lib/axios"; // Adjust import depth if needed
 interface Asset {
   id: number;
   title: string;
@@ -225,6 +225,25 @@ const Home: React.FC = () => {
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 800);
     return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const fetchUserSession = async () => {
+      try { 
+        const response = await api.get("/api/users/session");
+        if (response.status === 200 && response.data.steps) {
+          // Handle successful session fetch
+          if (!response.data.steps) {
+            navigate("/setup/personal-details");
+          } else if (response.data.steps === 'profile') {
+            navigate("/setup/survey");
+          }
+        }
+      } catch (err) { 
+        console.error("Error fetching user session:", err);
+      }
+    }
+    fetchUserSession();
   }, []);
 
   // Check scroll position for sticky actions

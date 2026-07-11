@@ -191,6 +191,41 @@ async function getDisplayNameByAccountId(listOfAccountIds) {
     }
 }
 
+async function updateAndInsertAccountProfile(accountId, profileData) {
+    const { name, path, mime_type, size_bytes } = profileData;
+    console.log('Updating/Inserting profile for accountId:', accountId, 'with data:', { name, path, mime_type, size_bytes });
+    const fileQuery = `INSERT INTO files (name, path, mime_type, size_bytes)
+                       VALUES ($1, $2, $3, $4)
+                       RETURNING file_id`;
+    const updateAccountQuery = `UPDATE accounts SET AVATAR_FILE_ID = $1 WHERE account_id = $2`;
+    const accountProfileFilesQuery = `INSERT INTO account_profile_files (account_id, file_id)
+    VALUES ($1, $2)`;
+
+    try {
+        const fileResult = await pool.query(fileQuery, [name, path, mime_type, size_bytes]);
+        const fileId = fileResult.rows[0].file_id;
+        await Promise.all([
+            pool.query(updateAccountQuery, [fileId, accountId]),
+            pool.query(accountProfileFilesQuery, [accountId, fileId])
+        ]);
+        return fileId;
+    }catch (err) {
+        console.error(`Error updating and inserting account profile for account ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function updateAccountProfile(accountId, fileId) { 
+    const updateAccountQuery = `UPDATE accounts SET AVATAR_FILE_ID = $1 WHERE account_id = $2`;
+    try {
+        await pool.query(updateAccountQuery, [fileId, accountId]);
+        return true;
+    } catch (err) {
+        console.error(`Error updating account profile for account ${accountId}:`, err);
+        throw err;
+    }
+}
+
 module.exports = {
     getAllAccounts,
     getAccountById,
@@ -201,5 +236,7 @@ module.exports = {
     getProfileRepositories,
     getAccountLinkByAccountIdRepositories,
     checkUserAccountIdRepositories,
-    getDisplayNameByAccountId
+    getDisplayNameByAccountId,
+    updateAndInsertAccountProfile,
+    updateAccountProfile
 };

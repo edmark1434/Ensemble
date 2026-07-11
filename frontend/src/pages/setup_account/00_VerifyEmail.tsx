@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Mail, ArrowRight, RefreshCw } from "lucide-react";
 import ShapeGrid from "../../components/ui/ShapeGrid"; // Adjust import depth if needed
+import useGlobalState from "@/lib/global_state";
+import axios from "axios";
 
 const T = {
   bg:        "#080a12",
@@ -23,11 +25,13 @@ export default function VerifyEmail() {
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(30);
   const [canResend, setCanResend] = useState(false);
-
+  const {signUpData,setUser,setIsAuthenticated} = useGlobalState();
   const navigate = useNavigate();
   const inputRefs = useRef<HTMLInputElement[]>([]);
-  const email = "your_email@studio.com";
-
+  const email = signUpData?.email;
+  const firstName = signUpData?.firstName;
+  const lastName = signUpData?.lastName;
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   useEffect(() => {
     if (countdown > 0) {
       const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
@@ -36,6 +40,12 @@ export default function VerifyEmail() {
       setCanResend(true);
     }
   }, [countdown]);
+
+  useEffect(() => {
+    if(!email || !firstName || !lastName){
+      navigate("/");
+    }
+  },[])
 
   const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
@@ -74,24 +84,46 @@ export default function VerifyEmail() {
 
     setError(null);
     setLoading(true);
-
+    setSuccessMessage(null);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-      navigate("/setup/personal-details");
-    } catch (err) {
-      setError("Invalid or expired code. Please try again.");
+      const response = await axios.post(
+        `${import.meta.env.VITE_BASE_URL}/api/users/verify-email`,
+        { email, code: fullCode },
+        { withCredentials: true }
+      );
+      const signUpResponse = await axios.post(`${import.meta.env.VITE_BASE_URL}/api/users/signup`, 
+        response.data.credentials, { withCredentials: true }
+      );
+        if (setUser) setUser(signUpResponse.data.credentials);
+        if (setIsAuthenticated) setIsAuthenticated(true);
+        navigate("/setup/personal-details");
+    } catch (err:any) {
+      console.log("Verification error:", err.response);
+      setError(err.response?.data?.message || "Verification failed. Please try again.");
     } finally {
       setLoading(false);
     }
   }, [code, navigate]);
 
-  const handleResendCode = () => {
+  const handleResendCode = async () => {
     if (!canResend) return;
     setCountdown(30);
     setCanResend(false);
     setCode(Array(6).fill(""));
     setError(null);
     inputRefs.current[0]?.focus();
+
+    try {
+      const response = await axios.post(
+        `${import.meta.env.VITE_BASE_URL}/api/users/resend-verification-email`,
+        { email, firstName, lastName },)
+      if(response.status === 200 && response.data.success) {
+        setSuccessMessage("Verification code resent successfully. Please check your email.");
+      }
+    }catch (err:any) {
+      console.log("Resend code error:", err.response);
+      setError(err.response?.data?.message || "Failed to resend code. Please try again.");
+    }
   };
 
   return (
@@ -234,6 +266,7 @@ export default function VerifyEmail() {
               </div>
 
               {error && <p style={{ color: T.error, fontSize: 12, marginTop: 12 }}>{error}</p>}
+              {successMessage && <p style={{ color: T.success, fontSize: 12, marginTop: 12 }}>{successMessage}</p>}
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>

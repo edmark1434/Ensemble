@@ -1,7 +1,13 @@
+import { useEffect, useRef } from "react";
 import type { FC } from "react";
 import { useNavigate } from "react-router-dom";
 
 type FooterLinks = Record<string, string[]>;
+
+// Added interface props to support global audio control
+interface FooterProps {
+  isMuted?: boolean;
+}
 
 const T_FOOT = {
   fontDisplay: "'Plus Jakarta Sans', sans-serif",
@@ -26,8 +32,21 @@ const Logo: FC<{ size?: number }> = ({ size = 22 }) => (
   </div>
 );
 
-const SectionFooter: FC = () => {
+const SectionFooter: FC<FooterProps> = ({ isMuted = false }) => {
   const navigate = useNavigate();
+  const minimalHoverAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    // Initialize the micro audio effect file
+    minimalHoverAudioRef.current = new Audio("/sounds/minimalhover.mp3");
+    minimalHoverAudioRef.current.volume = 0.25;
+  }, []);
+
+  const playMinimalHover = () => {
+    if (isMuted || !minimalHoverAudioRef.current) return;
+    minimalHoverAudioRef.current.currentTime = 0; // Rewind for crisp, snappier navigation overrides
+    minimalHoverAudioRef.current.play().catch(() => {});
+  };
 
   const handleLinkClick = (link: string) => {
     if (link === "Pricing") {
@@ -98,6 +117,11 @@ const SectionFooter: FC = () => {
               <div
                 key={l}
                 onClick={() => handleLinkClick(l)}
+                onMouseEnter={(e) => {
+                  playMinimalHover(); // Fires your custom hover variant sound asset
+                  e.currentTarget.style.color = "#fff";
+                }}
+                onMouseLeave={(e) => (e.currentTarget.style.color = T_FOOT.muted)}
                 style={{
                   color: T_FOOT.muted,
                   fontSize: 14,
@@ -106,8 +130,6 @@ const SectionFooter: FC = () => {
                   transition: "color .15s",
                   fontFamily: T_FOOT.fontBody
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "#fff")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = T_FOOT.muted)}
               >
                 {l}
               </div>
@@ -133,9 +155,31 @@ const SectionFooter: FC = () => {
           © 2026 Ensemble, RavenLabs Dev. All rights reserved.
         </span>
         <div style={{ display: "flex", gap: 24 }}>
-          <span style={{ color: "#3a4050", fontSize: 13, cursor: "pointer" }}>Twitter</span>
-          <span style={{ color: "#3a4050", fontSize: 13, cursor: "pointer" }}>GitHub</span>
-          <span style={{ color: "#3a4050", fontSize: 13, cursor: "pointer" }}>Discord</span>
+          <span
+            className="footer-social-link"
+            onMouseEnter={playMinimalHover}
+            style={{ color: "#3a4050", fontSize: 13, cursor: "pointer", transition: "color 0.2s" }}
+            onMouseEnter={(e) => { playMinimalHover(); e.currentTarget.style.color = "#fff"; }}
+            onMouseLeave={(e) => e.currentTarget.style.color = "#3a4050"}
+          >
+            Twitter
+          </span>
+          <span
+            className="footer-social-link"
+            style={{ color: "#3a4050", fontSize: 13, cursor: "pointer", transition: "color 0.2s" }}
+            onMouseEnter={(e) => { playMinimalHover(); e.currentTarget.style.color = "#fff"; }}
+            onMouseLeave={(e) => e.currentTarget.style.color = "#3a4050"}
+          >
+            GitHub
+          </span>
+          <span
+            className="footer-social-link"
+            style={{ color: "#3a4050", fontSize: 13, cursor: "pointer", transition: "color 0.2s" }}
+            onMouseEnter={(e) => { playMinimalHover(); e.currentTarget.style.color = "#fff"; }}
+            onMouseLeave={(e) => e.currentTarget.style.color = "#3a4050"}
+          >
+            Discord
+          </span>
         </div>
       </div>
     </footer>

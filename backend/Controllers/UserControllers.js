@@ -10,10 +10,17 @@ const {
     logout,
     getCredentials,
     getUsersByListOfIdsServices,
-    getNameByUserIdServices
+    getNameByUserIdServices,
+    signUpSaveSession,
+    checkVerificationCode,
+    sendVerificationEmailServices,
+    getAllCountries,
+    updatePersonalDetails
 } = require('../services/UserServices');
+const { getUserOnboardingStep } = require('../Repositories/UserRepositories');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
+const redis = require('../lib/redis');
 dotenv.config();
 
 function setAccessTokenCookie(res, accessToken) {
@@ -149,10 +156,20 @@ async function loginCredentials(req, res) {
 
     try {
         const credentials = await LoginUserOrEmail(resolvedIdentifier, password, requestContext);
+        if (credentials.existSession) {
+            return res.status(200).json({
+                success: true,
+                message: 'Need to verify email before logging in',
+                credentials,
+                existSession: true,
+            });
+        }
         credentials.email = credentials.email_address; // Ensure email is included in the credentials for token generation
         delete credentials.email_address; // Remove redundant email_address field
         delete credentials.password_hash; // Ensure password hash is not included in the access token payload
         credentials.username = credentials.handle;
+        credentials.userId = credentials.user_id;
+        delete credentials.user_id;
         delete credentials.handle; // Remove handle if it's redundant with username
         const accessToken = await AccessTokens(credentials);
         setAccessTokenCookie(res, accessToken);
@@ -169,7 +186,7 @@ async function loginCredentials(req, res) {
                 account_id: credentials.account_id,
                 type: credentials.type,
                 role: credentials.role,
-                userId: credentials.user_id,
+                userId: credentials.userId,
                 displayName: credentials.display_name,
                 staffId: credentials.staff_id
             },
@@ -342,6 +359,122 @@ async function getNameByUserIdController(req, res) {
     }
 }
 
+async function signUpSaveSessionController(req, res) { 
+    try {
+        const result = await signUpSaveSession(req.body);
+        return res.status(200).json({
+            success: true,
+            message: 'Session saved successfully',
+            credentials: req.body
+        });
+    } catch (err) {
+        console.error('Error saving session after signup:', err);
+        if (err instanceof ServiceError) {
+            return res.status(err.statusCode).json({
+                success: false,
+                message: err.message,
+                details: err.details || null,
+            });
+        }
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+        });
+    }
+}
+
+async function checkVerificationCodeController(req, res) { 
+    try {
+        const { email, code } = req.body;
+        const result = await checkVerificationCode(email, code);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Verification code is valid',
+            credentials: result
+        });
+    }catch (err) {
+        console.error('Error checking verification code:', err);
+        if (err instanceof ServiceError) {
+            return res.status(err.statusCode).json({
+                success: false,
+                message: err.message,
+                details: err.details || null,
+            });
+        }
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+        });
+    }
+}
+
+async function sendVerificationEmailController(req, res) { 
+    try {
+        await sendVerificationEmailServices(req.body.email, req.body.firstName, req.body.lastName);
+        return res.status(200).json({
+            success: true,
+            message: 'Verification email sent successfully',
+        });
+    }catch (err) {
+        console.error('Error sending verification email:', err);
+        if (err instanceof ServiceError) {
+            return res.status(err.statusCode).json({
+                success: false,
+                message: err.message,
+                details: err.details || null,
+            });
+        }
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+        });
+    }
+}
+
+async function updatePersonalDetailsController(req, res) { 
+    try {
+        const { userId } = req.session; // Assuming userId is stored in the session
+        const updatedDetails = req.body;
+        const result = await updatePersonalDetails(userId, updatedDetails);
+        return res.status(200).json({
+            success: true,
+            message: 'Personal details updated successfully',
+            data: result
+        });
+    } catch (err) { 
+        console.error('Error updating personal details:', err);
+        if (err instanceof ServiceError) {
+            return res.status(err.statusCode).json({
+                success: false,
+                message: err.message,
+                details: err.details || null,
+            });
+        }
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+        });
+    }
+}
+
+async function getUserSession(req, res) { 
+    try {
+        let steps = await getUserOnboardingStep(req.session.userId);
+        return res.status(200).json({
+            success: true,
+            steps: steps.completed_onboarding
+        });
+    } catch (err) {
+        console.error('Error fetching user session:', err);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+        });
+    }
+}
+
+
 module.exports = {
     getAllUsers,
     signup,
@@ -353,5 +486,10 @@ module.exports = {
     CheckUserRole,
     getUsersByListOfIdsController,
     getNameByUserIdController,
-    getNameByUserIdController
+    getNameByUserIdController,
+    signUpSaveSessionController,
+    checkVerificationCodeController,
+    sendVerificationEmailController,
+    updatePersonalDetailsController,
+    getUserSession
 };

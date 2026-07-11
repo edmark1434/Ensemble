@@ -1,6 +1,9 @@
 //library for password hashing
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
+const axios = require('axios');
+const dotenv = require('dotenv');
+dotenv.config();
 //import all the necessary repository functions for user and account management
 const {
     getAllUsers,
@@ -10,11 +13,13 @@ const {
     getEmailandPasswordHashByUsername,
     updateFirebaseUserUuid,
     getUserByListofIdsRepositories,
-    getNameByUserId
+    getNameByUserId,
+    updateUserDetails,
+    getUserOnboardingStep
 } = require('../Repositories/UserRepositories');
 const {
     createAccount,
-    getAccountByHandle,
+    getAccountByHandle
 } = require('../Repositories/AccountRepositories');
 const {
     getStaffByEmail,
@@ -186,7 +191,10 @@ async function registerUser(signupPayload = {}) {
         emailAddress,
         passwordHash,
         firebaseUserUuid,
+        isEmailVerified: true,
     });
+    await redisClient.del(`sessionCredentials:${emailAddress}`);
+    await redisClient.del(`verificationCode:${emailAddress}`);
     //return the created user and account information
     return {
         credentials:{
@@ -204,6 +212,30 @@ async function registerUser(signupPayload = {}) {
 
 //function to handle user login by validating the provided login identifier (email or username) and password, checking for account lockout due to failed attempts, verifying credentials, and returning the user credentials if successful or throwing appropriate ServiceErrors for various failure cases
 async function LoginUserOrEmail(loginIdentifier, password, context = {}) {
+    let credentialsSession = null;
+    if (isValidEmail(loginIdentifier)) { 
+        credentialsSession = await getEmailandPasswordHashByEmail(loginIdentifier.toLowerCase());
+    } else {
+        credentialsSession = await getEmailandPasswordHashByUsername(loginIdentifier);
+    }
+    if (!credentialsSession && isValidEmail(loginIdentifier)) { 
+        const credentialsInSession = await redisClient.get(`sessionCredentials:${loginIdentifier.toLowerCase()}`);
+        if (credentialsInSession) {
+            credentialsSession = JSON.parse(credentialsInSession);
+            console.log('Found credentials in session for email:', loginIdentifier);
+            console.log("credentialsSession:", credentialsSession);
+            if (loginIdentifier.toLowerCase() === credentialsSession.email.toLowerCase() && password === credentialsSession.password) {
+                credentialsSession.existSession = true;
+                const verifyCodeSession = await redisClient.get(`verificationCode:${credentialsSession.email}`);
+                if (!verifyCodeSession) {
+                    const verificationCode = await sendVerificationEmail(credentialsSession.email, credentialsSession.firstName, credentialsSession.lastName);
+                    await redisClient.set(`verificationCode:${credentialsSession.email}`, verificationCode, { EX: 10 * 60 });
+                }
+                return credentialsSession;
+            }
+        }
+    }
+        
     //trim the login identifier and validate that both the identifier and password are provided, throwing a ServiceError if not
     const loginIdentifierTrimmed = loginIdentifier?.trim();
     const lockoutIdentifier = loginIdentifierTrimmed?.toLowerCase();
@@ -356,6 +388,248 @@ async function getNameByUserIdServices(userId) {
     return await getNameByUserId(userId);
 }
 
+async function signUpSaveSession(credentials) {
+    // Implementation for signing up and saving session
+
+    try {
+        let errorList = {}
+        if(!isValidEmail(credentials.email)) {
+            errorList.email = "Invalid email format";
+        }
+        if(await getEmailandPasswordHashByEmail(credentials.email)) {
+            errorList.email = "Email already in use";
+        }
+        if(await getEmailandPasswordHashByUsername(credentials.username)) {
+            errorList.username = "Username already in use";
+        }
+        if (!credentials.email) {
+            errorList.email = "Email and password are required";
+        }
+        if(!credentials.password) {
+            errorList.password = "Email and password are required";
+        }
+        if (!credentials.firstName) {
+            errorList.firstName = "First name is required";
+        }
+        if (!credentials.lastName) {
+            errorList.lastName = "Last name is required";
+        }
+
+        if (!credentials.username) {
+            errorList.username = "Username is required";
+        }
+
+        if (!/^[a-zA-Z0-9_]{3,20}$/.test(credentials.username)) {
+            errorList.username = "Username must be 3-20 characters and contain only letters, numbers, or underscores";
+        }
+        
+        if(Object.keys(errorList).length > 0){
+            throw new ServiceError('Validation errors', 400, errorList);
+        } else {
+            await redisClient.set(`sessionCredentials:${credentials.email}`, JSON.stringify(credentials), { EX: 60 * 60 * 24 * 30 });
+            const checkCodeSession = await redisClient.get(`verificationCode:${credentials.email}`);
+            if(!checkCodeSession){
+                const verificationCode = await sendVerificationEmail(credentials.email, credentials.firstName, credentials.lastName);
+                await redisClient.set(`verificationCode:${credentials.email}`, verificationCode, { EX: 10 * 60 });
+            }
+            return;
+        }
+    }catch(err){
+        console.error(`Error signing up and saving session:`, err);
+        throw err;
+    }
+}
+
+async function checkVerificationCode(email, code) { 
+    const storedCode = await redisClient.get(`verificationCode:${email}`);
+    if (!storedCode) {
+        throw new ServiceError('Verification code expired', 400);
+    }
+    if (storedCode !== code) {
+        throw new ServiceError('Invalid verification code', 400);
+    }
+    if (storedCode === code) {
+        await redisClient.del(`verificationCode:${email}`);
+        const credentialsInSession = await redisClient.get(`sessionCredentials:${email}`);
+        if (!credentialsInSession) {
+            throw new ServiceError('Session expired or not found', 400);
+        }
+        const credentials = JSON.parse(credentialsInSession);
+        return credentials;
+    }
+}
+
+
+async function sendVerificationEmailServices(email, firstName, lastName) {
+    try {
+        if(!await redisClient.get(`verificationCode:${email}`)){
+            const sixDigitCode = await sendVerificationEmail(email, firstName, lastName);
+            await redisClient.set(`verificationCode:${email}`, sixDigitCode, { EX: 10 * 60 });
+            return sixDigitCode;
+        }
+    }
+    catch (err) {
+        console.error(`Error sending verification email:`, err);
+        throw err;
+    }
+
+}
+
+
+
+async function updatePersonalDetails(userId, details) {
+    try{
+        const result = await updateUserPersonalDetails(userId, details);
+        return result;
+    } catch (err) { 
+        console.error(`Error updating personal details for user ${userId}:`, err);
+        throw err;
+    }
+
+}
+
+
+async function sendVerificationEmail(email, firstName, lastName) { 
+    const sixDigitCode = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+    const payload = emailPayload(email, firstName, lastName, sixDigitCode);
+    const response = await axios.post('https://api.brevo.com/v3/smtp/email', payload, {
+        headers: {
+            'Content-Type': 'application/json',
+            'api-key': process.env.BREVO_API_KEY,
+            'Accept': 'application/json'
+        }
+    });
+    return sixDigitCode;
+}
+
+async function updateUserPersonalDetails(userId,details) {
+    const { middleName, suffix, birthDate, country, zipCode, address } = details;
+    console.log('Updating personal details for user:', userId, details);
+    let listErrors = {};
+    if (!middleName) listErrors.middleName = "Middle name is required";
+    if (!suffix) listErrors.suffix = "Suffix is required";
+    if (!birthDate) listErrors.birthDate = "Birth date is required";
+    if (!country) listErrors.country = "Country is required";
+    if (!zipCode) listErrors.zipCode = "Zip code is required";
+    if (!address) listErrors.address = "Address is required";
+    if(!typeof birthDate === 'string' || isNaN(Date.parse(birthDate))) listErrors.birthDate = "Birth date must be a valid date string";
+    if(Object.keys(listErrors).length > 0){
+        throw new ServiceError('Validation errors', 400, listErrors);
+    } else {
+        try {
+            const updatedUser = await updateUserDetails(userId, {
+                middle_name: middleName,
+                suffix,
+                birth_date: birthDate,
+                country,
+                zip_code: zipCode,
+                address
+            });
+            return updatedUser;
+        } catch (err) {
+            console.error(`Error updating personal details for user ${userId}:`, err);
+            throw err;
+        }
+    }
+
+
+}
+
+
+
+function emailPayload(email, firstName, lastName, sixDigitCode) {
+    return {
+        sender: {
+            name: "Ensemble",
+            email: "ensemble.support@ensemble.software"
+        },
+        to: [
+            {
+                email,
+                name: `${firstName} ${lastName}`
+            }
+        ],
+        subject: `Your Ensemble Verification Code: ${sixDigitCode}`,
+        htmlContent: getVerificationEmailHtml(firstName, sixDigitCode)
+    };
+} 
+
+
+function getVerificationEmailHtml(firstName, sixDigitCode) {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Account</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f5f7;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:40px 20px;">
+<tr>
+<td align="center">
+
+<table width="500" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.05);">
+
+<tr>
+<td align="center" style="padding:32px 20px 10px;">
+<img
+    src="https://i.pinimg.com/736x/4c/0e/41/4c0e41b328ad5f3bc015686827b05fa9.jpg"
+    width="120"
+    alt="Ensemble"
+    style="display:block;border-radius:8px;">
+</td>
+</tr>
+
+<tr>
+<td style="padding:20px 40px 40px;text-align:center;">
+
+<h2 style="margin:0 0 12px;color:#1e1e2f;">
+Hi ${firstName},
+</h2>
+
+<p style="font-size:15px;line-height:1.6;color:#555;">
+Use the verification code below to verify your identity on
+<strong>Ensemble</strong>. This code is valid for
+<strong>10 minutes</strong>.
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0"
+style="margin:24px 0;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+<tr>
+<td align="center"
+style="padding:20px;font-size:32px;font-weight:bold;letter-spacing:6px;color:#6366f1;font-family:Courier,monospace;">
+${sixDigitCode}
+</td>
+</tr>
+</table>
+
+<p style="font-size:13px;color:#94a3b8;line-height:1.6;">
+If you didn't request this code, you can safely ignore this email.
+</p>
+
+</td>
+</tr>
+
+<tr>
+<td align="center"
+style="padding:20px;background:#fafafa;border-top:1px solid #eeeeee;font-size:12px;color:#999;">
+© 2026 Ensemble. Security Notification.
+</td>
+</tr>
+
+</table>
+
+</td>
+</tr>
+</table>
+
+</body>
+</html>
+`;
+}
+
 module.exports = {
     ServiceError,
     fetchAllUsers,
@@ -368,5 +642,9 @@ module.exports = {
     logout,
     getCredentials,
     getUsersByListOfIdsServices,
-    getNameByUserIdServices
+    getNameByUserIdServices,
+    signUpSaveSession,
+    checkVerificationCode,
+    sendVerificationEmailServices,
+    updatePersonalDetails
 };

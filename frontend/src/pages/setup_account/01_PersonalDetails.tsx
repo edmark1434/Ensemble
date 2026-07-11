@@ -1,8 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, ArrowRight, ArrowLeft } from "lucide-react";
 import ShapeGrid from "../../components/ui/ShapeGrid"; // Adjust import depth if needed
-
+import axios from "axios";
+import api from "@/lib/axios"; // Adjust import depth if needed
+import { toast } from "react-hot-toast";
 const T = {
   bg:        "#080a12",
   bgInput:   "#13151f",
@@ -15,22 +17,93 @@ const T = {
   error:     "#e05252",
   fontBody:    "'Plus Jakarta Sans', sans-serif",
 };
+type Place = {
+    properties: {
+        osm_id: number;
+        name?: string;
+        city?: string;
+        state?: string;
+        country?: string;
+        postcode?: string;
+    };
+};
 
 export default function PersonalDetails() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
-
+  const [countries, setCountries] = useState<string[]>([]);
+  const [places, setPlaces] = useState<Place[]>([]);
+  const [originalForm, setOriginalForm] = useState({});
   const [form, setForm] = useState({
-    firstName: "John Paul",
     middleName: "",
-    lastName: "Mahilom",
     suffix: "",
     birthDate: "",
     country: "Philippines",
     zipCode: "",
     address: "",
   });
+
+  useEffect(() => { 
+    const fetchCountries = async () => {
+      try {
+        const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/api/countries`);
+        setCountries(response.data.countries || []);
+      } catch (error) {
+        console.error("Error fetching countries:", error);
+      }
+    };
+    fetchCountries();
+  },[]);
+
+  useEffect(() => {
+    const fetchPersonalDetails = async () => {
+      try {
+        const response = await api.get("/api/accounts/personal-details");
+        if (response.status === 200 && response.data.success) {
+          const data = response.data.data;
+          setForm({
+            middleName: data.middle_name || "",
+            suffix: data.suffix || "",
+            birthDate: data.birth_date || "",
+            country: data.country || "Philippines",
+            zipCode: data.zip_code || "",
+            address: data.address || ""
+          });
+          setOriginalForm({
+            middleName: data.middle_name || "",
+            suffix: data.suffix || "",
+            birthDate: data.birth_date || "",
+            country: data.country || "Philippines",
+            zipCode: data.zip_code || "",
+            address: data.address || ""
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching personal details:", error);
+      }
+    };
+    fetchPersonalDetails();
+  },[]);
+
+  useEffect(() => {
+    if(!form.address.trim()) {
+      setPlaces([]);
+      return;
+    }
+    const timeout = setTimeout(async () => {
+      try {
+        const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/api/places`, {
+          params: { q: form.address }
+        });
+        setPlaces(response.data.places || []);
+      } catch (err) {
+        console.error("Error fetching places:", err);
+      }
+    }, 300); // Debounce for 300ms
+
+    return () => clearTimeout(timeout);
+  },[form.address])
 
   const handleChange = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm({ ...form, [key]: e.target.value });
@@ -41,8 +114,6 @@ export default function PersonalDetails() {
     e.preventDefault();
 
     const newErrors: { [key: string]: string } = {};
-    if (!form.firstName.trim()) newErrors.firstName = "First name is required.";
-    if (!form.lastName.trim()) newErrors.lastName = "Last name is required.";
     if (!form.birthDate) newErrors.birthDate = "Birth date is required.";
     if (!form.address.trim()) newErrors.address = "Address is required.";
     if (!form.zipCode.trim()) newErrors.zipCode = "Zip code is required.";
@@ -54,8 +125,30 @@ export default function PersonalDetails() {
 
     setLoading(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      navigate("/setup/upload-image");
+      if (Object.keys(originalForm).length === 0) {
+          try {
+            const response = await api.post("/api/users/update-personal-details", form);
+            if(response.status === 200 && response.data.success) {
+              navigate("/setup/upload-image");
+            }
+          }catch (err:any) {
+            console.error("Error updating personal details:", err.response?.data || err.message || err);
+            setErrors(err.response?.data?.errors || { general: "An error occurred. Please try again." });
+          } 
+      } else {
+        try {
+            const response = await api.put("/api/accounts/update-profile-user", { originalForm, updates: form });
+            if (response.status === 200 && response.data.success) {
+              toast.success(response.data.message || "Personal details updated successfully.");
+              navigate("/setup/upload-image");
+            }
+        }catch (err:any) {
+          console.error("Error updating personal details:", err.response?.data || err.message || err);
+          setErrors(err.response?.data?.errors || { general: "An error occurred. Please try again." });
+        }
+      }
+
+      console.log("Form data to submit:", form);
     } catch (err) {
       console.error(err);
     } finally {
@@ -185,7 +278,7 @@ export default function PersonalDetails() {
             </div>
 
             <h2 style={{ fontSize: 24, fontWeight: 700, color: T.text, marginBottom: 6, letterSpacing: -.3 }}>
-              Personal details
+              Additional Personal details
             </h2>
             <p style={{ color: T.muted, fontSize: 14, marginBottom: 28, lineHeight: 1.5 }}>
               Please fill out your identity particulars to build your verified editor portfolio workspace.
@@ -193,31 +286,31 @@ export default function PersonalDetails() {
 
             <div style={{ display: "flex", gap: 12 }}>
               <div className="input-group">
-                <span className="input-label">First Name</span>
-                <input type="text" value={form.firstName} onChange={handleChange("firstName")} className="form-input" style={{ borderColor: errors.firstName ? T.error : T.border }} />
-                {errors.firstName && <span className="error-text">{errors.firstName}</span>}
-              </div>
-              <div className="input-group">
                 <span className="input-label">Middle Name</span>
                 <input type="text" value={form.middleName} onChange={handleChange("middleName")} className="form-input" placeholder="Optional" />
               </div>
-            </div>
-
-            <div style={{ display: "flex", gap: 12 }}>
-              <div className="input-group" style={{ flex: 3 }}>
-                <span className="input-label">Last Name</span>
-                <input type="text" value={form.lastName} onChange={handleChange("lastName")} className="form-input" style={{ borderColor: errors.lastName ? T.error : T.border }} />
-                {errors.lastName && <span className="error-text">{errors.lastName}</span>}
-              </div>
-              <div className="input-group" style={{ flex: 1 }}>
-                <span className="input-label">Suffix</span>
-                <input type="text" value={form.suffix} onChange={handleChange("suffix")} className="form-input" placeholder="Jr" />
-              </div>
+                <div className="input-group" style={{ flex: 1 }}>
+                  <span className="input-label">Suffix</span>
+                  <select
+                    value={form.suffix}
+                    onChange={handleChange("suffix")}
+                    className="form-input"
+                  >
+                  <option disabled value="">Select Suffix</option>
+                    <option value="">N/A</option>
+                    <option value="Jr.">Jr.</option>
+                    <option value="Sr.">Sr.</option>
+                    <option value="II">II</option>
+                    <option value="III">III</option>
+                    <option value="IV">IV</option>
+                    <option value="V">V</option>
+                  </select>
+                </div>
             </div>
 
             <div className="input-group">
               <span className="input-label">Birth Date</span>
-              <input type="date" value={form.birthDate} onChange={handleChange("birthDate")} className="form-input" style={{ borderColor: errors.birthDate ? T.error : T.border, colorScheme: "dark" }} />
+              <input type="date" value={form.birthDate} max={new Date().toISOString().split("T")[0]} onChange={handleChange("birthDate")} className="form-input" style={{ borderColor: errors.birthDate ? T.error : T.border, colorScheme: "dark" }} />
               {errors.birthDate && <span className="error-text">{errors.birthDate}</span>}
             </div>
 
@@ -225,9 +318,9 @@ export default function PersonalDetails() {
               <div className="input-group" style={{ flex: 2 }}>
                 <span className="input-label">Country</span>
                 <select value={form.country} onChange={handleChange("country")} className="form-input" style={{ background: T.bgInput }}>
-                  <option value="Philippines">Philippines</option>
-                  <option value="United States">United States</option>
-                  <option value="Singapore">Singapore</option>
+                  {countries.map((country) => (
+                    <option key={country} value={country}>{country}</option>
+                  ))}
                 </select>
               </div>
               <div className="input-group" style={{ flex: 1 }}>
@@ -237,25 +330,74 @@ export default function PersonalDetails() {
               </div>
             </div>
 
-            <div className="input-group" style={{ marginBottom: 32 }}>
-              <span className="input-label">Street Address</span>
-              <input type="text" value={form.address} onChange={handleChange("address")} className="form-input" placeholder="House No., Street name, Barangay, City" style={{ borderColor: errors.address ? T.error : T.border }} />
-              {errors.address && <span className="error-text">{errors.address}</span>}
+            <div className="input-group" style={{ marginBottom: 32, position: "relative" }}>
+                <span className="input-label">Street Address</span>
+
+                <input
+                    type="text"
+                    value={form.address}
+                    onChange={handleChange("address")}
+                    className="form-input"
+                    placeholder="House No., Street name, Barangay, City"
+                />
+
+                {places.length > 0 && (
+                    <div
+                        style={{
+                            position: "absolute",
+                            top: "100%",
+                            left: 0,
+                            right: 0,
+                            background: "#13151f",
+                            border: "1px solid #2a2d3e",
+                            borderRadius: 8,
+                            marginTop: 6,
+                            maxHeight: 250,
+                            overflowY: "auto",
+                          zIndex: 1000,
+                            color: "#fff"
+                        }}
+                    >
+                        {places.map((place) => (
+                            <div
+                                key={place.properties.osm_id}
+                                onClick={() => {
+                                    setForm({
+                                      ...form,
+                                      country: place.properties.country || form.country,
+                                      zipCode: place.properties.postcode || form.zipCode,
+                                      address: `${place.properties.name}, ${place.properties.city ?? ""}, ${place.properties.state ?? ""}`
+                                    });
+
+                                    setPlaces([]);
+                                }}
+                                style={{
+                                    padding: "12px",
+                                    cursor: "pointer",
+                                    borderBottom: "1px solid #2a2d3e"
+                                }}
+                            >
+                                <strong>{place.properties.name}</strong>
+
+                                <div
+                                    style={{
+                                        fontSize: 12,
+                                        color: "#888"
+                                    }}
+                                >
+                                    {place.properties.city}
+                                    {place.properties.city && ", "}
+                                    {place.properties.state}
+                                    {place.properties.state && ", "}
+                                    {place.properties.country}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             <div style={{ display: "flex", gap: 12 }}>
-              <button
-                type="button"
-                onClick={() => navigate("/setup/verify-email")}
-                style={{
-                  flex: 1, background: "none", border: `1px solid ${T.border}`, color: T.text, padding: "12px 20px",
-                  borderRadius: 30, fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6
-                }}
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back
-              </button>
-
               <button
                 type="submit"
                 disabled={loading}
