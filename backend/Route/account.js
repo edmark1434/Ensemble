@@ -15,14 +15,15 @@ const {
     updateTaglineAndDescriptionController,
     getPersonalDetailsController,
     updateProfileUserController,
-    updateProfileOnboardingController
+    updateProfileOnboardingController,
+    getProfileByUserIdController
 } = require('../Controllers/ProfileControllers');
 
 router.put('/profile/:accountId', [checkSession, requireAuth], updateProfileAccountController);
 router.put('/profile/tagline-description', [checkSession, requireAuth], updateTaglineAndDescriptionController);
 router.get('/wallet', [checkSession, requireAuth], getAccountWalletController);
 router.get('/personal-details', [checkSession, requireAuth], getPersonalDetailsController);
-router.get('/profile/:accountId', [], getProfileController);
+router.get('/profile/:userId', [], getProfileByUserIdController);
 router.get('/links/:accountId', [], getAccountLinkByAccountIdController);
 router.get('/check-user/:accountId', [], checkUserAccountIdController);
 router.post('/display-names', [], getDisplayNameByAccountIdController);

@@ -7,7 +7,8 @@ const {
     updateProfileSocialMediaRepositories: updateProfileSocialMedia,
     updateTaglineAndDescriptionRepositories: updateTaglineAndDescription,
     getPersonalDetails,
-    updateProfileUserRepositories
+    updateProfileUserRepositories,
+    getProfileByUserId
 } = require('../Repositories/ProfileRepositories');
 const {getUserByIdFromAccountId} = require('../Repositories/UserRepositories');
 const {checkAccountId} = require('../Repositories/AccountRepositories');
@@ -353,10 +354,24 @@ function checkChanges(originalForm, updates) {
     return newPayload;
 }
 
+async function getProfileByUserIdService(userId) {
+    if (!userId) {
+        throw new Error('User ID is required');
+    }
+    try {
+        const profile = await getProfileByUserId(userId);
+        return profile;
+    } catch (err) {
+        console.error(`Error fetching profile for userId ${userId}:`, err);
+        throw err;
+    }
+}
+
 module.exports = {
     updateProfileAccountServices,
     updateTaglineAndDescriptionServices,
     getPersonalDetailsServices,
     updateProfileUserServices,
-    updateProfileOnboarding
+    updateProfileOnboarding,
+    getProfileByUserIdService
 };

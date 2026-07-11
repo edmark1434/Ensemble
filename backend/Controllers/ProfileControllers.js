@@ -3,7 +3,8 @@ const {
     updateTaglineAndDescriptionServices,
     getPersonalDetailsServices,
     updateProfileUserServices,
-    updateProfileOnboarding
+    updateProfileOnboarding,
+    getProfileByUserIdService
 } = require('../Services/ProfileServices');
 
 async function updateProfileAccountController(req, res) { 
@@ -146,10 +147,28 @@ async function updateProfileOnboardingController(req, res) {
     }
 }
 
+async function getProfileByUserIdController(req, res) {
+    try {
+        const { userId } = req.params || req.session;
+        const profile = await getProfileByUserIdService(userId);
+        return res.status(200).json({
+            success: true,
+            data: profile
+        });
+    } catch (err) {
+        console.error('Error in getProfileByUserIdController:', err);
+        return res.status(500).json({
+            success: false,
+            message: 'An error occurred while fetching the profile. Please try again.'
+        });
+    }
+}
+
 module.exports = {
     updateProfileAccountController,
     updateTaglineAndDescriptionController,
     getPersonalDetailsController,
     updateProfileUserController,
-    updateProfileOnboardingController
+    updateProfileOnboardingController,
+    getProfileByUserIdController
 };

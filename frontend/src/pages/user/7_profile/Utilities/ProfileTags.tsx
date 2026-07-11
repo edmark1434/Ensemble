@@ -1,7 +1,10 @@
 import React from "react";
 
 interface ProfileTagsProps {
-  role?: "Freelancer" | "Client" | "Freelancer & Client" | "Casual";
+  role?: {
+    role_id: number;
+    role_name: string;
+  }[];
   verificationLevel?: 1 | 2;
   subscriptionType?: "Freemium" | "Premium" | "Studio";
 }
@@ -44,16 +47,16 @@ export const ProfileTags: React.FC<ProfileTagsProps> = ({
     <span 
       key={index} 
       className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase border ${
-        roleItem === "Freelancer"
+        roleItem.role_name === "Freelancer"
           ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
-          : roleItem === "Client"
+          : roleItem.role_name === "Client"
           ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-          : roleItem === "Casual"
+          : roleItem.role_name === "Casual"
           ? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20"
           : "bg-blue-500/10 text-blue-400 border-blue-500/20"
       }`}
     >
-      {roleItem}
+      {roleItem.role_name}
     </span>
   ))
 ) : (

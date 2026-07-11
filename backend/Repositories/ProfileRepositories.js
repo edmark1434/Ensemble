@@ -273,6 +273,63 @@ async function getPersonalDetails(userId) {
     }
 }
 
+async function getProfileByUserId(userId) { 
+    try {
+        // 1. Get profile data
+        const profileQuery = `
+            SELECT 
+                A.HANDLE AS username, 
+                A.DISPLAY_NAME as name, 
+                U.MIDDLE_NAME as middleName, 
+                U.SUFFIX as suffix,
+                A.TAGLINE as tagline,
+                U.EMAIL_ADDRESS as email_address, 
+                A.CREATED_AT AS joinedDate, 
+                U.BIRTH_DATE as birthDate, 
+                U.COUNTRY as country,
+                U.ZIP_CODE as zipCode,
+                U.ADDRESS as location,
+                A.MERIT_SCORE as merit_Score,
+                A.AVATAR_FILE_ID as avatar_file_id,
+                A.DESCRIPTION as bio,
+                F.PATH AS avatar_preset_url,
+                P.NAME AS subscriptionType
+            FROM ACCOUNTS A
+            JOIN USERS U ON A.ACCOUNT_ID = U.ACCOUNT_ID
+            LEFT JOIN FILES F ON A.AVATAR_FILE_ID = F.FILE_ID
+            LEFT JOIN SUBSCRIPTIONS S ON U.USER_ID = S.USER_ID
+            LEFT JOIN PLANS P ON S.PLAN_ID = P.PLAN_ID
+            WHERE U.USER_ID = $1
+        `;
+        
+        const profileResult = await pool.query(profileQuery, [userId]);
+        
+        if (profileResult.rows.length === 0) {
+            return null;
+        }
+        
+        const profile = profileResult.rows[0];
+        
+        // 2. Get roles
+        const rolesQuery = `
+            SELECT 
+                P.PLPU_ID AS "role_id",
+                P.PURPOSE_NAME AS "role_name"
+            FROM user_platform_purpose UP
+            JOIN platform_purpose P ON UP.PLPU_ID = P.PLPU_ID
+            WHERE UP.USER_ID = $1
+        `;
+        
+        const rolesResult = await pool.query(rolesQuery, [userId]);
+        profile.roles = rolesResult.rows;
+        
+        return profile;
+    } catch (err) {
+        console.error(`Error fetching profile for userId ${userId}:`, err);
+        throw err;
+    }
+}
+
 
 module.exports = {
     updateProfileAccountRepositories,
@@ -284,5 +341,6 @@ module.exports = {
     updateProfileSocialMediaRepositoriesBulk,
     updateTaglineAndDescriptionRepositories,
     getPersonalDetails,
-    updateProfileUserRepositories
+    updateProfileUserRepositories,
+    getProfileByUserId
 };

@@ -46,11 +46,14 @@ interface UserDetail {
   birthdate?: string;
   country?: string;
   zipCode?: string;
-  role: "Freelancer" | "Client" | "Freelancer & Client" | "Casual";
+  role: {
+    role_id: number;
+    role_name: "Freelancer" | "Client"| "Casual";
+  }[];
   email_address: string;
   location: string;
   joinedDate: string;
-  verification_status: string;
+  verification_status: 'unverified' | 'pending' | 'verified';
   bio: string;
   tagline: string;
   merit_score: number;
@@ -74,7 +77,7 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>("portfolio");
   const user = useGlobalState((state) => state.user);
-  const id = useParams().id || user?.account_id;
+  const id = useParams().id || user?.userId;
 
   const [userDetails, setUserDetails] = useState<UserDetail | null>(null);
   const [availableSkills, setAvailableSkills] = useState<{ tag_id: number; name: string }[]>([]);
@@ -83,18 +86,21 @@ export default function Profile() {
   const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
   const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
 
-  const isOwner = id == user?.account_id;
-
+  const isOwner = id == user?.userId;
+  
   useEffect(() => {
     socket.connect();
     return () => { socket.off("connect"); };
   }, []);
 
+  // Combined fetch profile effect
   useEffect(() => {
     const fetchProfile = async () => {
       try {
+        setLoading(true);
         const startTime = Date.now();
 
+        // Check if user exists
         const [isUser] = await Promise.all([api.get(`/api/accounts/check-user/${id}`)]);
         if (isUser.data.isUser === false) {
           toast.error("Profile not found.");
@@ -102,16 +108,20 @@ export default function Profile() {
           return;
         }
 
+        // Fetch all data in parallel
         const [profileResponse, tagsResponse, accountLinkResponse] = await Promise.all([
           api.get(`/api/accounts/profile/${id}`),
           api.get(`/api/tags/`),
           api.get(`api/accounts/links/${id}`)
         ]);
 
-        const profileData = profileResponse.data.profile;
+        const profileData = profileResponse.data.data || profileResponse.data.profile;
+        console.log("Fetched profile data:", profileData);
+        
         setAvailableSkills(tagsResponse.data.tags || []);
 
-        const userTagResponse = await api.get(`api/tags/users/${profileData.user_id}/tags`);
+        // Fetch user tags
+        const userTagResponse = await api.get(`api/tags/users/${profileData.user_id || id}/tags`);
 
         const compiledCompoundSkills: SkillObject[] = (userTagResponse.data.tags || []).map((tag: any, idx: number) => ({
           tag_id: tag.tag_id,
@@ -120,26 +130,31 @@ export default function Profile() {
           years: Math.max(1, idx + 2)
         }));
 
+        // Set user details with all data
         setUserDetails({
-          ...profileData,
-          username: profileData.username || "rexshimura",
-          middleName: profileData.middle_name || "P.",
-          suffix: profileData.suffix || "",
-          birthdate: profileData.birthdate || "2006-06-24",
-          country: profileData.country || "Philippines",
-          zipCode: profileData.zip_code || "6000",
-          role: profileData.role || "Freelancer",
-          joinedDate: profileData.created_at,
+          username: profileData.username || profileData.handle,
+          name: profileData.name || profileData.display_name,
+          middleName: profileData.middleName || profileData.middlename || "P.",
+          suffix: profileData.suffix,
+          birthdate: profileData.birthdate || profileData.birth_date,
+          country: profileData.country,
+          zipCode: profileData.zipCode || profileData.zip_code || "6000",
+          role: profileData.roles || profileData.role || [],
+          email_address: profileData.email_address,
+          location: profileData.location,
+          joinedDate: profileData.joinedDate || profileData.joineddate || profileData.created_at,
+          verification_status: profileData.verification_status || 'unverified',
+          bio: profileData.bio || profileData.description,
+          tagline: profileData.tagline,
+          merit_score: profileData.merit_score || 0,
+          avatar_file_id: profileData.avatar_file_id,
+          avatar_preset_url: `${import.meta.env.VITE_CLOUDFRONT_URL}${profileData.avatar_preset_url}` || profileData.avatarUrl,
           skills: compiledCompoundSkills,
-
-          badges: profileData.badges && profileData.badges.length > 0
-            ? profileData.badges
-            : badgesRegistry,
-
-          social_links: accountLinkResponse.data.links || [],
-          avatar_preset_url: profileData.avatar_preset_url || "/profile_presets/p1.png"
+          badges: profileData.badges || [],
+          social_links: accountLinkResponse.data.links || accountLinkResponse.data || []
         });
-
+        
+        // Minimum loading time for smooth UX
         const minimumDelay = 800;
         const elapsedTime = Date.now() - startTime;
         const remainingTime = Math.max(0, minimumDelay - elapsedTime);
@@ -149,12 +164,16 @@ export default function Profile() {
         }, remainingTime);
 
       } catch (err) {
-        console.error('Error loading component configuration profiles:', err);
+        console.error('Error loading profile:', err);
+        toast.error("Failed to load profile data");
         setLoading(false);
       }
     };
-    fetchProfile();
-  }, [id, navigate, user?.account_id]);
+    
+    if (id) {
+      fetchProfile();
+    }
+  }, [id, navigate]);
 
   const saveAvatarEdit = async (fileOrPresetUrl: File | string, isPreset: boolean) => {
     try {
@@ -199,15 +218,9 @@ export default function Profile() {
     setIsSkillsModalOpen(false);
   };
 
-  // ADDED: Callback method to save updated social links payload
   const saveSocialLinks = async (updatedLinksList: SocialLink[]) => {
     try {
-      // 1. Persist mutation changes to local runtime state layout first
       setUserDetails((prev) => (prev ? { ...prev, social_links: updatedLinksList } : null));
-
-      // 2. Optional API payload sync backend channel if required:
-      // await api.put(`/api/accounts/links/${id}`, { links: updatedLinksList });
-
       toast.success("Network integration routing configurations updated.");
     } catch (e) {
       toast.error("Failed to synchronize social network pipeline configurations.");
@@ -270,7 +283,6 @@ export default function Profile() {
               skills={userDetails?.skills}
               onEditClick={isOwner ? () => setIsSkillsModalOpen(true) : undefined}
             />
-            {/* FIXED: Attached saveSocialLinks callback and user validation wrapper */}
             <SocialLinksSection_ProfileDisplay
               loading={loading}
               socialLinks={userDetails?.social_links}
@@ -310,7 +322,6 @@ export default function Profile() {
         />
       )}
 
-      {/* Active Curation Selector Hub Modal Overlay Layout Block */}
       <BadgeEditModal
         isOpen={isBadgeModalOpen}
         onClose={() => setIsBadgeModalOpen(false)}
@@ -318,7 +329,6 @@ export default function Profile() {
         onSave={saveSelectedBadges}
       />
 
-      {/* Standalone Skills Matrix Curation Modal Overlay */}
       <SkillsEditModal
         isOpen={isSkillsModalOpen}
         onClose={() => setIsSkillsModalOpen(false)}
