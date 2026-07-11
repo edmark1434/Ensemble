@@ -1,5 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import ShapeGrid from "@/components/ui/ShapeGrid"; // Adjust this path to match your folder structure
+
+interface HowItWorksProps {
+  isMuted?: boolean;
+}
 
 const HIW_DATA = {
   hire: [
@@ -19,8 +23,83 @@ const HIW_DATA = {
   ]
 };
 
-const SectionHowItWorks: React.FC = () => {
+const SectionHowItWorks: React.FC<HowItWorksProps> = ({ isMuted = false }) => {
   const [tab, setTab] = useState<"hire" | "work" | "edit">("hire");
+  const [hoveredTab, setHoveredTab] = useState<"hire" | "work" | "edit" | null>(null);
+
+  // Audio references
+  const hoverAudioRef = useRef<HTMLAudioElement | null>(null);
+  const clickAudioRef = useRef<HTMLAudioElement | null>(null);
+  const popAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Track active timeouts to clear them out cleanly if tabs are switched mid-progression
+  const timeoutsRef = useRef<number[]>([]);
+
+  useEffect(() => {
+    // Initialize required audio clips
+    hoverAudioRef.current = new Audio("/sounds/hover.mp3");
+    clickAudioRef.current = new Audio("/sounds/softclick.mp3");
+    popAudioRef.current = new Audio("/sounds/pop.mp3");
+
+    hoverAudioRef.current.volume = 0.25;
+    clickAudioRef.current.volume = 0.4;
+    popAudioRef.current.volume = 0.35; // Snappy pop presence mix
+
+    // Play initial structural reveal pop effects for the default tab state on mounting
+    triggerCardStaggerPops();
+
+    return () => {
+      // Clean up timeouts on unmount
+      timeoutsRef.current.forEach(id => clearTimeout(id));
+    };
+  }, []);
+
+  const playHoverSound = () => {
+    if (isMuted || !hoverAudioRef.current) return;
+    hoverAudioRef.current.currentTime = 0;
+    hoverAudioRef.current.play().catch(() => {});
+  };
+
+  const playClickSound = () => {
+    if (isMuted || !clickAudioRef.current) return;
+    clickAudioRef.current.currentTime = 0;
+    clickAudioRef.current.play().catch(() => {});
+  };
+
+  // Dedicated audio queue builder to sync pops seamlessly with your layout fade-ins
+  const triggerCardStaggerPops = () => {
+    if (isMuted) return;
+
+    // Clear previous pending timeouts if tabs are switched quickly
+    timeoutsRef.current.forEach(id => clearTimeout(id));
+    timeoutsRef.current = [];
+
+    HIW_DATA[tab].forEach((_, i) => {
+      // Match the 0.1s stagger threshold (0ms, 100ms, 200ms)
+      const timeoutId = window.setTimeout(() => {
+        if (popAudioRef.current) {
+          // Clone or reuse the instance cleanly for instant overlaps
+          const sequentialPop = popAudioRef.current.cloneNode(true) as HTMLAudioElement;
+          sequentialPop.volume = 0.35;
+          sequentialPop.play().catch(() => {});
+        }
+      }, i * 100);
+
+      timeoutsRef.current.push(timeoutId);
+    });
+  };
+
+  const handleTabChange = (targetTab: "hire" | "work" | "edit") => {
+    if (tab === targetTab) return;
+    playClickSound();
+    setTab(targetTab);
+
+    // Schedule the pops for the newly revealed cluster cards
+    // Use a slight timeout to align with the React DOM node swap
+    setTimeout(() => {
+      triggerCardStaggerPops();
+    }, 20);
+  };
 
   return (
     <section
@@ -42,15 +121,15 @@ const SectionHowItWorks: React.FC = () => {
           width: "100%",
           height: "100%",
           zIndex: 0,
-          opacity: 0.4, // Subtle opacity so it doesn't overpower the layout cards
+          opacity: 0.4,
         }}
       >
         <ShapeGrid
           speed={0.4}
           squareSize={48}
           direction="diagonal"
-          borderColor="#1e2130" // Matches your core layout border color
-          hoverFillColor="#13162b" // Smooth deep tint glow when hovering over shapes
+          borderColor="#1e2130"
+          hoverFillColor="#13162b"
           shape="square"
           hoverTrailAmount={5}
         />
@@ -64,24 +143,40 @@ const SectionHowItWorks: React.FC = () => {
           <h2 style={{ fontSize: 42, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>How it works</h2>
 
           <div style={{ display: "flex", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 100, padding: 4 }}>
-            <button
-              onClick={() => setTab("hire")}
-              style={{ padding: "8px 24px", borderRadius: 100, border: "none", fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "all 0.3s", background: tab === "hire" ? "#fff" : "transparent", color: tab === "hire" ? "#000" : "#7a8499" }}
-            >
-              For hiring
-            </button>
-            <button
-              onClick={() => setTab("work")}
-              style={{ padding: "8px 24px", borderRadius: 100, border: "none", fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "all 0.3s", background: tab === "work" ? "#fff" : "transparent", color: tab === "work" ? "#000" : "#7a8499" }}
-            >
-              For finding work
-            </button>
-            <button
-              onClick={() => setTab("edit")}
-              style={{ padding: "8px 24px", borderRadius: 100, border: "none", fontSize: 14, fontWeight: 600, cursor: "pointer", transition: "all 0.3s", background: tab === "edit" ? "#fff" : "transparent", color: tab === "edit" ? "#000" : "#7a8499" }}
-            >
-              For editing
-            </button>
+            {(["hire", "work", "edit"] as const).map((mode) => {
+              const isActive = tab === mode;
+              const isCurrentlyHovered = hoveredTab === mode;
+              const labels = { hire: "For hiring", work: "For finding work", edit: "For editing" };
+
+              return (
+                <button
+                  key={mode}
+                  onClick={() => handleTabChange(mode)}
+                  onMouseEnter={() => {
+                    setHoveredTab(mode);
+                    if (!isActive) playHoverSound();
+                  }}
+                  onMouseLeave={() => setHoveredTab(null)}
+                  style={{
+                    padding: "8px 24px",
+                    borderRadius: 100,
+                    border: "none",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    transition: "all 0.25s ease",
+                    background: isActive
+                      ? "#fff"
+                      : (isCurrentlyHovered ? "rgba(255,255,255,0.06)" : "transparent"),
+                    color: isActive
+                      ? "#000"
+                      : (isCurrentlyHovered ? "#fff" : "#7a8499")
+                  }}
+                >
+                  {labels[mode]}
+                </button>
+              );
+            })}
           </div>
         </div>
 
