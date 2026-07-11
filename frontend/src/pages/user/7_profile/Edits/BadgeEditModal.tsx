@@ -21,8 +21,8 @@ export const BadgeEditModal: React.FC<BadgeEditModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSelectedBadges([...currentlyDisplayedBadges]);
+      // Strictly limit the initial incoming badges to a maximum of 5 slots
+      setSelectedBadges([...currentlyDisplayedBadges].slice(0, 5));
     }
   }, [isOpen, currentlyDisplayedBadges]);
 
@@ -185,7 +185,7 @@ export const BadgeEditModal: React.FC<BadgeEditModalProps> = ({
                           </div>
                         </>
                       ) : (
-                        /* Box Grid Overlay Priority tags moved to the BOTTOM RIGHT corner */
+                        /* Box Grid Overlay Priority tags */
                         isSelected && (
                           <div
                             className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black font-mono border shadow-md z-10"
@@ -196,13 +196,11 @@ export const BadgeEditModal: React.FC<BadgeEditModalProps> = ({
                         )
                       )}
 
-                      {/* BoxList Tooltip Layer - Title Only, Positioned on the RIGHT side of the block bounds */}
+                      {/* BoxList Tooltip Layer */}
                       {inventoryMode === "BoxList" && (
                         <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 p-2 rounded-lg border border-white/10 bg-[#070913] shadow-[0_10px_25px_rgba(0,0,0,0.5)] opacity-0 scale-95 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 z-50 whitespace-nowrap origin-left">
-                          {/* Left pointing speech arrow indicator */}
                           <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[#070913]" />
                           <div className="absolute right-full top-1/2 -translate-y-1/2 -mr-[1px] border-4 border-transparent border-r-white/10 -z-10" />
-
                           <h5 className="font-extrabold text-[11px] text-white tracking-wide px-1">{b.name}</h5>
                         </div>
                       )}
@@ -263,7 +261,8 @@ export const BadgeEditModal: React.FC<BadgeEditModalProps> = ({
                 </div>
               ))}
 
-              {[...Array(emptySlotsCount)].map((_, i) => {
+              {/* Fixed Empty Slot Array Range Check Wrapper */}
+              {[...Array(Math.max(0, emptySlotsCount))].map((_, i) => {
                 const globalSlotIndex = selectedBadges.length + i + 1;
                 return (
                   <div
