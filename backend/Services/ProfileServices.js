@@ -4,10 +4,15 @@ const {
     deleteProfileSkillsRepositories: deleteProfileSkills,
     insertProfileSocialMediaRepositories: insertProfileSocialMedia,
     deleteProfileSocialMediaRepositories: deleteProfileSocialMedia,
-    updateProfileSocialMediaRepositories: updateProfileSocialMedia
+    updateProfileSocialMediaRepositories: updateProfileSocialMedia,
+    updateTaglineAndDescriptionRepositories: updateTaglineAndDescription,
+    getPersonalDetails,
+    updateProfileUserRepositories
 } = require('../Repositories/ProfileRepositories');
 const {getUserByIdFromAccountId} = require('../Repositories/UserRepositories');
 const {checkAccountId} = require('../Repositories/AccountRepositories');
+const redisClient = require('../lib/redis');
+
 
 async function updateProfileAccountServices(accountId, payload) {
     const profileUpdates = {}
@@ -257,6 +262,101 @@ async function updateProfileAccountServices(accountId, payload) {
     };
 }
 
+async function updateTaglineAndDescriptionServices(accountId, tagline, description) {
+    if (!accountId) {
+        throw new Error('Account ID is required');
+    }
+    const isExist = await checkAccountId(accountId);
+    if (!isExist) {
+        throw new Error('Invalid account ID');
+    }
+    try {
+        const response = await updateTaglineAndDescription(accountId, tagline, description);
+        return response;
+    } catch (err) {
+        console.error(`Error updating tagline and description for accountId ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function getPersonalDetailsServices(userId) {
+    if (!userId) {
+        throw new Error('User ID is required');
+    }
+    try {
+        const response = await getPersonalDetails(userId);
+        return response;
+    } catch (err) {
+        console.error(`Error fetching personal details for userId ${userId}:`, err);
+        throw err;
+    }
+}
+
+
+async function updateProfileUserServices(userId, originalForm, updates) {
+    if (!userId) {
+        throw new Error('User ID is required');
+    }
+    
+    const newPayload = checkChanges(originalForm, updates);
+    if (Object.keys(newPayload).length === 0) { 
+        return null; // No changes to apply
+    }
+    try {
+        const response = await updateProfileUserRepositories(userId, newPayload);
+        return response;
+    } catch (err) {
+        console.error(`Error updating user profile for userId ${userId}:`, err);
+        throw err;
+    }
+}
+
+async function updateProfileOnboarding(userId, completed_onboarding) {
+    if (!userId) {
+        throw new Error('User ID is required');
+    }
+    try {
+        await updateProfileUserRepositories(userId,  completed_onboarding );
+    } catch (err) {
+        console.error(`Error updating onboarding data for userId ${userId}:`, err);
+        throw err;
+    }
+}
+
+function checkChanges(originalForm, updates) {
+    let newPayload = {};
+    updates.zipCode = parseInt(updates.zipCode) || null;
+    if(!originalForm || !updates) {
+        throw new Error('Both originalForm and updates are required to check for changes');
+    }
+    if (Object.keys(updates).length === 0) { 
+        throw new Error('No updates to apply');
+    }
+    if(updates.middleName !== undefined && updates.middleName !== originalForm.middleName) {
+        newPayload.middle_name = updates.middleName;
+    }
+    if(updates.suffix !== undefined && updates.suffix !== originalForm.suffix) {
+        newPayload.suffix = updates.suffix;
+    }
+    if(updates.birthDate !== undefined && updates.birthDate !== originalForm.birthDate) {
+        newPayload.birth_date = updates.birthDate;
+    }
+    if(updates.country !== undefined && updates.country !== originalForm.country) {
+        newPayload.country = updates.country;
+    }
+    if(updates.zipCode !== undefined && updates.zipCode !== originalForm.zipCode) {
+        newPayload.zip_code = updates.zipCode;
+    }
+    if(updates.address !== undefined && updates.address !== originalForm.address) {
+        newPayload.address = updates.address;
+    }
+    return newPayload;
+}
+
 module.exports = {
-    updateProfileAccountServices
+    updateProfileAccountServices,
+    updateTaglineAndDescriptionServices,
+    getPersonalDetailsServices,
+    updateProfileUserServices,
+    updateProfileOnboarding
 };

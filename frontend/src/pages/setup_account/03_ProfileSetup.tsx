@@ -110,6 +110,7 @@ export default function ProfileSetup() {
   const executeFinalSubmit = async () => {
     setLoading(true);
     try {
+      
       await new Promise((resolve) => setTimeout(resolve, 1200));
       navigate("/setup/survey");
     } catch (err) {

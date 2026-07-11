@@ -153,8 +153,15 @@ const handleNext = async (e: React.FormEvent) => {
         fileId: selectedPreset?.file_id
       });
     }
-
-    navigate("/setup/profile-setup");
+    const response = await api.get("/api/users/session");
+    if (!response.data.steps) {
+      if (response.data.steps !== null && response.data.steps !== 'completed' && response.data.steps !== 'survey' && response.data.steps !== 'profile') {
+        await api.put("/api/accounts/update-profile-onboarding", {
+          completed_onboarding: 'profile'
+        });
+      }
+    }
+    navigate("/setup/survey");
 
   } catch (err) {
 

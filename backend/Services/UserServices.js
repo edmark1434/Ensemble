@@ -192,7 +192,6 @@ async function registerUser(signupPayload = {}) {
         passwordHash,
         firebaseUserUuid,
         isEmailVerified: true,
-        onboardingStep: 1
     });
     await redisClient.del(`sessionCredentials:${emailAddress}`);
     await redisClient.del(`verificationCode:${emailAddress}`);
@@ -479,24 +478,8 @@ async function sendVerificationEmailServices(email, firstName, lastName) {
 
 
 async function updatePersonalDetails(userId, details) {
-    let userSession = await redisClient.get(`session:${userId}`);
-    if (!userSession) { 
-        userSession = await getUserOnboardingStep(userId);
-    }
-    let result = null;
-    try {
-        if (userSession) { 
-            let steps = userSession
-            if(steps == 1){
-                result =   await updateUserPersonalDetails(userId, details);
-                steps = 2;
-                await Promise.all([
-                    redisClient.set(`session:${userId}`, steps, { EX: 60 * 60 * 24 * 30 }),
-                    redisClient.del(`sessionCredentials:${result.email_address}`),
-                    updateUserDetails(userId, { onboarding_step: steps })
-                ]);
-            }
-        }
+    try{
+        const result = await updateUserPersonalDetails(userId, details);
         return result;
     } catch (err) { 
         console.error(`Error updating personal details for user ${userId}:`, err);

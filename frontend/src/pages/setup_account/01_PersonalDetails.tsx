@@ -4,6 +4,7 @@ import { User, ArrowRight, ArrowLeft } from "lucide-react";
 import ShapeGrid from "../../components/ui/ShapeGrid"; // Adjust import depth if needed
 import axios from "axios";
 import api from "@/lib/axios"; // Adjust import depth if needed
+import { toast } from "react-hot-toast";
 const T = {
   bg:        "#080a12",
   bgInput:   "#13151f",
@@ -33,6 +34,7 @@ export default function PersonalDetails() {
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [countries, setCountries] = useState<string[]>([]);
   const [places, setPlaces] = useState<Place[]>([]);
+  const [originalForm, setOriginalForm] = useState({});
   const [form, setForm] = useState({
     middleName: "",
     suffix: "",
@@ -52,6 +54,36 @@ export default function PersonalDetails() {
       }
     };
     fetchCountries();
+  },[]);
+
+  useEffect(() => {
+    const fetchPersonalDetails = async () => {
+      try {
+        const response = await api.get("/api/accounts/personal-details");
+        if (response.status === 200 && response.data.success) {
+          const data = response.data.data;
+          setForm({
+            middleName: data.middle_name || "",
+            suffix: data.suffix || "",
+            birthDate: data.birth_date || "",
+            country: data.country || "Philippines",
+            zipCode: data.zip_code || "",
+            address: data.address || ""
+          });
+          setOriginalForm({
+            middleName: data.middle_name || "",
+            suffix: data.suffix || "",
+            birthDate: data.birth_date || "",
+            country: data.country || "Philippines",
+            zipCode: data.zip_code || "",
+            address: data.address || ""
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching personal details:", error);
+      }
+    };
+    fetchPersonalDetails();
   },[]);
 
   useEffect(() => {
@@ -93,15 +125,29 @@ export default function PersonalDetails() {
 
     setLoading(true);
     try {
-      try {
-        const response = await api.post("/api/users/update-personal-details", form);
-        if(response.status === 200 && response.data.success) {
-          navigate("/setup/upload-image");
+      if (Object.keys(originalForm).length === 0) {
+          try {
+            const response = await api.post("/api/users/update-personal-details", form);
+            if(response.status === 200 && response.data.success) {
+              navigate("/setup/upload-image");
+            }
+          }catch (err:any) {
+            console.error("Error updating personal details:", err.response?.data || err.message || err);
+            setErrors(err.response?.data?.errors || { general: "An error occurred. Please try again." });
+          } 
+      } else {
+        try {
+            const response = await api.put("/api/accounts/update-profile-user", { originalForm, updates: form });
+            if (response.status === 200 && response.data.success) {
+              toast.success(response.data.message || "Personal details updated successfully.");
+              navigate("/setup/upload-image");
+            }
+        }catch (err:any) {
+          console.error("Error updating personal details:", err.response?.data || err.message || err);
+          setErrors(err.response?.data?.errors || { general: "An error occurred. Please try again." });
         }
-      }catch (err:any) {
-        console.error("Error updating personal details:", err.response?.data || err.message || err);
-        setErrors(err.response?.data?.errors || { general: "An error occurred. Please try again." });
-      } 
+      }
+
       console.log("Form data to submit:", form);
     } catch (err) {
       console.error(err);
@@ -251,7 +297,7 @@ export default function PersonalDetails() {
                     className="form-input"
                   >
                   <option disabled value="">Select Suffix</option>
-                    <option value="None">None</option>
+                    <option value="">N/A</option>
                     <option value="Jr.">Jr.</option>
                     <option value="Sr.">Sr.</option>
                     <option value="II">II</option>

@@ -33,6 +33,41 @@ async function updateProfileAccountRepositories(accountId, updates) {
     }
 }
 
+
+async function updateProfileUserRepositories(userId, updates) {
+    try {
+        // Build the SET clause dynamically
+        const setClauses = [];
+        const values = [];
+        let index = 1;
+
+        // Loop through the updates object to build the SET clause
+        for (const [key, value] of Object.entries(updates)) {
+            // Convert camelCase to snake_case for database columns
+            const dbKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+            setClauses.push(`${dbKey} = $${index}`);
+            values.push(value);
+            index++;
+        }
+
+        // Add userId as the last parameter
+        values.push(userId);
+
+        const queryText = `
+            UPDATE users 
+            SET ${setClauses.join(', ')} 
+            WHERE user_id = $${index}
+        `;
+
+        const result = await pool.query(queryText, values);
+        return result;
+    } catch (err) {
+        console.error(`Error updating profile account for userId ${userId}:`, err);
+        throw err;
+    }
+}
+
+
 async function insertProfileSkillsRepositories(userId, listOfSkills) {
     try {
         if (listOfSkills.length === 0) return null;
@@ -215,6 +250,30 @@ async function updateProfileSocialMediaRepositoriesBulk(accountId, listOfSocialM
     }
 }
 
+async function updateTaglineAndDescriptionRepositories(accountId, tagline, description) {
+    try {
+        const queryText = `UPDATE ACCOUNTS SET TAGLINE = $1 , DESCRIPTION = $2 WHERE ACCOUNT_ID = $3`;
+        const values = [tagline, description, accountId];
+        const result = await pool.query(queryText, values);
+        return result;
+    } catch (err) {
+        console.error(`Error updating tagline and description for accountId ${accountId}:`, err);
+        throw err;
+    }
+}
+
+
+async function getPersonalDetails(userId) {
+    try {
+        const result = await pool.query('SELECT middle_name,suffix,birth_date, country, zip_code, address FROM users WHERE user_id = $1', [userId]);
+        return result.rows[0];
+    } catch (err) {
+        console.error(`Error fetching personal details for userId ${userId}:`, err);
+        throw err;
+    }
+}
+
+
 module.exports = {
     updateProfileAccountRepositories,
     insertProfileSkillsRepositories,
@@ -222,5 +281,8 @@ module.exports = {
     deleteProfileSkillsRepositories,
     deleteProfileSocialMediaRepositories,
     updateProfileSocialMediaRepositories,        
-    updateProfileSocialMediaRepositoriesBulk     
+    updateProfileSocialMediaRepositoriesBulk,
+    updateTaglineAndDescriptionRepositories,
+    getPersonalDetails,
+    updateProfileUserRepositories
 };
