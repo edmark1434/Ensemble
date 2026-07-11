@@ -556,7 +556,7 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
         setProjectName={setProjectName}
       />
 
-      <div className="flex flex-1 h-[calc(100vh-52px)]">
+      <div className="flex flex-1 h-[calc(100vh-56px)]">
         {isLargeScreen ? (
           <ResizablePanelGroup direction="horizontal" className="h-full w-full">
             <ResizablePanel

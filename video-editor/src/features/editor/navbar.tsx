@@ -107,7 +107,7 @@ export default function Navbar({
         display: "grid",
         gridTemplateColumns: isLargeScreen ? "320px 1fr 320px" : "1fr 1fr 1fr"
       }}
-      className="bg-primary/12 pointer-events-none flex h-13 items-center border-b border-border/80 px-2"
+      className="bg-primary/12 pointer-events-none flex h-14 items-center border-b border-border/80 px-2"
     >
       <DownloadProgressModal />
 
@@ -195,7 +195,7 @@ export default function Navbar({
               value={title}
               onChange={handleTitleChange}
               width={200}
-              inputClassName="h-8 text-sm font-normal"
+              inputClassName="h-9 text-sm font-normal"
             />
           </div>
         )}
