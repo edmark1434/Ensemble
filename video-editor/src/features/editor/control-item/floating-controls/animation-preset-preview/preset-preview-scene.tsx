@@ -7,6 +7,7 @@ import { presets, PresetName } from "../../../player/animated/presets";
 import { createPreviewTrackItem } from "./preset-preview-data";
 import { isCustomTextAnimation } from "./preset-preview-dispatch";
 import { getSlideAnimation } from "../../../utils/get-animations";
+import {getTextColorStyle} from "@/features/editor/player/styles";
 
 const HOLD_FRAMES = 20;
 const PREVIEW_W = 140;
@@ -65,6 +66,7 @@ const PresetPreviewScene: React.FC<{
             type === "loop" ? preset.durationInFrames : HOLD_FRAMES + preset.durationInFrames
           }
           animationFonts={(preset as any).details?.fonts ?? []}
+          textColorStyle={getTextColorStyle(fakeItem.details.color)}
         />
       </AbsoluteFill>
     );

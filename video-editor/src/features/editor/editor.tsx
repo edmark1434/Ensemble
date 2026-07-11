@@ -459,7 +459,7 @@ const Controls = ({ panelRef }: { panelRef: React.RefObject<HTMLDivElement | nul
 };
 
 const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
-  const [projectName, setProjectName] = useState<string>("Untitled video");
+  const [projectName, setProjectName] = useState<string>("My Project");
   const { scene } = useSceneStore();
   const timelinePanelRef = useRef<ImperativePanelHandle>(null);
   const sceneRef = useRef<SceneRef>(null);
