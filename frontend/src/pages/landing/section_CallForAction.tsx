@@ -1,8 +1,10 @@
+import { useEffect, useRef } from "react";
 import type { FC } from "react";
 import ColorBends from "@/components/ui/ColorBends"; // Update path if needed
 
 interface CtaStripProps {
   onStart: () => void;
+  isMuted?: boolean; // Support global audio toggle system
 }
 
 const T_CTA = {
@@ -13,7 +15,31 @@ const T_CTA = {
   fontBody:    "'Plus Jakarta Sans', sans-serif",
 } as const;
 
-const SectionCallForAction: FC<CtaStripProps> = ({ onStart }) => {
+const SectionCallForAction: FC<CtaStripProps> = ({ onStart, isMuted = false }) => {
+  const hoverAudioRef = useRef<HTMLAudioElement | null>(null);
+  const clickAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    // Initialize standard action sound effects
+    hoverAudioRef.current = new Audio("/sounds/hover.mp3");
+    clickAudioRef.current = new Audio("/sounds/softclick.mp3");
+
+    hoverAudioRef.current.volume = 0.25;
+    clickAudioRef.current.volume = 0.4;
+  }, []);
+
+  const playHoverSound = () => {
+    if (isMuted || !hoverAudioRef.current) return;
+    hoverAudioRef.current.currentTime = 0;
+    hoverAudioRef.current.play().catch(() => {});
+  };
+
+  const playClickSound = () => {
+    if (isMuted || !clickAudioRef.current) return;
+    clickAudioRef.current.currentTime = 0;
+    clickAudioRef.current.play().catch(() => {});
+  };
+
   return (
     <section
       id="cta"
@@ -35,11 +61,10 @@ const SectionCallForAction: FC<CtaStripProps> = ({ onStart }) => {
           width: "100%",
           height: "100%",
           zIndex: 0,
-          opacity: 1.0, // 👈 Cranked up to max opacity (was 0.6)
+          opacity: 1.0,
         }}
       >
         <ColorBends
-          // 👈 Added brighter, high-contrast neon accents to cut through the dark layout
           colors={["#4f46e5", "#7c3aed", "#06b6d4", "#0d0f1a"]}
           speed={0.12}
           rotation={35}
@@ -47,7 +72,7 @@ const SectionCallForAction: FC<CtaStripProps> = ({ onStart }) => {
           warpStrength={1.2}
           mouseInfluence={0.6}
           parallax={0.3}
-          intensity={2.2} // 👈 Increased intensity (was 1.2) for maximum luminosity
+          intensity={2.2}
           transparent={true}
           noise={0.05}
         />
@@ -62,7 +87,10 @@ const SectionCallForAction: FC<CtaStripProps> = ({ onStart }) => {
           Join thousands of filmmakers already using Ensemble to ship better stories, faster.
         </p>
         <button
-          onClick={onStart}
+          onClick={() => {
+            playClickSound(); // Clean click trigger
+            onStart();
+          }}
           style={{
             background: "#fff",
             color: "#080a12",
@@ -74,8 +102,13 @@ const SectionCallForAction: FC<CtaStripProps> = ({ onStart }) => {
             fontFamily: T_CTA.fontBody,
             transition: "all 0.2s ease"
           }}
-          onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.03)"}
-          onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+          onMouseEnter={(e) => {
+            playHoverSound(); // Clean audio link trigger
+            e.currentTarget.style.transform = "scale(1.03)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = "scale(1)";
+          }}
         >
           Start for free →
         </button>
