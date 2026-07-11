@@ -63,9 +63,7 @@ import StaffDashboard from './pages/staff/StaffDashboard'
 import VerifyEmail from "@/pages/setup_account/00_VerifyEmail.tsx";
 import PersonalDetails from "@/pages/setup_account/01_PersonalDetails.tsx";
 import UploadImage from "@/pages/setup_account/02_UploadImage.tsx";
-import ProfileSetup from "@/pages/setup_account/03_ProfileSetup.tsx";
 import Survey from "@/pages/setup_account/04_Survey.tsx";
-import Preview from "@/pages/setup_account/05_Preview.tsx";
 
 import ForumModeratorLayout from './pages/moderator/forum-moderator/Layout'
 import MarketplaceModeratorLayout from './pages/moderator/marketplace-moderator/Layout'
@@ -107,9 +105,7 @@ function App() {
           <Route path="verify-email" element={<VerifyEmail />} />
           <Route path="personal-details" element={<PersonalDetails />} />
           <Route path="upload-image" element={<UploadImage />} />
-          <Route path="profile-setup" element={<ProfileSetup />} />
           <Route path="survey" element={<Survey />} />
-          <Route path="preview" element={<Preview />} />
         </Route>
 
       <Route element={<RouteMiddleware />}>
