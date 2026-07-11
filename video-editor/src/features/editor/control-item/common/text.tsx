@@ -12,7 +12,7 @@ import {
   AlignCenter,
   AlignJustify,
   AlignLeft,
-  AlignRight,
+  AlignRight, Check,
   ChevronDown, Loader2, Percent,
   Search,
   Strikethrough,
@@ -42,12 +42,13 @@ interface TextControlsProps {
   onChangeFontFamily: (font: ICompactFont) => void;
   handleChangeFontStyle: (font: IFont) => void;
   onChangeFontSize: (v: number) => void;
-  handleColorChange: (color: string) => void;
-  handleBackgroundChange: (color: string) => void;
+  handleColorChange?: (color: string) => void;
+  handleBackgroundChange?: (color: string) => void;
   onChangeTextAlign: (v: string) => void;
   onChangeTextDecorationLines: (v: string) => void;
   onChangeTextDecorationColor: (v: string) => void;
   handleChangeOpacity: (v: number) => void;
+  showFill?: boolean;
 }
 
 export const TextControls = ({
@@ -63,6 +64,7 @@ export const TextControls = ({
   onChangeTextDecorationLines,
   onChangeTextDecorationColor,
   handleChangeOpacity,
+  showFill = true
 }: TextControlsProps) => {
   return (
     <div className="flex flex-col gap-6">
@@ -129,19 +131,18 @@ export const TextControls = ({
         </div>
       </div>
 
-      <div className="flex flex-col gap-3">
-        <Label className="font-sans text-sm font-medium">Fill</Label>
-        <div className="flex flex-col gap-2">
-          <FontColor
-            value={properties.color}
-            handleColorChange={handleColorChange}
-          />
-          <FontBackground
-            value={properties.backgroundColor}
-            handleColorChange={handleBackgroundChange}
-          />
+      {showFill && handleColorChange && (
+        <div className="flex flex-col gap-3">
+          <Label className="font-sans text-sm font-medium">Fill</Label>
+          <div className="flex flex-col gap-2">
+            <FontColor value={properties.color} handleColorChange={handleColorChange} />
+
+            {handleBackgroundChange && (
+              <FontBackground value={properties.backgroundColor} handleColorChange={handleBackgroundChange} />
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
@@ -193,9 +194,9 @@ const FontColor = ({
 };
 
 const FontSize = ({
-                    value,
-                    onChange
-                  }: {
+  value,
+  onChange
+}: {
   value: number;
   onChange: (v: number) => void;
 }) => {
@@ -242,9 +243,9 @@ const FontSize = ({
 };
 
 const FontFamily = ({
-                      handleChangeFont,
-                      fontFamilyDisplay
-                    }: {
+  handleChangeFont,
+  fontFamilyDisplay
+}: {
   handleChangeFont: (font: ICompactFont) => void;
   fontFamilyDisplay: string;
 }) => {
@@ -267,7 +268,7 @@ const FontFamily = ({
         <div className="relative w-full">
           <Button
             className="flex w-full items-center justify-between text-sm"
-            variant="secondary"
+            variant="outline"
             onClick={() =>
               setFloatingControl(
                 floatingControl === "font-family-picker" ? "" : "font-family-picker"
@@ -286,7 +287,7 @@ const FontFamily = ({
             <PopoverTrigger asChild>
               <Button
                 className="flex items-center justify-between text-sm w-32"
-                variant="secondary"
+                variant="outline"
               >
                 <div className="w-full overflow-hidden text-left">
                   <p className="truncate">{fontFamilyDisplay}</p>
@@ -336,8 +337,8 @@ const FontFamily = ({
 };
 
 const FontStyle = ({
-                     selectedFont,
-                     handleChangeFontStyle
+  selectedFont,
+  handleChangeFontStyle
 }: {
   selectedFont: ICompactFont;
   handleChangeFontStyle: (font: IFont) => void;
@@ -349,7 +350,7 @@ const FontStyle = ({
           <PopoverTrigger asChild>
             <Button
               className="flex w-full items-center justify-between text-sm"
-              variant="secondary"
+              variant="outline"
             >
               <div className="w-full overflow-hidden text-left">
                 <p className="truncate">{selectedFont.name}</p>
@@ -369,11 +370,14 @@ const FontStyle = ({
                 .replace("Italic", " Italic");
               return (
                 <div
-                  className="flex cursor-pointer items-center px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                  className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
                   key={index}
                   onClick={() => handleChangeFontStyle(style)}
                 >
                   {styleName}
+                  {styleName === selectedFont.name && (
+                    <Check size={14} className="text-muted-foreground" />
+                  )}
                 </div>
               );
             })}
@@ -385,8 +389,8 @@ const FontStyle = ({
 };
 
 const TextDecorationLines = ({
-                          value,
-                          onChange
+  value,
+  onChange
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -459,9 +463,9 @@ const TextDecorationColor = ({
 };
 
 const Alignment = ({
-                     value,
-                     onChange
-                   }: {
+  value,
+  onChange
+}: {
   value: string;
   onChange: (v: string) => void;
 }) => {
@@ -503,7 +507,6 @@ const fontCaseOptions = [
 const FontCase = ({ id, value: initialValue }: { id: string; value: string }) => {
   const [value, setValue] = useState(initialValue ?? "none");
 
-  // Resync if the selected item changes
   useEffect(() => {
     setValue(initialValue ?? "none");
   }, [initialValue]);
@@ -531,7 +534,7 @@ const FontCase = ({ id, value: initialValue }: { id: string; value: string }) =>
           <PopoverTrigger asChild>
             <Button
               className="flex w-full items-center justify-between text-sm"
-              variant="secondary"
+              variant="outline"
             >
               <div className="w-full overflow-hidden text-left">
                 <p className="truncate">
@@ -550,10 +553,13 @@ const FontCase = ({ id, value: initialValue }: { id: string; value: string }) =>
               return (
                 <div
                   onClick={() => onChangeFontCase(option.value)}
-                  className="flex cursor-pointer items-center px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
+                  className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
                   key={index}
                 >
                   {option.label}
+                  {option.value === value && (
+                    <Check size={14} className="text-muted-foreground" />
+                  )}
                 </div>
               );
             })}
@@ -705,7 +711,7 @@ const FontWordBreak = ({ id, value }: { id: string; value: string }) => {
             <PopoverTrigger asChild>
               <Button
                 className="flex w-full items-center justify-between text-sm"
-                variant="secondary"
+                variant="outline"
               >
                 <div className="w-full overflow-hidden text-left">
                   <p className="truncate">
@@ -724,10 +730,13 @@ const FontWordBreak = ({ id, value }: { id: string; value: string }) => {
                 return (
                   <div
                     onClick={() => onChange(option.value)}
-                    className="flex cursor-pointer items-center px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
+                    className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
                     key={index}
                   >
                     {option.label}
+                    {option.value === localValue && (
+                      <Check size={14} className="text-muted-foreground" />
+                    )}
                   </div>
                 );
               })}

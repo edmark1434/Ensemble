@@ -16,16 +16,16 @@ import {
   TooltipContent,
   TooltipTrigger
 } from "@/components/ui/tooltip";
-import { Upload, Video, Image, Music, Type, Captions, Shuffle } from "lucide-react";
+import {Upload, Video, Image, Music, Type, Captions, Shuffle, ClosedCaption} from "lucide-react";
 
 const MENU_ITEMS = [
-  { id: "uploads",     icon: Upload,   label: "Uploads",     ariaLabel: "Add and manage uploads" },
-  { id: "videos",      icon: Video,    label: "Videos",      ariaLabel: "Add and manage video content" },
-  { id: "images",      icon: Image,    label: "Images",      ariaLabel: "Add and manage images" },
-  { id: "audios",      icon: Music,    label: "Audio",       ariaLabel: "Add and manage audio content" },
-  { id: "texts",       icon: Type,     label: "Texts",       ariaLabel: "Add and edit text elements" },
-  { id: "captions",    icon: Captions, label: "Captions",    ariaLabel: "Add and edit captions" },
-  { id: "transitions", icon: Shuffle,  label: "Transitions", ariaLabel: "Add transition effects" },
+  { id: "uploads",     icon: Upload,        label: "Uploads",     ariaLabel: "Add and manage uploads" },
+  { id: "videos",      icon: Video,         label: "Videos",      ariaLabel: "Add and manage video content" },
+  { id: "images",      icon: Image,         label: "Images",      ariaLabel: "Add and manage images" },
+  { id: "audios",      icon: Music,         label: "Audio",       ariaLabel: "Add and manage audio content" },
+  { id: "texts",       icon: Type,          label: "Texts",       ariaLabel: "Add and edit text elements" },
+  { id: "captions",    icon: ClosedCaption, label: "Captions",    ariaLabel: "Add and edit captions" },
+  { id: "transitions", icon: Shuffle,       label: "Transitions", ariaLabel: "Add transition effects" },
 ] as const;
 
 // Memoized menu button component for better performance

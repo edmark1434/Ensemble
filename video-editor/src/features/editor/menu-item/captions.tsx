@@ -12,14 +12,15 @@ import { loadFonts } from "../utils/fonts";
 import { dispatch } from "@designcombo/events";
 import { ADD_CAPTIONS, ADD_ITEMS } from "@designcombo/state";
 import { ITrackItem, ITrackItemsMap } from "@designcombo/types";
-import { millisecondsToHHMMSS } from "../utils/format";
+import {formatTimeToHumanReadable, millisecondsToHHMMSS} from "../utils/format";
 import useStore from "../store/use-store";
-import { groupBy } from "lodash";
+import {groupBy, uniqBy} from "lodash";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PLAYER_SEEK } from "../constants/events";
 import { useCurrentPlayerFrame } from "../hooks/use-current-frame";
 import { generateId } from "@designcombo/timeline";
 import { Loader2 } from "lucide-react";
+import {seedDefaultFont} from "@/features/editor/utils/seed-default-font";
 
 export const Captions = () => {
   const { trackItemsMap } = useStore();
@@ -71,12 +72,23 @@ export const Captions = () => {
       }
 
       const transcribeData = await transcribeMedia(selectedMedia, "ES");
+      if (!transcribeData) {
+        setErrorMessage("No speech was detected in this media.");
+        return;
+      }
+
       const jsonData = transcribeData; // already shaped, no fetch needed
+
+      const defaultFont = await seedDefaultFont();
+      if (!defaultFont?.url) {
+        throw new Error("Failed to load default font.");
+      }
       const fontInfo = {
-        fontFamily: "theboldfont",
-        fontUrl: "https://cdn.designcombo.dev/fonts/the-bold-font.ttf",
+        fontFamily: defaultFont.postScriptName,
+        fontUrl: defaultFont.url,
         fontSize: 64
       };
+
       const options = {
         containerWidth: 800,
         linesPerCaption: 1,
@@ -114,6 +126,28 @@ export const Captions = () => {
     }
   };
 
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const CAPTIONS_GENERATE_GRACE_PERIOD = 2000;
+
+  useEffect(() => {
+    if (!isGenerating) {
+      setElapsedMs(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setElapsedMs((prev) => prev + 1000);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isGenerating]);
+
+  const selectedTrackItem = mediaTrackItems.find(
+    (m) => m.details.src === selectedMedia
+  );
+  const durationMs = selectedTrackItem
+    ? selectedTrackItem.display.to - selectedTrackItem.display.from
+    : 0;
+  const estimatedMs = Math.ceil(durationMs / 3 + CAPTIONS_GENERATE_GRACE_PERIOD);
+
   return (
     <div className="h-full w-full flex items-center justify-center flex-1 flex-col gap-4">
       {mediaTrackItems.length === 0 ? (
@@ -127,6 +161,8 @@ export const Captions = () => {
           createCaptions={createCaptions}
           isGenerating={isGenerating}
           errorMessage={errorMessage}
+          estimatedMs={estimatedMs}
+          elapsedMs={elapsedMs}
         />
       )}
     </div>
@@ -141,6 +177,8 @@ const MediaSection = ({
   createCaptions,
   isGenerating,
   errorMessage,
+  estimatedMs,
+  elapsedMs,
 }: {
   selectMediaItems: { label: string; value: string }[];
   selectedMedia: string | undefined;
@@ -149,6 +187,8 @@ const MediaSection = ({
   createCaptions: (selectedMedia: string) => void;
   isGenerating: boolean;
   errorMessage: string | null;
+  estimatedMs: number;
+  elapsedMs: number;
 }) => (
   <div className="flex h-full w-full flex-col">
     <div className="w-full p-4">
@@ -158,9 +198,9 @@ const MediaSection = ({
         </SelectTrigger>
         <SelectContent className="z-[200]">
           {selectMediaItems.map((item) => (
-              <SelectItem value={item.value} key={item.value}>
-                {item.label}
-              </SelectItem>
+            <SelectItem value={item.value} key={item.value}>
+              {item.label}
+            </SelectItem>
           ))}
         </SelectContent>
       </Select>
@@ -168,66 +208,75 @@ const MediaSection = ({
 
     <ScrollArea className="w-full px-4 pb-4">
       {selectedMedia ? (
-          captionTrackItemsMap[selectedMedia] ? (
-              <MediaWithCaptions
-                  captionTrackItems={captionTrackItemsMap[selectedMedia]}
-              />
-          ) : (
-              <MediaWithNoCaptions
-                  createCaptions={() => createCaptions(selectedMedia)}
-                  isGenerating={isGenerating}
-              />
-          )
+        captionTrackItemsMap[selectedMedia] ? (
+          <MediaWithCaptions
+            captionTrackItems={captionTrackItemsMap[selectedMedia]}
+          />
+        ) : (
+          <MediaWithNoCaptions
+            createCaptions={() => createCaptions(selectedMedia)}
+            isGenerating={isGenerating}
+            estimatedMs={estimatedMs}
+            elapsedMs={elapsedMs}
+          />
+        )
       ) : (
-          <MediaNoSelected />
+        <MediaNoSelected />
       )}
 
       {errorMessage && (
-          <div className="text-sm text-destructive text-center my-4">{errorMessage}</div>
+        <div className="text-sm text-destructive text-center my-4">{errorMessage}</div>
       )}
     </ScrollArea>
   </div>
 );
 
 const MediaNoSelected = () => (
-  <div className="text-center text-sm text-muted-foreground">
+  <div className="text-center text-sm text-muted-foreground text-pretty">
     Select video or audio and generate captions automatically.
   </div>
 );
 
 const EmptyMediaTrackItems = () => (
-  <div className="text-center text-sm text-muted-foreground">
+  <div className="text-center text-sm text-muted-foreground text-pretty">
     Add video or audio and generate captions automatically.
   </div>
 );
 
 const MediaWithNoCaptions = ({
   createCaptions,
-  isGenerating
+  isGenerating,
+  estimatedMs,
+  elapsedMs
 }: {
   createCaptions: () => void;
   isGenerating: boolean;
+  estimatedMs: number;
+  elapsedMs: number;
 }) => (
-  <div className="flex flex-col gap-4">
-    <div className="text-center text-sm text-muted-foreground">
+  <div className="flex flex-col gap-4 items-center">
+    <div className="text-center text-sm text-muted-foreground text-pretty">
       Recognize speech in the selected video/audio and generate captions
       automatically.
     </div>
     <Button
       onClick={createCaptions}
       variant="default"
-      className="w-full"
+      className="w-fit"
       disabled={isGenerating}
     >
       {isGenerating ? (
         <>
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Generating...
+          {millisecondsToHHMMSS(elapsedMs)}
         </>
       ) : (
         "Generate"
       )}
     </Button>
+    <div className="text-center text-xs text-muted-foreground">
+      {`Estimated time: ${millisecondsToHHMMSS(estimatedMs)}`}
+    </div>
   </div>
 );
 
@@ -283,7 +332,7 @@ const CaptionItem = ({
   };
   return (
     <div
-      className={`flex flex-col gap-2 rounded-lg p-2 hover:cursor-pointer hover:bg-accent/30 ${
+      className={`flex flex-col gap-2 rounded-lg px-3.5 py-2 hover:cursor-pointer hover:bg-accent/30 ${
         isActive
           ? "bg-captions-background text-captions-text"
           : "text-muted-foreground"
@@ -291,7 +340,7 @@ const CaptionItem = ({
       onClick={() => handleSeek(display.from)}
     >
       <div className="flex flex-col gap-1">
-        <div className="text-xs font-normal">
+        <div className="text-xs font-normal text-muted-foreground">
           {millisecondsToHHMMSS(display.from)} -{" "}
           {millisecondsToHHMMSS(display.to)}
         </div>
@@ -300,11 +349,13 @@ const CaptionItem = ({
     </div>
   );
 };
+
 // Helper functions
 const fetchMediaTrackItems = (trackItemsMap: ITrackItemsMap) => {
-  return Object.values(trackItemsMap).filter(
+  const items = Object.values(trackItemsMap).filter(
     ({ type }: ITrackItem) => type === "audio" || type === "video"
   );
+  return uniqBy(items, (item) => item.details.src);
 };
 
 const createSelectMediaOptions = (mediaTrackItems: ITrackItem[]) => {
@@ -328,13 +379,18 @@ async function transcribeMedia(mediaUrl: string, targetLanguage: string) {
     body: JSON.stringify({ url: mediaUrl, targetLanguage })
   });
 
+  const body = await transcribeResponse
+    .json()
+    .catch(() => ({ message: "Failed to transcribe media." }));
+
   if (!transcribeResponse.ok) {
-    const err = await transcribeResponse.json().catch(() => ({ message: "Failed to transcribe media." }));
-    throw new Error(err.message || "Failed to transcribe media.");
+    if (body.message === "No speech detected in the media.") {
+      return null; // sentinel: not an error, just nothing to caption
+    }
+    throw new Error(body.message || "Failed to transcribe media.");
   }
 
-  const transcribeData = await transcribeResponse.json();
-  return transcribeData.transcribe.data; // returns the shaped { results: { main: { words: [] } } }
+  return body.transcribe.data; // { results: { main: { words: [] } } }
 }
 
 // async function fetchJsonFromUrl(url: string) {

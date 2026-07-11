@@ -111,7 +111,7 @@ const SelectaAnimation = ({ trackItem }: { trackItem: ITrackItem & IText }) => {
               <div className="relative w-full">
                 <Button
                   className="flex w-full items-center justify-between text-sm"
-                  variant="secondary"
+                  variant="outline"
                   onClick={() => openPicker("in")}
                 >
                   <div className="w-full text-left">
@@ -139,7 +139,7 @@ const SelectaAnimation = ({ trackItem }: { trackItem: ITrackItem & IText }) => {
               <div className="relative w-full">
                 <Button
                   className="flex w-full items-center justify-between text-sm"
-                  variant="secondary"
+                  variant="outline"
                   onClick={() => openPicker("out")}
                 >
                   <div className="w-full text-left">
@@ -167,7 +167,7 @@ const SelectaAnimation = ({ trackItem }: { trackItem: ITrackItem & IText }) => {
               <div className="relative w-full">
                 <Button
                   className="flex w-full items-center justify-between text-sm"
-                  variant="secondary"
+                  variant="outline"
                   onClick={() => openPicker("loop")}
                 >
                   <div className="w-full text-left">

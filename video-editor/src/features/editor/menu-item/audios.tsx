@@ -254,25 +254,17 @@ const AudioItem = ({
     }
   };
 
-  const style = useMemo(
-    () => ({
-      backgroundImage:
-        "url(https://cdn.designcombo.dev/thumbnails/music-preview.png)",
-      backgroundSize: "cover",
-      width: "120px",
-      height: "120px",
-      borderRadius: "6px"
-    }),
-    []
-  );
-
   return (
     <Draggable
       data={item}
-      renderCustomPreview={<div style={style} />}
+      renderCustomPreview={
+        <div className="w-[120px] h-[120px] rounded-md flex items-center justify-center bg-zinc-800 border border-primary">
+          <Music className="text-muted-foreground" size={40} />
+        </div>
+      }
       shouldDisplayPreview={!isDraggingOverTimeline}
     >
-      <div className="group relative flex items-center gap-3 p-2 bg-secondary rounded-md hover:opacity-80 transition-colors">
+      <div className="group relative flex items-center gap-3 cursor-pointer px-3 py-2 rounded hover:bg-zinc-800/50 transition-colors">
         <audio
           ref={audioRef}
           src={item.details?.src}

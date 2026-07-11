@@ -111,7 +111,7 @@ function ColorSwatch({ value }: { value: string }) {
 
   if (gradient) {
     return (
-      <div className="relative h-9 w-9 flex-none overflow-hidden rounded-md">
+      <div className="relative h-9 w-9 flex-none overflow-hidden rounded-md rounded-r-none border border-border border-r-0">
         <div className="absolute inset-0 rounded-lg" style={CHECKERBOARD_STYLE} />
         <div className="absolute inset-0" style={{ background: value }} />
       </div>
@@ -119,13 +119,13 @@ function ColorSwatch({ value }: { value: string }) {
   }
 
   return (
-    <div className="relative h-9 w-9 flex-none overflow-hidden rounded-md">
+    <div className="relative h-9 w-9 flex-none overflow-hidden rounded-md rounded-r-none border border-border border-r-0">
       <div
         className="absolute inset-y-0 left-0 w-1/2"
         style={{ background: solidColor }}
       />
       <div className="absolute inset-y-0 right-0 w-1/2 overflow-hidden">
-        <div className="absolute inset-0 rounded-r-lg" style={CHECKERBOARD_STYLE} />
+        <div className="absolute inset-0 rounded-r-none" style={CHECKERBOARD_STYLE} />
         <div className="absolute inset-0" style={{ background: fullHex }} />
       </div>
     </div>
@@ -133,14 +133,14 @@ function ColorSwatch({ value }: { value: string }) {
 }
 
 export function ColorPickerField({
-                                   value,
-                                   onChange,
-                                   gradient = false,
-                                   solid = true,
-                                   popoverTitle = "Color",
-                                   mobileControlType,
-                                   mobileControlLabel
-                                 }: ColorPickerFieldProps) {
+  value,
+  onChange,
+  gradient = false,
+  solid = true,
+  popoverTitle = "Color",
+  mobileControlType,
+  mobileControlLabel
+}: ColorPickerFieldProps) {
   const [localValue, setLocalValue] = useState<string>(value);
   const [open, setOpen] = useState(false);
   const isLargeScreen = useIsLargeScreen();
@@ -175,7 +175,7 @@ export function ColorPickerField({
             className="absolute left-0.5 top-0.5 h-7 w-7 flex-none rounded-md border border-border"
           />
           <Input
-            className="pointer-events-none pl-10"
+            className="pointer-events-none pl-10 rounded-l-none"
             value={formatColorDisplay(localValue)}
             onChange={() => {}}
           />
@@ -187,11 +187,11 @@ export function ColorPickerField({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <div className="relative flex w-full cursor-pointer gap-1">
+        <div className="relative flex w-full cursor-pointer">
           <ColorSwatch value={localValue} />
           <Button
-            className="flex w-full flex-1 items-center justify-between px-3 text-sm"
-            variant="secondary"
+            className="flex w-full flex-1 items-center justify-between px-3 text-sm rounded-l-none"
+            variant="outline"
           >
             <div className="w-full overflow-hidden text-left">
               <p className="truncate">{formatColorDisplay(localValue)}</p>

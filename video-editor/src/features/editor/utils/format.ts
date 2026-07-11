@@ -30,7 +30,7 @@ export function formatTimeToHumanReadable(
   ms: number,
   includeFrames = false
 ): string {
-  if (!ms) return "00:00";
+  if (!ms) return "0s";
 
   const fps = 60;
   const msPerFrame = 1000 / fps;

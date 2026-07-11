@@ -17,6 +17,7 @@ import { ICompactFont, IFont } from "../interfaces/editor";
 import { DEFAULT_FONT } from "../constants/font";
 import { PresetCaption } from "./common/preset-caption";
 import AnimationCaption from "./common/animation-caption";
+import {LayoutControls} from "@/features/editor/control-item/common/layout";
 
 interface ITextControlProps {
   color: string;
@@ -39,6 +40,7 @@ interface ITextControlProps {
   boxShadow: IBoxShadow;
   isKeywordColor: string;
   preservedColorKeyWord: boolean;
+  backgroundColor: string;
 }
 
 const DECORATION_LINE_VALUES = ["underline", "overline", "line-through"];
@@ -63,6 +65,57 @@ const getStyleNameFromFontName = (fontName: string) => {
   return styleName;
 };
 
+const resolveFontFromDetails = (
+  details: (ITrackItem & ICaption)["details"],
+  fonts: IFont[],
+  compactFonts: ICompactFont[]
+): ICompactFont | undefined => {
+  const fontFamily = details.fontFamily || DEFAULT_FONT.postScriptName;
+  const currentFont = fonts.find((font) => font.postScriptName === fontFamily);
+  if (!currentFont) return undefined;
+
+  const matched = compactFonts.find((font) => font.family === currentFont.family);
+  if (!matched) return undefined;
+
+  return { ...matched, name: getStyleNameFromFontName(currentFont.postScriptName) };
+};
+
+const getPropertiesFromDetails = (
+  details: (ITrackItem & ICaption)["details"],
+  fontFamilyDisplay?: string
+): ITextControlProps => {
+  const opacity = details.opacity ?? 100;
+  const { lines, color } = splitTextDecoration(details.textDecoration);
+  return {
+    color: details.color || "#ffffff",
+    colorDisplay: details.color || "#ffffff",
+    appearedColor: details.appearedColor || "#ffffff",
+    activeColor: details.activeColor || "#ffffff",
+    activeFillColor: details.activeFillColor || "#ffffff",
+    isKeywordColor: details.isKeywordColor || "transparent",
+    preservedColorKeyWord: details.preservedColorKeyWord || false,
+    fontSize: details.fontSize || 62,
+    fontSizeDisplay: `${details.fontSize || 62}px`,
+    fontFamily: details.fontFamily,
+    fontFamilyDisplay: fontFamilyDisplay || details.fontFamily,
+    opacity,
+    opacityDisplay: `${opacity}%`,
+    textAlign: details.textAlign || "left",
+    textDecoration: details.textDecoration || "none",
+    textDecorationLines: lines,
+    textDecorationColor: color,
+    borderWidth: details.borderWidth || 0,
+    borderColor: details.borderColor || "#000000",
+    boxShadow: details.boxShadow || {
+      color: "#000000",
+      x: 0,
+      y: 0,
+      blur: 0
+    },
+    backgroundColor: details.backgroundColor || "transparent",
+  };
+};
+
 const BasicCaption = ({
   trackItem,
   type
@@ -80,90 +133,28 @@ const BasicCaption = ({
       setActiveModalAnimation(!activeModalAnimation);
     }
   };
-  const [properties, setProperties] = useState<ITextControlProps>({
-    color: "#000000",
-    colorDisplay: "#000000",
-    appearedColor: "#ffffff",
-    activeColor: "#ffffff",
-    activeFillColor: "#ffffff",
-    isKeywordColor: "transparent",
-    preservedColorKeyWord: false,
-    fontSize: 12,
-    fontSizeDisplay: "12px",
-    fontFamily: "Open Sans",
-    fontFamilyDisplay: "Open Sans",
-    opacity: 1,
-    opacityDisplay: "100%",
-    textAlign: "left",
-    textDecoration: "none",
-    textDecorationLines: "",
-    textDecorationColor: "",
-    borderWidth: 0,
-    borderColor: "#000000",
-    boxShadow: {
-      color: "#000000",
-      x: 0,
-      y: 0,
-      blur: 0
-    }
-  });
-
-  const [selectedFont, setSelectedFont] = useState<ICompactFont>({
-    family: "Open Sans",
-    styles: [],
-    default: DEFAULT_FONT,
-    name: "Regular"
-  });
   const { compactFonts, fonts } = useDataState();
 
+  const initialFont =
+    resolveFontFromDetails(trackItem.details, fonts, compactFonts) ?? {
+      family: DEFAULT_FONT.family,
+      styles: [],
+      default: DEFAULT_FONT,
+      name: "Regular"
+    };
+
+  const [selectedFont, setSelectedFont] = useState<ICompactFont>(initialFont);
+
+  const [properties, setProperties] = useState<ITextControlProps>(() =>
+    getPropertiesFromDetails(trackItem.details, initialFont.family)
+  );
+
   useEffect(() => {
-    const fontFamily =
-      trackItem.details.fontFamily || DEFAULT_FONT.postScriptName;
-    const currentFont = fonts.find(
-      (font) => font.postScriptName === fontFamily
-    );
-    const selectedFont = compactFonts.find(
-      (font) => font.family === currentFont?.family
-    );
+    const resolved = resolveFontFromDetails(trackItem.details, fonts, compactFonts);
+    if (!resolved) return;
 
-    if (selectedFont && currentFont) {
-      setSelectedFont({
-        ...selectedFont,
-        name: getStyleNameFromFontName(currentFont.postScriptName)
-      });
-    }
-
-    const { lines, color: decorationColor } = splitTextDecoration(
-      trackItem.details.textDecoration
-    );
-
-    setProperties({
-      color: trackItem.details.color || "#ffffff",
-      colorDisplay: trackItem.details.color || "#ffffff",
-      fontSize: trackItem.details.fontSize || 62,
-      fontSizeDisplay: `${trackItem.details.fontSize || 62}px`,
-      fontFamily: selectedFont?.family || "Open Sans",
-      fontFamilyDisplay: selectedFont?.family || "Open Sans",
-      opacity: trackItem.details.opacity || 100,
-      opacityDisplay: `${(trackItem.details.opacity || 1) * 100 || "100"}%`,
-      textAlign: trackItem.details.textAlign || "left",
-      textDecoration: trackItem.details.textDecoration || "none",
-      textDecorationLines: lines,
-      textDecorationColor: decorationColor,
-      borderWidth: trackItem.details.borderWidth || 0,
-      borderColor: trackItem.details.borderColor || "#000000",
-      appearedColor: trackItem.details.appearedColor || "#ffffff",
-      activeColor: trackItem.details.activeColor || "#ffffff",
-      activeFillColor: trackItem.details.activeFillColor || "#ffffff",
-      isKeywordColor: trackItem.details.isKeywordColor || "transparent",
-      preservedColorKeyWord: trackItem.details.preservedColorKeyWord || false,
-      boxShadow: trackItem.details.boxShadow || {
-        color: "#000000",
-        x: 0,
-        y: 0,
-        blur: 0
-      }
-    });
+    setSelectedFont(resolved);
+    setProperties(getPropertiesFromDetails(trackItem.details, resolved.family));
   }, [trackItem.details]);
 
   const handleChangeFontStyle = async (font: IFont) => {
@@ -309,25 +300,6 @@ const BasicCaption = ({
     });
   };
 
-  const handleColorChange = (color: string) => {
-    setProperties((prev) => {
-      return {
-        ...prev,
-        color: color
-      } as ITextControlProps;
-    });
-
-    dispatch(EDIT_OBJECT, {
-      payload: {
-        [trackItem.id]: {
-          details: {
-            color: color
-          }
-        }
-      }
-    });
-  };
-
   const onChangeTextAlign = (v: string) => {
     setProperties((prev) => {
       return {
@@ -433,8 +405,8 @@ const BasicCaption = ({
 
   const components = [
     {
-      key: "captionPreset",
-      component: <PresetCaption trackItem={trackItem} properties={properties} />
+      key: "layout",
+      component: <LayoutControls trackItem={trackItem} />
     },
     {
       key: "captionWords",
@@ -443,23 +415,6 @@ const BasicCaption = ({
           id={trackItem.id}
           handleModalAnimation={handleModalAnimation}
           trackItem={trackItem}
-        />
-      )
-    },
-    {
-      key: "animations",
-      component: <AnimationCaption />
-    },
-    {
-      key: "captionColors",
-      component: (
-        <CaptionColors
-          id={trackItem.id}
-          activeColor={properties.activeColor}
-          activeFillColor={properties.activeFillColor}
-          appearedColor={properties.appearedColor}
-          isKeywordColor={properties.isKeywordColor}
-          preservedColorKeyWord={properties.preservedColorKeyWord}
         />
       )
     },
@@ -473,12 +428,26 @@ const BasicCaption = ({
           onChangeFontFamily={onChangeFontFamily}
           handleChangeFontStyle={handleChangeFontStyle}
           onChangeFontSize={onChangeFontSize}
-          handleColorChange={handleColorChange}
           onChangeTextAlign={onChangeTextAlign}
           onChangeTextDecorationLines={onChangeTextDecorationLines}
           onChangeTextDecorationColor={onChangeTextDecorationColor}
           handleChangeOpacity={handleChangeOpacity}
-          handleBackgroundChange={(v: string) => console.log(v)}
+          showFill={false}
+        />
+      )
+    },
+    {
+      key: "captionColors",
+      component: (
+        <CaptionColors
+          id={trackItem.id}
+          color={properties.color}
+          backgroundColor={properties.backgroundColor}
+          activeColor={properties.activeColor}
+          activeFillColor={properties.activeFillColor}
+          appearedColor={properties.appearedColor}
+          isKeywordColor={properties.isKeywordColor}
+          preservedColorKeyWord={properties.preservedColorKeyWord}
         />
       )
     },
@@ -486,7 +455,7 @@ const BasicCaption = ({
       key: "fontStroke",
       component: (
         <Outline
-          label="Font stroke"
+          label="Stroke"
           onChageBorderWidth={(v: number) => onChangeBorderWidth(v)}
           onChangeBorderColor={(v: string) => onChangeBorderColor(v)}
           valueBorderWidth={properties.borderWidth as number}
@@ -498,12 +467,16 @@ const BasicCaption = ({
       key: "fontShadow",
       component: (
         <Shadow
-          label="Font shadow"
+          label="Shadow"
           onChange={(v: IBoxShadow) => onChangeBoxShadow(v)}
           value={properties.boxShadow}
         />
       )
-    }
+    },
+    {
+      key: "animations",
+      component: <AnimationCaption />
+    },
   ];
   return (
     <>
@@ -534,9 +507,9 @@ const BasicCaption = ({
         </div>
       )}
 
-      <div className="flex lg:h-[calc(100vh-84px)] flex-1 flex-col overflow-hidden min-h-[340px]">
+      <div className="flex h-full flex-1 flex-col overflow-hidden min-h-0">
         <ScrollArea className="h-full">
-          <div className="flex flex-col gap-2 px-4 py-4">
+          <div className="flex flex-col gap-6 p-4">
             {components
               .filter((comp) => showAll || comp.key === type)
               .map((comp) => (
