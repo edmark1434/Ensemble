@@ -1,32 +1,22 @@
-import {ITextDetails} from "@designcombo/types";
+import { interpolate } from "remotion";
+import { FullBlockAnimationProps, renderFullBlock } from "./full-block-animation";
 
-const Spin = ({
-  text,
-  frame,
-  fps,
-  details,
-}: {
-  text: string;
-  frame: number;
-  fps: number;
-  details: ITextDetails;
-}) => {
-  const t = frame / fps;
-  const rotateZ = t * 360;
+const Spin = (props: FullBlockAnimationProps) => {
+  const { frame, fps, durationInFrames, animationTextInFrames, animationTextOutFrames } = props;
 
-  return (
-    <div
-      style={{
-        width: details.width,
-        height: details.height,
-        transform: `rotateZ(${rotateZ}deg)`,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center"
-      }}
-    >
-      {text}
-    </div>
-  );
+  const loopDuration = durationInFrames - animationTextInFrames - animationTextOutFrames;
+  const loopFrame = frame - animationTextInFrames;
+
+  // keep ~1 rotation/sec like before, but round to a whole number of
+  // rotations so the final frame always lands on a multiple of 360deg
+  const rotations = Math.max(1, Math.round(loopDuration / fps));
+
+  const rotateZ = interpolate(loopFrame, [0, loopDuration], [0, rotations * 360], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  return renderFullBlock(props, { transform: `rotateZ(${rotateZ}deg)` });
 };
+
 export default Spin;

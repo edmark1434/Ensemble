@@ -12,6 +12,8 @@ import { ICompactFont, IFont } from "../interfaces/editor";
 import { DEFAULT_FONT } from "../constants/font";
 import { PresetText } from "./common/preset-text";
 import { Animations } from "./common/animations";
+import {LayoutControls} from "@/features/editor/control-item/common/layout";
+import {TextContent} from "@/features/editor/control-item/common/text-content";
 
 interface ITextControlProps {
   color: string;
@@ -352,6 +354,18 @@ const BasicText = ({
   };
 
   const components = [
+    {
+      key: "content",
+      component: (
+        <TextContent trackItem={trackItem} />
+      )
+    },
+    {
+      key: "layout",
+      component: (
+        <LayoutControls trackItem={trackItem} />
+      )
+    },
     {
       key: "textControls",
       component: (

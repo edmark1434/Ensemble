@@ -1,7 +1,8 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Image, ArrowRight, ArrowLeft, Upload } from "lucide-react";
 import ShapeGrid from "../../components/ui/ShapeGrid";
+import api from "../../lib/axios";
 
 const T = {
   bg:        "#080a12",
@@ -13,18 +14,43 @@ const T = {
   muted:     "#888",
   dim:       "#555",
   error:     "#e05252",
-  fontBody:    "'Plus Jakarta Sans', sans-serif",
+  fontBody:  "'Plus Jakarta Sans', sans-serif",
 };
+
+interface Preset {
+  file_id: number;
+  path: string;
+  name: string;
+}
 
 export default function UploadImage() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string>("/profile_presets/p1.png");
+  const [previewUrl, setPreviewUrl] = useState<string>("");
   const [isCustomFile, setIsCustomFile] = useState(false);
+  const [presets, setPresets] = useState<Preset[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState<number | null>(null);
 
-  // Generate presets array dynamically from p1.png to p12.png
-  const presets = Array.from({ length: 12 }, (_, i) => `/profile_presets/p13_UploadImage_preset_${i + 1}.png`.replace('p13_UploadImage_preset_', 'p'));
+  useEffect(() => {
+    const fetchPresets = async () => {
+      try {
+        const response = await api.get("/api/files/profile-presets");
+        setPresets(response.data.files);
+        
+        // Set first preset as default
+        if (response.data.files && response.data.files.length > 0) {
+          const firstPreset = response.data.files[0];
+          const fullUrl = `${import.meta.env.VITE_CLOUDFRONT_URL}${firstPreset.path}`;
+          setPreviewUrl(fullUrl);
+          setSelectedPresetId(firstPreset.file_id);
+        }
+      } catch (error) {
+        console.error("Error fetching presets:", error);
+      }
+    };
+    fetchPresets();
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -32,31 +58,114 @@ export default function UploadImage() {
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
       setIsCustomFile(true);
+      setSelectedPresetId(null);
     }
   };
 
-  const handlePresetSelect = (presetPath: string) => {
-    setPreviewUrl(presetPath);
+  const handlePresetSelect = (presetId: number, presetUrl: string) => {
+    setPreviewUrl(presetUrl);
     setIsCustomFile(false);
+    setSelectedPresetId(presetId);
   };
 
   const triggerFileUpload = () => {
     fileInputRef.current?.click();
   };
 
-  const handleNext = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const uploadFile = async (file: File) => {
 
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-      navigate("/setup/profile-setup");
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
+  let response = await api.post("/api/files/upload-url", {
+    folder: "profile",
+    filename: file.name,
+    contentType: file.type,
+  });
+
+  let { uploadUrl, key } = response.data;
+
+  let uploadResponse = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Type": file.type,
+    },
+    body: file,
+  });
+
+  // Upload URL expired
+  if (uploadResponse.status === 403) {
+
+    response = await api.post("/api/files/upload-url", {
+      folder: "profile",
+      fileName: file.name,
+      contentType: file.type,
+    });
+
+    ({ uploadUrl, key } = response.data);
+
+    uploadResponse = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": file.type,
+      },
+      body: file,
+    });
+  }
+
+  if (!uploadResponse.ok) {
+    throw new Error(`Failed to upload image (${uploadResponse.status})`);
+  }
+
+  return key;
+};
+const handleNext = async (e: React.FormEvent) => {
+
+  e.preventDefault();
+  setLoading(true);
+
+  try {
+
+    if (isCustomFile) {
+
+      const file = fileInputRef.current?.files?.[0];
+
+      if (!file) {
+        throw new Error("Please select an image.");
+      }
+
+      const key = await uploadFile(file);
+
+      await api.post("/api/accounts/update-profile", {
+          name: file.name,
+          path: key,
+          mime_type: file.type,
+          size_bytes: file.size,
+        },
+      );
+
+      console.log("✅ Custom avatar uploaded.");
+
+    } else {
+
+      const selectedPreset = presets.find(
+        p => p.file_id === selectedPresetId
+      );
+
+      await api.put("/api/accounts/update-profile-id", {
+        fileId: selectedPreset?.file_id
+      });
     }
-  };
+
+    navigate("/setup/profile-setup");
+
+  } catch (err) {
+
+    console.error(err);
+
+  } finally {
+
+    setLoading(false);
+
+  }
+};
 
   return (
     <>
@@ -151,7 +260,6 @@ export default function UploadImage() {
       `}</style>
 
       <div className="setup-page-wrapper">
-        {/* Dynamic Canvas Background Module Integration */}
         <div className="canvas-bg-container">
           <ShapeGrid
             direction="diagonal"
@@ -165,8 +273,7 @@ export default function UploadImage() {
         </div>
 
         <div className="setup-card">
-
-          {/* Static Progress Bar Tracker — Stage 3 / 5 (60%) */}
+          {/* Progress Bar */}
           <div style={{ marginBottom: 40 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: T.accent, letterSpacing: 0.5 }}>ACCOUNT SETUP</span>
@@ -177,7 +284,7 @@ export default function UploadImage() {
             </div>
           </div>
 
-          {/* Core Layout Content */}
+          {/* Content */}
           <div className="animated-content">
             <div style={{
               width: 48, height: 48, borderRadius: 12, background: T.bgInput,
@@ -193,7 +300,7 @@ export default function UploadImage() {
               Upload a customized system media asset file or select one of our curated design profile presets.
             </p>
 
-            {/* Main Interactive Avatar Preview Ring */}
+            {/* Avatar Preview */}
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 32 }}>
               <div
                 style={{
@@ -207,10 +314,11 @@ export default function UploadImage() {
                 }}
               >
                 <div style={{ width: "100%", height: "100%", borderRadius: "50%", overflow: "hidden", background: T.bgInput }}>
-                  <img src={previewUrl} alt="Avatar Preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  {previewUrl && (
+                    <img src={previewUrl} alt="Avatar Preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  )}
                 </div>
 
-                {/* Upload Trigger Floating Circle Button */}
                 <button
                   onClick={triggerFileUpload}
                   style={{
@@ -236,7 +344,7 @@ export default function UploadImage() {
               </div>
             </div>
 
-            {/* Hidden Input Component Node */}
+            {/* File Input */}
             <input
               type="file"
               ref={fileInputRef}
@@ -245,29 +353,30 @@ export default function UploadImage() {
               style={{ display: "none" }}
             />
 
-            {/* Selection Title */}
+            {/* Presets */}
             <label style={{ display: "block", color: T.muted, fontSize: 12, fontWeight: 500, marginBottom: 14 }}>
               Profile Presets
             </label>
 
-            {/* 12-Item Circle Vector Grid Module */}
             <div className="presets-grid">
-              {presets.map((presetPath, idx) => {
-                const isActive = !isCustomFile && previewUrl === presetPath;
+              {presets.map((preset) => {
+                const fullUrl = `${import.meta.env.VITE_CLOUDFRONT_URL}${preset.path}`;
+                const isActive = !isCustomFile && selectedPresetId === preset.file_id;
                 return (
                   <button
-                    key={idx}
+                    key={preset.file_id}
                     type="button"
-                    onClick={() => handlePresetSelect(presetPath)}
+                    onClick={() => handlePresetSelect(preset.file_id, fullUrl)}
                     className={`preset-circle ${isActive ? "active" : ""}`}
+                    title={preset.name}
                   >
-                    <img src={presetPath} alt={`Preset ${idx + 1}`} />
+                    <img src={fullUrl} alt={preset.name} />
                   </button>
                 );
               })}
             </div>
 
-            {/* Flow Actions Navigation Rack */}
+            {/* Navigation */}
             <div style={{ display: "flex", gap: 12 }}>
               <button
                 type="button"
@@ -284,13 +393,13 @@ export default function UploadImage() {
               <button
                 type="button"
                 onClick={handleNext}
-                disabled={loading}
+                disabled={loading || !previewUrl}
                 style={{
-                  flex: 2, background: loading ? "#555" : "#fff", color: "#080a12", border: "none", padding: "12px 20px",
-                  borderRadius: 30, fontWeight: 600, fontSize: 14, cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all .2s ease"
+                  flex: 2, background: loading || !previewUrl ? "#555" : "#fff", color: "#080a12", border: "none", padding: "12px 20px",
+                  borderRadius: 30, fontWeight: 600, fontSize: 14, cursor: loading || !previewUrl ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, transition: "all .2s ease"
                 }}
-                onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = "#e8e8e8"; }}
-                onMouseLeave={(e) => { if (!loading) e.currentTarget.style.background = "#fff"; }}
+                onMouseEnter={(e) => { if (!loading && previewUrl) e.currentTarget.style.background = "#e8e8e8"; }}
+                onMouseLeave={(e) => { if (!loading && previewUrl) e.currentTarget.style.background = "#fff"; }}
               >
                 {loading ? "Processing..." : (
                   <>
@@ -301,7 +410,6 @@ export default function UploadImage() {
               </button>
             </div>
           </div>
-
         </div>
       </div>
     </>

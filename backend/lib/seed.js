@@ -269,11 +269,10 @@ async function seed() {
       userAccountIds.push(accountId);
 
       await pool.query(
-        `INSERT INTO USERS (firebase_user_uuid, xendit_customer_id, first_name, last_name, email_address, password_hash, account_id) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        `INSERT INTO USERS (firebase_user_uuid, first_name, last_name, email_address, password_hash, account_id) 
+         VALUES ($1, $2, $3, $4, $5, $6)`,
         [
           cap(faker.string.alphanumeric(28), 50),
-          cap(`cust_${faker.string.alphanumeric(15)}`, 50),
           firstName,
           lastName,
           userEmail,

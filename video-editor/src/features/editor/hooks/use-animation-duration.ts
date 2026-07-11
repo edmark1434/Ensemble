@@ -33,9 +33,12 @@ export const useAnimationDuration = () => {
   const [outDuration, setOutDuration] = useState(0);
   const [loopDuration, setLoopDuration] = useState(0);
 
+  const MIN_ANIMATION_FRAMES = 10;
+
   // Persists one or more animation durations in a SINGLE dispatch, so the
   // store never passes through a half-corrected state (e.g. "in" updated
   // but "out" not yet) that the effect below could observe and react to.
+  // use-animation-duration.ts
   const dispatchAnimationUpdates = useCallback(
     (updates: Partial<Record<AnimationType, number>>) => {
       if (!item) return;
@@ -47,12 +50,13 @@ export const useAnimationDuration = () => {
 
       const animations: Record<string, any> = {};
       for (const type of types) {
+        const frames = Math.max(MIN_ANIMATION_FRAMES, msToFrames(updates[type] as number));
         animations[type] = {
           name: item.animations?.[type]?.name,
           composition: [
             {
               ...item.animations?.[type]?.composition?.[0],
-              durationInFrames: msToFrames(updates[type] as number)
+              durationInFrames: frames
             }
           ]
         };

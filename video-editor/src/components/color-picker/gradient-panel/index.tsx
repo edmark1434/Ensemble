@@ -285,7 +285,11 @@ const GradientPanel: FC<IPropsPanel> = ({
         className="gradient-result"
         onMouseDown={showGradientAngle ? onMouseDown : undefined}
         onTouchStart={showGradientAngle ? onTouchStart : undefined}
-        style={{ background: gradient }}
+        style={{
+          backgroundImage: `${gradient}, url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"><path fill="white" d="M1,0H2V1H1V0ZM0,1H1V2H0V1Z"/><path fill="gray" d="M0,0H1V1H0V0ZM1,1H2V2H1V1Z"/></svg>')`,
+          backgroundSize: "100% 100%, 8px 8px",
+          backgroundRepeat: "no-repeat, repeat"
+        }}
       >
         <div
           data-mode={type}

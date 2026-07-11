@@ -1,4 +1,5 @@
 import { spring } from "remotion";
+import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
 
 const GreatThinkersAnimationOut = ({
   char,
@@ -7,7 +8,8 @@ const GreatThinkersAnimationOut = ({
   fps,
   textLength,
   animationTextOutFrames,
-  durationInFrames
+  durationInFrames,
+  colorStyle
 }: {
   char: string;
   index: number;
@@ -16,6 +18,11 @@ const GreatThinkersAnimationOut = ({
   textLength: number;
   animationTextOutFrames: number;
   durationInFrames: number;
+  colorStyle: {
+    isGradient: boolean;
+    shadowStrokeStyle: React.CSSProperties;
+    fillStyle: React.CSSProperties;
+  };
 }) => {
   const exitStart = durationInFrames - animationTextOutFrames;
   const delayPerChar = animationTextOutFrames / textLength;
@@ -31,15 +38,13 @@ const GreatThinkersAnimationOut = ({
   });
 
   return (
-    <span
-      key={index}
-      style={{
-        display: "inline-block",
-        opacity
-      }}
-    >
-      {char === " " ? " " : char}
-    </span>
+    <AnimatedChar
+      char={char}
+      animationStyle={{ opacity }}
+      isGradient={colorStyle.isGradient}
+      shadowStrokeStyle={colorStyle.shadowStrokeStyle}
+      fillStyle={colorStyle.fillStyle}
+    />
   );
 };
 

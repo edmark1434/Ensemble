@@ -1,4 +1,5 @@
 import { interpolate, spring } from "remotion";
+import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
 
 const MadeWithLoveAnimationOut = ({
   char,
@@ -7,7 +8,8 @@ const MadeWithLoveAnimationOut = ({
   fps,
   textLength,
   animationTextOutFrames,
-  durationInFrames
+  durationInFrames,
+  colorStyle
 }: {
   char: string;
   index: number;
@@ -16,6 +18,11 @@ const MadeWithLoveAnimationOut = ({
   textLength: number;
   animationTextOutFrames: number;
   durationInFrames: number;
+  colorStyle: {
+    isGradient: boolean;
+    shadowStrokeStyle: React.CSSProperties;
+    fillStyle: React.CSSProperties;
+  };
 }) => {
   const exitStart = durationInFrames - animationTextOutFrames;
   const delayPerChar = animationTextOutFrames / textLength;
@@ -41,16 +48,13 @@ const MadeWithLoveAnimationOut = ({
   );
 
   return (
-    <span
-      key={index}
-      style={{
-        display: "inline-block",
-        transform: `translateY(${translateY}px)`,
-        opacity
-      }}
-    >
-      {char === " " ? "\u00A0" : char}
-    </span>
+    <AnimatedChar
+      char={char}
+      animationStyle={{ transform: `translateY(${translateY}px)`, opacity }}
+      isGradient={colorStyle.isGradient}
+      shadowStrokeStyle={colorStyle.shadowStrokeStyle}
+      fillStyle={colorStyle.fillStyle}
+    />
   );
 };
 

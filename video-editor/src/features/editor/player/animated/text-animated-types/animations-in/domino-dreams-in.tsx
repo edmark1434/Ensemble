@@ -1,4 +1,5 @@
 import { spring } from "remotion";
+import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
 
 const DominoDreamsIn = ({
   char,
@@ -6,7 +7,8 @@ const DominoDreamsIn = ({
   frame,
   fps,
   textLength,
-  animationTextInFrames
+  animationTextInFrames,
+  colorStyle
 }: {
   char: string;
   index: number;
@@ -14,6 +16,11 @@ const DominoDreamsIn = ({
   fps: number;
   textLength: number;
   animationTextInFrames: number;
+  colorStyle: {
+    isGradient: boolean;
+    shadowStrokeStyle: React.CSSProperties;
+    fillStyle: React.CSSProperties;
+  };
 }) => {
   const totalDuration = animationTextInFrames;
   const delayFactor = totalDuration / textLength;
@@ -28,15 +35,13 @@ const DominoDreamsIn = ({
   });
 
   return (
-    <span
-      key={index}
-      style={{
-        display: "inline-block",
-        transform: `rotateY(${rotateY}deg)`
-      }}
-    >
-      {char === " " ? " " : char}
-    </span>
+    <AnimatedChar
+      char={char}
+      animationStyle={{ transform: `rotateY(${rotateY}deg)` }}
+      isGradient={colorStyle.isGradient}
+      shadowStrokeStyle={colorStyle.shadowStrokeStyle}
+      fillStyle={colorStyle.fillStyle}
+    />
   );
 };
 

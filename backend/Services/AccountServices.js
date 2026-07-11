@@ -1,8 +1,10 @@
 const { getAllAccounts, createAccount, getAccountByHandle, getAccountWalletRepositories,
     checkAccountId, getProfileRepositories, getAccountLinkByAccountIdRepositories,
     checkUserAccountIdRepositories,
-    getDisplayNameByAccountId
- } = require("../Repositories/AccountRepositories");
+    getDisplayNameByAccountId,
+    updateAndInsertAccountProfile,
+    updateAccountProfile
+} = require("../Repositories/AccountRepositories");
 const redisClient = require('../lib/redis');
 
 async function fetchAllAccounts() {
@@ -126,6 +128,33 @@ async function getDisplayNameByAccountIdService(listOfAccountIds) {
     }
 }
 
+async function updateAndInsertAccountProfileServices(accountId, profileData) { 
+    if (!checkAccountIdService(accountId)) {
+        throw new Error('Invalid account ID');
+    }
+    console.log('Profile data received for update:', profileData);
+    try {
+        const fileId = await updateAndInsertAccountProfile(accountId, profileData);
+        return fileId;
+    } catch (err) {
+        console.error('Error updating/inserting account profile:', err);
+        throw err;
+    }
+}
+
+async function updateAccountProfileServices(accountId, fileId) {
+    if (!checkAccountIdService(accountId)) {
+        throw new Error('Invalid account ID');
+    }
+    console.log('File ID received for update:', fileId);
+    try {
+        await updateAccountProfile(accountId, fileId);
+    } catch (err) {
+        console.error('Error updating account profile:', err);
+        throw err;
+    }
+}
+
 module.exports = {
     fetchAllAccounts,
     createNewAccount,
@@ -135,5 +164,7 @@ module.exports = {
     getAccountLinkByAccountIdService,
     checkUserAccountIdService,
     checkAccountIdService,
-    getDisplayNameByAccountIdService
+    getDisplayNameByAccountIdService,
+    updateAndInsertAccountProfileServices,
+    updateAccountProfileServices
 };

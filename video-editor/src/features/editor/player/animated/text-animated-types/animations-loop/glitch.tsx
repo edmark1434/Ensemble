@@ -1,52 +1,48 @@
-import {ITextDetails} from "@designcombo/types";
+import { FullBlockAnimationProps, renderBlockContent } from "./full-block-animation";
 
-const GlitchText = ({
-  text,
-  frame,
-  details,
-}: {
-  text: string;
-  frame: number;
-  details: ITextDetails;
-}) => {
-  const glitchIntensity = Math.sin(frame / 10) * 10;
-  const rgbOffset = Math.sin(frame / 5) * 10;
+const GlitchText = (props: FullBlockAnimationProps) => {
+  const { frame, durationInFrames, animationTextInFrames, animationTextOutFrames } = props;
+
+  const loopDuration = durationInFrames - animationTextInFrames - animationTextOutFrames;
+  const loopFrame = Math.min(Math.max(frame - animationTextInFrames, 0), loopDuration);
+
+  const baseCycles = Math.max(1, Math.round(loopDuration / (20 * Math.PI)));
+  const phase = (cycles: number) => (2 * Math.PI * cycles * loopFrame) / loopDuration;
+
+  const glitchIntensity = Math.sin(phase(baseCycles)) * 10;
+  const rgbOffset = Math.sin(phase(baseCycles * 2)) * 10;
+
+  const solidColor = (color: string) => () => ({
+    isGradient: false,
+    shadowStrokeStyle: {},
+    fillStyle: { color },
+  });
+
+  const cyanBlock = renderBlockContent({ ...props, getColorStyle: solidColor("cyan") });
+  const magentaBlock = renderBlockContent({ ...props, getColorStyle: solidColor("magenta") });
+  const mainBlock = renderBlockContent(props);
 
   return (
-    <div
-      style={{
-        width: details.width,
-        height: details.height,
-        position: "relative",
-        opacity: 0.8,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center"
-      }}
-    >
+    <div style={{ display: "grid", opacity: 0.8 }}>
       <div
         style={{
-          position: "absolute",
-          color: "cyan",
+          gridArea: "1 / 1",
           transform: `translate(${rgbOffset}px, ${glitchIntensity}px)`,
-          mixBlendMode: "screen"
+          mixBlendMode: "screen",
         }}
       >
-        {text}
+        {cyanBlock}
       </div>
       <div
         style={{
-          position: "absolute",
-          color: "magenta",
+          gridArea: "1 / 1",
           transform: `translate(${-rgbOffset}px, ${-glitchIntensity}px)`,
-          mixBlendMode: "screen"
+          mixBlendMode: "screen",
         }}
       >
-        {text}
+        {magentaBlock}
       </div>
-      <div style={{ color: "white" }}>
-        <span style={{ paddingInline: "10px" }}>{text}</span>
-      </div>
+      <div style={{ gridArea: "1 / 1", paddingInline: 10 }}>{mainBlock}</div>
     </div>
   );
 };

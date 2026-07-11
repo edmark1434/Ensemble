@@ -4,6 +4,7 @@ import Solid from "./solid";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
 import { IPropsMain } from "./types";
 import "./colorpicker.css";
+import {isGradientColor} from "@/components/color-picker/helpers";
 
 const ColorPicker: FC<IPropsMain> = ({
   value = "#ffffff",
@@ -32,9 +33,11 @@ const ColorPicker: FC<IPropsMain> = ({
   };
 
   if (solid && gradient) {
+    const defaultTab = isGradientColor(value) ? "gradient" : "solid";
+
     return (
       <div className="w-full">
-        <Tabs defaultValue="solid" className="w-full">
+        <Tabs defaultValue={defaultTab} className="w-full">
           <TabsList className="h-9 w-full">
             <TabsTrigger value="solid">Solid</TabsTrigger>
             <TabsTrigger value="gradient">Gradient</TabsTrigger>

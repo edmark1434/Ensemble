@@ -6,7 +6,9 @@ const {
     getProfileController,
     getAccountLinkByAccountIdController,
     checkUserAccountIdController,
-    getDisplayNameByAccountIdController
+    getDisplayNameByAccountIdController,
+    updateAndInsertAccountProfileController,
+    updateAccountProfileIdController
 } = require('../Controllers/AccountControllers');
 const {
     updateProfileAccountController
@@ -18,4 +20,6 @@ router.get('/profile/:accountId', [], getProfileController);
 router.get('/links/:accountId', [], getAccountLinkByAccountIdController);
 router.get('/check-user/:accountId', [], checkUserAccountIdController);
 router.post('/display-names', [], getDisplayNameByAccountIdController);
+router.post('/update-profile', [checkSession, requireAuth], updateAndInsertAccountProfileController);
+router.put('/update-profile-id', [checkSession, requireAuth], updateAccountProfileIdController);
 module.exports = router;

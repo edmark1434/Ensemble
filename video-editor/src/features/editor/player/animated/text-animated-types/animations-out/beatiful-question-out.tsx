@@ -1,4 +1,5 @@
 import { interpolate, spring } from "remotion";
+import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
 
 const BeatifulQuestionAnimationOut = ({
   char,
@@ -7,7 +8,8 @@ const BeatifulQuestionAnimationOut = ({
   fps,
   textLength,
   animationTextOutFrames,
-  durationInFrames
+  durationInFrames,
+  colorStyle
 }: {
   char: string;
   index: number;
@@ -16,6 +18,11 @@ const BeatifulQuestionAnimationOut = ({
   textLength: number;
   animationTextOutFrames: number;
   durationInFrames: number;
+  colorStyle: {
+    isGradient: boolean;
+    shadowStrokeStyle: React.CSSProperties;
+    fillStyle: React.CSSProperties;
+  };
 }) => {
   const exitDuration = animationTextOutFrames;
   const delayPerChar = exitDuration / textLength;
@@ -36,16 +43,13 @@ const BeatifulQuestionAnimationOut = ({
     extrapolateLeft: "clamp"
   });
   return (
-    <span
-      key={index}
-      style={{
-        display: "inline-block",
-        transform: `translateY(${translateY}em)`,
-        opacity
-      }}
-    >
-      {char === " " ? " " : char}
-    </span>
+    <AnimatedChar
+      char={char}
+      animationStyle={{ transform: `translateY(${translateY}em)`, opacity }}
+      isGradient={colorStyle.isGradient}
+      shadowStrokeStyle={colorStyle.shadowStrokeStyle}
+      fillStyle={colorStyle.fillStyle}
+    />
   );
 };
 

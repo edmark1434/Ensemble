@@ -1,17 +1,24 @@
 import { interpolate } from "remotion";
+import { AnimatedChar } from "@/features/editor/player/animated/text-animated-types/animated-char";
 
 const RisingStrongAnimationIn = ({
-  char,
-  index,
-  frame,
-  textLength,
-  animationTextInFrames
-}: {
+                                   char,
+                                   index,
+                                   frame,
+                                   textLength,
+                                   animationTextInFrames,
+                                   colorStyle
+                                 }: {
   char: string;
   index: number;
   frame: number;
   textLength: number;
   animationTextInFrames: number;
+  colorStyle: {
+    isGradient: boolean;
+    shadowStrokeStyle: React.CSSProperties;
+    fillStyle: React.CSSProperties;
+  };
 }) => {
   const totalDuration = animationTextInFrames / 2;
   const delayFactor = totalDuration / textLength;
@@ -35,16 +42,16 @@ const RisingStrongAnimationIn = ({
   );
 
   return (
-    <span
-      key={index}
-      style={{
-        display: "inline-block",
+    <AnimatedChar
+      char={char}
+      animationStyle={{
         transform: `translateY(${translateY}px)`,
         opacity
       }}
-    >
-      {char === " " ? " " : char}
-    </span>
+      isGradient={colorStyle.isGradient}
+      shadowStrokeStyle={colorStyle.shadowStrokeStyle}
+      fillStyle={colorStyle.fillStyle}
+    />
   );
 };
 

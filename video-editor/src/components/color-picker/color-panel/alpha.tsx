@@ -18,7 +18,6 @@ const Container = styled.div`
   background:
     linear-gradient(to right, transparent, black),
     url('data:image/svg+xml;utf8, <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2"><path fill="white" d="M1,0H2V1H1V0ZM0,1H1V2H0V1Z"/><path fill="gray" d="M0,0H1V1H0V0ZM1,1H2V2H1V1Z"/></svg>');
-  background-size: 100%, 6px;
   background-repeat: repeat;
   user-select: none;
 `;
@@ -34,12 +33,12 @@ const Background = styled.div<{ background: string }>`
 
 const Pointer = styled.span<{ left: number; backgroundColor: string }>`
   position: absolute;
-  top: -2px;
+  top: -4px;
   height: 16px;
   width: 16px;
   margin-left: -8px;
   border-radius: 50%;
-  border: solid 1px white;
+  border: solid 2px white;
   cursor: grab;
   left: ${(props) => props.left}%;
   background-color: ${(props) => props.backgroundColor};

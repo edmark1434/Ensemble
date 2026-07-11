@@ -12,11 +12,8 @@ import {
 import useStore from "../store/use-store";
 import StateManager from "@designcombo/state";
 import { getCurrentTime } from "../utils/time";
-import {
-  calculateMinWidth,
-  calculateTextHeight,
-  htmlToPlainText
-} from "../utils/text";
+import { getMinTextDimensions } from "../utils/text";
+import {getMoveableTransform} from "@/features/editor/player/styles";
 
 let holdGroupPosition: Record<string, any> | null = null;
 let dragStartEnd = false;
@@ -287,6 +284,9 @@ export function SceneInteractions({
     setSceneMoveableRef(moveableRef as React.RefObject<Moveable>);
   }, [moveableRef]);
 
+  const rotateStartRef = useRef(0);
+  const scaleStartRef = useRef<[number, number]>([1, 1]);
+
   return (
     <Moveable
       ref={moveableRef}
@@ -326,93 +326,98 @@ export function SceneInteractions({
           }
         });
       }}
-      onScale={({ target, transform, direction }) => {
-        const [xControl, yControl] = direction;
+      onScaleStart={({ target }) => {
+        const targetId = getIdFromClassName(target.className) as string;
+        const match = (trackItemsMap[targetId]?.details?.transform || "").match(/scale\(\s*([-\d.]+)\s*,\s*([-\d.]+)/);
+        scaleStartRef.current = match ? [parseFloat(match[1]), parseFloat(match[2])] : [1, 1];
+      }}
+      onScale={({ target, scale, direction }) => {
+        const targetId = getIdFromClassName(target.className) as string;
+        const details = trackItemsMap[targetId]?.details;
+        if (!details) return;
 
+        const [xControl, yControl] = direction;
         const moveX = xControl === -1;
         const moveY = yControl === -1;
 
-        const scaleRegex = /scale\(([^)]+)\)/;
-        const match = target.style.transform.match(scaleRegex);
-        if (!match) return;
+        const factor = scale[0]; // uniform magnitude ratio, corner handle only
+        const newScaleX = scaleStartRef.current[0] * factor;
+        const newScaleY = scaleStartRef.current[1] * factor;
 
-        //get current scale
-        const [scaleX, scaleY] = match[1]
-          .split(",")
-          .map((value) => Number.parseFloat(value.trim()));
+        const oldMatch = (details.transform || "").match(/scale\(\s*([-\d.]+)\s*,\s*([-\d.]+)/);
+        const oldScaleX = oldMatch ? parseFloat(oldMatch[1]) : 1;
+        const oldScaleY = oldMatch ? parseFloat(oldMatch[2]) : 1;
 
-        //get new Scale
-        const match2 = transform.match(scaleRegex);
-        if (!match2) return;
-        const [newScaleX, newScaleY] = match2[1]
-          .split(",")
-          .map((value) => Number.parseFloat(value.trim()));
+        // magnitude only — sign is mirror state, not size
+        const currentWidth = target.clientWidth * Math.abs(oldScaleX);
+        const currentHeight = target.clientHeight * Math.abs(oldScaleY);
+        const newWidth = target.clientWidth * Math.abs(newScaleX);
+        const newHeight = target.clientHeight * Math.abs(newScaleY);
 
-        const currentWidth = target.clientWidth * scaleX;
-        const currentHeight = target.clientHeight * scaleY;
+        target.style.transform = getMoveableTransform(details, { scaleX: newScaleX, scaleY: newScaleY });
+        target.dataset.liveScaleX = String(newScaleX);
+        target.dataset.liveScaleY = String(newScaleY);
 
-        const newWidth = target.clientWidth * newScaleX;
-        const newHeight = target.clientHeight * newScaleY;
-
-        target.style.transform = transform;
-
-        //Move element to initial Left position
         const diffX = currentWidth - newWidth;
-        let newLeft = Number.parseFloat(target.style.left) - diffX / 2;
-
+        let newLeft = parseFloat(target.style.left) - diffX / 2;
         const diffY = currentHeight - newHeight;
-        let newTop = Number.parseFloat(target.style.top) - diffY / 2;
-
-        if (moveX) {
-          newLeft += diffX;
-        }
-        if (moveY) {
-          newTop += diffY;
-        }
+        let newTop = parseFloat(target.style.top) - diffY / 2;
+        if (moveX) newLeft += diffX;
+        if (moveY) newTop += diffY;
         target.style.left = `${newLeft}px`;
         target.style.top = `${newTop}px`;
       }}
       onScaleEnd={({ target }) => {
-        if (!target.style.transform) return;
         const targetId = getIdFromClassName(target.className) as string;
         if (trackItemsMap[targetId]?.details?.locked) return;
+        const finalScaleX = target.dataset.liveScaleX;
+        const finalScaleY = target.dataset.liveScaleY;
+        if (finalScaleX === undefined || finalScaleY === undefined) return;
 
         dispatch(EDIT_OBJECT, {
           payload: {
             [targetId]: {
               details: {
-                transform: target.style.transform,
-                left: Number.parseFloat(target.style.left),
-                top: Number.parseFloat(target.style.top)
+                transform: `scale(${finalScaleX}, ${finalScaleY})`,
+                left: parseFloat(target.style.left),
+                top: parseFloat(target.style.top)
               }
             }
           }
         });
+        delete target.dataset.liveScaleX;
+        delete target.dataset.liveScaleY;
       }}
-      onRotate={({ target, transform }) => {
-        target.style.transform = transform;
+      onRotateStart={({ target }) => {
+        const targetId = getIdFromClassName(target.className) as string;
+        rotateStartRef.current = parseFloat(trackItemsMap[targetId]?.details?.rotate as unknown as string) || 0;
+      }}
+      onRotate={({ target, dist }) => {
+        const targetId = getIdFromClassName(target.className) as string;
+        const details = trackItemsMap[targetId]?.details;
+        if (!details) return;
+
+        const newRotate = rotateStartRef.current + dist;
+        target.style.transform = getMoveableTransform(details, { rotate: newRotate });
+        target.dataset.liveRotate = String(newRotate);
       }}
       onRotateEnd={({ target }) => {
-        if (!target.style.transform) return;
         const targetId = getIdFromClassName(target.className) as string;
         if (trackItemsMap[targetId]?.details?.locked) return;
+        const finalRotate = target.dataset.liveRotate;
+        if (finalRotate === undefined) return;
 
         dispatch(EDIT_OBJECT, {
-          payload: {
-            [targetId]: {
-              details: {
-                transform: target.style.transform
-              }
-            }
-          }
+          payload: { [targetId]: { details: { rotate: `${finalRotate}deg` } } }
         });
+        delete target.dataset.liveRotate;
       }}
       onResize={({
-                   target,
-                   width: nextWidth,
-                   height: nextHeight,
-                   direction
-                 }) => {
+        target,
+        width: nextWidth,
+        height: nextHeight,
+        direction
+      }) => {
         const id = getIdFromClassName(target.className);
         if (direction[1] === 1 || direction[1] === -1) {
           if (trackItemsMap[id].type === "progressSquare") {
@@ -444,70 +449,49 @@ export function SceneInteractions({
             return;
           }
 
-          const isPureSouthDirection =
+          const isPureVerticalDirection =
             (direction[1] === 1 || direction[1] === -1) && direction[0] === 0;
 
           if (
-            isPureSouthDirection &&
+            isPureVerticalDirection &&
             (trackItemsMap[id].type === "text" || trackItemsMap[id].type === "caption")
           ) {
-            const type = trackItemsMap[id].type;
-            const selector = type === "text" ? `[data-text-id="${id}"]` : `#caption-${id}`;
-            const textEl = document.querySelector(selector) as HTMLDivElement;
+            const details = trackItemsMap[id].details;
+            const { minHeight } = getMinTextDimensions(details, details.text, nextWidth);
 
-            console.log("onresize textel.innerhtml", textEl.innerHTML);
+            // only clamp upward, user can freely resize if above minimum
+            const finalHeight = Math.max(nextHeight, minHeight);
 
-            if (textEl) {
-              const minContentHeight = calculateTextHeight({
-                family: textEl.style.fontFamily,
-                fontSize: textEl.style.fontSize,
-                fontWeight: textEl.style.fontWeight,
-                letterSpacing: textEl.style.letterSpacing,
-                lineHeight: textEl.style.lineHeight,
-                text: textEl.innerHTML,
-                textShadow: textEl.style.textShadow,
-                webkitTextStroke: textEl.style.webkitTextStroke,
-                width: nextWidth + "px",
-                textTransform: textEl.style.textTransform
-              });
+            target.style.width = `${nextWidth}px`;
+            target.style.height = `${finalHeight}px`;
 
-              // only clamp upward, user can freely resize if above minimum
-              const finalHeight = Math.max(nextHeight, minContentHeight);
+            const animationDiv = target.firstElementChild?.firstElementChild as HTMLDivElement | null;
+            if (animationDiv) {
+              animationDiv.style.width = `${nextWidth}px`;
+              animationDiv.style.height = `${finalHeight}px`;
+            }
 
-              target.style.width = `${nextWidth}px`;
-              target.style.height = `${finalHeight}px`;
+            const selector = trackItemsMap[id].type === "text" ? `[data-text-id="${id}"]` : `#caption-${id}`;
+            const textDiv = document.querySelector(selector) as HTMLDivElement | null;
+            if (textDiv) {
+              textDiv.style.width = `${nextWidth}px`;
+              textDiv.style.height = `${finalHeight}px`;
+            }
 
-              console.log("onResize.nextHeight", nextHeight);
-              console.log("onResize.minContentHeight", minContentHeight);
-              console.log("onResize.finalHeight", finalHeight);
-
-              const animationDiv = target.firstElementChild?.firstElementChild as HTMLDivElement | null;
-              if (animationDiv) {
-                animationDiv.style.width = `${nextWidth}px`;
-                animationDiv.style.height = `${finalHeight}px`;
-
-                const textDiv = document.querySelector(selector) as HTMLDivElement;
-                if (textDiv) {
-                  textDiv.style.width = `${nextWidth}px`;
-                  textDiv.style.height = `${finalHeight}px`;
-                }
-              }
-
-              setState({
-                trackItemsMap: {
-                  ...trackItemsMap,
-                  [id]: {
-                    ...trackItemsMap[id],
-                    details: {
-                      ...trackItemsMap[id].details,
-                      width: nextWidth,
-                      height: finalHeight
-                    }
+            setState({
+              trackItemsMap: {
+                ...trackItemsMap,
+                [id]: {
+                  ...trackItemsMap[id],
+                  details: {
+                    ...trackItemsMap[id].details,
+                    width: nextWidth,
+                    height: finalHeight
                   }
                 }
-              });
-              return;
-            }
+              }
+            });
+            return;
           }
 
           // default proportional scaling for corner handles and non-text types
@@ -536,68 +520,43 @@ export function SceneInteractions({
             trackItemsMap[id].type === "text" ||
             trackItemsMap[id].type === "caption"
           ) {
-            const type = trackItemsMap[id].type;
-            const selector = type === "text" ? `[data-text-id="${id}"]` : `#caption-${id}`;
-            const textEl = document.querySelector(selector) as HTMLDivElement;
+            const details = trackItemsMap[id].details;
+            const { minWidth, minHeight } = getMinTextDimensions(details, details.text, nextWidth);
 
-            const minHeight = calculateTextHeight({
-              family: textEl!.style.fontFamily,
-              fontSize: textEl!.style.fontSize,
-              fontWeight: textEl!.style.fontWeight,
-              letterSpacing: textEl!.style.letterSpacing,
-              lineHeight: textEl!.style.lineHeight,
-              text: textEl!.innerHTML,
-              textShadow: textEl!.style.textShadow,
-              webkitTextStroke: textEl!.style.webkitTextStroke,
-              width: nextWidth + "px",
-              textTransform: textEl!.style.textTransform
-            });
-
-            const minWidth = calculateMinWidth({
-              family: textEl!.style.fontFamily,
-              fontSize: textEl!.style.fontSize,
-              fontWeight: textEl!.style.fontWeight,
-              letterSpacing: textEl!.style.letterSpacing,
-              lineHeight: textEl!.style.lineHeight,
-              text: textEl!.innerText,
-              textShadow: textEl!.style.textShadow,
-              webkitTextStroke: textEl!.style.webkitTextStroke,
-              textTransform: textEl!.style.textTransform
-            });
-
-            const currentHeight = parseFloat(target.style.height);
-            // only update height if current height is below the minimum
+            const clampedWidth = Math.max(nextWidth, minWidth);
+            const currentHeight = target.clientHeight;
             const finalHeight = Math.max(currentHeight, minHeight);
 
-            target.style.width = `${nextWidth}px`;
+            target.style.width = `${clampedWidth}px`;
             target.style.minWidth = `${minWidth}px`;
             target.style.height = `${finalHeight}px`;
 
             const animationDiv = target.firstElementChild?.firstElementChild as HTMLDivElement | null;
             if (animationDiv) {
-              animationDiv.style.width = `${nextWidth}px`;
+              animationDiv.style.width = `${clampedWidth}px`;
               animationDiv.style.height = `${finalHeight}px`;
 
+              const selector = trackItemsMap[id].type === "text" ? `[data-text-id="${id}"]` : `#caption-${id}`;
               const textDiv = document.querySelector(selector) as HTMLDivElement | null;
               if (textDiv) {
-                textDiv.style.width = `${nextWidth}px`;
+                textDiv.style.width = `${clampedWidth}px`;
                 textDiv.style.height = `${finalHeight}px`;
               }
             }
 
-            // only dispatch if height had to grow
-            if (finalHeight > currentHeight) {
-              dispatch(EDIT_OBJECT, {
-                payload: {
-                  [id]: {
-                    details: {
-                      width: nextWidth,
-                      height: finalHeight
-                    }
+            setState({
+              trackItemsMap: {
+                ...trackItemsMap,
+                [id]: {
+                  ...trackItemsMap[id],
+                  details: {
+                    ...trackItemsMap[id].details,
+                    width: clampedWidth,
+                    height: finalHeight
                   }
                 }
-              });
-            }
+              }
+            });
           }
 
           if (trackItemsMap[id].type === "progressSquare") {

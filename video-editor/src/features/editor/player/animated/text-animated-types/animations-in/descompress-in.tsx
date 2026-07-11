@@ -1,15 +1,23 @@
+import {AnimatedChar} from "@/features/editor/player/animated/text-animated-types/animated-char";
+
 const DescompressAnimationIn = ({
   char,
   index,
   frame,
   fps,
-  animationTextInFrames
+  animationTextInFrames,
+  colorStyle
 }: {
   char: string;
   index: number;
   frame: number;
   fps: number;
   animationTextInFrames: number;
+  colorStyle: {
+    isGradient: boolean;
+    shadowStrokeStyle: React.CSSProperties;
+    fillStyle: React.CSSProperties;
+  };
 }) => {
   const endTime = animationTextInFrames / fps;
   const time = frame / fps;
@@ -20,16 +28,16 @@ const DescompressAnimationIn = ({
   const opacity = progress;
 
   return (
-    <span
-      key={index}
-      style={{
-        display: "inline-block",
+    <AnimatedChar
+      char={char}
+      animationStyle={{
         transform: `scaleX(${scaleX})`,
         opacity: opacity
       }}
-    >
-      {char === " " ? " " : char}
-    </span>
+      isGradient={colorStyle.isGradient}
+      shadowStrokeStyle={colorStyle.shadowStrokeStyle}
+      fillStyle={colorStyle.fillStyle}
+    />
   );
 };
 
