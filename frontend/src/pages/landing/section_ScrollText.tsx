@@ -1,11 +1,29 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import ScrollVelocity from "@/components/ui/ScrollVelocity";
+
+interface ScrollTextProps {
+  isMuted?: boolean;
+}
 
 const T = {
   fontDisplay: "'Plus Jakarta Sans', sans-serif",
 } as const;
 
-const SectionScrollText: React.FC = () => {
+const SectionScrollText: React.FC<ScrollTextProps> = ({ isMuted = false }) => {
+  const blissHoverAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    // Initialize the blisshover sound asset
+    blissHoverAudioRef.current = new Audio("/sounds/blisshover.mp3");
+    blissHoverAudioRef.current.volume = 0.25;
+  }, []);
+
+  const playBlissHover = () => {
+    if (isMuted || !blissHoverAudioRef.current) return;
+    blissHoverAudioRef.current.currentTime = 0; // Rewind for rapid crossover triggers
+    blissHoverAudioRef.current.play().catch(() => {});
+  };
+
   return (
     <div
       style={{
@@ -15,7 +33,6 @@ const SectionScrollText: React.FC = () => {
         width: "100%"
       }}
     >
-      {/* Adjusted timers for a slower fade-in and faster color shifting loop */}
       <style>{`
         @keyframes morphColors {
           0% {
@@ -36,8 +53,7 @@ const SectionScrollText: React.FC = () => {
           }
         }
 
-        /* Base state with slow transitions back to faded mode */
-        .hover-marquee .parallax span {
+        .hover-marquee .row-wrapper .parallax span {
           color: #5e5e5e;
           opacity: 0.4;
           filter: blur(0.5px);
@@ -47,32 +63,49 @@ const SectionScrollText: React.FC = () => {
             color 0.4s ease;
         }
 
-        /* Lights up extra smooth over 1.2s, cycles colors quickly every 3s */
-        .hover-marquee .parallax:hover span {
+        .hover-marquee .row-wrapper:hover .parallax span {
           opacity: 1;
           filter: blur(0px);
           animation: morphColors 3s linear infinite;
         }
       `}</style>
 
-      <div className="hover-marquee">
-        <ScrollVelocity
-          texts={[
-            "COLLABORATIVE EDITING - BUILT FOR VIDEO EDITORS - LESS FRICTION WORKFLOW",
-            "INTEGRATED JOB & GIGS - ASSET MARKETPLACE - INTEGRATED CHAT SYSTEM"
-          ]}
-          velocity={60}
-          numCopies={5}
-          scrollerStyle={{
-            display: "flex",
-            whiteSpace: "nowrap",
-            fontFamily: T.fontDisplay,
-            fontSize: "clamp(3.5rem, 3vw, 6.5rem)",
-            lineHeight: "1",
-            fontWeight: 500,
-            letterSpacing: "-0.03em",
-          }}
-        />
+      <div className="hover-marquee" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        {/* Row 1 Wrapper */}
+        <div className="row-wrapper" onMouseEnter={playBlissHover} style={{ width: "100%" }}>
+          <ScrollVelocity
+            texts={["COLLABORATIVE EDITING - BUILT FOR VIDEO EDITORS - LESS FRICTION WORKFLOW"]}
+            velocity={60}
+            numCopies={5}
+            scrollerStyle={{
+              display: "flex",
+              whiteSpace: "nowrap",
+              fontFamily: T.fontDisplay,
+              fontSize: "clamp(2.5rem, 3vw, 4.5rem)", // Adjusted slightly for row stacking
+              lineHeight: "1",
+              fontWeight: 500,
+              letterSpacing: "-0.03em",
+            }}
+          />
+        </div>
+
+        {/* Row 2 Wrapper */}
+        <div className="row-wrapper" onMouseEnter={playBlissHover} style={{ width: "100%" }}>
+          <ScrollVelocity
+            texts={["INTEGRATED JOB & GIGS - ASSET MARKETPLACE - INTEGRATED CHAT SYSTEM"]}
+            velocity={-60} // Reversed velocity direction to make row 2 scroll oppositely for maximum dynamic depth
+            numCopies={5}
+            scrollerStyle={{
+              display: "flex",
+              whiteSpace: "nowrap",
+              fontFamily: T.fontDisplay,
+              fontSize: "clamp(2.5rem, 3vw, 4.5rem)",
+              lineHeight: "1",
+              fontWeight: 500,
+              letterSpacing: "-0.03em",
+            }}
+          />
+        </div>
       </div>
     </div>
   );
