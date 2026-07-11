@@ -10,6 +10,7 @@ const tagRoutes = require('./Tag');
 const inboxRoutes = require('./inbox');
 const paymentRoutes = require('./payment');
 const subscriptionRoutes = require('./subscription');
+const surveyRoutes = require('./survey');
 const fileRoutes = require('./file');
 const { getAllCountriesController,
     getAllPlacesController
@@ -26,7 +27,7 @@ router.use('/users', userRoutes);
 router.use('/accounts', accountRoutes);
 router.use('/tags', tagRoutes);
 router.use('/files', fileRoutes);
-
+router.use('/surveys', surveyRoutes);
 router.get('/countries', getAllCountriesController);
 router.get('/places', getAllPlacesController);
 module.exports = router;

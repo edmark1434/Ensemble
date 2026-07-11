@@ -156,7 +156,6 @@ async function updateAndInsertAccountProfileController(req, res) {
     const profileData = req.body;
     try {
         const fileId = await updateAndInsertAccountProfileServices(account_id, profileData);
-        await updateUserOnboardingStep(req.session.userId);
         return res.status(200).json({ success: true, message: 'Profile updated/inserted successfully', file: fileId });
     }catch (err) {
         console.error(`Error updating/inserting profile for accountId ${account_id}:`, err);
@@ -174,10 +173,7 @@ async function updateAccountProfileIdController(req, res) {
         return res.status(400).json({ success: false, message: 'File ID is required' });
     }
     try {
-        await Promise.all([
-            updateAccountProfileServices(account_id, fileId),
-            updateUserOnboardingStep(userId)
-        ]);
+        await updateAccountProfileServices(account_id, fileId);
         return res.status(200).json({ success: true, message: 'Profile updated successfully' });
     } catch (err) {
         console.error(`Error updating profile for accountId ${account_id}:`, err);

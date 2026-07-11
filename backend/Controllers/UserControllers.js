@@ -460,14 +460,10 @@ async function updatePersonalDetailsController(req, res) {
 
 async function getUserSession(req, res) { 
     try {
-        let steps = await redis.get(`session:${req.session.userId}`);
-        if (!steps) { 
-            steps = await getUserOnboardingStep(req.session.userId);
-            await redis.set(`session:${req.session.userId}`, steps, { EX: 60 * 60 * 24 * 30 });
-        }
+        let steps = await getUserOnboardingStep(req.session.userId);
         return res.status(200).json({
             success: true,
-            steps: parseInt(steps) || 0
+            steps: steps.completed_onboarding
         });
     } catch (err) {
         console.error('Error fetching user session:', err);

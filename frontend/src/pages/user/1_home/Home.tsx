@@ -233,13 +233,9 @@ const Home: React.FC = () => {
         const response = await api.get("/api/users/session");
         if (response.status === 200 && response.data.steps) {
           // Handle successful session fetch
-          if (response.data.steps === 1) {
+          if (!response.data.steps) {
             navigate("/setup/personal-details");
-          } else if (response.data.steps === 2) {
-            navigate("/setup/upload-image");
-          } else if (response.data.steps === 3) {
-            navigate("/setup/profile-setup");
-          } else if (response.data.steps === 4) { 
+          } else if (response.data.steps === 'profile') {
             navigate("/setup/survey");
           }
         }

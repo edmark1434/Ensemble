@@ -51,7 +51,6 @@ async function createUser({
     passwordHash,
     firebaseUserUuid = null,
     isEmailVerified = false,
-    onboardingStep = 0
 }) {
     try {
         const result = await pool.query(
@@ -63,9 +62,8 @@ async function createUser({
                 password_hash,
                 firebase_user_uuid,
                 is_email_verified,
-                onboarding_step
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING user_id, first_name, last_name, email_address, firebase_user_uuid`,
             [
                 account_id,
@@ -74,8 +72,7 @@ async function createUser({
                 emailAddress,
                 passwordHash,
                 firebaseUserUuid,
-                isEmailVerified,
-                onboardingStep
+                isEmailVerified
             ]
         );
         return result.rows[0];
@@ -256,8 +253,8 @@ async function updateUserDetails(userId, updates) {
 
 async function getUserOnboardingStep(userId) {
     try {
-        const result = await pool.query('SELECT onboarding_step FROM users WHERE user_id = $1', [userId]);
-        return result.rows[0]?.onboarding_step || 0;
+        const result = await pool.query('SELECT completed_onboarding FROM users WHERE user_id = $1', [userId]);
+        return result.rows[0];
     } catch (err) {
         console.error("Error fetching user onboarding step:", err);
         throw err;
