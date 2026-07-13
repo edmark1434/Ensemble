@@ -1,3 +1,5 @@
+// animation-preview/text/preview-dispatch
+
 const CUSTOM_TEXT_ANIMATION_KEYS = new Set([
   "typeWriterIn", "typeWriterOut",
   "animatedTextIn", "animatedTextOut",

@@ -206,33 +206,38 @@ const MediaSection = ({
       </Select>
     </div>
 
-    <ScrollArea className="w-full px-4 pb-4">
-      {selectedMedia ? (
-        captionTrackItemsMap[selectedMedia] ? (
+
+    {selectedMedia ? (
+      captionTrackItemsMap[selectedMedia] ? (
+        <ScrollArea className="w-full px-4 pb-4">
           <MediaWithCaptions
             captionTrackItems={captionTrackItemsMap[selectedMedia]}
           />
-        ) : (
+        </ScrollArea>
+      ) : (
+        <div className="w-full h-full px-4 pb-4 flex flex-col items-center justify-center">
           <MediaWithNoCaptions
             createCaptions={() => createCaptions(selectedMedia)}
             isGenerating={isGenerating}
             estimatedMs={estimatedMs}
             elapsedMs={elapsedMs}
           />
-        )
-      ) : (
-        <MediaNoSelected />
-      )}
 
-      {errorMessage && (
-        <div className="text-sm text-destructive text-center my-4">{errorMessage}</div>
-      )}
-    </ScrollArea>
+          {errorMessage && (
+            <div className="text-sm text-destructive text-center my-4">{errorMessage}</div>
+          )}
+        </div>
+      )
+    ) : (
+      <div className="w-full h-full px-4 pb-4 flex flex-col items-center justify-center">
+        <MediaNoSelected />
+      </div>
+    )}
   </div>
 );
 
 const MediaNoSelected = () => (
-  <div className="text-center text-sm text-muted-foreground text-pretty">
+  <div className="text-center text-sm text-muted-foreground text-pretty pb-4">
     Select video or audio and generate captions automatically.
   </div>
 );
@@ -254,7 +259,7 @@ const MediaWithNoCaptions = ({
   estimatedMs: number;
   elapsedMs: number;
 }) => (
-  <div className="flex flex-col gap-4 items-center">
+  <div className="flex flex-col gap-4 items-center pb-4">
     <div className="text-center text-sm text-muted-foreground text-pretty">
       Recognize speech in the selected video/audio and generate captions
       automatically.

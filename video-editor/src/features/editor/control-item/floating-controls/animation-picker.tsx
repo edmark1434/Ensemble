@@ -12,7 +12,7 @@ import { PresetName } from "../../player/animated/presets";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AnimationDuration } from "../common/animation-duration";
 import {cn} from "@/lib/utils";
-import { LazyPresetPreview } from "./animation-preset-preview/preset-preview-scene";
+import { LazyPresetPreview } from "@/features/editor/control-item/floating-controls/animation-preview/text/preview-scene";
 
 export const createPresetButtons = (
   filter: (key: string) => boolean,

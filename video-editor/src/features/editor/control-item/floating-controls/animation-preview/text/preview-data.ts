@@ -1,3 +1,5 @@
+// animation-preview/text/preview-data
+
 import { ITextDetails, ITrackItem } from "@designcombo/types";
 
 export const createPreviewDetails = (width: number, height: number): ITextDetails =>

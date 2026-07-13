@@ -1,14 +1,19 @@
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { dispatch } from "@designcombo/events";
+import { Ban, X } from "lucide-react";
 import { EDIT_OBJECT } from "@designcombo/state";
-import { X } from "lucide-react";
-import React, { useEffect, useRef, useState } from "react";
+import { dispatch } from "@designcombo/events";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Animation, presets } from "../../player/animated";
 import useLayoutStore from "../../store/use-layout-store";
 import useClickOutside from "../../hooks/use-click-outside";
 import { PresetName } from "../../player/animated/presets";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 import { groupCaptionItems } from "./caption-preset-picker";
 import useStore from "../../store/use-store";
+import { LazyCaptionPresetPreview } from "@/features/editor/control-item/floating-controls/animation-preview/caption/preview-scene";
+import {
+  isExcludedForCaptions
+} from "@/features/editor/control-item/floating-controls/animation-preview/caption/preview-exclusions";
 
 const AnimationCaption = () => {
   const { setFloatingControl, trackItem } = useLayoutStore();
@@ -17,115 +22,105 @@ const AnimationCaption = () => {
 
   useEffect(() => {
     const groupedCaptions = groupCaptionItems(trackItemsMap);
-
-    const currentGroupItems = groupedCaptions[trackItem?.metadata.sourceUrl];
-    const captionItemIds = currentGroupItems?.map((item) => item.id);
-    setCaptionItemIds(captionItemIds);
+    const currentGroupItems = groupedCaptions[trackItem?.metadata?.sourceUrl ?? ""];
+    setCaptionItemIds(currentGroupItems?.map((item) => item.id) ?? []);
   }, [trackItemsMap, trackItem]);
 
-  const isAnimationActive = (presetName: PresetName, type: "in" | "out") => {
-    return captionItemIds.some((id) => {
-      const item = trackItemsMap[id];
-      return item?.animations?.[type]?.name === presetName;
-    });
-  };
+  const firstItem = trackItemsMap[captionItemIds[0]];
+  const isNoneSelected = !firstItem?.animations?.in;
 
-  const applyAnimation = (presetName: PresetName, type: "in" | "out") => {
-    if (!trackItem?.id) {
-      console.warn("No active ID to apply the animation to.");
+  const isAnimationActive = (presetName: PresetName) =>
+    captionItemIds.some((id) => trackItemsMap[id]?.animations?.in?.name === presetName);
+
+  const applyAnimation = (presetName: PresetName) => {
+    if (!captionItemIds.length) {
+      console.warn("No caption items to apply the animation to.");
       return;
     }
     const presetAnimation = presets[presetName];
+    const composition: Animation[] = [{ ...presetAnimation, durationInFrames: 4 }];
 
-    const composition: Animation[] = [
-      {
-        ...presetAnimation,
-        durationInFrames: 3
-      }
-    ];
-
-    const payload = captionItemIds.reduce((acc, id) => {
-      return {
-        ...acc,
-        [id]: {
-          animations: {
-            [type]: {
-              name: presetName,
-              composition
-            }
-          }
-        }
-      };
-    }, {});
-
+    const payload = captionItemIds.reduce(
+      (acc, id) => ({ ...acc, [id]: { animations: { in: { name: presetName, composition } } } }),
+      {}
+    );
     dispatch(EDIT_OBJECT, { payload });
   };
 
-  const createPresetButtons = (
-    filter: (key: string) => boolean,
-    type: "in" | "out"
-  ) =>
-    Object.keys(presets)
-      .filter(filter)
+  const clearAnimation = () => {
+    if (!captionItemIds.length) return;
+    const payload = captionItemIds.reduce(
+      (acc, id) => ({ ...acc, [id]: { animations: { in: undefined } } }),
+      {}
+    );
+    dispatch(EDIT_OBJECT, { payload });
+  };
+
+  const idsKey = captionItemIds.join(",");
+  const presetButtons = useMemo(() => {
+    const noneButton = (
+      <div
+        key="none"
+        className="flex cursor-pointer flex-col gap-2 text-center text-xs text-muted-foreground items-center justify-start"
+        onClick={clearAnimation}
+      >
+        <div
+          className={cn(
+            "relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md bg-zinc-800 group",
+            isNoneSelected ? "border border-primary" : ""
+          )}
+        >
+          <Ban className="text-muted-foreground" size={24} />
+        </div>
+        <div>None</div>
+      </div>
+    );
+
+    const buttons = Object.keys(presets)
+      .filter((key) => key.includes("In"))
+      .filter((key) => !isExcludedForCaptions(key))
       .map((presetKey) => {
         const preset = presets[presetKey as "scaleIn"];
-        const isActive = isAnimationActive(presetKey as PresetName, type);
-        const style = React.useMemo(
-          () => ({
-            backgroundImage: `url(${preset.previewUrl})`,
-            backgroundSize: "cover",
-            width: "50px",
-            height: "50px",
-            borderRadius: "8px",
-            border: isActive ? "2px solid #3b82f6" : "2px solid transparent"
-          }),
-          [preset.previewUrl, isActive]
-        );
-        if (
-          preset.property?.toLowerCase().includes("text") ||
-          preset.property?.toLowerCase().includes("shake")
-        )
-          return;
+        const isSelected = isAnimationActive(presetKey as PresetName);
 
         return (
           <div
             key={presetKey}
-            className="flex cursor-pointer flex-col items-center justify-center gap-2 text-center text-xs text-muted-foreground"
-            onClick={() => applyAnimation(presetKey as PresetName, type)}
+            className="flex cursor-pointer flex-col gap-2 text-center text-xs text-muted-foreground items-center justify-start"
+            onClick={() => applyAnimation(presetKey as PresetName)}
           >
-            <div style={style} draggable={false} />
+            <div
+              className={cn(
+                "relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md bg-zinc-800 group",
+                isSelected ? "border border-primary" : ""
+              )}
+            >
+              <LazyCaptionPresetPreview presetKey={presetKey as PresetName} type="in" />
+            </div>
             <div>{preset.name}</div>
           </div>
         );
       });
 
-  const presetInButtons = createPresetButtons(
-    (key) => key.includes("In"),
-    "in"
-  );
-  const floatingRef = useRef<HTMLDivElement>(null);
+    return [noneButton, ...buttons];
+  }, [idsKey, firstItem?.animations?.in?.name]);
 
-  useClickOutside(floatingRef as React.RefObject<HTMLElement>, () =>
-    setFloatingControl("")
-  );
+  const floatingRef = useRef<HTMLDivElement>(null);
+  useClickOutside(floatingRef as React.RefObject<HTMLElement>, () => setFloatingControl(""));
+
   return (
     <div
-      className="absolute left-full top-2 z-200 ml-2 w-56 bg-card p-0 border"
       ref={floatingRef}
+      className="w-xs bg-card border flex flex-col rounded-lg"
     >
-      <div className="flex h-full flex-col gap-2 p-4">
-        <div className="handle flex cursor-grab justify-between">
-          <p>Animations</p>
-          <div className="h-4 w-4" onClick={() => setFloatingControl("")}>
-            <X className="h-3 w-3 cursor-pointer font-extrabold text-muted-foreground" />
-          </div>
-        </div>
-        <div className="h-full overflow-hidden">
-          <ScrollArea className="h-full">
-            <div className="grid grid-cols-3 gap-2 py-4">{presetInButtons}</div>
-          </ScrollArea>
-        </div>
+      <div className="handle flex cursor-grab justify-between items-center p-4">
+        <p className="text-sm font-medium">Animations</p>
+        <X className="h-4 w-4 cursor-pointer text-muted-foreground" onClick={() => setFloatingControl("")} />
       </div>
+
+      <ScrollArea className="h-[400px] w-full px-4">
+        <div className="grid grid-cols-2 gap-2 pb-4">{presetButtons}</div>
+      </ScrollArea>
     </div>
   );
 };

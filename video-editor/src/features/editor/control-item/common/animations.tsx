@@ -134,6 +134,26 @@ const SelectaAnimation = ({ trackItem }: { trackItem: ITrackItem & IText }) => {
           <div className="flex gap-2">
             <div className="flex flex-col gap-2 flex-1">
               <div className="flex flex-1 items-center text-xs text-muted-foreground">
+                Loop
+              </div>
+              <div className="relative w-full">
+                <Button
+                  className="flex w-full items-center justify-between text-sm"
+                  variant="outline"
+                  onClick={() => openPicker("loop")}
+                >
+                  <div className="w-full text-left">
+                    <p className="truncate">{getAnimationLabel("loop")}</p>
+                  </div>
+                  <ChevronDown className="text-muted-foreground" size={14} />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <div className="flex flex-col gap-2 flex-1">
+              <div className="flex flex-1 items-center text-xs text-muted-foreground">
                 Out
               </div>
               <div className="relative w-full">
@@ -157,26 +177,6 @@ const SelectaAnimation = ({ trackItem }: { trackItem: ITrackItem & IText }) => {
                 onChangeMs={handleOutChange}
               />
             )}
-          </div>
-
-          <div className="flex gap-2">
-            <div className="flex flex-col gap-2 flex-1">
-              <div className="flex flex-1 items-center text-xs text-muted-foreground">
-                Loop
-              </div>
-              <div className="relative w-full">
-                <Button
-                  className="flex w-full items-center justify-between text-sm"
-                  variant="outline"
-                  onClick={() => openPicker("loop")}
-                >
-                  <div className="w-full text-left">
-                    <p className="truncate">{getAnimationLabel("loop")}</p>
-                  </div>
-                  <ChevronDown className="text-muted-foreground" size={14} />
-                </Button>
-              </div>
-            </div>
           </div>
         </>
       ) : (

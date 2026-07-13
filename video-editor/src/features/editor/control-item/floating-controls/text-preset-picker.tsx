@@ -41,7 +41,7 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderRadius: 30,
     borderWidth: 0,
     borderColor: "transparent",
-    fontWeight: "bold"
+    fontWeight: "normal"
   },
   {
     backgroundColor: "#fff",
@@ -49,7 +49,7 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderRadius: 30,
     borderWidth: 0,
     borderColor: "transparent",
-    fontWeight: "bold"
+    fontWeight: "normal"
   },
   {
     borderWidth: 12,
@@ -57,7 +57,7 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderRadius: 0,
     backgroundColor: "transparent",
     color: "#fff",
-    fontWeight: "bold"
+    fontWeight: "normal"
   },
   {
     borderWidth: 12,
@@ -65,7 +65,7 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderRadius: 0,
     backgroundColor: "transparent",
     color: "#000",
-    fontWeight: "bold"
+    fontWeight: "normal"
   },
   {
     backgroundColor: "#8120fd",
@@ -73,7 +73,7 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderRadius: 30,
     borderWidth: 0,
     borderColor: "transparent",
-    fontWeight: "bold"
+    fontWeight: "normal"
   },
   {
     backgroundColor: "#ffde00",
@@ -81,7 +81,7 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderRadius: 30,
     borderWidth: 0,
     borderColor: "transparent",
-    fontWeight: "bold"
+    fontWeight: "normal"
   },
   {
     backgroundColor: "transparent",
@@ -90,7 +90,7 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderWidth: 12,
     borderColor: "#0f1fac",
     boxShadow: { color: "#0f1fac", x: -12, y: 12, blur: 0 },
-    fontWeight: "bold"
+    fontWeight: "normal"
   },
   {
     backgroundColor: "transparent",
@@ -99,7 +99,7 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderWidth: 12,
     borderColor: "#000",
     boxShadow: { color: "#000", x: -12, y: 12, blur: 0 },
-    fontWeight: "bold"
+    fontWeight: "normal"
   },
   {
     backgroundColor: "#000",
@@ -107,7 +107,7 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderRadius: 30,
     borderWidth: 0,
     borderColor: "transparent",
-    fontWeight: "bold"
+    fontWeight: "normal"
   },
   {
     backgroundColor: "transparent",
@@ -116,7 +116,7 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderWidth: 12,
     borderColor: "#dd4882",
     boxShadow: { color: "#dd4882", x: 0, y: 0, blur: 100 },
-    fontWeight: "bold"
+    fontWeight: "normal"
   },
   {
     backgroundColor: "transparent",
@@ -125,7 +125,7 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderWidth: 0,
     borderColor: "transparent",
     boxShadow: { color: "#5ed869", x: 8, y: 8, blur: 0 },
-    fontWeight: "bold"
+    fontWeight: "normal"
   },
   {
     backgroundColor: "transparent",
@@ -134,7 +134,7 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderWidth: 0,
     borderColor: "transparent",
     boxShadow: { color: "#b12019", x: 8, y: 8, blur: 0 },
-    fontWeight: "bold"
+    fontWeight: "normal"
   },
   {
     backgroundColor: "transparent",
@@ -142,7 +142,7 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderRadius: 10,
     borderWidth: 12,
     borderColor: "#000000",
-    fontWeight: "bold"
+    fontWeight: "normal"
   },
   {
     backgroundColor: "transparent",
@@ -150,7 +150,7 @@ export const TEXT_PRESETS: ITextPreset[] = [
     borderRadius: 10,
     borderWidth: 12,
     borderColor: "#ffffff",
-    fontWeight: "bold"
+    fontWeight: "normal"
   }
 ];
 

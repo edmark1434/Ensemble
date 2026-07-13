@@ -1,12 +1,14 @@
+// animation-preview/text/preview-scene
+
 import React, {useEffect, useMemo, useRef, useState} from "react";
 import { Player } from "@remotion/player";
 import {AbsoluteFill, useCurrentFrame} from "remotion";
 import { BoxAnim } from "@designcombo/animations";
-import { TextAnimated } from "../../../player/animated/text-animated";
-import { presets, PresetName } from "../../../player/animated/presets";
-import { createPreviewTrackItem } from "./preset-preview-data";
-import { isCustomTextAnimation } from "./preset-preview-dispatch";
-import { getSlideAnimation } from "../../../utils/get-animations";
+import { TextAnimated } from "../../../../player/animated/text-animated";
+import { presets, PresetName } from "../../../../player/animated/presets";
+import { createPreviewTrackItem } from "./preview-data";
+import { isCustomTextAnimation } from "./preview-dispatch";
+import { getSlideAnimation } from "../../../../utils/get-animations";
 import {getTextColorStyle} from "@/features/editor/player/styles";
 
 const HOLD_FRAMES = 20;
@@ -30,7 +32,7 @@ const buildShakeComposition = (preset: any, itemW: number, itemH: number) => {
   return [base, scaleStep];
 };
 
-const PresetPreviewScene: React.FC<{
+const PreviewScene: React.FC<{
   presetKey: PresetName;
   type: "in" | "out" | "loop";
 }> = ({ presetKey, type }) => {
@@ -117,7 +119,7 @@ export const RemotionPresetPreview: React.FC<{
 
   return (
     <Player
-      component={PresetPreviewScene}
+      component={PreviewScene}
       inputProps={{ presetKey, type }}
       durationInFrames={durationInFrames}
       fps={30}
