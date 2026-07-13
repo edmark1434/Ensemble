@@ -3,13 +3,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { dispatch } from "@designcombo/events";
 import { ADD_ITEMS, EDIT_OBJECT, LAYER_DELETE } from "@designcombo/state";
 import { ITrackItem, ITrackItemsMap } from "@designcombo/types";
-import { CircleOff, XIcon } from "lucide-react";
+import {CircleOff, X} from "lucide-react";
 import useLayoutStore from "../../store/use-layout-store";
 import { useEffect, useRef, useState } from "react";
 import useClickOutside from "../../hooks/use-click-outside";
 import useStore from "../../store/use-store";
 import { groupBy } from "lodash";
-import { loadFonts } from "../../utils/fonts";
 import { transformCaptions } from "../common/caption-words";
 import { generateId } from "@designcombo/timeline";
 import { PresetPicker } from "../common/preset-picker";
@@ -41,14 +40,16 @@ export interface ICaptionsControlProps {
 }
 
 export const NONE_PRESET: ICaptionsControlProps = {
-  appearedColor: "#000000",
-  activeColor: "#000000",
+  appearedColor: "#ffffff",
+  activeColor: "#ffffff",
   activeFillColor: "transparent",
-  color: "#000000",
+  color: "var(--muted-foreground)",
   backgroundColor: "transparent",
   borderColor: "transparent",
   borderWidth: 0,
-  boxShadow: { color: "#000000", x: 15, y: 15, blur: 60 }
+  isKeywordColor: "transparent",
+  preservedColorKeyWord: false,
+  animation: ""
 };
 export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
   {
@@ -59,7 +60,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 5,
-    fontFamily: "Bangers-Regular",
+    // fontFamily: "Bangers-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/bangers/v13/FeVQS0BTqb0h60ACL5la2bxii28.ttf",
     previewUrlDynamic:
@@ -104,7 +105,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 0,
     boxShadow: { color: "#ffffff", x: 15, y: 15, blur: 60 },
     animation: "typewriterEffect",
-    fontFamily: "Cinzel-Regular",
+    // fontFamily: "Cinzel-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/cinzel/v11/8vIU7ww63mVu7gtR-kwKxNvkNOjw-tbnTYrvDE5ZdqU.ttf",
 
@@ -123,7 +124,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderColor: "#ffffff",
     borderWidth: 5,
     boxShadow: { color: "#ffffff", x: 15, y: 15, blur: 60 },
-    fontFamily: "ChelseaMarket-Regular",
+    // fontFamily: "ChelseaMarket-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/chelseamarket/v8/BCawqZsHqfr89WNP_IApC8tzKBhlLA4uKkWk.ttf",
     previewUrlDynamic:
@@ -153,7 +154,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderColor: "#fcbe0365",
     borderWidth: 5,
     boxShadow: { color: "#fcbe0365", x: 15, y: 15, blur: 60 },
-    fontFamily: "CabinCondensed-Regular",
+    // fontFamily: "CabinCondensed-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/cabincondensed/v14/nwpMtK6mNhBK2err_hqkYhHRqmwaYOjZ5HZl8Q.ttf",
     previewUrlDynamic:
@@ -171,7 +172,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 0,
     boxShadow: { color: "#fffd30", x: 15, y: 15, blur: 60 },
     animation: "typewriterEffect",
-    fontFamily: "Chivo-Regular",
+    // fontFamily: "Chivo-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/chivo/v12/va9I4kzIxd1KFoBvS-J3kbDP.ttf",
     previewUrlDynamic:
@@ -233,7 +234,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 10,
     boxShadow: { color: "#ffffff", x: 15, y: 15, blur: 60 },
     animation: "letterBeasty",
-    fontFamily: "Montserrat-SemiBold",
+    // fontFamily: "Montserrat-SemiBold",
     fontUrl:
       "https://fonts.gstatic.com/s/montserrat/v18/JTURjIg1_i6t8kCHKm45_bZF7g7J_950vCo.ttf",
     previewUrlDynamic:
@@ -276,7 +277,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 10,
-    fontFamily: "FjallaOne-Regular",
+    // fontFamily: "FjallaOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/fjallaone/v8/Yq6R-LCAWCX3-6Ky7FAFnOZwkxgtUb8.ttf",
     previewUrlDynamic:
@@ -293,7 +294,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderColor: "#000000",
     borderWidth: 10,
     animation: "letterPopline/underlineEffect/scaleAnimationLetterEffect",
-    fontFamily: "Viga-Regular",
+    // fontFamily: "Viga-Regular",
     fontUrl: "https://fonts.gstatic.com/s/viga/v9/xMQbuFFdSaiX_QIjD4e2OX8.ttf",
     previewUrlDynamic:
       "https://cdn.designcombo.dev/caption_previews/dynamic-preset16.webm",
@@ -327,7 +328,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 10,
     animation: "captionAnimation1",
     textTransform: "uppercase",
-    fontFamily: "FrancoisOne-Regular",
+    // fontFamily: "FrancoisOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/francoisone/v15/_Xmr-H4zszafZw3A-KPSZutNxgKQu_avAg.ttf",
     previewUrlDynamic:
@@ -343,7 +344,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 10,
-    fontFamily: "AnonymousPro-Regular",
+    // fontFamily: "AnonymousPro-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/anonymouspro/v14/rP2Bp2a15UIB7Un-bOeISG3pLlw89CH98Ko.ttf",
     previewUrlDynamic:
@@ -390,7 +391,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 0,
     boxShadow: { color: "#000000", x: 4, y: 4, blur: 1 },
     animation: "captionAnimation3",
-    fontFamily: "Roboto-Bold",
+    // fontFamily: "Roboto-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/roboto/v29/KFOlCnqEu92Fr1MmWUlvAx05IsDqlA.ttf",
     previewUrlDynamic:
@@ -406,7 +407,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#e4ff00",
     borderColor: "transparent",
     borderWidth: 0,
-    fontFamily: "AnonymousPro-Regular",
+    // fontFamily: "AnonymousPro-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/anonymouspro/v14/rP2Bp2a15UIB7Un-bOeISG3pLlw89CH98Ko.ttf",
     textTransform: "uppercase",
@@ -427,7 +428,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     animation: "captionAnimation4",
     textTransform: "uppercase",
     boxShadow: { color: "#000000", x: 4, y: 4, blur: 1 },
-    fontFamily: "EncodeSans-Regular",
+    // fontFamily: "EncodeSans-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/encodesans/v8/LDIcapOFNxEwR-Bd1O9uYNmnUQomAgE25imKSbHhROjLsZBWTSrQGGHjZtWP7FJCt2c.ttf",
     previewUrlDynamic:
@@ -445,7 +446,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 5,
     boxShadow: { color: "#000000", x: 1, y: 1, blur: 4 },
     textTransform: "uppercase",
-    fontFamily: "FrancoisOne-Regular",
+    // fontFamily: "FrancoisOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/francoisone/v15/_Xmr-H4zszafZw3A-KPSZutNxgKQu_avAg.ttf",
     previewUrlDynamic:
@@ -477,7 +478,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 5,
     textTransform: "uppercase",
     boxShadow: { color: "#000000", x: 1, y: 1, blur: 4 },
-    fontFamily: "FrancoisOne-Regular",
+    // fontFamily: "FrancoisOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/francoisone/v15/_Xmr-H4zszafZw3A-KPSZutNxgKQu_avAg.ttf",
     previewUrlDynamic:
@@ -539,7 +540,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 10,
     animation: "captionAnimation7",
     textTransform: "uppercase",
-    fontFamily: "BebasNeue-Regular",
+    // fontFamily: "BebasNeue-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/bebasneue/v2/JTUSjIg69CK48gW7PXooxW5rygbi49c.ttf",
     previewUrlDynamic:
@@ -573,7 +574,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 0,
     // textTransform: "uppercase",
     animation: "captionAnimation9",
-    fontFamily: "EncodeSans-Regular",
+    // fontFamily: "EncodeSans-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/encodesans/v8/LDIcapOFNxEwR-Bd1O9uYNmnUQomAgE25imKSbHhROjLsZBWTSrQGGHjZtWP7FJCt2c.ttf",
     previewUrlDynamic:
@@ -602,7 +603,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#f0ea00",
     borderColor: "transparent",
     borderWidth: 0,
-    fontFamily: "AnonymousPro-Regular",
+    // fontFamily: "AnonymousPro-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/anonymouspro/v14/rP2Bp2a15UIB7Un-bOeISG3pLlw89CH98Ko.ttf",
     previewUrlDynamic:
@@ -636,7 +637,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 10,
     boxShadow: { color: "#000000", x: 4, y: 4, blur: 1 },
     textTransform: "uppercase",
-    fontFamily: "AlfaSlabOne-Regular",
+    // fontFamily: "AlfaSlabOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/alfaslabone/v10/6NUQ8FmMKwSEKjnm5-4v-4Jh6dVretWvYmE.ttf",
     previewUrlDynamic:
@@ -652,7 +653,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#e4ff00",
     borderColor: "transparent",
     borderWidth: 0,
-    fontFamily: "AnonymousPro-Regular",
+    // fontFamily: "AnonymousPro-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/anonymouspro/v14/rP2Bp2a15UIB7Un-bOeISG3pLlw89CH98Ko.ttf",
     textTransform: "uppercase",
@@ -703,7 +704,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 10,
     animation: "captionAnimation3",
     textTransform: "uppercase",
-    fontFamily: "AlfaSlabOne-Regular",
+    // fontFamily: "AlfaSlabOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/alfaslabone/v10/6NUQ8FmMKwSEKjnm5-4v-4Jh6dVretWvYmE.ttf",
     previewUrlDynamic:
@@ -720,7 +721,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderColor: "#000000",
     borderWidth: 10,
     animation: "captionAnimation13",
-    fontFamily: "AlfaSlabOne-Regular",
+    // fontFamily: "AlfaSlabOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/alfaslabone/v10/6NUQ8FmMKwSEKjnm5-4v-4Jh6dVretWvYmE.ttf",
     previewUrlDynamic:
@@ -736,7 +737,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 10,
-    fontFamily: "AlfaSlabOne-Regular",
+    // fontFamily: "AlfaSlabOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/alfaslabone/v10/6NUQ8FmMKwSEKjnm5-4v-4Jh6dVretWvYmE.ttf",
     previewUrlDynamic:
@@ -752,7 +753,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 10,
-    fontFamily: "AlfaSlabOne-Regular",
+    // fontFamily: "AlfaSlabOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/alfaslabone/v10/6NUQ8FmMKwSEKjnm5-4v-4Jh6dVretWvYmE.ttf",
     boxShadow: { color: "#0dfaff", x: 15, y: 15, blur: 60 },
@@ -771,7 +772,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 10,
-    fontFamily: "AlfaSlabOne-Regular",
+    // fontFamily: "AlfaSlabOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/alfaslabone/v10/6NUQ8FmMKwSEKjnm5-4v-4Jh6dVretWvYmE.ttf",
     textTransform: "uppercase",
@@ -789,7 +790,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 20,
-    fontFamily: "Knewave-Regular",
+    // fontFamily: "Knewave-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/knewave/v9/sykz-yx0lLcxQaSItSq9-trEvlQ.ttf",
     boxShadow: { color: "#38dc31", x: 15, y: 15, blur: 60 },
@@ -810,7 +811,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 10,
     animation: "captionAnimation16/scaleAnimationLetterEffect",
     textTransform: "uppercase",
-    fontFamily: "Knewave-Regular",
+    // fontFamily: "Knewave-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/knewave/v9/sykz-yx0lLcxQaSItSq9-trEvlQ.ttf",
     previewUrlDynamic:
@@ -830,7 +831,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     animation: "captionAnimation1",
     textTransform: "uppercase",
     boxShadow: { color: "#000000", x: 15, y: 15, blur: 60 },
-    fontFamily: "Knewave-Regular",
+    // fontFamily: "Knewave-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/knewave/v9/sykz-yx0lLcxQaSItSq9-trEvlQ.ttf",
     previewUrlDynamic:
@@ -846,7 +847,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 10,
-    fontFamily: "AnonymousPro-Regular",
+    // fontFamily: "AnonymousPro-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/anonymouspro/v14/rP2Bp2a15UIB7Un-bOeISG3pLlw89CH98Ko.ttf",
     textTransform: "uppercase",
@@ -880,7 +881,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 10,
     animation: "captionAnimation16/scaleAnimationLetterEffect",
     textTransform: "uppercase",
-    fontFamily: "FjallaOne-Regular",
+    // fontFamily: "FjallaOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/fjallaone/v8/Yq6R-LCAWCX3-6Ky7FAFnOZwkxgtUb8.ttf",
     previewUrlDynamic:
@@ -898,7 +899,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 2,
     animation: "animationScaleMinEffect",
     textTransform: "uppercase",
-    fontFamily: "FjallaOne-Regular",
+    // fontFamily: "FjallaOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/fjallaone/v8/Yq6R-LCAWCX3-6Ky7FAFnOZwkxgtUb8.ttf",
     boxShadow: { color: "#ffffff", x: 4, y: 4, blur: 60 },
@@ -918,7 +919,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 2,
     animation: "captionAnimation18",
     textTransform: "uppercase",
-    fontFamily: "FjallaOne-Regular",
+    // fontFamily: "FjallaOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/fjallaone/v8/Yq6R-LCAWCX3-6Ky7FAFnOZwkxgtUb8.ttf",
     boxShadow: { color: "#ffffff", x: 4, y: 4, blur: 60 },
@@ -938,7 +939,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 0,
     animation: "captionAnimation19",
     textTransform: "uppercase",
-    fontFamily: "FjallaOne-Regular",
+    // fontFamily: "FjallaOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/fjallaone/v8/Yq6R-LCAWCX3-6Ky7FAFnOZwkxgtUb8.ttf",
     boxShadow: { color: "#ffffff", x: 4, y: 4, blur: 60 },
@@ -957,7 +958,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderColor: "#000000",
     borderWidth: 10,
     animation: "captionAnimation19",
-    fontFamily: "FjallaOne-Regular",
+    // fontFamily: "FjallaOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/fjallaone/v8/Yq6R-LCAWCX3-6Ky7FAFnOZwkxgtUb8.ttf",
     previewUrlDynamic:
@@ -976,7 +977,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 0,
     animation: "captionAnimation20",
     textTransform: "uppercase",
-    fontFamily: "SigmarOne-Regular",
+    // fontFamily: "SigmarOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/sigmarone/v11/co3DmWZ8kjZuErj9Ta3dk6Pjp3Di8U0.ttf",
     boxShadow: { color: "#ffffff", x: 4, y: 4, blur: 60 },
@@ -996,7 +997,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 10,
     animation: "captionAnimation21",
     textTransform: "uppercase",
-    fontFamily: "AnonymousPro-Regular",
+    // fontFamily: "AnonymousPro-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/anonymouspro/v14/rP2Bp2a15UIB7Un-bOeISG3pLlw89CH98Ko.ttf",
     previewUrlDynamic:
@@ -1015,7 +1016,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 10,
     animation: "captionAnimation22",
     textTransform: "uppercase",
-    fontFamily: "PermanentMarker-Regular",
+    // fontFamily: "PermanentMarker-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/permanentmarker/v10/Fh4uPib9Iyv2ucM6pGQMWimMp004HaqIfrT5nlk.ttf",
     previewUrlDynamic:
@@ -1032,7 +1033,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderColor: "transparent",
     borderWidth: 0,
     textTransform: "uppercase",
-    fontFamily: "AlfaSlabOne-Regular",
+    // fontFamily: "AlfaSlabOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/alfaslabone/v10/6NUQ8FmMKwSEKjnm5-4v-4Jh6dVretWvYmE.ttf",
     boxShadow: { color: "#000000", x: 4, y: 4, blur: 60 },
@@ -1049,7 +1050,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 10,
-    fontFamily: "Atma-SemiBold",
+    // fontFamily: "Atma-SemiBold",
     fontUrl:
       "https://fonts.gstatic.com/s/atma/v8/uK_z4rqWc-Eoo7Z1Kjc9PvedRkM.ttf",
     previewUrlDynamic:
@@ -1065,7 +1066,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "transparent",
     borderWidth: 0,
-    fontFamily: "AlfaSlabOne-Regular",
+    // fontFamily: "AlfaSlabOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/alfaslabone/v10/6NUQ8FmMKwSEKjnm5-4v-4Jh6dVretWvYmE.ttf",
     textTransform: "uppercase",
@@ -1116,7 +1117,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderColor: "#000000",
     borderWidth: 10,
     animation: "captionAnimation21",
-    fontFamily: "AnonymousPro-Regular",
+    // fontFamily: "AnonymousPro-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/anonymouspro/v14/rP2Bp2a15UIB7Un-bOeISG3pLlw89CH98Ko.ttf",
     previewUrlDynamic:
@@ -1135,7 +1136,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderWidth: 10,
     animation: "captionAnimation21",
     textTransform: "uppercase",
-    fontFamily: "AlfaSlabOne-Regular",
+    // fontFamily: "AlfaSlabOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/alfaslabone/v10/6NUQ8FmMKwSEKjnm5-4v-4Jh6dVretWvYmE.ttf",
     previewUrlDynamic:
@@ -1152,7 +1153,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderColor: "#000000",
     borderWidth: 10,
     textTransform: "uppercase",
-    fontFamily: "AlfaSlabOne-Regular",
+    // fontFamily: "AlfaSlabOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/alfaslabone/v10/6NUQ8FmMKwSEKjnm5-4v-4Jh6dVretWvYmE.ttf",
     previewUrlDynamic:
@@ -1168,7 +1169,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#000000",
     borderColor: "transparent",
     borderWidth: 0,
-    fontFamily: "AnonymousPro-Regular",
+    // fontFamily: "AnonymousPro-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/anonymouspro/v14/rP2Bp2a15UIB7Un-bOeISG3pLlw89CH98Ko.ttf",
     previewUrlDynamic:
@@ -1199,7 +1200,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 5,
-    fontFamily: "AlfaSlabOne-Regular",
+    // fontFamily: "AlfaSlabOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/alfaslabone/v10/6NUQ8FmMKwSEKjnm5-4v-4Jh6dVretWvYmE.ttf",
     textTransform: "uppercase",
@@ -1216,7 +1217,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 10,
-    fontFamily: "AlfaSlabOne-Regular",
+    // fontFamily: "AlfaSlabOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/alfaslabone/v10/6NUQ8FmMKwSEKjnm5-4v-4Jh6dVretWvYmE.ttf",
     animation: "captionAnimation25",
@@ -1233,7 +1234,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 10,
-    fontFamily: "AnonymousPro-Regular",
+    // fontFamily: "AnonymousPro-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/anonymouspro/v14/rP2Bp2a15UIB7Un-bOeISG3pLlw89CH98Ko.ttf",
     animation: "captionAnimation26",
@@ -1252,7 +1253,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 10,
-    fontFamily: "SigmarOne-Regular",
+    // fontFamily: "SigmarOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/sigmarone/v11/co3DmWZ8kjZuErj9Ta3dk6Pjp3Di8U0.ttf",
     animation: "captionAnimation27",
@@ -1272,7 +1273,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "transparent",
     borderWidth: 0,
-    fontFamily: "SigmarOne-Regular",
+    // fontFamily: "SigmarOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/sigmarone/v11/co3DmWZ8kjZuErj9Ta3dk6Pjp3Di8U0.ttf",
     animation: "captionAnimation28",
@@ -1291,7 +1292,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 10,
-    fontFamily: "SigmarOne-Regular",
+    // fontFamily: "SigmarOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/sigmarone/v11/co3DmWZ8kjZuErj9Ta3dk6Pjp3Di8U0.ttf",
     textTransform: "uppercase",
@@ -1310,7 +1311,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "transparent",
     borderWidth: 0,
-    fontFamily: "SigmarOne-Regular",
+    // fontFamily: "SigmarOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/sigmarone/v11/co3DmWZ8kjZuErj9Ta3dk6Pjp3Di8U0.ttf",
     animation: "captionAnimation29",
@@ -1330,7 +1331,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 10,
-    fontFamily: "SigmarOne-Regular",
+    // fontFamily: "SigmarOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/sigmarone/v11/co3DmWZ8kjZuErj9Ta3dk6Pjp3Di8U0.ttf",
     animation: "captionAnimation30",
@@ -1349,7 +1350,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#41434a",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "SigmarOne-Regular", // "font Avenir Next"
+    // fontFamily: "SigmarOne-Regular", // "font Avenir Next"
     fontUrl:
       "https://fonts.gstatic.com/s/sigmarone/v11/co3DmWZ8kjZuErj9Ta3dk6Pjp3Di8U0.ttf",
     previewUrlDynamic:
@@ -1368,7 +1369,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderColor: "#000000",
     borderWidth: 0,
     animation: "captionAnimation31",
-    fontFamily: "Imbue10pt-Regular",
+    // fontFamily: "Imbue10pt-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/imbue/v9/RLpXK5P16Ki3fXhj5cvGrqjocPk4n-gVX3M93TnrnvhoP8iXfOsNNK-Q4xY.ttf",
     previewUrlDynamic:
@@ -1386,7 +1387,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderColor: "#000000",
     borderWidth: 0,
     animation: "captionAnimation32/animationScaleDinamicEffect",
-    fontFamily: "Imbue10pt-Regular",
+    // fontFamily: "Imbue10pt-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/imbue/v9/RLpXK5P16Ki3fXhj5cvGrqjocPk4n-gVX3M93TnrnvhoP8iXfOsNNK-Q4xY.ttf",
     previewUrlDynamic:
@@ -1406,7 +1407,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Montserrat-Bold",
+    // fontFamily: "Montserrat-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/montserrat/v18/JTURjIg1_i6t8kCHKm45_dJE7g7J_950vCo.ttf",
     previewUrlDynamic:
@@ -1428,7 +1429,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#334744",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "SigmarOne-Regular",
+    // fontFamily: "SigmarOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/sigmarone/v11/co3DmWZ8kjZuErj9Ta3dk6Pjp3Di8U0.ttf",
     previewUrlDynamic:
@@ -1447,7 +1448,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "AndadaPro-Medium",
+    // fontFamily: "AndadaPro-Medium",
     fontUrl:
       "https://fonts.gstatic.com/s/andadapro/v7/HhyEU5Qi9-SuOEhPe4LtKoVCuWGURPcg3DP7BY8cFLzvIt2S.ttf",
     previewUrlDynamic:
@@ -1467,7 +1468,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "AndadaPro-Medium",
+    // fontFamily: "AndadaPro-Medium",
     fontUrl:
       "https://fonts.gstatic.com/s/andadapro/v7/HhyEU5Qi9-SuOEhPe4LtKoVCuWGURPcg3DP7BY8cFLzvIt2S.ttf",
     previewUrlDynamic:
@@ -1486,7 +1487,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#00000049",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Poppins-Bold",
+    // fontFamily: "Poppins-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/poppins/v15/pxiByp8kv8JHgFVrLCz7V1tvFP-KUEg.ttf",
     previewUrlDynamic:
@@ -1505,7 +1506,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderColor: "#ffffff",
     borderWidth: 2,
     textTransform: "uppercase",
-    fontFamily: "AlfaSlabOne-Regular",
+    // fontFamily: "AlfaSlabOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/alfaslabone/v10/6NUQ8FmMKwSEKjnm5-4v-4Jh6dVretWvYmE.ttf",
     previewUrlDynamic:
@@ -1527,7 +1528,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderColor: "#000000",
     borderWidth: 0,
     textTransform: "uppercase",
-    fontFamily: "BebasNeue-Regular",
+    // fontFamily: "BebasNeue-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/bebasneue/v2/JTUSjIg69CK48gW7PXooxW5rygbi49c.ttf",
     previewUrlDynamic:
@@ -1548,7 +1549,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderColor: "#000000",
     borderWidth: 0,
     textTransform: "uppercase",
-    fontFamily: "Rubik-Black",
+    // fontFamily: "Rubik-Black",
     fontUrl:
       "https://fonts.gstatic.com/s/rubik/v14/iJWZBXyIfDnIV5PNhY1KTN7Z-Yh-ro-1UE80V4bVkA.ttf",
     previewUrlDynamic:
@@ -1569,7 +1570,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderColor: "#000000",
     borderWidth: 0,
     textTransform: "uppercase",
-    fontFamily: "Poppins-Bold",
+    // fontFamily: "Poppins-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/poppins/v15/pxiByp8kv8JHgFVrLCz7V1tvFP-KUEg.ttf",
     previewUrlDynamic:
@@ -1589,7 +1590,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderColor: "#000000",
     borderWidth: 0,
     textTransform: "uppercase",
-    fontFamily: "Poppins-Bold",
+    // fontFamily: "Poppins-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/poppins/v15/pxiByp8kv8JHgFVrLCz7V1tvFP-KUEg.ttf",
     previewUrlDynamic:
@@ -1609,7 +1610,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "SigmarOne-Regular", // "font Avenir Next"
+    // fontFamily: "SigmarOne-Regular", // "font Avenir Next"
     fontUrl:
       "https://fonts.gstatic.com/s/sigmarone/v11/co3DmWZ8kjZuErj9Ta3dk6Pjp3Di8U0.ttf",
     previewUrlDynamic:
@@ -1631,7 +1632,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "SigmarOne-Regular",
+    // fontFamily: "SigmarOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/sigmarone/v11/co3DmWZ8kjZuErj9Ta3dk6Pjp3Di8U0.ttf",
     previewUrlDynamic:
@@ -1652,7 +1653,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "SigmarOne-Regular",
+    // fontFamily: "SigmarOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/sigmarone/v11/co3DmWZ8kjZuErj9Ta3dk6Pjp3Di8U0.ttf",
     previewUrlDynamic:
@@ -1673,7 +1674,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#75fbfd98",
     borderColor: "#000000",
     borderWidth: 3,
-    fontFamily: "SigmarOne-Regular",
+    // fontFamily: "SigmarOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/sigmarone/v11/co3DmWZ8kjZuErj9Ta3dk6Pjp3Di8U0.ttf",
     previewUrlDynamic:
@@ -1693,7 +1694,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#000000",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "CabinCondensed-Bold",
+    // fontFamily: "CabinCondensed-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/cabincondensed/v14/nwpJtK6mNhBK2err_hqkYhHRqmwi3Mf97F15-K1oqQ.ttf",
     previewUrlDynamic:
@@ -1713,7 +1714,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 10,
-    fontFamily: "CabinCondensed-Regular",
+    // fontFamily: "CabinCondensed-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/cabincondensed/v14/nwpMtK6mNhBK2err_hqkYhHRqmwaYOjZ5HZl8Q.ttf",
     previewUrlDynamic:
@@ -1732,7 +1733,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "DMSans-Bold",
+    // fontFamily: "DMSans-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/dmsans/v6/rP2Cp2ywxg089UriASitOB-sClQX6Cg.ttf",
     previewUrlDynamic:
@@ -1751,7 +1752,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#ffffff27",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "CabinCondensed-Bold",
+    // fontFamily: "CabinCondensed-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/cabincondensed/v14/nwpJtK6mNhBK2err_hqkYhHRqmwi3Mf97F15-K1oqQ.ttf",
     previewUrlDynamic:
@@ -1771,7 +1772,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     borderColor: "#000000",
     borderWidth: 0,
     textAlign: "left",
-    fontFamily: "BebasNeue-Regular",
+    // fontFamily: "BebasNeue-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/bebasneue/v2/JTUSjIg69CK48gW7PXooxW5rygbi49c.ttf",
     previewUrlDynamic:
@@ -1791,7 +1792,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#000000",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "CabinCondensed-Bold",
+    // fontFamily: "CabinCondensed-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/cabincondensed/v14/nwpJtK6mNhBK2err_hqkYhHRqmwi3Mf97F15-K1oqQ.ttf",
     previewUrlDynamic:
@@ -1811,7 +1812,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "SigmarOne-Regular", // "font Avenir Next"
+    // fontFamily: "SigmarOne-Regular", // "font Avenir Next"
     fontUrl:
       "https://fonts.gstatic.com/s/sigmarone/v11/co3DmWZ8kjZuErj9Ta3dk6Pjp3Di8U0.ttf",
     previewUrlDynamic:
@@ -1830,7 +1831,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#6d7780",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Montserrat-Light",
+    // fontFamily: "Montserrat-Light",
     fontUrl:
       "https://fonts.gstatic.com/s/montserrat/v18/JTURjIg1_i6t8kCHKm45_cJD7g7J_950vCo.ttf",
     previewUrlDynamic:
@@ -1851,7 +1852,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Montserrat-Black",
+    // fontFamily: "Montserrat-Black",
     fontUrl:
       "https://fonts.gstatic.com/s/montserrat/v18/JTURjIg1_i6t8kCHKm45_epG7g7J_950vCo.ttf",
     previewUrlDynamic:
@@ -1871,7 +1872,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Inter-Bold",
+    // fontFamily: "Inter-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/inter/v7/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYMZhrib2Bg-4.ttf",
     previewUrlDynamic:
@@ -1892,7 +1893,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#c95858",
     borderWidth: 5,
-    fontFamily: "FredokaOne-Regular",
+    // fontFamily: "FredokaOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/fredokaone/v8/k3kUo8kEI-tA1RRcTZGmTmHBA6aF8Bf_.ttf",
     previewUrlDynamic:
@@ -1914,7 +1915,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Lemonada-Bold",
+    // fontFamily: "Lemonada-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/lemonada/v14/0QI-MXFD9oygTWy_R-FFlwV-bgfR7QJGnex2mfWc3Z2pTg.ttf",
     previewUrlDynamic:
@@ -1935,7 +1936,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Bangers-Regular",
+    // fontFamily: "Bangers-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/bangers/v13/FeVQS0BTqb0h60ACL5la2bxii28.ttf",
     previewUrlDynamic:
@@ -1955,7 +1956,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "ChelseaMarket-Regular",
+    // fontFamily: "ChelseaMarket-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/chelseamarket/v8/BCawqZsHqfr89WNP_IApC8tzKBhlLA4uKkWk.ttf",
     previewUrlDynamic:
@@ -1976,7 +1977,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Bangers-Regular",
+    // fontFamily: "Bangers-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/bangers/v13/FeVQS0BTqb0h60ACL5la2bxii28.ttf",
     previewUrlDynamic:
@@ -1997,7 +1998,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Baskervville-Regular",
+    // fontFamily: "Baskervville-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/baskervville/v5/YA9Ur0yU4l_XOrogbkun3kQgt5OohvbJ9A.ttf",
     previewUrlDynamic:
@@ -2018,7 +2019,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Montserrat-Bold",
+    // fontFamily: "Montserrat-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/montserrat/v18/JTURjIg1_i6t8kCHKm45_dJE7g7J_950vCo.ttf",
     previewUrlDynamic:
@@ -2039,7 +2040,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "FredokaOne-Regular",
+    // fontFamily: "FredokaOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/fredokaone/v8/k3kUo8kEI-tA1RRcTZGmTmHBA6aF8Bf_.ttf",
     previewUrlDynamic:
@@ -2060,7 +2061,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Neuton-Regular",
+    // fontFamily: "Neuton-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/neuton/v13/UMBTrPtMoH62xUZyyII7civlBw.ttf",
     previewUrlDynamic:
@@ -2079,7 +2080,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Montserrat-Bold",
+    // fontFamily: "Montserrat-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/montserrat/v18/JTURjIg1_i6t8kCHKm45_dJE7g7J_950vCo.ttf",
     previewUrlDynamic:
@@ -2100,7 +2101,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Bangers-Regular",
+    // fontFamily: "Bangers-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/bangers/v13/FeVQS0BTqb0h60ACL5la2bxii28.ttf",
     previewUrlDynamic:
@@ -2122,7 +2123,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#000000",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "DMSans-Bold",
+    // fontFamily: "DMSans-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/dmsans/v6/rP2Cp2ywxg089UriASitOB-sClQX6Cg.ttf",
     previewUrlDynamic:
@@ -2143,7 +2144,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Inter-Bold",
+    // fontFamily: "Inter-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/inter/v7/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYMZhrib2Bg-4.ttf",
     previewUrlDynamic:
@@ -2165,7 +2166,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Lemonada-Bold",
+    // fontFamily: "Lemonada-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/lemonada/v14/0QI-MXFD9oygTWy_R-FFlwV-bgfR7QJGnex2mfWc3Z2pTg.ttf",
     previewUrlDynamic:
@@ -2186,7 +2187,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#f24b34",
     borderWidth: 5,
-    fontFamily: "LilitaOne",
+    // fontFamily: "LilitaOne",
     fontUrl:
       "https://fonts.gstatic.com/s/lilitaone/v8/i7dPIFZ9Zz-WBtRtedDbUEZ2RFq7AwU.ttf",
     previewUrlDynamic:
@@ -2208,7 +2209,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 5,
-    fontFamily: "Inter-Bold",
+    // fontFamily: "Inter-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/inter/v7/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYMZhrib2Bg-4.ttf",
     previewUrlDynamic:
@@ -2231,7 +2232,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 5,
-    fontFamily: "PublicSans-BlackItalic",
+    // fontFamily: "PublicSans-BlackItalic",
     fontUrl:
       "https://fonts.gstatic.com/s/publicsans/v7/ijwAs572Xtc6ZYQws9YVwnNDZpDyNjGolS673tr4hwctfVotfj7j.ttf",
     previewUrlDynamic:
@@ -2254,7 +2255,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "BebasNeue-Regular",
+    // fontFamily: "BebasNeue-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/bebasneue/v2/JTUSjIg69CK48gW7PXooxW5rygbi49c.ttf",
     previewUrlDynamic:
@@ -2277,7 +2278,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 5,
-    fontFamily: "Montserrat-Black",
+    // fontFamily: "Montserrat-Black",
     fontUrl:
       "https://fonts.gstatic.com/s/montserrat/v18/JTURjIg1_i6t8kCHKm45_epG7g7J_950vCo.ttf",
     previewUrlDynamic:
@@ -2299,7 +2300,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Bangers-Regular",
+    // fontFamily: "Bangers-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/bangers/v13/FeVQS0BTqb0h60ACL5la2bxii28.ttf",
     previewUrlDynamic:
@@ -2322,7 +2323,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#e53268",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Inter-Bold",
+    // fontFamily: "Inter-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/inter/v7/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYMZhrib2Bg-4.ttf",
     previewUrlDynamic:
@@ -2363,7 +2364,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Inter-Bold",
+    // fontFamily: "Inter-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/inter/v7/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYMZhrib2Bg-4.ttf",
     previewUrlDynamic:
@@ -2385,7 +2386,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "rgba(0, 0, 0, 0.5)",
     borderColor: "#000000",
     borderWidth: 3,
-    fontFamily: "Inter-Bold",
+    // fontFamily: "Inter-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/inter/v7/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYMZhrib2Bg-4.ttf",
     previewUrlDynamic:
@@ -2408,7 +2409,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 3,
-    fontFamily: "RobotoCondensed-Bold",
+    // fontFamily: "RobotoCondensed-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/robotocondensed/v19/ieVi2ZhZI2eCN5jzbjEETS9weq8-32meKCMSbvtdYyQ.ttf",
     previewUrlDynamic:
@@ -2432,7 +2433,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 3,
-    fontFamily: "Rubik-Black",
+    // fontFamily: "Rubik-Black",
     fontUrl:
       "https://fonts.gstatic.com/s/rubik/v14/iJWZBXyIfDnIV5PNhY1KTN7Z-Yh-ro-1UE80V4bVkA.ttf",
     previewUrlDynamic:
@@ -2456,7 +2457,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 3,
-    fontFamily: "Bangers-Regular",
+    // fontFamily: "Bangers-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/bangers/v13/FeVQS0BTqb0h60ACL5la2bxii28.ttf",
     previewUrlDynamic:
@@ -2479,7 +2480,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#1f8aff",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "SigmarOne-Regular", // "font Avenir Next"
+    // fontFamily: "SigmarOne-Regular", // "font Avenir Next"
     fontUrl:
       "https://fonts.gstatic.com/s/sigmarone/v11/co3DmWZ8kjZuErj9Ta3dk6Pjp3Di8U0.ttf",
     previewUrlDynamic:
@@ -2500,7 +2501,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#000000",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "RobotoSlab-Medium",
+    // fontFamily: "RobotoSlab-Medium",
     fontUrl:
       "https://fonts.gstatic.com/s/robotoslab/v16/BngbUXZYTXPIvIBgJJSb6s3BzlRRfKOFbvjovoSWaG5iddG-1A.ttf",
     previewUrlDynamic:
@@ -2521,7 +2522,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "FredokaOne-Regular",
+    // fontFamily: "FredokaOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/fredokaone/v8/k3kUo8kEI-tA1RRcTZGmTmHBA6aF8Bf_.ttf",
     previewUrlDynamic:
@@ -2542,7 +2543,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "CaveatBrush-Regular",
+    // fontFamily: "CaveatBrush-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/caveatbrush/v6/EYq0maZfwr9S9-ETZc3fKXtMW7mT03pdQw.ttf",
     previewUrlDynamic:
@@ -2562,7 +2563,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "AguafinaScript-Regular",
+    // fontFamily: "AguafinaScript-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/aguafinascript/v9/If2QXTv_ZzSxGIO30LemWEOmt1bHqs4pgicOrg.ttf",
     previewUrlDynamic:
@@ -2584,7 +2585,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#000000",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "CabinCondensed-Bold",
+    // fontFamily: "CabinCondensed-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/cabincondensed/v14/nwpJtK6mNhBK2err_hqkYhHRqmwi3Mf97F15-K1oqQ.ttf",
     previewUrlDynamic:
@@ -2603,7 +2604,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "DMSerifText-Regular",
+    // fontFamily: "DMSerifText-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/dmseriftext/v5/rnCu-xZa_krGokauCeNq1wWyafOPXHIJErY.ttf",
     previewUrlDynamic:
@@ -2624,7 +2625,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Rubik-Black",
+    // fontFamily: "Rubik-Black",
     fontUrl:
       "https://fonts.gstatic.com/s/rubik/v14/iJWZBXyIfDnIV5PNhY1KTN7Z-Yh-ro-1UE80V4bVkA.ttf",
     previewUrlDynamic:
@@ -2645,7 +2646,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "DMSerifText-Regular",
+    // fontFamily: "DMSerifText-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/dmseriftext/v5/rnCu-xZa_krGokauCeNq1wWyafOPXHIJErY.ttf",
     previewUrlDynamic:
@@ -2686,7 +2687,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#f5c944",
     borderWidth: 2,
-    fontFamily: "DMSerifText-Regular",
+    // fontFamily: "DMSerifText-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/dmseriftext/v5/rnCu-xZa_krGokauCeNq1wWyafOPXHIJErY.ttf",
     previewUrlDynamic:
@@ -2706,7 +2707,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "rgba(10, 57, 146, 0.41)",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "DMSerifText-Regular",
+    // fontFamily: "DMSerifText-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/dmseriftext/v5/rnCu-xZa_krGokauCeNq1wWyafOPXHIJErY.ttf",
     previewUrlDynamic:
@@ -2727,7 +2728,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#0000d5",
     borderWidth: 7,
-    fontFamily: "Inter-Bold",
+    // fontFamily: "Inter-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/inter/v7/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYMZhrib2Bg-4.ttf",
     previewUrlDynamic:
@@ -2750,7 +2751,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Chivo-Bold",
+    // fontFamily: "Chivo-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/chivo/v12/va9F4kzIxd1KFrjTZMZ_uqzGQC_-.ttf",
     previewUrlDynamic:
@@ -2774,7 +2775,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Inter-Bold",
+    // fontFamily: "Inter-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/inter/v7/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYMZhrib2Bg-4.ttf",
     previewUrlDynamic:
@@ -2818,7 +2819,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 2,
-    fontFamily: "Staatliches-Regular",
+    // fontFamily: "Staatliches-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/staatliches/v6/HI_OiY8KO6hCsQSoAPmtMbectJG9O9PS.ttf",
     previewUrlDynamic:
@@ -2842,7 +2843,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 4,
-    fontFamily: "Staatliches-Regular",
+    // fontFamily: "Staatliches-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/staatliches/v6/HI_OiY8KO6hCsQSoAPmtMbectJG9O9PS.ttf",
     previewUrlDynamic:
@@ -2927,7 +2928,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "FredokaOne-Regular",
+    // fontFamily: "FredokaOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/fredokaone/v8/k3kUo8kEI-tA1RRcTZGmTmHBA6aF8Bf_.ttf",
     previewUrlDynamic:
@@ -3010,7 +3011,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 10,
-    fontFamily: "FredokaOne-Regular",
+    // fontFamily: "FredokaOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/fredokaone/v8/k3kUo8kEI-tA1RRcTZGmTmHBA6aF8Bf_.ttf",
     previewUrlDynamic:
@@ -3033,7 +3034,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#000000",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "SecularOne-Regular",
+    // fontFamily: "SecularOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/secularone/v5/8QINdiTajsj_87rMuMdKypDlMul7LJpK.ttf",
     previewUrlDynamic:
@@ -3053,7 +3054,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 4,
-    fontFamily: "JuliusSansOne-Regular",
+    // fontFamily: "JuliusSansOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/juliussansone/v9/1Pt2g8TAX_SGgBGUi0tGOYEga5W-xXEW6aGXHw.ttf",
     previewUrlDynamic:
@@ -3077,7 +3078,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Montserrat-ExtraBold",
+    // fontFamily: "Montserrat-ExtraBold",
     fontUrl:
       "https://fonts.gstatic.com/s/montserrat/v18/JTURjIg1_i6t8kCHKm45_c5H7g7J_950vCo.ttf",
     previewUrlDynamic:
@@ -3100,7 +3101,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#000000",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Montserrat-ExtraBold",
+    // fontFamily: "Montserrat-ExtraBold",
     fontUrl:
       "https://fonts.gstatic.com/s/montserrat/v18/JTURjIg1_i6t8kCHKm45_c5H7g7J_950vCo.ttf",
     previewUrlDynamic:
@@ -3183,7 +3184,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#7e12ff",
     borderColor: "#000000",
     borderWidth: 4,
-    fontFamily: "JuliusSansOne-Regular",
+    // fontFamily: "JuliusSansOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/juliussansone/v9/1Pt2g8TAX_SGgBGUi0tGOYEga5W-xXEW6aGXHw.ttf",
     previewUrlDynamic:
@@ -3203,7 +3204,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#ffffff",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "JuliusSansOne-Regular",
+    // fontFamily: "JuliusSansOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/juliussansone/v9/1Pt2g8TAX_SGgBGUi0tGOYEga5W-xXEW6aGXHw.ttf",
     previewUrlDynamic:
@@ -3243,7 +3244,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#000000",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "SigmarOne-Regular",
+    // fontFamily: "SigmarOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/sigmarone/v11/co3DmWZ8kjZuErj9Ta3dk6Pjp3Di8U0.ttf",
     previewUrlDynamic:
@@ -3263,7 +3264,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "CabinCondensed-Regular",
+    // fontFamily: "CabinCondensed-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/cabincondensed/v14/nwpMtK6mNhBK2err_hqkYhHRqmwaYOjZ5HZl8Q.ttf",
     previewUrlDynamic:
@@ -3285,7 +3286,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "SecularOne-Regular",
+    // fontFamily: "SecularOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/secularone/v5/8QINdiTajsj_87rMuMdKypDlMul7LJpK.ttf",
     previewUrlDynamic:
@@ -3308,7 +3309,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#000000",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Inter-Bold",
+    // fontFamily: "Inter-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/inter/v7/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYMZhrib2Bg-4.ttf",
     previewUrlDynamic:
@@ -3405,7 +3406,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 8,
-    fontFamily: "Changa-Bold",
+    // fontFamily: "Changa-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/changa/v14/2-c79JNi2YuVOUcOarRPgnNGooxCZ0q2QjDp9htf1ZM.ttf",
     previewUrlDynamic:
@@ -3429,7 +3430,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 3,
-    fontFamily: "SigmarOne-Regular",
+    // fontFamily: "SigmarOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/sigmarone/v11/co3DmWZ8kjZuErj9Ta3dk6Pjp3Di8U0.ttf",
     previewUrlDynamic:
@@ -3453,7 +3454,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#7e12ff",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Montserrat-ExtraBold",
+    // fontFamily: "Montserrat-ExtraBold",
     fontUrl:
       "https://fonts.gstatic.com/s/montserrat/v18/JTURjIg1_i6t8kCHKm45_c5H7g7J_950vCo.ttf",
     previewUrlDynamic:
@@ -3497,7 +3498,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 4,
-    fontFamily: "Bungee-Regular",
+    // fontFamily: "Bungee-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/bungee/v6/N0bU2SZBIuF2PU_ECn50Kd_PmA.ttf",
     previewUrlDynamic:
@@ -3521,7 +3522,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 4,
-    fontFamily: "Changa-Bold",
+    // fontFamily: "Changa-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/changa/v14/2-c79JNi2YuVOUcOarRPgnNGooxCZ0q2QjDp9htf1ZM.ttf",
     previewUrlDynamic:
@@ -3602,7 +3603,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Inter-Black",
+    // fontFamily: "Inter-Black",
     fontUrl:
       "https://fonts.gstatic.com/s/inter/v7/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuBWYMZhrib2Bg-4.ttf",
     previewUrlDynamic:
@@ -3700,7 +3701,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#000000",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Inter-SemiBold",
+    // fontFamily: "Inter-SemiBold",
     fontUrl:
       "https://fonts.gstatic.com/s/inter/v7/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuGKYMZhrib2Bg-4.ttf",
     previewUrlDynamic:
@@ -3724,7 +3725,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#000000",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Lobster-Regular",
+    // fontFamily: "Lobster-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/lobster/v23/neILzCirqoswsqX9_oWsMqEzSJQ.ttf",
     previewUrlDynamic:
@@ -3747,7 +3748,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#7e12ff",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Inter-SemiBold",
+    // fontFamily: "Inter-SemiBold",
     fontUrl:
       "https://fonts.gstatic.com/s/inter/v7/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuGKYMZhrib2Bg-4.ttf",
     previewUrlDynamic:
@@ -3769,7 +3770,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#7e12ff",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "RobotoCondensed-Bold",
+    // fontFamily: "RobotoCondensed-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/robotocondensed/v19/ieVi2ZhZI2eCN5jzbjEETS9weq8-32meKCMSbvtdYyQ.ttf",
     previewUrlDynamic:
@@ -3811,7 +3812,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#7e12ff",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Pacifico-Regular",
+    // fontFamily: "Pacifico-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/pacifico/v17/FwZY7-Qmy14u9lezJ96A4sijpFu_.ttf",
     previewUrlDynamic:
@@ -3834,7 +3835,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "SecularOne-Regular",
+    // fontFamily: "SecularOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/secularone/v5/8QINdiTajsj_87rMuMdKypDlMul7LJpK.ttf",
     previewUrlDynamic:
@@ -3857,7 +3858,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#7e12ff",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Inter-SemiBold",
+    // fontFamily: "Inter-SemiBold",
     fontUrl:
       "https://fonts.gstatic.com/s/inter/v7/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuGKYMZhrib2Bg-4.ttf",
     previewUrlDynamic:
@@ -3959,7 +3960,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "#41434a",
     borderColor: "#000000",
     borderWidth: 2,
-    fontFamily: "SigmarOne-Regular",
+    // fontFamily: "SigmarOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/sigmarone/v11/co3DmWZ8kjZuErj9Ta3dk6Pjp3Di8U0.ttf",
     previewUrlDynamic:
@@ -3982,7 +3983,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Staatliches-Regular",
+    // fontFamily: "Staatliches-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/staatliches/v6/HI_OiY8KO6hCsQSoAPmtMbectJG9O9PS.ttf",
     previewUrlDynamic:
@@ -4027,7 +4028,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 4,
-    fontFamily: "Montserrat-ExtraBold",
+    // fontFamily: "Montserrat-ExtraBold",
     fontUrl:
       "https://fonts.gstatic.com/s/montserrat/v18/JTURjIg1_i6t8kCHKm45_c5H7g7J_950vCo.ttf",
     previewUrlDynamic:
@@ -4050,7 +4051,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "PlayfairDisplay-Bold",
+    // fontFamily: "PlayfairDisplay-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/playfairdisplay/v25/nuFvD-vYSZviVYUb_rj3ij__anPXJzDwcbmjWBN2PKeiukDQZNLo_U2r.ttf",
     previewUrlDynamic:
@@ -4074,7 +4075,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 4,
-    fontFamily: "RobotoCondensed-Bold",
+    // fontFamily: "RobotoCondensed-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/robotocondensed/v19/ieVi2ZhZI2eCN5jzbjEETS9weq8-32meKCMSbvtdYyQ.ttf",
     previewUrlDynamic:
@@ -4098,7 +4099,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 10,
-    fontFamily: "Rubik-Black",
+    // fontFamily: "Rubik-Black",
     fontUrl:
       "https://fonts.gstatic.com/s/rubik/v14/iJWZBXyIfDnIV5PNhY1KTN7Z-Yh-ro-1UE80V4bVkA.ttf",
     previewUrlDynamic:
@@ -4121,7 +4122,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Inter-Bold",
+    // fontFamily: "Inter-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/inter/v7/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYMZhrib2Bg-4.ttf",
     previewUrlDynamic:
@@ -4163,7 +4164,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "Poppins-Bold",
+    // fontFamily: "Poppins-Bold",
     fontUrl:
       "https://fonts.gstatic.com/s/poppins/v15/pxiByp8kv8JHgFVrLCz7V1tvFP-KUEg.ttf",
     previewUrlDynamic:
@@ -4185,7 +4186,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 10,
-    fontFamily: "Montserrat-Black",
+    // fontFamily: "Montserrat-Black",
     fontUrl:
       "https://fonts.gstatic.com/s/montserrat/v18/JTURjIg1_i6t8kCHKm45_epG7g7J_950vCo.ttf",
     previewUrlDynamic:
@@ -4209,7 +4210,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 0,
-    fontFamily: "SigmarOne-Regular", // "font Avenir Next"
+    // fontFamily: "SigmarOne-Regular", // "font Avenir Next"
     fontUrl:
       "https://fonts.gstatic.com/s/sigmarone/v11/co3DmWZ8kjZuErj9Ta3dk6Pjp3Di8U0.ttf",
     previewUrlDynamic:
@@ -4233,7 +4234,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 10,
-    fontFamily: "Montserrat-Light",
+    // fontFamily: "Montserrat-Light",
     fontUrl:
       "https://fonts.gstatic.com/s/montserrat/v18/JTURjIg1_i6t8kCHKm45_cJD7g7J_950vCo.ttf",
     previewUrlDynamic:
@@ -4270,7 +4271,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 5,
-    fontFamily: "FrancoisOne-Regular",
+    // fontFamily: "FrancoisOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/francoisone/v15/_Xmr-H4zszafZw3A-KPSZutNxgKQu_avAg.ttf",
     previewUrlDynamic:
@@ -4288,7 +4289,7 @@ export const STYLE_CAPTION_PRESETS: ICaptionsControlProps[] = [
     backgroundColor: "transparent",
     borderColor: "#000000",
     borderWidth: 5,
-    fontFamily: "FrancoisOne-Regular",
+    // fontFamily: "FrancoisOne-Regular",
     fontUrl:
       "https://fonts.gstatic.com/s/francoisone/v15/_Xmr-H4zszafZw3A-KPSZutNxgKQu_avAg.ttf",
     previewUrlDynamic:
@@ -4305,56 +4306,113 @@ export const getTextShadow = (boxShadow?: IBoxShadow): string | undefined => {
     boxShadow.color
   }`;
 };
+
+export const groupCaptionItems = (trackItemsMap: ITrackItemsMap) => {
+  const captionTrackItems = Object.values(trackItemsMap).filter(
+    ({ type }: ITrackItem) => type === "caption"
+  );
+  return groupBy(captionTrackItems, "metadata.sourceUrl");
+};
+
+// Add this type + function near IBoxShadow/ICaptionsControlProps.
+// Pure version of the default-filling applyPreset used to do inline (and used
+// to mutate the preset object directly — this doesn't, which also means
+// repeated applies no longer silently write defaults back onto the shared
+// STYLE_CAPTION_PRESETS entries).
+export type SanitizedCaptionPreset = {
+  appearedColor: string;
+  activeColor: string;
+  activeFillColor: string;
+  color: string;
+  backgroundColor: string;
+  borderColor: string;
+  borderWidth: number;
+  boxShadow: IBoxShadow;
+  animation: string;
+  textTransform: string;
+  textAlign: string;
+  isKeywordColor: string;
+  preservedColorKeyWord: boolean;
+};
+
+export const getSanitizedPreset = (
+  preset: ICaptionsControlProps
+): SanitizedCaptionPreset => ({
+  appearedColor: preset.appearedColor,
+  activeColor: preset.activeColor,
+  activeFillColor: preset.activeFillColor,
+  color: preset.color,
+  backgroundColor: preset.backgroundColor,
+  borderColor: preset.borderColor,
+  borderWidth: preset.borderWidth,
+  boxShadow: preset.boxShadow ?? { color: "transparent", x: 0, y: 0, blur: 0 },
+  animation: preset.animation ?? "",
+  textTransform: preset.textTransform ?? "none",
+  textAlign: preset.textAlign ?? "center",
+  isKeywordColor: preset.isKeywordColor ?? "transparent",
+  preservedColorKeyWord: preset.preservedColorKeyWord ?? false
+});
+
+const CAPTION_PRESET_FIELDS = [
+  "appearedColor",
+  "activeColor",
+  "activeFillColor",
+  "color",
+  "backgroundColor",
+  "borderColor",
+  "borderWidth",
+  "animation",
+  "textTransform",
+  "textAlign",
+  "isKeywordColor",
+  "preservedColorKeyWord"
+] as const;
+
+const sanitizedPresetsEqual = (
+  a: SanitizedCaptionPreset,
+  b: SanitizedCaptionPreset
+) =>
+  CAPTION_PRESET_FIELDS.every((field) => a[field] === b[field]) &&
+  a.boxShadow.color === b.boxShadow.color &&
+  a.boxShadow.x === b.boxShadow.x &&
+  a.boxShadow.y === b.boxShadow.y &&
+  a.boxShadow.blur === b.boxShadow.blur;
+
+// Field-by-field match against every known preset (plus "None"), so the picker
+// can highlight whichever one currently matches an applied caption's details.
+// Returns null if nothing matches — i.e. the details were hand-tweaked/custom.
+export const findMatchingCaptionPreset = (
+  details: any
+): ICaptionsControlProps | null => {
+  if (!details) return null;
+  const current = getSanitizedPreset(details);
+
+  if (sanitizedPresetsEqual(current, getSanitizedPreset(NONE_PRESET))) {
+    return NONE_PRESET;
+  }
+
+  return (
+    STYLE_CAPTION_PRESETS.find((preset) =>
+      sanitizedPresetsEqual(current, getSanitizedPreset(preset))
+    ) ?? null
+  );
+};
+
+// Replace applyPreset's body with this (drops the old inline mutation block):
 export const applyPreset = async (
-  preset: any,
+  preset: ICaptionsControlProps,
   captionItemIds: string[],
   captionsData: any[]
 ) => {
-  if (preset.boxShadow === undefined) {
-    preset.boxShadow = { color: "transparent", x: 0, y: 0, blur: 0 };
-  }
-  if (preset.animation === undefined) {
-    preset.animation = "";
-  }
-  if (preset.fontFamily === undefined) {
-    preset.fontFamily = "Bangers-Regular";
-  }
-  if (preset.fontUrl === undefined) {
-    preset.fontUrl =
-      "https://fonts.gstatic.com/s/bangers/v13/FeVQS0BTqb0h60ACL5la2bxii28.ttf";
-  }
-  if (preset.textTransform === undefined) {
-    preset.textTransform = "none";
-  }
-  if (preset.textAlign === undefined) {
-    preset.textAlign = "center";
-  }
-  if (preset.isKeywordColor === undefined) {
-    preset.isKeywordColor = "transparent";
-  }
-
-  if (preset.preservedColorKeyWord === undefined) {
-    preset.preservedColorKeyWord = false;
-  }
+  const sanitizedPreset = getSanitizedPreset(preset);
 
   let newData = transformCaptions(
     captionsData,
     preset.type === "word" ? "singleWord" : "time"
   );
 
-  await loadFonts([
-    {
-      name: preset.fontFamily,
-      url: preset.fontUrl
-    }
-  ]);
-
-  const { previewUrlDynamic, previewUrlStatic, type, ...sanitizedPreset } =
-    preset;
   dispatch(LAYER_DELETE, {
-    payload: {
-      trackItemIds: captionsData.map((item) => item.id)
-    }
+    payload: { trackItemIds: captionsData.map((item) => item.id) }
   });
 
   dispatch(ADD_ITEMS, {
@@ -4363,26 +4421,27 @@ export const applyPreset = async (
         ...item,
         details: {
           ...item.details,
-          ...sanitizedPreset
+          ...sanitizedPreset,
+          // sanitizedPreset never carries fontFamily/fontUrl (intentional —
+          // presets don't control fonts), but that also means a stale font
+          // from a previous preset (or the transcription default) can't get
+          // cleared by the spread above since the key just isn't there.
+          // Clear both explicitly so switching presets always resets to the
+          // editor's default font instead of dragging the old one along.
+          fontFamily: item.details.fontFamily,
+          fontUrl: item.details.fontUrl,
         }
       })),
       tracks: [
-        {
-          id: generateId(),
-          items: newData.map((item) => item.id),
-          type: "caption"
-        }
+        { id: generateId(), items: newData.map((item) => item.id), type: "caption" }
       ]
     }
   });
 };
 
-export const groupCaptionItems = (trackItemsMap: ITrackItemsMap) => {
-  const captionTrackItems = Object.values(trackItemsMap).filter(
-    ({ type }: ITrackItem) => type === "caption"
-  );
-  return groupBy(captionTrackItems, "metadata.sourceUrl");
-};
+// Replace the default export component with this (drops the unused
+// ScrollArea/Tabs/CircleOff imports at the top of the file too — they weren't
+// used anywhere in this file):
 export default function CaptionPresetPicker({
   trackItem
 }: {
@@ -4396,13 +4455,12 @@ export default function CaptionPresetPicker({
   useClickOutside(floatingRef as React.RefObject<HTMLElement>, () =>
     setFloatingControl("")
   );
+
   useEffect(() => {
     const groupedCaptions = groupCaptionItems(trackItemsMap);
-
     const currentGroupItems = groupedCaptions[trackItem.metadata.sourceUrl];
-    const captionItemIds = currentGroupItems?.map((item) => item.id);
-    setCaptionItemIds(captionItemIds);
-    setCaptionsData(currentGroupItems);
+    setCaptionItemIds(currentGroupItems?.map((item) => item.id) ?? []);
+    setCaptionsData(currentGroupItems ?? []);
   }, [trackItemsMap, trackItem]);
 
   const handlePresetClick = (
@@ -4414,20 +4472,19 @@ export default function CaptionPresetPicker({
   };
 
   return (
-    <div
-      ref={floatingRef}
-      className="absolute left-full top-2 z-200 ml-2 w-56 bg-card p-0 border"
-    >
-      <div className="handle flex cursor-grab items-center justify-between px-4 py-3">
-        <p className="text-sm font-bold">Presets</p>
-        <div className="h-4 w-4" onClick={() => setFloatingControl("")}>
-          <XIcon className="h-3 w-3 cursor-pointer font-extrabold text-muted-foreground" />
-        </div>
+    <div ref={floatingRef} className="w-xs bg-card border flex flex-col rounded-lg">
+      <div className="handle flex cursor-grab items-center justify-between p-4">
+        <p className="text-sm font-medium">Presets</p>
+        <X
+          className="h-4 w-4 cursor-pointer text-muted-foreground"
+          onClick={() => setFloatingControl("")}
+        />
       </div>
 
       <PresetPicker
         captionItemIds={captionItemIds}
         captionsData={captionsData}
+        currentDetails={captionsData?.[0]?.details}
         onPresetClick={handlePresetClick}
       />
     </div>

@@ -512,7 +512,78 @@ const CaptionWords = ({
         <div className="flex gap-2">
           <div className="flex flex-col gap-2 flex-1">
             <div className="flex flex-1 items-center text-xs text-muted-foreground">
-              Lines per Page
+              Caption type
+            </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  className="flex w-full items-center justify-between text-sm"
+                  variant="outline"
+                >
+                  <div className="w-full overflow-hidden text-left">
+                    <p className="truncate">
+                      {
+                        OPTIONS_WORDS_IN_LINE.filter(
+                          (option) => option.value === data.showObject
+                        )[0].label
+                      }
+                    </p>
+                  </div>
+                  <ChevronDown className="text-muted-foreground" size={14} />
+                </Button>
+              </PopoverTrigger>
+
+              <PopoverContent
+                className="z-[300] p-0"
+                style={{ width: "var(--radix-popover-trigger-width)" }}
+              >
+                {OPTIONS_WORDS_IN_LINE.map((option, index) => (
+                  <div
+                    key={index}
+                    onClick={() =>
+                      onChange({ type: "showObject", value: option.value })
+                    }
+                    className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
+                  >
+                    {option.label}
+                    {option.value === data.showObject && (
+                      <Check size={14} className="text-muted-foreground" />
+                    )}
+                  </div>
+                ))}
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/*<div className="flex flex-col gap-2 flex-1">*/}
+          {/*  <div className="flex flex-1 items-center text-xs text-muted-foreground">*/}
+          {/*    Preset*/}
+          {/*  </div>*/}
+          {/*  {isLargeScreen ? (*/}
+          {/*    <Button*/}
+          {/*      className="flex w-full items-center justify-between text-sm"*/}
+          {/*      variant="outline"*/}
+          {/*      onClick={() => setFloatingControl("caption-preset-picker")}*/}
+          {/*    >*/}
+          {/*      <div className="w-full overflow-hidden text-left">*/}
+          {/*        <p className="truncate">None</p>*/}
+          {/*      </div>*/}
+          {/*      <ChevronDown className="text-muted-foreground" size={14} />*/}
+          {/*    </Button>*/}
+          {/*  ) : (*/}
+          {/*    <PresetPicker*/}
+          {/*      captionItemIds={captionItemIds}*/}
+          {/*      captionsData={captionsData}*/}
+          {/*      onPresetClick={handlePresetClick}*/}
+          {/*    />*/}
+          {/*  )}*/}
+          {/*</div>*/}
+        </div>
+
+        <div className="flex gap-2">
+          <div className="flex flex-col gap-2 flex-1">
+            <div className="flex flex-1 items-center text-xs text-muted-foreground">
+              Lines per caption
             </div>
             <Popover>
               <PopoverTrigger asChild>
@@ -557,32 +628,6 @@ const CaptionWords = ({
 
           <div className="flex flex-col gap-2 flex-1">
             <div className="flex flex-1 items-center text-xs text-muted-foreground">
-              Preset
-            </div>
-            {isLargeScreen ? (
-              <Button
-                className="flex w-full items-center justify-between text-sm"
-                variant="outline"
-                onClick={() => setFloatingControl("caption-preset-picker")}
-              >
-                <div className="w-full overflow-hidden text-left">
-                  <p className="truncate">None</p>
-                </div>
-                <ChevronDown className="text-muted-foreground" size={14} />
-              </Button>
-            ) : (
-              <PresetPicker
-                captionItemIds={captionItemIds}
-                captionsData={captionsData}
-                onPresetClick={handlePresetClick}
-              />
-            )}
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          <div className="flex flex-col gap-2 flex-1">
-            <div className="flex flex-1 items-center text-xs text-muted-foreground">
               Words per line
             </div>
             <Popover>
@@ -618,51 +663,6 @@ const CaptionWords = ({
                   >
                     {option.label}
                     {option.value === data.wordsPerLine && (
-                      <Check size={14} className="text-muted-foreground" />
-                    )}
-                  </div>
-                ))}
-              </PopoverContent>
-            </Popover>
-          </div>
-
-          <div className="flex flex-col gap-2 flex-1">
-            <div className="flex flex-1 items-center text-xs text-muted-foreground">
-              Words in line
-            </div>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  className="flex w-full items-center justify-between text-sm"
-                  variant="outline"
-                >
-                  <div className="w-full overflow-hidden text-left">
-                    <p className="truncate">
-                      {
-                        OPTIONS_WORDS_IN_LINE.filter(
-                          (option) => option.value === data.showObject
-                        )[0].label
-                      }
-                    </p>
-                  </div>
-                  <ChevronDown className="text-muted-foreground" size={14} />
-                </Button>
-              </PopoverTrigger>
-
-              <PopoverContent
-                className="z-[300] p-0"
-                style={{ width: "var(--radix-popover-trigger-width)" }}
-              >
-                {OPTIONS_WORDS_IN_LINE.map((option, index) => (
-                  <div
-                    key={index}
-                    onClick={() =>
-                      onChange({ type: "showObject", value: option.value })
-                    }
-                    className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
-                  >
-                    {option.label}
-                    {option.value === data.showObject && (
                       <Check size={14} className="text-muted-foreground" />
                     )}
                   </div>

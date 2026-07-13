@@ -1,81 +1,21 @@
-import { useState } from "react";
+import { useMemo } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CircleOff } from "lucide-react";
+import { Ban } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   ICaptionsControlProps,
   NONE_PRESET,
   STYLE_CAPTION_PRESETS,
-  getTextShadow
+  findMatchingCaptionPreset
 } from "../floating-controls/caption-preset-picker";
-
-interface PresetItemProps {
-  preset: ICaptionsControlProps;
-  onClick: () => void;
-}
-
-const PresetItem = ({ preset, onClick }: PresetItemProps) => {
-  const [isHovered, setIsHovered] = useState(false);
-
-  return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      className="text-md flex h-[70px] cursor-pointer items-center justify-center bg-zinc-800 rounded-lg overflow-hidden"
-    >
-      {preset.previewUrlStatic && preset.previewUrlDynamic ? (
-        isHovered ? (
-          <video
-            src={preset.previewUrlDynamic}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="h-40 place-content-center rounded-lg"
-          />
-        ) : (
-          <img
-            src={preset.previewUrlStatic}
-            alt="Preset preview"
-            className="h-40 place-content-center rounded-lg"
-          />
-        )
-      ) : preset.previewUrlDynamic ? (
-        <video
-          src={preset.previewUrlDynamic}
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="h-40 place-content-center rounded-lg"
-        />
-      ) : (
-        <div
-          style={{
-            backgroundColor:
-              preset.backgroundColor !== "transparent"
-                ? preset.backgroundColor
-                : preset.activeFillColor,
-            color: preset.activeColor,
-            paintOrder: "stroke fill",
-            fontWeight: "bold",
-            textShadow: getTextShadow(preset.boxShadow),
-            WebkitTextStroke: `1px ${preset.borderColor}`
-          }}
-          className="h-6 place-content-center rounded-lg px-2"
-        >
-          Text
-        </div>
-      )}
-    </div>
-  );
-};
+import { LazyCaptionStylePresetPreview } from "../floating-controls/animation-preview/caption-preset/preview-scene";
 
 interface PresetGridProps {
   presets: ICaptionsControlProps[];
   captionItemIds: string[];
   captionsData: any[];
+  matchedPreset: ICaptionsControlProps | null;
   onPresetClick: (
     preset: ICaptionsControlProps,
     captionItemIds: string[],
@@ -84,25 +24,45 @@ interface PresetGridProps {
 }
 
 const PresetGrid = ({
-  presets,
-  captionItemIds,
-  captionsData,
-  onPresetClick
-}: PresetGridProps) => (
-  <div className="grid gap-4 p-4">
+                      presets,
+                      captionItemIds,
+                      captionsData,
+                      matchedPreset,
+                      onPresetClick
+                    }: PresetGridProps) => (
+  <div className="grid grid-cols-2 gap-2 pb-4">
     <div
       onClick={() => onPresetClick(NONE_PRESET, captionItemIds, captionsData)}
-      className="flex h-[70px] cursor-pointer items-center justify-center bg-zinc-800 rounded-lg"
+      className="flex cursor-pointer flex-col gap-2 text-center text-xs text-muted-foreground items-center justify-start"
     >
-      <CircleOff />
+      <div
+        className={cn(
+          "relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md bg-zinc-800 group",
+          matchedPreset === NONE_PRESET ? "border border-primary" : ""
+        )}
+      >
+        <Ban className="text-muted-foreground" size={24} />
+      </div>
     </div>
 
     {presets.map((preset, index) => (
-      <PresetItem
+      <div
         key={index}
-        preset={preset}
         onClick={() => onPresetClick(preset, captionItemIds, captionsData)}
-      />
+        className="flex cursor-pointer flex-col gap-2 text-center text-xs text-muted-foreground items-center justify-start"
+      >
+        <div
+          className={cn(
+            "relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md bg-zinc-800 group",
+            matchedPreset === preset ? "border border-primary" : ""
+          )}
+        >
+          <LazyCaptionStylePresetPreview preset={preset} />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+            <div className="rounded-full p-1" />
+          </div>
+        </div>
+      </div>
     ))}
   </div>
 );
@@ -110,6 +70,7 @@ const PresetGrid = ({
 interface PresetPickerProps {
   captionItemIds: string[];
   captionsData: any[];
+  currentDetails?: any;
   onPresetClick: (
     preset: ICaptionsControlProps,
     captionItemIds: string[],
@@ -119,44 +80,49 @@ interface PresetPickerProps {
 }
 
 export const PresetPicker = ({
-  captionItemIds,
-  captionsData,
-  onPresetClick,
-  className = ""
-}: PresetPickerProps) => {
-  const wordPresets = STYLE_CAPTION_PRESETS.filter(
-    (preset) => preset.type === "word"
-  );
-  const linePresets = STYLE_CAPTION_PRESETS.filter(
-    (preset) => preset.type !== "word"
+                               captionItemIds,
+                               captionsData,
+                               currentDetails,
+                               onPresetClick,
+                               className = ""
+                             }: PresetPickerProps) => {
+  const wordPresets = STYLE_CAPTION_PRESETS.filter((preset) => preset.type === "word");
+  const linePresets = STYLE_CAPTION_PRESETS.filter((preset) => preset.type !== "word");
+  const matchedPreset = useMemo(
+    () => findMatchingCaptionPreset(currentDetails),
+    [currentDetails]
   );
 
   return (
     <Tabs defaultValue="words" className={`w-full ${className}`}>
-      <TabsList className="grid w-full grid-cols-2">
+      <TabsList className="h-9 mx-4 w-[calc(100%-32px)] grid grid-cols-2">
         <TabsTrigger value="words">Words</TabsTrigger>
         <TabsTrigger value="lines">Lines</TabsTrigger>
       </TabsList>
 
-      <ScrollArea className="h-[400px] w-full">
-        <TabsContent value="words" className="mt-0">
+      <TabsContent value="words">
+        <ScrollArea className="h-[400px] w-full px-4">
           <PresetGrid
             presets={wordPresets}
             captionItemIds={captionItemIds}
             captionsData={captionsData}
+            matchedPreset={matchedPreset}
             onPresetClick={onPresetClick}
           />
-        </TabsContent>
+        </ScrollArea>
+      </TabsContent>
 
-        <TabsContent value="lines" className="mt-0">
+      <TabsContent value="lines">
+        <ScrollArea className="h-[400px] w-full px-4">
           <PresetGrid
             presets={linePresets}
             captionItemIds={captionItemIds}
             captionsData={captionsData}
+            matchedPreset={matchedPreset}
             onPresetClick={onPresetClick}
           />
-        </TabsContent>
-      </ScrollArea>
+        </ScrollArea>
+      </TabsContent>
     </Tabs>
   );
 };
