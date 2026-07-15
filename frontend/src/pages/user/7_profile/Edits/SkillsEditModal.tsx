@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Plus, Trash2, Check, Minus, AlertCircle } from "lucide-react";
+import { X, Plus, Trash2, Check, Minus, AlertCircle, ChevronDown } from "lucide-react";
 import api from "@/lib/axios.ts";
 
 type Proficiency = "beginner" | "intermediate" | "advanced" | "expert";
@@ -26,16 +26,19 @@ export default function SkillsEditModal({
   onSave,
   availableSkillsList = []
 }: SkillsEditModalProps) {
-  // Local active copy tracking matrix changes
   const [skillsList, setSkillsList] = useState<SkillObject[]>([]);
   const [newSkill, setNewSkill] = useState({ name: "", proficiency: "beginner" as Proficiency, years: 1 });
   const [suggestedSkills, setSuggestedSkills] = useState<{ tag_id: number; name: string }[]>(availableSkillsList);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Synchronize internal state fields when modal opens
   useEffect(() => {
     if (isOpen) {
       setSkillsList([...currentSkills]);
+      setSearchTerm("");
+      setNewSkill({ name: "", proficiency: "beginner", years: 1 });
     }
   }, [isOpen, currentSkills]);
 
@@ -46,16 +49,34 @@ export default function SkillsEditModal({
       setIsLoading(true);
       api.get("/api/tags/")
         .then(res => {
-          // Handle the response structure: { success: true, data: [...] }
           const tags = res.data.data || res.data.tags || [];
           setSuggestedSkills(tags);
         })
         .catch(err => console.error("Failed fetching matrix suggestions database log:", err))
         .finally(() => setIsLoading(false));
+    } else {
+      setSuggestedSkills(availableSkillsList);
     }
   }, [isOpen, availableSkillsList]);
 
   if (!isOpen) return null;
+
+  // Filter skills based on search term and exclude already added ones
+  const getFilteredSkills = () => {
+    const existingSkillNames = skillsList.map(s => s.name.toLowerCase());
+    return suggestedSkills.filter(skill => 
+      skill.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+      !existingSkillNames.includes(skill.name.toLowerCase())
+    );
+  };
+
+  const filteredSkills = getFilteredSkills();
+
+  const handleSkillSelect = (skillName: string) => {
+    setNewSkill({ ...newSkill, name: skillName });
+    setSearchTerm(skillName);
+    setIsDropdownOpen(false);
+  };
 
   const addCompoundSkill = () => {
     if (!newSkill.name.trim()) return;
@@ -79,6 +100,8 @@ export default function SkillsEditModal({
 
     setSkillsList(prev => [...prev, appendedSkill]);
     setNewSkill({ name: "", proficiency: "beginner", years: 1 });
+    setSearchTerm("");
+    setIsDropdownOpen(false);
   };
 
   const removeSkill = (name: string) => {
@@ -86,7 +109,6 @@ export default function SkillsEditModal({
   };
 
   const handleSave = () => {
-    // Pass both the original skills and the updated skills
     onSave(currentSkills, skillsList);
   };
 
@@ -115,20 +137,63 @@ export default function SkillsEditModal({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 items-end">
-            <div className="sm:col-span-2">
+            <div className="sm:col-span-2 relative">
               <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">Skill Name Tag</label>
-              <input
-                type="text"
-                value={newSkill.name}
-                onChange={(e) => setNewSkill(p => ({ ...p, name: e.target.value }))}
-                list="modal-skills-datalist"
-                className="w-full rounded-lg border border-white/10 bg-[#121420] px-3 py-1.5 text-xs outline-none text-white focus:border-blue-500/30"
-                placeholder={isLoading ? "Loading skills..." : "Type skill..."}
-                disabled={isLoading}
-              />
-              <datalist id="modal-skills-datalist">
-                {suggestedSkills.map(s => <option key={s.tag_id} value={s.name} />)}
-              </datalist>
+              
+              {/* Dropdown Trigger */}
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setIsDropdownOpen(true);
+                    // If user types, clear the selected skill name
+                    if (e.target.value !== newSkill.name) {
+                      setNewSkill({ ...newSkill, name: "" });
+                    }
+                  }}
+                  onFocus={() => setIsDropdownOpen(true)}
+                  onBlur={() => {
+                    // Delay closing to allow click on dropdown items
+                    setTimeout(() => setIsDropdownOpen(false), 200);
+                  }}
+                  className="w-full rounded-lg border border-white/10 bg-[#121420] px-3 py-1.5 text-xs outline-none text-white focus:border-blue-500/30 pr-8"
+                  placeholder={isLoading ? "Loading skills..." : "Search or select skill..."}
+                  disabled={isLoading}
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition"
+                >
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
+
+              {/* Dropdown List */}
+              {isDropdownOpen && filteredSkills.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-[#121420] border border-white/10 rounded-lg max-h-40 overflow-y-auto shadow-xl">
+                  {filteredSkills.map((skill) => (
+                    <button
+                      key={skill.tag_id}
+                      type="button"
+                      onClick={() => handleSkillSelect(skill.name)}
+                      className="w-full text-left px-3 py-2 text-xs text-white hover:bg-white/5 transition-colors border-b border-white/5 last:border-0"
+                    >
+                      {skill.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* No Results Message */}
+              {isDropdownOpen && searchTerm && filteredSkills.length === 0 && suggestedSkills.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-[#121420] border border-white/10 rounded-lg p-3 text-center">
+                  <p className="text-xs text-zinc-400">No matching skills found</p>
+                  <p className="text-[10px] text-zinc-500 mt-1">You can still add it manually</p>
+                </div>
+              )}
             </div>
 
             <div>
@@ -146,7 +211,7 @@ export default function SkillsEditModal({
             </div>
 
             <div>
-              <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1 text-center">Tenure</label>
+              <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1 text-center">Years of Experience</label>
               <div className="flex items-center justify-between border border-white/10 bg-white/5 rounded-lg h-[32px] overflow-hidden p-0.5">
                 <button 
                   type="button" 
