@@ -16,6 +16,7 @@ export interface BadgeMetadata {
 interface BadgeSectionProps {
   loading?: boolean;
   badges?: BadgeMetadata[];
+  isOwner?: boolean; // Added isOwner prop
   onEditClick?: () => void;
 }
 
@@ -36,6 +37,7 @@ export const BadgeSideSectionSkeleton: React.FC = () => (
 export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
   loading,
   badges = [],
+  isOwner = false, // Default to false
   onEditClick
 }) => {
   const [isCollapsed, setIsCollapsed] = useState<boolean>(true);
@@ -53,7 +55,6 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
   ];
 
   return (
-    // FIXED: Container z-index adjusted so floating panels naturally clear content layers
     <div className="rounded-2xl border border-white/10 bg-[#0b0e17]/90 p-4 text-zinc-300 shadow-xl font-['Plus Jakarta Sans',sans-serif] space-y-3 relative z-20">
 
       {/* Header Panel */}
@@ -63,7 +64,7 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 relative">
-          {/* ==================== QUESTION MARK OVERLAY TOOLTIP ==================== */}
+          {/* Question Mark Help Tooltip */}
           <div className="relative group/help">
             <button className="p-1.5 rounded-lg border border-white/5 bg-white/[0.02] text-zinc-400 hover:bg-white/10 hover:text-white transition-all duration-200 cursor-help">
               <HelpCircle className="h-3 w-3" />
@@ -96,13 +97,16 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={onEditClick}
-            className="p-1.5 rounded-lg border border-white/5 bg-white/[0.02] hover:bg-white/10 hover:border-white/10 text-zinc-400 hover:text-white transition-all duration-200 group/btn"
-            title="Edit Displayed Badges"
-          >
-            <Edit2 className="h-3 w-3 transition-transform duration-200 group-hover/btn:rotate-12" />
-          </button>
+          {/* Edit Button - Only show if user is the owner */}
+          {isOwner && (
+            <button
+              onClick={onEditClick}
+              className="p-1.5 rounded-lg border border-white/5 bg-white/[0.02] hover:bg-white/10 hover:border-white/10 text-zinc-400 hover:text-white transition-all duration-200 group/btn"
+              title="Edit Displayed Badges"
+            >
+              <Edit2 className="h-3 w-3 transition-transform duration-200 group-hover/btn:rotate-12" />
+            </button>
+          )}
 
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
@@ -121,12 +125,10 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
           <p className="text-[11px] text-zinc-500 font-medium">No active badges showcased.</p>
         </div>
       ) : (
-        /* FIXED: Removed overflow-hidden from the outer relative wrapper to keep elements clear */
         <div className="relative">
           <AnimatePresence mode="wait">
             {isCollapsed ? (
-              /* ==================== 1. COLLAPSED VIEW (HORIZONTAL ROW) ==================== */
-              // FIXED: Removed overflow-hidden from style variants entirely so tooltips can render safely outside
+              /* Collapsed View (Horizontal Row) */
               <motion.div
                 key="grid-collapsed"
                 initial={{ opacity: 0, y: -4 }}
@@ -157,7 +159,7 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
                       <img src={b.icon} alt={b.name} className="w-full h-full object-contain filter drop-shadow-[0_1px_2px_rgba(0,0,0,0.4)]" />
                     </div>
 
-                    {/* TOOLTIP CONTAINER */}
+                    {/* Tooltip */}
                     <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 w-80 p-5 rounded-2xl border border-white/10 bg-[#070913] shadow-[0_25px_60px_-10px_rgba(0,0,0,0.85)] opacity-0 scale-95 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 z-50 text-left space-y-4 origin-left">
                       <div className="absolute right-full top-1/2 -translate-y-1/2 border-[6px] border-transparent border-r-[#070913]" />
                       <div className="absolute right-full top-1/2 -translate-y-1/2 -mr-[1px] border-[6px] border-transparent border-r-white/10 -z-10" />
@@ -185,8 +187,7 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
                 ))}
               </motion.div>
             ) : (
-              /* ==================== 2. EXPANDED VIEW (VERTICAL DETAILED ROW) ==================== */
-              // FIXED: Changed collapse strategy to an elegant opacity fade down to avoid overflow cutting off tooltips
+              /* Expanded View (Vertical Detailed Row) */
               <motion.div
                 key="grid-expanded"
                 initial={{ opacity: 0, y: -4 }}
@@ -223,7 +224,7 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
                       </p>
                     </div>
 
-                    {/* TOOLTIP CONTAINER */}
+                    {/* Tooltip */}
                     <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 w-80 p-5 rounded-2xl border border-white/10 bg-[#070913] shadow-[0_25px_60px_-10px_rgba(0,0,0,0.85)] opacity-0 scale-95 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 z-50 text-left space-y-4 origin-left">
                       <div className="absolute right-full top-1/2 -translate-y-1/2 border-[6px] border-transparent border-r-[#070913]" />
                       <div className="absolute right-full top-1/2 -translate-y-1/2 -mr-[1px] border-[6px] border-transparent border-r-white/10 -z-10" />

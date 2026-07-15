@@ -71,13 +71,19 @@ const CreditShop: React.FC = () => {
   const [customCredits, setCustomCredits] = useState<number>(100);
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [isUserSubscribed, setIsUserSubscribed] = useState(false);
+  const [currentBalance, setCurrentBalance] = useState<number>(0);
   useEffect(() => {
     const fetchMemberships = async () => {
       try {
-        const [planResponse, userSubscriptionResponse] = await Promise.all([
+        const [planResponse, userSubscriptionResponse,getWalletResponse] = await Promise.all([
           api.get("api/subscription/plans"),
           api.get("api/subscription"), // Fetch user's current subscription
+          api.get("/api/accounts/wallet", {
+            params: { type: 'account_wallets' },
+          }),
         ]);
+        console.log("fetch wallet response:", getWalletResponse.data);
+        setCurrentBalance(getWalletResponse.data?.wallet?.balance_credits || 0);
         const plansData = planResponse.data.plans || [];
         const userSubscriptionData = userSubscriptionResponse.data.subscription;
         if (userSubscriptionData && userSubscriptionData.xendit_plan_id && userSubscriptionData.trial_ends_at 
@@ -182,7 +188,7 @@ const CreditShop: React.FC = () => {
             <div>
               <p className="text-xs text-zinc-400">Current balance</p>
               <p className="text-sm font-semibold text-white">
-                {userCurrentCredits.toLocaleString()} credits
+                {currentBalance.toLocaleString()} credits
               </p>
             </div>
           </div>

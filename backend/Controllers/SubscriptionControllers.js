@@ -1,5 +1,6 @@
 const {getAllPlanServices,
-    getSubcriptionByUserIdServices
+    getSubcriptionByUserIdServices,
+    getSubscriptionPlanDetailsByUserIdServices
 } = require('../Services/SubscriptionServices');
 
 async function getAllPlanControllers(req, res) {
@@ -23,7 +24,20 @@ async function getSubcriptionByUserIdControllers(req, res) {
     }
 }
 
+async function getSubscriptionPlanDetailsByUserIdControllers(req, res) {
+    const {userId} = req.session;
+    try{
+        const planDetails = await getSubscriptionPlanDetailsByUserIdServices(userId);
+        res.status(200).json({ message: 'Subscription plan details fetched successfully', planDetails });
+    }
+    catch(err){
+        console.error('Error in controller layer while fetching subscription plan details:', err);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+}
+
 module.exports = {
     getAllPlanControllers,
-    getSubcriptionByUserIdControllers
+    getSubcriptionByUserIdControllers,
+    getSubscriptionPlanDetailsByUserIdControllers
 };
