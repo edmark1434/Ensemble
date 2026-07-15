@@ -1,74 +1,16 @@
 const {
-    updateProfileAccountServices,
     updateTaglineAndDescriptionServices,
     getPersonalDetailsServices,
     updateProfileUserServices,
     updateProfileOnboarding,
-    getProfileByUserIdService
+    getProfileByAccountIdService,
+    profileSocialMediaUpdateService,
+    updateProfileDetailsServices,
+    getProfileAvatarsByAccountIdService,
+    getProfileCurrentAvatarByAccountIdService
 } = require('../Services/ProfileServices');
 
-async function updateProfileAccountController(req, res) { 
-    try {
-        const { accountId } = req.params;
-        const payload = req.body;
-        
-        // Validate accountId
-        if (!accountId) {
-            return res.status(400).json({
-                success: false,
-                message: 'Account ID is required'
-            });
-        }
 
-        // Validate payload
-        if (!payload || Object.keys(payload).length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'No update data provided'
-            });
-        }
-
-        const result = await updateProfileAccountServices(accountId, payload);
-        
-        // Check if there were any changes
-        if (result.message === 'No changes detected') {
-            return res.status(200).json({
-                success: true,
-                message: 'No changes detected',
-                data: null
-            });
-        }
-
-        return res.status(200).json({
-            success: true,
-            message: result.message || 'Profile updated successfully',
-            data: result.data
-        });
-    } catch (err) { 
-        console.error('Error in updateProfileAccountController:', err);
-        
-        // Handle specific error types
-        if (err.message.includes('Invalid URL') || err.message.includes('URL is required')) {
-            return res.status(400).json({
-                success: false,
-                message: err.message
-            });
-        }
-
-        if (err.message.includes('Account ID is required') || err.message.includes('Invalid account ID')) {
-            return res.status(400).json({
-                success: false,
-                message: err.message
-            });
-        }
-
-        // Generic server error
-        return res.status(500).json({
-            success: false,
-            message: 'An error occurred while updating the profile. Please try again.'
-        });
-    }
-}
 
 async function updateTaglineAndDescriptionController(req, res) {
     try {
@@ -147,16 +89,16 @@ async function updateProfileOnboardingController(req, res) {
     }
 }
 
-async function getProfileByUserIdController(req, res) {
+async function getProfileByAccountIdController(req, res) {
     try {
-        const { userId } = req.params || req.session;
-        const profile = await getProfileByUserIdService(userId);
+        const { accountId } = req.params;
+        const profile = await getProfileByAccountIdService(accountId);
         return res.status(200).json({
             success: true,
             data: profile
         });
     } catch (err) {
-        console.error('Error in getProfileByUserIdController:', err);
+        console.error('Error in getProfileByAccountIdController:', err);
         return res.status(500).json({
             success: false,
             message: 'An error occurred while fetching the profile. Please try again.'
@@ -164,11 +106,85 @@ async function getProfileByUserIdController(req, res) {
     }
 }
 
+async function updateProfileSocialMediaController(req, res) {
+    try{
+        const {account_id} = req.session;
+        const {updatedLinks, originalLinks} = req.body;
+        const result = await profileSocialMediaUpdateService(account_id, originalLinks, updatedLinks);
+        return res.status(200).json({
+            success: true,
+            message: 'Social media links updated successfully',
+            result: result
+        });
+    }catch (err) {
+        console.error('Error in updateProfileSocialMediaController:', err);
+        return res.status(500).json({
+            success: false,
+            message: 'An error occurred while updating the social media links. Please try again.'
+        });
+    }
+}
+async function updateProfileDetailsController(req, res) {
+    try {
+        const { account_id } = req.session;
+        const { original, updates } = req.body;
+        const result = await updateProfileDetailsServices(account_id, original, updates);
+        return res.status(200).json({
+            success: true,
+            message: 'Profile details updated successfully',
+            result: result
+        });
+    } catch (err) {
+        console.error('Error in updateProfileDetailsController:', err);
+        return res.status(500).json({
+            success: false,
+            message: 'An error occurred while updating the profile details. Please try again.'
+        });
+    }
+}
+
+async function getProfileAvatarsByAccountIdController(req, res) {
+    try {
+        const { accountId } = req.params;
+        const avatars = await getProfileAvatarsByAccountIdService(accountId);
+        return res.status(200).json({
+            success: true,
+            data: avatars
+        });
+    } catch (err) {
+        console.error('Error in getProfileAvatarsByAccountIdController:', err);
+        return res.status(500).json({
+            success: false,
+            message: 'An error occurred while fetching the profile avatars. Please try again.'
+        });
+    }
+}
+
+async function getProfileCurrentAvatarByAccountIdController(req, res) {
+    try {
+        const { account_id } = req.session;
+        const currentAvatar = await getProfileCurrentAvatarByAccountIdService(account_id);
+        return res.status(200).json({
+            success: true,
+            data: currentAvatar
+        });
+    } catch (err) {
+        console.error('Error in getProfileCurrentAvatarByAccountIdController:', err);
+        return res.status(500).json({
+            success: false,
+            message: 'An error occurred while fetching the current profile avatar. Please try again.'
+        });
+    }
+}
+
 module.exports = {
-    updateProfileAccountController,
     updateTaglineAndDescriptionController,
     getPersonalDetailsController,
     updateProfileUserController,
     updateProfileOnboardingController,
-    getProfileByUserIdController
+    getProfileByAccountIdController,
+    updateProfileSocialMediaController,
+    updateProfileDetailsController,
+    getProfileAvatarsByAccountIdController,
+    getProfileCurrentAvatarByAccountIdController
 };

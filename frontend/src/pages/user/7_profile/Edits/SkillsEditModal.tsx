@@ -15,7 +15,7 @@ interface SkillsEditModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentSkills: SkillObject[];
-  onSave: (updatedSkills: SkillObject[]) => void;
+  onSave: (originalSkills: SkillObject[], updatedSkills: SkillObject[]) => void;
   availableSkillsList?: { tag_id: number; name: string }[];
 }
 
@@ -30,11 +30,11 @@ export default function SkillsEditModal({
   const [skillsList, setSkillsList] = useState<SkillObject[]>([]);
   const [newSkill, setNewSkill] = useState({ name: "", proficiency: "beginner" as Proficiency, years: 1 });
   const [suggestedSkills, setSuggestedSkills] = useState<{ tag_id: number; name: string }[]>(availableSkillsList);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Synchronize internal state fields when modal opens
   useEffect(() => {
     if (isOpen) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
       setSkillsList([...currentSkills]);
     }
   }, [isOpen, currentSkills]);
@@ -43,9 +43,15 @@ export default function SkillsEditModal({
   useEffect(() => {
     if (!isOpen) return;
     if (availableSkillsList.length === 0) {
+      setIsLoading(true);
       api.get("/api/tags/")
-        .then(res => setSuggestedSkills(res.data.tags || []))
-        .catch(err => console.error("Failed fetching matrix suggestions database log:", err));
+        .then(res => {
+          // Handle the response structure: { success: true, data: [...] }
+          const tags = res.data.data || res.data.tags || [];
+          setSuggestedSkills(tags);
+        })
+        .catch(err => console.error("Failed fetching matrix suggestions database log:", err))
+        .finally(() => setIsLoading(false));
     }
   }, [isOpen, availableSkillsList]);
 
@@ -77,6 +83,11 @@ export default function SkillsEditModal({
 
   const removeSkill = (name: string) => {
     setSkillsList(prev => prev.filter(s => s.name !== name));
+  };
+
+  const handleSave = () => {
+    // Pass both the original skills and the updated skills
+    onSave(currentSkills, skillsList);
   };
 
   return (
@@ -112,7 +123,8 @@ export default function SkillsEditModal({
                 onChange={(e) => setNewSkill(p => ({ ...p, name: e.target.value }))}
                 list="modal-skills-datalist"
                 className="w-full rounded-lg border border-white/10 bg-[#121420] px-3 py-1.5 text-xs outline-none text-white focus:border-blue-500/30"
-                placeholder="Type skill..."
+                placeholder={isLoading ? "Loading skills..." : "Type skill..."}
+                disabled={isLoading}
               />
               <datalist id="modal-skills-datalist">
                 {suggestedSkills.map(s => <option key={s.tag_id} value={s.name} />)}
@@ -136,18 +148,31 @@ export default function SkillsEditModal({
             <div>
               <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1 text-center">Tenure</label>
               <div className="flex items-center justify-between border border-white/10 bg-white/5 rounded-lg h-[32px] overflow-hidden p-0.5">
-                <button type="button" onClick={() => setNewSkill(p => ({ ...p, years: Math.max(1, p.years - 1) }))} className="h-full aspect-square flex items-center justify-center rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition">
+                <button 
+                  type="button" 
+                  onClick={() => setNewSkill(p => ({ ...p, years: Math.max(1, p.years - 1) }))} 
+                  className="h-full aspect-square flex items-center justify-center rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition"
+                >
                   <Minus className="h-2.5 w-2.5" />
                 </button>
                 <span className="text-xs font-mono font-bold text-zinc-200">{newSkill.years}</span>
-                <button type="button" onClick={() => setNewSkill(p => ({ ...p, years: p.years + 1 }))} className="h-full aspect-square flex items-center justify-center rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition">
+                <button 
+                  type="button" 
+                  onClick={() => setNewSkill(p => ({ ...p, years: p.years + 1 }))} 
+                  className="h-full aspect-square flex items-center justify-center rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition"
+                >
                   <Plus className="h-2.5 w-2.5" />
                 </button>
               </div>
             </div>
           </div>
 
-          <button type="button" onClick={addCompoundSkill} className="w-full px-4 py-2 bg-blue-600 rounded-lg text-xs font-bold hover:bg-blue-500 transition shadow-md shadow-blue-600/10 text-white">
+          <button 
+            type="button" 
+            onClick={addCompoundSkill} 
+            className="w-full px-4 py-2 bg-blue-600 rounded-lg text-xs font-bold hover:bg-blue-500 transition shadow-md shadow-blue-600/10 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isLoading || !newSkill.name.trim()}
+          >
             Add Skill Matrix Block
           </button>
         </div>
@@ -164,7 +189,11 @@ export default function SkillsEditModal({
                 <span className="text-[11px] text-zinc-400 font-medium">
                   {skill.years} {skill.years === 1 ? 'yr' : 'yrs'}
                 </span>
-                <button type="button" onClick={() => removeSkill(skill.name)} className="text-red-400 hover:text-red-300 p-1 rounded-md hover:bg-red-500/10 transition">
+                <button 
+                  type="button" 
+                  onClick={() => removeSkill(skill.name)} 
+                  className="text-red-400 hover:text-red-300 p-1 rounded-md hover:bg-red-500/10 transition"
+                >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -180,10 +209,18 @@ export default function SkillsEditModal({
 
         {/* Footer Navigation controls */}
         <div className="flex justify-end gap-2.5 pt-3 border-t border-white/5">
-          <button type="button" onClick={onClose} className="px-4 py-2 border border-white/10 bg-white/5 text-zinc-400 text-xs font-semibold rounded-lg hover:text-white transition">
+          <button 
+            type="button" 
+            onClick={onClose} 
+            className="px-4 py-2 border border-white/10 bg-white/5 text-zinc-400 text-xs font-semibold rounded-lg hover:text-white transition"
+          >
             Cancel
           </button>
-          <button type="button" onClick={() => onSave(skillsList)} className="px-4 py-2 bg-blue-500 text-white text-xs font-bold rounded-lg flex items-center gap-2 hover:bg-blue-600 transition shadow-lg shadow-blue-500/10">
+          <button 
+            type="button" 
+            onClick={handleSave} 
+            className="px-4 py-2 bg-blue-500 text-white text-xs font-bold rounded-lg flex items-center gap-2 hover:bg-blue-600 transition shadow-lg shadow-blue-500/10"
+          >
             Commit Changes <Check className="h-3.5 w-3.5" />
           </button>
         </div>

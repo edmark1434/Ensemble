@@ -1,7 +1,7 @@
 import { Bell, ChevronDown, Settings, LogOut, User, CircleDollarSign, Search } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import useGlobalState from "@/lib/global_state"; // Ensure this is the correct path
+import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
 import { signOut } from "firebase/auth";
 import { auth } from "@/pages/firebase";
@@ -25,7 +25,6 @@ const UserHeader: React.FC<UserHeaderProps> = ({
 }) => {
   const navigate = useNavigate();
 
-  // 1. Get the sidebar state from your global store
   const isCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -33,7 +32,6 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
-  // Header Search Input State
   const [headerSearchInput, setHeaderSearchInput] = useState("");
 
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -43,7 +41,8 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const [showHeader, setShowHeader] = useState(false);
   const [isCheckingAccess, setIsCheckingAccess] = useState(true);
   const [userCredits, setCredits] = useState(0);
-
+  const [userAvatarState, setUserAvatarState] = useState('');
+  const [userSubscriptionPlan, setUserSubscriptionPlan] = useState<"Free" | "Premium" | "Business">("Free");
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -60,12 +59,34 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   useEffect(() => {
     const checkRole = async () => {
       try {
-        const [checkRoleResponse, getWalletResponse] = await Promise.all([
+        const [checkRoleResponse, getWalletResponse, getAvatarResponse, getSubscriptionPlanResponse] = await Promise.all([
           api.get("/api/users/check-user-role"),
           api.get("/api/accounts/wallet", {
             params: { type: 'account_wallets' },
-          })
+          }),
+          api.get(`/api/accounts/profile/current-avatar`),
+          api.get(`/api/subscription/plan-details`),
         ]);
+
+        // ✅ Fix: Properly construct avatar URL
+        setUserSubscriptionPlan(getSubscriptionPlanResponse.data?.planDetails.plan_name);
+        let avatarUrl = '';
+        if (getAvatarResponse.data?.data?.path) {
+          const path = getAvatarResponse.data.data.path;
+          
+          // Check if it's already a full URL
+          if (path.startsWith('http')) {
+            avatarUrl = path;
+          } else {
+            // Use CloudFront URL for profile images
+            const cloudfrontUrl = import.meta.env.VITE_CLOUDFRONT_URL;
+            // Remove leading slash if exists to avoid double slashes
+            const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+            avatarUrl = `${cloudfrontUrl}/${cleanPath}`;
+          }
+        }
+
+        setUserAvatarState(avatarUrl);
         setCredits(getWalletResponse.data.wallet.balance_credits || 0);
         setShowHeader(true);
       } catch (err) {
@@ -78,6 +99,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
     checkRole();
   }, []);
 
+
   const handleTopUp = () => {
     navigate("/credits");
   };
@@ -86,7 +108,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
     e.preventDefault();
     if (headerSearchInput.trim()) {
       navigate(`/search/user/${encodeURIComponent(headerSearchInput.trim())}`);
-      setHeaderSearchInput(""); // Clear field after redirection triggers
+      setHeaderSearchInput("");
     }
   };
 
@@ -111,7 +133,6 @@ const UserHeader: React.FC<UserHeaderProps> = ({
 
   return showHeader ? (
     <>
-      {/* 2. Added dynamic padding-left to match Sidebar width + transition */}
       <header
         className={`sticky top-0 z-50 border-b border-white/10 bg-[#080a12]/95 backdrop-blur-md transition-all duration-300 ${
             (!isCollapsed ? "md:p-0" : "md:pl-20")
@@ -119,13 +140,11 @@ const UserHeader: React.FC<UserHeaderProps> = ({
       >
         <div className="flex items-center justify-between px-6 py-4 md:px-8 gap-4">
 
-          {/* Left Side (Title & Global Profile Search Bar Row) */}
           <div className="flex items-center gap-8 flex-1 min-w-0">
             <h1 className="text-xl font-semibold text-white shrink-0 hidden sm:block" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
               {pageTitle}
             </h1>
 
-            {/* Inline Navigation Search Bar Input */}
             <form onSubmit={handleHeaderSearchSubmit} className="relative w-full max-w-xs group">
               <Search
                 onClick={handleHeaderSearchSubmit}
@@ -141,7 +160,6 @@ const UserHeader: React.FC<UserHeaderProps> = ({
             </form>
           </div>
 
-          {/* Right Side */}
           <div className="flex items-center gap-4 shrink-0">
             {/* Credits */}
             <div className="relative">
@@ -188,10 +206,18 @@ const UserHeader: React.FC<UserHeaderProps> = ({
                 }}
                 className="flex items-center gap-2 rounded-lg p-1 transition hover:bg-white/10"
               >
-                <img src={userAvatar} alt={userName} className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20" />
+                <img 
+                  src={userAvatarState || userAvatar} 
+                  alt={userInfo?.username || "User"} 
+                  className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20"
+                  onError={(e) => {
+                    // ✅ Fallback if image fails to load
+                    (e.target as HTMLImageElement).src = userAvatar;
+                  }}
+                />
                 <div className="text-left hidden md:block">
-                  <p className="text-sm font-medium text-white">{userInfo?.display_name || userInfo?.displayName || "User"}</p>
-                  <p className="text-xs text-zinc-500">Premium Member</p>
+                  <p className="text-sm font-medium text-white">{userInfo?.display_name || userInfo?.displayName || userInfo?.username || "User"}</p>
+                  <p className="text-xs text-zinc-500">{userSubscriptionPlan} Member</p>
                 </div>
                 <ChevronDown className={`h-4 w-4 text-zinc-400 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`} />
               </button>
@@ -199,7 +225,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
               {isProfileOpen && (
                 <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/10 bg-[#0d0f1a] shadow-2xl backdrop-blur-xl animate-fade-in">
                   <div className="border-b border-white/10 p-3">
-                    <p className="text-sm font-medium text-white">{ userInfo?.username }</p>
+                    <p className="text-sm font-medium text-white">{userInfo?.username || "User"}</p>
                     <p className="text-xs text-zinc-500">{userInfo?.email || "user@ensemble.com"}</p>
                   </div>
                   <div className="p-2">

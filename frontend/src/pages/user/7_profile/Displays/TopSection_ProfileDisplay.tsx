@@ -24,7 +24,7 @@ interface TopSectionProps {
   avatarUrl?: string;
   isOwner?: boolean;
   verificationLevel?: 1 | 2;
-  subscriptionType?: "Freemium" | "Premium" | "Studio";
+  subscriptionType?: "Free" | "Premium" | "Business";
   onEditAvatar?: () => void;
   onEditProfile?: () => void;
   onChatClick?: () => void;
@@ -50,7 +50,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
   avatarUrl,
   isOwner,
   verificationLevel = 2,
-  subscriptionType = "Studio",
+  subscriptionType = "Free",
   onEditAvatar,
   onEditProfile,
   onChatClick,
@@ -75,7 +75,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
   const getSubscriptionIcon = (type: string) => {
     switch (type.toLowerCase()) {
       case "premium": return "/icons/subscription/premium.png";
-      case "studio": return "/icons/subscription/studio.png";
+      case "business": return "/icons/subscription/studio.png";
       default: return "/icons/subscription/freemium.png";
     }
   };

@@ -56,6 +56,18 @@ export default function Survey() {
   // Dynamic state to store answers for all questions
   const [answers, setAnswers] = useState<{ [questionId: string]: string | string[] }>({});
 
+    useEffect(() => {
+      const checkOnboardingStatus = async () => {
+        const response = await api.get("/api/users/session");
+                if (response.data.steps) {
+                  if (response.data.steps && response.data.steps !== 'profile' && response.data.steps === 'completed') {
+                    navigate("/*");
+                  }
+        }
+      }
+      checkOnboardingStatus();
+    }, []);
+
   // Fetch survey data on component mount
   useEffect(() => {
     const fetchSurvey = async () => {
@@ -250,11 +262,9 @@ export default function Survey() {
       console.log('Full Submission Data:', JSON.stringify(submissionData, null, 2));
 
       // Send the data to the backend API
-      const response = await api.post('/api/surveys/', submissionData);
-      
-      console.log('API Response:', response.data);
+      await api.post('/api/surveys/', submissionData); 
       const result = await api.get("/api/users/session");
-          if (result.data.steps && result.data.steps !== 'completed' && result.data.steps !== 'survey' && result.data.steps === 'profile') {
+          if (result.data.steps && result.data.steps === 'profile') {
             await api.put("/api/accounts/update-profile-onboarding", {
               completed_onboarding: 'completed'
             });

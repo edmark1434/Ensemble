@@ -11,24 +11,30 @@ const {
     updateAccountProfileIdController
 } = require('../Controllers/AccountControllers');
 const {
-    updateProfileAccountController,
     updateTaglineAndDescriptionController,
     getPersonalDetailsController,
     updateProfileUserController,
     updateProfileOnboardingController,
-    getProfileByUserIdController
+    getProfileByAccountIdController,
+    updateProfileSocialMediaController,
+    updateProfileDetailsController,
+    getProfileAvatarsByAccountIdController,
+    getProfileCurrentAvatarByAccountIdController
 } = require('../Controllers/ProfileControllers');
 
-router.put('/profile/:accountId', [checkSession, requireAuth], updateProfileAccountController);
 router.put('/profile/tagline-description', [checkSession, requireAuth], updateTaglineAndDescriptionController);
 router.get('/wallet', [checkSession, requireAuth], getAccountWalletController);
 router.get('/personal-details', [checkSession, requireAuth], getPersonalDetailsController);
-router.get('/profile/:userId', [], getProfileByUserIdController);
-router.get('/links/:accountId', [], getAccountLinkByAccountIdController);
-router.get('/check-user/:accountId', [], checkUserAccountIdController);
-router.post('/display-names', [], getDisplayNameByAccountIdController);
+router.get('/profile/current-avatar', [checkSession, requireAuth], getProfileCurrentAvatarByAccountIdController);
+router.get('/profile/:accountId', [checkSession, requireAuth], getProfileByAccountIdController);
+router.get('/links/:accountId', [checkSession, requireAuth], getAccountLinkByAccountIdController);
+router.get('/profile/avatars/:accountId', [checkSession, requireAuth], getProfileAvatarsByAccountIdController);
+router.get('/check-user/:accountId', [checkSession, requireAuth], checkUserAccountIdController);
+router.post('/display-names', [checkSession, requireAuth], getDisplayNameByAccountIdController);
 router.post('/update-profile', [checkSession, requireAuth], updateAndInsertAccountProfileController);
 router.put('/update-profile-id', [checkSession, requireAuth], updateAccountProfileIdController);
 router.put('/update-profile-user', [checkSession, requireAuth], updateProfileUserController);
+router.put('/update-profile-social-media', [checkSession, requireAuth], updateProfileSocialMediaController);
 router.put('/update-profile-onboarding', [checkSession, requireAuth], updateProfileOnboardingController);
+router.put('/update-profile-details', [checkSession, requireAuth], updateProfileDetailsController);
 module.exports = router;
