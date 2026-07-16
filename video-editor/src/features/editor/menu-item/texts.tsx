@@ -6,6 +6,7 @@ import Draggable from "@/components/shared/draggable";
 import { TEXT_ADD_PAYLOAD } from "../constants/payload";
 import { cn } from "@/lib/utils";
 import { nanoid } from "nanoid";
+import { useEffect, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   TEXT_PRESETS,
@@ -26,9 +27,22 @@ const getFontDetails = async () => {
 
 export const Texts = () => {
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
+  const [defaultFont, setDefaultFont] = useState({ fontName: "", fontUrl: "" });
+
+  useEffect(() => {
+    let cancelled = false;
+    getFontDetails().then(({ fontName, fontUrl }) => {
+      if (!cancelled) setDefaultFont({ fontName, fontUrl });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleAddText = async () => {
-    const { fontName, fontUrl } = await getFontDetails();
+    const { fontName, fontUrl } = defaultFont.fontName
+      ? defaultFont
+      : await getFontDetails();
     dispatch(ADD_TEXT, {
       payload: {
         ...TEXT_ADD_PAYLOAD,
@@ -44,7 +58,9 @@ export const Texts = () => {
   };
 
   const handleAddPresetText = async (preset: any) => {
-    const { fontName, fontUrl } = await getFontDetails();
+    const { fontName, fontUrl } = defaultFont.fontName
+      ? defaultFont
+      : await getFontDetails();
     dispatch(ADD_TEXT, {
       payload: {
         ...TEXT_ADD_PAYLOAD,
@@ -66,11 +82,23 @@ export const Texts = () => {
     });
   };
 
+  const buildTextAddPayload = () => ({
+    ...TEXT_ADD_PAYLOAD,
+    id: nanoid(),
+    details: {
+      ...TEXT_ADD_PAYLOAD.details,
+      fontFamily: defaultFont.fontName,
+      fontUrl: defaultFont.fontUrl
+    }
+  });
+
   const buildPresetPayload = (preset: any) => ({
     ...TEXT_ADD_PAYLOAD,
     id: nanoid(),
     details: {
       ...TEXT_ADD_PAYLOAD.details,
+      fontFamily: defaultFont.fontName,
+      fontUrl: defaultFont.fontUrl,
       ...preset,
       boxShadow: preset.boxShadow || {
         color: "transparent",
@@ -85,11 +113,22 @@ export const Texts = () => {
     <div className="flex h-full w-full flex-col min-h-0 overflow-hidden">
       <div className="flex flex-col gap-2 p-4">
         <Draggable
-          data={TEXT_ADD_PAYLOAD}
+          data={buildTextAddPayload()}
           renderCustomPreview={
-            <Button variant="secondary" className="w-60">
-              Add text
-            </Button>
+            <div className="flex aspect-square w-30 items-center justify-center rounded-md bg-zinc-800 border border-primary">
+              <div
+                style={{
+                  backgroundColor: "transparent",
+                  color: "#ffffff",
+                  borderRadius: 0,
+                  borderWidth: 0,
+                  borderColor: "transparent",
+                  fontWeight: "normal"
+                }}
+                className="place-content-center px-2 text-2xl">
+                Text
+              </div>
+            </div>
           }
           shouldDisplayPreview={!isDraggingOverTimeline}
         >

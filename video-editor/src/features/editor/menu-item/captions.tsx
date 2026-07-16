@@ -127,7 +127,7 @@ export const Captions = () => {
   };
 
   const [elapsedMs, setElapsedMs] = useState(0);
-  const CAPTIONS_GENERATE_GRACE_PERIOD = 2000;
+  const CAPTIONS_GENERATE_GRACE_PERIOD = 5000;
 
   useEffect(() => {
     if (!isGenerating) {

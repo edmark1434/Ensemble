@@ -51,7 +51,8 @@ export const Audios = () => {
           name: music.name,
           type: music.type,
           metadata: {
-            author: music.description || ""
+            author: music.description || "",
+            name: music.name
           }
         }));
 
