@@ -180,7 +180,7 @@ export const SkillsSideSection_ProfileDisplay: React.FC<SkillsSectionProps> = ({
 
                         {/* Operational Tenure */}
                         <div className="flex items-center justify-between mt-2 text-[10px] text-zinc-500 font-medium relative z-10">
-                          <span>Operational Tenure</span>
+                          <span>Years of Experience</span>
                           <span className="font-bold text-zinc-300 transition-colors group-hover:text-zinc-100">
                             {skill.years} {skill.years === 1 ? 'Year' : 'Years'}
                           </span>

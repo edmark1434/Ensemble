@@ -1,5 +1,6 @@
 const {getAllPlanRepositories,
-    getSubcriptionByUserIdRepositories
+    getSubcriptionByUserIdRepositories,
+    getSubscriptionPlanDetailsByUserIdRepositories
 } = require('../Repositories/SubscriptionRepositories');
 
 async function getAllPlanServices() {
@@ -21,7 +22,18 @@ async function getSubcriptionByUserIdServices(userId) {
     }
 }
 
+async function getSubscriptionPlanDetailsByUserIdServices(userId) {
+    try{
+        const planDetails = await getSubscriptionPlanDetailsByUserIdRepositories(userId);
+        return planDetails;
+    }catch(err){
+        console.error('Error in service layer while fetching subscription plan details:', err);
+        throw err;
+    }
+}
+
 module.exports = {
     getAllPlanServices,
-    getSubcriptionByUserIdServices
+    getSubcriptionByUserIdServices,
+    getSubscriptionPlanDetailsByUserIdServices
 }

@@ -60,7 +60,20 @@ async function getSubcriptionByUserIdRepositories(userId) {
         throw err;
     }
 }
+
+
+async function getSubscriptionPlanDetailsByUserIdRepositories(userId) {
+    try{
+        const query = `SELECT P.NAME AS PLAN_NAME FROM SUBSCRIPTIONS S JOIN PLANS P ON S.PLAN_ID = P.PLAN_ID WHERE S.USER_ID = $1`;
+        const result = await pool.query(query, [userId]);
+        return result.rows[0];
+    }catch(err){
+        console.error("Error fetching subscription plan details:", err);
+        throw err;
+    }
+}
 module.exports = {
     getAllPlanRepositories,
-    getSubcriptionByUserIdRepositories
+    getSubcriptionByUserIdRepositories,
+    getSubscriptionPlanDetailsByUserIdRepositories
 };

@@ -1,32 +1,24 @@
-import React, { useState, useEffect } from "react";
-import { X, Plus, Trash2, Check, Minus } from "lucide-react";
-import axios from "axios";
+import React, { useState, useEffect, useRef } from "react";
+import { X, Check, Search, MapPin, AlertCircle } from "lucide-react";
 import api from "@/lib/axios.ts";
-
-type Proficiency = "beginner" | "intermediate" | "advanced" | "expert";
-
-interface SkillObject {
-  tag_id: number | string;
-  name: string;
-  proficiency: Proficiency;
-  years: number;
-}
+import axios from "axios";
+import { toast } from "react-hot-toast";
 
 interface UserDetail {
   username: string;
   name: string;
-  middleName?: string;
-  suffix?: string;
   birthdate?: string;
-  country?: string;
-  zipCode?: string;
   role: "Freelancer" | "Client" | "Freelancer & Client" | "Casual";
   email_address: string;
-  location: string;
+  address: string;
   bio: string;
   tagline: string;
-  skills?: SkillObject[];
+  country?: string;
+  zipCode?: string;
+  skills?: any[];
   social_links?: any[];
+  avatar_file_id: number | null;
+  avatar_preset_url?: string;
 }
 
 interface ProfileEditModalProps {
@@ -34,402 +26,544 @@ interface ProfileEditModalProps {
   onClose: () => void;
   data: UserDetail;
   onSave: (updatedData: UserDetail) => void;
-  availableSkillsList?: { tag_id: number; name: string }[];
 }
+
+type Place = {
+  properties: {
+    osm_id: number;
+    name?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    postcode?: string;
+  };
+};
 
 export default function ProfileEditModal({ 
   isOpen, 
   onClose, 
   data, 
-  onSave, 
-  availableSkillsList = [] 
+  onSave
 }: ProfileEditModalProps) {
-  const [formData, setFormData] = useState<UserDetail>({ ...data });
-  const [newSkill, setNewSkill] = useState({ 
-    name: "", 
-    proficiency: "beginner" as Proficiency, 
-    years: 1 
+  const [formData, setFormData] = useState<UserDetail>({
+    username: "",
+    name: "",
+    birthdate: "",
+    role: "Freelancer",
+    email_address: "",
+    address: "",
+    bio: "",
+    tagline: "",
+    country: "",
+    zipCode: "",
+    skills: [],
+    social_links: [],
+    avatar_file_id: null,
+    avatar_preset_url: ""
   });
-
-  const [currentStep, setCurrentStep] = useState<number>(1);
-  const totalSteps = 3;
-
-  const [suggestedCountries, setSuggestedCountries] = useState<string[]>([]);
-  const [suggestedCities, setSuggestedCities] = useState<string[]>([]);
-  const [suggestedTaglines, setSuggestedTaglines] = useState<string[]>([]);
-  const [suggestedSkills, setSuggestedSkills] = useState<{ tag_id: number; name: string }[]>(availableSkillsList);
+  
+  const [originalFormData, setOriginalFormData] = useState<UserDetail>({
+    username: "",
+    name: "",
+    birthdate: "",
+    role: "Freelancer",
+    email_address: "",
+    address: "",
+    bio: "",
+    tagline: "",
+    country: "",
+    zipCode: "",
+    skills: [],
+    social_links: [],
+    avatar_file_id: null,
+    avatar_preset_url: ""
+  });
+  
+  const [places, setPlaces] = useState<Place[]>([]);
+  const [countries, setCountries] = useState<string[]>([]);
+  const [isAddressSelected, setIsAddressSelected] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [addressStatus, setAddressStatus] = useState<"idle" | "typing" | "selected" | "manual">("idle");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const addressInputRef = useRef<HTMLInputElement>(null);
 
   // Reset form data when modal opens
   useEffect(() => {
-    if (isOpen) {
-      setFormData({ ...data });
+    if (isOpen && data) {
+      const safeData = {
+        username: data.username || "",
+        name: data.name || "",
+        birthdate: data.birthdate || "",
+        role: data.role || "Freelancer",
+        email_address: data.email_address || "",
+        address: data.location || data.address || "",
+        bio: data.bio || "",
+        tagline: data.tagline || "",
+        country: data.country || "",
+        zipCode: data.zipCode || "",
+        skills: data.skills || [],
+        avatar_file_id: data.avatar_file_id || null,
+        avatar_preset_url: data.avatar_preset_url || "",
+        social_links: data.social_links || []
+      };
+      
+      setFormData(safeData);
+      setOriginalFormData(safeData);
+      setIsInitialized(true);
+      
+      // Check if address exists and is from previous selection
+      if (safeData.address) {
+        setIsAddressSelected(true);
+        setAddressStatus("selected");
+      } else {
+        setIsAddressSelected(false);
+        setAddressStatus("idle");
+      }
+    } else {
+      setIsInitialized(false);
     }
   }, [isOpen, data]);
 
-  // Fetch countries and taglines
+  // Fetch countries
   useEffect(() => {
-    if (!isOpen) return;
+    const fetchCountries = async () => {
+      try {
+        const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/api/countries`);
+        setCountries(response.data.countries || []);
+      } catch (error) {
+        console.error("Error fetching countries:", error);
+      }
+    };
+    fetchCountries();
+  }, []);
 
-    axios.get("https://countriesnow.space/api/v0.1/countries/positions")
-      .then(res => {
-        if (res.data && Array.isArray(res.data.data)) {
-          const countryNames = res.data.data.map((c: any) => c.name);
-          setSuggestedCountries(countryNames);
-        }
-      })
-      .catch(() => setSuggestedCountries(["Philippines", "United States", "Canada", "Singapore"]));
-
-    api.get("/api/suggestions/taglines")
-      .then(res => setSuggestedTaglines(res.data.suggestions || []))
-      .catch(() => setSuggestedTaglines(["Full-Stack Software Engineer", "UI/UX Designer", "Video Editor"]));
-
-    if (availableSkillsList.length === 0) {
-      api.get("/api/tags/").then(res => setSuggestedSkills(res.data.tags || []));
+  // Fetch places for address autocomplete
+  useEffect(() => {
+    if (!isOpen || !isInitialized) return;
+    if (!formData.address || !formData.address.trim()) {
+      setPlaces([]);
+      setShowSuggestions(false);
+      return;
     }
-  }, [isOpen, availableSkillsList]);
-
-  // Fetch cities based on country
-  useEffect(() => {
-    if (!formData.country?.trim()) {
-      setSuggestedCities([]);
+    
+    // If address was selected from suggestions or pre-filled, don't fetch new ones
+    if (isAddressSelected) {
+      setShowSuggestions(false);
       return;
     }
 
-    axios.post("https://countriesnow.space/api/v0.1/countries/cities", {
-      country: formData.country.trim()
-    })
-      .then(res => {
-        if (res.data && Array.isArray(res.data.data)) {
-          setSuggestedCities(res.data.data);
+    setShowSuggestions(true);
+    setAddressStatus("typing");
+    
+    const timeout = setTimeout(async () => {
+      try {
+        const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/api/places`, {
+          params: { q: formData.address }
+        });
+        setPlaces(response.data.places || []);
+        if (response.data.places?.length === 0) {
+          setAddressStatus("manual");
         }
-      })
-      .catch(() => {
-        if (formData.country.toLowerCase() === "philippines") {
-          setSuggestedCities(["Cebu City", "Manila", "Quezon City", "Davao City"]);
-        } else {
-          setSuggestedCities([]);
-        }
-      });
-  }, [formData.country]);
+      } catch (err) {
+        console.error("Error fetching places:", err);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [formData.address, isOpen, isAddressSelected, isInitialized]);
 
   if (!isOpen) return null;
 
-  const nextStep = () => {
-    if (currentStep < totalSteps) setCurrentStep(prev => prev + 1);
-  };
-
-  const prevStep = () => {
-    if (currentStep > 1) setCurrentStep(prev => prev - 1);
-  };
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const addCompoundSkill = () => {
-    if (!newSkill.name.trim()) return;
-    if ((formData.skills || []).length >= 12) {
-      alert("Maximum of 12 capability blocks allowed in matrix registries.");
-      return;
+    
+    // If user is typing in address field
+    if (name === "address") {
+      setIsAddressSelected(false);
+      setAddressStatus("typing");
+      setShowSuggestions(true);
+      setFormData((prev) => ({ 
+        ...prev, 
+        address: value
+      }));
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
     }
-
-    const uniqueName = newSkill.name.trim();
-    const exists = formData.skills?.some(s => s.name.toLowerCase() === uniqueName.toLowerCase());
-    if (exists) return;
-
-    const systemMatchedTag = suggestedSkills.find(s => s.name.toLowerCase() === uniqueName.toLowerCase());
-
-    const appendedSkill: SkillObject = {
-      tag_id: systemMatchedTag ? systemMatchedTag.tag_id : `custom_${Date.now()}`,
-      name: uniqueName,
-      proficiency: newSkill.proficiency,
-      years: newSkill.years
-    };
-
-    setFormData(prev => ({
-      ...prev,
-      skills: [...(prev.skills || []), appendedSkill]
-    }));
-
-    setNewSkill({ name: "", proficiency: "beginner", years: 1 });
   };
 
-  const removeSkill = (name: string) => {
-    setFormData(prev => ({
+  const handlePlaceSelect = (place: Place) => {
+    const formattedAddress = `${place.properties.name || ''}, ${place.properties.city ?? ''}, ${place.properties.state ?? ''}`.trim().replace(/,\s*$/, '');
+    
+    setFormData((prev) => ({
       ...prev,
-      skills: prev.skills?.filter(s => s.name !== name) || []
+      address: formattedAddress,
+      country: place.properties.country || prev.country || "Philippines",
+      zipCode: place.properties.postcode || prev.zipCode || ""
     }));
+    
+    setIsAddressSelected(true);
+    setAddressStatus("selected");
+    setPlaces([]);
+    setShowSuggestions(false);
+    
+    // Focus back on input to show the selected value
+    if (addressInputRef.current) {
+      addressInputRef.current.focus();
+    }
+  };
+
+  const handleAddressBlur = () => {
+    // Hide suggestions after a delay to allow click on suggestion
+    setTimeout(() => {
+      setShowSuggestions(false);
+      // If address has content but wasn't selected, mark as manual
+      if (formData.address && !isAddressSelected) {
+        setAddressStatus("manual");
+      }
+    }, 200);
+  };
+
+  const handleAddressFocus = () => {
+    if (formData.address?.trim()) {
+      if (!isAddressSelected) {
+        setShowSuggestions(true);
+        setAddressStatus("typing");
+      } else {
+        // If already selected, show indicator but not suggestions
+        setAddressStatus("selected");
+      }
+    }
+  };
+
+  const handleSave = async () => {
+    if (isLoading) return;
+    
+    setIsLoading(true);
+    
+    try {
+      // Prepare the payload with original and updated data
+      const payload = {
+        original: {
+          display_name: originalFormData.name || "",
+          birth_date: originalFormData.birthdate || "",
+          address: originalFormData.address || "",
+          country: originalFormData.country || "",
+          zip_code: originalFormData.zipCode || "",
+          description: originalFormData.bio || "",
+          tagline: originalFormData.tagline || ""
+        },
+        updates: {
+          display_name: formData.name || "",
+          birth_date: formData.birthdate || "",
+          address: formData.address || "",
+          country: formData.country || "",
+          zip_code: formData.zipCode || "",
+          description: formData.bio || "",
+          tagline: formData.tagline || ""
+        }
+      };
+      
+      console.log("📊 Profile Edit Payload:", payload);
+      
+      // Call the API to update profile
+      const response = await api.put('/api/accounts/update-profile-details', payload);
+      
+      if (response.data.success) {
+        toast.success("Profile updated successfully");
+        
+        // Check if updatedDetails exists and has data
+        const hasUpdatedDetails = response.data.result?.updatedDetails && 
+          Object.keys(response.data.result.updatedDetails).length > 0;
+        
+        let updatedData: UserDetail;
+        
+        if (hasUpdatedDetails) {
+          // Merge API response with form data
+          updatedData = {
+            ...formData,
+            name: response.data.result.updatedDetails.display_name || formData.name,
+            birthdate: response.data.result.updatedDetails.birth_date || formData.birthdate,
+            address: response.data.result.updatedDetails.address || formData.address,
+            country: response.data.result.updatedDetails.country || formData.country,
+            zipCode: response.data.result.updatedDetails.zip_code || formData.zipCode,
+            bio: response.data.result.updatedDetails.description || formData.bio,
+            tagline: response.data.result.updatedDetails.tagline || formData.tagline
+          };
+          console.log("📊 Updated from API response:", updatedData);
+        } else {
+          // Use form data directly if no updatedDetails
+          updatedData = { ...formData };
+          console.log("📊 No updatedDetails from API, using formData:", updatedData);
+        }
+        
+        // Pass the updated data to parent
+        onSave(updatedData);
+        onClose();
+      } else {
+        toast.error(response.data.message || "Failed to update profile");
+      }
+    } catch (error: any) {
+      console.error("Error updating profile:", error);
+      toast.error(error.response?.data?.message || "Failed to update profile");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 font-['Plus Jakarta Sans',sans-serif]">
-      <div className="relative w-full max-w-2xl rounded-2xl border border-white/10 bg-[#080a12] p-6 shadow-2xl text-white transition-all duration-300">
+      <div className="relative w-full max-w-2xl rounded-2xl border border-white/10 bg-[#080a12] p-6 shadow-2xl text-white transition-all duration-300 max-h-[90vh] overflow-y-auto">
 
-        <button onClick={onClose} className="absolute right-4 top-4 text-zinc-400 hover:text-white rounded-lg p-1.5 hover:bg-white/5 transition">
+        <button 
+          onClick={onClose} 
+          disabled={isLoading}
+          className="absolute right-4 top-4 text-zinc-400 hover:text-white rounded-lg p-1.5 hover:bg-white/5 transition disabled:opacity-50"
+        >
           <X className="h-5 w-5" />
         </button>
 
-        {/* Progress Tracker */}
-        <div className="mb-6">
-          <h2 className="text-xl font-bold tracking-tight">Edit Profile</h2>
-          <div className="flex items-center gap-2 mt-3 w-full">
-            {[...Array(totalSteps)].map((_, idx) => (
-              <div 
-                key={idx} 
-                className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${
-                  (idx + 1) <= currentStep 
-                    ? "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.4)]" 
-                    : "bg-white/15"
-                }`} 
+        <h2 className="text-xl font-bold tracking-tight mb-6">Edit Profile</h2>
+
+        <div className="space-y-4">
+          {/* Basic Information */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Display Name</label>
+              <input 
+                type="text" 
+                name="name" 
+                value={formData.name || ""} 
+                onChange={handleInputChange} 
+                disabled={isLoading}
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm focus:border-blue-500/50 outline-none transition disabled:opacity-50" 
               />
-            ))}
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Email</label>
+              <input 
+                type="email" 
+                name="email_address" 
+                value={formData.email_address || ""} 
+                onChange={handleInputChange} 
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm focus:border-blue-500/50 outline-none transition" 
+                disabled
+              />
+            </div>
           </div>
-          <p className="text-[11px] font-bold tracking-wider text-zinc-500 uppercase mt-2">
-            Step {currentStep} of {totalSteps}: {
-              currentStep === 1 
-                ? "Basic Information" 
-                : currentStep === 2 
-                ? "About You" 
-                : "Skills"
-            }
-          </p>
-        </div>
 
-        <div className="min-h-[320px]">
-          {/* STEP 1: Basic Information */}
-          {currentStep === 1 && (
-            <div className="space-y-4 animate-fadeIn">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1">Display Name</label>
-                  <input 
-                    type="text" 
-                    name="name" 
-                    value={formData.name} 
-                    onChange={handleInputChange} 
-                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm focus:border-blue-500/50 outline-none transition" 
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1">Role</label>
-                  <select 
-                    name="role" 
-                    value={formData.role} 
-                    onChange={handleInputChange} 
-                    className="w-full rounded-lg border border-white/10 bg-[#121420] px-3 py-2 text-sm focus:border-blue-500/50 outline-none transition"
-                  >
-                    <option value="Freelancer">Freelancer</option>
-                    <option value="Client">Client</option>
-                    <option value="Freelancer & Client">Freelancer & Client</option>
-                    <option value="Casual">Casual</option>
-                  </select>
-                </div>
-              </div>
+          {/* Birthdate Field */}
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">Birthdate</label>
+            <input 
+              type="date" 
+              name="birthdate" 
+              value={formData.birthdate ? formData.birthdate.split('T')[0] : ""} 
+              onChange={handleInputChange} 
+              disabled={isLoading}
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm focus:border-blue-500/50 outline-none transition disabled:opacity-50" 
+            />
+          </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white/[0.02] p-3 rounded-xl border border-white/5">
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1">Country</label>
-                  <input
-                    type="text"
-                    name="country"
-                    value={formData.country || ""}
-                    onChange={handleInputChange}
-                    list="countries-datalist"
-                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs focus:border-blue-500/50 outline-none text-zinc-200 transition"
-                    placeholder="Type or choose country..."
-                  />
-                  <datalist id="countries-datalist">
-                    {suggestedCountries.map((c, i) => <option key={i} value={c} />)}
-                  </datalist>
-                </div>
-
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1">City</label>
-                  <input
-                    type="text"
-                    name="zipCode"
-                    value={formData.zipCode || ""}
-                    onChange={handleInputChange}
-                    list="cities-datalist"
-                    disabled={!formData.country?.trim()}
-                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs focus:border-blue-500/50 outline-none text-zinc-200 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                    placeholder={formData.country?.trim() ? "Type or choose city..." : "Select country first..."}
-                  />
-                  <datalist id="cities-datalist">
-                    {suggestedCities.map((city, i) => <option key={i} value={city} />)}
-                  </datalist>
-                </div>
-
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1">Location / Address</label>
-                  <input 
-                    type="text" 
-                    name="location" 
-                    value={formData.location} 
-                    onChange={handleInputChange} 
-                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs focus:border-blue-500/50 outline-none transition" 
-                    placeholder="e.g., Cebu City" 
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 2: About You */}
-          {currentStep === 2 && (
-            <div className="space-y-4 animate-fadeIn">
-              <div>
-                <label className="block text-xs text-zinc-400 mb-1">Tagline</label>
-                <input
-                  type="text"
-                  name="tagline"
-                  value={formData.tagline}
-                  onChange={handleInputChange}
-                  list="taglines-list"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm focus:border-blue-500/50 outline-none"
-                  placeholder="e.g., Full-Stack Developer | UI/UX Designer"
-                />
-                <datalist id="taglines-list">
-                  {suggestedTaglines.map((t, i) => <option key={i} value={t} />)}
-                </datalist>
-              </div>
-              <div>
-                <label className="block text-xs text-zinc-400 mb-1">Bio / About Me</label>
-                <textarea
-                  name="bio"
-                  value={formData.bio}
-                  onChange={handleInputChange}
-                  rows={8}
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm focus:border-blue-500/50 outline-none resize-none leading-relaxed"
-                  placeholder="Tell the community about yourself..."
-                />
-              </div>
-            </div>
-          )}
-
-          {/* STEP 3: Skills */}
-          {currentStep === 3 && (
-            <div className="space-y-4 animate-fadeIn">
-              <div className="bg-white/[0.01] border border-white/5 p-4 rounded-xl">
-                <div className="flex justify-between items-center mb-3">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-blue-400">Manage Skills</h4>
-                  <span className="text-[10px] font-mono text-zinc-500">{(formData.skills || []).length} / 12 Max</span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 items-end">
-                  <div className="sm:col-span-2">
-                    <label className="block text-[11px] text-zinc-500 mb-0.5">Skill Name</label>
-                    <input 
-                      type="text" 
-                      value={newSkill.name} 
-                      onChange={(e) => setNewSkill(p => ({ ...p, name: e.target.value }))} 
-                      list="skills-datalist" 
-                      className="w-full rounded-lg border border-white/10 bg-[#121420] px-3 py-2 text-xs outline-none focus:border-blue-500/30" 
-                      placeholder="Type or select skill..." 
-                    />
-                    <datalist id="skills-datalist">
-                      {suggestedSkills.map(s => <option key={s.tag_id} value={s.name} />)}
-                    </datalist>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-zinc-500 mb-0.5">Proficiency</label>
-                    <select 
-                      value={newSkill.proficiency} 
-                      onChange={(e) => setNewSkill(p => ({ ...p, proficiency: e.target.value as Proficiency }))} 
-                      className="w-full rounded-lg border border-white/10 bg-[#121420] px-3 py-2 text-xs outline-none h-[34px]"
-                    >
-                      <option value="beginner">Beginner</option>
-                      <option value="intermediate">Intermediate</option>
-                      <option value="advanced">Advanced</option>
-                      <option value="expert">Expert</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-zinc-500 mb-1 text-center">Years</label>
-                    <div className="flex items-center justify-between border border-white/10 bg-white/5 rounded-lg h-[34px] overflow-hidden p-0.5">
-                      <button 
-                        type="button" 
-                        onClick={() => setNewSkill(p => ({ ...p, years: Math.max(1, p.years - 1) }))} 
-                        className="h-full aspect-square flex items-center justify-center rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition"
-                      >
-                        <Minus className="h-3 w-3" />
-                      </button>
-                      <span className="text-xs font-mono font-bold text-zinc-200">{newSkill.years}</span>
-                      <button 
-                        type="button" 
-                        onClick={() => setNewSkill(p => ({ ...p, years: p.years + 1 }))} 
-                        className="h-full aspect-square flex items-center justify-center rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition"
-                      >
-                        <Plus className="h-3 w-3" />
-                      </button>
+          {/* Address with Autocomplete - Pre-filled with existing address */}
+          <div className="relative">
+            <label className="block text-xs text-zinc-400 mb-1">Street Address</label>
+            
+            <div className="relative">
+              <input 
+                ref={addressInputRef}
+                type="text" 
+                name="address" 
+                value={formData.address || ""} 
+                onChange={handleInputChange}
+                onFocus={handleAddressFocus}
+                onBlur={handleAddressBlur}
+                disabled={isLoading}
+                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none transition disabled:opacity-50 ${
+                  addressStatus === "selected" 
+                    ? "border-emerald-500/50 bg-emerald-500/5 pr-12" 
+                    : addressStatus === "manual"
+                    ? "border-yellow-500/50 bg-yellow-500/5 pr-12"
+                    : "border-white/10 bg-white/5 focus:border-blue-500/50"
+                }`}
+                placeholder="Start typing your address..."
+              />
+              
+              {/* Address Status Indicator */}
+              {formData.address && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  {addressStatus === "selected" ? (
+                    <div className="flex items-center gap-1.5 text-emerald-400">
+                      <Check className="h-4 w-4" />
+                      <span className="text-[10px] font-medium">Verified</span>
                     </div>
-                  </div>
+                  ) : addressStatus === "manual" ? (
+                    <div className="flex items-center gap-1.5 text-yellow-400">
+                      <AlertCircle className="h-4 w-4" />
+                      <span className="text-[10px] font-medium">Manual</span>
+                    </div>
+                  ) : addressStatus === "typing" ? (
+                    <div className="flex items-center gap-1.5 text-blue-400">
+                      <Search className="h-4 w-4 animate-pulse" />
+                      <span className="text-[10px] font-medium">Searching...</span>
+                    </div>
+                  ) : null}
                 </div>
-                <button 
-                  type="button" 
-                  onClick={addCompoundSkill} 
-                  className="mt-3 w-full px-4 py-2 bg-blue-600 rounded-lg text-xs font-bold hover:bg-blue-500 transition shadow-md shadow-blue-600/10"
-                >
-                  Add Skill
-                </button>
-              </div>
+              )}
+            </div>
 
-              <div className="max-h-36 overflow-y-auto space-y-1.5 bg-black/20 p-2.5 rounded-xl border border-white/5">
-                {formData.skills?.map((skill, index) => (
-                  <div key={index} className="flex justify-between items-center text-xs bg-white/5 p-2 rounded-lg border border-white/5">
-                    <span className="font-medium text-zinc-200 pl-1">{skill.name}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="capitalize text-blue-400 font-mono text-[10px] bg-blue-500/5 px-1.5 py-0.5 rounded border border-blue-500/10">
-                        {skill.proficiency}
-                      </span>
-                      <span className="text-[11px] text-zinc-400">{skill.years} {skill.years === 1 ? 'yr' : 'yrs'}</span>
-                      <button 
-                        type="button" 
-                        onClick={() => removeSkill(skill.name)} 
-                        className="text-red-400 hover:text-red-300 p-1 rounded-md hover:bg-red-500/10 transition"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+            {/* Address Status Message */}
+            {formData.address && (
+              <div className="mt-1.5 flex items-center gap-1.5">
+                {addressStatus === "selected" ? (
+                  <>
+                    <MapPin className="h-3 w-3 text-emerald-400" />
+                    <span className="text-[10px] text-emerald-400">
+                      ✓ Address verified • Country & ZIP auto-filled
+                    </span>
+                  </>
+                ) : addressStatus === "manual" ? (
+                  <>
+                    <AlertCircle className="h-3 w-3 text-yellow-400" />
+                    <span className="text-[10px] text-yellow-400">
+                      ⚠️ Manual entry - Country & ZIP not auto-filled
+                    </span>
+                  </>
+                ) : addressStatus === "typing" ? (
+                  <>
+                    <Search className="h-3 w-3 text-blue-400" />
+                    <span className="text-[10px] text-zinc-400">
+                      Type to search or select from suggestions below
+                    </span>
+                  </>
+                ) : null}
+              </div>
+            )}
+
+            {/* Places Autocomplete Dropdown */}
+            {showSuggestions && places.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-[#13151f] border border-white/10 rounded-lg max-h-60 overflow-y-auto shadow-xl">
+                <div className="sticky top-0 bg-[#13151f] px-3 py-1.5 border-b border-white/5">
+                  <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">
+                    Select location to auto-fill country & ZIP
+                  </span>
+                </div>
+                {places.map((place) => (
+                  <div
+                    key={place.properties.osm_id}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handlePlaceSelect(place);
+                    }}
+                    className="px-3 py-2 hover:bg-white/5 cursor-pointer border-b border-white/5 last:border-0 group transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-white group-hover:text-blue-400 transition-colors">
+                        {place.properties.name || "Unnamed location"}
+                        {place.properties.city && (
+                          <span className="text-xs text-zinc-400 ml-1">
+                            ({place.properties.city})
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-zinc-500">
+                        {place.properties.country && (
+                          <span className="bg-white/5 px-2 py-0.5 rounded">
+                            {place.properties.country}
+                          </span>
+                        )}
+                        {place.properties.postcode && (
+                          <span className="ml-1 bg-white/5 px-2 py-0.5 rounded">
+                            {place.properties.postcode}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-xs text-zinc-500 mt-0.5">
+                      {place.properties.state || ""}
+                      {place.properties.state && place.properties.country && " • "}
+                      {place.properties.country || ""}
                     </div>
                   </div>
                 ))}
-                {(!formData.skills || formData.skills.length === 0) && (
-                  <p className="text-xs text-zinc-500 text-center py-4">No skills added yet.</p>
-                )}
               </div>
-            </div>
-          )}
+            )}
+
+            {/* No Results Message */}
+            {showSuggestions && formData.address?.trim() && places.length === 0 && addressStatus === "manual" && (
+              <div className="absolute z-50 w-full mt-1 bg-[#13151f] border border-yellow-500/20 rounded-lg p-3 shadow-xl">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-zinc-300">No locations found</p>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      You can still save this address manually, but country and ZIP code won't be auto-filled.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Hidden country and zipCode fields - stored in formData but not displayed */}
+          {/* The country and zipCode are still in formData and included in the payload */}
+
+          {/* Tagline */}
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">Tagline</label>
+            <input
+              type="text"
+              name="tagline"
+              value={formData.tagline || ""}
+              onChange={handleInputChange}
+              disabled={isLoading}
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm focus:border-blue-500/50 outline-none transition disabled:opacity-50"
+              placeholder="e.g., Full-Stack Developer | UI/UX Designer"
+            />
+          </div>
+
+          {/* Bio / About Me */}
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">Bio / About Me</label>
+            <textarea
+              name="bio"
+              value={formData.bio || ""}
+              onChange={handleInputChange}
+              disabled={isLoading}
+              rows={6}
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm focus:border-blue-500/50 outline-none resize-none leading-relaxed disabled:opacity-50"
+              placeholder="Tell the community about yourself..."
+            />
+          </div>
         </div>
 
-        {/* Footer Navigation */}
-        <div className="flex justify-between mt-6 border-t border-white/10 pt-4">
+        {/* Footer Actions */}
+        <div className="flex justify-end gap-3 mt-6 border-t border-white/10 pt-4">
           <button 
             type="button" 
-            onClick={prevStep} 
-            className={`px-4 py-2 border border-white/10 bg-white/5 text-zinc-400 text-xs font-semibold rounded-lg hover:text-white transition ${
-              currentStep === 1 ? "invisible pointer-events-none" : ""
-            }`}
+            onClick={onClose} 
+            disabled={isLoading}
+            className="px-4 py-2 border border-white/10 bg-white/5 text-zinc-400 text-xs font-semibold rounded-lg hover:text-white transition disabled:opacity-50"
           >
-            Back
+            Cancel
           </button>
-          {currentStep < totalSteps ? (
-            <button 
-              type="button" 
-              onClick={nextStep} 
-              className="px-4 py-2 bg-white text-[#080a12] text-xs font-bold rounded-lg hover:bg-zinc-200 transition"
-            >
-              Next
-            </button>
-          ) : (
-            <button 
-              type="button" 
-              onClick={() => onSave(formData)} 
-              className="px-4 py-2 bg-blue-500 text-white text-xs font-bold rounded-lg flex items-center gap-2 hover:bg-blue-600 transition shadow-lg shadow-blue-500/10"
-            >
-              Save Changes <Check className="h-3.5 w-3.5" />
-            </button>
-          )}
+          <button 
+            type="button" 
+            onClick={handleSave} 
+            disabled={isLoading}
+            className="px-4 py-2 bg-blue-500 text-white text-xs font-bold rounded-lg flex items-center gap-2 hover:bg-blue-600 transition shadow-lg shadow-blue-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? (
+              <>
+                <div className="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full" />
+                Saving...
+              </>
+            ) : (
+              <>
+                Save Changes <Check className="h-3.5 w-3.5" />
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>

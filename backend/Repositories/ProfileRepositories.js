@@ -2,6 +2,11 @@ const { pool } = require('../lib/database');
 
 async function updateProfileAccountRepositories(accountId, updates) {
     try {
+        // If no updates, return early
+        if (!updates || Object.keys(updates).length === 0) {
+            return { rows: [] };
+        }
+
         // Build the SET clause dynamically
         const setClauses = [];
         const values = [];
@@ -9,11 +14,19 @@ async function updateProfileAccountRepositories(accountId, updates) {
 
         // Loop through the updates object to build the SET clause
         for (const [key, value] of Object.entries(updates)) {
+            // Skip undefined or null values
+            if (value === undefined || value === null) continue;
+            
             // Convert camelCase to snake_case for database columns
             const dbKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
             setClauses.push(`${dbKey} = $${index}`);
             values.push(value);
             index++;
+        }
+
+        // If no valid updates after filtering, return early
+        if (setClauses.length === 0) {
+            return { rows: [] };
         }
 
         // Add accountId as the last parameter
@@ -23,6 +36,7 @@ async function updateProfileAccountRepositories(accountId, updates) {
             UPDATE accounts 
             SET ${setClauses.join(', ')} 
             WHERE account_id = $${index}
+            RETURNING tagline, description, display_name
         `;
 
         const result = await pool.query(queryText, values);
@@ -33,7 +47,52 @@ async function updateProfileAccountRepositories(accountId, updates) {
     }
 }
 
+async function updateProfileUserByAccountIdRepositories(accountId, updates) {
+    try {
+        // If no updates, return early
+        if (!updates || Object.keys(updates).length === 0) {
+            return { rows: [] };
+        }
 
+        // Build the SET clause dynamically
+        const setClauses = [];
+        const values = [];
+        let index = 1;
+
+        // Loop through the updates object to build the SET clause
+        for (const [key, value] of Object.entries(updates)) {
+            // Skip undefined or null values
+            if (value === undefined || value === null) continue;
+            
+            // Convert camelCase to snake_case for database columns
+            const dbKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+            setClauses.push(`${dbKey} = $${index}`);
+            values.push(value);
+            index++;
+        }
+
+        // If no valid updates after filtering, return early
+        if (setClauses.length === 0) {
+            return { rows: [] };
+        }
+
+        // Add accountId as the last parameter
+        values.push(accountId);
+
+        const queryText = `
+            UPDATE users 
+            SET ${setClauses.join(', ')} 
+            WHERE account_id = $${index}
+            RETURNING birth_date, country, zip_code, address
+        `;
+
+        const result = await pool.query(queryText, values);
+        return result;
+    } catch (err) {
+        console.error(`Error updating profile user for accountId ${accountId}:`, err);
+        throw err;
+    }
+}
 async function updateProfileUserRepositories(userId, updates) {
     try {
         // Build the SET clause dynamically
@@ -68,30 +127,6 @@ async function updateProfileUserRepositories(userId, updates) {
 }
 
 
-async function insertProfileSkillsRepositories(userId, listOfSkills) {
-    try {
-        if (listOfSkills.length === 0) return null;
-
-        const values = [];
-        const placeholders = [];
-        let index = 1;
-
-        listOfSkills.forEach((skill) => {
-            placeholders.push(`($${index}, $${index + 1})`);
-            values.push(userId, skill.tag_id);
-            index += 2;
-        });
-
-        const queryText = `INSERT INTO user_tags(user_id, tag_id) VALUES ${placeholders.join(', ')}`;
-        
-        // This will execute: INSERT INTO user_tags(user_id, tag_id) VALUES ($1, $2)
-        const response = await pool.query(queryText, values);
-        return response;
-    } catch (err) {
-        console.error(`Error inserting profile skills for userId ${userId}:`, err);
-        throw err;
-    }
-}
 
 async function insertProfileSocialMediaRepositories(accountId, listOfSocialMedia) {
     try {
@@ -119,136 +154,7 @@ async function insertProfileSocialMediaRepositories(accountId, listOfSocialMedia
     }
 }
 
-async function deleteProfileSkillsRepositories(userId, listOfSkills) {
-    try {
-        if (listOfSkills.length === 0) return null;
 
-        const tagIds = listOfSkills.map(skill => skill.tag_id);
-
-        const placeholders = tagIds.map((_, index) => `$${index + 2}`).join(', ');
-
-        const queryText = `
-            DELETE FROM user_tags
-            WHERE user_id = $1
-            AND tag_id IN (${placeholders})
-        `;
-
-        const values = [userId, ...tagIds];
-
-        const response = await pool.query(queryText, values);
-        return response;
-    } catch (err) {
-        console.error(`Error deleting profile skills for userId ${userId}:`, err);
-        throw err;
-    }
-}
-
-async function deleteProfileSocialMediaRepositories(accountId, listOfSocialMedia) {
-    try {
-        if (listOfSocialMedia.length === 0) return null;
-
-        // Extract the account_link_ids to delete
-        const linkIds = listOfSocialMedia.map(link => link.account_link_id);
-
-        // Filter out any undefined or null values (new items that haven't been saved yet)
-        const validLinkIds = linkIds.filter(id => id !== undefined && id !== null);
-        
-        if (validLinkIds.length === 0) return null;
-
-        const placeholders = validLinkIds.map((_, index) => `$${index + 2}`).join(', ');
-
-        const queryText = `
-            DELETE FROM account_link
-            WHERE account_id = $1
-            AND account_link_id IN (${placeholders})
-        `;
-
-        const values = [accountId, ...validLinkIds];
-
-        const response = await pool.query(queryText, values);
-        return response;
-    } catch (err) {
-        console.error(`Error deleting profile social media for accountId ${accountId}:`, err);
-        throw err;
-    }
-}
-
-// ============================================
-// NEW: Update Social Media URLs (Bulk)
-// ============================================
-async function updateProfileSocialMediaRepositories(accountId, listOfSocialMedia) {
-    try {
-        if (listOfSocialMedia.length === 0) return null;
-
-        // Using a single query with CASE statements for bulk update (more efficient)
-        // OR we can use multiple updates in a transaction
-        // Let's use the simpler approach with multiple updates
-        const results = [];
-        for (const link of listOfSocialMedia) {
-            const queryText = `
-                UPDATE account_link 
-                SET url = $1, platform = $2
-                WHERE account_link_id = $3 AND account_id = $4
-            `;
-            const values = [link.url, link.platform, link.account_link_id, accountId];
-            const result = await pool.query(queryText, values);
-            results.push(result);
-        }
-        
-        return results;
-    } catch (err) {
-        console.error(`Error updating profile social media for accountId ${accountId}:`, err);
-        throw err;
-    }
-}
-
-// ============================================
-// OPTIONAL: Bulk Update using a single query (more efficient for many records)
-// ============================================
-async function updateProfileSocialMediaRepositoriesBulk(accountId, listOfSocialMedia) {
-    try {
-        if (listOfSocialMedia.length === 0) return null;
-
-        // Build CASE statements for bulk update
-        const values = [];
-        let index = 1;
-        const idPlaceholders = [];
-        const urlCases = [];
-        const platformCases = [];
-
-        listOfSocialMedia.forEach((link) => {
-            idPlaceholders.push(`$${index}`);
-            urlCases.push(`WHEN $${index} THEN $${index + 1}`);
-            platformCases.push(`WHEN $${index} THEN $${index + 2}`);
-            values.push(link.account_link_id, link.url, link.platform);
-            index += 3;
-        });
-
-        // Add account_id as the last parameter
-        values.push(accountId);
-
-        const queryText = `
-            UPDATE account_link 
-            SET 
-                url = CASE account_link_id 
-                    ${urlCases.join(' ')}
-                    ELSE url
-                END,
-                platform = CASE account_link_id 
-                    ${platformCases.join(' ')}
-                    ELSE platform
-                END
-            WHERE account_id = $${values.length}
-            AND account_link_id IN (${idPlaceholders.join(', ')})
-        `;
-
-        const result = await pool.query(queryText, values);
-        return result;
-    } catch (err) {
-        console.error(`Error updating profile social media in bulk for accountId ${accountId}:`, err);
-        throw err;
-    }
-}
 
 async function updateTaglineAndDescriptionRepositories(accountId, tagline, description) {
     try {
@@ -273,7 +179,7 @@ async function getPersonalDetails(userId) {
     }
 }
 
-async function getProfileByUserId(userId) { 
+async function getProfileByAccountId(accountId) { 
     try {
         // 1. Get profile data
         const profileQuery = `
@@ -285,7 +191,7 @@ async function getProfileByUserId(userId) {
                 A.TAGLINE as tagline,
                 U.EMAIL_ADDRESS as email_address, 
                 A.CREATED_AT AS joinedDate, 
-                U.BIRTH_DATE as birthDate, 
+                TO_CHAR(u.birth_date, 'YYYY-MM-DD') as birthdate, 
                 U.COUNTRY as country,
                 U.ZIP_CODE as zipCode,
                 U.ADDRESS as location,
@@ -293,16 +199,17 @@ async function getProfileByUserId(userId) {
                 A.AVATAR_FILE_ID as avatar_file_id,
                 A.DESCRIPTION as bio,
                 F.PATH AS avatar_preset_url,
-                P.NAME AS subscriptionType
+                P.NAME AS subscriptionType,
+                U.USER_ID as user_id
             FROM ACCOUNTS A
             JOIN USERS U ON A.ACCOUNT_ID = U.ACCOUNT_ID
             LEFT JOIN FILES F ON A.AVATAR_FILE_ID = F.FILE_ID
             LEFT JOIN SUBSCRIPTIONS S ON U.USER_ID = S.USER_ID
             LEFT JOIN PLANS P ON S.PLAN_ID = P.PLAN_ID
-            WHERE U.USER_ID = $1
+            WHERE A.ACCOUNT_ID = $1
         `;
         
-        const profileResult = await pool.query(profileQuery, [userId]);
+        const profileResult = await pool.query(profileQuery, [accountId]);
         
         if (profileResult.rows.length === 0) {
             return null;
@@ -320,12 +227,104 @@ async function getProfileByUserId(userId) {
             WHERE UP.USER_ID = $1
         `;
         
-        const rolesResult = await pool.query(rolesQuery, [userId]);
+        const rolesResult = await pool.query(rolesQuery, [profile.user_id]);
         profile.roles = rolesResult.rows;
         
         return profile;
     } catch (err) {
-        console.error(`Error fetching profile for userId ${userId}:`, err);
+        console.error(`Error fetching profile for accountId ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function updateProfileSocialMediaRepositories(accountId, socialMediaUpdates) {
+    try {
+        if (socialMediaUpdates.length === 0) return [];
+
+        // Build a single query with CASE statements
+        let platformCases = [];
+        let urlCases = [];
+        const ids = [];
+        let index = 1;
+
+        for (const link of socialMediaUpdates) {
+            platformCases.push(`WHEN account_link_id = $${index} THEN $${index + 1}`);
+            urlCases.push(`WHEN account_link_id = $${index} THEN $${index + 2}`);
+            ids.push(link.account_link_id);
+            index += 3;
+        }
+
+        const queryText = `
+            UPDATE account_link 
+            SET 
+                platform = CASE ${platformCases.join(' ')} END,
+                url = CASE ${urlCases.join(' ')} END
+            WHERE account_id = $${index} 
+            AND account_link_id = ANY($${index + 1}::int[])
+            RETURNING *
+        `;
+
+        // Prepare values: for each link, add [id, platform, url]
+        const values = [];
+        for (const link of socialMediaUpdates) {
+            values.push(link.account_link_id, link.platform, link.url);
+        }
+        values.push(accountId, ids);
+
+        const result = await pool.query(queryText, values);
+        return result.rows;
+    } catch (err) {
+        console.error(`Error updating profile social media for accountId ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function deleteProfileSocialMediaRepositories(accountId, listOfSocialMediaIds) {
+    try {
+        if (listOfSocialMediaIds.length === 0) return null;
+        
+        // Extract IDs if they're objects
+        const ids = listOfSocialMediaIds.map(item => 
+            typeof item === 'object' ? item.account_link_id : item
+        );
+        
+        // Build parameterized placeholders
+        const placeholders = ids.map((_, index) => `$${index + 2}`).join(', ');
+        const queryText = `DELETE FROM account_link WHERE account_id = $1 AND account_link_id IN (${placeholders})`;
+        const result = await pool.query(queryText, [accountId, ...ids]);
+        
+        return {
+            success: true,
+            deletedCount: result.rowCount,
+            deletedIds: ids
+        };
+    } catch (err) {
+        console.error(`Error deleting profile social media for accountId ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function getProfileAvatarsByAccountId(accountId) {
+    try{
+        const queryText = `SELECT f.file_id,f.name, f.path from account_profile_files apf 
+        JOIN files f ON apf.file_id = f.file_id WHERE account_id = $1`;
+        const result = await pool.query(queryText, [accountId]);
+        return result.rows;
+    }catch(err){
+        console.error(`Error fetching profile avatars for accountId ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function getProfileCurrentAvatarByAccountId(accountId){
+    try{
+        const queryText = `SELECT f.file_id,f.name, f.path from accounts a
+        JOIN files f ON a.avatar_file_id = f.file_id
+        WHERE a.account_id = $1`;
+        const result = await pool.query(queryText, [accountId]);
+        return result.rows[0];
+    }catch(err){
+        console.error(`Error fetching current profile avatar for accountId ${accountId}:`, err);
         throw err;
     }
 }
@@ -333,14 +332,14 @@ async function getProfileByUserId(userId) {
 
 module.exports = {
     updateProfileAccountRepositories,
-    insertProfileSkillsRepositories,
     insertProfileSocialMediaRepositories,
-    deleteProfileSkillsRepositories,
-    deleteProfileSocialMediaRepositories,
-    updateProfileSocialMediaRepositories,        
-    updateProfileSocialMediaRepositoriesBulk,
     updateTaglineAndDescriptionRepositories,
     getPersonalDetails,
     updateProfileUserRepositories,
-    getProfileByUserId
+    updateProfileUserByAccountIdRepositories,
+    getProfileByAccountId,
+    updateProfileSocialMediaRepositories,
+    deleteProfileSocialMediaRepositories,
+    getProfileAvatarsByAccountId,
+    getProfileCurrentAvatarByAccountId
 };

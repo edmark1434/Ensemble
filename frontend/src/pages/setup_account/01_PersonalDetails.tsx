@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, ArrowRight, ArrowLeft } from "lucide-react";
-import ShapeGrid from "../../components/ui/ShapeGrid"; // Adjust import depth if needed
+import ShapeGrid from "../../components/ui/ShapeGrid";
 import axios from "axios";
-import api from "@/lib/axios"; // Adjust import depth if needed
+import api from "@/lib/axios";
 import { toast } from "react-hot-toast";
+
 const T = {
   bg:        "#080a12",
   bgInput:   "#13151f",
@@ -15,17 +16,18 @@ const T = {
   muted:     "#888",
   dim:       "#555",
   error:     "#e05252",
-  fontBody:    "'Plus Jakarta Sans', sans-serif",
+  fontBody:  "'Plus Jakarta Sans', sans-serif",
 };
+
 type Place = {
-    properties: {
-        osm_id: number;
-        name?: string;
-        city?: string;
-        state?: string;
-        country?: string;
-        postcode?: string;
-    };
+  properties: {
+    osm_id: number;
+    name?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    postcode?: string;
+  };
 };
 
 export default function PersonalDetails() {
@@ -44,6 +46,36 @@ export default function PersonalDetails() {
     address: "",
   });
 
+  // ✅ Helper function to format date to YYYY-MM-DD
+  const formatDateForInput = (dateString: string): string => {
+    if (!dateString) return "";
+    
+    try {
+      // If it's already in YYYY-MM-DD format, return as is
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+        return dateString;
+      }
+      
+      // Parse the date string and format to YYYY-MM-DD
+      const date = new Date(dateString);
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        return "";
+      }
+      
+      // Get local date components to avoid timezone issues
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      
+      return `${year}-${month}-${day}`;
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return "";
+    }
+  };
+
   useEffect(() => { 
     const fetchCountries = async () => {
       try {
@@ -54,18 +86,30 @@ export default function PersonalDetails() {
       }
     };
     fetchCountries();
-  },[]);
-
+  }, []);
+  useEffect(() => {
+      const checkOnboardingStatus = async () => {
+        const response = await api.get("/api/users/session");
+          if (response.data.steps) {
+            navigate("/*");
+          }
+      }
+      checkOnboardingStatus();
+  }, []);
   useEffect(() => {
     const fetchPersonalDetails = async () => {
       try {
         const response = await api.get("/api/accounts/personal-details");
         if (response.status === 200 && response.data.success) {
           const data = response.data.data;
+          
+          // ✅ Format the birth date for the input field
+          const formattedBirthDate = formatDateForInput(data.birth_date || "");
+          
           setForm({
             middleName: data.middle_name || "",
             suffix: data.suffix || "",
-            birthDate: data.birth_date || "",
+            birthDate: formattedBirthDate,
             country: data.country || "Philippines",
             zipCode: data.zip_code || "",
             address: data.address || ""
@@ -73,7 +117,7 @@ export default function PersonalDetails() {
           setOriginalForm({
             middleName: data.middle_name || "",
             suffix: data.suffix || "",
-            birthDate: data.birth_date || "",
+            birthDate: formattedBirthDate,
             country: data.country || "Philippines",
             zipCode: data.zip_code || "",
             address: data.address || ""
@@ -84,10 +128,10 @@ export default function PersonalDetails() {
       }
     };
     fetchPersonalDetails();
-  },[]);
+  }, []);
 
   useEffect(() => {
-    if(!form.address.trim()) {
+    if (!form.address.trim()) {
       setPlaces([]);
       return;
     }
@@ -100,10 +144,10 @@ export default function PersonalDetails() {
       } catch (err) {
         console.error("Error fetching places:", err);
       }
-    }, 300); // Debounce for 300ms
+    }, 300);
 
     return () => clearTimeout(timeout);
-  },[form.address])
+  }, [form.address]);
 
   const handleChange = (key: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm({ ...form, [key]: e.target.value });
@@ -126,29 +170,27 @@ export default function PersonalDetails() {
     setLoading(true);
     try {
       if (Object.keys(originalForm).length === 0) {
-          try {
-            const response = await api.post("/api/users/update-personal-details", form);
-            if(response.status === 200 && response.data.success) {
-              navigate("/setup/upload-image");
-            }
-          }catch (err:any) {
-            console.error("Error updating personal details:", err.response?.data || err.message || err);
-            setErrors(err.response?.data?.errors || { general: "An error occurred. Please try again." });
-          } 
+        try {
+          const response = await api.post("/api/users/update-personal-details", form);
+          if (response.status === 200 && response.data.success) {
+            navigate("/setup/upload-image");
+          }
+        } catch (err: any) {
+          console.error("Error updating personal details:", err.response?.data || err.message || err);
+          setErrors(err.response?.data?.errors || { general: "An error occurred. Please try again." });
+        } 
       } else {
         try {
-            const response = await api.put("/api/accounts/update-profile-user", { originalForm, updates: form });
-            if (response.status === 200 && response.data.success) {
-              toast.success(response.data.message || "Personal details updated successfully.");
-              navigate("/setup/upload-image");
-            }
-        }catch (err:any) {
+          const response = await api.put("/api/accounts/update-profile-user", { originalForm, updates: form });
+          if (response.status === 200 && response.data.success) {
+            toast.success(response.data.message || "Personal details updated successfully.");
+            navigate("/setup/upload-image");
+          }
+        } catch (err: any) {
           console.error("Error updating personal details:", err.response?.data || err.message || err);
           setErrors(err.response?.data?.errors || { general: "An error occurred. Please try again." });
         }
       }
-
-      console.log("Form data to submit:", form);
     } catch (err) {
       console.error(err);
     } finally {
@@ -243,7 +285,6 @@ export default function PersonalDetails() {
       `}</style>
 
       <div className="setup-page-wrapper">
-        {/* Identical Structural Background Canvas Setup */}
         <div className="canvas-bg-container">
           <ShapeGrid
             direction="diagonal"
@@ -257,7 +298,6 @@ export default function PersonalDetails() {
         </div>
 
         <form onSubmit={handleNext} className="setup-card">
-          {/* Progress fill smoothly increments to 40% inside static coordinates */}
           <div style={{ marginBottom: 40 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: T.accent, letterSpacing: 0.5 }}>ACCOUNT SETUP</span>
@@ -268,7 +308,6 @@ export default function PersonalDetails() {
             </div>
           </div>
 
-          {/* Entry Form Nodes */}
           <div className="animated-content">
             <div style={{
               width: 48, height: 48, borderRadius: 12, background: T.bgInput,
@@ -289,28 +328,35 @@ export default function PersonalDetails() {
                 <span className="input-label">Middle Name</span>
                 <input type="text" value={form.middleName} onChange={handleChange("middleName")} className="form-input" placeholder="Optional" />
               </div>
-                <div className="input-group" style={{ flex: 1 }}>
-                  <span className="input-label">Suffix</span>
-                  <select
-                    value={form.suffix}
-                    onChange={handleChange("suffix")}
-                    className="form-input"
-                  >
+              <div className="input-group" style={{ flex: 1 }}>
+                <span className="input-label">Suffix</span>
+                <select
+                  value={form.suffix}
+                  onChange={handleChange("suffix")}
+                  className="form-input"
+                >
                   <option disabled value="">Select Suffix</option>
-                    <option value="">N/A</option>
-                    <option value="Jr.">Jr.</option>
-                    <option value="Sr.">Sr.</option>
-                    <option value="II">II</option>
-                    <option value="III">III</option>
-                    <option value="IV">IV</option>
-                    <option value="V">V</option>
-                  </select>
-                </div>
+                  <option value="">N/A</option>
+                  <option value="Jr.">Jr.</option>
+                  <option value="Sr.">Sr.</option>
+                  <option value="II">II</option>
+                  <option value="III">III</option>
+                  <option value="IV">IV</option>
+                  <option value="V">V</option>
+                </select>
+              </div>
             </div>
 
             <div className="input-group">
               <span className="input-label">Birth Date</span>
-              <input type="date" value={form.birthDate} max={new Date().toISOString().split("T")[0]} onChange={handleChange("birthDate")} className="form-input" style={{ borderColor: errors.birthDate ? T.error : T.border, colorScheme: "dark" }} />
+              <input 
+                type="date" 
+                value={form.birthDate} 
+                max={new Date().toISOString().split("T")[0]} 
+                onChange={handleChange("birthDate")} 
+                className="form-input" 
+                style={{ borderColor: errors.birthDate ? T.error : T.border, colorScheme: "dark" }} 
+              />
               {errors.birthDate && <span className="error-text">{errors.birthDate}</span>}
             </div>
 
@@ -331,70 +377,62 @@ export default function PersonalDetails() {
             </div>
 
             <div className="input-group" style={{ marginBottom: 32, position: "relative" }}>
-                <span className="input-label">Street Address</span>
+              <span className="input-label">Street Address</span>
+              <input
+                type="text"
+                value={form.address}
+                onChange={handleChange("address")}
+                className="form-input"
+                placeholder="House No., Street name, Barangay, City"
+              />
 
-                <input
-                    type="text"
-                    value={form.address}
-                    onChange={handleChange("address")}
-                    className="form-input"
-                    placeholder="House No., Street name, Barangay, City"
-                />
-
-                {places.length > 0 && (
+              {places.length > 0 && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    right: 0,
+                    background: "#13151f",
+                    border: "1px solid #2a2d3e",
+                    borderRadius: 8,
+                    marginTop: 6,
+                    maxHeight: 250,
+                    overflowY: "auto",
+                    zIndex: 1000,
+                    color: "#fff"
+                  }}
+                >
+                  {places.map((place) => (
                     <div
-                        style={{
-                            position: "absolute",
-                            top: "100%",
-                            left: 0,
-                            right: 0,
-                            background: "#13151f",
-                            border: "1px solid #2a2d3e",
-                            borderRadius: 8,
-                            marginTop: 6,
-                            maxHeight: 250,
-                            overflowY: "auto",
-                          zIndex: 1000,
-                            color: "#fff"
-                        }}
+                      key={place.properties.osm_id}
+                      onClick={() => {
+                        setForm({
+                          ...form,
+                          country: place.properties.country || form.country,
+                          zipCode: place.properties.postcode || form.zipCode,
+                          address: `${place.properties.name}, ${place.properties.city ?? ""}, ${place.properties.state ?? ""}`
+                        });
+                        setPlaces([]);
+                      }}
+                      style={{
+                        padding: "12px",
+                        cursor: "pointer",
+                        borderBottom: "1px solid #2a2d3e"
+                      }}
                     >
-                        {places.map((place) => (
-                            <div
-                                key={place.properties.osm_id}
-                                onClick={() => {
-                                    setForm({
-                                      ...form,
-                                      country: place.properties.country || form.country,
-                                      zipCode: place.properties.postcode || form.zipCode,
-                                      address: `${place.properties.name}, ${place.properties.city ?? ""}, ${place.properties.state ?? ""}`
-                                    });
-
-                                    setPlaces([]);
-                                }}
-                                style={{
-                                    padding: "12px",
-                                    cursor: "pointer",
-                                    borderBottom: "1px solid #2a2d3e"
-                                }}
-                            >
-                                <strong>{place.properties.name}</strong>
-
-                                <div
-                                    style={{
-                                        fontSize: 12,
-                                        color: "#888"
-                                    }}
-                                >
-                                    {place.properties.city}
-                                    {place.properties.city && ", "}
-                                    {place.properties.state}
-                                    {place.properties.state && ", "}
-                                    {place.properties.country}
-                                </div>
-                            </div>
-                        ))}
+                      <strong>{place.properties.name}</strong>
+                      <div style={{ fontSize: 12, color: "#888" }}>
+                        {place.properties.city}
+                        {place.properties.city && ", "}
+                        {place.properties.state}
+                        {place.properties.state && ", "}
+                        {place.properties.country}
+                      </div>
                     </div>
-                )}
+                  ))}
+                </div>
+              )}
             </div>
 
             <div style={{ display: "flex", gap: 12 }}>
@@ -417,7 +455,6 @@ export default function PersonalDetails() {
               </button>
             </div>
           </div>
-
         </form>
       </div>
     </>

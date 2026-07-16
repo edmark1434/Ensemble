@@ -6,13 +6,13 @@ interface ProfileTagsProps {
     role_name: string;
   }[];
   verificationLevel?: 1 | 2;
-  subscriptionType?: "Freemium" | "Premium" | "Studio";
+  subscriptionType?: "Free" | "Premium" | "Business";
 }
 
 export const ProfileTags: React.FC<ProfileTagsProps> = ({
   role,
   verificationLevel = 1,
-  subscriptionType = "Freemium",
+  subscriptionType = "Free",
 }) => {
   const getVerificationIcon = (level: number) => {
     return level === 2 ? "/icons/verification/lvl2_verified.png" : "/icons/verification/lvl1_verified.png";
@@ -22,7 +22,7 @@ export const ProfileTags: React.FC<ProfileTagsProps> = ({
     switch (type.toLowerCase()) {
       case "premium":
         return "bg-yellow-500/10 border-amber-500/30 text-amber-400 animate-none";
-      case "studio":
+      case "business":
         return "bg-gradient-to-r from-purple-600 via-yellow-400 via-cyan-400 to-purple-600 bg-[length:200%_auto] animate-cyber-spectrum text-white font-black border-transparent shadow-[0_0_12px_rgba(147,51,234,0.2)]";
       default:
         return "bg-zinc-500/10 border-zinc-500/30 text-zinc-400 animate-none";
