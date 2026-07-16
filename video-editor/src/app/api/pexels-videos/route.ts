@@ -47,6 +47,18 @@ interface PexelsVideoPopularResponse {
   prev_page?: string;
 }
 
+function slugToName(url: string, fallbackId: number): string {
+  const match = url.match(/\/video\/(.+)-\d+\/?$/);
+  if (!match) return `Video ${fallbackId}`;
+
+  const words = match[1].split("-");
+  return words
+    .map((word, i) =>
+      i === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word
+    )
+    .join(" ");
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("query");
@@ -99,6 +111,7 @@ export async function GET(request: NextRequest) {
 
       return {
         id: `pexels_video_${video.id}`,
+        name: slugToName(video.url, video.id),
         details: {
           src: videoFile?.link || "",
           width: video.width,

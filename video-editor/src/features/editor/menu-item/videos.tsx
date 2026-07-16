@@ -51,6 +51,11 @@ export const Videos = () => {
   }, [loadPopularVideos]);
 
   const handleAddVideo = (payload: Partial<IVideo>) => {
+    payload.id = generateId();
+    payload.metadata = {
+      ...payload.metadata,
+      name: payload.name,
+    };
     dispatch(ADD_VIDEO, {
       payload,
       options: {
@@ -95,7 +100,13 @@ export const Videos = () => {
   };
 
   // Use Pexels videos if available, otherwise fall back to static videos
-  const displayVideos = pexelsVideos;
+  const displayVideos = pexelsVideos.map((video) => ({
+    ...video,
+    metadata: {
+      ...video.metadata,
+      name: video.name
+    }
+  }));
   const columns = useMasonryColumns(displayVideos, COLUMN_WIDTH, containerWidth, GAP);
 
   return (
@@ -119,7 +130,7 @@ export const Videos = () => {
             placeholder="Search Pexels videos..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onKeyDown={handleKeyPress}
             className="pl-10"
           />
         </div>
@@ -213,6 +224,7 @@ const VideoItem = ({
       data={{
         ...video,
         metadata: {
+          ...video.metadata,
           previewUrl: video.preview
         }
       }}
@@ -222,11 +234,13 @@ const VideoItem = ({
       <div
         onClick={() =>
           handleAddImage({
+            ...video,
             id: generateId(),
             details: {
               src: video.details?.src
             },
             metadata: {
+              ...video.metadata,
               previewUrl: video.preview
             }
           } as any)

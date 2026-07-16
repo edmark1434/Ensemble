@@ -364,8 +364,8 @@ const fetchMediaTrackItems = (trackItemsMap: ITrackItemsMap) => {
 };
 
 const createSelectMediaOptions = (mediaTrackItems: ITrackItem[]) => {
-  return mediaTrackItems.map(({ name, details }) => ({
-    label: name,
+  return mediaTrackItems.map(({ name, details, metadata }) => ({
+    label: metadata?.name || name,
     value: details.src
   }));
 };

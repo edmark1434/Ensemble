@@ -92,7 +92,7 @@ export const Audios = () => {
     payload.id = generateId();
     payload.metadata = {
       ...payload.metadata,
-      name: payload.name,  // store name in metadata
+      name: payload.name,
     };
     console.log(payload);
     dispatch(ADD_AUDIO, {
