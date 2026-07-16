@@ -18,6 +18,7 @@ import { DEFAULT_FONT } from "../constants/font";
 import { PresetCaption } from "./common/preset-caption";
 import AnimationCaption from "./common/animation-caption";
 import {LayoutControls} from "@/features/editor/control-item/common/layout";
+import {CaptionDimensionsSync} from "@/features/editor/control-item/common/caption-dimensions-sync";
 
 interface ITextControlProps {
   color: string;
@@ -476,6 +477,10 @@ const BasicCaption = ({
     {
       key: "animations",
       component: <AnimationCaption />
+    },
+    {
+      key: "captionDimensionsSync",
+      component: <CaptionDimensionsSync trackItem={trackItem} />
     },
   ];
   return (

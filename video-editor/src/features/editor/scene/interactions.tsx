@@ -14,6 +14,7 @@ import StateManager from "@designcombo/state";
 import { getCurrentTime } from "../utils/time";
 import { getMinTextDimensions } from "../utils/text";
 import {getMoveableTransform} from "@/features/editor/player/styles";
+import {getMinCaptionDimensions} from "@/features/editor/utils/captions";
 
 let holdGroupPosition: Record<string, any> | null = null;
 let dragStartEnd = false;
@@ -452,12 +453,13 @@ export function SceneInteractions({
           const isPureVerticalDirection =
             (direction[1] === 1 || direction[1] === -1) && direction[0] === 0;
 
-          if (
-            isPureVerticalDirection &&
-            (trackItemsMap[id].type === "text" || trackItemsMap[id].type === "caption")
-          ) {
-            const details = trackItemsMap[id].details;
-            const { minHeight } = getMinTextDimensions(details, details.text, nextWidth);
+          const item = trackItemsMap[id];
+
+          if (isPureVerticalDirection && (item.type === "text" || item.type === "caption")) {
+            const { minHeight } =
+              item.type === "caption"
+                ? getMinCaptionDimensions(item.details, item.details.words, nextWidth)
+                : getMinTextDimensions(item.details, item.details.text, nextWidth);
 
             // only clamp upward, user can freely resize if above minimum
             const finalHeight = Math.max(nextHeight, minHeight);
@@ -516,12 +518,13 @@ export function SceneInteractions({
           }
         } else {
           const id = getIdFromClassName(target.className);
-          if (
-            trackItemsMap[id].type === "text" ||
-            trackItemsMap[id].type === "caption"
-          ) {
-            const details = trackItemsMap[id].details;
-            const { minWidth, minHeight } = getMinTextDimensions(details, details.text, nextWidth);
+          const item = trackItemsMap[id];
+
+          if (item.type === "text" || item.type === "caption") {
+            const { minWidth, minHeight } =
+              item.type === "caption"
+                ? getMinCaptionDimensions(item.details, item.details.words, nextWidth)
+                : getMinTextDimensions(item.details, item.details.text, nextWidth);
 
             const clampedWidth = Math.max(nextWidth, minWidth);
             const currentHeight = target.clientHeight;

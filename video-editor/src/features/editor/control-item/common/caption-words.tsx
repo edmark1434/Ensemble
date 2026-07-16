@@ -512,7 +512,7 @@ const CaptionWords = ({
         <div className="flex gap-2">
           <div className="flex flex-col gap-2 flex-1">
             <div className="flex flex-1 items-center text-xs text-muted-foreground">
-              Caption type
+              Show object
             </div>
             <Popover>
               <PopoverTrigger asChild>

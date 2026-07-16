@@ -19,10 +19,17 @@ import {
   AnimationConfig
 } from "./caption-animations";
 
+// Bundles the two per-word style knobs that don't vary per word (only per
+// layer, since the shape layer intentionally suppresses decoration).
+interface SharedWordStyle {
+  wordSpacing: string | number;
+  textDecoration: string;
+}
+
 export default function Caption({
-  item,
-  options
-}: {
+                                  item,
+                                  options
+                                }: {
   item: ICaption;
   options: SequenceItemOptions;
 }) {
@@ -49,6 +56,74 @@ export default function Caption({
 
   const { height, width, ...filteredStyles } =
     calculateContainerStyles(updatedDetails);
+
+  // Real text styles (typography, decoration, stroke, shadow, background+radius)
+  const fullTextStyles = calculateTextStyles(updatedDetails);
+  const boxRadiusPx = calculateBoxRadiusPx(updatedDetails);
+
+  const sharedTypographyStyles: React.CSSProperties = {
+    fontFamily: fullTextStyles.fontFamily,
+    fontWeight: fullTextStyles.fontWeight,
+    lineHeight: fullTextStyles.lineHeight,
+    letterSpacing: fullTextStyles.letterSpacing,
+    wordSpacing: fullTextStyles.wordSpacing,
+    wordWrap: fullTextStyles.wordWrap,
+    wordBreak: fullTextStyles.wordBreak,
+    textTransform: fullTextStyles.textTransform,
+    textAlign: fullTextStyles.textAlign,
+    textDecoration: fullTextStyles.textDecoration
+  };
+
+  const justifyContentValue: React.CSSProperties["justifyContent"] =
+    updatedDetails.textAlign === "left"
+      ? "flex-start"
+      : updatedDetails.textAlign === "right"
+        ? "flex-end"
+        : "center";
+
+  // Layer 1: stroke + shadow only (transparent fill). Absolutely positioned
+  // and self-centered against the fixed-size caption box.
+  const shapeLayerStyle: React.CSSProperties = {
+    position: "absolute",
+    inset: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: justifyContentValue,
+    ...sharedTypographyStyles,
+    WebkitTextStroke: fullTextStyles.WebkitTextStroke,
+    paintOrder: fullTextStyles.paintOrder,
+    textShadow: fullTextStyles.textShadow,
+    color: "transparent",
+    textDecoration: "none",
+    maxWidth: "100%",
+    ...extraStyles
+  };
+
+  // Layer 2: fill + decoration only (no stroke/shadow). Absolutely positioned
+  // over layer 1 so text/decoration always paint above border/shadow.
+  const fillLayerStyle: React.CSSProperties = {
+    position: "absolute",
+    inset: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: justifyContentValue,
+    ...sharedTypographyStyles,
+    WebkitTextStroke: "0px transparent",
+    textShadow: "none",
+    ...extraStyles,
+  };
+
+  // Per-layer word style: shape layer never shows decoration (it's the
+  // stroke/shadow-only layer); fill layer gets the real resolved decoration.
+  // Word spacing is shared since it affects layout, not paint.
+  const shapeWordStyle: SharedWordStyle = {
+    wordSpacing: updatedDetails.wordSpacing,
+    textDecoration: "none"
+  };
+  const fillWordStyle: SharedWordStyle = {
+    wordSpacing: updatedDetails.wordSpacing,
+    textDecoration: fullTextStyles.textDecoration as string
+  };
 
   const children = (
     <BoxAnim
@@ -81,27 +156,51 @@ export default function Caption({
         <div
           id={`caption-${item.id}`}
           style={{
-            ...calculateTextStyles(updatedDetails),
+            ...fullTextStyles,
+            width,
+            height,
+            position: "relative",
+            borderRadius: `${boxRadiusPx}px`,
             ...transformStyles,
-            ...extraStyles,
             transition: "transform 0.2s ease",
-            borderRadius: "16px",
-            display: currentFrame > 0 ? "block" : "none",
+            display: currentFrame > 0 ? "flex" : "none",
+            alignItems: "center",
+            justifyContent: justifyContentValue,
             maxWidth: "100%",
-            maxHeight: "max-content",
-            height: "100%",
-            padding: "8px"
           }}
         >
-          {renderWords(
-            item,
-            updatedDetails,
-            scaleFactor,
-            offsetFrom,
-            fps,
-            currentFrame,
-            globalOpacity
-          )}
+          <div style={shapeLayerStyle}>
+            <div style={{ width: "100%", textAlign: fullTextStyles.textAlign }}>
+              {renderWords(
+                item,
+                updatedDetails,
+                scaleFactor,
+                offsetFrom,
+                fps,
+                currentFrame,
+                globalOpacity,
+                true,
+                updatedDetails.borderRadius || 0,
+                shapeWordStyle
+              )}
+            </div>
+          </div>
+          <div style={fillLayerStyle}>
+            <div style={{ width: "100%", textAlign: fullTextStyles.textAlign }}>
+              {renderWords(
+                item,
+                updatedDetails,
+                scaleFactor,
+                offsetFrom,
+                fps,
+                currentFrame,
+                globalOpacity,
+                false,
+                updatedDetails.borderRadius || 0,
+                fillWordStyle
+              )}
+            </div>
+          </div>
         </div>
       </ContentAnim>
     </BoxAnim>
@@ -147,6 +246,20 @@ function calculateUpdatedDetails(details: any) {
     borderWidth,
     scaleFactor
   };
+}
+
+// Single source of truth for the caption's corner radius, shared by the
+// container background AND the per-word activeFillColor pill. Falls back to
+// treating `borderRadius` as a raw px value if width/height aren't usable,
+// so it never produces NaN.
+function calculateBoxRadiusPx(details: any): number {
+  const pct = details.borderRadius || 0;
+  const w = details.width;
+  const h = details.height;
+  if (typeof w === "number" && typeof h === "number" && w > 0 && h > 0) {
+    return Math.min(w, h) * (pct / 100);
+  }
+  return pct;
 }
 
 function calculateAnimationTransforms(
@@ -384,7 +497,10 @@ function renderWords(
   offsetFrom: number,
   fps: number,
   currentFrame: number,
-  globalOpacity?: number
+  globalOpacity: number | undefined,
+  isShapeLayer: boolean,
+  activeFillBorderRadius: number,
+  sharedWordStyle: SharedWordStyle
 ) {
   if (
     updatedDetails?.showObject === "line" &&
@@ -397,7 +513,10 @@ function renderWords(
       offsetFrom,
       fps,
       currentFrame,
-      globalOpacity
+      globalOpacity,
+      isShapeLayer,
+      activeFillBorderRadius,
+      sharedWordStyle
     );
   } else if (updatedDetails?.animation === "customAnimation1") {
     return renderCustomAnimation1Words(
@@ -405,7 +524,10 @@ function renderWords(
       updatedDetails,
       scaleFactor,
       offsetFrom,
-      globalOpacity
+      globalOpacity,
+      isShapeLayer,
+      activeFillBorderRadius,
+      sharedWordStyle
     );
   } else {
     return renderStandardWords(
@@ -413,7 +535,10 @@ function renderWords(
       updatedDetails,
       scaleFactor,
       offsetFrom,
-      globalOpacity
+      globalOpacity,
+      isShapeLayer,
+      activeFillBorderRadius,
+      sharedWordStyle
     );
   }
 }
@@ -425,7 +550,10 @@ function renderLineBasedWords(
   offsetFrom: number,
   fps: number,
   currentFrame: number,
-  globalOpacity?: number
+  globalOpacity: number | undefined,
+  isShapeLayer: boolean,
+  activeFillBorderRadius: number,
+  sharedWordStyle: SharedWordStyle
 ) {
   const wordsPerLine = Math.ceil(
     item.details.words.length / updatedDetails.linesPerCaption
@@ -458,22 +586,21 @@ function renderLineBasedWords(
         marginBottom: lineIndex < lines.length - 1 ? "8px" : "0"
       }}
     >
-      {lineWords.map((word: any, wordIndex: number) => (
-        <CaptionWord
-          {...createCaptionWordProps(
-            word,
-            updatedDetails,
-            scaleFactor,
-            offsetFrom,
-            updatedDetails.animation || "",
-            globalOpacity,
-            undefined,
-            lineIndex,
-            currentLine
-          )}
-          key={`${lineIndex}-${wordIndex}`}
-        />
-      ))}
+      {lineWords.flatMap((word: any, wordIndex: number) => {
+        const el = (
+          <CaptionWord
+            {...createCaptionWordProps(
+              word, updatedDetails, scaleFactor, offsetFrom,
+              updatedDetails.animation || "", globalOpacity, isShapeLayer,
+              activeFillBorderRadius, sharedWordStyle
+            )}
+            key={`${lineIndex}-${wordIndex}`}
+          />
+        );
+        return wordIndex === 0
+          ? [el]
+          : [<span key={`${lineIndex}-${wordIndex}-sp`}> </span>, el];
+      })}
     </div>
   ));
 }
@@ -483,7 +610,10 @@ function renderCustomAnimation1Words(
   updatedDetails: any,
   scaleFactor: number,
   offsetFrom: number,
-  globalOpacity?: number
+  globalOpacity: number | undefined,
+  isShapeLayer: boolean,
+  activeFillBorderRadius: number,
+  sharedWordStyle: SharedWordStyle
 ) {
   const nonKeywordWords = item.details.words.filter(
     (word: any) => !word.is_keyword
@@ -514,20 +644,21 @@ function renderCustomAnimation1Words(
     groupedWords.push(word);
   });
 
-  return groupedWords.map((word: any, index: number) => (
-    <CaptionWord
-      {...createCaptionWordProps(
-        word,
-        updatedDetails,
-        scaleFactor,
-        offsetFrom,
-        updatedDetails.animation || "",
-        globalOpacity,
-        "word"
-      )}
-      key={index}
-    />
-  ));
+  return groupedWords.flatMap((word: any, index: number) => {
+    const el = (
+      <CaptionWord
+        {...createCaptionWordProps(
+          word, updatedDetails, scaleFactor, offsetFrom,
+          updatedDetails.animation || "", globalOpacity, isShapeLayer,
+          activeFillBorderRadius, sharedWordStyle
+        )}
+        key={index}
+      />
+    );
+    return index === 0
+      ? [el]
+      : [<span key={`${index}-sp`}> </span>, el];
+  });
 }
 
 function renderStandardWords(
@@ -535,21 +666,26 @@ function renderStandardWords(
   updatedDetails: any,
   scaleFactor: number,
   offsetFrom: number,
-  globalOpacity?: number
+  globalOpacity: number | undefined,
+  isShapeLayer: boolean,
+  activeFillBorderRadius: number,
+  sharedWordStyle: SharedWordStyle
 ) {
-  return item.details.words.map((word: any, index: number) => (
-    <CaptionWord
-      {...createCaptionWordProps(
-        word,
-        updatedDetails,
-        scaleFactor,
-        offsetFrom,
-        updatedDetails.animation || "",
-        globalOpacity
-      )}
-      key={index}
-    />
-  ));
+  return item.details.words.flatMap((word: any, index: number) => {
+    const el = (
+      <CaptionWord
+        {...createCaptionWordProps(
+          word, updatedDetails, scaleFactor, offsetFrom,
+          updatedDetails.animation || "", globalOpacity, isShapeLayer,
+          activeFillBorderRadius, sharedWordStyle
+        )}
+        key={index}
+      />
+    );
+    return index === 0
+      ? [el]
+      : [<span key={`${index}-sp`}> </span>, el];
+  });
 }
 
 // Helper function to create common CaptionWord props
@@ -559,7 +695,10 @@ const createCaptionWordProps = (
   scaleFactor: number,
   offsetFrom: number,
   animation: string,
-  globalOpacity?: number,
+  globalOpacity: number | undefined,
+  isShapeLayer: boolean,
+  activeFillBorderRadius: number,
+  sharedWordStyle: SharedWordStyle,
   showObject?: string,
   lineIndex?: number,
   currentLine?: number
@@ -578,5 +717,9 @@ const createCaptionWordProps = (
   animationNoneCaption: false,
   showObject: showObject || updatedDetails?.showObject || "page",
   lineIndex,
-  currentLine
+  currentLine,
+  isShapeLayer,
+  activeFillBorderRadius,
+  wordSpacing: sharedWordStyle.wordSpacing,
+  textDecoration: sharedWordStyle.textDecoration
 });

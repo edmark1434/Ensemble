@@ -90,7 +90,7 @@ export const Captions = () => {
       };
 
       const options = {
-        containerWidth: 800,
+        containerWidth: 1280,
         linesPerCaption: 1,
         parentId: trackItem.id,
         displayFrom: trackItem.display.from

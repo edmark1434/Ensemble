@@ -88,7 +88,7 @@ const CaptionColors = ({
 
       <div className="grid grid-cols-2 gap-2">
         <div className="flex flex-col gap-2 flex-1">
-          <div className="flex flex-1 items-center text-xs text-muted-foreground">Text</div>
+          <div className="flex flex-1 items-center text-xs text-muted-foreground">Upcoming</div>
           <ColorPickerField
             value={localColor}
             onChange={onChangeColor}
@@ -99,13 +99,13 @@ const CaptionColors = ({
         </div>
 
         <div className="flex flex-col gap-2 flex-1">
-          <div className="flex flex-1 items-center text-xs text-muted-foreground">Background</div>
+          <div className="flex flex-1 items-center text-xs text-muted-foreground">Appeared</div>
           <ColorPickerField
-            value={localBackgroundColor}
-            onChange={onChangeBackgroundColor}
+            value={localAppearedColor}
+            onChange={onChangeAppearedColor}
             gradient={true}
-            mobileControlType="backgroundColor"
-            mobileControlLabel="Background Color"
+            mobileControlType="appearedColor"
+            mobileControlLabel="Appeared Color"
           />
         </div>
 
@@ -131,33 +131,33 @@ const CaptionColors = ({
           />
         </div>
 
-        <div className="flex flex-col gap-2 flex-1">
-          <div className="flex flex-1 items-center text-xs text-muted-foreground">Appeared</div>
+        <div className="flex flex-col gap-2 flex-1 col-span-full">
+          <div className="flex flex-1 items-center text-xs text-muted-foreground">Background</div>
           <ColorPickerField
-            value={localAppearedColor}
-            onChange={onChangeAppearedColor}
+            value={localBackgroundColor}
+            onChange={onChangeBackgroundColor}
             gradient={true}
-            mobileControlType="appearedColor"
-            mobileControlLabel="Appeared Color"
+            mobileControlType="backgroundColor"
+            mobileControlLabel="Background Color"
           />
         </div>
 
-        <div className="flex flex-col gap-2 flex-1">
-          <div className="flex flex-1 items-center text-xs text-muted-foreground">Emphasize</div>
-          <ColorPickerField
-            value={localEmphasizeColor}
-            onChange={onChangeEmphasizeColor}
-            gradient={true}
-            mobileControlType="emphasizeColor"
-            mobileControlLabel="Emphasize Color"
-          />
-        </div>
+        {/*<div className="flex flex-col gap-2 flex-1">*/}
+        {/*  <div className="flex flex-1 items-center text-xs text-muted-foreground">Emphasize</div>*/}
+        {/*  <ColorPickerField*/}
+        {/*    value={localEmphasizeColor}*/}
+        {/*    onChange={onChangeEmphasizeColor}*/}
+        {/*    gradient={true}*/}
+        {/*    mobileControlType="emphasizeColor"*/}
+        {/*    mobileControlLabel="Emphasize Color"*/}
+        {/*  />*/}
+        {/*</div>*/}
       </div>
 
-      <div className="flex gap-2 items-center">
-        <div className="flex flex-1 items-center text-sm text-muted-foreground">Preserved Color</div>
-        <Switch checked={localPreservedColor} onCheckedChange={onChangePreservedColor} />
-      </div>
+      {/*<div className="flex gap-2 items-center">*/}
+      {/*  <div className="flex flex-1 items-center text-sm text-muted-foreground">Preserved Color</div>*/}
+      {/*  <Switch checked={localPreservedColor} onCheckedChange={onChangePreservedColor} />*/}
+      {/*</div>*/}
     </div>
   );
 };
