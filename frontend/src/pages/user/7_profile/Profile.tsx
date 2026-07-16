@@ -643,6 +643,7 @@ export default function Profile() {
           bio={userDetails?.bio}
           avatarUrl={userDetails?.avatar_preset_url}
           isOwner={isOwner}
+          birthdate={userDetails?.birthdate}
           verificationLevel={userDetails?.verification_status === 'verified' ? 2 : 1}
           subscriptionType={userDetails?.subscriptionType || "Free"}
           onEditAvatar={() => setIsAvatarModalOpen(true)}

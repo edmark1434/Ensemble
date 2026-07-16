@@ -16,7 +16,6 @@ interface TopSectionProps {
   location?: string;
   emailAddress?: string;
   joinedDate?: string;
-  updatedDate?: string;
   birthdate?: string;
   country?: string;
   zipCode?: string;
@@ -39,13 +38,12 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
   suffix,
   role,
   tagline,
-  // location,
+  location,
   emailAddress,
   joinedDate,
-  updatedDate,
   birthdate,
-  // country,
-  // zipCode,
+  country,
+  zipCode,
   bio,
   avatarUrl,
   isOwner,
@@ -147,11 +145,10 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
                   <div className="flex items-start gap-2">
                     <MapPin className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0 mt-0.5" />
                     {/* Explicit layout routing string output */}
-                    <span className="leading-normal text-zinc-300">683 Holyname ST., Mabolo, Cebu City, Cebu, Philippines</span>
+                    <span className="leading-normal text-zinc-300">{`${location}, ${country} ${zipCode}`}</span>
                   </div>
                   <div className="flex items-center gap-2"><Cake className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" /> <span>Born: {birthdate ? new Date(birthdate).toLocaleDateString() : "Not Specified"}</span></div>
                   <div className="flex items-center gap-2"><Calendar className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" /> <span>Joined: {joinedDate ? new Date(joinedDate).toLocaleDateString() : "N/A"}</span></div>
-                  <div className="flex items-center gap-2"><Clock className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" /> <span>Updated: {updatedDate ? new Date(updatedDate).toLocaleDateString() : "Never"}</span></div>
                 </div>
               )}
             </div>
