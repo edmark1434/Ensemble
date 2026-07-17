@@ -4,10 +4,12 @@ import { useState, useEffect } from "react";
 
 const Opacity = ({
   value,
-  onChange
+  onChange,
+  disabled,
 }: {
   value: number;
   onChange: (v: number) => void;
+  disabled: boolean;
 }) => {
   // Create local state to manage opacity
   const [localValue, setLocalValue] = useState(value);
@@ -37,6 +39,7 @@ const Opacity = ({
             }
           }}
           value={localValue} // Use local state for input value
+          disabled={disabled}
         />
         <Slider
           id="opacity"
@@ -50,6 +53,7 @@ const Opacity = ({
           step={1}
           aria-label="Opacity"
           className="w-full"
+          disabled={disabled}
         />
       </div>
     </div>

@@ -27,6 +27,7 @@ interface ColorPickerFieldProps {
   popoverTitle?: string;
   mobileControlType: string;
   mobileControlLabel: string;
+  disabled: boolean;
 }
 
 function useDraggable() {
@@ -139,7 +140,8 @@ export function ColorPickerField({
   solid = true,
   popoverTitle = "Color",
   mobileControlType,
-  mobileControlLabel
+  mobileControlLabel,
+  disabled
 }: ColorPickerFieldProps) {
   const [localValue, setLocalValue] = useState<string>(value);
   const [open, setOpen] = useState(false);
@@ -158,6 +160,7 @@ export function ColorPickerField({
 
   if (!isLargeScreen) {
     const handleColorClick = () => {
+      if (disabled) return;
       setControItemDrawerOpen(true);
       setTypeControlItem(mobileControlType);
       setLabelControlItem(mobileControlLabel);
@@ -178,6 +181,7 @@ export function ColorPickerField({
             className="pointer-events-none pl-10 rounded-l-none"
             value={formatColorDisplay(localValue)}
             onChange={() => {}}
+            disabled={disabled}
           />
         </div>
       </div>
@@ -185,13 +189,14 @@ export function ColorPickerField({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={disabled ? false : open} onOpenChange={(o) => { if (!disabled) setOpen(o); }}>
       <PopoverTrigger asChild>
-        <div className="relative flex w-full cursor-pointer">
+        <div className="relative flex w-full">
           <ColorSwatch value={localValue} />
           <Button
             className="flex w-full flex-1 items-center justify-between px-3 text-sm rounded-l-none"
             variant="outline"
+            disabled={disabled}
           >
             <div className="w-full overflow-hidden text-left">
               <p className="truncate">{formatColorDisplay(localValue)}</p>
