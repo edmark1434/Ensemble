@@ -12,6 +12,7 @@ import {Search, Loader2, PlusIcon} from "lucide-react";
 import { usePexelsImages } from "@/hooks/use-pexels-images";
 import { ImageLoading } from "@/components/ui/image-loading";
 import {useMasonryColumns} from "@/features/editor/hooks/use-masonry-columns";
+import {getCurrentTime} from "@/features/editor/utils/time";
 
 export const Images = () => {
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
@@ -56,6 +57,15 @@ export const Images = () => {
       ...payload.metadata,
       name: payload.name,
     };
+
+    const time = getCurrentTime();
+    const DEFAULT_IMAGE_DURATION_MS = 5000;
+
+    payload.display = {
+      from: time,
+      to: time + DEFAULT_IMAGE_DURATION_MS
+    };
+
     console.log(payload);
     dispatch(ADD_IMAGE, {
       payload,

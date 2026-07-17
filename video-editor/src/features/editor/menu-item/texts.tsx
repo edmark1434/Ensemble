@@ -14,6 +14,7 @@ import {
 } from "../control-item/floating-controls/text-preset-picker";
 import { seedDefaultFont } from "@/features/editor/utils/seed-default-font";
 import { loadFonts } from "@/features/editor/utils/fonts";
+import {getCurrentTime} from "@/features/editor/utils/time";
 
 const getFontDetails = async () => {
   const defaultFont = await seedDefaultFont();
@@ -43,10 +44,18 @@ export const Texts = () => {
     const { fontName, fontUrl } = defaultFont.fontName
       ? defaultFont
       : await getFontDetails();
+
+    const time = getCurrentTime();
+    const clipDuration = TEXT_ADD_PAYLOAD.display.to - TEXT_ADD_PAYLOAD.display.from;
+
     dispatch(ADD_TEXT, {
       payload: {
         ...TEXT_ADD_PAYLOAD,
         id: nanoid(),
+        display: {
+          from: time,
+          to: time + clipDuration
+        },
         details: {
           ...TEXT_ADD_PAYLOAD.details,
           fontFamily: fontName,
@@ -61,10 +70,18 @@ export const Texts = () => {
     const { fontName, fontUrl } = defaultFont.fontName
       ? defaultFont
       : await getFontDetails();
+
+    const time = getCurrentTime();
+    const clipDuration = TEXT_ADD_PAYLOAD.display.to - TEXT_ADD_PAYLOAD.display.from;
+
     dispatch(ADD_TEXT, {
       payload: {
         ...TEXT_ADD_PAYLOAD,
         id: nanoid(),
+        display: {
+          from: time,
+          to: time + clipDuration
+        },
         details: {
           ...TEXT_ADD_PAYLOAD.details,
           ...preset,

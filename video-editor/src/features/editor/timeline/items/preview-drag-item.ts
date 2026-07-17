@@ -28,53 +28,59 @@ const ITEM_NAMES: Record<string, string> = {
 
 const FADEABLE_TYPES = new Set(["audio", "video"]);
 const FADE_WIDTH = 96;
+const MAX_FADE_RATIO = 0.4; // fade zone never eats more than 40% of the item
 
 class PreviewTrackItem extends PreviewTrackItemBase {
   static type = "PreviewTrackItem";
 
   constructor(props: PreviewTrackItemProps) {
     super(props);
-    this.fill = `color-mix(in srgb, ${getCardColor()}, ${FILL_COLORS[this.itemType] ?? "#27272A"} 50%)`;
+    this.fill = "transparent"; // real fill is hand-painted in _render
     this.stroke = "transparent";
     this.rx = 4;
     this.ry = 4;
   }
 
-  public _render(ctx: CanvasRenderingContext2D) {
-    super._render(ctx);
-    if (FADEABLE_TYPES.has(this.itemType)) {
-      this.drawRightFade(ctx);
-    }
-    this.updateSelected(ctx);
+  private getBaseFill(): string {
+    return `color-mix(in srgb, ${getCardColor()}, ${FILL_COLORS[this.itemType] ?? "#27272A"} 50%)`;
   }
 
-  public drawRightFade(ctx: CanvasRenderingContext2D) {
-    const fadeWidth = Math.min(FADE_WIDTH, this.width);
-    if (fadeWidth <= 0) return;
+  private getFadeWidth(): number {
+    return Math.min(FADE_WIDTH, this.width * MAX_FADE_RATIO);
+  }
+
+  public drawFill(ctx: CanvasRenderingContext2D) {
+    if (this.width <= 0 || this.height <= 0) return;
 
     ctx.save();
     ctx.translate(-this.width / 2, -this.height / 2);
 
-    const gradient = ctx.createLinearGradient(
-      this.width - fadeWidth, 0,
-      this.width, 0
-    );
-    gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
-    gradient.addColorStop(1, "rgba(0, 0, 0, 1)");
-
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.roundRect(
-      this.width - fadeWidth,
-      0,
-      fadeWidth,
-      this.height,
-      [0, this.ry ?? 4, this.ry ?? 4, 0]
-    );
-    ctx.fill();
+    ctx.roundRect(0, 0, this.width, this.height, this.rx ?? 4);
 
+    if (FADEABLE_TYPES.has(this.itemType)) {
+      const baseFill = this.getBaseFill();
+      const fadeWidth = this.getFadeWidth();
+      const solidStop = Math.max(0, 1 - fadeWidth / this.width);
+
+      const gradient = ctx.createLinearGradient(0, 0, this.width, 0);
+      gradient.addColorStop(0, baseFill);
+      gradient.addColorStop(solidStop, baseFill);
+      gradient.addColorStop(1, "rgba(1, 1, 1, 0)");
+
+      ctx.fillStyle = gradient;
+    } else {
+      ctx.fillStyle = this.getBaseFill();
+    }
+
+    ctx.fill();
     ctx.restore();
+  }
+
+  public _render(ctx: CanvasRenderingContext2D) {
+    this.drawFill(ctx);      // paint background first
+    super._render(ctx);      // fill is transparent, so this only draws text/thumbnail on top
+    this.updateSelected(ctx);
   }
 
   public drawTextIdentity(ctx: CanvasRenderingContext2D) {
@@ -100,8 +106,9 @@ class PreviewTrackItem extends PreviewTrackItemBase {
     ctx.lineWidth = borderWidth;
     ctx.setLineDash([5, 0]);
 
-    if (FADEABLE_TYPES.has(this.itemType)) {
-      const fadeWidth = Math.min(FADE_WIDTH, this.width);
+    const fadeWidth = FADEABLE_TYPES.has(this.itemType) ? this.getFadeWidth() : 0;
+
+    if (fadeWidth > 0) {
       const gradient = ctx.createLinearGradient(
         this.width / 2 - fadeWidth, 0,
         this.width / 2, 0

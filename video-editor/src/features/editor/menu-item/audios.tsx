@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { debounce } from "lodash";
 import {useIsDraggingOverTimeline} from "@/features/editor/hooks/is-dragging-over-timeline";
+import {getCurrentTime} from "@/features/editor/utils/time";
 
 export const Audios = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -46,7 +47,8 @@ export const Audios = () => {
         const mappedMusics = data.musics.map((music: any) => ({
           id: music.id,
           details: {
-            src: music.src
+            src: music.src,
+            duration: music.duration,
           },
           name: music.name,
           type: music.type,
@@ -94,7 +96,15 @@ export const Audios = () => {
       ...payload.metadata,
       name: payload.name,
     };
-    console.log(payload);
+
+    const time = getCurrentTime();
+    const durationMs = ((payload.details as any)?.duration ?? 5) * 1000;
+
+    payload.display = {
+      from: time,
+      to: time + durationMs
+    };
+
     dispatch(ADD_AUDIO, {
       payload,
       options: {}
@@ -144,7 +154,7 @@ export const Audios = () => {
             placeholder="Search Freesound audios..."
             value={searchQuery}
             onChange={handleSearchChange}
-            onKeyPress={(e) => {
+            onKeyDown={(e) => {
               if (e.key === "Enter") {
                 fetchMusic(searchQuery);
               }
