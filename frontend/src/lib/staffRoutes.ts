@@ -17,6 +17,9 @@ export const STAFF_HOME_BY_ROLE: Record<string, string> = {
   Admin: ADMIN_DASHBOARD,
   ...Object.fromEntries(MODERATOR_ROLES.map((role) => [role, STAFF_PORTAL_DASHBOARD])),
   'Marketplace Moderator': '/moderator/marketplace',
+  'Support Moderator': '/moderator/support',
+  'Forum Moderator': '/moderator/forum',
+  'Jobs N Gigs Moderator': '/moderator/jobs',
 };
 
 export function getStaffHomePath(role?: string | null): string {

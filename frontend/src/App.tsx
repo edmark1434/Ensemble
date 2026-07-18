@@ -66,12 +66,23 @@ import UploadImage from "@/pages/setup_account/02_UploadImage.tsx";
 import Survey from "@/pages/setup_account/04_Survey.tsx";
 
 import ForumModeratorLayout from './pages/moderator/forum-moderator/Layout'
+import ForumModeratorDashboard from './pages/moderator/forum-moderator/Dashboard'
+import ForumManagement from './pages/moderator/forum-moderator/ForumManagement'
+import ForumTicketManagement from './pages/moderator/forum-moderator/TicketManagement'
 import MarketplaceModeratorLayout from './pages/moderator/marketplace-moderator/Layout'
 import MarketplaceModeratorDashboard from './pages/moderator/marketplace-moderator/Dashboard'
 import MarketplaceControl from './pages/moderator/marketplace-moderator/MarketplaceControl'
 import MarketplaceTicketManagement from './pages/moderator/marketplace-moderator/TicketManagement'
 import MarketplaceRestrictions from './pages/moderator/marketplace-moderator/Restrictions'
 import SupportModeratorLayout from './pages/moderator/support-moderator/Layout'
+import SupportModeratorDashboard from './pages/moderator/support-moderator/Dashboard'
+import SupportChat from './pages/moderator/support-moderator/ChatSupport'
+import SupportTicketManagement from './pages/moderator/support-moderator/TicketManagement'
+import SupportUserTeam from './pages/moderator/support-moderator/UserTeam'
+import JobsModeratorLayout from './pages/moderator/jobs-moderator/Layout'
+import JobsModeratorDashboard from './pages/moderator/jobs-moderator/Dashboard'
+import JobsTicketManagement from './pages/moderator/jobs-moderator/TicketManagement'
+import JobsDisputes from './pages/moderator/jobs-moderator/Disputes'
 import ModeratorSectionPlaceholder from './pages/moderator/SectionPlaceholder'
 import RouteMiddleware from './lib/RouteMiddleware'
 import StaffMiddleware from './lib/StaffMiddleware'
@@ -206,10 +217,10 @@ function App() {
 
         {/* Moderator Routes */}
         <Route path='/moderator/forum' element={<ForumModeratorLayout />}>
-          <Route index element={<ModeratorSectionPlaceholder title='FORUM MODERATOR' />} />
-          <Route path='forum-management' element={<ModeratorSectionPlaceholder title='FORUM MANAGEMENT' />} />
-          <Route path='ticket-management' element={<ModeratorSectionPlaceholder title='TICKET MANAGEMENT' />} />
-          <Route path='user-team' element={<ModeratorSectionPlaceholder title='USER & TEAM' />} />
+          <Route index element={<ForumModeratorDashboard />} />
+          <Route path='forum-management' element={<ForumManagement />} />
+          <Route path='ticket-management' element={<ForumTicketManagement />} />
+          <Route path='user-team' element={<ModeratorSectionPlaceholder title='USER & TEAM' subtitle='User account management is centralized in the Admin console.' />} />
         </Route>
 
         <Route path='/moderator/marketplace' element={<MarketplaceModeratorLayout />}>
@@ -220,10 +231,16 @@ function App() {
         </Route>
 
         <Route path='/moderator/support' element={<SupportModeratorLayout />}>
-          <Route index element={<ModeratorSectionPlaceholder title='SUPPORT MODERATOR' />} />
-          <Route path='chat-support' element={<ModeratorSectionPlaceholder title='CHAT SUPPORT' />} />
-          <Route path='ticket-management' element={<ModeratorSectionPlaceholder title='TICKET MANAGEMENT' />} />
-          <Route path='user-team' element={<ModeratorSectionPlaceholder title='USER & TEAM' />} />
+          <Route index element={<SupportModeratorDashboard />} />
+          <Route path='chat-support' element={<SupportChat />} />
+          <Route path='ticket-management' element={<SupportTicketManagement />} />
+          <Route path='user-team' element={<SupportUserTeam />} />
+        </Route>
+
+        <Route path='/moderator/jobs' element={<JobsModeratorLayout />}>
+          <Route index element={<JobsModeratorDashboard />} />
+          <Route path='ticket-management' element={<JobsTicketManagement />} />
+          <Route path='disputes' element={<JobsDisputes />} />
         </Route>
       </Route>
       </Routes>

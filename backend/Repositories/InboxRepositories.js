@@ -1,8 +1,7 @@
-const { getDB } = require('../lib/mongodb');
+const { lazyCollection } = require('../lib/mongodb');
 const { ObjectId } = require('mongodb');
-const db = getDB();
-const MessageCollection = db.collection('messages');
-const InboxCollection = db.collection('inbox');
+const MessageCollection = lazyCollection('messages');
+const InboxCollection = lazyCollection('inbox');
 
 
 async function createInboxRepositories(inboxPayload = {}) {
