@@ -21,6 +21,39 @@ export const generateCaption = (
   options: Options,
   sourceUrl: string
 ): ICaption => {
+  const words = captionLine.words.map((w) => ({
+    ...w,
+    start: w.start * 1000,
+    end: w.end * 1000
+  }));
+
+  const baseDetails = {
+    appearedColor: "#FFFFFF",
+    activeColor: "#FFFFFF",
+    activeFillColor: "#AD3EEC",
+    color: "#808084",
+    backgroundColor: "transparent",
+    borderColor: "#000000",
+    borderWidth: 0,
+    borderRadius: 30,
+    text: captionLine.text,
+    fontSize: fontInfo.fontSize,
+    width: 1280,
+    fontFamily: fontInfo.fontFamily,
+    fontUrl: fontInfo.fontUrl,
+    textAlign: "center",
+    linesPerCaption: options.linesPerCaption,
+    words
+  };
+
+  // Same helper CaptionDimensionsSync uses to clamp/measure caption boxes,
+  // so the default position is anchored using the caption's real rendered height.
+  const { minHeight } = getMinCaptionDimensions(
+    baseDetails as unknown as CaptionStyleDetails,
+    words,
+    baseDetails.width,
+  );
+
   const caption = {
     id: generateId(),
     type: "caption",
@@ -34,27 +67,10 @@ export const generateCaption = (
       parentId: options.parentId
     },
     details: {
-      // top: 100,
-      appearedColor: "#FFFFFF",
-      activeColor: "#FFFFFF",
-      activeFillColor: "#AD3EEC",
-      color: "#808084",
-      backgroundColor: "transparent",
-      borderColor: "#000000",
-      borderWidth: 0,
-      borderRadius: 30,
-      text: captionLine.text,
-      fontSize: fontInfo.fontSize,
-      width: options.containerWidth,
-      fontFamily: fontInfo.fontFamily,
-      fontUrl: fontInfo.fontUrl,
-      textAlign: "center",
-      linesPerCaption: options.linesPerCaption,
-      words: captionLine.words.map((w) => ({
-        ...w,
-        start: w.start * 1000,
-        end: w.end * 1000
-      }))
+      ...baseDetails,
+      left: (options.containerWidth - baseDetails.width) / 2,
+      top: options.containerHeight * 0.9 - minHeight,
+      height: minHeight
     } as unknown
   };
   return caption as ICaption;
@@ -153,6 +169,7 @@ interface Options {
   linesPerCaption: number;
   parentId: string;
   displayFrom: number;
+  containerHeight: number;
 }
 
 export function generateCaptions(

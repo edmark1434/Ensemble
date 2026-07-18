@@ -3,7 +3,7 @@ import { dispatch } from "@designcombo/events";
 import { generateId } from "@designcombo/timeline";
 import Draggable from "@/components/shared/draggable";
 import { IImage } from "@designcombo/types";
-import React, {useState, useEffect, useRef} from "react";
+import React, {useState, useEffect, useRef, useMemo} from "react";
 import { useIsDraggingOverTimeline } from "../hooks/is-dragging-over-timeline";
 import { ADD_IMAGE } from "@designcombo/state";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,32 @@ import { usePexelsImages } from "@/hooks/use-pexels-images";
 import { ImageLoading } from "@/components/ui/image-loading";
 import {useMasonryColumns} from "@/features/editor/hooks/use-masonry-columns";
 import {getCurrentTime} from "@/features/editor/utils/time";
+import {normalizeDimensionsToCanvas} from "@/features/editor/utils/dimensions";
+import useStore from "../store/use-store";
+
+const buildNormalizedImagePayload = (image: Partial<IImage>): Partial<IImage> => {
+  const details = image.details;
+  if (!details || !details.width || !details.height) return image;
+
+  const { size } = useStore.getState();
+  const normalized = normalizeDimensionsToCanvas(
+    details.width,
+    details.height,
+    size.width,
+    size.height
+  );
+
+  return {
+    ...image,
+    details: {
+      ...details,
+      width: normalized.width,
+      height: normalized.height,
+      left: `${(size.width - normalized.width) / 2}px`,
+      top: `${(size.height - normalized.height) / 2}px`
+    }
+  };
+};
 
 export const Images = () => {
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
@@ -52,23 +78,27 @@ export const Images = () => {
   }, [loadCuratedImages]);
 
   const handleAddImage = (payload: Partial<IImage>) => {
-    payload.id = generateId();
-    payload.metadata = {
-      ...payload.metadata,
-      name: payload.name,
-    };
+    const normalizedPayload = buildNormalizedImagePayload(payload);
+    if (!normalizedPayload.details) return;
 
     const time = getCurrentTime();
     const DEFAULT_IMAGE_DURATION_MS = 5000;
 
-    payload.display = {
-      from: time,
-      to: time + DEFAULT_IMAGE_DURATION_MS
+    const finalPayload: Partial<IImage> = {
+      ...normalizedPayload,
+      id: generateId(),
+      metadata: {
+        ...normalizedPayload.metadata,
+        name: normalizedPayload.name
+      },
+      display: {
+        from: time,
+        to: time + DEFAULT_IMAGE_DURATION_MS
+      }
     };
 
-    console.log(payload);
     dispatch(ADD_IMAGE, {
-      payload,
+      payload: finalPayload,
       options: {}
     });
   };
@@ -202,6 +232,11 @@ const ImageItem = ({
   const width = (image.details as any)?.width;
   const height = (image.details as any)?.height;
 
+  const normalizedImage = useMemo(
+    () => buildNormalizedImagePayload(image),
+    [image]
+  );
+
   const style = React.useMemo(
     () => ({
       backgroundImage: `url(${image.preview})`,
@@ -216,7 +251,7 @@ const ImageItem = ({
 
   return (
     <Draggable
-      data={image}
+      data={normalizedImage}
       renderCustomPreview={<div style={style} />}
       shouldDisplayPreview={shouldDisplayPreview}
     >

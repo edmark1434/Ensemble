@@ -374,13 +374,30 @@ const CaptionWords = ({
     });
   };
 
-  const handleSetPosition = useCallback(
-    debounce((left: number, top: number) => {
+  const handleSetHorizontalPosition = useCallback(
+    debounce((left: number) => {
       const updates = captionsData.reduce(
         (acc, item) => ({
           ...acc,
           [item.id]: {
-            details: { left, top }
+            details: { left }
+          }
+        }),
+        {}
+      );
+
+      dispatch(EDIT_OBJECT, { payload: updates });
+    }, 200),
+    [captionsData]
+  );
+
+  const handleSetVerticalPosition = useCallback(
+    debounce((computeTop: (item: ITrackItem & any) => number) => {
+      const updates = captionsData.reduce(
+        (acc, item) => ({
+          ...acc,
+          [item.id]: {
+            details: { top: computeTop(item) }
           }
         }),
         {}
@@ -394,45 +411,48 @@ const CaptionWords = ({
   const handlePresetPosition = (
     position: "left" | "center" | "right" | "up" | "middle" | "down"
   ) => {
-    let left = 0;
-    let top = 0;
-    const elementHeight = trackItem?.details.height || 0;
     switch (position) {
-      case "left":
-        left = size.width * 0.1;
-        // Keep current vertical position
-        top = parseFloat(topPosition) || 0;
+      case "left": {
+        const left = size.width * 0.1;
+        setLeftPosition(String(left));
+        handleSetHorizontalPosition(left);
         break;
-      case "center":
-        left = (size.width - elementWidth) / 2;
-        // Keep current vertical position
-        top = parseFloat(topPosition) || 0;
+      }
+      case "center": {
+        const left = (size.width - elementWidth) / 2;
+        setLeftPosition(String(left));
+        handleSetHorizontalPosition(left);
         break;
-      case "right":
-        left = size.width * 0.9 - elementWidth;
-        // Keep current vertical position
-        top = parseFloat(topPosition) || 0;
+      }
+      case "right": {
+        const left = size.width * 0.9 - elementWidth;
+        setLeftPosition(String(left));
+        handleSetHorizontalPosition(left);
         break;
-      case "up":
-        // Keep current horizontal position
-        left = parseFloat(leftPosition) || 0;
-        top = size.height * 0.1;
+      }
+      case "up": {
+        const top = size.height * 0.1;
+        setTopPosition(String(top));
+        handleSetVerticalPosition(() => top);
         break;
-      case "middle":
-        // Keep current horizontal position
-        left = parseFloat(leftPosition) || 0;
-        top = size.height / 2 - elementHeight / 2;
+      }
+      case "middle": {
+        const elementHeight = trackItem?.details.height || 0;
+        setTopPosition(String(size.height / 2 - elementHeight / 2));
+        handleSetVerticalPosition(
+          (item) => size.height / 2 - (Number(item.details.height) || 0) / 2
+        );
         break;
-      case "down":
-        // Keep current horizontal position
-        left = parseFloat(leftPosition) || 0;
-        top = size.height * 0.9 - elementHeight;
+      }
+      case "down": {
+        const elementHeight = trackItem?.details.height || 0;
+        setTopPosition(String(size.height * 0.9 - elementHeight));
+        handleSetVerticalPosition(
+          (item) => size.height * 0.9 - (Number(item.details.height) || 0)
+        );
         break;
+      }
     }
-
-    setTopPosition(String(top));
-    setLeftPosition(String(left));
-    handleSetPosition(left, top);
   };
 
   const animationOptions: { key: string; label: string }[] = [

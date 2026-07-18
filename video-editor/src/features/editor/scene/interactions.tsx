@@ -287,6 +287,16 @@ export function SceneInteractions({
 
   const rotateStartRef = useRef(0);
   const scaleStartRef = useRef<[number, number]>([1, 1]);
+  const startPosRef = useRef<[number, number]>([0, 0]);
+  const rawScaleRef = useRef<[number, number]>([1, 1]);
+
+  useEffect(() => {
+    if (targets.length !== 1) return;
+    const id = getIdFromClassName(targets[0].className);
+    const transform = trackItemsMap[id]?.details?.transform || "";
+    const match = transform.match(/scale\(\s*([-\d.]+)\s*,\s*([-\d.]+)/);
+    rawScaleRef.current = match ? [parseFloat(match[1]), parseFloat(match[2])] : [1, 1];
+  }, [targets, trackItemsMap]);
 
   return (
     <Moveable
@@ -328,9 +338,8 @@ export function SceneInteractions({
         });
       }}
       onScaleStart={({ target }) => {
-        const targetId = getIdFromClassName(target.className) as string;
-        const match = (trackItemsMap[targetId]?.details?.transform || "").match(/scale\(\s*([-\d.]+)\s*,\s*([-\d.]+)/);
-        scaleStartRef.current = match ? [parseFloat(match[1]), parseFloat(match[2])] : [1, 1];
+        scaleStartRef.current = rawScaleRef.current;
+        startPosRef.current = [parseFloat(target.style.left), parseFloat(target.style.top)];
       }}
       onScale={({ target, scale, direction }) => {
         const targetId = getIdFromClassName(target.className) as string;
@@ -341,15 +350,19 @@ export function SceneInteractions({
         const moveX = xControl === -1;
         const moveY = yControl === -1;
 
-        const factor = scale[0]; // uniform magnitude ratio, corner handle only
-        const newScaleX = scaleStartRef.current[0] * factor;
-        const newScaleY = scaleStartRef.current[1] * factor;
+        // `scale` from Moveable is already the ABSOLUTE ratio vs. the frozen,
+        // untransformed box size — not a delta on top of the pre-gesture scale.
+        // Don't multiply it by scaleStartRef, or every gesture after the first
+        // squares the previous one.
+        const magnitude = Math.abs(scale[0]); // uniform magnitude, corner handle only
+        const signX = scaleStartRef.current[0] < 0 ? -1 : 1;
+        const signY = scaleStartRef.current[1] < 0 ? -1 : 1;
+        const newScaleX = signX * magnitude;
+        const newScaleY = signY * magnitude;
 
-        const oldMatch = (details.transform || "").match(/scale\(\s*([-\d.]+)\s*,\s*([-\d.]+)/);
-        const oldScaleX = oldMatch ? parseFloat(oldMatch[1]) : 1;
-        const oldScaleY = oldMatch ? parseFloat(oldMatch[2]) : 1;
+        const oldScaleX = scaleStartRef.current[0];
+        const oldScaleY = scaleStartRef.current[1];
 
-        // magnitude only — sign is mirror state, not size
         const currentWidth = target.clientWidth * Math.abs(oldScaleX);
         const currentHeight = target.clientHeight * Math.abs(oldScaleY);
         const newWidth = target.clientWidth * Math.abs(newScaleX);
@@ -360,9 +373,9 @@ export function SceneInteractions({
         target.dataset.liveScaleY = String(newScaleY);
 
         const diffX = currentWidth - newWidth;
-        let newLeft = parseFloat(target.style.left) - diffX / 2;
+        let newLeft = startPosRef.current[0] - diffX / 2;
         const diffY = currentHeight - newHeight;
-        let newTop = parseFloat(target.style.top) - diffY / 2;
+        let newTop = startPosRef.current[1] - diffY / 2;
         if (moveX) newLeft += diffX;
         if (moveY) newTop += diffY;
         target.style.left = `${newLeft}px`;
@@ -388,6 +401,8 @@ export function SceneInteractions({
         });
         delete target.dataset.liveScaleX;
         delete target.dataset.liveScaleY;
+
+        rawScaleRef.current = [parseFloat(finalScaleX), parseFloat(finalScaleY)];
       }}
       onRotateStart={({ target }) => {
         const targetId = getIdFromClassName(target.className) as string;

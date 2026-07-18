@@ -23,7 +23,7 @@ import { Loader2 } from "lucide-react";
 import {seedDefaultFont} from "@/features/editor/utils/seed-default-font";
 
 export const Captions = () => {
-  const { trackItemsMap } = useStore();
+  const { trackItemsMap, size } = useStore();
   const [selectMediaItems, setSelectMediaItems] = useState<
     { label: string; value: string }[]
   >([]);
@@ -90,10 +90,11 @@ export const Captions = () => {
       };
 
       const options = {
-        containerWidth: 1280,
+        containerWidth: size.width,
         linesPerCaption: 1,
         parentId: trackItem.id,
-        displayFrom: trackItem.display.from
+        displayFrom: trackItem.display.from,
+        containerHeight: size.height
       };
 
       await loadFonts([{ name: fontInfo.fontFamily, url: fontInfo.fontUrl }]);

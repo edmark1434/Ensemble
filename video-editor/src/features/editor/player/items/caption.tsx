@@ -27,9 +27,9 @@ interface SharedWordStyle {
 }
 
 export default function Caption({
-                                  item,
-                                  options
-                                }: {
+  item,
+  options
+}: {
   item: ICaption;
   options: SequenceItemOptions;
 }) {

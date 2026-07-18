@@ -4,7 +4,7 @@ import { dispatch } from "@designcombo/events";
 import { ADD_VIDEO } from "@designcombo/state";
 import { generateId } from "@designcombo/timeline";
 import { IVideo } from "@designcombo/types";
-import React, {useState, useEffect, useRef} from "react";
+import React, {useState, useEffect, useRef, useMemo} from "react";
 import { useIsDraggingOverTimeline } from "../hooks/is-dragging-over-timeline";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,27 @@ import { usePexelsVideos } from "@/hooks/use-pexels-videos";
 import { ImageLoading } from "@/components/ui/image-loading";
 import {useMasonryColumns} from "@/features/editor/hooks/use-masonry-columns";
 import {getCurrentTime} from "@/features/editor/utils/time";
+import {normalizeDimensionsToCanvas} from "@/features/editor/utils/dimensions";
+import useStore from "../store/use-store";
+
+// Shared by both click-to-add and drag-to-add: scales the raw video
+// dimensions to fit the canvas and centers left/top accordingly.
+// Returns the video unchanged if it has no usable width/height.
+const buildNormalizedVideoPayload = (video: Partial<IVideo>): Partial<IVideo> => {
+  const details = video.details;
+  if (!details || !details.width || !details.height) return video;
+
+  const { size } = useStore.getState();
+
+  return {
+    ...video,
+    details: {
+      ...details,
+      left: `${(size.width - details.width) / 2}px`,
+      top: `${(size.height - details.height) / 2}px`
+    }
+  };
+};
 
 export const Videos = () => {
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
@@ -52,25 +73,31 @@ export const Videos = () => {
   }, [loadPopularVideos]);
 
   const handleAddVideo = (payload: Partial<IVideo>) => {
-    payload.id = generateId();
-    payload.metadata = {
-      ...payload.metadata,
-      name: payload.name,
-    };
+    const normalizedPayload = buildNormalizedVideoPayload(payload);
 
     const time = getCurrentTime();
-    const durationMs = ((payload.details as any)?.duration ?? 5) * 1000;
+    const durationMs = ((normalizedPayload.details as any)?.duration ?? 5) * 1000;
 
-    payload.display = {
-      from: time,
-      to: time + durationMs
+    const finalPayload: Partial<IVideo> = {
+      ...normalizedPayload,
+      id: generateId(),
+      metadata: {
+        ...normalizedPayload.metadata,
+        name: normalizedPayload.name
+      },
+      display: {
+        from: time,
+        to: time + durationMs
+      }
     };
 
+    console.log("sent", JSON.stringify(finalPayload));
+
     dispatch(ADD_VIDEO, {
-      payload,
+      payload: finalPayload,
       options: {
         resourceId: "main",
-        scaleMode: "fit"
+        // scaleMode: "fit"
       }
     });
   };
@@ -173,7 +200,7 @@ export const Videos = () => {
                   key={video.id || `${colIndex}-${i}`}
                   video={video}
                   shouldDisplayPreview={!isDraggingOverTimeline}
-                  handleAddImage={handleAddVideo}
+                  handleAddVideo={handleAddVideo}
                 />
               ))}
             </div>
@@ -206,16 +233,27 @@ export const Videos = () => {
 };
 
 const VideoItem = ({
-  handleAddImage,
-  video,
-  shouldDisplayPreview
-}: {
-  handleAddImage: (payload: Partial<IVideo>) => void;
+                     handleAddVideo,
+                     video,
+                     shouldDisplayPreview
+                   }: {
+  handleAddVideo: (payload: Partial<IVideo>) => void;
   video: Partial<IVideo>;
   shouldDisplayPreview: boolean;
 }) => {
   const width = (video.details as any)?.width;
   const height = (video.details as any)?.height;
+
+  const normalizedVideo = useMemo(
+    () => buildNormalizedVideoPayload({
+      ...video,
+      metadata: {
+        ...video.metadata,
+        previewUrl: video.preview
+      }
+    }),
+    [video]
+  );
 
   const style = React.useMemo(
     () => ({
@@ -231,30 +269,19 @@ const VideoItem = ({
 
   return (
     <Draggable
-      data={{
-        ...video,
-        metadata: {
-          ...video.metadata,
-          previewUrl: video.preview
-        }
-      }}
+      data={normalizedVideo}
       renderCustomPreview={<div style={style} className="draggable" />}
       shouldDisplayPreview={shouldDisplayPreview}
     >
       <div
         onClick={() =>
-          handleAddImage({
+          handleAddVideo({
             ...video,
-            id: generateId(),
-            details: {
-              ...video.details,
-              src: video.details?.src
-            },
             metadata: {
               ...video.metadata,
               previewUrl: video.preview
             }
-          } as any)
+          })
         }
         className="relative flex w-full items-center justify-center overflow-hidden group cursor-pointer rounded-md"
       >

@@ -114,8 +114,8 @@ export async function GET(request: NextRequest) {
         name: slugToName(video.url, video.id),
         details: {
           src: videoFile?.link || "",
-          width: video.width,
-          height: video.height,
+          width: videoFile?.width || video.width,
+          height: videoFile?.height || video.height,
           duration: video.duration,
           fps: videoFile?.fps || 30
         },

@@ -15,6 +15,7 @@ import {
 import { seedDefaultFont } from "@/features/editor/utils/seed-default-font";
 import { loadFonts } from "@/features/editor/utils/fonts";
 import {getCurrentTime} from "@/features/editor/utils/time";
+import useStore from "../store/use-store";
 
 const getFontDetails = async () => {
   const defaultFont = await seedDefaultFont();
@@ -24,6 +25,15 @@ const getFontDetails = async () => {
     await loadFonts([{ name: fontName, url: fontUrl }]);
   }
   return { fontName, fontUrl };
+};
+
+const getCenteredTextPosition = (width: number, fontSize: number) => {
+  const { size } = useStore.getState();
+  const height = (151 / 120) * fontSize;
+  return {
+    left: `${(size.width - width) / 2}px`,
+    top: `${(size.height - height) / 2}px`
+  };
 };
 
 export const Texts = () => {
@@ -47,6 +57,10 @@ export const Texts = () => {
 
     const time = getCurrentTime();
     const clipDuration = TEXT_ADD_PAYLOAD.display.to - TEXT_ADD_PAYLOAD.display.from;
+    const position = getCenteredTextPosition(
+      TEXT_ADD_PAYLOAD.details.width,
+      TEXT_ADD_PAYLOAD.details.fontSize
+    );
 
     dispatch(ADD_TEXT, {
       payload: {
@@ -59,7 +73,8 @@ export const Texts = () => {
         details: {
           ...TEXT_ADD_PAYLOAD.details,
           fontFamily: fontName,
-          fontUrl: fontUrl
+          fontUrl: fontUrl,
+          ...position
         }
       },
       options: {}
@@ -73,6 +88,10 @@ export const Texts = () => {
 
     const time = getCurrentTime();
     const clipDuration = TEXT_ADD_PAYLOAD.display.to - TEXT_ADD_PAYLOAD.display.from;
+    const position = getCenteredTextPosition(
+      preset.width || TEXT_ADD_PAYLOAD.details.width,
+      preset.fontSize || TEXT_ADD_PAYLOAD.details.fontSize
+    );
 
     dispatch(ADD_TEXT, {
       payload: {
@@ -92,7 +111,8 @@ export const Texts = () => {
             x: 0,
             y: 0,
             blur: 0
-          }
+          },
+          ...position
         }
       },
       options: {}
@@ -105,7 +125,11 @@ export const Texts = () => {
     details: {
       ...TEXT_ADD_PAYLOAD.details,
       fontFamily: defaultFont.fontName,
-      fontUrl: defaultFont.fontUrl
+      fontUrl: defaultFont.fontUrl,
+      ...getCenteredTextPosition(
+        TEXT_ADD_PAYLOAD.details.width,
+        TEXT_ADD_PAYLOAD.details.fontSize
+      )
     }
   });
 
@@ -122,7 +146,11 @@ export const Texts = () => {
         x: 0,
         y: 0,
         blur: 0
-      }
+      },
+      ...getCenteredTextPosition(
+        preset.width || TEXT_ADD_PAYLOAD.details.width,
+        preset.fontSize || TEXT_ADD_PAYLOAD.details.fontSize
+      )
     }
   });
 
