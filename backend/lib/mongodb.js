@@ -44,5 +44,18 @@ function getDB(dbName = 'ensemble') {
   return client.db(dbName);
 }
 
+// Returns a lazy proxy for a collection so requiring a repository module does
+// not touch MongoDB at import time. getDB() is only invoked on first actual use,
+// which lets the server boot without MongoDB (forum/inbox features stay optional).
+function lazyCollection(name, dbName = 'ensemble') {
+  return new Proxy({}, {
+    get(_target, prop) {
+      const collection = getDB(dbName).collection(name);
+      const value = collection[prop];
+      return typeof value === 'function' ? value.bind(collection) : value;
+    }
+  });
+}
+
 // Export getDB along with your other functions
-module.exports = { connectMongoDB, getMongoClient, getDB };
+module.exports = { connectMongoDB, getMongoClient, getDB, lazyCollection };

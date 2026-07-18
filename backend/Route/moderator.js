@@ -14,9 +14,16 @@ const {
   postViolation,
   patchRestriction,
 } = require('../Controllers/MarketplaceModeratorControllers');
+const SupportModerator = require('../Controllers/SupportModeratorControllers');
+const ForumModerator = require('../Controllers/ForumModeratorControllers');
+const JobsModerator = require('../Controllers/JobsModeratorControllers');
 
 const marketplaceModerator = requireStaffRole(['Marketplace Moderator']);
+const supportModerator = requireStaffRole(['Support Moderator']);
+const forumModerator = requireStaffRole(['Forum Moderator']);
+const jobsModerator = requireStaffRole(['Jobs N Gigs Moderator']);
 
+// ─── Marketplace Moderator ───────────────────────────────────────────────
 router.get('/marketplace/overview', [checkSession, marketplaceModerator], getOverview);
 router.get('/marketplace/listings', [checkSession, marketplaceModerator], getListings);
 router.get('/marketplace/listings/:id', [checkSession, marketplaceModerator], getListingDetail);
@@ -30,5 +37,33 @@ router.post('/tickets/:id/messages', [checkSession, marketplaceModerator], postT
 router.get('/restrictions', [checkSession, marketplaceModerator], getRestrictions);
 router.post('/restrictions/violations', [checkSession, marketplaceModerator], postViolation);
 router.patch('/restrictions/accounts/:id', [checkSession, marketplaceModerator], patchRestriction);
+
+// ─── Support Moderator ───────────────────────────────────────────────────
+router.get('/support/overview', [checkSession, supportModerator], SupportModerator.getOverview);
+router.get('/support/tickets', [checkSession, supportModerator], SupportModerator.getTickets);
+router.get('/support/tickets/:id', [checkSession, supportModerator], SupportModerator.getTicket);
+router.patch('/support/tickets/:id', [checkSession, supportModerator], SupportModerator.patchTicket);
+router.post('/support/tickets/:id/messages', [checkSession, supportModerator], SupportModerator.postTicketMessage);
+router.get('/support/reports', [checkSession, supportModerator], SupportModerator.getReports);
+router.patch('/support/reports/:id', [checkSession, supportModerator], SupportModerator.patchReport);
+router.get('/support/chat', [checkSession, supportModerator], SupportModerator.getChat);
+
+// ─── Forum Moderator ─────────────────────────────────────────────────────
+router.get('/forum/overview', [checkSession, forumModerator], ForumModerator.getOverview);
+router.get('/forum/tickets', [checkSession, forumModerator], ForumModerator.getTickets);
+router.get('/forum/tickets/:id', [checkSession, forumModerator], ForumModerator.getTicket);
+router.patch('/forum/tickets/:id', [checkSession, forumModerator], ForumModerator.patchTicket);
+router.post('/forum/tickets/:id/messages', [checkSession, forumModerator], ForumModerator.postTicketMessage);
+router.get('/forum/reports', [checkSession, forumModerator], ForumModerator.getReports);
+router.patch('/forum/reports/:id', [checkSession, forumModerator], ForumModerator.patchReport);
+
+// ─── Jobs & Gigs Moderator ───────────────────────────────────────────────
+router.get('/jobs/overview', [checkSession, jobsModerator], JobsModerator.getOverview);
+router.get('/jobs/tickets', [checkSession, jobsModerator], JobsModerator.getTickets);
+router.get('/jobs/tickets/:id', [checkSession, jobsModerator], JobsModerator.getTicket);
+router.patch('/jobs/tickets/:id', [checkSession, jobsModerator], JobsModerator.patchTicket);
+router.post('/jobs/tickets/:id/messages', [checkSession, jobsModerator], JobsModerator.postTicketMessage);
+router.get('/jobs/disputes', [checkSession, jobsModerator], JobsModerator.getDisputes);
+router.patch('/jobs/disputes/:id', [checkSession, jobsModerator], JobsModerator.patchDispute);
 
 module.exports = router;

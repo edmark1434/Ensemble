@@ -10,11 +10,10 @@ const {
     getForumDiscussionSavedByUserId,
     deleteForumDiscussion,
 } = require('../Repositories/ForumDiscussionRepositories');
-const { getDB } = require('../lib/mongodb');
+const { lazyCollection } = require('../lib/mongodb');
 const { ObjectId } = require('mongodb');
-const db = getDB();
 
-const forumDiscussionsCollection = db.collection('forum_discussions');
+const forumDiscussionsCollection = lazyCollection('forum_discussions');
 const discussionPayload = {
     forum_group_id: null,
     user_id: null,

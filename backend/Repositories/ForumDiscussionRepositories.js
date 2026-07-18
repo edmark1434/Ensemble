@@ -1,6 +1,13 @@
-const { getMongoClient,getDB } = require('../lib/mongodb');
+const { getMongoClient, getDB } = require('../lib/mongodb');
 const { ObjectId } = require('mongodb');
-const db = getDB();
+// Lazy proxy so requiring this module does not touch MongoDB at import time.
+const db = new Proxy({}, {
+    get(_target, prop) {
+        const realDb = getDB();
+        const value = realDb[prop];
+        return typeof value === 'function' ? value.bind(realDb) : value;
+    }
+});
 async function createForumDiscussionRepositories(discussionPayload = {}) {
     try {
         const forumDiscussionsCollection = db.collection('forum_discussions');
