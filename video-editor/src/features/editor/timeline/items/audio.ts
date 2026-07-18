@@ -43,6 +43,11 @@ class Audio extends Trimmable {
   public name: string = "Audio";
   declare volume: number;
 
+  public isLoading = true;
+  private loaderPath: Path2D | null = null;
+  private loadingRotation = 0;
+  private loadingAnimationFrameId: number | null = null;
+
   static createControls(): { controls: Record<string, Control> } {
     return { controls: createAudioControls() };
   }
@@ -63,6 +68,7 @@ class Audio extends Trimmable {
     this.rx = 4;
     this.ry = 4;
     this.volume = props.volume ?? 100;
+    this.startLoadingAnimation();
   }
 
   // Update the _render method to handle the visible portion
@@ -105,12 +111,16 @@ class Audio extends Trimmable {
     const audioData = await getAudioData(this.src);
     this.barData = audioData;
     this.bars = this.getBars(0, 0) as any;
+    this.isLoading = false;
+    this.stopLoadingAnimation();
     this.canvas?.requestRenderAll();
     this.onScrollChange({ scrollLeft: 0 });
   }
 
   public setSrc(src: string) {
     this.src = src;
+    this.isLoading = true;
+    this.startLoadingAnimation();
     this.initOffscreenCanvas();
     this.initialize();
     this.setCoords();
@@ -162,7 +172,10 @@ class Audio extends Trimmable {
     ctx.textAlign = "left";
     ctx.clip();
 
-    if (this.volume === 0) {
+    if (this.isLoading) {
+      this.drawLoader(ctx);
+      ctx.fillText(this.name, 36, 22);
+    } else if (this.volume === 0) {
       ctx.save();
       ctx.translate(12, 10);
       ctx.strokeStyle = "rgba(255,255,255,1)";
@@ -291,6 +304,44 @@ class Audio extends Trimmable {
   public onScale() {
     this.bars = this.getBars(0, 0) as any;
     this.onScrollChange({ scrollLeft: this.scrollLeft });
+  }
+
+  private drawLoader(ctx: CanvasRenderingContext2D) {
+    if (!this.loaderPath) {
+      this.loaderPath = new Path2D("M21 12a9 9 0 1 1-6.219-8.56");
+    }
+
+    ctx.save();
+    ctx.translate(12, 10);
+    ctx.scale(0.67, 0.67);
+    ctx.translate(12, 12);
+    ctx.rotate((this.loadingRotation * Math.PI) / 180);
+    ctx.translate(-12, -12);
+    ctx.strokeStyle = "rgba(255,255,255,1)";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.stroke(this.loaderPath);
+    ctx.restore();
+  }
+
+  private startLoadingAnimation() {
+    const animate = () => {
+      if (!this.isLoading) {
+        this.loadingAnimationFrameId = null;
+        return;
+      }
+      this.loadingRotation = (this.loadingRotation + 8) % 360;
+      this.canvas?.requestRenderAll();
+      this.loadingAnimationFrameId = requestAnimationFrame(animate);
+    };
+    this.loadingAnimationFrameId = requestAnimationFrame(animate);
+  }
+
+  private stopLoadingAnimation() {
+    if (this.loadingAnimationFrameId !== null) {
+      cancelAnimationFrame(this.loadingAnimationFrameId);
+      this.loadingAnimationFrameId = null;
+    }
   }
 }
 

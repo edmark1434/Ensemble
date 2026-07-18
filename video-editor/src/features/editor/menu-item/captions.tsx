@@ -127,7 +127,7 @@ export const Captions = () => {
   };
 
   const [elapsedMs, setElapsedMs] = useState(0);
-  const CAPTIONS_GENERATE_GRACE_PERIOD = 2000;
+  const CAPTIONS_GENERATE_GRACE_PERIOD = 5000;
 
   useEffect(() => {
     if (!isGenerating) {
@@ -364,8 +364,8 @@ const fetchMediaTrackItems = (trackItemsMap: ITrackItemsMap) => {
 };
 
 const createSelectMediaOptions = (mediaTrackItems: ITrackItem[]) => {
-  return mediaTrackItems.map(({ name, details }) => ({
-    label: name,
+  return mediaTrackItems.map(({ name, details, metadata }) => ({
+    label: metadata?.name || name,
     value: details.src
   }));
 };

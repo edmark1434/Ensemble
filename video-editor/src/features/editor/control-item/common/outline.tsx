@@ -4,17 +4,19 @@ import React, { useEffect, useState } from "react";
 import { ColorPickerField } from "./color-picker-field";
 
 function Outline({
-                   label,
-                   onChageBorderWidth,
-                   onChangeBorderColor,
-                   valueBorderWidth,
-                   valueBorderColor
-                 }: {
+  label,
+  onChageBorderWidth,
+  onChangeBorderColor,
+  valueBorderWidth,
+  valueBorderColor,
+  disabled = false,
+}: {
   label: string;
   onChageBorderWidth: (v: number) => void;
   onChangeBorderColor: (v: string) => void;
   valueBorderWidth: number;
   valueBorderColor: string;
+  disabled?: boolean;
 }) {
   const [localValueBorderWidth, setLocalValueBorderWidth] = useState<string | number>(valueBorderWidth);
   const [localValueBorderColor, setLocalValueBorderColor] = useState<string>(valueBorderColor);
@@ -42,6 +44,7 @@ function Outline({
             gradient={false}
             mobileControlType="strokeColor"
             mobileControlLabel="Stroke Color"
+            disabled={disabled}
           />
         </div>
 

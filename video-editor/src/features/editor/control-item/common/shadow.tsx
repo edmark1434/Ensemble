@@ -6,13 +6,15 @@ import { ColorPickerField } from "./color-picker-field";
 import tinycolor from "tinycolor2";
 
 function Shadow({
-                  label,
-                  value,
-                  onChange
-                }: {
+  label,
+  value,
+  onChange,
+  disabled = false,
+}: {
   label: string;
   value: IBoxShadow;
   onChange: (v: IBoxShadow) => void;
+  disabled?: boolean;
 }) {
   const [localValue, setLocalValue] = useState<IBoxShadow>(value);
 
@@ -138,6 +140,7 @@ function Shadow({
           gradient={false}
           mobileControlType="shadowColor"
           mobileControlLabel="Shadow Color"
+          disabled={disabled}
         />
       </div>
     </div>

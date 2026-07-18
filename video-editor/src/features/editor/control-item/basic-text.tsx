@@ -14,6 +14,7 @@ import { PresetText } from "./common/preset-text";
 import { Animations } from "./common/animations";
 import {LayoutControls} from "@/features/editor/control-item/common/layout";
 import {TextContent} from "@/features/editor/control-item/common/text-content";
+import { Lock } from "lucide-react";
 
 interface ITextControlProps {
   color: string;
@@ -353,6 +354,8 @@ const BasicText = ({
     });
   };
 
+  const isLocked = (trackItem.details as any)?.locked === true;
+
   const components = [
     {
       key: "content",
@@ -382,6 +385,7 @@ const BasicText = ({
           onChangeTextDecorationLines={onChangeTextDecorationLines}
           onChangeTextDecorationColor={onChangeTextDecorationColor}
           handleChangeOpacity={handleChangeOpacity}
+          disabled={isLocked}
         />
       )
     },
@@ -394,6 +398,7 @@ const BasicText = ({
           onChangeBorderColor={(v: string) => onChangeBorderColor(v)}
           valueBorderWidth={properties.borderWidth as number}
           valueBorderColor={properties.borderColor as string}
+          disabled={isLocked}
         />
       )
     },
@@ -404,25 +409,39 @@ const BasicText = ({
           label="Shadow"
           onChange={(v: IBoxShadow) => onChangeBoxShadow(v)}
           value={properties.boxShadow}
+          disabled={isLocked}
         />
       )
     },
     {
       key: "animations",
-      component: <Animations trackItem={trackItem} properties={properties} />
+      component:
+        <Animations
+          trackItem={trackItem}
+          properties={properties}
+          disabled={isLocked}
+        />
     },
   ];
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden min-h-0">
       <ScrollArea className="h-full">
-        <div className="flex flex-col gap-6 p-4">
+        <fieldset disabled={isLocked} className="flex flex-col gap-6 p-4 border-0 m-0 min-w-0">
+          {isLocked && (
+            <div className="flex gap-2 items-center text-primary text-sm font-normal">
+              <Lock size={16} />
+              <span>
+                This element has been locked
+              </span>
+            </div>
+          )}
           {components
             .filter((comp) => showAll || comp.key === type)
             .map((comp) => (
               <React.Fragment key={comp.key}>{comp.component}</React.Fragment>
             ))}
-        </div>
+        </fieldset>
       </ScrollArea>
     </div>
   );

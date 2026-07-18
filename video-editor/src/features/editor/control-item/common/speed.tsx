@@ -1,79 +1,84 @@
 import { Input } from "@/components/ui/input";
-
 import { Slider } from "@/components/ui/slider";
 import { useEffect, useState } from "react";
+import { getSpeedRange } from "../../utils/playback-rate";
+
+const formatSpeedDisplay = (v: string | number): string => {
+  if (v === "") return "";
+  const str = typeof v === "number" ? v.toString() : v;
+  return str.replace(/^0(\.\d{3,})$/, "$1");
+};
 
 const Speed = ({
   value,
-  onChange
+  onChange,
+  disabled
 }: {
   value: number;
   onChange: (v: number) => void;
+  disabled: boolean;
 }) => {
-  // Create local state to manage opacity
   const [localValue, setLocalValue] = useState<string | number>(value);
+  const [range, setRange] = useState({ min: 0.25, max: 4 }); // conservative default until mounted
 
-  // Update local state when prop value changes
+  useEffect(() => {
+    setRange(getSpeedRange());
+  }, []);
+
   useEffect(() => {
     setLocalValue(value);
   }, [value]);
 
+  const clamp = (v: number) => Math.min(range.max, Math.max(range.min, v));
+
   const handleBlur = () => {
     if (localValue !== "") {
-      onChange(Number(localValue)); // Propagate as a number
+      const clamped = clamp(Number(localValue));
+      setLocalValue(clamped);
+      onChange(clamped);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      if (localValue !== "") {
-        onChange(Number(localValue)); // Propagate as a number
-      }
+    if (e.key === "Enter" && localValue !== "") {
+      const clamped = clamp(Number(localValue));
+      setLocalValue(clamped);
+      onChange(clamped);
     }
   };
 
   return (
-    <div className="flex gap-2">
-      <div className="flex flex-1 items-center text-sm text-muted-foreground">
+    <div className="flex flex-col gap-2 flex-1">
+      <div className="flex flex-1 items-center text-xs text-muted-foreground">
         Speed
       </div>
-      <div
-        className="w-32"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 80px"
-        }}
-      >
+      <div className="w-full flex gap-2">
         <Input
-          className="h-8 w-11 px-2 text-center text-sm"
-          value={localValue}
+          className="w-15 text-center text-sm"
+          value={formatSpeedDisplay(localValue)}
           onChange={(e) => {
             const newValue = e.target.value;
-
-            // Allow empty string or validate as a number
-            if (
-              newValue === "" ||
-              (!Number.isNaN(Number(newValue)) && Number(newValue) >= 0)
-            ) {
-              setLocalValue(newValue); // Update local state
+            if (newValue === "" || /^\d*\.?\d*$/.test(newValue)) {
+              setLocalValue(newValue);
             }
           }}
-          onBlur={handleBlur} // Trigger onBlur event
-          onKeyDown={handleKeyDown} // Trigger onKeyDown event
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          disabled={disabled}
         />
         <Slider
-          id="opacity"
-          value={[Number(localValue)]} // Use local state for slider value
+          id="speed"
+          value={[Number(localValue)]}
           onValueChange={(e) => {
-            setLocalValue(e[0]); // Update local state
+            setLocalValue(e[0]);
+            onChange(e[0]);
           }}
-          onValueCommit={() => {
-            onChange(Number(localValue)); // Propagate value to parent when user commits change
-          }}
-          min={0}
-          max={4}
+          min={range.min}
+          max={range.max}
           step={0.1}
-          aria-label="Opacity"
+          aria-label="Speed"
+          className="w-full"
+          disabled={disabled}
         />
       </div>
     </div>

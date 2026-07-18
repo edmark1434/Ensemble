@@ -84,15 +84,16 @@ export async function GET(request: NextRequest) {
     // Transform the data to match the expected format for the video editor
     const transformedPhotos = data.photos.map((photo) => ({
       id: `pexels_${photo.id}`,
+      name: photo.alt?.trim() || `Photo by ${photo.photographer}`,
       details: {
-        src: photo.src.large2x, // Use large2x for better quality
+        src: photo.src.large2x,
         width: photo.width,
         height: photo.height,
         photographer: photo.photographer,
         photographer_url: photo.photographer_url,
         alt: photo.alt
       },
-      preview: photo.src.medium, // Use medium for preview
+      preview: photo.src.medium,
       type: "image" as const,
       metadata: {
         pexels_id: photo.id,

@@ -17,18 +17,26 @@ import {DurationInputSlider} from "@/features/editor/control-item/common/duratio
 interface PresetTextProps {
   trackItem: ITrackItem & any;
   properties: any;
+  disabled?: boolean;
 }
 
-export const Animations = ({ properties, trackItem }: PresetTextProps) => {
+export const Animations = ({
+  properties,
+  trackItem,
+  disabled = false,
+}: PresetTextProps) => {
   return (
     <div className="flex flex-col gap-3">
       <Label className="font-sans text-sm font-medium">Animations</Label>
-      <SelectaAnimation trackItem={trackItem} />
+      <SelectaAnimation trackItem={trackItem} disabled={disabled} />
     </div>
   );
 };
 
-const SelectaAnimation = ({ trackItem }: { trackItem: ITrackItem & IText }) => {
+const SelectaAnimation = ({ trackItem, disabled }: {
+  trackItem: ITrackItem & IText;
+  disabled: boolean;
+}) => {
   const { setFloatingControl, setAnimationPickerInitialTab } = useLayoutStore();
   const isLargeScreen = useIsLargeScreen();
   const activeIds = useStore((state) => state.activeIds);
@@ -127,6 +135,7 @@ const SelectaAnimation = ({ trackItem }: { trackItem: ITrackItem & IText }) => {
                 valueMs={inDuration}
                 maxMs={maxValues.in}
                 onChangeMs={handleInChange}
+                disabled={disabled}
               />
             )}
           </div>
@@ -175,6 +184,7 @@ const SelectaAnimation = ({ trackItem }: { trackItem: ITrackItem & IText }) => {
                 valueMs={outDuration}
                 maxMs={maxValues.out}
                 onChangeMs={handleOutChange}
+                disabled={disabled}
               />
             )}
           </div>

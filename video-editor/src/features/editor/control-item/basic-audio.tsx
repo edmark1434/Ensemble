@@ -1,21 +1,24 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { IAudio, ITrackItem } from "@designcombo/types";
-import Volume from "./common/volume";
-import Speed from "./common/speed";
-import React, { useState } from "react";
+import React, {useEffect, useState} from "react";
 import { dispatch } from "@designcombo/events";
-import { EDIT_OBJECT, LAYER_REPLACE } from "@designcombo/state";
-import { Button } from "@/components/ui/button";
+import { EDIT_OBJECT } from "@designcombo/state";
+import { Lock } from "lucide-react";
+import { PlaybackControls } from "./common/playback";
 
 const BasicAudio = ({
-  trackItem,
-  type
-}: {
+                      trackItem,
+                      type
+                    }: {
   trackItem: ITrackItem & IAudio;
   type?: string;
 }) => {
   const showAll = !type;
   const [properties, setProperties] = useState(trackItem);
+
+  useEffect(() => {
+    setProperties(trackItem);
+  }, [trackItem.id, trackItem.details, trackItem.playbackRate]);
 
   const handleChangeVolume = (v: number) => {
     dispatch(EDIT_OBJECT, {
@@ -56,37 +59,41 @@ const BasicAudio = ({
     });
   };
 
+  const isLocked = (trackItem.details as any)?.locked === true;
+
   const components = [
     {
-      key: "speed",
+      key: "playback",
       component: (
-        <Speed
-          value={properties.playbackRate ?? 1}
-          onChange={handleChangeSpeed}
-        />
-      )
-    },
-    {
-      key: "volume",
-      component: (
-        <Volume
-          onChange={(v: number) => handleChangeVolume(v)}
-          value={properties.details.volume ?? 100}
+        <PlaybackControls
+          speed={properties.playbackRate ?? 1}
+          volume={properties.details.volume ?? 100}
+          onChangeSpeed={handleChangeSpeed}
+          onChangeVolume={handleChangeVolume}
+          disabled={isLocked}
         />
       )
     }
   ];
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex h-full flex-1 flex-col overflow-hidden min-h-0">
       <ScrollArea className="h-full">
-        <div className="flex flex-col gap-2 px-4 py-4">
+        <fieldset disabled={isLocked} className="flex flex-col gap-6 p-4 border-0 m-0 min-w-0">
+          {isLocked && (
+            <div className="flex gap-2 items-center text-primary text-sm font-normal">
+              <Lock size={16} />
+              <span>
+                This element has been locked
+              </span>
+            </div>
+          )}
           {components
             .filter((comp) => showAll || comp.key === type)
             .map((comp) => (
               <React.Fragment key={comp.key}>{comp.component}</React.Fragment>
             ))}
-        </div>
+        </fieldset>
       </ScrollArea>
     </div>
   );

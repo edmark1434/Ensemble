@@ -5,13 +5,14 @@ import Draggable from "@/components/shared/draggable";
 import { IImage } from "@designcombo/types";
 import React, {useState, useEffect, useRef} from "react";
 import { useIsDraggingOverTimeline } from "../hooks/is-dragging-over-timeline";
-import { ADD_ITEMS } from "@designcombo/state";
+import { ADD_IMAGE } from "@designcombo/state";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {Search, Loader2, PlusIcon} from "lucide-react";
 import { usePexelsImages } from "@/hooks/use-pexels-images";
 import { ImageLoading } from "@/components/ui/image-loading";
 import {useMasonryColumns} from "@/features/editor/hooks/use-masonry-columns";
+import {getCurrentTime} from "@/features/editor/utils/time";
 
 export const Images = () => {
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
@@ -51,24 +52,24 @@ export const Images = () => {
   }, [loadCuratedImages]);
 
   const handleAddImage = (payload: Partial<IImage>) => {
-    const id = generateId();
-    dispatch(ADD_ITEMS, {
-      payload: {
-        trackItems: [
-          {
-            id,
-            type: "image",
-            display: {
-              from: 0,
-              to: 5000
-            },
-            details: {
-              src: payload.details?.src
-            },
-            metadata: {}
-          }
-        ]
-      }
+    payload.id = generateId();
+    payload.metadata = {
+      ...payload.metadata,
+      name: payload.name,
+    };
+
+    const time = getCurrentTime();
+    const DEFAULT_IMAGE_DURATION_MS = 5000;
+
+    payload.display = {
+      from: time,
+      to: time + DEFAULT_IMAGE_DURATION_MS
+    };
+
+    console.log(payload);
+    dispatch(ADD_IMAGE, {
+      payload,
+      options: {}
     });
   };
 
@@ -107,7 +108,13 @@ export const Images = () => {
   };
 
   // Use Pexels images if available, otherwise fall back to static images
-  const displayImages = pexelsImages;
+  const displayImages = pexelsImages.map((image) => ({
+    ...image,
+    metadata: {
+      ...image.metadata,
+      name: image.name
+    }
+  }));
   const columns = useMasonryColumns(displayImages, COLUMN_WIDTH, containerWidth, GAP);
 
   return (
@@ -131,7 +138,7 @@ export const Images = () => {
             placeholder="Search Pexels images..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onKeyDown={handleKeyPress}
             className="pl-10"
           />
         </div>
@@ -215,10 +222,7 @@ const ImageItem = ({
     >
       <div
         onClick={() =>
-          handleAddImage({
-            id: generateId(),
-            details: { src: image.details?.src }
-          } as IImage)
+          handleAddImage(image)
         }
         className="relative flex w-full items-center justify-center overflow-hidden cursor-pointer group rounded-md"
       >

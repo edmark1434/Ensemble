@@ -8,6 +8,7 @@ interface DurationInputSliderProps {
   valueMs: number;
   maxMs: number;
   onChangeMs: (ms: number) => void;
+  disabled: boolean;
 }
 
 const MIN_DURATION_MS = 330; // 10 frames
@@ -16,7 +17,8 @@ export const DurationInputSlider = ({
   label,
   valueMs,
   maxMs,
-  onChangeMs
+  onChangeMs,
+  disabled,
 }: DurationInputSliderProps) => {
   const safeMaxMs = Math.max(0, maxMs);
   const safeMaxSeconds = formatearNumero(safeMaxMs / 1000);
@@ -61,6 +63,7 @@ export const DurationInputSlider = ({
             if (Number.isNaN(seconds) || seconds < 0) return;
             commitMs(seconds * 1000);
           }}
+          disabled={disabled}
         />
         <Slider
           value={[localMs]}
@@ -73,6 +76,7 @@ export const DurationInputSlider = ({
           }}
           className="w-full"
           aria-label={label}
+          disabled={disabled}
         />
       </div>
     </div>

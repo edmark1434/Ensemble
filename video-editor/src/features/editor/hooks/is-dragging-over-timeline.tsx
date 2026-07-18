@@ -18,7 +18,17 @@ export const useIsDraggingOverTimeline = () => {
       }
     });
 
-    return () => dragEventsSubscription.unsubscribe();
+    // Native dragend always fires once a drag ends (drop or cancel).
+    // DRAG_END above depends on "dragleave" firing on the timeline
+    // container, which never happens on a successful drop there —
+    // so without this, the flag gets stuck true after every drop.
+    const resetOnDragEnd = () => setIsDraggingOverTimeline(false);
+    document.addEventListener("dragend", resetOnDragEnd);
+
+    return () => {
+      dragEventsSubscription.unsubscribe();
+      document.removeEventListener("dragend", resetOnDragEnd);
+    };
   }, []);
 
   return isDraggingOverTimeline;

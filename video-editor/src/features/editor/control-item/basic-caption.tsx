@@ -12,7 +12,7 @@ import CaptionColors from "./common/caption-colors";
 import { TextControls } from "./common/text";
 import { Animation, presets } from "../player/animated";
 import { PresetName } from "../player/animated/presets";
-import { X } from "lucide-react";
+import {Lock, X} from "lucide-react";
 import { ICompactFont, IFont } from "../interfaces/editor";
 import { DEFAULT_FONT } from "../constants/font";
 import { PresetCaption } from "./common/preset-caption";
@@ -404,6 +404,8 @@ const BasicCaption = ({
     "in"
   );
 
+  const isLocked = (trackItem.details as any)?.locked === true;
+
   const components = [
     {
       key: "layout",
@@ -434,6 +436,7 @@ const BasicCaption = ({
           onChangeTextDecorationColor={onChangeTextDecorationColor}
           handleChangeOpacity={handleChangeOpacity}
           showFill={false}
+          disabled={isLocked}
         />
       )
     },
@@ -449,6 +452,7 @@ const BasicCaption = ({
           appearedColor={properties.appearedColor}
           isKeywordColor={properties.isKeywordColor}
           preservedColorKeyWord={properties.preservedColorKeyWord}
+          disabled={isLocked}
         />
       )
     },
@@ -461,6 +465,7 @@ const BasicCaption = ({
           onChangeBorderColor={(v: string) => onChangeBorderColor(v)}
           valueBorderWidth={properties.borderWidth as number}
           valueBorderColor={properties.borderColor as string}
+          disabled={isLocked}
         />
       )
     },
@@ -471,6 +476,7 @@ const BasicCaption = ({
           label="Shadow"
           onChange={(v: IBoxShadow) => onChangeBoxShadow(v)}
           value={properties.boxShadow}
+          disabled={isLocked}
         />
       )
     },
@@ -514,13 +520,21 @@ const BasicCaption = ({
 
       <div className="flex h-full flex-1 flex-col overflow-hidden min-h-0">
         <ScrollArea className="h-full">
-          <div className="flex flex-col gap-6 p-4">
+          <fieldset disabled={isLocked} className="flex flex-col gap-6 p-4 border-0 m-0 min-w-0">
+            {isLocked && (
+              <div className="flex gap-2 items-center text-primary text-sm font-normal">
+                <Lock size={16} />
+                <span>
+                This element has been locked
+              </span>
+              </div>
+            )}
             {components
               .filter((comp) => showAll || comp.key === type)
               .map((comp) => (
                 <React.Fragment key={comp.key}>{comp.component}</React.Fragment>
               ))}
-          </div>
+          </fieldset>
         </ScrollArea>
       </div>
     </>

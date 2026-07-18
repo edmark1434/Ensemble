@@ -17,18 +17,20 @@ interface ICaptionColors {
 
 interface ICaptionColorsProps extends ICaptionColors {
   id: string;
+  disabled?: boolean;
 }
 
 const CaptionColors = ({
-                         id,
-                         color,
-                         backgroundColor,
-                         appearedColor,
-                         activeColor,
-                         activeFillColor,
-                         isKeywordColor,
-                         preservedColorKeyWord
-                       }: ICaptionColorsProps) => {
+  id,
+  color,
+  backgroundColor,
+  appearedColor,
+  activeColor,
+  activeFillColor,
+  isKeywordColor,
+  preservedColorKeyWord,
+  disabled = false,
+}: ICaptionColorsProps) => {
   const [localColor, setLocalColor] = useState<string>(color);
   const [localBackgroundColor, setLocalBackgroundColor] = useState<string>(backgroundColor);
   const [localAppearedColor, setLocalAppearedColor] = useState<string>(appearedColor);
@@ -95,6 +97,7 @@ const CaptionColors = ({
             gradient={true}
             mobileControlType="color"
             mobileControlLabel="Text Color"
+            disabled={disabled}
           />
         </div>
 
@@ -106,6 +109,7 @@ const CaptionColors = ({
             gradient={true}
             mobileControlType="appearedColor"
             mobileControlLabel="Appeared Color"
+            disabled={disabled}
           />
         </div>
 
@@ -117,6 +121,7 @@ const CaptionColors = ({
             gradient={true}
             mobileControlType="activeColor"
             mobileControlLabel="Active Color"
+            disabled={disabled}
           />
         </div>
 
@@ -128,6 +133,7 @@ const CaptionColors = ({
             gradient={true}
             mobileControlType="activeFillColor"
             mobileControlLabel="Active Background Color"
+            disabled={disabled}
           />
         </div>
 
@@ -139,6 +145,7 @@ const CaptionColors = ({
             gradient={true}
             mobileControlType="backgroundColor"
             mobileControlLabel="Background Color"
+            disabled={disabled}
           />
         </div>
 

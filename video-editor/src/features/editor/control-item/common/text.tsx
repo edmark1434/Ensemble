@@ -49,6 +49,7 @@ interface TextControlsProps {
   onChangeTextDecorationColor: (v: string) => void;
   handleChangeOpacity: (v: number) => void;
   showFill?: boolean;
+  disabled?: boolean;
 }
 
 export const TextControls = ({
@@ -64,7 +65,8 @@ export const TextControls = ({
   onChangeTextDecorationLines,
   onChangeTextDecorationColor,
   handleChangeOpacity,
-  showFill = true
+  showFill = true,
+  disabled = false,
 }: TextControlsProps) => {
   return (
     <div className="flex flex-col gap-6">
@@ -74,8 +76,13 @@ export const TextControls = ({
           <Opacity
             onChange={(v: number) => handleChangeOpacity(v)}
             value={properties.opacity ?? 100}
+            disabled={disabled}
           />
-          <BorderRadius id={trackItem.id} value={trackItem.details?.borderRadius ?? 0} />
+          <BorderRadius
+            id={trackItem.id}
+            value={trackItem.details?.borderRadius ?? 0}
+            disabled={disabled}
+          />
         </div>
       </div>
 
@@ -127,6 +134,7 @@ export const TextControls = ({
           <TextDecorationColor
             value={properties.textDecorationColor}
             onChange={onChangeTextDecorationColor}
+            disabled={disabled}
           />
         </div>
       </div>
@@ -135,10 +143,18 @@ export const TextControls = ({
         <div className="flex flex-col gap-3">
           <Label className="font-sans text-sm font-medium">Fill</Label>
           <div className="flex flex-col gap-2">
-            <FontColor value={properties.color} handleColorChange={handleColorChange} />
+            <FontColor
+              value={properties.color}
+              handleColorChange={handleColorChange}
+              disabled={disabled}
+            />
 
             {handleBackgroundChange && (
-              <FontBackground value={properties.backgroundColor} handleColorChange={handleBackgroundChange} />
+              <FontBackground
+                value={properties.backgroundColor}
+                handleColorChange={handleBackgroundChange}
+                disabled={disabled}
+              />
             )}
           </div>
         </div>
@@ -149,10 +165,12 @@ export const TextControls = ({
 
 const FontBackground = ({
   value,
-  handleColorChange
+  handleColorChange,
+  disabled
 }: {
   value: string;
   handleColorChange: (color: string) => void;
+  disabled: boolean;
 }) => {
   return (
     <div className="flex flex-col gap-2 flex-1">
@@ -165,6 +183,7 @@ const FontBackground = ({
         gradient={true}
         mobileControlType="backgroundColor"
         mobileControlLabel="Background Color"
+        disabled={disabled}
       />
     </div>
   );
@@ -172,10 +191,12 @@ const FontBackground = ({
 
 const FontColor = ({
   value,
-  handleColorChange
+  handleColorChange,
+  disabled
 }: {
   value: string;
   handleColorChange: (color: string) => void;
+  disabled: boolean;
 }) => {
   return (
     <div className="flex flex-col gap-2 flex-1">
@@ -188,6 +209,7 @@ const FontColor = ({
         gradient={true}
         mobileControlType="color"
         mobileControlLabel="Color"
+        disabled={disabled}
       />
     </div>
   );
@@ -444,10 +466,12 @@ const TextDecorationLines = ({
 
 const TextDecorationColor = ({
   value,
-  onChange
+  onChange,
+  disabled
 }: {
   value: string;
   onChange: (v: string) => void;
+  disabled: boolean;
 }) => {
   return (
     <div className="flex flex-col gap-2 flex-1">
@@ -457,6 +481,7 @@ const TextDecorationColor = ({
         gradient={false}
         mobileControlType="textDecorationColor"
         mobileControlLabel="Decoration Color"
+        disabled={disabled}
       />
     </div>
   );
@@ -906,7 +931,7 @@ const FontWordSpacing = ({ id, value }: { id: string; value: string | number }) 
   );
 };
 
-const BorderRadius = ({ id, value }: { id: string; value: number }) => {
+const BorderRadius = ({ id, value, disabled }: { id: string; value: number; disabled: boolean }) => {
   const [localValue, setLocalValue] = useState<number>(value * 2);
 
   const onChange = (v: number) => {
@@ -945,6 +970,7 @@ const BorderRadius = ({ id, value }: { id: string; value: number }) => {
             }
           }}
           value={localValue} // Use local state for input value
+          disabled={disabled}
         />
         <Slider
           id="opacity"
@@ -958,6 +984,7 @@ const BorderRadius = ({ id, value }: { id: string; value: number }) => {
           step={1}
           aria-label="Corner Radius"
           className="w-full"
+          disabled={disabled}
         />
       </div>
     </div>

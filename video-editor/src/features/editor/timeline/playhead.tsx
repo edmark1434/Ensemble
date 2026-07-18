@@ -12,6 +12,7 @@ import { timeMsToUnits, unitsToTimeMs } from "../utils/timeline";
 import { TIMELINE_OFFSET_CANVAS_LEFT } from "../constants/constants";
 import { useTimelineOffsetX } from "../hooks/use-timeline-offset";
 import { useTheme } from "next-themes";
+import {useIsDraggingOverTimeline} from "@/features/editor/hooks/is-dragging-over-timeline";
 const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
   const playheadRef = useRef<HTMLDivElement>(null);
   const { playerRef, fps, scale, markers, playheadSnapped } = useStore();
@@ -106,6 +107,8 @@ const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
     ? `color-mix(in oklch, var(--primary) 50%, var(--card))`
     : markerColor ?? color;
 
+  const isDraggingOverTimeline = useIsDraggingOverTimeline();
+
   return (
     <div
       ref={playheadRef}
@@ -121,6 +124,7 @@ const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
         height: "calc(100% - 40px)",
         zIndex: 10,
         cursor: "pointer",
+        pointerEvents: isDraggingOverTimeline ? "none" : "auto",
         touchAction: "none" // Prevent default touch actions
       }}
     >
