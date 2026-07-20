@@ -15,6 +15,7 @@ import { Animations } from "./common/animations";
 import {LayoutControls} from "@/features/editor/control-item/common/layout";
 import {TextContent} from "@/features/editor/control-item/common/text-content";
 import { Lock } from "lucide-react";
+import {Appearance} from "@/features/editor/control-item/common/appearance";
 
 interface ITextControlProps {
   color: string;
@@ -100,9 +101,9 @@ const getPropertiesFromDetails = (
 };
 
 const BasicText = ({
-  trackItem,
-  type
-}: {
+                     trackItem,
+                     type
+                   }: {
   trackItem: ITrackItem & IText;
   type?: string;
 }) => {
@@ -370,6 +371,17 @@ const BasicText = ({
       )
     },
     {
+      key: "appearance",
+      component: (
+        <Appearance
+          id={trackItem.id}
+          opacity={properties.opacity}
+          cornerRadius={trackItem.details?.borderRadius ?? 0}
+          disabled={isLocked}
+        />
+      )
+    },
+    {
       key: "textControls",
       component: (
         <TextControls
@@ -384,7 +396,6 @@ const BasicText = ({
           onChangeTextAlign={onChangeTextAlign}
           onChangeTextDecorationLines={onChangeTextDecorationLines}
           onChangeTextDecorationColor={onChangeTextDecorationColor}
-          handleChangeOpacity={handleChangeOpacity}
           disabled={isLocked}
         />
       )

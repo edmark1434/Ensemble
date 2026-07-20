@@ -18,24 +18,27 @@ interface PresetTextProps {
   trackItem: ITrackItem & any;
   properties: any;
   disabled?: boolean;
+  showLoop?: boolean;
 }
 
 export const Animations = ({
-  properties,
-  trackItem,
-  disabled = false,
-}: PresetTextProps) => {
+                             properties,
+                             trackItem,
+                             disabled = false,
+                             showLoop = true,
+                           }: PresetTextProps) => {
   return (
     <div className="flex flex-col gap-3">
       <Label className="font-sans text-sm font-medium">Animations</Label>
-      <SelectaAnimation trackItem={trackItem} disabled={disabled} />
+      <SelectaAnimation trackItem={trackItem} disabled={disabled} showLoop={showLoop} />
     </div>
   );
 };
 
-const SelectaAnimation = ({ trackItem, disabled }: {
+const SelectaAnimation = ({ trackItem, disabled, showLoop }: {
   trackItem: ITrackItem & IText;
   disabled: boolean;
+  showLoop: boolean;
 }) => {
   const { setFloatingControl, setAnimationPickerInitialTab } = useLayoutStore();
   const isLargeScreen = useIsLargeScreen();
@@ -140,25 +143,27 @@ const SelectaAnimation = ({ trackItem, disabled }: {
             )}
           </div>
 
-          <div className="flex gap-2">
-            <div className="flex flex-col gap-2 flex-1">
-              <div className="flex flex-1 items-center text-xs text-muted-foreground">
-                Loop
-              </div>
-              <div className="relative w-full">
-                <Button
-                  className="flex w-full items-center justify-between text-sm"
-                  variant="outline"
-                  onClick={() => openPicker("loop")}
-                >
-                  <div className="w-full text-left">
-                    <p className="truncate">{getAnimationLabel("loop")}</p>
-                  </div>
-                  <ChevronDown className="text-muted-foreground" size={14} />
-                </Button>
+          {showLoop && (
+            <div className="flex gap-2">
+              <div className="flex flex-col gap-2 flex-1">
+                <div className="flex flex-1 items-center text-xs text-muted-foreground">
+                  Loop
+                </div>
+                <div className="relative w-full">
+                  <Button
+                    className="flex w-full items-center justify-between text-sm"
+                    variant="outline"
+                    onClick={() => openPicker("loop")}
+                  >
+                    <div className="w-full text-left">
+                      <p className="truncate">{getAnimationLabel("loop")}</p>
+                    </div>
+                    <ChevronDown className="text-muted-foreground" size={14} />
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           <div className="flex gap-2">
             <div className="flex flex-col gap-2 flex-1">
@@ -194,7 +199,9 @@ const SelectaAnimation = ({ trackItem, disabled }: {
           <Tabs defaultValue="in" className="w-full">
             <TabsList className="p-0 grid w-full grid-cols-3">
               <TabsTrigger value="in">In</TabsTrigger>
-              <TabsTrigger value="loop">Loop</TabsTrigger>
+              {showLoop && (
+                <TabsTrigger value="loop">Loop</TabsTrigger>
+              )}
               <TabsTrigger value="out">Out</TabsTrigger>
             </TabsList>
             <TabsContent value="in">
@@ -204,13 +211,15 @@ const SelectaAnimation = ({ trackItem, disabled }: {
                 </div>
               </ScrollArea>
             </TabsContent>
-            <TabsContent value="loop">
-              <ScrollArea className="h-[300px]">
-                <div className="grid grid-cols-[repeat(auto-fit,minmax(100px,1fr))] gap-2 py-4">
-                  {presetLoopButtons}
-                </div>
-              </ScrollArea>
-            </TabsContent>
+            {showLoop && (
+              <TabsContent value="loop">
+                <ScrollArea className="h-[300px]">
+                  <div className="grid grid-cols-[repeat(auto-fit,minmax(100px,1fr))] gap-2 py-4">
+                    {presetLoopButtons}
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+            )}
             <TabsContent value="out">
               <ScrollArea className="h-[300px]">
                 <div className="grid grid-cols-[repeat(auto-fit,minmax(100px,1fr))] gap-2 py-4">

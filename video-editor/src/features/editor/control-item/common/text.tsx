@@ -47,45 +47,27 @@ interface TextControlsProps {
   onChangeTextAlign: (v: string) => void;
   onChangeTextDecorationLines: (v: string) => void;
   onChangeTextDecorationColor: (v: string) => void;
-  handleChangeOpacity: (v: number) => void;
   showFill?: boolean;
   disabled?: boolean;
 }
 
 export const TextControls = ({
-  trackItem,
-  properties,
-  selectedFont,
-  onChangeFontFamily,
-  handleChangeFontStyle,
-  onChangeFontSize,
-  handleColorChange,
-  handleBackgroundChange,
-  onChangeTextAlign,
-  onChangeTextDecorationLines,
-  onChangeTextDecorationColor,
-  handleChangeOpacity,
-  showFill = true,
-  disabled = false,
-}: TextControlsProps) => {
+                               trackItem,
+                               properties,
+                               selectedFont,
+                               onChangeFontFamily,
+                               handleChangeFontStyle,
+                               onChangeFontSize,
+                               handleColorChange,
+                               handleBackgroundChange,
+                               onChangeTextAlign,
+                               onChangeTextDecorationLines,
+                               onChangeTextDecorationColor,
+                               showFill = true,
+                               disabled = false,
+                             }: TextControlsProps) => {
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <Label className="font-sans text-sm font-medium">Appearance</Label>
-        <div className="flex flex-col gap-2">
-          <Opacity
-            onChange={(v: number) => handleChangeOpacity(v)}
-            value={properties.opacity ?? 100}
-            disabled={disabled}
-          />
-          <BorderRadius
-            id={trackItem.id}
-            value={trackItem.details?.borderRadius ?? 0}
-            disabled={disabled}
-          />
-        </div>
-      </div>
-
       <div className="flex flex-col gap-3">
         <Label className="font-sans text-sm font-medium">Typography</Label>
         <div className="flex flex-col gap-2">
@@ -164,10 +146,10 @@ export const TextControls = ({
 };
 
 const FontBackground = ({
-  value,
-  handleColorChange,
-  disabled
-}: {
+                          value,
+                          handleColorChange,
+                          disabled
+                        }: {
   value: string;
   handleColorChange: (color: string) => void;
   disabled: boolean;
@@ -190,10 +172,10 @@ const FontBackground = ({
 };
 
 const FontColor = ({
-  value,
-  handleColorChange,
-  disabled
-}: {
+                     value,
+                     handleColorChange,
+                     disabled
+                   }: {
   value: string;
   handleColorChange: (color: string) => void;
   disabled: boolean;
@@ -216,9 +198,9 @@ const FontColor = ({
 };
 
 const FontSize = ({
-  value,
-  onChange
-}: {
+                    value,
+                    onChange
+                  }: {
   value: number;
   onChange: (v: number) => void;
 }) => {
@@ -265,9 +247,9 @@ const FontSize = ({
 };
 
 const FontFamily = ({
-  handleChangeFont,
-  fontFamilyDisplay
-}: {
+                      handleChangeFont,
+                      fontFamilyDisplay
+                    }: {
   handleChangeFont: (font: ICompactFont) => void;
   fontFamilyDisplay: string;
 }) => {
@@ -359,9 +341,9 @@ const FontFamily = ({
 };
 
 const FontStyle = ({
-  selectedFont,
-  handleChangeFontStyle
-}: {
+                     selectedFont,
+                     handleChangeFontStyle
+                   }: {
   selectedFont: ICompactFont;
   handleChangeFontStyle: (font: IFont) => void;
 }) => {
@@ -411,9 +393,9 @@ const FontStyle = ({
 };
 
 const TextDecorationLines = ({
-  value,
-  onChange
-}: {
+                               value,
+                               onChange
+                             }: {
   value: string;
   onChange: (v: string) => void;
 }) => {
@@ -465,10 +447,10 @@ const TextDecorationLines = ({
 };
 
 const TextDecorationColor = ({
-  value,
-  onChange,
-  disabled
-}: {
+                               value,
+                               onChange,
+                               disabled
+                             }: {
   value: string;
   onChange: (v: string) => void;
   disabled: boolean;
@@ -488,9 +470,9 @@ const TextDecorationColor = ({
 };
 
 const Alignment = ({
-  value,
-  onChange
-}: {
+                     value,
+                     onChange
+                   }: {
   value: string;
   onChange: (v: string) => void;
 }) => {
@@ -596,11 +578,11 @@ const FontCase = ({ id, value: initialValue }: { id: string; value: string }) =>
 };
 
 const FontLineHeight = ({
-  id,
-  value,
-  fontFamily,
-  fontSize
-}: {
+                          id,
+                          value,
+                          fontFamily,
+                          fontSize
+                        }: {
   id: string;
   value: string | number;
   fontFamily?: string;

@@ -175,8 +175,8 @@ export const clearAnimation = (
 };
 
 export default function AnimationPicker({
-  animationType = "media"
-}: {
+                                          animationType = "media"
+                                        }: {
   animationType?: "text" | "media";
 }) {
   const activeIds = useStore((state) => state.activeIds);
@@ -246,7 +246,9 @@ export default function AnimationPicker({
       >
         <TabsList className="h-9 mx-4 w-[calc(100%-32px)]">
           <TabsTrigger value="in">In</TabsTrigger>
-          <TabsTrigger value="loop">Loop</TabsTrigger>
+          {animationType === "text" && (
+            <TabsTrigger value="loop">Loop</TabsTrigger>
+          )}
           <TabsTrigger value="out">Out</TabsTrigger>
         </TabsList>
 
@@ -255,11 +257,13 @@ export default function AnimationPicker({
             <div className={`grid grid-cols-2 gap-2 ${hasCurrentTabAnimation ? "pb-0" : "pb-4"}`}>{presetInButtons}</div>
           </ScrollArea>
         </TabsContent>
-        <TabsContent value="loop">
-          <ScrollArea className="h-[400px] w-full px-4">
-            <div className={`grid grid-cols-2 gap-2 pb-4`}>{presetLoopButtons}</div>
-          </ScrollArea>
-        </TabsContent>
+        {animationType === "text" && (
+          <TabsContent value="loop">
+            <ScrollArea className="h-[400px] w-full px-4">
+              <div className={`grid grid-cols-2 gap-2 pb-4`}>{presetLoopButtons}</div>
+            </ScrollArea>
+          </TabsContent>
+        )}
         <TabsContent value="out">
           <ScrollArea className="h-[400px] w-full px-4">
             <div className={`grid grid-cols-2 gap-2 ${hasCurrentTabAnimation ? "pb-0" : "pb-4"}`}>{presetOutButtons}</div>

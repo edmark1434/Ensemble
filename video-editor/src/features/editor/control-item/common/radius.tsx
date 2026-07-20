@@ -1,64 +1,73 @@
 import { Input } from "@/components/ui/input";
-
 import { Slider } from "@/components/ui/slider";
+import { dispatch } from "@designcombo/events";
+import { EDIT_OBJECT } from "@designcombo/state";
 import { useEffect, useState } from "react";
 
-const Rounded = ({
-  value,
-  onChange
-}: {
+const BorderRadius = ({
+                        id,
+                        value,
+                        disabled
+                      }: {
+  id: string;
   value: number;
-  onChange: (v: number) => void;
+  disabled: boolean;
 }) => {
-  // Create local state to manage opacity
-  const [localValue, setLocalValue] = useState(value);
+  const [localValue, setLocalValue] = useState<number>(value * 2);
 
-  // Update local state when prop value changes
+  const onChange = (v: number) => {
+    dispatch(EDIT_OBJECT, {
+      payload: {
+        [id]: {
+          details: {
+            borderRadius: v / 2
+          }
+        }
+      }
+    });
+  };
+
   useEffect(() => {
-    setLocalValue(value);
+    setLocalValue(Math.round(value * 2));
   }, [value]);
 
   return (
-    <div className="flex gap-2">
-      <div className="flex flex-1 items-center text-sm text-muted-foreground">
-        Round
+    <div className="flex flex-col gap-2 flex-1">
+      <div className="flex flex-1 items-center text-xs text-muted-foreground">
+        Corner radius
       </div>
-      <div
-        className="w-32"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 80px"
-        }}
-      >
+      <div className="w-full flex gap-2">
         <Input
-          className="h-8 w-11 px-2 text-center text-sm"
+          max={100}
+          className="w-15 text-center text-sm"
           type="number"
           onChange={(e) => {
             const newValue = Number(e.target.value);
             if (newValue >= 0 && newValue <= 100) {
-              setLocalValue(newValue); // Update local state
-              onChange(newValue); // Optionally propagate immediately, or adjust as needed
+              setLocalValue(newValue);
+              onChange(newValue);
             }
           }}
-          value={localValue} // Use local state for input value
+          value={localValue}
+          disabled={disabled}
         />
         <Slider
-          id="rounded"
-          value={[localValue]} // Use local state for slider value
+          id="corner-radius"
+          value={[localValue]}
           onValueChange={(e) => {
-            setLocalValue(e[0]); // Update local state
-          }}
-          onValueCommit={() => {
-            onChange(localValue); // Propagate value to parent when user commits change
+            setLocalValue(e[0]);
+            onChange(e[0]);
           }}
           min={0}
-          max={50}
+          max={100}
           step={1}
-          aria-label="rounded"
+          aria-label="Corner Radius"
+          className="w-full"
+          disabled={disabled}
         />
       </div>
     </div>
   );
 };
 
-export default Rounded;
+export default BorderRadius;
