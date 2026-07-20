@@ -51,10 +51,10 @@ function scaleDiv(
 }
 
 export function SceneInteractions({
-                                    stateManager,
-                                    containerRef,
-                                    zoom
-                                  }: SceneInteractionsProps) {
+  stateManager,
+  containerRef,
+  zoom
+}: SceneInteractionsProps) {
   const [targets, setTargets] = useState<HTMLDivElement[]>([]);
   const [selection, setSelection] = useState<Selection>();
   const {

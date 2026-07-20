@@ -392,10 +392,16 @@ const FontStyle = ({
   );
 };
 
+const decorationOptions = [
+  { value: "underline", label: "Toggle underline", icon: Underline },
+  { value: "line-through", label: "Toggle strikethrough", icon: Strikethrough },
+  { value: "overline", label: "Toggle overline", icon: XLineTop }
+];
+
 const TextDecorationLines = ({
-                               value,
-                               onChange
-                             }: {
+  value,
+  onChange
+}: {
   value: string;
   onChange: (v: string) => void;
 }) => {
@@ -405,41 +411,38 @@ const TextDecorationLines = ({
     setLocalValue(value);
   }, [value]);
 
+  const activeLines = localValue.split(" ").filter(Boolean);
+
+  const toggleLine = (line: string) => {
+    const next = activeLines.includes(line)
+      ? activeLines.filter((item) => item !== line)
+      : [...activeLines, line];
+    const joined = next.filter((item) => item !== "none").join(" ");
+    setLocalValue(joined);
+    onChange(joined);
+  };
+
   return (
     <div className="flex flex-col gap-2 flex-1">
-      {/*<div className="flex flex-1 items-center text-xs text-muted-foreground">*/}
-      {/*  Lines*/}
-      {/*</div>*/}
       <div className="flex gap-2">
-        <div className="relative w-full">
-          <ToggleGroup
-            value={localValue.split(" ")}
-            className="grid grid-cols-3 w-full h-9"
-            type="multiple"
-            onValueChange={(v) => {
-              const next = v.filter((item) => item !== "none").join(" ");
-              setLocalValue(next);
-              onChange(next);
-            }}
-          >
-            <ToggleGroupItem
-              value="underline"
-              aria-label="Toggle underline"
-            >
-              <Underline size={16} />
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="line-through"
-              aria-label="Toggle strikethrough">
-              <Strikethrough size={16} />
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="overline"
-              aria-label="Toggle overline"
-            >
-              <XLineTop size={16} />
-            </ToggleGroupItem>
-          </ToggleGroup>
+        <div className="grid grid-cols-3 gap-1 w-full h-9">
+          {decorationOptions.map(({ value: lineValue, label, icon: Icon }) => {
+            const isActive = activeLines.includes(lineValue);
+            return (
+              <Button
+                key={lineValue}
+                type="button"
+                size="icon"
+                variant={isActive ? "default" : "secondary"}
+                aria-label={label}
+                aria-pressed={isActive}
+                onClick={() => toggleLine(lineValue)}
+                className="h-full w-full"
+              >
+                <Icon size={16} />
+              </Button>
+            );
+          })}
         </div>
       </div>
     </div>

@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Animations } from "./common/animations";
 import { Appearance } from "@/features/editor/control-item/common/appearance";
 import { LayoutControls } from "@/features/editor/control-item/common/layout";
+import {LayoutMediaControls} from "@/features/editor/control-item/common/layout-media";
 
 interface IImageControlProps {
   opacity: number;
@@ -31,9 +32,9 @@ const getPropertiesFromDetails = (
 });
 
 const BasicImage = ({
-                      trackItem,
-                      type
-                    }: {
+  trackItem,
+  type
+}: {
   trackItem: ITrackItem & IImage;
   type?: string;
 }) => {
@@ -101,34 +102,8 @@ const BasicImage = ({
 
   const components = [
     {
-      key: "crop",
-      component: (
-        <div className="flex flex-col gap-2">
-          <Label className="font-sans text-xs font-semibold">Crop</Label>
-          <div className="mb-4">
-            <Button
-              variant={"secondary"}
-              size={"icon"}
-              onClick={() => setCropTarget(trackItem)}
-              disabled={isLocked}
-            >
-              <Crop size={16} />
-            </Button>
-          </div>
-        </div>
-      )
-    },
-    {
       key: "layout",
-      component: <LayoutControls trackItem={trackItem} />
-    },
-    {
-      key: "aspectRatio",
-      component: (
-        <div className="flex flex-col gap-2">
-          <AspectRatio />
-        </div>
-      )
+      component: <LayoutMediaControls trackItem={trackItem} />
     },
     {
       key: "appearance",
