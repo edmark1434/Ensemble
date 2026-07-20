@@ -517,7 +517,12 @@ const CheckoutPage: React.FC = () => {
                               <div className="flex-1 flex items-center gap-3">
                                 <span className="text-xl">{getPaymentMethodIcon(method)}</span>
                                 <div>
-                                  <p className="text-sm font-medium text-white">{method.channel_code}</p>
+                              <p className="text-sm font-medium text-white">{method.masked_card_number && method.card_brand ? method.card_brand + " " + method.masked_card_number : method.display_name}</p>
+                              {method.masked_card_number && (
+                                <p className="text-xs text-zinc-400">
+                                  Expires {method.card_exp_month}/{method.card_exp_year}
+                                </p>
+                              )}
                                   <p className="text-xs text-zinc-400">
                                     {method.display_name !== method.channel_code && method.display_name}
                                     {method.masked_card_number && ` • ${method.masked_card_number}`}
