@@ -1,69 +1,60 @@
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
-import { dispatch } from "@designcombo/events";
-import { EDIT_OBJECT } from "@designcombo/state";
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 
 const Blur = ({
-  id,
   value,
-  disabled
+  onChange
 }: {
-  id: string;
   value: number;
-  disabled?: boolean;
+  onChange: (v: number) => void;
 }) => {
-  const [localValue, setLocalValue] = useState<number>(value);
+  // Create local state to manage opacity
+  const [localValue, setLocalValue] = useState(value);
 
-  const onChange = (v: number) => {
-    dispatch(EDIT_OBJECT, {
-      payload: {
-        [id]: {
-          details: {
-            blur: v
-          }
-        }
-      }
-    });
-  };
-
+  // Update local state when prop value changes
   useEffect(() => {
-    setLocalValue(Math.round(value));
+    setLocalValue(value);
   }, [value]);
 
   return (
-    <div className="flex flex-col gap-2 flex-1">
-      <div className="flex flex-1 items-center text-xs text-muted-foreground">
+    <div className="flex gap-2">
+      <div className="flex flex-1 items-center text-sm text-muted-foreground">
         Blur
       </div>
-      <div className="w-full flex gap-2">
+      <div
+        className="w-32"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 80px"
+        }}
+      >
         <Input
           max={100}
-          className="w-15 text-center text-sm"
+          className="h-8 w-11 px-2 text-center text-sm"
           type="number"
           onChange={(e) => {
             const newValue = Number(e.target.value);
             if (newValue >= 0 && newValue <= 100) {
-              setLocalValue(newValue);
-              onChange(newValue);
+              setLocalValue(newValue); // Update local state
+              onChange(newValue); // Optionally propagate immediately, or adjust as needed
             }
           }}
-          value={localValue}
-          disabled={disabled}
+          value={localValue} // Use local state for input value
         />
         <Slider
           id="blur"
-          value={[localValue]}
+          value={[localValue]} // Use local state for slider value
           onValueChange={(e) => {
-            setLocalValue(e[0]);
-            onChange(e[0]);
+            setLocalValue(e[0]); // Update local state
+          }}
+          onValueCommit={() => {
+            onChange(localValue); // Propagate value to parent when user commits change
           }}
           min={0}
           max={100}
           step={1}
           aria-label="Blur"
-          className="w-full"
-          disabled={disabled}
         />
       </div>
     </div>

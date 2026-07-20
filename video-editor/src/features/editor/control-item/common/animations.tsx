@@ -18,27 +18,24 @@ interface PresetTextProps {
   trackItem: ITrackItem & any;
   properties: any;
   disabled?: boolean;
-  showLoop?: boolean;
 }
 
 export const Animations = ({
   properties,
   trackItem,
   disabled = false,
-  showLoop = true,
 }: PresetTextProps) => {
   return (
     <div className="flex flex-col gap-3">
       <Label className="font-sans text-sm font-medium">Animations</Label>
-      <SelectaAnimation trackItem={trackItem} disabled={disabled} showLoop={showLoop} />
+      <SelectaAnimation trackItem={trackItem} disabled={disabled} />
     </div>
   );
 };
 
-const SelectaAnimation = ({ trackItem, disabled, showLoop }: {
+const SelectaAnimation = ({ trackItem, disabled }: {
   trackItem: ITrackItem & IText;
   disabled: boolean;
-  showLoop: boolean;
 }) => {
   const { setFloatingControl, setAnimationPickerInitialTab } = useLayoutStore();
   const isLargeScreen = useIsLargeScreen();
@@ -143,27 +140,25 @@ const SelectaAnimation = ({ trackItem, disabled, showLoop }: {
             )}
           </div>
 
-          {showLoop && (
-            <div className="flex gap-2">
-              <div className="flex flex-col gap-2 flex-1">
-                <div className="flex flex-1 items-center text-xs text-muted-foreground">
-                  Loop
-                </div>
-                <div className="relative w-full">
-                  <Button
-                    className="flex w-full items-center justify-between text-sm"
-                    variant="outline"
-                    onClick={() => openPicker("loop")}
-                  >
-                    <div className="w-full text-left">
-                      <p className="truncate">{getAnimationLabel("loop")}</p>
-                    </div>
-                    <ChevronDown className="text-muted-foreground" size={14} />
-                  </Button>
-                </div>
+          <div className="flex gap-2">
+            <div className="flex flex-col gap-2 flex-1">
+              <div className="flex flex-1 items-center text-xs text-muted-foreground">
+                Loop
+              </div>
+              <div className="relative w-full">
+                <Button
+                  className="flex w-full items-center justify-between text-sm"
+                  variant="outline"
+                  onClick={() => openPicker("loop")}
+                >
+                  <div className="w-full text-left">
+                    <p className="truncate">{getAnimationLabel("loop")}</p>
+                  </div>
+                  <ChevronDown className="text-muted-foreground" size={14} />
+                </Button>
               </div>
             </div>
-          )}
+          </div>
 
           <div className="flex gap-2">
             <div className="flex flex-col gap-2 flex-1">

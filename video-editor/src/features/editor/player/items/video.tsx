@@ -7,9 +7,9 @@ import { calculateFrames } from "../../utils/frames";
 import { OffthreadVideo } from "remotion";
 
 export const Video = ({
-                        item,
-                        options
-                      }: {
+  item,
+  options
+}: {
   item: IVideo;
   options: SequenceItemOptions;
 }) => {
@@ -51,10 +51,7 @@ export const Video = ({
           keyframeAnimations={animationTimed}
           frame={frame || 0}
         >
-          <div
-            id={`${item.id}-reveal-mask`}
-            style={calculateMediaStyles(details, crop)}
-          >
+          <div style={calculateMediaStyles(details, crop)}>
             <OffthreadVideo
               startFrom={(item.trim?.from! / 1000) * fps}
               endAt={(item.trim?.to! / 1000) * fps || 1 / fps}

@@ -19,7 +19,6 @@ import { PresetCaption } from "./common/preset-caption";
 import AnimationCaption from "./common/animation-caption";
 import {LayoutControls} from "@/features/editor/control-item/common/layout";
 import {CaptionDimensionsSync} from "@/features/editor/control-item/common/caption-dimensions-sync";
-import {Appearance} from "@/features/editor/control-item/common/appearance";
 
 interface ITextControlProps {
   color: string;
@@ -423,17 +422,6 @@ const BasicCaption = ({
       )
     },
     {
-      key: "appearance",
-      component: (
-        <Appearance
-          id={trackItem.id}
-          opacity={properties.opacity}
-          cornerRadius={trackItem.details?.borderRadius ?? 0}
-          disabled={isLocked}
-        />
-      )
-    },
-    {
       key: "textControls",
       component: (
         <TextControls
@@ -446,6 +434,7 @@ const BasicCaption = ({
           onChangeTextAlign={onChangeTextAlign}
           onChangeTextDecorationLines={onChangeTextDecorationLines}
           onChangeTextDecorationColor={onChangeTextDecorationColor}
+          handleChangeOpacity={handleChangeOpacity}
           showFill={false}
           disabled={isLocked}
         />

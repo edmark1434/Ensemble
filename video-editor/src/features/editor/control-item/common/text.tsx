@@ -47,6 +47,7 @@ interface TextControlsProps {
   onChangeTextAlign: (v: string) => void;
   onChangeTextDecorationLines: (v: string) => void;
   onChangeTextDecorationColor: (v: string) => void;
+  handleChangeOpacity: (v: number) => void;
   showFill?: boolean;
   disabled?: boolean;
 }
@@ -63,11 +64,28 @@ export const TextControls = ({
   onChangeTextAlign,
   onChangeTextDecorationLines,
   onChangeTextDecorationColor,
+  handleChangeOpacity,
   showFill = true,
   disabled = false,
 }: TextControlsProps) => {
   return (
     <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-3">
+        <Label className="font-sans text-sm font-medium">Appearance</Label>
+        <div className="flex flex-col gap-2">
+          <Opacity
+            onChange={(v: number) => handleChangeOpacity(v)}
+            value={properties.opacity ?? 100}
+            disabled={disabled}
+          />
+          <BorderRadius
+            id={trackItem.id}
+            value={trackItem.details?.borderRadius ?? 0}
+            disabled={disabled}
+          />
+        </div>
+      </div>
+
       <div className="flex flex-col gap-3">
         <Label className="font-sans text-sm font-medium">Typography</Label>
         <div className="flex flex-col gap-2">

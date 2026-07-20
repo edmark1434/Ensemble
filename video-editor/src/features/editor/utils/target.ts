@@ -1,20 +1,11 @@
-import useStore from "../store/use-store";
-import { getIdFromClassName } from "./scene";
-
-export const getTargetControls = (
-  targetType: string,
-  lockAspectRatio: boolean = true
-): string[] => {
+export const getTargetControls = (targetType: string): string[] => {
   switch (targetType) {
     case "text":
       return ["e", "se", "s"];
     case "caption":
       return ["e", "se", "s"];
     case "image":
-    case "video":
-      return lockAspectRatio
-        ? ["nw", "ne", "sw", "se"]
-        : ["nw", "n", "ne", "w", "e", "sw", "s", "se"];
+      return ["nw", "ne", "sw", "se"];
     case "svg":
       return ["nw", "n", "ne", "w", "e", "sw", "s", "se"];
     case "group":
@@ -54,12 +45,11 @@ export const getTargetAbles = (targetType: string): ITargetAbles => {
         snappable: true
       };
     case "image":
-    case "video":
       return {
         rotatable: true,
-        resizable: true,
-        scalable: false,
-        keepRatio: false,
+        resizable: false,
+        scalable: true,
+        keepRatio: true,
         draggable: true,
         snappable: true
       };
@@ -78,6 +68,7 @@ export const getTargetAbles = (targetType: string): ITargetAbles => {
         resizable: false,
         scalable: true,
         keepRatio: true,
+
         draggable: true,
         snappable: true
       };
@@ -141,11 +132,8 @@ export const getSelectionByIds = (ids: string[]): SelectionInfo => {
   if (targets.length === 1) {
     const target = targets[0];
     const targetType = getTypeFromClassName(target.className)!;
-    const targetId = getIdFromClassName(target.className);
-    const lockAspectRatio =
-      useStore.getState().trackItemsMap[targetId]?.details?.lockAspectRatio ?? true;
     const ables = getTargetAbles(targetType);
-    const controls = getTargetControls(targetType, lockAspectRatio);
+    const controls = getTargetControls(targetType);
     return { targets: [target], layerType: targetType, ables, controls };
   } else {
     return {
