@@ -19,6 +19,8 @@ import {getMinCaptionDimensions} from "@/features/editor/utils/captions";
 let holdGroupPosition: Record<string, any> | null = null;
 let dragStartEnd = false;
 
+const MIN_MEDIA_DIMENSION = 20;
+
 interface SceneInteractionsProps {
   stateManager: StateManager;
   containerRef: React.RefObject<HTMLDivElement>;
@@ -50,11 +52,38 @@ function scaleDiv(
   }
 }
 
+// Like scaleDiv, but for the image/video reveal-mask content div — no
+// font-size to touch, just the box itself. Selects by attribute rather
+// than `#id` so we don't need CSS.escape for generated ids.
+// This is a purely-visual instant-feedback patch; it doesn't reach
+// MaskAnim's own masking wrapper (which lives outside this div and is
+// sized from React props), so it's paired with a live setState push
+// below that actually keeps MaskAnim in sync.
+function scaleMediaDiv(
+  id: string,
+  scale: number,
+  currentWidth: number,
+  currentHeight: number
+) {
+  const div = document.querySelector(`[id="${id}-reveal-mask"]`) as HTMLDivElement | null;
+  if (div) {
+    div.style.width = `${currentWidth * scale}px`;
+    div.style.height = `${currentHeight * scale}px`;
+  }
+}
+
+function setMediaDivSize(id: string, width?: number, height?: number) {
+  const div = document.querySelector(`[id="${id}-reveal-mask"]`) as HTMLDivElement | null;
+  if (!div) return;
+  if (width !== undefined) div.style.width = `${width}px`;
+  if (height !== undefined) div.style.height = `${height}px`;
+}
+
 export function SceneInteractions({
-  stateManager,
-  containerRef,
-  zoom
-}: SceneInteractionsProps) {
+                                    stateManager,
+                                    containerRef,
+                                    zoom
+                                  }: SceneInteractionsProps) {
   const [targets, setTargets] = useState<HTMLDivElement[]>([]);
   const [selection, setSelection] = useState<Selection>();
   const {
@@ -86,21 +115,21 @@ export function SceneInteractions({
     const updateTargets = (time?: number) => {
       const { trackItemsMap, playerRef, fps, activeIds } = useStore.getState();
       const currentTime = time ?? (playerRef?.current
-          ? (playerRef.current.getCurrentFrame() / fps) * 1000
-          : 0);
+        ? (playerRef.current.getCurrentFrame() / fps) * 1000
+        : 0);
       const targetIds = activeIds.filter((id) => {
         return (
-            trackItemsMap[id]?.display.from <= currentTime &&
-            trackItemsMap[id]?.display.to >= currentTime
+          trackItemsMap[id]?.display.from <= currentTime &&
+          trackItemsMap[id]?.display.to >= currentTime
         );
       });
       const targets = targetIds.map(
-          (id) => getTargetById(id) as HTMLDivElement
+        (id) => getTargetById(id) as HTMLDivElement
       );
       selection?.setSelectedTargets(targets);
       const selInfo = getSelectionByIds(targetIds);
       const isLocked = targetIds.length === 1 &&
-          useStore.getState().trackItemsMap[targetIds[0]]?.details?.locked;
+        useStore.getState().trackItemsMap[targetIds[0]]?.details?.locked;
       if (isLocked) {
         selInfo.ables = {
           ...selInfo.ables,
@@ -429,11 +458,11 @@ export function SceneInteractions({
         delete target.dataset.liveRotate;
       }}
       onResize={({
-        target,
-        width: nextWidth,
-        height: nextHeight,
-        direction
-      }) => {
+                   target,
+                   width: nextWidth,
+                   height: nextHeight,
+                   direction
+                 }) => {
         const id = getIdFromClassName(target.className);
         if (direction[1] === 1 || direction[1] === -1) {
           if (trackItemsMap[id].type === "progressSquare") {
@@ -511,25 +540,77 @@ export function SceneInteractions({
             return;
           }
 
+          if (isPureVerticalDirection && (item.type === "image" || item.type === "video")) {
+            // pure top/bottom edge drag: height only, width untouched.
+            const finalHeight = Math.max(nextHeight, MIN_MEDIA_DIMENSION);
+            target.style.height = `${finalHeight}px`;
+
+            const animationDiv = target.firstElementChild?.firstElementChild as HTMLDivElement | null;
+            if (animationDiv) {
+              animationDiv.style.height = `${finalHeight}px`;
+            }
+
+            setMediaDivSize(id, undefined, finalHeight);
+
+            // MaskAnim's own masking wrapper is sized from React props
+            // (item.details), not from the DOM nodes we can reach with a
+            // selector — push the live value into the store so it
+            // re-renders and the mask boundary actually moves with the drag.
+            setState({
+              trackItemsMap: {
+                ...trackItemsMap,
+                [id]: {
+                  ...trackItemsMap[id],
+                  details: {
+                    ...trackItemsMap[id].details,
+                    height: finalHeight
+                  }
+                }
+              }
+            });
+            return;
+          }
+
           // default proportional scaling for corner handles and non-text types
           const currentWidth = target.clientWidth;
           const currentHeight = target.clientHeight;
           const scaleY = nextHeight / currentHeight;
           const scale = scaleY;
 
-          target.style.width = `${currentWidth * scale}px`;
-          target.style.height = `${currentHeight * scale}px`;
+          const scaledWidth = currentWidth * scale;
+          const scaledHeight = currentHeight * scale;
+
+          target.style.width = `${scaledWidth}px`;
+          target.style.height = `${scaledHeight}px`;
 
           const animationDiv = target.firstElementChild?.firstElementChild as HTMLDivElement | null;
           if (animationDiv) {
-            animationDiv.style.width = `${currentWidth * scale}px`;
-            animationDiv.style.height = `${currentHeight * scale}px`;
+            animationDiv.style.width = `${scaledWidth}px`;
+            animationDiv.style.height = `${scaledHeight}px`;
 
             if (trackItemsMap[id].type === "text") {
               scaleDiv(`[data-text-id="${id}"]`, scale, currentWidth, currentHeight);
             } else if (trackItemsMap[id].type === "caption") {
               scaleDiv(`#caption-${id}`, scale, currentWidth, currentHeight);
+            } else if (trackItemsMap[id].type === "image" || trackItemsMap[id].type === "video") {
+              scaleMediaDiv(id, scale, currentWidth, currentHeight);
             }
+          }
+
+          if (trackItemsMap[id].type === "image" || trackItemsMap[id].type === "video") {
+            setState({
+              trackItemsMap: {
+                ...trackItemsMap,
+                [id]: {
+                  ...trackItemsMap[id],
+                  details: {
+                    ...trackItemsMap[id].details,
+                    width: scaledWidth,
+                    height: scaledHeight
+                  }
+                }
+              }
+            });
           }
         } else {
           const id = getIdFromClassName(target.className);
@@ -605,6 +686,32 @@ export function SceneInteractions({
               }
             });
           }
+
+          if (item.type === "image" || item.type === "video") {
+            // pure left/right edge drag: width only, height untouched.
+            const clampedWidth = Math.max(nextWidth, MIN_MEDIA_DIMENSION);
+            target.style.width = `${clampedWidth}px`;
+
+            const animationDiv = target.firstElementChild?.firstElementChild as HTMLDivElement | null;
+            if (animationDiv) {
+              animationDiv.style.width = `${clampedWidth}px`;
+            }
+
+            setMediaDivSize(id, clampedWidth, undefined);
+
+            setState({
+              trackItemsMap: {
+                ...trackItemsMap,
+                [id]: {
+                  ...trackItemsMap[id],
+                  details: {
+                    ...trackItemsMap[id].details,
+                    width: clampedWidth
+                  }
+                }
+              }
+            });
+          }
         }
       }}
       onResizeEnd={({ target }) => {
@@ -631,15 +738,54 @@ export function SceneInteractions({
                 }
               }
             });
+
+            if (type === "text") {
+              textDiv.style.width = "100%";
+              textDiv.style.height = "100%";
+            }
+            const animationDiv = target.firstElementChild?.firstElementChild as HTMLDivElement | null;
+            if (animationDiv) {
+              animationDiv.style.height = "100%";
+              animationDiv.style.width = type === "caption" ? "100%" : "";
+            }
           }
         } else {
+          const oldDetails = trackItemsMap[targetId].details;
+          const newWidth = parseFloat(target.style.width);
+          const newHeight = parseFloat(target.style.height);
+
+          // If this item has an explicit crop window (from a prior crop
+          // operation), it's defined in the OLD width/height's coordinate
+          // space. Scale it along with the resize so it doesn't go stale
+          // and desync the outer box from the visible content.
+          let cropUpdate: Record<string, any> = {};
+          if (
+            (type === "image" || type === "video") &&
+            oldDetails.crop &&
+            oldDetails.width &&
+            oldDetails.height
+          ) {
+            const scaleX = newWidth / oldDetails.width;
+            const scaleY = newHeight / oldDetails.height;
+            cropUpdate = {
+              crop: {
+                ...oldDetails.crop,
+                x: (oldDetails.crop.x || 0) * scaleX,
+                y: (oldDetails.crop.y || 0) * scaleY,
+                width: (oldDetails.crop.width || oldDetails.width) * scaleX,
+                height: (oldDetails.crop.height || oldDetails.height) * scaleY
+              }
+            };
+          }
+
           dispatch(EDIT_OBJECT, {
             payload: {
               [targetId]: {
                 details: {
-                  ...trackItemsMap[targetId].details,
-                  width: parseFloat(target.style.width),
-                  height: parseFloat(target.style.height),
+                  ...oldDetails,
+                  width: newWidth,
+                  height: newHeight,
+                  ...cropUpdate
                 }
               }
             }

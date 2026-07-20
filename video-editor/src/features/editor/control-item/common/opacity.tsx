@@ -1,22 +1,34 @@
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
-import { useState, useEffect } from "react";
+import { dispatch } from "@designcombo/events";
+import { EDIT_OBJECT } from "@designcombo/state";
+import { useEffect, useState } from "react";
 
 const Opacity = ({
+  id,
   value,
-  onChange,
-  disabled,
+  disabled
 }: {
+  id: string;
   value: number;
-  onChange: (v: number) => void;
-  disabled: boolean;
+  disabled?: boolean;
 }) => {
-  // Create local state to manage opacity
-  const [localValue, setLocalValue] = useState(value);
+  const [localValue, setLocalValue] = useState<number>(value);
 
-  // Update local state when prop value changes
+  const onChange = (v: number) => {
+    dispatch(EDIT_OBJECT, {
+      payload: {
+        [id]: {
+          details: {
+            opacity: v
+          }
+        }
+      }
+    });
+  };
+
   useEffect(() => {
-    setLocalValue(value);
+    setLocalValue(Math.round(value));
   }, [value]);
 
   return (
@@ -24,9 +36,7 @@ const Opacity = ({
       <div className="flex flex-1 items-center text-xs text-muted-foreground">
         Opacity
       </div>
-      <div
-        className="w-full flex gap-2"
-      >
+      <div className="w-full flex gap-2">
         <Input
           max={100}
           className="w-15 text-center text-sm"
@@ -34,11 +44,11 @@ const Opacity = ({
           onChange={(e) => {
             const newValue = Number(e.target.value);
             if (newValue >= 0 && newValue <= 100) {
-              setLocalValue(newValue); // Update local state
-              onChange(newValue); // Optionally propagate immediately, or adjust as needed
+              setLocalValue(newValue);
+              onChange(newValue);
             }
           }}
-          value={localValue} // Use local state for input value
+          value={localValue}
           disabled={disabled}
         />
         <Slider
@@ -46,7 +56,7 @@ const Opacity = ({
           value={[localValue]}
           onValueChange={(e) => {
             setLocalValue(e[0]);
-            onChange(e[0]); // propagate immediately on every drag tick
+            onChange(e[0]);
           }}
           min={0}
           max={100}
