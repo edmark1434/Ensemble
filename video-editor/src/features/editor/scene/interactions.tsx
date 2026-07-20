@@ -51,10 +51,10 @@ function scaleDiv(
 }
 
 export function SceneInteractions({
-  stateManager,
-  containerRef,
-  zoom
-}: SceneInteractionsProps) {
+                                    stateManager,
+                                    containerRef,
+                                    zoom
+                                  }: SceneInteractionsProps) {
   const [targets, setTargets] = useState<HTMLDivElement[]>([]);
   const [selection, setSelection] = useState<Selection>();
   const {
@@ -86,21 +86,21 @@ export function SceneInteractions({
     const updateTargets = (time?: number) => {
       const { trackItemsMap, playerRef, fps, activeIds } = useStore.getState();
       const currentTime = time ?? (playerRef?.current
-          ? (playerRef.current.getCurrentFrame() / fps) * 1000
-          : 0);
+        ? (playerRef.current.getCurrentFrame() / fps) * 1000
+        : 0);
       const targetIds = activeIds.filter((id) => {
         return (
-            trackItemsMap[id]?.display.from <= currentTime &&
-            trackItemsMap[id]?.display.to >= currentTime
+          trackItemsMap[id]?.display.from <= currentTime &&
+          trackItemsMap[id]?.display.to >= currentTime
         );
       });
       const targets = targetIds.map(
-          (id) => getTargetById(id) as HTMLDivElement
+        (id) => getTargetById(id) as HTMLDivElement
       );
       selection?.setSelectedTargets(targets);
       const selInfo = getSelectionByIds(targetIds);
       const isLocked = targetIds.length === 1 &&
-          useStore.getState().trackItemsMap[targetIds[0]]?.details?.locked;
+        useStore.getState().trackItemsMap[targetIds[0]]?.details?.locked;
       if (isLocked) {
         selInfo.ables = {
           ...selInfo.ables,
@@ -429,11 +429,11 @@ export function SceneInteractions({
         delete target.dataset.liveRotate;
       }}
       onResize={({
-        target,
-        width: nextWidth,
-        height: nextHeight,
-        direction
-      }) => {
+                   target,
+                   width: nextWidth,
+                   height: nextHeight,
+                   direction
+                 }) => {
         const id = getIdFromClassName(target.className);
         if (direction[1] === 1 || direction[1] === -1) {
           if (trackItemsMap[id].type === "progressSquare") {
@@ -631,6 +631,16 @@ export function SceneInteractions({
                 }
               }
             });
+
+            if (type === "text") {
+              textDiv.style.width = "100%";
+              textDiv.style.height = "100%";
+            }
+            const animationDiv = target.firstElementChild?.firstElementChild as HTMLDivElement | null;
+            if (animationDiv) {
+              animationDiv.style.height = "100%";
+              animationDiv.style.width = type === "caption" ? "100%" : "";
+            }
           }
         } else {
           dispatch(EDIT_OBJECT, {
