@@ -81,20 +81,22 @@ export const LayoutControls = ({ trackItem }: LayoutControlProps) => {
       <Label className="font-sans text-sm font-medium">Layout</Label>
       <div className="flex flex-col gap-2">
         <div className="flex gap-2">
-          <LayoutDimension
-            field="width"
-            label="Width"
-            value={details.width}
-            isLinked={isLinked}
-            onCommit={commitDimension}
-          />
-          <LayoutDimension
-            field="height"
-            label="Height"
-            value={details.height}
-            isLinked={isLinked}
-            onCommit={commitDimension}
-          />
+          <div className="flex gap-2 flex-5">
+            <LayoutDimension
+              field="width"
+              label="Width"
+              value={details.width}
+              isLinked={isLinked}
+              onCommit={commitDimension}
+            />
+            <LayoutDimension
+              field="height"
+              label="Height"
+              value={details.height}
+              isLinked={isLinked}
+              onCommit={commitDimension}
+            />
+          </div>
           <div className="flex flex-col gap-2 flex-1">
             <div className="flex flex-1 items-center text-xs text-muted-foreground"></div>
             <div className="flex gap-1 flex-1">

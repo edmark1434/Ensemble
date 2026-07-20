@@ -12,14 +12,6 @@ interface LayoutMediaControlsProps {
   trackItem: ITrackItem & any;
 }
 
-// Images/videos are scaled on canvas via a CSS `scale()` transform —
-// `details.width`/`details.height` stay fixed at the item's base
-// (unscaled) size. Making resize handles write width/height directly for
-// media broke video fit/fill, so this panel doesn't try to fix that: it
-// shows the effective on-canvas size (base * scale) and, when edited,
-// solves for the scale that would produce the requested size and
-// dispatches a transform update instead. `details.width`/`details.height`
-// are never written to from here.
 const getScaleXY = (transform?: string): [number, number] => {
   const match = (transform || "").match(/scale\(\s*([-\d.]+)\s*,\s*([-\d.]+)/);
   return match ? [parseFloat(match[1]), parseFloat(match[2])] : [1, 1];
@@ -31,9 +23,12 @@ export const LayoutMediaControls = ({ trackItem }: LayoutMediaControlsProps) => 
   const [isLinked, setIsLinked] = useState(false);
   const { setCropTarget } = useLayoutStore();
 
+  const crop = details.crop;
+  const hasCrop = !!(crop && crop.width && crop.height);
+  const baseW = hasCrop ? crop.width : (details.width ?? 0);
+  const baseH = hasCrop ? crop.height : (details.height ?? 0);
+
   const commitDimension = (axis: "width" | "height", nextDisplay: number) => {
-    const baseW = details.width ?? 0;
-    const baseH = details.height ?? 0;
     const [curSx, curSy] = getScaleXY(details.transform);
 
     const curDisplayW = Math.round(baseW * Math.abs(curSx));
@@ -58,8 +53,22 @@ export const LayoutMediaControls = ({ trackItem }: LayoutMediaControlsProps) => 
     const nextSx = baseW > 0 ? signX * (nextDisplayW / baseW) : curSx;
     const nextSy = baseH > 0 ? signY * (nextDisplayH / baseH) : curSy;
 
+    const deltaW = baseW > 0 ? baseW * (Math.abs(nextSx) - Math.abs(curSx)) : 0;
+    const deltaH = baseH > 0 ? baseH * (Math.abs(nextSy) - Math.abs(curSy)) : 0;
+
+    const nextLeft = parseNumeric(details.left) + deltaW / 2;
+    const nextTop = parseNumeric(details.top) + deltaH / 2;
+
     dispatch(EDIT_OBJECT, {
-      payload: { [id]: { details: { transform: `scale(${nextSx}, ${nextSy})` } } }
+      payload: {
+        [id]: {
+          details: {
+            transform: `scale(${nextSx}, ${nextSy})`,
+            left: nextLeft,
+            top: nextTop
+          }
+        }
+      }
     });
   };
 
@@ -93,7 +102,7 @@ export const LayoutMediaControls = ({ trackItem }: LayoutMediaControlsProps) => 
           <MediaDimension
             axis="width"
             label="Width"
-            baseValue={details.width}
+            baseValue={baseW}
             transform={details.transform}
             isLinked={isLinked}
             onCommit={commitDimension}
@@ -101,7 +110,7 @@ export const LayoutMediaControls = ({ trackItem }: LayoutMediaControlsProps) => 
           <MediaDimension
             axis="height"
             label="Height"
-            baseValue={details.height}
+            baseValue={baseH}
             transform={details.transform}
             isLinked={isLinked}
             onCommit={commitDimension}
@@ -136,7 +145,7 @@ export const LayoutMediaControls = ({ trackItem }: LayoutMediaControlsProps) => 
             axis="left"
             label="Left"
             rawValue={details.left}
-            baseSize={details.width}
+            baseSize={baseW}
             transform={details.transform}
           />
           <MediaPosition
@@ -144,7 +153,7 @@ export const LayoutMediaControls = ({ trackItem }: LayoutMediaControlsProps) => 
             axis="top"
             label="Top"
             rawValue={details.top}
-            baseSize={details.height}
+            baseSize={baseH}
             transform={details.transform}
           />
         </div>
@@ -191,7 +200,9 @@ export const LayoutMediaControls = ({ trackItem }: LayoutMediaControlsProps) => 
 
 // The lying field: displays base * |scale| for the given axis, and on
 // commit solves scale = displayed / base, preserving sign (so flips don't
-// get clobbered) and leaving the other axis's scale untouched.
+// get clobbered) and leaving the other axis's scale untouched. `base` is
+// whatever the caller passes in — LayoutMediaControls now passes the
+// crop-aware size, so this component itself doesn't need to know crop exists.
 const MediaDimension = ({
                           axis,
                           label,
@@ -282,14 +293,16 @@ const MediaDimension = ({
 // visible edges actually land once a scale is applied. This shows the
 // effective on-screen position and, on edit, solves for the raw left/top
 // that would produce it — scale itself is untouched by this field.
+// `baseSize` is crop-aware (passed in from LayoutMediaControls), so the
+// offset math below is already correct whether or not a crop is active.
 const MediaPosition = ({
-  id,
-  axis,
-  label,
-  rawValue,
-  baseSize,
-  transform
-}: {
+                         id,
+                         axis,
+                         label,
+                         rawValue,
+                         baseSize,
+                         transform
+                       }: {
   id: string;
   axis: "left" | "top";
   label: string;
@@ -376,11 +389,11 @@ const parseNumeric = (v: number | string | undefined): number => {
 };
 
 const LayoutSkew = ({
-  id,
-  field,
-  label,
-  value
-}: {
+                      id,
+                      field,
+                      label,
+                      value
+                    }: {
   id: string;
   field: "skewX" | "skewY";
   label: string;
@@ -446,9 +459,9 @@ const parseRotate = (v: number | string | undefined): number => {
 };
 
 const LayoutRotation = ({
-  id,
-  value
-}: {
+                          id,
+                          value
+                        }: {
   id: string;
   value: number | string | undefined;
 }) => {
