@@ -91,8 +91,6 @@ export const Videos = () => {
       }
     };
 
-    console.log("sent", JSON.stringify(finalPayload));
-
     dispatch(ADD_VIDEO, {
       payload: finalPayload,
       options: {

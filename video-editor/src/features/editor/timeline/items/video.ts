@@ -90,6 +90,11 @@ class Video extends Trimmable {
   declare volume: number;
   public name: string = "Video";
 
+  public isLoading = true;
+  private loaderPath: Path2D | null = null;
+  private loadingRotation = 0;
+  private loadingAnimationFrameId: number | null = null;
+
   static createControls(): { controls: Record<string, Control> } {
     return { controls: createMediaControls() };
   }
@@ -124,6 +129,7 @@ class Video extends Trimmable {
     this.hidden = props.hidden ?? false;
     this.volume = props.volume ?? 100;
     this.name = props.metadata?.name || "Video";
+    this.startLoadingAnimation();
   }
 
   private initOffscreenCanvas() {
@@ -161,6 +167,10 @@ class Video extends Trimmable {
 
     this.createFallbackPattern();
     await this.prepareAssets();
+
+    this.isLoading = false;
+    this.stopLoadingAnimation();
+    this.canvas?.requestRenderAll();
 
     this.onScrollChange({ scrollLeft: 0 });
   }
@@ -410,7 +420,13 @@ class Video extends Trimmable {
     ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
     ctx.restore();
 
-    if (this.hidden || this.volume === 0) this.drawStatusIcons(ctx);
+    if (this.isLoading || this.hidden || this.volume === 0) {
+      this.drawStatusIcons(ctx);
+    }
+
+    const iconCount =
+      (this.isLoading ? 1 : 0) + (this.hidden ? 1 : 0) + (this.volume === 0 ? 1 : 0);
+    const textX = 12 + iconCount * 24;
 
     ctx.save();
     ctx.translate(-this.width / 2, -this.height / 2);
@@ -424,13 +440,7 @@ class Video extends Trimmable {
     ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
     ctx.shadowBlur = 4;
 
-    if (this.hidden && this.volume === 0) {
-      ctx.fillText(this.name, 60, 22);
-    } else if (this.hidden || this.volume === 0) {
-      ctx.fillText(this.name, 36, 22);
-    } else {
-      ctx.fillText(this.name, 12, 22);
-    }
+    ctx.fillText(this.name, textX, 22);
 
     ctx.restore();
   }
@@ -448,6 +458,11 @@ class Video extends Trimmable {
     }
 
     let iconX = -this.width / 2 + 12;
+
+    if (this.isLoading) {
+      this.drawLoader(ctx, iconX);
+      iconX += 24;
+    }
 
     if (this.hidden) {
       const eyeOffPath = new Path2D("M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22");
@@ -485,11 +500,15 @@ class Video extends Trimmable {
   public async setSrc(src: string) {
     super.setSrc(src);
     this.clip = null;
+    this.isLoading = true;
+    this.startLoadingAnimation();
+    this.canvas?.requestRenderAll();
     await this.initialize();
     await this.prepareAssets();
     this.thumbnailCache.clearCacheButFallback();
     this.onScale();
   }
+
   public onResizeSnap() {
     this.renderToOffscreen(true);
   }
@@ -672,6 +691,44 @@ class Video extends Trimmable {
     this.nextFilmstrip = { ...EMPTY_FILMSTRIP, segmentIndex: 0 };
     this.loadingFilmstrip = { ...EMPTY_FILMSTRIP };
     this.onScrollChange({ scrollLeft: this.scrollLeft, force: true });
+  }
+
+  private drawLoader(ctx: CanvasRenderingContext2D, iconX: number) {
+    if (!this.loaderPath) {
+      this.loaderPath = new Path2D("M21 12a9 9 0 1 1-6.219-8.56");
+    }
+
+    ctx.save();
+    ctx.translate(iconX, -this.height / 2 + 10);
+    ctx.scale(0.67, 0.67);
+    ctx.translate(12, 12);
+    ctx.rotate((this.loadingRotation * Math.PI) / 180);
+    ctx.translate(-12, -12);
+    ctx.strokeStyle = "rgba(255,255,255,1)";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.stroke(this.loaderPath);
+    ctx.restore();
+  }
+
+  private startLoadingAnimation() {
+    const animate = () => {
+      if (!this.isLoading) {
+        this.loadingAnimationFrameId = null;
+        return;
+      }
+      this.loadingRotation = (this.loadingRotation + 8) % 360;
+      this.canvas?.requestRenderAll();
+      this.loadingAnimationFrameId = requestAnimationFrame(animate);
+    };
+    this.loadingAnimationFrameId = requestAnimationFrame(animate);
+  }
+
+  private stopLoadingAnimation() {
+    if (this.loadingAnimationFrameId !== null) {
+      cancelAnimationFrame(this.loadingAnimationFrameId);
+      this.loadingAnimationFrameId = null;
+    }
   }
 }
 
