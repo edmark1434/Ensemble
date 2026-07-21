@@ -231,7 +231,8 @@ const Home: React.FC = () => {
     const fetchUserSession = async () => {
       try { 
         const response = await api.get("/api/users/session");
-        if (response.status === 200 && response.data.steps) {
+        console.log("User session response:", response.data);
+        if (response.status === 200) {
           // Handle successful session fetch
           if (!response.data.steps) {
             navigate("/setup/personal-details");

@@ -49,22 +49,22 @@ function mapReportRow(row) {
     id: row.report_id,
     number: row.report_number,
     reporter: {
-      accountId: row.reporter_account_id,
+      accountId: row.reporter_account_id || row.by_account_id,
       name: row.reporter_name || 'Anonymous',
       username: row.reporter_handle || '—',
     },
-    targetType: row.target_type,
-    targetId: row.target_id,
+    targetType: row.target_type || row.type,
+    targetId: row.target_id || row.reference_id,
     targetLabel: row.target_label,
     reason: row.reason,
     description: row.description,
     status: normalizeStatus(row.status),
-    priority: row.priority,
+    priority: row.priority || 'medium',
     assignee: row.assigned_staff_id
       ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Unassigned' }
       : null,
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    updatedAt: row.updated_at || row.created_at,
     resolvedAt: row.resolved_at,
   };
 }
@@ -205,23 +205,25 @@ async function fetchScopedReports({ targetTypesIn, status } = {}) {
   const params = [];
   if (targetTypesIn && targetTypesIn.length) {
     params.push(targetTypesIn);
-    where.push(`LOWER(r.target_type) = ANY($${params.length})`);
+    where.push(`LOWER(COALESCE(r.target_type, r.type)) = ANY($${params.length})`);
   }
   if (status && status !== 'all') {
     params.push(String(status).toLowerCase());
     where.push(`LOWER(r.status) = $${params.length}`);
   }
+  where.push('r.deleted_at IS NULL');
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
   const result = await pool.query(
     `
     SELECT
       r.*,
+      r.by_account_id AS reporter_account_id,
       COALESCE(repa.display_name, repu.first_name || ' ' || repu.last_name) AS reporter_name,
       repa.handle AS reporter_handle,
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name
-    FROM user_reports r
-    LEFT JOIN accounts repa ON repa.account_id = r.reporter_account_id
+    FROM reports r
+    LEFT JOIN accounts repa ON repa.account_id = r.by_account_id
     LEFT JOIN users repu ON repu.account_id = repa.account_id
     LEFT JOIN staff st ON st.staff_id = r.assigned_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
@@ -239,8 +241,9 @@ async function scopedReportCounts({ targetTypesIn } = {}) {
   const params = [];
   if (targetTypesIn && targetTypesIn.length) {
     params.push(targetTypesIn);
-    where.push(`LOWER(target_type) = ANY($${params.length})`);
+    where.push(`LOWER(COALESCE(target_type, type)) = ANY($${params.length})`);
   }
+  where.push('deleted_at IS NULL');
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
   const result = await pool.query(
@@ -248,7 +251,7 @@ async function scopedReportCounts({ targetTypesIn } = {}) {
     SELECT
       COUNT(*)::int AS total,
       COUNT(*) FILTER (WHERE LOWER(status) NOT IN ('resolved', 'closed'))::int AS open_count
-    FROM user_reports
+    FROM reports
     ${whereSql}
     `,
     params

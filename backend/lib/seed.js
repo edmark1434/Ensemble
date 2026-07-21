@@ -35,22 +35,25 @@ async function ensurePasswordHashColumnCapacity() {
 }
 
 async function resetSeedTables() {
-  await pool.query(`
-    TRUNCATE TABLE
-      ticket_messages,
-      support_tickets,
-      user_reports,
-      disputes,
-      violations,
-      marketplace_listings,
-      platform_settings,
-      staff,
-      users,
-      accounts
-    RESTART IDENTITY CASCADE
-  `).catch(async () => {
-    await pool.query('TRUNCATE TABLE staff, users, accounts RESTART IDENTITY CASCADE');
-  });
+  // Prefer clearing portal + auth tables. CASCADE handles FKs; UUID tables ignore RESTART IDENTITY.
+  try {
+    await pool.query(`
+      TRUNCATE TABLE
+        ticket_messages,
+        support_tickets,
+        reports,
+        marketplace_listings,
+        platform_settings,
+        disputes,
+        violations,
+        staff,
+        users,
+        accounts
+      CASCADE
+    `);
+  } catch {
+    await pool.query('TRUNCATE TABLE staff, users, accounts CASCADE');
+  }
 }
 
 async function seedMarketplaceListings(userAccountIds, staffByRole) {
@@ -103,14 +106,37 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   ];
 
   const reportIds = [];
-  for (const r of reports) {
+  for (let i = 0; i < reports.length; i++) {
+    const r = reports[i];
+    const targetAccountId = userAccountIds[(i + 1) % userAccountIds.length];
     const res = await pool.query(
-      `INSERT INTO user_reports (
-        report_number, reporter_account_id, target_type, target_id, target_label,
-        reason, description, status, priority, assigned_staff_id, created_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, NOW() - ($11 || ' hours')::interval)
+      `INSERT INTO reports (
+        report_number, by_account_id, for_account_id,
+        target_type, target_id, target_label,
+        reason, description, status, priority, assigned_staff_id, created_at,
+        type, reference_table, reference_prefix, reference_id, is_created_by_bot
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+        NOW() - ($12 || ' hours')::interval,
+        $4, $4, $13, $14, false
+      )
       RETURNING report_id`,
-      [...r.slice(0, 9), r[7] === 'resolved' ? adminStaffId : supportStaffId, String(faker.number.int({ min: 2, max: 120 }))]
+      [
+        r[0],
+        r[1],
+        targetAccountId,
+        r[2],
+        r[3],
+        r[4],
+        r[5],
+        r[6],
+        r[7],
+        r[8],
+        r[7] === 'resolved' ? adminStaffId : supportStaffId,
+        String(faker.number.int({ min: 2, max: 120 })),
+        String(r[3] || 'id').slice(0, 50),
+        String(r[3] || 'unknown').slice(0, 50),
+      ]
     );
     reportIds.push(res.rows[0].report_id);
   }
@@ -130,13 +156,15 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         dispute_number, title, reason, status, priority,
         initiator_account_id, respondent_account_id,
         related_entity_type, related_entity_id, assigned_staff_id,
-        credit_amount_involved, opened_at, resolution_notes
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, NOW() - ($12 || ' days')::interval, $13)
+        credit_amount_involved, opened_at, resolution_notes,
+        type, by_account_id, for_account_id
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, NOW() - ($12 || ' days')::interval, $13, $14, $6, $7)
       RETURNING dispute_id`,
       [
         ...d.slice(0, 11),
         String(faker.number.int({ min: 3, max: 90 })),
         d[3] === 'resolved' ? 'Resolved per platform policy.' : null,
+        d[7] || 'general',
       ]
     );
     disputeIds.push(res.rows[0].dispute_id);
@@ -196,8 +224,10 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
 
   for (const v of violations) {
     await pool.query(
-      `INSERT INTO violations (violation_number, account_id, title, reason, points, issued_by_staff_id)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
+      `INSERT INTO violations (
+        violation_number, account_id, title, reason, points, issued_by_staff_id,
+        type, status, staff_id
+      ) VALUES ($1,$2,$3,$4,$5,$6,$3,'active',$6)`,
       v
     );
   }

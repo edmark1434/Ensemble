@@ -19,6 +19,7 @@ interface UserDetail {
   social_links?: any[];
   avatar_file_id: number | null;
   avatar_preset_url?: string;
+  joinedDate?: string;
 }
 
 interface ProfileEditModalProps {
@@ -59,7 +60,8 @@ export default function ProfileEditModal({
     skills: [],
     social_links: [],
     avatar_file_id: null,
-    avatar_preset_url: ""
+    avatar_preset_url: "",
+    joinedDate: ""
   });
   
   const [originalFormData, setOriginalFormData] = useState<UserDetail>({
@@ -76,7 +78,8 @@ export default function ProfileEditModal({
     skills: [],
     social_links: [],
     avatar_file_id: null,
-    avatar_preset_url: ""
+    avatar_preset_url: "",
+    joinedDate: ""
   });
   
   const [places, setPlaces] = useState<Place[]>([]);
@@ -97,6 +100,7 @@ export default function ProfileEditModal({
         birthdate: data.birthdate || "",
         role: data.role || "Freelancer",
         email_address: data.email_address || "",
+        joinedDate: data.joinedDate || "",
         address: data.location || data.address || "",
         bio: data.bio || "",
         tagline: data.tagline || "",
@@ -195,7 +199,18 @@ export default function ProfileEditModal({
   const handlePlaceSelect = (place: Place) => {
     const formattedAddress = `${place.properties.name || ''}, ${place.properties.city ?? ''}, ${place.properties.state ?? ''}`.trim().replace(/,\s*$/, '');
     
-    setFormData((prev) => ({
+    const updatedData = {
+      ...formData,
+      address: formattedAddress,
+      country: place.properties.country || formData.country || "Philippines",
+      zipCode: place.properties.postcode || formData.zipCode || ""
+    };
+    
+    setFormData(updatedData);
+    
+    // CRITICAL FIX: Also update originalFormData to reflect the selected address
+    // This ensures the original data matches the selected address data
+    setOriginalFormData(prev => ({
       ...prev,
       address: formattedAddress,
       country: place.properties.country || prev.country || "Philippines",
@@ -242,60 +257,54 @@ export default function ProfileEditModal({
     setIsLoading(true);
     
     try {
-      // Prepare the payload with original and updated data
-      const payload = {
-        original: {
-          display_name: originalFormData.name || "",
-          birth_date: originalFormData.birthdate || "",
-          address: originalFormData.address || "",
-          country: originalFormData.country || "",
-          zip_code: originalFormData.zipCode || "",
-          description: originalFormData.bio || "",
-          tagline: originalFormData.tagline || ""
-        },
-        updates: {
-          display_name: formData.name || "",
-          birth_date: formData.birthdate || "",
-          address: formData.address || "",
-          country: formData.country || "",
-          zip_code: formData.zipCode || "",
-          description: formData.bio || "",
-          tagline: formData.tagline || ""
-        }
+      // Prepare the payload with the correct structure
+      // Your backend expects: { original: {...}, updates: {...} }
+      const original = {
+        display_name: originalFormData.name || "",
+        birth_date: originalFormData.birthdate || "",
+        address: originalFormData.address || "",
+        country: originalFormData.country || "",
+        zip_code: originalFormData.zipCode || "",
+        description: originalFormData.bio || "",
+        tagline: originalFormData.tagline || ""
       };
       
-      console.log("📊 Profile Edit Payload:", payload);
+      const updates = {
+        display_name: formData.name || "",
+        birth_date: formData.birthdate || "",
+        address: formData.address || "",
+        country: formData.country || "",
+        zip_code: formData.zipCode || "",
+        description: formData.bio || "",
+        tagline: formData.tagline || ""
+      };
       
-      // Call the API to update profile
-      const response = await api.put('/api/accounts/update-profile-details', payload);
+      console.log("📊 Original:", JSON.stringify(original, null, 2));
+      console.log("📊 Updates:", JSON.stringify(updates, null, 2));
+      
+      // Call the API with the correct payload structure
+      const response = await api.put('/api/accounts/update-profile-details', {
+        original: original,
+        updates: updates
+      });
+      
+      console.log("📊 API Response:", JSON.stringify(response.data, null, 2));
       
       if (response.data.success) {
         toast.success("Profile updated successfully");
         
-        // Check if updatedDetails exists and has data
-        const hasUpdatedDetails = response.data.result?.updatedDetails && 
-          Object.keys(response.data.result.updatedDetails).length > 0;
-        
-        let updatedData: UserDetail;
-        
-        if (hasUpdatedDetails) {
-          // Merge API response with form data
-          updatedData = {
-            ...formData,
-            name: response.data.result.updatedDetails.display_name || formData.name,
-            birthdate: response.data.result.updatedDetails.birth_date || formData.birthdate,
-            address: response.data.result.updatedDetails.address || formData.address,
-            country: response.data.result.updatedDetails.country || formData.country,
-            zipCode: response.data.result.updatedDetails.zip_code || formData.zipCode,
-            bio: response.data.result.updatedDetails.description || formData.bio,
-            tagline: response.data.result.updatedDetails.tagline || formData.tagline
-          };
-          console.log("📊 Updated from API response:", updatedData);
-        } else {
-          // Use form data directly if no updatedDetails
-          updatedData = { ...formData };
-          console.log("📊 No updatedDetails from API, using formData:", updatedData);
-        }
+        // Create updated data with all fields
+        const updatedData: UserDetail = {
+          ...formData,
+          name: formData.name || "",
+          birthdate: formData.birthdate || "",
+          address: formData.address || "",
+          country: formData.country || "",
+          zipCode: formData.zipCode || "",
+          bio: formData.bio || "",
+          tagline: formData.tagline || "",
+          joinedDate: formData.joinedDate || "",
+        };
         
         // Pass the updated data to parent
         onSave(updatedData);
@@ -305,6 +314,7 @@ export default function ProfileEditModal({
       }
     } catch (error: any) {
       console.error("Error updating profile:", error);
+      console.error("Error response:", error.response?.data);
       toast.error(error.response?.data?.message || "Failed to update profile");
     } finally {
       setIsLoading(false);
@@ -504,9 +514,6 @@ export default function ProfileEditModal({
               </div>
             )}
           </div>
-
-          {/* Hidden country and zipCode fields - stored in formData but not displayed */}
-          {/* The country and zipCode are still in formData and included in the payload */}
 
           {/* Tagline */}
           <div>

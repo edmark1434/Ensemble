@@ -48,10 +48,11 @@ CREATE TABLE IF NOT EXISTS platform_settings (
 );
 
 -- User-submitted reports (feeds tickets & moderation)
-CREATE TABLE IF NOT EXISTS user_reports (
+CREATE TABLE IF NOT EXISTS reports (
     report_id SERIAL PRIMARY KEY,
     report_number VARCHAR(20) UNIQUE NOT NULL,
-    reporter_account_id INTEGER REFERENCES accounts(account_id),
+    by_account_id INTEGER REFERENCES accounts(account_id),
+    for_account_id INTEGER REFERENCES accounts(account_id),
     target_type VARCHAR(50) NOT NULL,
     target_id VARCHAR(100),
     target_label VARCHAR(255),
@@ -60,9 +61,15 @@ CREATE TABLE IF NOT EXISTS user_reports (
     status VARCHAR(50) NOT NULL DEFAULT 'open',
     priority VARCHAR(20) NOT NULL DEFAULT 'medium',
     assigned_staff_id INTEGER REFERENCES staff(staff_id),
+    type VARCHAR(50),
+    reference_table VARCHAR(50),
+    reference_prefix VARCHAR(50),
+    reference_id VARCHAR(50),
+    is_created_by_bot BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    resolved_at TIMESTAMPTZ
+    resolved_at TIMESTAMPTZ,
+    deleted_at TIMESTAMPTZ
 );
 
 -- Support tickets
@@ -77,7 +84,7 @@ CREATE TABLE IF NOT EXISTS support_tickets (
     requester_account_id INTEGER REFERENCES accounts(account_id),
     assigned_staff_id INTEGER REFERENCES staff(staff_id),
     assigned_role VARCHAR(50),
-    related_report_id INTEGER REFERENCES user_reports(report_id),
+    related_report_id INTEGER REFERENCES reports(report_id),
     related_dispute_id INTEGER,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -158,7 +165,7 @@ BEGIN
     END IF;
 END $$;
 
-CREATE INDEX IF NOT EXISTS idx_user_reports_status ON user_reports(status);
+CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
 CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status);
 CREATE INDEX IF NOT EXISTS idx_support_tickets_assigned ON support_tickets(assigned_staff_id);
 CREATE INDEX IF NOT EXISTS idx_marketplace_listings_status ON marketplace_listings(status);
