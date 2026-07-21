@@ -204,7 +204,7 @@ async function checkInboxByTwoAccountIdsServices(messagePayload,account_id){
                 conversation_type: conversation_type,
                 members: [
                     { account_id: account_id, role: "member", joined_at: new Date() },
-                    { account_id: parseInt(recipientId), role: "member", joined_at: new Date() }
+                    { account_id: recipientId, role: "member", joined_at: new Date() }
                 ],
                 pinned_messages: [],
                 created_at: new Date(),

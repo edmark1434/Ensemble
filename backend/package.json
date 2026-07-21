@@ -11,9 +11,16 @@
     "start": "nodemon server.js",
     "db:setup": "node lib/setup-db.js",
     "seed": "node lib/seed.js",
-    "clean": "node lib/clean.js"
+    "clean": "node lib/clean.js",
+    "migrate": "node-pg-migrate up",
+    "rollback": "node-pg-migrate down",
+    "migration:create": "node-pg-migrate create",
+    "db:create": "node lib/create-db.js",
+    "run:test": "node test-env.js",
+    "rollback:all": "node-pg-migrate down 100"
   },
   "devDependencies": {
+    "node-pg-migrate": "^9.0.0",
     "nodemon": "^3.1.14"
   },
   "dependencies": {
