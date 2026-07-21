@@ -16,7 +16,6 @@
     "rollback": "node-pg-migrate down",
     "migration:create": "node-pg-migrate create",
     "db:create": "node lib/create-db.js",
-    "run:test": "node test-env.js",
     "rollback:all": "node-pg-migrate down 100"
   },
   "devDependencies": {
