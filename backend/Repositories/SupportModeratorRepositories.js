@@ -56,8 +56,8 @@ async function getSupportStaffWorkload() {
       COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name,
       (SELECT COUNT(*)::int FROM support_tickets t
         WHERE t.assigned_staff_id = s.staff_id AND LOWER(t.status) NOT IN ('resolved', 'closed')) AS open_tickets,
-      (SELECT COUNT(*)::int FROM user_reports r
-        WHERE r.assigned_staff_id = s.staff_id AND LOWER(r.status) NOT IN ('resolved', 'closed')) AS open_reports
+      (SELECT COUNT(*)::int FROM reports r
+        WHERE r.assigned_staff_id = s.staff_id AND LOWER(r.status) NOT IN ('resolved', 'closed') AND r.deleted_at IS NULL) AS open_reports
     FROM staff s
     INNER JOIN accounts a ON a.account_id = s.account_id
     WHERE s.role IN ('Support Moderator', 'Admin')
@@ -128,7 +128,7 @@ async function getSupportOverview() {
     recentTickets: tickets.slice(0, 8),
     staffWorkload,
     alerts: buildAlerts(tc, rc, chatOpen),
-    dataSources: { tables: ['support_tickets', 'ticket_messages', 'user_reports'], persisted: true },
+    dataSources: { tables: ['support_tickets', 'ticket_messages', 'reports'], persisted: true },
   };
 }
 

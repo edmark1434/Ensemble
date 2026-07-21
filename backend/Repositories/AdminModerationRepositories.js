@@ -378,7 +378,7 @@ async function getModerationOverview() {
         discussions: forum.discussions,
       },
       notYetInDatabase: ['moderation_actions'],
-      persisted: ['user_reports', 'disputes', 'violations', 'platform_settings'],
+      persisted: ['reports', 'disputes', 'violations', 'platform_settings'],
     },
     summary: {
       yourPendingCases: pendingCases.filter((c) => c.status === 'Open').length,

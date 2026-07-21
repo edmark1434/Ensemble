@@ -80,22 +80,22 @@ function mapReportRow(row) {
     id: row.report_id,
     number: row.report_number,
     reporter: {
-      accountId: row.reporter_account_id,
+      accountId: row.reporter_account_id || row.by_account_id,
       name: row.reporter_name || 'Anonymous',
       username: row.reporter_handle || '—',
     },
-    targetType: row.target_type,
-    targetId: row.target_id,
+    targetType: row.target_type || row.type,
+    targetId: row.target_id || row.reference_id,
     targetLabel: row.target_label,
     reason: row.reason,
     description: row.description,
     status: normalizeStatus(row.status),
-    priority: row.priority,
+    priority: row.priority || 'medium',
     assignee: row.assigned_staff_id
       ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Unassigned' }
       : null,
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    updatedAt: row.updated_at || row.created_at,
     resolvedAt: row.resolved_at,
   };
 }
@@ -138,7 +138,8 @@ async function getTicketsOverview() {
         COUNT(*) FILTER (WHERE LOWER(status) = 'open')::int AS open_count,
         COUNT(*) FILTER (WHERE LOWER(status) = 'in_review')::int AS in_review,
         COUNT(*) FILTER (WHERE LOWER(status) = 'resolved')::int AS resolved
-      FROM user_reports
+      FROM reports
+      WHERE deleted_at IS NULL
     `),
     fetchTicketsList(),
     fetchDisputesList(),
@@ -208,7 +209,7 @@ async function getTicketsOverview() {
     recentActivity,
     alerts: buildTicketAlerts(tc, dc, rc),
     dataSources: {
-      tables: ['support_tickets', 'ticket_messages', 'disputes', 'user_reports', 'violations'],
+      tables: ['support_tickets', 'ticket_messages', 'disputes', 'reports', 'violations'],
       persisted: true,
     },
   };
@@ -305,14 +306,16 @@ async function fetchReportsList() {
   const result = await pool.query(`
     SELECT
       r.*,
+      r.by_account_id AS reporter_account_id,
       COALESCE(repa.display_name, repu.first_name || ' ' || repu.last_name) AS reporter_name,
       repa.handle AS reporter_handle,
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name
-    FROM user_reports r
-    LEFT JOIN accounts repa ON repa.account_id = r.reporter_account_id
+    FROM reports r
+    LEFT JOIN accounts repa ON repa.account_id = r.by_account_id
     LEFT JOIN users repu ON repu.account_id = repa.account_id
     LEFT JOIN staff st ON st.staff_id = r.assigned_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
+    WHERE r.deleted_at IS NULL
     ORDER BY r.created_at DESC
     LIMIT 40
   `);
@@ -329,8 +332,8 @@ async function fetchStaffWorkload() {
         WHERE t.assigned_staff_id = s.staff_id AND LOWER(t.status) NOT IN ('resolved', 'closed')) AS open_tickets,
       (SELECT COUNT(*)::int FROM disputes d
         WHERE d.assigned_staff_id = s.staff_id AND LOWER(d.status) NOT IN ('resolved', 'closed')) AS open_disputes,
-      (SELECT COUNT(*)::int FROM user_reports r
-        WHERE r.assigned_staff_id = s.staff_id AND LOWER(r.status) = 'open') AS open_reports
+      (SELECT COUNT(*)::int FROM reports r
+        WHERE r.assigned_staff_id = s.staff_id AND LOWER(r.status) = 'open' AND r.deleted_at IS NULL) AS open_reports
     FROM staff s
     INNER JOIN accounts a ON a.account_id = s.account_id
     ORDER BY open_tickets DESC, open_disputes DESC
@@ -359,8 +362,8 @@ async function fetchRecentActivity() {
     )
     UNION ALL
     (
-      SELECT 'report' AS type, report_number AS ref, reason AS label, status, updated_at AS at
-      FROM user_reports ORDER BY updated_at DESC LIMIT 6
+      SELECT 'report' AS type, report_number AS ref, COALESCE(reason, type) AS label, status, COALESCE(updated_at, created_at) AS at
+      FROM reports WHERE deleted_at IS NULL ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 6
     )
     ORDER BY at DESC
     LIMIT 20
@@ -532,10 +535,10 @@ async function updateReport(reportId, patch) {
   sets.push(`updated_at = NOW()`);
   values.push(reportId);
 
-  await pool.query(`UPDATE user_reports SET ${sets.join(', ')} WHERE report_id = $${idx}`, values);
+  await pool.query(`UPDATE reports SET ${sets.join(', ')} WHERE report_id = $${idx}`, values);
 
   const list = await fetchReportsList();
-  return list.find((r) => r.id === Number(reportId)) || null;
+  return list.find((r) => String(r.id) === String(reportId)) || null;
 }
 
 module.exports = {

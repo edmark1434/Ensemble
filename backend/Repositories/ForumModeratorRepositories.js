@@ -68,7 +68,7 @@ async function getForumOverview() {
     alerts: buildAlerts(tc, rc),
     notice:
       'Live forum groups and discussions are stored in MongoDB. Configure MONGODB_URI to enable content-level moderation; ticket and report queues below are always available.',
-    dataSources: { tables: ['support_tickets', 'user_reports'], persisted: true },
+    dataSources: { tables: ['support_tickets', 'reports'], persisted: true },
   };
 }
 
