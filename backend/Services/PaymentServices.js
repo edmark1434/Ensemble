@@ -4,7 +4,6 @@ const { pool } = require('../lib/database');
 
 const {
     getPaymentByUserIdAndStatus,
-    createTopUpPayment,
     updatePaymentWithReferenceId,
     getPaymentByReferenceId,
     updatePaymentByReference,
@@ -16,7 +15,8 @@ const {
     updatePayment,
     createPaymentMethodForUser,
     paymentMethodExists,
-    getAllPaymentMethodsByUserId
+    getAllPaymentMethodsByUserId,
+    updatePaymentMethodStatus
 } = require("../Repositories/PaymentRepositories");
 const redisClient = require('../lib/redis');
 
@@ -54,7 +54,19 @@ async function xenditWebhookHandler(req, res) {
             console.error("Error processing webhook:", err);
             return res.status(500).json({ error: "Internal Server Error" });
         }
+    }else if (data.status === 'FAILED' || data.status === 'EXPIRED'){
+        await updatePaymentByReference(payment.reference_id, {
+            status: data.status,
+            payment_id: data.payment_id || data.latest_payment_id,
+            payment_request_id: data.payment_request_id,
+            processed_at: new Date(),
+            channel_code: data.channel_code
+        });
+        await updateTopUpStatus(payment.reference_id, data.status, data.payment_id || data.latest_payment_id, data.channel_code);
+        res.status(200).json({ message: "Payment status updated" });
     }
+    
+    
 }
 
 
@@ -76,8 +88,8 @@ if (!req.session) {
     accountName = response.rows[0];
 }
 
-const userId = accountName.user_id || req.session.userId;
-
+let userId = accountName.user_id || req.session.userId;
+userId = parseInt(userId, 10); // Ensure userId is an integer
 // 1. Try Redis
 let customerId = await redisClient.get(`customerId:${userId}`); 
 
@@ -153,10 +165,9 @@ const customerPayload = customerId
         amount: req.body.amount,
         currency: req.body.currency,
         credits: req.body.credits,
-        description: req.body.itemName,
-        pay_type: "checkout_pay"
-    };
-    const existingTopUp = await getPaymentCheckOutByPayload(topUpPayload);
+        description: req.body.itemName
+        };
+    const existingTopUp = await getPaymentCheckOutByPayload(topUpPayload,'checkout');
         console.log("💳 Payment Session Created:", existingTopUp);
 
     let payment;
@@ -166,7 +177,7 @@ const customerPayload = customerId
 
         // Reuse if still valid locally
         if (
-            payment.status === "PENDING" &&
+            payment.status === "ACTIVE" &&
             payment.redirect_url &&
             new Date(payment.expired_at) > new Date()
         ) {
@@ -179,25 +190,13 @@ const customerPayload = customerId
         
     }
 
-    if (!payment || payment.status !== "PENDING") {
-        payment = await createTopUpPaymentSession({
-            user_id: userId,
-            reference_id: payload.reference_id,
-            amount: payload.amount,
-            currency: payload.currency,
-            status: "PENDING",
-            credits: req.body.credits,
-            description: req.body.itemName,
-            payment_type: "TOPUP"
-        });
-    }
     try {
 
         const response = await axios.post(
             "https://api.xendit.co/sessions",
             {
                 ...payload,
-                reference_id: payment.reference_id,
+                reference_id: payment?.reference_id ?? payload.reference_id,
             },
             {
                 auth: {
@@ -213,25 +212,36 @@ const customerPayload = customerId
 
         console.log("response.data:", response.data);
         const redirectUrl = response.data.payment_link_url ? response.data.payment_link_url : response.data.actions.find(a => a.type === "REDIRECT_CUSTOMER" && a.descriptor === "WEB_URL")?.value;
-        const updatePaymentPayload={
-            reference_id: payment.reference_id,
-            customerId: response.data.customer_id,
-            PaymentSessionId: response.data.payment_session_id,
-            channelCode: response.data.channel_code,
-            redirectUrl: response.data.payment_link_url,
-            expired_at: response.data.expires_at,
+        if(response.data.status === "REQUIRED_ACTION" || response.data.status === "ACTIVE") {
+            await createTopUpPaymentSession({
+                user_id: userId,
+                reference_id: response.data.reference_id,
+                amount: response.data.amount,
+                currency: response.data.currency,
+                status: response.data.status,
+                credits: response.data.metadata.credits ?? response.data.credits,
+                description: response.data.metadata.item_name ?? response.data.description,
+                payment_type: "TOPUP"
+            });
+            const updatePaymentPayload={
+                reference_id: response.data.reference_id,
+                customerId: response.data.customer_id,
+                PaymentSessionId: response.data.payment_session_id,
+                channelCode: response.data.channel_code,
+                redirectUrl: response.data.payment_link_url,
+                expired_at: response.data.expires_at,
+            }
+
+            await Promise.all([
+                updateUserCustomerId(accountName.user_id || req.session.userId, response.data.customer_id),
+                updatePayment(updatePaymentPayload),
+                redisClient.set(`customerId:${accountName.user_id || req.session.userId}`, response.data.customer_id, 'EX', 60 * 60 * 24 * 30) // Cache for 30 days
+            ]);
+            return res.json({
+                paymentSessionId: response.data.payment_session_id,
+                paymentLink: response.data.payment_link_url
+            });
         }
-
-        await Promise.all([
-            updateUserCustomerId(accountName.user_id || req.session.userId, response.data.customer_id),
-            updatePayment(updatePaymentPayload),
-            redisClient.set(`customerId:${accountName.user_id || req.session.userId}`, response.data.customer_id, 'EX', 60 * 60 * 24 * 30) // Cache for 30 days
-        ]);
-        return res.json({
-            paymentSessionId: response.data.payment_session_id,
-            paymentLink: response.data.payment_link_url
-        });
-
     } catch (err) {
 
         console.error(err.response?.data || err);
@@ -247,6 +257,8 @@ async function processSubscriptionPayment(req, res) {
 
 
 }
+
+
 
 
 async function createPaymentToken(req, res) {
@@ -268,6 +280,9 @@ async function createPaymentToken(req, res) {
 
                 cancel_return_url:
                     `https://app.com/credits?cancel`,
+                metadata: {
+                    user_id: `${userId}`
+                }
             },
             {
                 auth: {
@@ -292,7 +307,8 @@ async function createPaymentToken(req, res) {
 }
 
 async function savePaymentMethod(data) {
-    const payment = await getPaymentByReferenceId(data.reference_id.split("_")[0] || data.reference_id);
+    let payment = await getPaymentByReferenceId(data.reference_id.split("_")[0] || data.reference_id);
+    payment.user_id = parseInt(payment.user_id, 10); // Ensure user_id is an integer
     if(!payment){
         console.error("Payment not found for reference_id:", data.reference_id);
         return res.status(404).json({ error: "Payment not found" });
@@ -347,7 +363,7 @@ async function savePaymentMethod(data) {
                                 type: ['GCASH','PAYMAYA','SHOPEEPAY','GRABPAY'].includes(response.data.channel_code) ? 'E-WALLET' : ['UBP_DIRECT_DEBIT','BPI_DIRECT_DEBIT','UBP_EADA'].includes(response.data.channel_code) ? 'DIRECT-DEBIT' : response.data.channel_code,
                                 status:response.data.status,
                                 is_default: false,
-                                display_name: response.data.channel_code,
+                                display_name: response.data.token_details.account_number || response.data.token_details.masked_bank_account_number || response.data.channel_code,
                                 card_brand: null,
                                 masked_card_number: null,
                                 card_exp_month: null,
@@ -431,6 +447,8 @@ async function paymentSessionCompleteWebhookHandler(req, res) {
     console.log("📬 Payment Session Complete Webhook Received:", req.body);
     const { event, data } = req.body;
     const hasToken = data.payment_token_id ? true : false;
+    const userId = parseInt(data.metadata?.user_id, 10) || null; // Ensure userId is an integer
+    console.log("User ID from metadata:", userId);
     if(hasToken){
                 const response = await axios.get(
                     `https://api.xendit.co/v3/payment_tokens/${data.payment_token_id}`,
@@ -448,16 +466,16 @@ async function paymentSessionCompleteWebhookHandler(req, res) {
                                 console.log("✅ Xendit Payment Token Response:", response.data);
                 
                 const checkExistingPaymentMethod = await paymentMethodExists(
-                    { user_id: parseInt(data.metadata.userId), payment_token_id: data.payment_token_id }
+                    { user_id: userId, payment_token_id: data.payment_token_id }
                 );
                 if(!checkExistingPaymentMethod){
                     if(response.data.channel_code === 'CARDS'){
                         const checkExistingCard = await paymentMethodExists(
-                            { user_id: parseInt(data.metadata.userId), fingerprint: response.data.channel_properties.card_details.fingerprint }
+                            { user_id: userId, fingerprint: response.data.channel_properties.card_details.fingerprint }
                         )
                         if(!checkExistingCard){
                             await createPaymentMethodForUser({
-                                user_id: parseInt(data.metadata.userId),
+                                user_id: userId,
                                 payment_token_id: data.payment_token_id,
                                 channel_code: response.data.channel_code,
                                 type: response.data.channel_properties.card_details.type,
@@ -468,22 +486,21 @@ async function paymentSessionCompleteWebhookHandler(req, res) {
                                 masked_card_number: response.data.channel_properties.card_details.masked_card_number,
                                 card_exp_month: response.data.channel_properties.card_details.expiry_month,
                                 card_exp_year: response.data.channel_properties.card_details.expiry_year,
-                                customer_reference_id: response.data.reference_id,
                                 fingerprint: response.data.channel_properties.card_details.fingerprint
                             });
                         }
                     }else{
                         if(response.data.channel_code === 'PAYMAYA' || response.data.channel_code === 'SHOPEEPAY' || response.data.channel_code === 'UBP_DIRECT_DEBIT'){
                             const checkExistingCard = await paymentMethodExists(
-                                { user_id: parseInt(data.metadata.userId), channel_code: response.data.channel_code, display_name: response.data.token_details.account_number ?? response.data.token_details.masked_bank_account_number }
+                                { user_id: userId, channel_code: response.data.channel_code, display_name: response.data.token_details.account_number ?? response.data.token_details.masked_bank_account_number }
                             )
                             if(checkExistingCard){
-                                console.log("Payment method already exists for user:", data.metadata.userId, "with channel code:", response.data.channel_code);
+                                console.log("Payment method already exists for user:", userId, "with channel code:", response.data.channel_code);
                                 return;
                             }
                         }
                         await createPaymentMethodForUser({
-                                user_id: parseInt(data.metadata.userId),
+                                user_id: userId,
                                 payment_token_id: data.payment_token_id,
                                 channel_code: response.data.channel_code,
                                 type: ['GCASH','PAYMAYA','SHOPEEPAY','GRABPAY','GCASH_LINK_AND_PAY'].includes(response.data.channel_code) ? 'E-WALLET' : ['UBP_DIRECT_DEBIT','BPI_DIRECT_DEBIT','UBP_EADA'].includes(response.data.channel_code) ? 'DIRECT-DEBIT' : response.data.channel_code,
@@ -494,7 +511,6 @@ async function paymentSessionCompleteWebhookHandler(req, res) {
                                 masked_card_number: null,
                                 card_exp_month: null,
                                 card_exp_year: null,
-                                customer_reference_id: response.data.reference_id,
                                 fingerprint: null
                         })
                     }
@@ -508,6 +524,121 @@ async function paymentSessionExpiredWebhookHandler(req, res) {
     console.log("📬 Payment Session Expired Webhook Received:", req.body);
 }
 
+async function TopUpPaymentByPaymentMethod(req, res) {
+    let { userId } = req.session;
+    userId = parseInt(userId, 10); // Ensure userId is an integer
+    console.log("💳 Processing Top-Up Payment by Payment Method:", req.body);
+    const {amount, currency, itemName, credits,itemType, paymentMethodId} = req.body;
+    const reference_id = `TOPUP-${uuidv4()}`;
+    const topUpPayload = {
+        user_id: userId,
+        amount: req.body.amount,
+        currency: req.body.currency,
+        credits: req.body.credits,
+        description: req.body.itemName
+    };
+    const payload = {
+        reference_id: reference_id,
+        type: "PAY",
+        currency: currency,
+        request_amount: amount,
+        metadata: {
+            item_name: `${itemName}`,
+            credits: `${credits}`,
+        },
+        capture_method: "AUTOMATIC",
+        description: `Top-up ${credits} credits for ${itemName}`,
+        channel_properties: {
+            success_return_url: `https://app.com/credits?success`,
+            cancel_return_url: `https://app.com/credits?cancel`,
+            failure_return_url: `https://app.com/credits?failure`
+        },
+        payment_token_id: paymentMethodId,
+    }
+    const existingTopUp = await getPaymentCheckOutByPayload(topUpPayload,'payment-method');
+        console.log("💳 Payment Session Created:", existingTopUp);
+
+    let payment;
+
+    if (existingTopUp.length > 0) {
+        payment = existingTopUp[0];
+
+        // Reuse if still valid locally
+        if (
+            payment.status === "REQUIRES_ACTION" &&
+            payment.redirect_url 
+        ) {
+            return res.json({
+                paymentSessionId: payment.payment_session_id,
+                paymentLink: payment.redirect_url
+            });
+        }
+
+        
+    }
+
+    try{
+        const response = await axios.post(
+            "https://api.xendit.co/v3/payment_requests",
+            {
+                ...payload,
+                reference_id: payment?.reference_id ?? payload.reference_id,
+            },
+            {
+                auth: {
+                    username: process.env.XENDIT_API_KEY,
+                    password: ""
+                },
+                headers: {
+                    "Content-Type": "application/json",
+                    "api-version": "2024-11-11"
+                }
+            }
+        );
+        console.log("✅ Xendit Payment Request Response:", response.data);
+        const redirectUrl = response.data.actions ? response.data.actions.find(a => a.type === "REDIRECT_CUSTOMER" && a.descriptor === "WEB_URL")?.value : null;
+        if(redirectUrl || (response.data.status === "REQUIRES_ACTION" || response.data.status === "ACTIVE"|| response.data.status === "SUCCEEDED")) {
+            await createTopUpPaymentSession({
+                user_id: userId,
+                reference_id: response.data.reference_id,
+                amount: response.data.amount || response.data.request_amount,
+                currency: response.data.currency,
+                payment_token_id: response.data.payment_token_id,
+                status: response.data.status,
+                credits: response.data.metadata.credits,
+                description: response.data.metadata.item_name,
+                payment_type: "TOPUP"
+            });
+            const updatePaymentPayload={
+                reference_id: response.data.reference_id,
+                channel_code: response.data.channel_code,
+                payment_request_id: response.data.payment_request_id,
+                payment_token_id: response.data.payment_token_id,
+                customer_id: response.data.customer_id,
+                processed_at: new Date(),
+                redirect_url: redirectUrl,
+            }
+
+            await Promise.all([
+                updatePaymentByReference(response.data.reference_id, updatePaymentPayload),
+            ]);
+
+            return res.json({
+                reference_id: response.data.reference_id,
+                paymentLink: redirectUrl
+            });
+        }
+
+    }catch(err){
+        console.log("💳 Error processing Top-Up Payment:", err.response?.data.error_code);
+        if(err.response?.data.error_code === "INVALID_TOKEN"){
+            await updatePaymentMethodStatus(paymentMethodId, 'INACTIVE');
+        }
+        return res.status(500).json({
+            error: err.response?.data || err.message
+        });
+    }
+}
 
 module.exports = {
     xenditWebhookHandler,
@@ -517,4 +648,6 @@ module.exports = {
     getAllPaymentMethodsByUserIdService,
     paymentSessionCompleteWebhookHandler,
     paymentSessionExpiredWebhookHandler,
+    TopUpPaymentByPaymentMethod,
+    createPaymentToken
 };

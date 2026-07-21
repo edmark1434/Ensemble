@@ -1,75 +1,5 @@
 const { pool } = require('../lib/database');
 
-async function createTopUpPayment(data) {
-    try {
-        const query = `
-            INSERT INTO payment (
-                user_id,
-                reference_id,
-                provider,
-                provider_payment_id,
-                provider_payment_request_id,
-                purpose,
-                payment_type,
-                channel_code,
-                amount,
-                currency,
-                status,
-                description,
-                paid_at
-            )
-            VALUES (
-                $1, $2, $3, $4, $5,
-                $6, $7, $8, $9, $10,
-                $11, $12, $13
-            )
-            RETURNING *;
-        `;
-        const topUpQuery = `INSERT INTO TOPUPS(
-        TOPUP_ID,
-        XENDIT_PAYMENT_ID,
-        XENDIT_CHANNEL_CODE,
-        AMOUNT_PHP_CENTS,
-        CREDITS_GRANTED,
-        STATUS,
-        CREATED_AT,
-        USER_ID
-        ) VALUES (
-            $1, $2, $3, $4, $5,
-            $6, CURRENT_TIMESTAMP, $7
-        )`;
-        const values = [
-            data.user_id,
-            data.reference_id,
-            data.provider,
-            data.provider_payment_id,
-            data.provider_payment_method_id,
-            data.purpose,
-            data.payment_type,
-            data.channel_code,
-            data.amount,
-            data.currency,
-            data.status,
-            data.description,
-            data.paid_at
-        ];
-        const topUpValues = [
-            data.reference_id,
-            data.provider_payment_id,
-            data.channel_code,
-            data.amount,
-            data.credits_granted,
-            data.status,
-            data.user_id
-        ];
-        const result = await pool.query(query, values);
-        await pool.query(topUpQuery, topUpValues);
-        return result.rows[0];
-    } catch (err) {
-        console.error("Error creating payment:", err);
-        throw err;
-    }
-}
 
 async function createPaymentMethod(data) {
     try {
@@ -283,14 +213,14 @@ async function createTopUpPaymentSession(payload){
     }
 }
 
-async function getPaymentCheckOutByPayload(payload){
+async function getPaymentCheckOutByPayload(payload, type = 'checkout') {
     try{
-        let condition =  payload.pay_type === 'direct_pay' ? "NOT NULL" : "NULL";
+        const paymentTokenCondition = type === 'checkout' ? 'AND PAYMENT_TOKEN_ID IS NULL' : 'AND PAYMENT_TOKEN_ID IS NOT NULL';
         const query = `
             SELECT * FROM PAYMENTS
             WHERE USER_ID = $1 AND AMOUNT = $2
-            AND CURRENCY = $3 AND STATUS IN ('REQUIRES_ACTION', 'PENDING') AND CREDITS = $4
-            AND DESCRIPTION = $5 AND PAYMENT_TOKEN_ID IS ${condition}
+            AND CURRENCY = $3 AND STATUS IN ('REQUIRES_ACTION', 'PENDING', 'ACTIVE') AND CREDITS = $4
+            AND DESCRIPTION = $5 ${paymentTokenCondition}
         `;
         const values = [payload.user_id, payload.amount, payload.currency, payload.credits, payload.description];
         const result = await pool.query(query, values);
@@ -438,7 +368,7 @@ async function getAllPaymentMethodsByUserId(userId) {
         const query = `
             SELECT payment_token_id,channel_code, type, status, is_default, display_name, card_brand,
             masked_card_number, card_exp_month, card_exp_year, customer_reference_id from payment_methods
-            WHERE user_id = $1
+            WHERE user_id = $1 and status = 'ACTIVE'
         `
         const result = await pool.query(query, [userId]);
         return result.rows;
@@ -449,9 +379,36 @@ async function getAllPaymentMethodsByUserId(userId) {
 
 }
 
+async function getAllPaymentMethod() {
+    try {
+        const query = `
+            SELECT payment_token_id
+            FROM payment_methods
+        `;
+        const result = await pool.query(query);
+        return result.rows;
+    } catch (err) {
+        console.error("Error fetching all payment methods:", err);
+        throw err;
+    }
+}
+
+async function updatePaymentMethodStatus(paymentTokenId, status) {
+    try{
+        const query = `
+            UPDATE payment_methods
+            SET status = $2, updated_at = CURRENT_TIMESTAMP
+            WHERE payment_token_id = $1
+        `;
+        const result = await pool.query(query, [paymentTokenId, status]);
+        return result
+    }catch(err){
+        console.error("Error updating payment method status:", err);
+        throw err;
+    }
+}
 
 module.exports = {
-    createTopUpPayment,
     createPaymentMethod,
     getPaymentByUserIdAndStatus,
     updatePaymentWithReferenceId,
@@ -467,4 +424,5 @@ module.exports = {
     paymentMethodExists,
     getActivePaymentSessions,
     getAllPaymentMethodsByUserId,
+    updatePaymentMethodStatus,
 };

@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import api from "@/lib/axios";
-
+import toast from "react-hot-toast";
 // Interfaces
 interface Feature {
   feature_id: number;
@@ -92,21 +92,13 @@ const CheckoutPage: React.FC = () => {
   useEffect(() => {
     fetchPaymentMethods();
   }, []);
+
   const fetchPaymentMethods = async () => {
     setLoadingPaymentMethods(true);
     try {
       const response = await api.get("api/payment/payment-methods");
       console.log("📥 Fetched Payment Methods:", response.data);
       setPaymentMethods(response.data.paymentMethods || []);
-      // setPaymentMethods(mockPaymentMethods);
-      
-      // // Set default selected payment method
-      // const defaultMethod = mockPaymentMethods.find(m => m.is_default);
-      // if (defaultMethod) {
-      //   setSelectedPaymentMethod(defaultMethod.payment_token_id);
-      // } else if (mockPaymentMethods.length > 0) {
-      //   setSelectedPaymentMethod(mockPaymentMethods[0].payment_token_id);
-      // }
     } catch (error) {
       console.error("Error fetching payment methods:", error);
     } finally {
@@ -114,14 +106,19 @@ const CheckoutPage: React.FC = () => {
     }
   };
 
-  const handleAddPaymentMethod = () => {
+  const handleAddPaymentMethod = async () => {
     setShowAddPayment(true);
     // Simulate redirect to add payment method
-    setTimeout(() => {
-      setShowAddPayment(false);
-      // After adding, refresh payment methods
+    try{
+      const result = await api.post("api/payment/create-payment-token");
+      if(result.data && result.status === 200 && result.data.paymentLink){
+        window.location.href = result.data.paymentLink;
+      }
+    }catch(err){
+      toast.error("Failed to add payment method. Please try again.");
+    }finally{
       fetchPaymentMethods();
-    }, 1500);
+    }
   };
 
   const handlePayWithCheckout = async () => {
@@ -196,11 +193,11 @@ const CheckoutPage: React.FC = () => {
       
       console.log("📤 Saved Payment Payload:", payload);
       
-      // const response = await api.post("api/payment/topup", payload, {
-      //   headers: {
-      //     "Content-Type": "application/json",
-      //   },
-      // });
+      const response = await api.post("api/payment/topup-by-payment-method", payload, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
 
       const data = response.data;
       console.log("✅ Saved Payment Response:", data);
@@ -455,12 +452,13 @@ const CheckoutPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Payment Methods Section - For Top-up with saved methods or Subscription */}
-              {isOneTime && hasSavedPaymentMethods && (
+              {/* Payment Methods Section - For Top-up */}
+              {isOneTime && (
                 <div className="bg-[#0d0f1a]/80 backdrop-blur-md border border-[#1e2130] rounded-2xl p-5">
                   <h3 className="text-sm font-semibold text-white mb-3">Choose payment option</h3>
                   
                   <div className="space-y-2">
+                    {/* Pay with Checkout - Always visible */}
                     <label className="flex items-center gap-3 p-3 rounded-xl border border-[#1e2130] hover:border-zinc-600 cursor-pointer transition-all">
                       <input
                         type="radio"
@@ -475,6 +473,8 @@ const CheckoutPage: React.FC = () => {
                       />
                       <span className="text-sm text-white">Pay with Checkout</span>
                     </label>
+                    
+                    {/* Pay with saved payment method - Always show this option */}
                     <label className="flex items-center gap-3 p-3 rounded-xl border border-[#1e2130] hover:border-zinc-600 cursor-pointer transition-all">
                       <input
                         type="radio"
@@ -488,7 +488,7 @@ const CheckoutPage: React.FC = () => {
                     </label>
                   </div>
 
-                  {/* Show saved payment methods only when "saved_payment" is selected */}
+                  {/* Show saved payment methods section when "saved_payment" is selected */}
                   {selectedPaymentOption === "saved_payment" && (
                     <div className="mt-3">
                       {loadingPaymentMethods ? (
@@ -517,11 +517,16 @@ const CheckoutPage: React.FC = () => {
                               <div className="flex-1 flex items-center gap-3">
                                 <span className="text-xl">{getPaymentMethodIcon(method)}</span>
                                 <div>
-                                  <p className="text-sm font-medium text-white">{method.channel_code}</p>
-                                    <p className="text-xs text-zinc-400">
-                                      {method.display_name !== method.channel_code && method.display_name}
-                                      {method.masked_card_number && ` • ${method.masked_card_number}`}
-                                    </p>
+                              <p className="text-sm font-medium text-white">{method.masked_card_number && method.card_brand ? method.card_brand + " " + method.masked_card_number : method.display_name}</p>
+                              {method.masked_card_number && (
+                                <p className="text-xs text-zinc-400">
+                                  Expires {method.card_exp_month}/{method.card_exp_year}
+                                </p>
+                              )}
+                                  <p className="text-xs text-zinc-400">
+                                    {method.display_name !== method.channel_code && method.display_name}
+                                    {method.masked_card_number && ` • ${method.masked_card_number}`}
+                                  </p>
                                   {method.is_default && (
                                     <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
                                       Default
@@ -715,13 +720,13 @@ const CheckoutPage: React.FC = () => {
                 {isOneTime && (
                   <button
                     onClick={() => {
-                      if (hasSavedPaymentMethods && selectedPaymentOption === "saved_payment") {
+                      if (selectedPaymentOption === "saved_payment" && hasSavedPaymentMethods) {
                         handlePayWithSavedPayment();
                       } else {
                         handlePayWithCheckout();
                       }
                     }}
-                    disabled={isProcessing || (hasSavedPaymentMethods && selectedPaymentOption === "saved_payment" && !selectedPaymentMethod)}
+                    disabled={isProcessing || (selectedPaymentOption === "saved_payment" && hasSavedPaymentMethods && !selectedPaymentMethod)}
                     className="w-full py-3.5 bg-gradient-to-r from-blue-500 to-purple-600 text-sm font-bold text-white rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     {isProcessing ? (

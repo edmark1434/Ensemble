@@ -5,7 +5,8 @@ const {
     getActivePaymentSessions,
     updatePaymentByReference,
     updateTopUpStatus,
-    updateWalletFromTopUp
+    updateWalletFromTopUp,
+    updatePaymentMethodStatus,
 } = require("../Repositories/PaymentRepositories");
 const { savePaymentMethod } = require("../Services/PaymentServices");
 const config = {
@@ -141,6 +142,9 @@ async function reconcilePayment(payment) {
 
             case "FAILED":
                 status = "FAILED";
+                if(paymentRequest.failure_code === "PAYMENT_METHOD_EXPIRED") {
+                    await updatePaymentMethodStatus(paymentRequest.payment_method_id, 'INACTIVE');
+                }
                 break;
 
             case "EXPIRED":
@@ -170,12 +174,13 @@ async function reconcilePayment(payment) {
                     paymentRequest.payment_id ?? payment.payment_id,
                 processed_at: new Date()
             });
-            if(payment.payment_type === "TOPUP"){
-                const payload = {
-                    payment_id: paymentRequest.payment_id ?? null,
-                    channel_code: paymentRequest.channel_code ?? payment.channel_code,
-                }
-                const result = await updateTopUpStatus(payment.reference_id, status,payload.payment_id, payload.channel_code);
+            const payload = {
+                payment_id: paymentRequest.payment_id ?? paymentRequest.latest_payment_id ?? payment.payment_id ?? null,
+                channel_code: paymentRequest.channel_code ?? payment.channel_code,
+            }
+            const result = await updateTopUpStatus(payment.reference_id, status,payload.payment_id, payload.channel_code);
+            if(payment.payment_type === "TOPUP" && status === "PAID") {
+
                 await updateWalletFromTopUp(payment.user_id, result.credits_granted);
                 await savePaymentMethod(paymentRequest);
             }
@@ -230,8 +235,14 @@ function startPaymentReconciliationJob() {
         }
 
     });
+    cron.schedule
 
 }
+
+
+
+
+//run job for checking payment method expiration every 
 
 module.exports = {
     startPaymentReconciliationJob
