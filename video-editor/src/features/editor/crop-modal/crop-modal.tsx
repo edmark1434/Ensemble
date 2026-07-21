@@ -41,13 +41,6 @@ const CropModal = () => {
     const oldWidth = Number.parseFloat(cropTargetDetails.width);
     const oldHeight = Number.parseFloat(cropTargetDetails.height);
 
-    // Everything ElementCrop works in (canvas size, `area`, drag math) is
-    // native-pixel-based preview space: nativeSize.width * scaled wide.
-    // Stored crop.x/y/width/height must be in editor-canvas space instead,
-    // since that's the space `details.width/height` (and the render pipeline
-    // that consumes `crop`) actually live in. Convert preview -> editor
-    // directly using the target's own placed size as the reference, so we
-    // never have to round-trip through native pixels as an intermediate.
     const previewFullWidth = nativeSize.width * scaled;
     const previewFullHeight = nativeSize.height * scaled;
     const scaleX = oldWidth / previewFullWidth;
@@ -116,7 +109,7 @@ const CropModal = () => {
     if (cropTarget.type === "image") {
       loadImage(cropTargetDetails.src);
     }
-  }, [cropTarget]);
+  }, [cropTarget?.id, cropTarget?.details.src]);
 
   if (!cropTarget) return;
 

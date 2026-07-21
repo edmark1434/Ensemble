@@ -58,6 +58,10 @@ const useCropStore = create<ICropState>((set) => ({
   setArea: (area: Area) => set({ area }),
   setStep: (step: number) => set({ step }),
   loadImage: (src: string) => {
+    const state = useCropStore.getState();
+    if (state.src === src && (state.element || state.fileLoading)) return;
+    set({ fileLoading: true });
+
     const image = document.createElement("img");
     image.setAttribute("crossOrigin", "anonymous");
     image.setAttribute("src", src);
@@ -66,66 +70,51 @@ const useCropStore = create<ICropState>((set) => ({
       const imageHeight = image.naturalHeight;
       const maxWidth = 700;
       const maxHeight = 520;
-
-      // Calculate the scale factors for width and height
       const widthScale = maxWidth / imageWidth;
       const heightScale = maxHeight / imageHeight;
-
-      // Choose the smaller scale factor to fit within both dimensions
       const scaleFactor = Math.min(widthScale, heightScale);
       set({
         area: [0, 0, imageWidth * scaleFactor, imageHeight * scaleFactor],
         src,
-        size: { width: imageWidth, height: imageHeight }
+        size: { width: imageWidth, height: imageHeight },
+        fileLoading: false
       });
       set({ element: image, scale: scaleFactor });
     });
     image.src = src;
   },
   loadVideo: (src: string) => {
-    set({ area: [0, 0, 0, 0], src });
+    const state = useCropStore.getState();
+    if (state.src === src && (state.element || state.fileLoading)) return;
+
+    set({ area: [0, 0, 0, 0], src, fileLoading: true });
 
     const video = document.createElement("video");
-
     video.setAttribute("playsinline", "");
     video.preload = "metadata";
     video.autoplay = false;
-
-    // Required when using a Service Worker on iOS Safari.
     video.crossOrigin = "anonymous";
 
     video.addEventListener("loadedmetadata", () => {
       video.currentTime = 0.01;
       const videoWidth = video.videoWidth;
       const videoHeight = video.videoHeight;
-
-      // Define the maximum dimensions
       const maxWidth = 520;
       const maxHeight = 400;
-
-      // Calculate the scale factors for width and height
       const widthScale = maxWidth / videoWidth;
       const heightScale = maxHeight / videoHeight;
-
-      // Choose the smaller scale factor to fit within both dimensions
       const scaleFactor = Math.min(widthScale, heightScale);
 
       set({
         element: video,
         scale: scaleFactor,
-        size: {
-          width: videoWidth,
-          height: videoHeight
-        },
+        size: { width: videoWidth, height: videoHeight },
         area: [0, 0, videoWidth * scaleFactor, videoHeight * scaleFactor]
       });
     });
 
     video.addEventListener("canplay", () => {
-      set({
-        fileLoading: false,
-        step: 1
-      });
+      set({ fileLoading: false, step: 1 });
     });
 
     video.addEventListener("ended", () => {
@@ -135,7 +124,6 @@ const useCropStore = create<ICropState>((set) => ({
     video.addEventListener("timeupdate", () => {
       const start = 0;
       const end = video.duration;
-
       if (video.currentTime > end) {
         video.currentTime = start;
       } else if (video.currentTime < start - 1) {

@@ -5,7 +5,7 @@ import useCropStore from "../store/use-crop-store";
 import { clamp } from "../utils/math";
 import { ITrackItemBase } from "@designcombo/types";
 
-const MIN_CROP_SIZE = 100;
+const MIN_CROP_SIZE = 50;
 
 interface ElementCropProps {
   element: HTMLVideoElement | HTMLImageElement;
@@ -28,7 +28,7 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
   const { area, setArea, scale } = useCropStore();
   const canvasPreviewRef = useRef<HTMLCanvasElement>(null);
   const lastAspectRatioRef = useRef<string | null>(null);
-  const initializedForSrcRef = useRef<string | null>(null);
+
   let ratio: number | null = null;
   if (aspectRatio && aspectRatio !== "free") {
     const [w, h] = aspectRatio.split(":").map(Number);
@@ -43,7 +43,6 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
     preventDefault: true,
     stopPropagation: true,
     onMove: ({ x, y, deltaX, deltaY, state: { dirX, dirY, area } }) => {
-      console.log("onMove", { dirX, dirY, area, x, y });
       const rect = canvasPreviewRef.current?.getBoundingClientRect();
       if (!rect) return;
 
@@ -77,85 +76,65 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
 
         if (dirY === -1) {
           if (ratio) {
-            const newHeight = endY - relativeY;
-            if (newHeight >= MIN_CROP_SIZE) {
-              const newWidth = newHeight * ratio;
-              if (
-                newWidth >= MIN_CROP_SIZE &&
-                newArea[0] + newWidth <= size.width * scale
-              ) {
-                newArea[1] = relativeY;
-                newArea[3] = newHeight;
-                newArea[2] = newWidth;
-              }
+            const newHeight = Math.max(endY - relativeY, MIN_CROP_SIZE);
+            let newWidth = newHeight * ratio;
+            if (newArea[0] + newWidth > size.width * scale) {
+              newWidth = size.width * scale - newArea[0];
             }
+            const finalWidth = Math.max(newWidth, MIN_CROP_SIZE);
+            const finalHeight = finalWidth / ratio;
+            newArea[1] = endY - finalHeight;
+            newArea[3] = finalHeight;
+            newArea[2] = finalWidth;
           } else {
-            const newHeight = endY - relativeY;
-            if (newHeight >= MIN_CROP_SIZE) {
-              newArea[1] = relativeY;
-              newArea[3] = newHeight;
-            }
+            const newHeight = Math.max(endY - relativeY, MIN_CROP_SIZE);
+            newArea[1] = endY - newHeight;
+            newArea[3] = newHeight;
           }
         } else if (dirY === 1) {
           if (ratio) {
-            const newHeight = relativeY - newArea[1];
-            if (newHeight >= MIN_CROP_SIZE) {
-              const newWidth = newHeight * ratio;
-              if (
-                newWidth >= MIN_CROP_SIZE &&
-                newArea[0] + newWidth <= size.width * scale
-              ) {
-                newArea[3] = newHeight;
-                newArea[2] = newWidth;
-              }
+            const newHeight = Math.max(relativeY - newArea[1], MIN_CROP_SIZE);
+            let newWidth = newHeight * ratio;
+            if (newArea[0] + newWidth > size.width * scale) {
+              newWidth = size.width * scale - newArea[0];
             }
+            const finalWidth = Math.max(newWidth, MIN_CROP_SIZE);
+            newArea[3] = finalWidth / ratio;
+            newArea[2] = finalWidth;
           } else {
-            const newHeight = relativeY - newArea[1];
-            if (newHeight >= MIN_CROP_SIZE) {
-              newArea[3] = newHeight;
-            }
+            newArea[3] = Math.max(relativeY - newArea[1], MIN_CROP_SIZE);
           }
         }
 
         if (dirX === -1) {
           if (ratio) {
-            const newWidth = endX - relativeX;
-            if (newWidth >= MIN_CROP_SIZE) {
-              const newHeight = newWidth / ratio;
-              if (
-                newHeight >= MIN_CROP_SIZE &&
-                newArea[1] + newHeight <= size.height * scale
-              ) {
-                newArea[0] = relativeX;
-                newArea[2] = newWidth;
-                newArea[3] = newHeight;
-              }
+            const newWidth = Math.max(endX - relativeX, MIN_CROP_SIZE);
+            let newHeight = newWidth / ratio;
+            if (newArea[1] + newHeight > size.height * scale) {
+              newHeight = size.height * scale - newArea[1];
             }
+            const finalHeight = Math.max(newHeight, MIN_CROP_SIZE);
+            const finalWidth = finalHeight * ratio;
+            newArea[0] = endX - finalWidth;
+            newArea[2] = finalWidth;
+            newArea[3] = finalHeight;
           } else {
-            const newWidth = endX - relativeX;
-            if (newWidth >= MIN_CROP_SIZE) {
-              newArea[0] = relativeX;
-              newArea[2] = newWidth;
-            }
+            const newWidth = Math.max(endX - relativeX, MIN_CROP_SIZE);
+            newArea[0] = endX - newWidth;
+            newArea[2] = newWidth;
           }
         } else if (dirX === 1) {
           if (ratio) {
-            const newWidth = relativeX - newArea[0];
-            if (newWidth >= MIN_CROP_SIZE) {
-              const newHeight = newWidth / ratio;
-              if (
-                newHeight >= MIN_CROP_SIZE &&
-                newArea[1] + newHeight <= size.height * scale
-              ) {
-                newArea[2] = newWidth;
-                newArea[3] = newHeight;
-              }
+            const newWidth = Math.max(relativeX - newArea[0], MIN_CROP_SIZE);
+            let newHeight = newWidth / ratio;
+            if (newArea[1] + newHeight > size.height * scale) {
+              newHeight = size.height * scale - newArea[1];
             }
+            const finalHeight = Math.max(newHeight, MIN_CROP_SIZE);
+            newArea[2] = finalHeight * ratio;
+            newArea[3] = finalHeight;
           } else {
-            const newWidth = relativeX - newArea[0];
-            if (newWidth >= MIN_CROP_SIZE) {
-              newArea[2] = newWidth;
-            }
+            newArea[2] = Math.max(relativeX - newArea[0], MIN_CROP_SIZE);
           }
         }
       }
@@ -229,32 +208,16 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
       requestAnimationFrame(update);
     };
 
-    // Restore the item's saved crop into `area` only once per crop session,
-    // keyed on src rather than the `element` reference. `element` can be
-    // handed to us as a new object more than once during a video crop
-    // session (e.g. as readyState/frame state updates), and re-running this
-    // on every one of those would stomp on an in-progress drag with the
-    // originally saved crop values.
-    const srcKey = (targetDetails as { src?: string }).src ?? null;
-    if (initializedForSrcRef.current !== srcKey) {
-      initializedForSrcRef.current = srcKey;
-
-      const widthTotal = area[2];
-      const scaleWidth = targetDetails.width / widthTotal;
-      const areaPosX = (targetDetails.crop?.x || 0) / scaleWidth;
-      const areaPosY = (targetDetails.crop?.y || 0) / scaleWidth;
-      const areaWidth =
-        (targetDetails.crop?.width || targetDetails.width) / scaleWidth;
-      const areaHeight =
-        (targetDetails.crop?.height || targetDetails.height) / scaleWidth;
-      setArea([areaPosX, areaPosY, areaWidth, areaHeight]);
-    }
+    const widthTotal = area[2];
+    const scaleWidth = targetDetails.width / widthTotal;
+    const areaPosX = (targetDetails.crop?.x || 0) / scaleWidth;
+    const areaPosY = (targetDetails.crop?.y || 0) / scaleWidth;
+    const areaWidth = (targetDetails.crop?.width || targetDetails.width) / scaleWidth;
+    const areaHeight = (targetDetails.crop?.height || targetDetails.height) / scaleWidth;
+    setArea([areaPosX, areaPosY, areaWidth, areaHeight]);
 
     requestAnimationFrame(update);
-
-    return () => {
-      updating = false;
-    };
+    return () => { updating = false; };
   }, [element]);
 
   useEffect(() => {
