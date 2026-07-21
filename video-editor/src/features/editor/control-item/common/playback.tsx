@@ -22,7 +22,7 @@ export const PlaybackControls = ({
       <Label className="font-sans text-sm font-medium">Playback</Label>
       <div className="flex flex-col gap-2">
         <Volume value={volume} onChange={onChangeVolume} disabled={disabled} />
-        <Speed value={speed} onChange={onChangeSpeed} disabled={disabled} />
+        {/*<Speed value={speed} onChange={onChangeSpeed} disabled={disabled} />*/}
       </div>
     </div>
   );
