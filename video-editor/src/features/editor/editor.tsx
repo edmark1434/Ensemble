@@ -213,7 +213,7 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
         >
           {frameToTimeString({ frame: currentFrame }, { fps })}
         </span>
-          <span className="text-zinc-500">|</span>
+          <span className="text-zinc-500">/</span>
           <span className="text-muted-foreground">
           {timeToString({ time: duration })}
         </span>

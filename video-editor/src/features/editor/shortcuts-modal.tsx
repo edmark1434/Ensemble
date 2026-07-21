@@ -100,7 +100,7 @@ export function ShortcutsModal({ open, onOpenChange }: ShortcutsModalProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="md:max-w-6xl w-full max-w-5xl border bg-card px-2 py-8 gap-6 overflow-hidden">
         <DialogHeader className="px-6 -mt-0.75 flex flex-row gap-4">
-          <DialogTitle className="text-lg font-semibold">Keyboard shortcuts</DialogTitle>
+          <DialogTitle className="text-md font-medium">Keyboard shortcuts</DialogTitle>
           <KbdGroup>
             <Kbd className="bg-zinc-800 border-zinc-700 text-zinc-300 min-w-6">
               Ctrl
@@ -120,7 +120,7 @@ export function ShortcutsModal({ open, onOpenChange }: ShortcutsModalProps) {
               >
                 <h3
                   className={cn(
-                    "text-sm font-semibold",
+                    "text-sm font-medium",
                     index > 0 && SHORTCUTS[index - 1].title === category.title && "invisible"
                   )}
                 >

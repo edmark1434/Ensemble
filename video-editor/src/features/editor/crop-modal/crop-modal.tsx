@@ -1,7 +1,7 @@
 import {
   DialogContent,
   Dialog,
-  DialogDescription,
+  DialogHeader,
   DialogTitle,
   DialogOverlay
 } from "@/components/ui/dialog";
@@ -15,13 +15,10 @@ import useCropStore from "../store/use-crop-store";
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Label } from "@radix-ui/react-label";
 
 const CropModal = () => {
   const { cropTarget, setCropTarget } = useLayoutStore();
@@ -33,28 +30,39 @@ const CropModal = () => {
     scale: scaled,
     element,
     loadImage,
-    clear
+    clear,
+    size: nativeSize // native asset pixel dimensions, e.g. { width: 4000, height: 3000 }
   } = useCropStore();
 
   const apply = () => {
     if (!cropTarget) return;
     const cropTargetDetails = cropTarget.details;
 
-    const scale = 1 / scaled;
-
     const oldWidth = Number.parseFloat(cropTargetDetails.width);
     const oldHeight = Number.parseFloat(cropTargetDetails.height);
+
+    // Everything ElementCrop works in (canvas size, `area`, drag math) is
+    // native-pixel-based preview space: nativeSize.width * scaled wide.
+    // Stored crop.x/y/width/height must be in editor-canvas space instead,
+    // since that's the space `details.width/height` (and the render pipeline
+    // that consumes `crop`) actually live in. Convert preview -> editor
+    // directly using the target's own placed size as the reference, so we
+    // never have to round-trip through native pixels as an intermediate.
+    const previewFullWidth = nativeSize.width * scaled;
+    const previewFullHeight = nativeSize.height * scaled;
+    const scaleX = oldWidth / previewFullWidth;
+    const scaleY = oldHeight / previewFullHeight;
 
     // Extract the actual visual scale from the transform property
     const regex = cropTargetDetails.transform?.match(/scale\(([^)]+)\)/);
     const imageScale = regex ? Number.parseFloat(regex[1]) : 1; // Default scale to 1 if missing
 
-    // Calculate crop offsets and new dimensions in original coordinates
-    const cropX = (area ? area[0] : 0) * scale;
-    const cropY = (area ? area[1] : 0) * scale;
+    // Calculate crop offsets and new dimensions in editor-canvas coordinates
+    const cropX = (area ? area[0] : 0) * scaleX;
+    const cropY = (area ? area[1] : 0) * scaleY;
 
-    const newWidth = (area ? area[2] : oldWidth) * scale;
-    const newHeight = (area ? area[3] : oldHeight) * scale;
+    const newWidth = (area ? area[2] : oldWidth) * scaleX;
+    const newHeight = (area ? area[3] : oldHeight) * scaleY;
 
     const prevCropX = cropTargetDetails?.crop?.x || 0;
     const prevCropY = cropTargetDetails?.crop?.y || 0;
@@ -125,18 +133,32 @@ const CropModal = () => {
           }}
         >
           <DialogOverlay className="z-[300] bg-zinc-950/80">
-            <DialogContent className="z-[300] flex max-h-[800px] w-full sm:max-w-[900px] flex-col bg-zinc-950 px-8">
-              <DialogTitle>Crop</DialogTitle>
+            <DialogContent className="z-[300] flex max-h-[800px] w-full sm:max-w-[900px] flex-col border bg-card px-2 py-8 gap-6 overflow-hidden">
+              <DialogHeader className="px-6 -mt-0.75">
+                <DialogTitle className="text-md font-semibold">Crop</DialogTitle>
+              </DialogHeader>
 
-              <div className="flex gap-4">
-                <div className="w-56 flex flex-col gap-2">
-                  <Label>Aspect Ratio</Label>
+              <div className="flex flex-1 flex-col gap-4 px-6">
+                <div className="flex flex-1 flex-col gap-4 bg-zinc-900 p-4 rounded-md">
+                  <div className="flex flex-1 items-center justify-center">
+                    {element && (
+                      <ElementCrop
+                        size={nativeSize}
+                        targetDetails={cropTargetDetails}
+                        element={element}
+                        aspectRatio={aspectRatio}
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-4">
                   <Select
                     value={aspectRatio}
                     onValueChange={setAspectRatio}
                     defaultValue="free"
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-40">
                       <SelectValue placeholder="Select ratio" />
                     </SelectTrigger>
                     <SelectContent className="z-[1000]">
@@ -150,29 +172,14 @@ const CropModal = () => {
                       <SelectItem value="16:9">16:9</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
 
-                <div className="flex flex-1 flex-col gap-4 bg-zinc-900 p-4">
-                  <div className="flex flex-1 items-center justify-center ">
-                    {element && (
-                      <ElementCrop
-                        size={{
-                          width: cropTargetDetails.width,
-                          height: cropTargetDetails.height
-                        }}
-                        targetDetails={cropTargetDetails}
-                        element={element}
-                        aspectRatio={aspectRatio}
-                      />
-                    )}
+                  <div className="flex items-center gap-2">
+                    <Button variant="secondary" onClick={reset}>
+                      Reset
+                    </Button>
+                    <Button onClick={apply}>Apply</Button>
                   </div>
                 </div>
-              </div>
-              <div className="flex h-16 items-center justify-end gap-4">
-                <Button variant="secondary" onClick={reset}>
-                  Reset
-                </Button>
-                <Button onClick={apply}>Apply</Button>
               </div>
             </DialogContent>
           </DialogOverlay>

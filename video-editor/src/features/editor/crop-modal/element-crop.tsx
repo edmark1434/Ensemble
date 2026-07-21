@@ -28,6 +28,7 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
   const { area, setArea, scale } = useCropStore();
   const canvasPreviewRef = useRef<HTMLCanvasElement>(null);
   const lastAspectRatioRef = useRef<string | null>(null);
+  const initializedForSrcRef = useRef<string | null>(null);
   let ratio: number | null = null;
   if (aspectRatio && aspectRatio !== "free") {
     const [w, h] = aspectRatio.split(":").map(Number);
@@ -42,6 +43,7 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
     preventDefault: true,
     stopPropagation: true,
     onMove: ({ x, y, deltaX, deltaY, state: { dirX, dirY, area } }) => {
+      console.log("onMove", { dirX, dirY, area, x, y });
       const rect = canvasPreviewRef.current?.getBoundingClientRect();
       if (!rect) return;
 
@@ -74,9 +76,7 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
         const endY = area[1] + area[3];
 
         if (dirY === -1) {
-          // Resizing from top (north)
           if (ratio) {
-            // Maintain aspect ratio: adjust width based on height change
             const newHeight = endY - relativeY;
             if (newHeight >= MIN_CROP_SIZE) {
               const newWidth = newHeight * ratio;
@@ -90,7 +90,6 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
               }
             }
           } else {
-            // Free aspect ratio
             const newHeight = endY - relativeY;
             if (newHeight >= MIN_CROP_SIZE) {
               newArea[1] = relativeY;
@@ -98,9 +97,7 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
             }
           }
         } else if (dirY === 1) {
-          // Resizing from bottom (south)
           if (ratio) {
-            // Maintain aspect ratio: adjust width based on height change
             const newHeight = relativeY - newArea[1];
             if (newHeight >= MIN_CROP_SIZE) {
               const newWidth = newHeight * ratio;
@@ -113,7 +110,6 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
               }
             }
           } else {
-            // Free aspect ratio
             const newHeight = relativeY - newArea[1];
             if (newHeight >= MIN_CROP_SIZE) {
               newArea[3] = newHeight;
@@ -122,9 +118,7 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
         }
 
         if (dirX === -1) {
-          // Resizing from left (west)
           if (ratio) {
-            // Maintain aspect ratio: adjust height based on width change
             const newWidth = endX - relativeX;
             if (newWidth >= MIN_CROP_SIZE) {
               const newHeight = newWidth / ratio;
@@ -138,7 +132,6 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
               }
             }
           } else {
-            // Free aspect ratio
             const newWidth = endX - relativeX;
             if (newWidth >= MIN_CROP_SIZE) {
               newArea[0] = relativeX;
@@ -146,9 +139,7 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
             }
           }
         } else if (dirX === 1) {
-          // Resizing from right (east)
           if (ratio) {
-            // Maintain aspect ratio: adjust height based on width change
             const newWidth = relativeX - newArea[0];
             if (newWidth >= MIN_CROP_SIZE) {
               const newHeight = newWidth / ratio;
@@ -161,7 +152,6 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
               }
             }
           } else {
-            // Free aspect ratio
             const newWidth = relativeX - newArea[0];
             if (newWidth >= MIN_CROP_SIZE) {
               newArea[2] = newWidth;
@@ -170,9 +160,7 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
         }
       }
 
-      // 🔹 Ensure bounds are respected
       if (ratio) {
-        // Ensure the crop area stays within bounds
         if (newArea[0] + newArea[2] > size.width * scale) {
           newArea[2] = size.width * scale - newArea[0];
           newArea[3] = newArea[2] / ratio;
@@ -186,6 +174,7 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
       setArea(newArea);
     }
   });
+
   useEffect(() => {
     let updating = true;
 
@@ -239,15 +228,27 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
       }
       requestAnimationFrame(update);
     };
-    const widthTotal = area[2];
-    const scaleWidth = targetDetails.width / widthTotal;
-    const areaPosX = (targetDetails.crop?.x || 0) / scaleWidth;
-    const areaPosY = (targetDetails.crop?.y || 0) / scaleWidth;
-    const areaWidth =
-      (targetDetails.crop?.width || targetDetails.width) / scaleWidth;
-    const areaHeight =
-      (targetDetails.crop?.height || targetDetails.height) / scaleWidth;
-    setArea([areaPosX, areaPosY, areaWidth, areaHeight]);
+
+    // Restore the item's saved crop into `area` only once per crop session,
+    // keyed on src rather than the `element` reference. `element` can be
+    // handed to us as a new object more than once during a video crop
+    // session (e.g. as readyState/frame state updates), and re-running this
+    // on every one of those would stomp on an in-progress drag with the
+    // originally saved crop values.
+    const srcKey = (targetDetails as { src?: string }).src ?? null;
+    if (initializedForSrcRef.current !== srcKey) {
+      initializedForSrcRef.current = srcKey;
+
+      const widthTotal = area[2];
+      const scaleWidth = targetDetails.width / widthTotal;
+      const areaPosX = (targetDetails.crop?.x || 0) / scaleWidth;
+      const areaPosY = (targetDetails.crop?.y || 0) / scaleWidth;
+      const areaWidth =
+        (targetDetails.crop?.width || targetDetails.width) / scaleWidth;
+      const areaHeight =
+        (targetDetails.crop?.height || targetDetails.height) / scaleWidth;
+      setArea([areaPosX, areaPosY, areaWidth, areaHeight]);
+    }
 
     requestAnimationFrame(update);
 
@@ -256,11 +257,9 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
     };
   }, [element]);
 
-  // Auto-adjust crop area when aspectRatio changes
   useEffect(() => {
     if (!area || aspectRatio === "free") return;
 
-    // Prevent infinite loop by checking if we've already processed this aspect ratio
     if (lastAspectRatioRef.current === aspectRatio) return;
     lastAspectRatioRef.current = aspectRatio;
 
@@ -270,21 +269,17 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
     const ratio = w / h;
     const currentArea = [...area];
 
-    // Calculate center of current crop area
     const centerX = currentArea[0] + currentArea[2] / 2;
     const centerY = currentArea[1] + currentArea[3] / 2;
 
-    // Calculate new dimensions maintaining aspect ratio
     let newWidth = currentArea[2];
     let newHeight = newWidth / ratio;
 
-    // If height is too large, adjust based on height instead
     if (newHeight > size.height * scale) {
       newHeight = size.height * scale;
       newWidth = newHeight * ratio;
     }
 
-    // Ensure minimum size
     if (newWidth < MIN_CROP_SIZE) {
       newWidth = MIN_CROP_SIZE;
       newHeight = newWidth / ratio;
@@ -294,11 +289,9 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
       newWidth = newHeight * ratio;
     }
 
-    // Calculate new position to maintain center
     const newX = centerX - newWidth / 2;
     const newY = centerY - newHeight / 2;
 
-    // Clamp to bounds
     const clampedX = Math.max(0, Math.min(newX, size.width * scale - newWidth));
     const clampedY = Math.max(
       0,
@@ -306,7 +299,7 @@ export const ElementCrop: React.FC<ElementCropProps> = ({
     );
 
     setArea([clampedX, clampedY, newWidth, newHeight]);
-  }, [aspectRatio, size.width, size.height, scale]); // Removed 'area' dependency
+  }, [aspectRatio, size.width, size.height, scale]);
 
   return (
     <div className="flex">
