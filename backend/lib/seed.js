@@ -35,22 +35,25 @@ async function ensurePasswordHashColumnCapacity() {
 }
 
 async function resetSeedTables() {
-  await pool.query(`
-    TRUNCATE TABLE
-      ticket_messages,
-      support_tickets,
-      user_reports,
-      disputes,
-      violations,
-      marketplace_listings,
-      platform_settings,
-      staff,
-      users,
-      accounts
-    RESTART IDENTITY CASCADE
-  `).catch(async () => {
-    await pool.query('TRUNCATE TABLE staff, users, accounts RESTART IDENTITY CASCADE');
-  });
+  // Prefer clearing portal + auth tables. CASCADE handles FKs; UUID tables ignore RESTART IDENTITY.
+  try {
+    await pool.query(`
+      TRUNCATE TABLE
+        ticket_messages,
+        support_tickets,
+        user_reports,
+        marketplace_listings,
+        platform_settings,
+        disputes,
+        violations,
+        staff,
+        users,
+        accounts
+      CASCADE
+    `);
+  } catch {
+    await pool.query('TRUNCATE TABLE staff, users, accounts CASCADE');
+  }
 }
 
 async function seedMarketplaceListings(userAccountIds, staffByRole) {
@@ -130,13 +133,15 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         dispute_number, title, reason, status, priority,
         initiator_account_id, respondent_account_id,
         related_entity_type, related_entity_id, assigned_staff_id,
-        credit_amount_involved, opened_at, resolution_notes
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, NOW() - ($12 || ' days')::interval, $13)
+        credit_amount_involved, opened_at, resolution_notes,
+        type, by_account_id, for_account_id
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, NOW() - ($12 || ' days')::interval, $13, $14, $6, $7)
       RETURNING dispute_id`,
       [
         ...d.slice(0, 11),
         String(faker.number.int({ min: 3, max: 90 })),
         d[3] === 'resolved' ? 'Resolved per platform policy.' : null,
+        d[7] || 'general',
       ]
     );
     disputeIds.push(res.rows[0].dispute_id);
@@ -196,8 +201,10 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
 
   for (const v of violations) {
     await pool.query(
-      `INSERT INTO violations (violation_number, account_id, title, reason, points, issued_by_staff_id)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
+      `INSERT INTO violations (
+        violation_number, account_id, title, reason, points, issued_by_staff_id,
+        type, status, staff_id
+      ) VALUES ($1,$2,$3,$4,$5,$6,$3,'active',$6)`,
       v
     );
   }
