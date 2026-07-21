@@ -89,7 +89,7 @@ if (!req.session) {
 }
 
 let userId = accountName.user_id || req.session.userId;
-userId = parseInt(userId, 10); // Ensure userId is an integer
+userId = userId, 10; // Ensure userId is an integer
 // 1. Try Redis
 let customerId = await redisClient.get(`customerId:${userId}`); 
 
@@ -105,27 +105,7 @@ if (!customerId) {
     customerId = result.rows[0]?.customer_id || null;
 }
 
-// 3. Build customer payload
-const customerPayload = customerId
-    ? {
-        customer_id: customerId
-    }
-    : {
-        customer: {
-            reference_id: `CUST-${userId}`,
-            type: "INDIVIDUAL",
-            email: accountName.email || req.session.email,
-            individual_detail: {
-                given_names:
-                    accountName.first_name ||
-                    req.session.displayName.split(" ")[0],
-
-                surname:
-                    accountName.last_name ||
-                    req.session.displayName.split(" ").slice(1).join(" ")
-            }
-        }
-    };
+const customerPayload = await getCustomerPayload(req);
     const payload = {
         reference_id: `TOPUP-${uuidv4()}`,
         session_type: "PAY",
@@ -265,10 +245,14 @@ async function createPaymentToken(req, res) {
     const { userId } = req.session;
     const customerPayload = await getCustomerPayload(req);
     try{
+        console.log({
+    reference_id: `SAVE-CARD-USER-${uuidv4()}`,
+    ...customerPayload
+});
         const response = await axios.post(
             "https://api.xendit.co/sessions",
             {
-                reference_id: `SAVE-CARD-USER-${userId}-${uuidv4()}`,
+                reference_id: `SAVE-CARD-USER-${uuidv4()}`,
                 session_type: "SAVE",
                 mode: "PAYMENT_LINK",
                 amount: 0,
@@ -300,6 +284,7 @@ async function createPaymentToken(req, res) {
             paymentLink: response.data.payment_link_url
         });
     }catch(err){
+        console.error(err.response?.data || err);
         res.status(500).json({
             error: err.response?.data || err.message
         });
@@ -308,7 +293,7 @@ async function createPaymentToken(req, res) {
 
 async function savePaymentMethod(data) {
     let payment = await getPaymentByReferenceId(data.reference_id.split("_")[0] || data.reference_id);
-    payment.user_id = parseInt(payment.user_id, 10); // Ensure user_id is an integer
+    payment.user_id = payment.user_id; // Ensure user_id is an integer
     if(!payment){
         console.error("Payment not found for reference_id:", data.reference_id);
         return res.status(404).json({ error: "Payment not found" });
@@ -377,61 +362,95 @@ async function savePaymentMethod(data) {
 }
 
 
-async function getCustomerPayload(req){
-let accountName = {};
-if (!req.session) {
-    const response = await pool.query(
-        `SELECT user_id, first_name, last_name, email
-         FROM users
-         WHERE user_id = $1`,
-        [req.body.userId]
-    );
-
-    accountName = response.rows[0];
-}
-
-const userId = accountName.user_id || req.session.userId;
-
-// 1. Try Redis
-let customerId = await redisClient.get(`customerId:${userId}`); 
-
-// 2. Fallback to DB
-if (!customerId) {
-    const result = await pool.query(
-        `SELECT customer_id
-         FROM users
-         WHERE user_id = $1`,
-        [userId]
-    );
-
-    customerId = result.rows[0]?.customer_id || null;
-}
-
-// 3. Build customer payload
-const customerPayload = customerId
-    ? {
-        customer_id: customerId
-    }
-    : {
-        customer: {
-            reference_id: `CUST-${userId}`,
-            type: "INDIVIDUAL",
-            email: accountName.email || req.session.email,
-            individual_detail: {
-                given_names:
-                    accountName.first_name ||
-                    req.session.displayName.split(" ")[0],
-
-                surname:
-                    accountName.last_name ||
-                    req.session.displayName.split(" ").slice(1).join(" ")
-            }
+async function getCustomerPayload(req) {
+    let accountName = {};
+    let userId;
+    
+    // 1. Get user data
+    if (!req.session) {
+        const response = await pool.query(
+            `SELECT user_id, first_name, last_name, email
+             FROM users
+             WHERE user_id = $1`,
+            [req.body.userId]
+        );
+        accountName = response.rows[0];
+        userId = accountName.user_id;
+    } else {
+        userId = req.session.userId;
+        // Get user data from session or database
+        if (!req.session.first_name) {
+            const response = await pool.query(
+                `SELECT first_name, last_name, email_address
+                 FROM users
+                 WHERE user_id = $1`,
+                [userId]
+            );
+            accountName = response.rows[0];
+        } else {
+            accountName = {
+                first_name: req.session.first_name,
+                last_name: req.session.last_name,
+                email: req.session.email
+            };
         }
-    };
-    return customerPayload;
-        
-}
+    }
 
+    // 2. Try Redis for existing customer_id
+    let customerId = await redisClient.get(`customerId:${userId}`);
+    console.log(`📊 Redis customerId for ${userId}:`, customerId);
+
+    // 3. Fallback to DB
+    if (!customerId) {
+        const result = await pool.query(
+            `SELECT customer_id
+             FROM users
+             WHERE user_id = $1`,
+            [userId]
+        );
+        customerId = result.rows[0]?.customer_id || null;
+        console.log(`📊 DB customerId for ${userId}:`, customerId);
+        
+        // If found in DB, cache it in Redis
+        if (customerId) {
+            await redisClient.set(`customerId:${userId}`, customerId);
+            await updateUserCustomerId(userId, customerId); // Ensure DB is updated
+        }
+    }
+
+    // 4. Build customer payload with unique reference_id if creating new
+    if (customerId) {
+        // ✅ Existing customer - use customer_id
+        console.log(`✅ Using existing customer_id: ${customerId}`);
+        return {
+            customer_id: customerId
+        };
+    } else {
+        // ✅ New customer - create with unique reference_id
+        const firstName = accountName.first_name || req.session?.displayName?.split(" ")[0] || "User";
+        const lastName = accountName.last_name || req.session?.displayName?.split(" ").slice(1).join(" ") || "Unknown";
+        const email = accountName.email || req.session?.email || `user_${userId}@example.com`;
+        
+        // ✅ Generate unique reference_id with timestamp
+        const timestamp = Date.now();
+        const randomStr = Math.random().toString(36).substring(2, 8);
+        const referenceId = `CUST-${userId}-${timestamp}-${randomStr}`;
+        
+        console.log(`📊 Creating new customer with reference_id: ${referenceId}`);
+        
+        return {
+            customer: {
+                reference_id: referenceId,
+                type: "INDIVIDUAL",
+                email: email,
+                individual_detail: {
+                    given_names: firstName,
+                    surname: lastName
+                }
+            }
+        };
+    }
+}
 async function getAllPaymentMethodsByUserIdService(req, res) {
     const user_id = req.session.userId || req.session.user_id;
     try{
@@ -447,7 +466,7 @@ async function paymentSessionCompleteWebhookHandler(req, res) {
     console.log("📬 Payment Session Complete Webhook Received:", req.body);
     const { event, data } = req.body;
     const hasToken = data.payment_token_id ? true : false;
-    const userId = parseInt(data.metadata?.user_id, 10) || null; // Ensure userId is an integer
+    const userId = data.metadata?.user_id|| null; // Ensure userId is an integer
     console.log("User ID from metadata:", userId);
     if(hasToken){
                 const response = await axios.get(
@@ -526,7 +545,7 @@ async function paymentSessionExpiredWebhookHandler(req, res) {
 
 async function TopUpPaymentByPaymentMethod(req, res) {
     let { userId } = req.session;
-    userId = parseInt(userId, 10); // Ensure userId is an integer
+    userId = userId, 10; // Ensure userId is an integer
     console.log("💳 Processing Top-Up Payment by Payment Method:", req.body);
     const {amount, currency, itemName, credits,itemType, paymentMethodId} = req.body;
     const reference_id = `TOPUP-${uuidv4()}`;

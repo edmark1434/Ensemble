@@ -179,32 +179,75 @@ async function updateProfileOnboarding(userId, completed_onboarding) {
 }
 
 function checkChanges(originalForm, updates) {
-    let newPayload = {};
-    updates.zipCode = parseInt(updates.zipCode) || null;
-    if(!originalForm || !updates) {
+    // Validate inputs
+    if (!originalForm || !updates) {
         throw new Error('Both originalForm and updates are required to check for changes');
     }
+    
     if (Object.keys(updates).length === 0) { 
         throw new Error('No updates to apply');
     }
-    if(updates.middleName !== undefined && updates.middleName !== originalForm.middleName) {
-        newPayload.middle_name = updates.middleName;
+    
+    // ✅ Helper function to normalize values for comparison
+    const normalizeValue = (value) => {
+        if (value === null || value === undefined) return '';
+        if (typeof value === 'string') return value.trim();
+        return String(value).trim();
+    };
+    
+    // ✅ Return payload with snake_case keys for database
+    let newPayload = {};
+    
+    // Check each field for changes
+    if (updates.middleName !== undefined) {
+        const updateValue = normalizeValue(updates.middleName);
+        const originalValue = normalizeValue(originalForm.middleName);
+        if (updateValue !== originalValue) {
+            newPayload.middle_name = updates.middleName; // ✅ snake_case
+        }
     }
-    if(updates.suffix !== undefined && updates.suffix !== originalForm.suffix) {
-        newPayload.suffix = updates.suffix;
+    
+    if (updates.suffix !== undefined) {
+        const updateValue = normalizeValue(updates.suffix);
+        const originalValue = normalizeValue(originalForm.suffix);
+        if (updateValue !== originalValue) {
+            newPayload.suffix = updates.suffix; // ✅ already snake_case
+        }
     }
-    if(updates.birthDate !== undefined && updates.birthDate !== originalForm.birthDate) {
-        newPayload.birth_date = updates.birthDate;
+    
+    if (updates.birthDate !== undefined) {
+        const updateValue = normalizeValue(updates.birthDate);
+        const originalValue = normalizeValue(originalForm.birthDate);
+        if (updateValue !== originalValue) {
+            newPayload.birth_date = updates.birthDate; // ✅ snake_case
+        }
     }
-    if(updates.country !== undefined && updates.country !== originalForm.country) {
-        newPayload.country = updates.country;
+    
+    if (updates.country !== undefined && updates.country !== null && updates.country !== "") {
+        const updateValue = normalizeValue(updates.country);
+        const originalValue = normalizeValue(originalForm.country);
+        if (updateValue !== originalValue) {
+            newPayload.country = updates.country; // ✅ already snake_case
+        }
     }
-    if(updates.zipCode !== undefined && updates.zipCode !== originalForm.zipCode) {
-        newPayload.zip_code = updates.zipCode;
+    
+    if (updates.zipCode !== undefined && updates.zipCode !== null && updates.zipCode !== "") {
+        const updateValue = normalizeValue(updates.zipCode);
+        const originalValue = normalizeValue(originalForm.zipCode);
+        if (updateValue !== originalValue) {
+            newPayload.zip_code = updates.zipCode; // ✅ snake_case
+        }
     }
-    if(updates.address !== undefined && updates.address !== originalForm.address) {
-        newPayload.address = updates.address;
+    
+    if (updates.address !== undefined && updates.address !== null && updates.address !== "") {
+        const updateValue = normalizeValue(updates.address);
+        const originalValue = normalizeValue(originalForm.address);
+        if (updateValue !== originalValue) {
+            newPayload.address = updates.address; // ✅ already snake_case
+        }
     }
+    
+    console.log("📊 Changes detected (snake_case):", newPayload);
     return newPayload;
 }
 

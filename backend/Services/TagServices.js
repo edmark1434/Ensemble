@@ -58,17 +58,17 @@ async function checkUserTagExistsServices(userId, tagId) {
 function compareSkills(originalSkills, updatedSkills) {
     // Find added skills (in updated but not in original)
     const added = updatedSkills.filter(
-        updated => !originalSkills.some(original => Number(original.tag_id) === Number(updated.tag_id))
+        updated => !originalSkills.some(original => original.tag_id === updated.tag_id)
     );
 
     // Find removed skills (in original but not in updated)
     const removed = originalSkills.filter(
-        original => !updatedSkills.some(updated => Number(updated.tag_id) === Number(original.tag_id))
+        original => !updatedSkills.some(updated => updated.tag_id === original.tag_id)
     );
 
     // Find modified skills (in both but with different proficiency or years)
     const modified = updatedSkills.filter(updated => {
-        const original = originalSkills.find(o => Number(o.tag_id) === Number(updated.tag_id));
+        const original = originalSkills.find(o => o.tag_id === updated.tag_id);
         if (!original) return false;
         return original.proficiency !== updated.proficiency || original.years !== updated.years;
     });
@@ -95,7 +95,7 @@ async function updateUserSkillsServices(userId, originalSkills, updatedSkills) {
 
         // Handle removed skills
         if (comparison.removed.length > 0) {
-            const tagIds = comparison.removed.map(skill => Number(skill.tag_id));
+            const tagIds = comparison.removed.map(skill => skill.tag_id);
             removedCount = await removeUserTagsRepositories(userId, tagIds);
             console.log('🗑️ Removed skills:', comparison.removed.map(s => s.name).join(', '));
         }
@@ -103,7 +103,7 @@ async function updateUserSkillsServices(userId, originalSkills, updatedSkills) {
         // Handle added skills
         if (comparison.added.length > 0) {
             const tagsToAdd = comparison.added.map(skill => ({
-                tag_id: Number(skill.tag_id),
+                tag_id: skill.tag_id,
                 proficiency: skill.proficiency,
                 years: skill.years
             }));
@@ -115,7 +115,7 @@ async function updateUserSkillsServices(userId, originalSkills, updatedSkills) {
         // Handle modified skills
         if (comparison.modified.length > 0) {
             const tagsToUpdate = comparison.modified.map(skill => ({
-                tag_id: Number(skill.tag_id),
+                tag_id: skill.tag_id,
                 proficiency: skill.proficiency,
                 years: skill.years
             }));

@@ -36,7 +36,14 @@ export default function PersonalDetails() {
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [countries, setCountries] = useState<string[]>([]);
   const [places, setPlaces] = useState<Place[]>([]);
-  const [originalForm, setOriginalForm] = useState({});
+  const [originalForm, setOriginalForm] = useState({
+    middleName: "",
+    suffix: "",
+    birthDate: "",
+    country: "",
+    zipCode: "",
+    address: "",
+  });
   const [form, setForm] = useState({
     middleName: "",
     suffix: "",
@@ -87,15 +94,17 @@ export default function PersonalDetails() {
     };
     fetchCountries();
   }, []);
+  
   useEffect(() => {
-      const checkOnboardingStatus = async () => {
-        const response = await api.get("/api/users/session");
-          if (response.data.steps) {
-            navigate("/*");
-          }
+    const checkOnboardingStatus = async () => {
+      const response = await api.get("/api/users/session");
+      if (response.data.steps) {
+        navigate("/*");
       }
-      checkOnboardingStatus();
+    }
+    checkOnboardingStatus();
   }, []);
+  
   useEffect(() => {
     const fetchPersonalDetails = async () => {
       try {
@@ -106,22 +115,24 @@ export default function PersonalDetails() {
           // ✅ Format the birth date for the input field
           const formattedBirthDate = formatDateForInput(data.birth_date || "");
           
+          // ✅ Store the actual values from database (null or empty)
+          const formData = {
+            middleName: data.middle_name || "",
+            suffix: data.suffix || "",
+            birthDate: formattedBirthDate,
+            country: data.country || "", // ✅ Keep as empty string if null
+            zipCode: data.zip_code || "",
+            address: data.address || ""
+          };
+          
+          // ✅ Set form with the data (fallback to "Philippines" for display)
           setForm({
-            middleName: data.middle_name || "",
-            suffix: data.suffix || "",
-            birthDate: formattedBirthDate,
-            country: data.country || "Philippines",
-            zipCode: data.zip_code || "",
-            address: data.address || ""
+            ...formData,
+            country: data.country || "Philippines", // Display default
           });
-          setOriginalForm({
-            middleName: data.middle_name || "",
-            suffix: data.suffix || "",
-            birthDate: formattedBirthDate,
-            country: data.country || "Philippines",
-            zipCode: data.zip_code || "",
-            address: data.address || ""
-          });
+          
+          // ✅ Set originalForm with the actual data from database (no defaults)
+          setOriginalForm(formData);
         }
       } catch (error) {
         console.error("Error fetching personal details:", error);
@@ -154,6 +165,24 @@ export default function PersonalDetails() {
     if (errors[key]) setErrors({ ...errors, [key]: "" });
   };
 
+  // ✅ FIX: Handle place selection - ONLY update form, NOT originalForm
+  const handlePlaceSelect = (place: Place) => {
+    const formattedAddress = `${place.properties.name || ''}, ${place.properties.city ?? ''}, ${place.properties.state ?? ''}`.trim().replace(/,\s*$/, '');
+    
+    const country = place.properties.country || "Philippines";
+    const zipCode = place.properties.postcode || "";
+    
+    // ✅ Only update form
+    setForm(prev => ({
+      ...prev,
+      country: country,
+      zipCode: zipCode,
+      address: formattedAddress
+    }));
+    
+    setPlaces([]);
+  };
+
   const handleNext = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -169,30 +198,107 @@ export default function PersonalDetails() {
 
     setLoading(true);
     try {
-      if (Object.keys(originalForm).length === 0) {
-        try {
-          const response = await api.post("/api/users/update-personal-details", form);
-          if (response.status === 200 && response.data.success) {
-            navigate("/setup/upload-image");
-          }
-        } catch (err: any) {
-          console.error("Error updating personal details:", err.response?.data || err.message || err);
-          setErrors(err.response?.data?.errors || { general: "An error occurred. Please try again." });
-        } 
+      // ✅ Check if originalForm has data (check if any field has a value)
+      const hasOriginalData = Object.values(originalForm).some(value => 
+        value !== "" && value !== null && value !== undefined
+      );
+      
+      // Prepare the payload with proper data
+      const payload = {
+        middleName: form.middleName || "",
+        suffix: form.suffix || "",
+        birthDate: form.birthDate || "",
+        country: form.country || "Philippines",
+        zipCode: form.zipCode || "",
+        address: form.address || ""
+      };
+      
+      console.log("📊 Original Form (from DB):", originalForm);
+      console.log("📊 Current Form (user edits):", form);
+      console.log("📊 Has Original Data:", hasOriginalData);
+      
+      if (!hasOriginalData) {
+        // First time saving - POST
+        console.log("📊 First time saving - POST");
+        const response = await api.post("/api/users/update-personal-details", payload);
+        if (response.status === 200 && response.data.success) {
+          toast.success("Personal details saved successfully.");
+          navigate("/setup/upload-image");
+        }
       } else {
-        try {
-          const response = await api.put("/api/accounts/update-profile-user", { originalForm, updates: form });
+        // ✅ Only send updates that have changed
+        const updates: any = {};
+        const original: any = {};
+        
+        // Check each field for changes
+        // ✅ Compare with originalForm (which has the actual database values)
+        if (form.middleName !== originalForm.middleName) {
+          updates.middleName = form.middleName;
+          original.middleName = originalForm.middleName;
+        }
+        if (form.suffix !== originalForm.suffix) {
+          updates.suffix = form.suffix;
+          original.suffix = originalForm.suffix;
+        }
+        if (form.birthDate !== originalForm.birthDate) {
+          updates.birthDate = form.birthDate;
+          original.birthDate = originalForm.birthDate;
+        }
+        // ✅ Compare country: if original is empty/undefined and form has "Philippines", it's a change
+        if (form.country !== originalForm.country) {
+          updates.country = form.country;
+          original.country = originalForm.country;
+        }
+        if (form.zipCode !== originalForm.zipCode) {
+          updates.zipCode = form.zipCode;
+          original.zipCode = originalForm.zipCode;
+        }
+        if (form.address !== originalForm.address) {
+          updates.address = form.address;
+          original.address = originalForm.address;
+        }
+        
+        console.log("📊 Detected changes:", updates);
+        
+        // ✅ If there are changes, send them
+        if (Object.keys(updates).length > 0) {
+          const updatePayload = { 
+            originalForm: {
+              middleName: original.middleName || originalForm.middleName || "",
+              suffix: original.suffix || originalForm.suffix || "",
+              birthDate: original.birthDate || originalForm.birthDate || "",
+              country: original.country || originalForm.country || "",
+              zipCode: original.zipCode || originalForm.zipCode || "",
+              address: original.address || originalForm.address || ""
+            }, 
+            updates: {
+              middleName: updates.middleName || form.middleName || "",
+              suffix: updates.suffix || form.suffix || "",
+              birthDate: updates.birthDate || form.birthDate || "",
+              country: updates.country || form.country || "Philippines",
+              zipCode: updates.zipCode || form.zipCode || "",
+              address: updates.address || form.address || ""
+            } 
+          };
+          
+          console.log("📊 Update Payload being sent:", JSON.stringify(updatePayload, null, 2));
+          
+          const response = await api.put("/api/accounts/update-profile-user", updatePayload);
           if (response.status === 200 && response.data.success) {
             toast.success(response.data.message || "Personal details updated successfully.");
             navigate("/setup/upload-image");
           }
-        } catch (err: any) {
-          console.error("Error updating personal details:", err.response?.data || err.message || err);
-          setErrors(err.response?.data?.errors || { general: "An error occurred. Please try again." });
+        } else {
+          // No changes detected
+          console.log("📊 No changes detected, skipping update");
+          toast.info("No changes to save.");
+          navigate("/setup/upload-image");
         }
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error("Error updating personal details:", err.response?.data || err.message || err);
+      setErrors(err.response?.data?.errors || { general: "An error occurred. Please try again." });
+      toast.error(err.response?.data?.message || "Failed to save personal details.");
     } finally {
       setLoading(false);
     }
@@ -406,14 +512,9 @@ export default function PersonalDetails() {
                   {places.map((place) => (
                     <div
                       key={place.properties.osm_id}
-                      onClick={() => {
-                        setForm({
-                          ...form,
-                          country: place.properties.country || form.country,
-                          zipCode: place.properties.postcode || form.zipCode,
-                          address: `${place.properties.name}, ${place.properties.city ?? ""}, ${place.properties.state ?? ""}`
-                        });
-                        setPlaces([]);
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handlePlaceSelect(place);
                       }}
                       style={{
                         padding: "12px",

@@ -357,7 +357,11 @@ export default function Profile() {
 
   const saveProfileDetails = async (updatedData: any) => {
     try {
-      setUserDetails(updatedData);
+      setUserDetails({
+        ...updatedData,
+        joinedDate: updatedData.joinedDate || "",
+        location:updatedData.address
+      });
       setIsProfileModalOpen(false);
     } catch (e) {
       toast.error("Failed executing operations pipeline data push.");

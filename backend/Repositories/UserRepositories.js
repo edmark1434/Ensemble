@@ -61,7 +61,7 @@ async function createUser({
                 email_address,
                 password_hash,
                 firebase_user_uuid,
-                is_email_verified,
+                is_email_verified
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING user_id, first_name, last_name, email_address, firebase_user_uuid`,
