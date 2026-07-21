@@ -1,6 +1,7 @@
-import { Briefcase, Gem, LayoutDashboard, Scale, Ticket } from "lucide-react";
+import { Briefcase, Gem, LayoutDashboard, Scale, ShieldAlert, Ticket } from "lucide-react";
 import type { ComponentType } from "react";
 import { NavLink } from "react-router-dom";
+import LogoutButton from "../shared/LogoutButton";
 
 type NavItem = {
   label: string;
@@ -10,8 +11,10 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/moderator/jobs" },
+  { label: "Jobs & Gigs Control", icon: Briefcase, to: "/moderator/jobs/control" },
   { label: "Ticket Management", icon: Ticket, to: "/moderator/jobs/ticket-management" },
   { label: "Disputes", icon: Scale, to: "/moderator/jobs/disputes" },
+  { label: "Restrictions", icon: ShieldAlert, to: "/moderator/jobs/restrictions" },
 ];
 
 const navClassName = (isActive: boolean) =>
@@ -47,11 +50,12 @@ const JobsModeratorNavbar = () => {
         </ul>
       </nav>
 
-      <div className="border-t border-white/10 p-4">
+      <div className="space-y-2 border-t border-white/10 p-4">
         <div className="flex items-center justify-between rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs text-zinc-300">
           <span>Go to platform</span>
           <Gem className="h-3.5 w-3.5 text-emerald-300" />
         </div>
+        <LogoutButton />
       </div>
     </aside>
   );

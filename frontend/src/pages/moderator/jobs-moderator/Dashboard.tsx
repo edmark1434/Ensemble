@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, Coins, Loader2, Scale, Ticket, TimerReset } from "lucide-react";
+import { AlertCircle, Briefcase, Coins, FileSignature, Gem, Loader2, Scale, Ticket, TimerReset } from "lucide-react";
 import api from "@/lib/axios";
 import { ChartCard, DonutChart } from "@/pages/admin/analytics/components/AnalyticsCharts";
 import type { JobsOverview } from "../shared/moderatorTypes";
@@ -53,13 +53,25 @@ export default function JobsModeratorDashboard() {
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard accent="emerald" label="Total jobs" value={summary.totalJobs} sub={`${summary.activeJobs} active job postings`} icon={Briefcase} />
+        <StatCard accent="emerald" label="Total gigs" value={summary.totalGigs} sub={`${summary.activeGigs} active gig postings`} icon={Gem} />
+        <StatCard accent="emerald" label="Active contracts" value={summary.activeContracts} sub="Contracts in progress" icon={FileSignature} />
         <StatCard accent="emerald" label="Open tickets" value={summary.openTickets} sub={`${summary.totalTickets} job/gig tickets total`} icon={Ticket} />
+      </div>
+
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard accent="emerald" label="Open disputes" value={summary.openDisputes} sub={`${summary.totalDisputes} disputes total`} icon={Scale} />
         <StatCard accent="emerald" label="Credits at risk" value={summary.creditsAtRisk.toLocaleString()} sub="Held in open disputes" icon={Coins} />
         <StatCard accent="emerald" label="Unassigned" value={summary.unassignedTickets} sub="Tickets waiting" icon={TimerReset} />
       </div>
 
-      <div className="mb-6 grid gap-4 lg:grid-cols-2">
+      <div className="mb-6 grid gap-4 lg:grid-cols-3">
+        <ChartCard>
+          <DonutChart
+            title="Postings by type"
+            segments={charts.postingsMix.map((s) => ({ label: s.label, value: s.value, color: s.color || "#34d399" }))}
+          />
+        </ChartCard>
         <ChartCard>
           <DonutChart
             title="Tickets by status"

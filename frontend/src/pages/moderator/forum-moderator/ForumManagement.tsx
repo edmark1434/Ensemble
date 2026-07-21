@@ -49,8 +49,8 @@ export default function ForumManagement() {
       <div className="mb-6 flex items-start gap-3 rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] px-4 py-3 text-sm text-violet-100">
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-violet-300" />
         <p>
-          Full discussion content lives in MongoDB. Set <code className="rounded bg-black/30 px-1">MONGODB_URI</code> to enable
-          inline post/comment removal. Report-based moderation below works without MongoDB.
+          This queue handles community reports. To moderate content directly, use the <strong>Forum Groups</strong> and{" "}
+          <strong>Discussions</strong> tabs (requires MongoDB to be connected).
         </p>
       </div>
 

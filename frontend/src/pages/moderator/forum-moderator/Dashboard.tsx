@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, Flag, Info, Loader2, MessagesSquare, Ticket, TimerReset } from "lucide-react";
+import { AlertCircle, Flag, Info, Loader2, MessageSquare, MessagesSquare, Ticket, TimerReset, UsersRound } from "lucide-react";
 import api from "@/lib/axios";
 import { ChartCard, DonutChart, HorizontalBarChart } from "@/pages/admin/analytics/components/AnalyticsCharts";
 import type { ForumOverview } from "../shared/moderatorTypes";
@@ -43,7 +43,7 @@ export default function ForumModeratorDashboard() {
     );
   }
 
-  const { summary, charts, recentTickets, flaggedReports, alerts, notice } = data;
+  const { summary, forumContent, charts, recentTickets, flaggedReports, alerts, notice } = data;
 
   return (
     <main className="relative z-10 min-h-screen px-6 py-8 md:ml-72 md:px-10" style={{ animation: "fadeIn 420ms ease" }}>
@@ -56,6 +56,14 @@ export default function ForumModeratorDashboard() {
         <div className="mb-6 flex items-start gap-3 rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] px-4 py-3 text-sm text-violet-100">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-violet-300" />
           <p>{notice}</p>
+        </div>
+      )}
+
+      {forumContent.available && (
+        <div className="mb-6 grid gap-4 sm:grid-cols-3">
+          <StatCard accent="violet" label="Forum groups" value={forumContent.totalGroups} sub={`${forumContent.activeGroups} active`} icon={UsersRound} />
+          <StatCard accent="violet" label="Discussions" value={forumContent.totalDiscussions} sub={`${forumContent.removedDiscussions} removed by moderation`} icon={MessagesSquare} />
+          <StatCard accent="violet" label="Comments" value={forumContent.totalComments} sub="Across all discussions" icon={MessageSquare} />
         </div>
       )}
 

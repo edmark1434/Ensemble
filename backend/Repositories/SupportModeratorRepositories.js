@@ -5,8 +5,11 @@ const {
   scopedTicketCategoryBreakdown,
   fetchScopedReports,
   scopedReportCounts,
+  fetchScopedDisputes,
+  scopedDisputeCounts,
   toCategoryChart,
   ticketStatusChart,
+  normalizeStatus,
 } = require('./ModeratorSharedRepositories');
 
 // Support desk owns general support: everything not routed to a specialist queue.
@@ -19,6 +22,63 @@ async function getSupportTickets({ status } = {}) {
 
 async function getSupportReports({ status } = {}) {
   return fetchScopedReports({ status });
+}
+
+// Support desk sees the full dispute queue.
+async function getSupportDisputes({ status } = {}) {
+  return fetchScopedDisputes({ status });
+}
+
+// Chronological ticket log: status changes surface via updated_at, plus every message.
+async function getTicketLog() {
+  const result = await pool.query(`
+    (
+      SELECT
+        'ticket' AS type,
+        t.ticket_number AS ref,
+        t.subject AS label,
+        t.status,
+        t.updated_at AS at
+      FROM support_tickets t
+      ORDER BY t.updated_at DESC
+      LIMIT 14
+    )
+    UNION ALL
+    (
+      SELECT
+        'message' AS type,
+        t.ticket_number AS ref,
+        COALESCE(tm.author_name, 'Someone') || ' replied on ' || t.ticket_number AS label,
+        t.status,
+        tm.created_at AS at
+      FROM ticket_messages tm
+      INNER JOIN support_tickets t ON t.ticket_id = tm.ticket_id
+      ORDER BY tm.created_at DESC
+      LIMIT 10
+    )
+    UNION ALL
+    (
+      SELECT
+        'dispute' AS type,
+        d.dispute_number AS ref,
+        d.title AS label,
+        d.status,
+        d.updated_at AS at
+      FROM disputes d
+      ORDER BY d.updated_at DESC
+      LIMIT 8
+    )
+    ORDER BY at DESC
+    LIMIT 20
+  `);
+  return result.rows.map((r, i) => ({
+    id: `log-${i}`,
+    type: r.type,
+    ref: r.ref,
+    label: r.label,
+    status: normalizeStatus(r.status),
+    at: r.at,
+  }));
 }
 
 async function getChatQueue() {
@@ -94,18 +154,21 @@ function buildAlerts(tc, rc, chatOpen) {
 }
 
 async function getSupportOverview() {
-  const [ticketCounts, categoryRows, reportCounts, tickets, reports, staffWorkload, chatQueue] = await Promise.all([
+  const [ticketCounts, categoryRows, reportCounts, disputeCounts, tickets, reports, staffWorkload, chatQueue, ticketLog] = await Promise.all([
     scopedTicketCounts(SUPPORT_SCOPE),
     scopedTicketCategoryBreakdown(SUPPORT_SCOPE),
     scopedReportCounts({}),
+    scopedDisputeCounts({}),
     getSupportTickets(),
     getSupportReports(),
     getSupportStaffWorkload(),
     getChatQueue(),
+    getTicketLog(),
   ]);
 
   const tc = ticketCounts;
   const rc = reportCounts;
+  const dc = disputeCounts;
   const chatOpen = chatQueue.filter((t) => !['resolved', 'closed'].includes(t.status)).length;
 
   return {
@@ -118,6 +181,9 @@ async function getSupportOverview() {
       resolvedTickets: Number(tc.resolved),
       openReports: Number(rc.open_count),
       totalReports: Number(rc.total),
+      openDisputes: Number(dc.open_count),
+      totalDisputes: Number(dc.total),
+      creditsAtRisk: Number(dc.credits_at_risk),
       chatWaiting: chatOpen,
       slaCompliancePercent: tc.total > 0 ? Math.round((Number(tc.resolved) / Number(tc.total)) * 100) : 100,
     },
@@ -126,9 +192,10 @@ async function getSupportOverview() {
       ticketCategories: toCategoryChart(categoryRows),
     },
     recentTickets: tickets.slice(0, 8),
+    ticketLog,
     staffWorkload,
     alerts: buildAlerts(tc, rc, chatOpen),
-    dataSources: { tables: ['support_tickets', 'ticket_messages', 'reports'], persisted: true },
+    dataSources: { tables: ['support_tickets', 'ticket_messages', 'disputes', 'dispute_messages', 'reports'], persisted: true },
   };
 }
 
@@ -136,5 +203,7 @@ module.exports = {
   getSupportOverview,
   getSupportTickets,
   getSupportReports,
+  getSupportDisputes,
+  getTicketLog,
   getChatQueue,
 };
