@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Loader2, MessageSquare, X } from "lucide-react";
+import { CheckCircle2, Loader2, MessageSquare, X } from "lucide-react";
 import api from "@/lib/axios";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
-import type { TicketDetail } from "@/pages/admin/ticketManagement/ticketTypes";
+import type { DisputeDetail } from "./moderatorTypes";
 import type { Accent } from "./ui";
 import { accentSpinner } from "./ui";
 
@@ -19,46 +19,46 @@ const ACCENT_BTN: Record<Accent, string> = {
 };
 
 /**
- * Generic moderator ticket detail modal.
- * `endpointBase` is the tickets base path, e.g. "/api/moderator/support/tickets".
+ * Dispute detail modal with a discussion thread.
+ * `endpointBase` is the disputes base path, e.g. "/api/moderator/support/disputes".
  */
-export default function ModeratorTicketDetailModal({
-  ticketId,
+export default function ModeratorDisputeDetailModal({
+  disputeId,
   endpointBase,
   accent = "sky",
-  allowEscalate = true,
   onClose,
   onUpdated,
 }: {
-  ticketId: number;
+  disputeId: number | string;
   endpointBase: string;
   accent?: Accent;
-  allowEscalate?: boolean;
   onClose: () => void;
   onUpdated: () => void;
 }) {
-  const [detail, setDetail] = useState<TicketDetail | null>(null);
+  const [detail, setDetail] = useState<DisputeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [reply, setReply] = useState("");
+  const [message, setMessage] = useState("");
   const [internalNote, setInternalNote] = useState(false);
   const [status, setStatus] = useState("");
   const [priority, setPriority] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
-  const [escalateRole, setEscalateRole] = useState("Admin");
+  const [resolutionNotes, setResolutionNotes] = useState("");
 
   const load = async () => {
     setLoading(true);
     try {
-      const res = await api.get(`${endpointBase}/${ticketId}`);
+      const res = await api.get(`${endpointBase}/${disputeId}`);
       if (res.data?.success) {
-        setDetail(res.data.data);
-        setStatus(res.data.data.ticket.status);
-        setPriority(res.data.data.ticket.priority);
-        setAssigneeId(res.data.data.ticket.assignee?.staffId?.toString() || "");
+        const d = res.data.data as DisputeDetail;
+        setDetail(d);
+        setStatus(d.dispute.status);
+        setPriority(d.dispute.priority);
+        setAssigneeId(d.dispute.assignee?.staffId?.toString() || "");
+        setResolutionNotes(d.dispute.resolutionNotes || "");
       }
     } catch {
-      showErrorToast("Failed to load ticket");
+      showErrorToast("Failed to load dispute");
     } finally {
       setLoading(false);
     }
@@ -67,54 +67,37 @@ export default function ModeratorTicketDetailModal({
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ticketId]);
+  }, [disputeId]);
 
-  const saveChanges = async () => {
+  const saveChanges = async (overrideStatus?: string) => {
     setSaving(true);
     try {
-      await api.patch(`${endpointBase}/${ticketId}`, {
-        status,
+      await api.patch(`${endpointBase}/${disputeId}`, {
+        status: overrideStatus || status,
         priority,
-        assigned_staff_id: assigneeId ? Number(assigneeId) : null,
+        assigned_staff_id: assigneeId ? assigneeId : null,
+        resolution_notes: resolutionNotes || null,
       });
-      showSuccessToast("Ticket updated");
+      showSuccessToast(overrideStatus === "resolved" ? "Dispute resolved" : "Dispute updated");
       await load();
       onUpdated();
     } catch {
-      showErrorToast("Failed to update ticket");
+      showErrorToast("Failed to update dispute");
     } finally {
       setSaving(false);
     }
   };
 
-  const escalateTo = async (role: string) => {
+  const sendMessage = async () => {
+    if (!message.trim()) return;
     setSaving(true);
     try {
-      await api.patch(`${endpointBase}/${ticketId}`, {
-        status: "escalated",
-        assigned_role: role,
-        assigned_staff_id: null,
-      });
-      showSuccessToast(`Ticket escalated to ${role}`);
-      await load();
-      onUpdated();
-    } catch {
-      showErrorToast("Failed to escalate ticket");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const sendReply = async () => {
-    if (!reply.trim()) return;
-    setSaving(true);
-    try {
-      await api.post(`${endpointBase}/${ticketId}/messages`, {
-        body: reply.trim(),
+      await api.post(`${endpointBase}/${disputeId}/messages`, {
+        body: message.trim(),
         isInternal: internalNote,
       });
-      setReply("");
-      showSuccessToast(internalNote ? "Internal note added" : "Reply sent");
+      setMessage("");
+      showSuccessToast(internalNote ? "Internal note added" : "Message sent");
       await load();
       onUpdated();
     } catch {
@@ -124,13 +107,15 @@ export default function ModeratorTicketDetailModal({
     }
   };
 
+  const dispute = detail?.dispute;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0f1016] shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
           <div>
-            <p className={`text-[10px] font-semibold uppercase tracking-wide ${accentSpinner(accent)}`}>Ticket detail</p>
-            <h2 className="text-lg font-bold text-white">{detail?.ticket.number || `TKT-${ticketId}`}</h2>
+            <p className={`text-[10px] font-semibold uppercase tracking-wide ${accentSpinner(accent)}`}>Dispute detail</p>
+            <h2 className="text-lg font-bold text-white">{dispute?.number || "Dispute"}</h2>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white">
             <X className="h-5 w-5" />
@@ -141,14 +126,15 @@ export default function ModeratorTicketDetailModal({
           <div className="flex flex-1 items-center justify-center py-20">
             <Loader2 className={`h-8 w-8 animate-spin ${accentSpinner(accent)}`} />
           </div>
-        ) : detail ? (
+        ) : detail && dispute ? (
           <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
             <div>
-              <h3 className="text-xl font-semibold text-white">{detail.ticket.subject}</h3>
+              <h3 className="text-xl font-semibold text-white">{dispute.title}</h3>
               <p className="mt-1 text-sm text-zinc-500">
-                {detail.ticket.requester.name} · @{detail.ticket.requester.username} · {detail.ticket.category} ·{" "}
-                {formatDateTime(detail.ticket.createdAt)}
+                @{dispute.initiator.username} vs @{dispute.respondent.username} · {dispute.relatedEntityType || "general"} ·{" "}
+                {dispute.creditAmount.toLocaleString()} credits · opened {formatDateTime(dispute.openedAt)}
               </p>
+              {dispute.reason && <p className="mt-2 text-sm text-zinc-400">{dispute.reason}</p>}
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
@@ -159,7 +145,7 @@ export default function ModeratorTicketDetailModal({
                   onChange={(e) => setStatus(e.target.value)}
                   className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
                 >
-                  {["open", "in_progress", "resolved", "closed", "escalated"].map((s) => (
+                  {["open", "under_review", "resolved", "closed"].map((s) => (
                     <option key={s} value={s}>
                       {s.replace("_", " ")}
                     </option>
@@ -197,44 +183,43 @@ export default function ModeratorTicketDetailModal({
               </label>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <label className="flex flex-col gap-1 text-xs text-zinc-500">
+              Resolution notes
+              <textarea
+                value={resolutionNotes}
+                onChange={(e) => setResolutionNotes(e.target.value)}
+                rows={2}
+                placeholder="How was (or will) this dispute be settled?"
+                className="resize-none rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white outline-none"
+              />
+            </label>
+
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => void saveChanges()}
                 disabled={saving}
                 className={`rounded-xl px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${ACCENT_BTN[accent]}`}
               >
-                Save ticket changes
+                Save dispute changes
               </button>
-              {allowEscalate && (
-                <div className="flex items-center gap-2">
-                  <select
-                    value={escalateRole}
-                    onChange={(e) => setEscalateRole(e.target.value)}
-                    className="rounded-xl border border-amber-500/30 bg-[#14151c] px-3 py-2 text-sm text-amber-200"
-                  >
-                    {["Admin", "Support Moderator", "Marketplace Moderator", "Forum Moderator", "Jobs N Gigs Moderator"].map((r) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => void escalateTo(escalateRole)}
-                    disabled={saving}
-                    className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
-                  >
-                    Escalate
-                  </button>
-                </div>
+              {!["resolved", "closed"].includes(dispute.status) && (
+                <button
+                  type="button"
+                  onClick={() => void saveChanges("resolved")}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  Resolve dispute
+                </button>
               )}
             </div>
 
             <div className="space-y-3">
               <p className="flex items-center gap-2 text-sm font-semibold text-white">
                 <MessageSquare className={`h-4 w-4 ${accentSpinner(accent)}`} />
-                Conversation ({detail.messages.length})
+                Discussion ({detail.messages.length})
               </p>
               {detail.messages.map((m) => (
                 <div
@@ -253,28 +238,26 @@ export default function ModeratorTicketDetailModal({
                   <p className="mt-2 text-sm text-zinc-200">{m.body}</p>
                 </div>
               ))}
-              {detail.messages.length === 0 && (
-                <p className="text-sm text-zinc-500">No messages yet.</p>
-              )}
+              {detail.messages.length === 0 && <p className="text-sm text-zinc-500">No discussion yet — start the chat below.</p>}
             </div>
 
             <div className="rounded-xl border border-white/10 bg-[#14151c] p-4">
               <textarea
-                value={reply}
-                onChange={(e) => setReply(e.target.value)}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
                 rows={3}
-                placeholder="Write a reply or internal note…"
+                placeholder="Write a message to discuss this dispute…"
                 className="w-full resize-none rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none"
               />
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                 <label className="flex items-center gap-2 text-xs text-zinc-400">
                   <input type="checkbox" checked={internalNote} onChange={(e) => setInternalNote(e.target.checked)} />
-                  Internal note (hidden from requester)
+                  Internal note (staff only)
                 </label>
                 <button
                   type="button"
-                  onClick={() => void sendReply()}
-                  disabled={saving || !reply.trim()}
+                  onClick={() => void sendMessage()}
+                  disabled={saving || !message.trim()}
                   className="rounded-lg bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/15 disabled:opacity-50"
                 >
                   Send
@@ -283,7 +266,7 @@ export default function ModeratorTicketDetailModal({
             </div>
           </div>
         ) : (
-          <p className="py-12 text-center text-zinc-500">Ticket not found.</p>
+          <p className="py-12 text-center text-zinc-500">Dispute not found.</p>
         )}
       </div>
     </div>

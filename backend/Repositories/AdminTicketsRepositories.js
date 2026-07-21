@@ -499,7 +499,7 @@ async function updateDispute(disputeId, patch, staffSession) {
 
   if (!sets.length) {
     const list = await fetchDisputesList();
-    return list.find((d) => d.id === Number(disputeId)) || null;
+    return list.find((d) => String(d.id) === String(disputeId)) || null;
   }
 
   if (patch.status && ['resolved', 'closed'].includes(String(patch.status).toLowerCase())) {
@@ -512,7 +512,70 @@ async function updateDispute(disputeId, patch, staffSession) {
   await pool.query(`UPDATE disputes SET ${sets.join(', ')} WHERE dispute_id = $${idx}`, values);
 
   const list = await fetchDisputesList();
-  return list.find((d) => d.id === Number(disputeId)) || null;
+  return list.find((d) => String(d.id) === String(disputeId)) || null;
+}
+
+async function getDisputeDetail(disputeId) {
+  const disputeResult = await pool.query(
+    `
+    SELECT
+      d.*,
+      COALESCE(ia.display_name, iu.first_name || ' ' || iu.last_name) AS initiator_name,
+      ia.handle AS initiator_handle,
+      COALESCE(ra.display_name, ru.first_name || ' ' || ru.last_name) AS respondent_name,
+      ra.handle AS respondent_handle,
+      COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
+      st.role AS assignee_role
+    FROM disputes d
+    LEFT JOIN accounts ia ON ia.account_id = d.initiator_account_id
+    LEFT JOIN users iu ON iu.account_id = ia.account_id
+    LEFT JOIN accounts ra ON ra.account_id = d.respondent_account_id
+    LEFT JOIN users ru ON ru.account_id = ra.account_id
+    LEFT JOIN staff st ON st.staff_id = d.assigned_staff_id
+    LEFT JOIN accounts sa ON sa.account_id = st.account_id
+    WHERE d.dispute_id = $1
+    `,
+    [disputeId]
+  );
+  if (!disputeResult.rows.length) return null;
+
+  const messagesResult = await pool.query(
+    `SELECT * FROM dispute_messages WHERE dispute_id = $1 ORDER BY created_at ASC`,
+    [disputeId]
+  );
+
+  const staffResult = await pool.query(`
+    SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
+    FROM staff s INNER JOIN accounts a ON a.account_id = s.account_id
+    ORDER BY s.role
+  `);
+
+  return {
+    dispute: mapDisputeRow(disputeResult.rows[0]),
+    messages: messagesResult.rows.map((m) => ({
+      id: m.message_id,
+      authorType: m.author_type,
+      authorName: m.author_name,
+      body: m.body,
+      isInternal: m.is_internal,
+      createdAt: m.created_at,
+    })),
+    assignableStaff: staffResult.rows.map((s) => ({
+      staffId: s.staff_id,
+      name: s.name,
+      role: s.role,
+    })),
+  };
+}
+
+async function addDisputeMessage(disputeId, body, staffSession, isInternal = false) {
+  await pool.query(
+    `INSERT INTO dispute_messages (dispute_id, author_account_id, author_type, author_name, body, is_internal)
+     VALUES ($1, $2, 'staff', $3, $4, $5)`,
+    [disputeId, staffSession?.accountId || null, staffSession?.username || 'Admin', body, isInternal]
+  );
+  await pool.query(`UPDATE disputes SET updated_at = NOW() WHERE dispute_id = $1`, [disputeId]);
+  return getDisputeDetail(disputeId);
 }
 
 async function updateReport(reportId, patch) {
@@ -547,5 +610,7 @@ module.exports = {
   updateTicket,
   addTicketMessage,
   updateDispute,
+  getDisputeDetail,
+  addDisputeMessage,
   updateReport,
 };

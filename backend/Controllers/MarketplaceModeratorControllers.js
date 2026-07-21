@@ -38,7 +38,7 @@ async function getListings(req, res) {
 
 async function getListingDetail(req, res) {
   try {
-    const data = await getMarketplaceListingDetail(Number(req.params.id));
+    const data = await getMarketplaceListingDetail(req.params.id);
     if (!data) return res.status(404).json({ success: false, message: 'Listing not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -49,7 +49,7 @@ async function getListingDetail(req, res) {
 
 async function patchListing(req, res) {
   try {
-    const data = await reviewMarketplaceListing(Number(req.params.id), req.body, req.session);
+    const data = await reviewMarketplaceListing(req.params.id, req.body, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Listing not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -70,7 +70,7 @@ async function getTickets(req, res) {
 
 async function getTicket(req, res) {
   try {
-    const data = await getTicketDetail(Number(req.params.id));
+    const data = await getTicketDetail(req.params.id);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -81,7 +81,7 @@ async function getTicket(req, res) {
 
 async function patchTicket(req, res) {
   try {
-    const data = await updateTicket(Number(req.params.id), req.body, req.session);
+    const data = await updateTicket(req.params.id, req.body, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -96,7 +96,7 @@ async function postTicketMessage(req, res) {
     if (!body?.trim()) {
       return res.status(400).json({ success: false, message: 'Message body is required' });
     }
-    const data = await addTicketMessage(Number(req.params.id), body.trim(), req.session, Boolean(isInternal));
+    const data = await addTicketMessage(req.params.id, body.trim(), req.session, Boolean(isInternal));
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -121,7 +121,7 @@ async function postViolation(req, res) {
     if (!accountId || !title) {
       return res.status(400).json({ success: false, message: 'accountId and title are required' });
     }
-    const data = await issueViolation(Number(accountId), { title, reason, points }, req.session);
+    const data = await issueViolation(accountId, { title, reason, points }, req.session);
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error issuing violation:', err);
@@ -131,7 +131,7 @@ async function postViolation(req, res) {
 
 async function patchRestriction(req, res) {
   try {
-    const data = await updateAccountRestriction(Number(req.params.id), req.body.status);
+    const data = await updateAccountRestriction(req.params.id, req.body.status);
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error updating account restriction:', err);

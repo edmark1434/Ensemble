@@ -62,7 +62,7 @@ async function getMarketplaceListings({ status } = {}) {
 
 async function getMarketplaceListingDetail(listingId) {
   const listings = await fetchListings('all');
-  return listings.find((l) => l.id === Number(listingId)) || null;
+  return listings.find((l) => String(l.id) === String(listingId)) || null;
 }
 
 async function reviewMarketplaceListing(listingId, { status, rejectionReason }, staffSession) {

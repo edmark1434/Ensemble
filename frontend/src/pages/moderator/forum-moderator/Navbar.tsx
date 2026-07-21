@@ -1,6 +1,7 @@
-import { Gem, LayoutDashboard, MessageSquare, Ticket, Users } from "lucide-react";
+import { Gem, LayoutDashboard, MessageSquare, MessagesSquare, ShieldAlert, Ticket, Users, UsersRound } from "lucide-react";
 import type { ComponentType } from "react";
 import { NavLink } from "react-router-dom";
+import LogoutButton from "../shared/LogoutButton";
 
 type NavItem = {
   label: string;
@@ -10,8 +11,11 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/moderator/forum" },
+  { label: "Forum Groups", icon: UsersRound, to: "/moderator/forum/groups" },
+  { label: "Discussions", icon: MessagesSquare, to: "/moderator/forum/discussions" },
   { label: "Forum Management", icon: MessageSquare, to: "/moderator/forum/forum-management" },
   { label: "Ticket Management", icon: Ticket, to: "/moderator/forum/ticket-management" },
+  { label: "Restrictions", icon: ShieldAlert, to: "/moderator/forum/restrictions" },
   { label: "User & Team", icon: Users, to: "/moderator/forum/user-team" },
 ];
 
@@ -48,11 +52,12 @@ const ForumModeratorNavbar = () => {
         </ul>
       </nav>
 
-      <div className="border-t border-white/10 p-4">
+      <div className="space-y-2 border-t border-white/10 p-4">
         <div className="flex items-center justify-between rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs text-zinc-300">
           <span>Go to platform</span>
           <span className="text-yellow-300">*</span>
         </div>
+        <LogoutButton />
       </div>
     </aside>
   );

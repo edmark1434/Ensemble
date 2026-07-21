@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import api from "@/lib/axios";
-import TicketDetailModal from "./TicketDetailModal";
+import ModeratorTicketDetailModal from "../shared/ModeratorTicketDetailModal";
 import type { MarketplaceTicket } from "./marketplaceTypes";
 
 export default function TicketManagement() {
@@ -80,7 +80,13 @@ export default function TicketManagement() {
       </div>
 
       {selectedId !== null && (
-        <TicketDetailModal ticketId={selectedId} onClose={() => setSelectedId(null)} onUpdated={() => void load()} />
+        <ModeratorTicketDetailModal
+          ticketId={selectedId}
+          endpointBase="/api/moderator/tickets"
+          accent="rose"
+          onClose={() => setSelectedId(null)}
+          onUpdated={() => void load()}
+        />
       )}
     </main>
   );

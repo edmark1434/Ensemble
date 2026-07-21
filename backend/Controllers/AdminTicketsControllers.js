@@ -19,7 +19,7 @@ async function getAdminTicketsOverview(req, res) {
 
 async function getAdminTicketDetail(req, res) {
   try {
-    const data = await getTicketDetail(Number(req.params.id));
+    const data = await getTicketDetail(req.params.id);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -30,7 +30,7 @@ async function getAdminTicketDetail(req, res) {
 
 async function patchAdminTicket(req, res) {
   try {
-    const data = await updateTicket(Number(req.params.id), req.body, req.session);
+    const data = await updateTicket(req.params.id, req.body, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -45,7 +45,7 @@ async function postAdminTicketMessage(req, res) {
     if (!body?.trim()) {
       return res.status(400).json({ success: false, message: 'Message body is required' });
     }
-    const data = await addTicketMessage(Number(req.params.id), body.trim(), req.session, Boolean(isInternal));
+    const data = await addTicketMessage(req.params.id, body.trim(), req.session, Boolean(isInternal));
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -56,7 +56,7 @@ async function postAdminTicketMessage(req, res) {
 
 async function patchAdminDispute(req, res) {
   try {
-    const data = await updateDispute(Number(req.params.id), req.body, req.session);
+    const data = await updateDispute(req.params.id, req.body, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -67,7 +67,7 @@ async function patchAdminDispute(req, res) {
 
 async function patchAdminReport(req, res) {
   try {
-    const data = await updateReport(Number(req.params.id), req.body);
+    const data = await updateReport(req.params.id, req.body);
     if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {

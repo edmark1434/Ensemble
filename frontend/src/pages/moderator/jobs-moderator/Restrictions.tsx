@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Loader2, Plus, ShieldAlert, ShieldCheck, X } from "lucide-react";
 import api from "@/lib/axios";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
-import type { RestrictionsData } from "./marketplaceTypes";
+import type { RestrictionsData } from "../marketplace-moderator/marketplaceTypes";
 
 function IssueViolationModal({ onClose, onIssued }: { onClose: () => void; onIssued: () => void }) {
   const [accountId, setAccountId] = useState("");
@@ -15,7 +15,7 @@ function IssueViolationModal({ onClose, onIssued }: { onClose: () => void; onIss
     if (!accountId.trim() || !title.trim()) return;
     setSaving(true);
     try {
-      await api.post("/api/moderator/restrictions/violations", {
+      await api.post("/api/moderator/jobs/restrictions/violations", {
         accountId: accountId.trim(),
         title: title.trim(),
         reason: reason.trim(),
@@ -55,7 +55,7 @@ function IssueViolationModal({ onClose, onIssued }: { onClose: () => void; onIss
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Misleading listing"
+              placeholder="e.g. Fraudulent job posting"
               className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white outline-none"
             />
           </label>
@@ -81,7 +81,7 @@ function IssueViolationModal({ onClose, onIssued }: { onClose: () => void; onIss
             type="button"
             disabled={saving || !accountId.trim() || !title.trim()}
             onClick={() => void submit()}
-            className="w-full rounded-xl bg-rose-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50"
+            className="w-full rounded-xl bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
           >
             {saving ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Issue violation"}
           </button>
@@ -91,7 +91,7 @@ function IssueViolationModal({ onClose, onIssued }: { onClose: () => void; onIss
   );
 }
 
-export default function Restrictions() {
+export default function JobsRestrictions() {
   const [data, setData] = useState<RestrictionsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showIssueModal, setShowIssueModal] = useState(false);
@@ -99,7 +99,7 @@ export default function Restrictions() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/api/moderator/restrictions");
+      const res = await api.get("/api/moderator/jobs/restrictions");
       if (res.data?.success) setData(res.data.data);
     } finally {
       setLoading(false);
@@ -112,7 +112,7 @@ export default function Restrictions() {
 
   const setRestriction = async (accountId: number | string, status: "suspended" | "banned" | "active") => {
     try {
-      await api.patch(`/api/moderator/restrictions/accounts/${accountId}`, { status });
+      await api.patch(`/api/moderator/jobs/restrictions/accounts/${accountId}`, { status });
       showSuccessToast(status === "active" ? "Account reinstated" : `Account ${status}`);
       void load();
     } catch {
@@ -124,13 +124,14 @@ export default function Restrictions() {
     <main className="relative z-10 min-h-screen px-6 py-8 md:ml-72 md:px-10" style={{ animation: "fadeIn 420ms ease" }}>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-400">Marketplace Moderator</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-400">Jobs &amp; Gigs Moderator</p>
           <h1 className="text-2xl font-bold text-white">Restrictions</h1>
+          <p className="mt-1 text-sm text-zinc-500">Restrict accounts from the jobs &amp; gigs marketplace.</p>
         </div>
         <button
           type="button"
           onClick={() => setShowIssueModal(true)}
-          className="flex items-center gap-2 rounded-xl bg-rose-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500"
+          className="flex items-center gap-2 rounded-xl bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
         >
           <Plus className="h-4 w-4" />
           Issue Violation
@@ -139,13 +140,13 @@ export default function Restrictions() {
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-6 w-6 animate-spin text-rose-400" />
+          <Loader2 className="h-6 w-6 animate-spin text-emerald-400" />
         </div>
       ) : data ? (
         <div className="space-y-6">
           <div className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
             <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-white">
-              <ShieldAlert className="h-4 w-4 text-rose-400" />
+              <ShieldAlert className="h-4 w-4 text-emerald-400" />
               Restricted accounts
             </p>
             {data.restrictedAccounts.length === 0 ? (

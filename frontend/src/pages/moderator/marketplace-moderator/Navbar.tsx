@@ -1,6 +1,7 @@
 import { Gem, LayoutDashboard, ShieldAlert, ShoppingBag, Ticket } from "lucide-react";
 import type { ComponentType } from "react";
 import { NavLink } from "react-router-dom";
+import LogoutButton from "../shared/LogoutButton";
 
 type NavItem = {
   label: string;
@@ -48,11 +49,12 @@ const MarketplaceModeratorNavbar = () => {
         </ul>
       </nav>
 
-      <div className="border-t border-white/10 p-4">
+      <div className="space-y-2 border-t border-white/10 p-4">
         <div className="flex items-center justify-between rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs text-zinc-300">
           <span>Go to platform</span>
           <span className="text-yellow-300">*</span>
         </div>
+        <LogoutButton />
       </div>
     </aside>
   );

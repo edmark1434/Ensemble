@@ -1,6 +1,7 @@
-import { Gem, LayoutDashboard, MessageSquare, Ticket, Users } from "lucide-react";
+import { Gem, LayoutDashboard, MessageSquare, Scale, ShieldAlert, Ticket, Users } from "lucide-react";
 import type { ComponentType } from "react";
 import { NavLink } from "react-router-dom";
+import LogoutButton from "../shared/LogoutButton";
 
 type NavItem = {
   label: string;
@@ -12,7 +13,9 @@ const navItems: NavItem[] = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/moderator/support" },
   { label: "Chat Support", icon: MessageSquare, to: "/moderator/support/chat-support" },
   { label: "Ticket Management", icon: Ticket, to: "/moderator/support/ticket-management" },
+  { label: "Disputes", icon: Scale, to: "/moderator/support/disputes" },
   { label: "User & Team", icon: Users, to: "/moderator/support/user-team" },
+  { label: "Restrictions", icon: ShieldAlert, to: "/moderator/support/restrictions" },
 ];
 
 const navClassName = (isActive: boolean) =>
@@ -48,11 +51,12 @@ const SupportModeratorNavbar = () => {
         </ul>
       </nav>
 
-      <div className="border-t border-white/10 p-4">
+      <div className="space-y-2 border-t border-white/10 p-4">
         <div className="flex items-center justify-between rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs text-zinc-300">
           <span>Go to platform</span>
           <span className="text-yellow-300">*</span>
         </div>
+        <LogoutButton />
       </div>
     </aside>
   );

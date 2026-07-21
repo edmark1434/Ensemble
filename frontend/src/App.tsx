@@ -68,7 +68,10 @@ import Survey from "@/pages/setup_account/04_Survey.tsx";
 import ForumModeratorLayout from './pages/moderator/forum-moderator/Layout'
 import ForumModeratorDashboard from './pages/moderator/forum-moderator/Dashboard'
 import ForumManagement from './pages/moderator/forum-moderator/ForumManagement'
+import ForumGroups from './pages/moderator/forum-moderator/Groups'
+import ForumDiscussions from './pages/moderator/forum-moderator/Discussions'
 import ForumTicketManagement from './pages/moderator/forum-moderator/TicketManagement'
+import ForumRestrictions from './pages/moderator/forum-moderator/Restrictions'
 import MarketplaceModeratorLayout from './pages/moderator/marketplace-moderator/Layout'
 import MarketplaceModeratorDashboard from './pages/moderator/marketplace-moderator/Dashboard'
 import MarketplaceControl from './pages/moderator/marketplace-moderator/MarketplaceControl'
@@ -78,11 +81,15 @@ import SupportModeratorLayout from './pages/moderator/support-moderator/Layout'
 import SupportModeratorDashboard from './pages/moderator/support-moderator/Dashboard'
 import SupportChat from './pages/moderator/support-moderator/ChatSupport'
 import SupportTicketManagement from './pages/moderator/support-moderator/TicketManagement'
+import SupportDisputes from './pages/moderator/support-moderator/Disputes'
 import SupportUserTeam from './pages/moderator/support-moderator/UserTeam'
+import SupportRestrictions from './pages/moderator/support-moderator/Restrictions'
 import JobsModeratorLayout from './pages/moderator/jobs-moderator/Layout'
 import JobsModeratorDashboard from './pages/moderator/jobs-moderator/Dashboard'
+import JobsGigsControl from './pages/moderator/jobs-moderator/JobsGigsControl'
 import JobsTicketManagement from './pages/moderator/jobs-moderator/TicketManagement'
 import JobsDisputes from './pages/moderator/jobs-moderator/Disputes'
+import JobsRestrictions from './pages/moderator/jobs-moderator/Restrictions'
 import ModeratorSectionPlaceholder from './pages/moderator/SectionPlaceholder'
 import RouteMiddleware from './lib/RouteMiddleware'
 import StaffMiddleware from './lib/StaffMiddleware'
@@ -219,7 +226,10 @@ function App() {
         <Route path='/moderator/forum' element={<ForumModeratorLayout />}>
           <Route index element={<ForumModeratorDashboard />} />
           <Route path='forum-management' element={<ForumManagement />} />
+          <Route path='groups' element={<ForumGroups />} />
+          <Route path='discussions' element={<ForumDiscussions />} />
           <Route path='ticket-management' element={<ForumTicketManagement />} />
+          <Route path='restrictions' element={<ForumRestrictions />} />
           <Route path='user-team' element={<ModeratorSectionPlaceholder title='USER & TEAM' subtitle='User account management is centralized in the Admin console.' />} />
         </Route>
 
@@ -234,13 +244,17 @@ function App() {
           <Route index element={<SupportModeratorDashboard />} />
           <Route path='chat-support' element={<SupportChat />} />
           <Route path='ticket-management' element={<SupportTicketManagement />} />
+          <Route path='disputes' element={<SupportDisputes />} />
           <Route path='user-team' element={<SupportUserTeam />} />
+          <Route path='restrictions' element={<SupportRestrictions />} />
         </Route>
 
         <Route path='/moderator/jobs' element={<JobsModeratorLayout />}>
           <Route index element={<JobsModeratorDashboard />} />
+          <Route path='control' element={<JobsGigsControl />} />
           <Route path='ticket-management' element={<JobsTicketManagement />} />
           <Route path='disputes' element={<JobsDisputes />} />
+          <Route path='restrictions' element={<JobsRestrictions />} />
         </Route>
       </Route>
       </Routes>

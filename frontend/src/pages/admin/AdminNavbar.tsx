@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { NavLink } from 'react-router-dom';
+import LogoutButton from '@/pages/moderator/shared/LogoutButton';
+import { ADMIN_LOGIN_PATH } from '@/lib/staffRoutes';
 
 type NavItem = {
   label: string;
@@ -80,7 +82,7 @@ const AdminNavbar = () => {
         ))}
       </nav>
 
-      <div className="border-t border-white/[0.06] p-4">
+      <div className="space-y-2 border-t border-white/[0.06] p-4">
         <NavLink
           to="/home"
           className="flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-xs font-medium text-zinc-400 transition hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
@@ -88,6 +90,7 @@ const AdminNavbar = () => {
           <ExternalLink className="h-3.5 w-3.5" />
           Back to platform
         </NavLink>
+        <LogoutButton loginPath={ADMIN_LOGIN_PATH} />
       </div>
     </aside>
   );

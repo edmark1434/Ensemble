@@ -47,6 +47,13 @@ router.post('/support/tickets/:id/messages', [checkSession, supportModerator], S
 router.get('/support/reports', [checkSession, supportModerator], SupportModerator.getReports);
 router.patch('/support/reports/:id', [checkSession, supportModerator], SupportModerator.patchReport);
 router.get('/support/chat', [checkSession, supportModerator], SupportModerator.getChat);
+router.get('/support/disputes', [checkSession, supportModerator], SupportModerator.getDisputes);
+router.get('/support/disputes/:id', [checkSession, supportModerator], SupportModerator.getDispute);
+router.patch('/support/disputes/:id', [checkSession, supportModerator], SupportModerator.patchDispute);
+router.post('/support/disputes/:id/messages', [checkSession, supportModerator], SupportModerator.postDisputeMessage);
+router.get('/support/restrictions', [checkSession, supportModerator], SupportModerator.getRestrictions);
+router.post('/support/restrictions/violations', [checkSession, supportModerator], SupportModerator.postViolation);
+router.patch('/support/restrictions/accounts/:id', [checkSession, supportModerator], SupportModerator.patchRestriction);
 
 // ─── Forum Moderator ─────────────────────────────────────────────────────
 router.get('/forum/overview', [checkSession, forumModerator], ForumModerator.getOverview);
@@ -56,6 +63,15 @@ router.patch('/forum/tickets/:id', [checkSession, forumModerator], ForumModerato
 router.post('/forum/tickets/:id/messages', [checkSession, forumModerator], ForumModerator.postTicketMessage);
 router.get('/forum/reports', [checkSession, forumModerator], ForumModerator.getReports);
 router.patch('/forum/reports/:id', [checkSession, forumModerator], ForumModerator.patchReport);
+router.get('/forum/groups', [checkSession, forumModerator], ForumModerator.getGroups);
+router.patch('/forum/groups/:id', [checkSession, forumModerator], ForumModerator.patchGroup);
+router.get('/forum/discussions', [checkSession, forumModerator], ForumModerator.getDiscussions);
+router.get('/forum/discussions/:id', [checkSession, forumModerator], ForumModerator.getDiscussion);
+router.patch('/forum/discussions/:id', [checkSession, forumModerator], ForumModerator.patchDiscussion);
+router.delete('/forum/discussions/:id/comments/:commentId', [checkSession, forumModerator], ForumModerator.deleteComment);
+router.get('/forum/restrictions', [checkSession, forumModerator], ForumModerator.getRestrictions);
+router.post('/forum/restrictions/violations', [checkSession, forumModerator], ForumModerator.postViolation);
+router.patch('/forum/restrictions/accounts/:id', [checkSession, forumModerator], ForumModerator.patchRestriction);
 
 // ─── Jobs & Gigs Moderator ───────────────────────────────────────────────
 router.get('/jobs/overview', [checkSession, jobsModerator], JobsModerator.getOverview);
@@ -65,5 +81,12 @@ router.patch('/jobs/tickets/:id', [checkSession, jobsModerator], JobsModerator.p
 router.post('/jobs/tickets/:id/messages', [checkSession, jobsModerator], JobsModerator.postTicketMessage);
 router.get('/jobs/disputes', [checkSession, jobsModerator], JobsModerator.getDisputes);
 router.patch('/jobs/disputes/:id', [checkSession, jobsModerator], JobsModerator.patchDispute);
+router.get('/jobs/postings', [checkSession, jobsModerator], JobsModerator.getPostings);
+router.get('/jobs/postings/:type/:id', [checkSession, jobsModerator], JobsModerator.getPosting);
+router.patch('/jobs/postings/:type/:id', [checkSession, jobsModerator], JobsModerator.patchPosting);
+router.get('/jobs/users/:accountId/history', [checkSession, jobsModerator], JobsModerator.getUserHistory);
+router.get('/jobs/restrictions', [checkSession, jobsModerator], JobsModerator.getRestrictions);
+router.post('/jobs/restrictions/violations', [checkSession, jobsModerator], JobsModerator.postViolation);
+router.patch('/jobs/restrictions/accounts/:id', [checkSession, jobsModerator], JobsModerator.patchRestriction);
 
 module.exports = router;

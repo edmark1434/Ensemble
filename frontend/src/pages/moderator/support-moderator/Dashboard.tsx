@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertCircle, Loader2, MessageSquare, ShieldAlert, Ticket, TimerReset } from "lucide-react";
+import { AlertCircle, History, Loader2, MessageSquare, Scale, ShieldAlert, Ticket, TimerReset } from "lucide-react";
 import api from "@/lib/axios";
 import { ChartCard, DonutChart, HorizontalBarChart } from "@/pages/admin/analytics/components/AnalyticsCharts";
 import type { SupportOverview } from "../shared/moderatorTypes";
@@ -43,7 +43,7 @@ export default function SupportModeratorDashboard() {
     );
   }
 
-  const { summary, charts, recentTickets, staffWorkload, alerts } = data;
+  const { summary, charts, recentTickets, ticketLog, staffWorkload, alerts } = data;
 
   return (
     <main className="relative z-10 min-h-screen px-6 py-8 md:ml-72 md:px-10" style={{ animation: "fadeIn 420ms ease" }}>
@@ -52,9 +52,10 @@ export default function SupportModeratorDashboard() {
         <h1 className="text-2xl font-bold text-white">Support Desk Overview</h1>
       </div>
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard accent="sky" label="Open tickets" value={summary.openTickets} sub={`${summary.totalTickets} total in support scope`} icon={Ticket} />
         <StatCard accent="sky" label="Unassigned" value={summary.unassignedTickets} sub="Waiting to be picked up" icon={TimerReset} />
+        <StatCard accent="sky" label="Open disputes" value={summary.openDisputes} sub={`${summary.creditsAtRisk.toLocaleString()} credits at risk`} icon={Scale} />
         <StatCard accent="sky" label="Open reports" value={summary.openReports} sub={`${summary.totalReports} reports total`} icon={ShieldAlert} />
         <StatCard accent="sky" label="Live chat waiting" value={summary.chatWaiting} sub={`SLA compliance ${summary.slaCompliancePercent}%`} icon={MessageSquare} />
       </div>
@@ -123,6 +124,27 @@ export default function SupportModeratorDashboard() {
             {staffWorkload.length === 0 && <li className="text-sm text-zinc-500">No staff workload data.</li>}
           </ul>
         </div>
+      </div>
+
+      <div className="mt-6 rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
+        <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-white">
+          <History className="h-4 w-4 text-sky-400" />
+          Ticket log
+        </p>
+        <ul className="space-y-2">
+          {ticketLog.map((entry) => (
+            <li key={entry.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm">
+              <div className="min-w-0">
+                <p className="truncate text-zinc-200">{entry.label}</p>
+                <p className="text-[11px] text-zinc-500">
+                  {entry.ref} · {entry.type} · {entry.status.replace("_", " ")}
+                </p>
+              </div>
+              <span className="shrink-0 text-[11px] text-zinc-500">{new Date(entry.at).toLocaleString()}</span>
+            </li>
+          ))}
+          {ticketLog.length === 0 && <li className="text-sm text-zinc-500">No recent activity.</li>}
+        </ul>
       </div>
     </main>
   );
