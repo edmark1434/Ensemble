@@ -30,7 +30,7 @@ export default function ModeratorTicketDetailModal({
   onClose,
   onUpdated,
 }: {
-  ticketId: number;
+  ticketId: number | string;
   endpointBase: string;
   accent?: Accent;
   allowEscalate?: boolean;

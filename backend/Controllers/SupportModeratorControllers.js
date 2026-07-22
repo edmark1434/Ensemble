@@ -32,7 +32,12 @@ async function getOverview(req, res) {
 
 async function getTickets(req, res) {
   try {
-    const data = await getSupportTickets({ status: req.query.status });
+    const data = await getSupportTickets({
+      status: req.query.status,
+      search: req.query.search,
+      category: req.query.category,
+      priority: req.query.priority,
+    });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching support tickets:', err);
@@ -110,7 +115,11 @@ async function getChat(req, res) {
 
 async function getDisputes(req, res) {
   try {
-    const data = await getSupportDisputes({ status: req.query.status });
+    const data = await getSupportDisputes({
+      status: req.query.status,
+      search: req.query.search,
+      entityType: req.query.entityType,
+    });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching disputes:', err);

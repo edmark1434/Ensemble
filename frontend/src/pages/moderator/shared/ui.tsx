@@ -104,34 +104,38 @@ export function TicketsTable({
   onSelect,
 }: {
   tickets: SupportTicket[];
-  onSelect: (id: number) => void;
+  onSelect: (id: number | string) => void;
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[720px] text-left text-sm">
+      <table className="w-full min-w-[860px] text-left text-sm">
         <thead>
           <tr className="text-[10px] uppercase tracking-wide text-zinc-500">
+            <th className="pb-2">ID</th>
             <th className="pb-2">Ticket</th>
             <th className="pb-2">Requester</th>
             <th className="pb-2">Category</th>
             <th className="pb-2">Priority</th>
             <th className="pb-2">Status</th>
+            <th className="pb-2">Msgs</th>
             <th className="pb-2">Assignee</th>
             <th className="pb-2">Updated</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-white/5">
           {tickets.map((t) => (
-            <tr key={t.id} onClick={() => onSelect(t.id)} className="cursor-pointer hover:bg-white/[0.02]">
-              <td className="py-2.5 text-zinc-200">{t.subject}</td>
+            <tr key={t.id} onClick={() => onSelect(t.id)} className="cursor-pointer transition hover:bg-white/[0.03]">
+              <td className="py-2.5 font-mono text-[11px] text-zinc-500">{t.number}</td>
+              <td className="max-w-[220px] truncate py-2.5 font-medium text-zinc-200">{t.subject}</td>
               <td className="py-2.5 text-zinc-400">@{t.requester.username}</td>
-              <td className="py-2.5 text-zinc-400">{t.category || "—"}</td>
+              <td className="py-2.5 capitalize text-zinc-400">{t.category || "—"}</td>
               <td className="py-2.5">
                 <PriorityBadge priority={t.priority} />
               </td>
               <td className="py-2.5">
                 <StatusBadge status={t.status} />
               </td>
+              <td className="py-2.5 tabular-nums text-zinc-400">{t.messageCount ?? 0}</td>
               <td className="py-2.5 text-zinc-400">{t.assignee?.name || "Unassigned"}</td>
               <td className="py-2.5 text-zinc-500">{new Date(t.updatedAt).toLocaleDateString()}</td>
             </tr>

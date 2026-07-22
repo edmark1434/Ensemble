@@ -1,18 +1,18 @@
 export type TicketPerson = {
-  accountId?: number;
+  accountId?: number | string;
   name: string;
   username?: string;
   email?: string | null;
 };
 
 export type TicketAssignee = {
-  staffId: number;
+  staffId: number | string;
   name: string;
   role: string;
 };
 
 export type SupportTicket = {
-  id: number;
+  id: number | string;
   number: string;
   subject: string;
   category: string;
@@ -21,8 +21,8 @@ export type SupportTicket = {
   channel: string;
   requester: TicketPerson;
   assignee: TicketAssignee | null;
-  relatedReportId: number | null;
-  relatedDisputeId: number | null;
+  relatedReportId: number | string | null;
+  relatedDisputeId: number | string | null;
   messageCount: number;
   lastMessageAt: string | null;
   createdAt: string;
@@ -31,7 +31,7 @@ export type SupportTicket = {
 };
 
 export type TicketMessage = {
-  id: number;
+  id: number | string;
   authorType: string;
   authorName: string;
   body: string;
@@ -40,7 +40,7 @@ export type TicketMessage = {
 };
 
 export type Dispute = {
-  id: number;
+  id: number | string;
   number: string;
   title: string;
   reason: string | null;
@@ -59,7 +59,7 @@ export type Dispute = {
 };
 
 export type UserReport = {
-  id: number;
+  id: number | string;
   number: string;
   reporter: TicketPerson;
   targetType: string;
@@ -69,14 +69,14 @@ export type UserReport = {
   description: string | null;
   status: string;
   priority: string;
-  assignee: { staffId: number; name: string } | null;
+  assignee: { staffId: number | string; name: string } | null;
   createdAt: string;
   updatedAt: string;
   resolvedAt: string | null;
 };
 
 export type StaffWorkload = {
-  staffId: number;
+  staffId: number | string;
   name: string;
   role: string;
   openTickets: number;

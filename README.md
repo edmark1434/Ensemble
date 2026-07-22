@@ -18,7 +18,7 @@ Install these before running the project:
 
 - **Node.js** 18+ (20+ recommended)
 - **npm** (comes with Node)
-- **PostgreSQL** — database must already exist with the project schema (`accounts`, `users`, `staff`, and related tables). Schema/migration files are not included in this repo; use your team's database dump or setup docs.
+- **PostgreSQL** — create the database and apply migrations with the backend scripts below (`npm run db:create`, then `npm run migrate`)
 - **Redis** — used for sessions, login lockout, and caching
 - **Firebase project** — used for Google OAuth on the frontend
 
@@ -81,16 +81,18 @@ FRONTEND_URL=http://localhost:5173
 
 Generate JWT secrets with any long random string (e.g. `openssl rand -hex 32`).
 
-### 4. Create the database and tables
+### 4. Create the database and run migrations
 
-Your `DB_NAME` in `.env` must exist in PostgreSQL. If you see `database "ensemble" does not exist`, run:
+From `backend/`, create the Postgres database (if it does not exist yet), then apply all migrations:
 
 ```bash
 cd backend
-npm run db:setup
+npm run db:create
+npm run migrate
 ```
 
-This creates the database (if missing) and applies `backend/sql/schema.sql`.
+- `npm run db:create` — creates the database named in `DB_NAME` (skips if it already exists)
+- `npm run migrate` — runs `node-pg-migrate up` and applies schema from `backend/migrations/`
 
 ### 5. Seed the database (optional)
 
@@ -222,7 +224,8 @@ Open http://localhost:3000
 | Command        | Description                          |
 |----------------|--------------------------------------|
 | `npm start`      | Start API with nodemon (port 4000)   |
-| `npm run db:setup` | Create DB + apply schema           |
+| `npm run db:create` | Create the Postgres database (`DB_NAME`) if missing |
+| `npm run migrate` | Apply pending database migrations  |
 | `npm run seed`   | Insert sample users and staff        |
 | `npm run clean`  | Truncate users, staff, and accounts  |
 
@@ -280,7 +283,8 @@ Postgres is running but the database named in `DB_NAME` was never created. Run:
 
 ```bash
 cd backend
-npm run db:setup
+npm run db:create
+npm run migrate
 npm run seed
 ```
 
