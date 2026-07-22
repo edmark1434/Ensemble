@@ -23,7 +23,6 @@ export class AudioDataManager {
 
   private async loadAudioData(src: string, id: string): Promise<void> {
     try {
-      console.log("Loading audio data for", src);
       const data = await getAudioData(src);
       this.audioDatas[id] = {
         data,
@@ -31,15 +30,12 @@ export class AudioDataManager {
       };
       this.cleanupCache();
     } catch (error) {
-      console.error(`Error loading audio data for ${src}:`, error);
-
-      // If it's an EncodingError (no audio track), just ignore it
       if (error instanceof Error && error.name === "EncodingError") {
-        console.log(`No audio track found for ${src}, ignoring`);
+        // Expected for clips with no audio track — don't spam console.error
+        console.log(`No audio track found for ${src}, skipping waveform`);
         return;
       }
-
-      // For other errors, still throw them
+      console.error(`Error loading audio data for ${src}:`, error);
       throw error;
     }
   }

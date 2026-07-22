@@ -12,6 +12,7 @@ import {
 import UserHeader from "@/components/nav/user_header";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/axios";
+
 // ---- Data models ----
 interface CreditPack {
   id: string;
@@ -21,7 +22,7 @@ interface CreditPack {
 }
 
 interface Feature {
-  feature_id: number;
+  feature_id: string;
   feature_key: string;
   name: string;
   description: string;
@@ -29,7 +30,7 @@ interface Feature {
 }
 
 interface Membership {
-  plan_id: number;
+  plan_id: string;
   name: string;
   description: string;
   price: number;
@@ -47,6 +48,20 @@ interface CheckoutItem {
   priceValue: number;
   features?: Feature[];
   isCustom?: boolean;
+  trialDays?: number;
+  isUserEligibleForTrial?: boolean;
+}
+
+interface SubscriptionData {
+  subscription_id: string;
+  plan_id: string;
+  status: string;
+  trial_ends_at: string | null;
+  trial_starts_at: string | null;
+  current_period_end: string;
+  current_period_start: string;
+  cancel_at_period_end: boolean;
+  xendit_plan_id: string | null;
 }
 
 const creditPacks: CreditPack[] = [
@@ -70,34 +85,63 @@ const CreditShop: React.FC = () => {
   const [showCustom, setShowCustom] = useState(false);
   const [customCredits, setCustomCredits] = useState<number>(100);
   const [memberships, setMemberships] = useState<Membership[]>([]);
-  const [isUserSubscribed, setIsUserSubscribed] = useState(false);
   const [currentBalance, setCurrentBalance] = useState<number>(0);
+  
+  // Track user's current subscription
+  const [userSubscription, setUserSubscription] = useState<SubscriptionData | null>(null);
+  const [isUserSubscribed, setIsUserSubscribed] = useState(false);
+
   useEffect(() => {
     const fetchMemberships = async () => {
       try {
-        const [planResponse, userSubscriptionResponse,getWalletResponse] = await Promise.all([
+        const [planResponse, userSubscriptionResponse, getWalletResponse] = await Promise.all([
           api.get("api/subscription/plans"),
-          api.get("api/subscription"), // Fetch user's current subscription
+          api.get("api/subscription"),
           api.get("/api/accounts/wallet", {
             params: { type: 'account_wallets' },
           }),
         ]);
-        console.log("fetch wallet response:", getWalletResponse.data);
+        
+        console.log("Fetch wallet response:", getWalletResponse.data);
         setCurrentBalance(getWalletResponse.data?.wallet?.balance_credits || 0);
+        
         const plansData = planResponse.data.plans || [];
-        const userSubscriptionData = userSubscriptionResponse.data.subscription;
-        if (userSubscriptionData && userSubscriptionData.xendit_plan_id && userSubscriptionData.trial_ends_at 
-          && userSubscriptionData.trial_starts_at
-        ) {
-          setIsUserSubscribed(true);
-        }
-        console.log("Fetched user subscription:", userSubscriptionData);
         console.log("Fetched memberships:", plansData);
-        console.log("Is user subscribed:", isUserSubscribed);
+        
+        const subscriptionData = userSubscriptionResponse.data.subscription;
+        console.log("Fetched user subscription:", subscriptionData);
+        
+        if (subscriptionData && subscriptionData.length > 0) {
+          const sub = subscriptionData[0];
+          setUserSubscription(sub);
+          
+          // Check if user has a REAL subscription (not free plan)
+          // User is considered "subscribed" if they have xendit_plan_id and trial data
+          const hasRealSubscription = sub.xendit_plan_id !== null && 
+                                      sub.trial_starts_at !== null && 
+                                      sub.trial_ends_at !== null;
+          
+          // User is eligible for trial if:
+          // 1. No subscription at all OR
+          // 2. Has subscription but it's the FREE plan (plan_id matches Free plan)
+          const isFreePlan = sub.plan_id === "75e5c586-eab8-4954-ac14-9874d5429b68";
+          
+          setIsUserSubscribed(!isFreePlan && hasRealSubscription);
+          console.log(`User has real subscription: ${!isFreePlan && hasRealSubscription}`);
+          console.log(`Is free plan: ${isFreePlan}`);
+          console.log(`Has xendit_plan_id: ${sub.xendit_plan_id !== null}`);
+        } else {
+          setUserSubscription(null);
+          setIsUserSubscribed(false);
+          console.log("User has NO subscription");
+        }
+        
         setMemberships(plansData);
       } catch (error) {
         console.error("Error fetching memberships:", error);
         setMemberships([]);
+        setUserSubscription(null);
+        setIsUserSubscribed(false);
       } finally {
         setLoading(false);
       }
@@ -136,15 +180,19 @@ const CreditShop: React.FC = () => {
 
   const handleMembershipCheckout = (membership: Membership) => {
     if (membership.price === 0) return;
+    
+    const isEligibleForTrial = !isUserSubscribed && membership.days_of_trials > 0;
+    console.log(`Checking out: ${membership.name}, eligible for trial: ${isEligibleForTrial}`);
+    
     navigateToCheckout({
-      id: String(membership.plan_id),
+      id: membership.plan_id,
       name: membership.name,
       type: "subscription",
       price: formatPHP(membership.price),
       priceValue: membership.price,
       features: membership.features || [],
       trialDays: membership.days_of_trials || 0,
-      isUserEligibleForTrial: !isUserSubscribed && membership.days_of_trials > 0,
+      isUserEligibleForTrial: isEligibleForTrial,
     });
   };
 
@@ -153,6 +201,17 @@ const CreditShop: React.FC = () => {
   const handleCustomInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value, 10);
     if (!isNaN(value) && value >= 0) setCustomCredits(Math.min(value, 10000));
+  };
+
+  const isCurrentPlan = (planId: string): boolean => {
+    if (!userSubscription) return false;
+    return planId === userSubscription.plan_id;
+  };
+
+  // Check if user is on Free plan
+  const isOnFreePlan = (): boolean => {
+    if (!userSubscription) return false;
+    return userSubscription.plan_id === "75e5c586-eab8-4954-ac14-9874d5429b68";
   };
 
   if (loading) {
@@ -354,24 +413,79 @@ const CreditShop: React.FC = () => {
           <div className="grid gap-4 md:grid-cols-3 items-stretch">
             {memberships.map((tier) => {
               const isFree = tier.price === 0;
-              const isPopular = tier.plan_id === 2; // Premium is popular
+              const isPopular = tier.name === "Premium";
               const hasFreeTrial = tier.days_of_trials > 0;
+              const currentPlan = isCurrentPlan(tier.plan_id);
+              
+              // Determine if user is eligible for trial
+              // User is eligible if: NOT subscribed to a paid plan AND has free trial days
+              const isEligibleForTrial = !isUserSubscribed && hasFreeTrial && !isFree;
+              
+              console.log(`=== ${tier.name} ===`);
+              console.log(`isFree: ${isFree}`);
+              console.log(`hasFreeTrial: ${hasFreeTrial} (days: ${tier.days_of_trials})`);
+              console.log(`currentPlan: ${currentPlan}`);
+              console.log(`isUserSubscribed: ${isUserSubscribed}`);
+              console.log(`isEligibleForTrial: ${isEligibleForTrial}`);
+              
+              // Determine button text and state
+              let buttonText = "Subscribe";
+              let isDisabled = false;
+              
+              if (isFree) {
+                buttonText = currentPlan ? "Current Plan" : "Free";
+                isDisabled = true;
+              } else if (currentPlan) {
+                buttonText = "Current Plan";
+                isDisabled = true;
+              } else if (isEligibleForTrial) {
+                // User on Free plan or no subscription - show trial
+                buttonText = `Start Free Trial (${tier.days_of_trials} days)`;
+                isDisabled = false;
+                console.log(`✅ Button text set to: ${buttonText}`);
+              } else {
+                buttonText = "Subscribe";
+                isDisabled = false;
+              }
+
+              const showTrialBadge = isEligibleForTrial;
+
               return (
                 <div
                   key={tier.plan_id}
-                  className={`flex flex-col justify-between rounded-lg border p-6 ${
-                    isPopular
+                  className={`flex flex-col justify-between rounded-lg border p-6 relative ${
+                    isPopular && !currentPlan
                       ? "border-white/40 bg-zinc-900/50"
+                      : currentPlan
+                      ? "border-emerald-500/40 bg-zinc-900/30"
                       : "border-zinc-800 bg-zinc-900/30"
                   }`}
                 >
+                  {/* Current Plan Badge */}
+                  {currentPlan && (
+                    <div className="absolute -top-2.5 left-4">
+                      <span className="bg-emerald-500 text-white text-[10px] font-medium px-3 py-0.5 rounded-full">
+                        CURRENT PLAN
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Trial Badge */}
+                  {showTrialBadge && (
+                    <div className="absolute -top-2.5 left-4">
+                      <span className="bg-blue-500 text-white text-[10px] font-medium px-3 py-0.5 rounded-full">
+                        {tier.days_of_trials}-DAY FREE TRIAL
+                      </span>
+                    </div>
+                  )}
+
                   <div>
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="text-sm font-semibold text-white flex items-center gap-1.5">
                         {!isFree && <Crown className="h-3.5 w-3.5 text-zinc-400" />}
                         {tier.name}
                       </h3>
-                      {isPopular && (
+                      {isPopular && !currentPlan && (
                         <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white">
                           Most popular
                         </span>
@@ -384,6 +498,14 @@ const CreditShop: React.FC = () => {
                         <span className="text-sm font-normal text-zinc-500"> /mo</span>
                       )}
                     </p>
+
+                    {/* Show trial info for eligible users */}
+                    {isEligibleForTrial && (
+                      <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1">
+                        <span>✦</span>
+                        <span>Try free for {tier.days_of_trials} days, then {formatPHP(tier.price)}/mo</span>
+                      </p>
+                    )}
 
                     <div className="h-px bg-zinc-800 my-5" />
                     <ul className="space-y-2.5 mb-6">
@@ -407,16 +529,16 @@ const CreditShop: React.FC = () => {
 
                   <button
                     onClick={() => handleMembershipCheckout(tier)}
-                    disabled={isFree}
+                    disabled={isDisabled}
                     className={`w-full rounded-md py-2.5 text-sm font-medium transition-colors ${
-                      isFree
-                        ? "border border-zinc-800 text-zinc-500 cursor-default"
+                      isDisabled
+                        ? "border border-zinc-800 text-zinc-500 cursor-default bg-zinc-800/20"
                         : isPopular
                         ? "bg-white text-zinc-950 hover:bg-zinc-200"
                         : "border border-zinc-700 text-white hover:bg-zinc-800"
                     }`}
                   >
-                    {isFree ? "Current Plan" : hasFreeTrial && isUserSubscribed === false ? `Start Free Trial (${tier.days_of_trials} days)` : "Subscribe"}
+                    {buttonText}
                   </button>
                 </div>
               );
