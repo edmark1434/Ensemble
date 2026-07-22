@@ -195,7 +195,7 @@ async function getSupportOverview() {
     ticketLog,
     staffWorkload,
     alerts: buildAlerts(tc, rc, chatOpen),
-    dataSources: { tables: ['support_tickets', 'ticket_messages', 'disputes', 'dispute_messages', 'reports'], persisted: true },
+    dataSources: { tables: ['support_tickets', 'ticket_messages', 'disputes', 'dispute_chats', 'inbox/messages (mongo)', 'reports'], persisted: true },
   };
 }
 

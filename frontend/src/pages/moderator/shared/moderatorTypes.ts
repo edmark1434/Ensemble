@@ -13,7 +13,9 @@ export type { SupportTicket, Dispute, UserReport, ChartSegment, TicketDetail, Ti
 export type DisputeDetail = {
   dispute: Dispute;
   messages: TicketMessage[];
-  assignableStaff: { staffId: number; name: string; role: string }[];
+  chatId?: string | null;
+  chatAvailable?: boolean;
+  assignableStaff: { staffId: number | string; name: string; role: string }[];
 };
 
 export type Alert = { id: string; message: string; severity: string };
