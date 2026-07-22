@@ -255,11 +255,8 @@ const CheckoutPage: React.FC = () => {
 
       const data = response.data;
       console.log("✅ Subscription Response:", data);
-
-      if (data.paymentLink) {
-        window.location.href = data.paymentLink;
-      } else if (data.reference_id) {
-        setReferenceNumber(data.reference_id);
+       if (response.status === 200 && data?.subscriptionUpdate?.reference_id) {
+        setReferenceNumber(data?.subscriptionUpdate?.reference_id);
         setIsSuccess(true);
       } else {
         setError("Subscription initiation failed. Please try again.");
