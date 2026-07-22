@@ -116,14 +116,10 @@ const CreditShop: React.FC = () => {
           setUserSubscription(sub);
           
           // Check if user has a REAL subscription (not free plan)
-          // User is considered "subscribed" if they have xendit_plan_id and trial data
           const hasRealSubscription = sub.xendit_plan_id !== null && 
                                       sub.trial_starts_at !== null && 
                                       sub.trial_ends_at !== null;
           
-          // User is eligible for trial if:
-          // 1. No subscription at all OR
-          // 2. Has subscription but it's the FREE plan (plan_id matches Free plan)
           const isFreePlan = sub.plan_id === "75e5c586-eab8-4954-ac14-9874d5429b68";
           
           setIsUserSubscribed(!isFreePlan && hasRealSubscription);
@@ -208,10 +204,97 @@ const CreditShop: React.FC = () => {
     return planId === userSubscription.plan_id;
   };
 
+  // Get current plan details
+  const getCurrentPlan = (): Membership | null => {
+    if (!userSubscription) return null;
+    return memberships.find(m => m.plan_id === userSubscription.plan_id) || null;
+  };
+
   // Check if user is on Free plan
   const isOnFreePlan = (): boolean => {
     if (!userSubscription) return false;
     return userSubscription.plan_id === "75e5c586-eab8-4954-ac14-9874d5429b68";
+  };
+
+  // Determine button text and state for membership
+  const getMembershipButtonState = (tier: Membership) => {
+    const isFree = tier.price === 0;
+    const currentPlan = isCurrentPlan(tier.plan_id);
+    const hasFreeTrial = tier.days_of_trials > 0;
+    const isEligibleForTrial = !isUserSubscribed && hasFreeTrial && !isFree;
+    
+    // If it's the current plan
+    if (currentPlan) {
+      return {
+        buttonText: "Current Plan",
+        isDisabled: true,
+        isUpgrade: false,
+        isDowngrade: false
+      };
+    }
+    
+    // If it's the free plan
+    if (isFree) {
+      return {
+        buttonText: "Free",
+        isDisabled: true,
+        isUpgrade: false,
+        isDowngrade: false
+      };
+    }
+    
+    // If user has a subscription and comparing plans
+    if (isUserSubscribed) {
+      const currentPlanDetails = getCurrentPlan();
+      
+      if (currentPlanDetails) {
+        // Compare prices - if current plan price is higher, it's a downgrade
+        if (tier.price < currentPlanDetails.price) {
+          return {
+            buttonText: `Downgrade to ${tier.name}`,
+            isDisabled: false,
+            isUpgrade: false,
+            isDowngrade: true
+          };
+        } 
+        // If current plan price is lower, it's an upgrade
+        else if (tier.price > currentPlanDetails.price) {
+          return {
+            buttonText: `Upgrade to ${tier.name}`,
+            isDisabled: false,
+            isUpgrade: true,
+            isDowngrade: false
+          };
+        }
+        // Same price (shouldn't happen for different plans, but just in case)
+        else {
+          return {
+            buttonText: "Subscribe",
+            isDisabled: false,
+            isUpgrade: false,
+            isDowngrade: false
+          };
+        }
+      }
+    }
+    
+    // User is on free plan or no subscription - check for trial
+    if (isEligibleForTrial) {
+      return {
+        buttonText: `Start Free Trial (${tier.days_of_trials} days)`,
+        isDisabled: false,
+        isUpgrade: false,
+        isDowngrade: false
+      };
+    }
+    
+    // Default subscribe button
+    return {
+      buttonText: "Subscribe",
+      isDisabled: false,
+      isUpgrade: false,
+      isDowngrade: false
+    };
   };
 
   if (loading) {
@@ -414,41 +497,19 @@ const CreditShop: React.FC = () => {
             {memberships.map((tier) => {
               const isFree = tier.price === 0;
               const isPopular = tier.name === "Premium";
-              const hasFreeTrial = tier.days_of_trials > 0;
               const currentPlan = isCurrentPlan(tier.plan_id);
-              
-              // Determine if user is eligible for trial
-              // User is eligible if: NOT subscribed to a paid plan AND has free trial days
+              const hasFreeTrial = tier.days_of_trials > 0;
               const isEligibleForTrial = !isUserSubscribed && hasFreeTrial && !isFree;
               
-              console.log(`=== ${tier.name} ===`);
-              console.log(`isFree: ${isFree}`);
-              console.log(`hasFreeTrial: ${hasFreeTrial} (days: ${tier.days_of_trials})`);
-              console.log(`currentPlan: ${currentPlan}`);
-              console.log(`isUserSubscribed: ${isUserSubscribed}`);
-              console.log(`isEligibleForTrial: ${isEligibleForTrial}`);
+              // Get button state using the new function
+              const { buttonText, isDisabled, isUpgrade, isDowngrade } = getMembershipButtonState(tier);
               
-              // Determine button text and state
-              let buttonText = "Subscribe";
-              let isDisabled = false;
-              
-              if (isFree) {
-                buttonText = currentPlan ? "Current Plan" : "Free";
-                isDisabled = true;
-              } else if (currentPlan) {
-                buttonText = "Current Plan";
-                isDisabled = true;
-              } else if (isEligibleForTrial) {
-                // User on Free plan or no subscription - show trial
-                buttonText = `Start Free Trial (${tier.days_of_trials} days)`;
-                isDisabled = false;
-                console.log(`✅ Button text set to: ${buttonText}`);
-              } else {
-                buttonText = "Subscribe";
-                isDisabled = false;
-              }
-
+              // Determine if show trial badge
               const showTrialBadge = isEligibleForTrial;
+
+              // Determine if show upgrade/downgrade indicator
+              const showUpgradeBadge = isUpgrade && !currentPlan;
+              const showDowngradeBadge = isDowngrade && !currentPlan;
 
               return (
                 <div
@@ -466,6 +527,24 @@ const CreditShop: React.FC = () => {
                     <div className="absolute -top-2.5 left-4">
                       <span className="bg-emerald-500 text-white text-[10px] font-medium px-3 py-0.5 rounded-full">
                         CURRENT PLAN
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Upgrade Badge */}
+                  {showUpgradeBadge && (
+                    <div className="absolute -top-2.5 left-4">
+                      <span className="bg-blue-500 text-white text-[10px] font-medium px-3 py-0.5 rounded-full">
+                        UPGRADE
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Downgrade Badge */}
+                  {showDowngradeBadge && (
+                    <div className="absolute -top-2.5 left-4">
+                      <span className="bg-amber-500 text-white text-[10px] font-medium px-3 py-0.5 rounded-full">
+                        DOWNGRADE
                       </span>
                     </div>
                   )}
@@ -533,6 +612,10 @@ const CreditShop: React.FC = () => {
                     className={`w-full rounded-md py-2.5 text-sm font-medium transition-colors ${
                       isDisabled
                         ? "border border-zinc-800 text-zinc-500 cursor-default bg-zinc-800/20"
+                        : isUpgrade
+                        ? "bg-emerald-500 text-white hover:bg-emerald-600"
+                        : isDowngrade
+                        ? "bg-amber-500 text-white hover:bg-amber-600"
                         : isPopular
                         ? "bg-white text-zinc-950 hover:bg-zinc-200"
                         : "border border-zinc-700 text-white hover:bg-zinc-800"
