@@ -1,4 +1,16 @@
 const { pool } = require('../lib/database');
+const { ObjectId } = require('mongodb');
+const { getMongoClient } = require('../lib/mongodb');
+const {
+  createInboxRepositories,
+  createMessageRepositories,
+  getConversationByConvoId,
+} = require('./InboxRepositories');
+
+function mongoDb() {
+  const client = getMongoClient();
+  return client ? client.db('ensemble') : null;
+}
 
 function normalizeStatus(status) {
   if (!status) return 'open';
@@ -515,6 +527,69 @@ async function updateDispute(disputeId, patch, staffSession) {
   return list.find((d) => String(d.id) === String(disputeId)) || null;
 }
 
+async function getDisputeChatId(disputeId) {
+  const result = await pool.query(
+    `SELECT chat_id FROM dispute_chats WHERE dispute_id = $1 AND deleted_at IS NULL`,
+    [disputeId]
+  );
+  return result.rows[0]?.chat_id || null;
+}
+
+/** Create (or reuse) the Mongo inbox for a dispute and link it via dispute_chats. */
+async function ensureDisputeChat(disputeId, disputeRow) {
+  const existing = await getDisputeChatId(disputeId);
+  if (existing) return existing;
+
+  if (!getMongoClient()) {
+    throw new Error('MongoDB is not connected — dispute chats require MONGODB_URI');
+  }
+
+  const members = [];
+  const seen = new Set();
+  const addMember = (accountId, role) => {
+    if (!accountId || seen.has(String(accountId))) return;
+    seen.add(String(accountId));
+    members.push({ account_id: String(accountId), role, joined_at: new Date() });
+  };
+
+  addMember(disputeRow.initiator_account_id || disputeRow.by_account_id, 'member');
+  addMember(disputeRow.respondent_account_id || disputeRow.for_account_id, 'member');
+  // Staff participant is added when they first post; starter members are the parties.
+
+  const insertResult = await createInboxRepositories({
+    conversation_name: disputeRow.dispute_number
+      ? `Dispute ${disputeRow.dispute_number}`
+      : `Dispute ${disputeId}`,
+    conversation_type: 'group',
+    dispute_id: String(disputeId),
+    members,
+    pinned_messages: [],
+    created_at: new Date(),
+    updated_at: new Date(),
+  });
+
+  const chatId = String(insertResult.insertedId);
+  await pool.query(
+    `INSERT INTO dispute_chats (dispute_id, chat_id)
+     VALUES ($1, $2)
+     ON CONFLICT (dispute_id) DO UPDATE
+       SET chat_id = EXCLUDED.chat_id, deleted_at = NULL, created_at = CURRENT_TIMESTAMP`,
+    [disputeId, chatId]
+  );
+  return chatId;
+}
+
+function mapMongoDisputeMessage(m) {
+  return {
+    id: String(m._id),
+    authorType: m.author_type || (m.is_internal ? 'staff' : 'user'),
+    authorName: m.author_name || 'Unknown',
+    body: m.message_content || m.body || '',
+    isInternal: Boolean(m.is_internal),
+    createdAt: m.created_at || m.createdAt || null,
+  };
+}
+
 async function getDisputeDetail(disputeId) {
   const disputeResult = await pool.query(
     `
@@ -539,27 +614,35 @@ async function getDisputeDetail(disputeId) {
   );
   if (!disputeResult.rows.length) return null;
 
-  const messagesResult = await pool.query(
-    `SELECT * FROM dispute_messages WHERE dispute_id = $1 ORDER BY created_at ASC`,
-    [disputeId]
-  );
-
   const staffResult = await pool.query(`
     SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
     FROM staff s INNER JOIN accounts a ON a.account_id = s.account_id
     ORDER BY s.role
   `);
 
+  let messages = [];
+  let chatId = null;
+  let chatAvailable = Boolean(getMongoClient());
+
+  try {
+    chatId = await getDisputeChatId(disputeId);
+    if (chatId && chatAvailable) {
+      const { Messages } = await getConversationByConvoId(chatId);
+      messages = (Messages || [])
+        .filter((m) => !m.is_deleted && !m.deleted_at)
+        .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))
+        .map(mapMongoDisputeMessage);
+    }
+  } catch (err) {
+    console.error('Error loading dispute chat from MongoDB:', err.message);
+    chatAvailable = false;
+  }
+
   return {
     dispute: mapDisputeRow(disputeResult.rows[0]),
-    messages: messagesResult.rows.map((m) => ({
-      id: m.message_id,
-      authorType: m.author_type,
-      authorName: m.author_name,
-      body: m.body,
-      isInternal: m.is_internal,
-      createdAt: m.created_at,
-    })),
+    messages,
+    chatId,
+    chatAvailable,
     assignableStaff: staffResult.rows.map((s) => ({
       staffId: s.staff_id,
       name: s.name,
@@ -569,12 +652,61 @@ async function getDisputeDetail(disputeId) {
 }
 
 async function addDisputeMessage(disputeId, body, staffSession, isInternal = false) {
-  await pool.query(
-    `INSERT INTO dispute_messages (dispute_id, author_account_id, author_type, author_name, body, is_internal)
-     VALUES ($1, $2, 'staff', $3, $4, $5)`,
-    [disputeId, staffSession?.accountId || null, staffSession?.username || 'Admin', body, isInternal]
-  );
+  if (!getMongoClient()) {
+    throw new Error('MongoDB is not connected — cannot send dispute chat messages');
+  }
+
+  const disputeResult = await pool.query(`SELECT * FROM disputes WHERE dispute_id = $1`, [disputeId]);
+  if (!disputeResult.rows.length) return null;
+
+  const chatId = await ensureDisputeChat(disputeId, disputeResult.rows[0]);
+  const now = new Date();
+  const accountId = staffSession?.accountId ? String(staffSession.accountId) : null;
+
+  // Keep staff on the conversation member list when they post.
+  if (accountId && ObjectId.isValid(chatId)) {
+    const db = mongoDb();
+    if (db) {
+      await db.collection('inbox').updateOne(
+        { _id: new ObjectId(chatId), 'members.account_id': { $ne: accountId } },
+        {
+          $push: { members: { account_id: accountId, role: 'admin', joined_at: now } },
+          $set: { updated_at: now },
+        }
+      );
+    }
+  }
+
+  await createMessageRepositories({
+    conversation_id: String(chatId),
+    sender_id: accountId,
+    message_type: 'text',
+    message_content: body,
+    message_id_reply: null,
+    attachments: [],
+    links: [],
+    message_react: [],
+    read_by: accountId ? [{ account_id: accountId, read_at: now }] : [],
+    is_edited: false,
+    is_deleted: false,
+    is_internal: Boolean(isInternal),
+    author_type: 'staff',
+    author_name: staffSession?.username || 'Staff',
+    created_at: now,
+    updated_at: now,
+  });
+
   await pool.query(`UPDATE disputes SET updated_at = NOW() WHERE dispute_id = $1`, [disputeId]);
+  if (ObjectId.isValid(chatId)) {
+    const db = mongoDb();
+    if (db) {
+      await db.collection('inbox').updateOne(
+        { _id: new ObjectId(chatId) },
+        { $set: { updated_at: now, last_message: body, last_message_time: now } }
+      );
+    }
+  }
+
   return getDisputeDetail(disputeId);
 }
 
