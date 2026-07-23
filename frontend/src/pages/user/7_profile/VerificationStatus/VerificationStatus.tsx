@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import api from "@/lib/axios";
 import {
   CheckCircle2,
   ArrowLeft,
@@ -54,7 +55,13 @@ export const VerificationStatus: React.FC = () => {
   ];
 
   const handleStartVerification = () => {
-    
+    try{
+      const response = api.post("/api/verification/create-session");
+      console.log("Verification session created:", response.data);
+    }catch (error) {
+      console.error("Error starting verification:", error);
+    }
+
   };
 
   return (

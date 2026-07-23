@@ -36,142 +36,252 @@ const redisClient = require('../lib/redis');
 
 async function xenditWebhookHandler(req, res) {
     console.log("📬 Xendit Webhook Received:", req.body);
+
     const { event, data } = req.body;
-    if(data.status  === 'SUCCEEDED' && data.reference_id.includes("SUBSCRIPTION")){
-        if(data.metadata.action === 'UPGRADE'){
-            const [subscriptionDetails, planDetails] = await Promise.all([
-                getSubcriptionByUserIdRepositories(data.metadata.userId),
-                getPlandetailsByPlanIdRepositories(data.metadata.newPlanId)
-            ]);
-            const payload = {
-                amount: planDetails.amount_php_cents,
-                schedule: {
-                    interval: planDetails.billing_period,
-                    interval_count: 1,
-                    anchor_date: subscriptionDetails[0].next_billing_at,
-                    retry_interval: "DAY",
-                    retry_interval_count: 1,
-                    total_retry: 3,
-                    failed_attempt_notifications: [1, 3]
-                },
 
-                payment_tokens: [
-                    {
-                        payment_token_id: data.payment_token_id,
-                        rank: 1
-                    }
-                ],
+    try {
 
-                payment_link_for_failed_attempt: true,
+        // ==========================
+        // SUBSCRIPTION PAYMENT
+        // ==========================
+        if (
+            data?.status === "SUCCEEDED" &&
+            data?.reference_id?.includes("SUBSCRIPTION")
+        ) {
 
-                locale: "en",
+            // Upgrade payment completed
+            if (data.metadata?.action === "UPGRADE") {
 
-                notification_channels: ["EMAIL"],
+                const [subscriptionDetails, planDetails] = await Promise.all([
+                    getSubcriptionByUserIdRepositories(data.metadata.userId),
+                    getPlandetailsByPlanIdRepositories(data.metadata.newPlanId)
+                ]);
 
-                description: planDetails.description,
-                metadata: {
-                    planId: planDetails.plan_id,
-                    userId: data.metadata.userId,
-                    subscriptionId: subscriptionDetails[0].subscription_id
-                },
-                items: [
-                    {
-                        type: "DIGITAL_PRODUCT",
-                        reference_id: subscriptionDetails[0].reference_id,
-                        name: planDetails.name,
-                        net_unit_amount: planDetails.amount_php_cents,
-                        quantity: 1,
-                        category: "Plan",
-                        description: planDetails.description,
-                        metadata: {
-                            "value":'string',
-                        }
-                    }
-                ]
-            };
-            const response = await axios.patch(
-                `https://api.xendit.co/recurring/plans/${subscriptionDetails[0].xendit_plan_id}`,
-                payload,
-                {
-                    auth: {
-                        username: process.env.XENDIT_API_KEY,
-                        password: ""
+                const subscription = subscriptionDetails?.[0];
+
+                if (!subscription)
+                    throw new Error("Subscription not found.");
+
+                const payload = {
+                    amount: planDetails.amount_php_cents,
+
+                    schedule: {
+                        interval: planDetails.billing_period,
+                        interval_count: 1,
+                        anchor_date: new Date(
+                            subscription.next_billing_at
+                        ).toISOString(),
+                        retry_interval: "DAY",
+                        retry_interval_count: 1,
+                        total_retry: 3,
+                        failed_attempt_notifications: [1, 3]
                     },
-                    headers: {
-                        "Content-Type": "application/json",
-                        "api-version": "2026-01-01"
-                    }
+
+                    payment_tokens: [
+                        {
+                            payment_token_id: data.payment_token_id,
+                            rank: 1
+                        }
+                    ],
+
+                    payment_link_for_failed_attempt: true,
+
+                    locale: "en",
+
+                    notification_channels: ["EMAIL"],
+
+                    description: planDetails.description,
+
+                    metadata: {
+                        planId: planDetails.plan_id,
+                        userId: data.metadata.userId,
+                        subscriptionId: subscription.subscription_id
+                    },
+
+                    items: [
+                        {
+                            type: "DIGITAL_PRODUCT",
+                            reference_id: subscription.reference_id,
+                            name: planDetails.name,
+                            net_unit_amount: planDetails.amount_php_cents,
+                            quantity: 1,
+                            category: "Plan",
+                            description: planDetails.description
+                        }
+                    ]
+                };
+
+                try {
+
+                    const response = await axios.patch(
+                        `https://api.xendit.co/recurring/plans/${subscription.xendit_plan_id}`,
+                        payload,
+                        {
+                            auth: {
+                                username: process.env.XENDIT_API_KEY,
+                                password: ""
+                            },
+                            headers: {
+                                "Content-Type": "application/json",
+                                "api-version": "2026-01-01"
+                            }
+                        }
+                    );
+
+                    console.log("✅ Recurring plan updated.");
+
+                    await updateSubscriptionBySubscriptionId(
+                        response.data.metadata.subscriptionId,
+                        {
+                            plan_id: response.data.metadata.planId,
+                            payment_token_id: data.payment_token_id
+                        }
+                    );
+
+                    await updateSubscriptionInvoiceAmountRepositories(
+                        subscription.xendit_plan_id,
+                        response.data.amount
+                    );
+
+                } catch (err) {
+
+                    console.error(
+                        "PATCH recurring failed:",
+                        JSON.stringify(err.response?.data, null, 2)
+                    );
+
+                    throw err;
                 }
-            );
-            console.log("✅ Xendit Recurring Plan Response:", response.data);
-            
-            const subscriptionUpdatePayload = {
-                plan_id: response.data.metadata.planId,
-                payment_token_id: req.body.paymentMethodId
             }
-            const updateSubscription = await updateSubscriptionBySubscriptionId(response.data.metadata.subscriptionId, subscriptionUpdatePayload);
-            await updateSubscriptionInvoiceAmountRepositories(subscriptionDetails[0].xendit_plan_id, response.data.amount);
-        }
-        await createSubscriptionPayment({
-            user_id: data.metadata.userId,
-            reference_id: data.reference_id,
-            amount: data.request_amount,
-            currency: data.currency,
-            status: 'PAID',
-            description: data.description || `Subscription Payment for Subscription ID: ${data.metadata.subscriptionId}`,
-            payment_type: "SUBSCRIPTION",
-            PAYMENT_REQUEST_ID: data.payment_request_id,
-            PAYMENT_ID: data.payment_id,
-            payment_token_id: data.payment_token_id,
-            CHANNEL_CODE: data.channel_code,
-            CUSTOMER_ID: data.customer_id,
-            PROCESSED_AT: new Date(),
-        });
-        return res.status(200).json({ message: "Subscription payment processed successfully" });
-    }
-    const payment = await getPaymentByReferenceId(data.reference_id.split("_")[0]);
-    if(!payment){
-        console.error("Payment not found for reference_id:", data.reference_id);
-        return res.status(404).json({ error: "Payment not found" });
-    }
-    if(payment.status === 'PAID'){
-        res.status(200).json({ message: "Payment already processed" });
-        return;
-    }
-    if(data.status === 'SUCCEEDED'){
-        await pool.query(`BEGIN;`);
-        try{
-            //save payment method if it doesn't exist
-            await savePaymentMethod(data);
-            await updatePaymentByReference(payment.reference_id, {
-                status: 'PAID',
+
+            // Save one-time upgrade payment
+            await createSubscriptionPayment({
+                user_id: data.metadata?.userId,
+                reference_id: data.reference_id,
+                amount: data.request_amount,
+                currency: data.currency,
+                status: "PAID",
+                description:
+                    data.description ??
+                    `Subscription Payment`,
+                payment_type: "SUBSCRIPTION",
+                payment_request_id: data.payment_request_id,
                 payment_id: data.payment_id,
+                payment_token_id: data.payment_token_id,
+                channel_code: data.channel_code,
+                customer_id: data.customer_id,
+                processed_at: new Date()
+            });
+
+            return res.status(200).json({
+                message: "Subscription payment processed."
+            });
+        }
+
+        // ==========================
+        // NORMAL PAYMENTS / TOPUPS
+        // ==========================
+
+        const payment = await getPaymentByReferenceId(
+            data.reference_id.split("_")[0]
+        );
+
+        if (!payment) {
+            console.log(
+                "Payment not found:",
+                data.reference_id
+            );
+
+            // don't retry forever
+            return res.sendStatus(200);
+        }
+
+        if (payment.status === "PAID") {
+            return res.status(200).json({
+                message: "Already processed."
+            });
+        }
+
+        if (data.status === "SUCCEEDED") {
+
+            await pool.query("BEGIN");
+
+            try {
+
+                await savePaymentMethod(data);
+
+                await updatePaymentByReference(payment.reference_id, {
+                    status: "PAID",
+                    payment_id: data.payment_id,
+                    payment_request_id: data.payment_request_id,
+                    processed_at: new Date(),
+                    channel_code: data.channel_code
+                });
+
+                const result =
+                    await updateTopUpStatus(
+                        payment.reference_id,
+                        "PAID",
+                        data.payment_id,
+                        data.channel_code
+                    );
+
+                await updateWalletFromTopUp(
+                    payment.user_id,
+                    result.credits_granted
+                );
+
+                await pool.query("COMMIT");
+
+                return res.status(200).json({
+                    message: "Payment processed."
+                });
+
+            } catch (err) {
+
+                await pool.query("ROLLBACK");
+                throw err;
+            }
+
+        } else if (
+            data.status === "FAILED" ||
+            data.status === "EXPIRED"
+        ) {
+
+            await updatePaymentByReference(payment.reference_id, {
+                status: data.status,
+                payment_id:
+                    data.payment_id ??
+                    data.latest_payment_id,
                 payment_request_id: data.payment_request_id,
                 processed_at: new Date(),
                 channel_code: data.channel_code
             });
-            const result = await updateTopUpStatus(payment.reference_id, 'PAID',data.payment_id,data.channel_code);
-            await updateWalletFromTopUp(payment.user_id, result.credits_granted);
-            await pool.query(`COMMIT;`);
-            res.status(200).json({ message: "Payment processed successfully" });
-        }catch(err){
-            await pool.query(`ROLLBACK;`);
-            console.error("Error processing webhook:", err);
-            return res.status(500).json({ error: "Internal Server Error" });
+
+            await updateTopUpStatus(
+                payment.reference_id,
+                data.status,
+                data.payment_id ?? data.latest_payment_id,
+                data.channel_code
+            );
+
+            return res.status(200).json({
+                message: "Payment updated."
+            });
         }
-    }else if (data.status === 'FAILED' || data.status === 'EXPIRED'){
-        await updatePaymentByReference(payment.reference_id, {
-            status: data.status,
-            payment_id: data.payment_id || data.latest_payment_id,
-            payment_request_id: data.payment_request_id,
-            processed_at: new Date(),
-            channel_code: data.channel_code
-        });
-        await updateTopUpStatus(payment.reference_id, data.status, data.payment_id || data.latest_payment_id, data.channel_code);
-        res.status(200).json({ message: "Payment status updated" });
+
+        return res.sendStatus(200);
+
+    } catch (err) {
+
+        console.error(
+            "Webhook Error:",
+            JSON.stringify(err.response?.data ?? err, null, 2)
+        );
+
+        // Return 200 so Xendit doesn't continuously retry the webhook
+        return res.sendStatus(200);
     }
-    
-    
 }
 
 

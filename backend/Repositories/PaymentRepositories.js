@@ -217,8 +217,8 @@ async function createSubscriptionPayment(payload){
     try{
         const query = `
             INSERT INTO PAYMENTS(
-            USER_ID,REFERENCE_ID,AMOUNT,
-            CURRENCY,STATUS,DESCRIPTION,PAYMENT_TYPE, PAYMENT_REQUEST_ID, payment_id, channel_code,
+            user_id,reference_id,amount,
+            currency,status,description,payment_type, payment_request_id, payment_id, channel_code,
             payment_token_id,customer_id,processed_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *;
         `;
