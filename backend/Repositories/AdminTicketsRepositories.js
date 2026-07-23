@@ -221,7 +221,7 @@ async function getTicketsOverview() {
     recentActivity,
     alerts: buildTicketAlerts(tc, dc, rc),
     dataSources: {
-      tables: ['support_tickets', 'ticket_messages', 'disputes', 'reports', 'violations'],
+      tables: ['support_tickets', 'ticket_chats', 'inbox/messages (mongo)', 'disputes', 'reports', 'violations'],
       persisted: true,
     },
   };
@@ -276,8 +276,8 @@ async function fetchTicketsList() {
       ru.email_address AS requester_email,
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
       st.role AS assignee_role,
-      (SELECT COUNT(*)::int FROM ticket_messages tm WHERE tm.ticket_id = t.ticket_id) AS message_count,
-      (SELECT MAX(tm.created_at) FROM ticket_messages tm WHERE tm.ticket_id = t.ticket_id) AS last_message_at
+      COALESCE(t.message_count, 0) AS message_count,
+      t.last_message_at
     FROM support_tickets t
     LEFT JOIN accounts ra ON ra.account_id = t.requester_account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id
@@ -390,6 +390,68 @@ async function fetchRecentActivity() {
   }));
 }
 
+async function getTicketChatId(ticketId) {
+  const result = await pool.query(
+    `SELECT chat_id FROM ticket_chats WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  );
+  return result.rows[0]?.chat_id || null;
+}
+
+/** Create (or reuse) the Mongo inbox for a support ticket and link it via ticket_chats. */
+async function ensureTicketChat(ticketId, ticketRow) {
+  const existing = await getTicketChatId(ticketId);
+  if (existing) return existing;
+
+  if (!getMongoClient()) {
+    throw new Error('MongoDB is not connected — ticket chats require MONGODB_URI');
+  }
+
+  const members = [];
+  const seen = new Set();
+  const addMember = (accountId, role) => {
+    if (!accountId || seen.has(String(accountId))) return;
+    seen.add(String(accountId));
+    members.push({ account_id: String(accountId), role, joined_at: new Date() });
+  };
+
+  addMember(ticketRow.requester_account_id, 'member');
+
+  const insertResult = await createInboxRepositories({
+    conversation_name: ticketRow.ticket_number
+      ? `Ticket ${ticketRow.ticket_number}`
+      : `Ticket ${ticketId}`,
+    conversation_type: 'group',
+    ticket_id: String(ticketId),
+    support_ticket_id: String(ticketId),
+    members,
+    pinned_messages: [],
+    created_at: new Date(),
+    updated_at: new Date(),
+  });
+
+  const chatId = String(insertResult.insertedId);
+  await pool.query(
+    `INSERT INTO ticket_chats (ticket_id, chat_id)
+     VALUES ($1, $2)
+     ON CONFLICT (ticket_id) DO UPDATE
+       SET chat_id = EXCLUDED.chat_id, deleted_at = NULL, created_at = CURRENT_TIMESTAMP`,
+    [ticketId, chatId]
+  );
+  return chatId;
+}
+
+function mapMongoTicketMessage(m) {
+  return {
+    id: String(m._id),
+    authorType: m.author_type || (m.is_internal ? 'staff' : 'user'),
+    authorName: m.author_name || 'Unknown',
+    body: m.message_content || m.body || '',
+    isInternal: Boolean(m.is_internal),
+    createdAt: m.created_at || m.createdAt || null,
+  };
+}
+
 async function getTicketDetail(ticketId) {
   const ticketResult = await pool.query(
     `
@@ -411,27 +473,42 @@ async function getTicketDetail(ticketId) {
   );
   if (!ticketResult.rows.length) return null;
 
-  const messagesResult = await pool.query(
-    `SELECT * FROM ticket_messages WHERE ticket_id = $1 ORDER BY created_at ASC`,
-    [ticketId]
-  );
-
   const staffResult = await pool.query(`
     SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
     FROM staff s INNER JOIN accounts a ON a.account_id = s.account_id
     ORDER BY s.role
   `);
 
+  let messages = [];
+  let chatId = null;
+  let chatAvailable = Boolean(getMongoClient());
+
+  try {
+    chatId = await getTicketChatId(ticketId);
+    if (chatId && chatAvailable) {
+      const { Messages } = await getConversationByConvoId(chatId);
+      messages = (Messages || [])
+        .filter((m) => !m.is_deleted && !m.deleted_at)
+        .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))
+        .map(mapMongoTicketMessage);
+    }
+  } catch (err) {
+    console.error('Error loading ticket chat from MongoDB:', err.message);
+    chatAvailable = false;
+  }
+
+  const row = ticketResult.rows[0];
   return {
-    ticket: mapTicketRow({ ...ticketResult.rows[0], message_count: messagesResult.rows.length }),
-    messages: messagesResult.rows.map((m) => ({
-      id: m.message_id,
-      authorType: m.author_type,
-      authorName: m.author_name,
-      body: m.body,
-      isInternal: m.is_internal,
-      createdAt: m.created_at,
-    })),
+    ticket: mapTicketRow({
+      ...row,
+      message_count: messages.length || Number(row.message_count || 0),
+      last_message_at: messages.length
+        ? messages[messages.length - 1].createdAt
+        : row.last_message_at,
+    }),
+    messages,
+    chatId,
+    chatAvailable,
     assignableStaff: staffResult.rows.map((s) => ({
       staffId: s.staff_id,
       name: s.name,
@@ -454,44 +531,93 @@ async function updateTicket(ticketId, patch, staffSession) {
     }
   }
 
-  if (!sets.length) return getTicketDetail(ticketId);
+  if (!sets.length && !patch.note) return getTicketDetail(ticketId);
 
-  if (patch.status && ['resolved', 'closed'].includes(String(patch.status).toLowerCase())) {
-    sets.push(`closed_at = NOW()`);
+  if (sets.length) {
+    if (patch.status && ['resolved', 'closed'].includes(String(patch.status).toLowerCase())) {
+      sets.push(`closed_at = NOW()`);
+    }
+
+    sets.push(`updated_at = NOW()`);
+    values.push(ticketId);
+
+    await pool.query(
+      `UPDATE support_tickets SET ${sets.join(', ')} WHERE ticket_id = $${idx}`,
+      values
+    );
   }
 
-  sets.push(`updated_at = NOW()`);
-  values.push(ticketId);
-
-  await pool.query(
-    `UPDATE support_tickets SET ${sets.join(', ')} WHERE ticket_id = $${idx}`,
-    values
-  );
-
   if (patch.note) {
-    await pool.query(
-      `INSERT INTO ticket_messages (ticket_id, author_account_id, author_type, author_name, body, is_internal)
-       VALUES ($1, $2, 'staff', $3, $4, $5)`,
-      [
-        ticketId,
-        staffSession?.accountId || null,
-        staffSession?.username || 'Admin',
-        patch.note,
-        Boolean(patch.internalNote),
-      ]
-    );
+    await addTicketMessage(ticketId, patch.note, staffSession, Boolean(patch.internalNote));
+    return getTicketDetail(ticketId);
   }
 
   return getTicketDetail(ticketId);
 }
 
 async function addTicketMessage(ticketId, body, staffSession, isInternal = false) {
+  if (!getMongoClient()) {
+    throw new Error('MongoDB is not connected — cannot send ticket chat messages');
+  }
+
+  const ticketResult = await pool.query(`SELECT * FROM support_tickets WHERE ticket_id = $1`, [ticketId]);
+  if (!ticketResult.rows.length) return null;
+
+  const chatId = await ensureTicketChat(ticketId, ticketResult.rows[0]);
+  const now = new Date();
+  const accountId = staffSession?.accountId ? String(staffSession.accountId) : null;
+
+  if (accountId && ObjectId.isValid(chatId)) {
+    const db = mongoDb();
+    if (db) {
+      await db.collection('inbox').updateOne(
+        { _id: new ObjectId(chatId), 'members.account_id': { $ne: accountId } },
+        {
+          $push: { members: { account_id: accountId, role: 'admin', joined_at: now } },
+          $set: { updated_at: now },
+        }
+      );
+    }
+  }
+
+  await createMessageRepositories({
+    conversation_id: String(chatId),
+    sender_id: accountId,
+    message_type: 'text',
+    message_content: body,
+    message_id_reply: null,
+    attachments: [],
+    links: [],
+    message_react: [],
+    read_by: accountId ? [{ account_id: accountId, read_at: now }] : [],
+    is_edited: false,
+    is_deleted: false,
+    is_internal: Boolean(isInternal),
+    author_type: 'staff',
+    author_name: staffSession?.username || 'Staff',
+    created_at: now,
+    updated_at: now,
+  });
+
   await pool.query(
-    `INSERT INTO ticket_messages (ticket_id, author_account_id, author_type, author_name, body, is_internal)
-     VALUES ($1, $2, 'staff', $3, $4, $5)`,
-    [ticketId, staffSession?.accountId || null, staffSession?.username || 'Admin', body, isInternal]
+    `UPDATE support_tickets
+     SET updated_at = NOW(),
+         message_count = COALESCE(message_count, 0) + 1,
+         last_message_at = NOW()
+     WHERE ticket_id = $1`,
+    [ticketId]
   );
-  await pool.query(`UPDATE support_tickets SET updated_at = NOW() WHERE ticket_id = $1`, [ticketId]);
+
+  if (ObjectId.isValid(chatId)) {
+    const db = mongoDb();
+    if (db) {
+      await db.collection('inbox').updateOne(
+        { _id: new ObjectId(chatId) },
+        { $set: { updated_at: now, last_message: body, last_message_time: now } }
+      );
+    }
+  }
+
   return getTicketDetail(ticketId);
 }
 

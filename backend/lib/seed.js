@@ -39,7 +39,7 @@ async function resetSeedTables() {
   try {
     await pool.query(`
       TRUNCATE TABLE
-        ticket_messages,
+        ticket_chats,
         support_tickets,
         reports,
         marketplace_listings,
@@ -200,22 +200,8 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     ticketIds.push(res.rows[0].ticket_id);
   }
 
-  const messageSeeds = [
-    [ticketIds[0], userAccountIds[0], 'user', 'Member', 'I added my card but verification keeps failing.', false],
-    [ticketIds[0], null, 'staff', 'Support', 'We are checking your Xendit customer profile — please confirm billing email.', false],
-    [ticketIds[1], userAccountIds[3], 'user', 'Member', 'Reset link worked but login says account suspended.', false],
-    [ticketIds[1], null, 'staff', 'Support', 'Internal: escalated to admin for status review.', true],
-    [ticketIds[2], userAccountIds[4], 'user', 'Member', 'Pro Pack purchase did not credit my wallet.', false],
-    [ticketIds[7], userAccountIds[5], 'user', 'Member', 'Please escalate dispute DIS-21126 to senior reviewer.', false],
-  ];
-
-  for (const m of messageSeeds) {
-    await pool.query(
-      `INSERT INTO ticket_messages (ticket_id, author_account_id, author_type, author_name, body, is_internal)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      m
-    );
-  }
+  // Ticket chat threads live in MongoDB (inbox + messages), linked via ticket_chats.
+  // Seed does not require Mongo — chats are created when a moderator first replies.
 
   const violations = [
     ['VIO-21034', userAccountIds[3], 'Spam posting', 'Automated flag: duplicate promo links.', 2, adminStaffId],

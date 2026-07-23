@@ -75,7 +75,7 @@ export default function ModeratorTicketDetailModal({
       await api.patch(`${endpointBase}/${ticketId}`, {
         status,
         priority,
-        assigned_staff_id: assigneeId ? Number(assigneeId) : null,
+        assigned_staff_id: assigneeId ? assigneeId : null,
       });
       showSuccessToast("Ticket updated");
       await load();
@@ -236,6 +236,11 @@ export default function ModeratorTicketDetailModal({
                 <MessageSquare className={`h-4 w-4 ${accentSpinner(accent)}`} />
                 Conversation ({detail.messages.length})
               </p>
+              {detail.chatAvailable === false && (
+                <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
+                  MongoDB is not connected — ticket chats are unavailable until MONGODB_URI is set. Ticket status updates still work.
+                </p>
+              )}
               {detail.messages.map((m) => (
                 <div
                   key={m.id}
@@ -253,8 +258,8 @@ export default function ModeratorTicketDetailModal({
                   <p className="mt-2 text-sm text-zinc-200">{m.body}</p>
                 </div>
               ))}
-              {detail.messages.length === 0 && (
-                <p className="text-sm text-zinc-500">No messages yet.</p>
+              {detail.messages.length === 0 && detail.chatAvailable !== false && (
+                <p className="text-sm text-zinc-500">No messages yet — start the chat below.</p>
               )}
             </div>
 
@@ -264,17 +269,23 @@ export default function ModeratorTicketDetailModal({
                 onChange={(e) => setReply(e.target.value)}
                 rows={3}
                 placeholder="Write a reply or internal note…"
-                className="w-full resize-none rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none"
+                disabled={detail.chatAvailable === false}
+                className="w-full resize-none rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none disabled:opacity-50"
               />
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                 <label className="flex items-center gap-2 text-xs text-zinc-400">
-                  <input type="checkbox" checked={internalNote} onChange={(e) => setInternalNote(e.target.checked)} />
+                  <input
+                    type="checkbox"
+                    checked={internalNote}
+                    onChange={(e) => setInternalNote(e.target.checked)}
+                    disabled={detail.chatAvailable === false}
+                  />
                   Internal note (hidden from requester)
                 </label>
                 <button
                   type="button"
                   onClick={() => void sendReply()}
-                  disabled={saving || !reply.trim()}
+                  disabled={saving || !reply.trim() || detail.chatAvailable === false}
                   className="rounded-lg bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/15 disabled:opacity-50"
                 >
                   Send

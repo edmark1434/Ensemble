@@ -90,8 +90,8 @@ async function getMarketplaceTickets() {
       ru.email_address AS requester_email,
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
       st.role AS assignee_role,
-      (SELECT COUNT(*)::int FROM ticket_messages tm WHERE tm.ticket_id = t.ticket_id) AS message_count,
-      (SELECT MAX(tm.created_at) FROM ticket_messages tm WHERE tm.ticket_id = t.ticket_id) AS last_message_at
+      COALESCE(t.message_count, 0) AS message_count,
+      t.last_message_at
     FROM support_tickets t
     LEFT JOIN accounts ra ON ra.account_id = t.requester_account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id

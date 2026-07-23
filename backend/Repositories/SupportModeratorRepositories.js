@@ -57,8 +57,8 @@ async function getSupportTickets({ status, search, category, priority } = {}) {
       ru.email_address AS requester_email,
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
       st.role AS assignee_role,
-      (SELECT COUNT(*)::int FROM ticket_messages tm WHERE tm.ticket_id = t.ticket_id) AS message_count,
-      (SELECT MAX(tm.created_at) FROM ticket_messages tm WHERE tm.ticket_id = t.ticket_id) AS last_message_at
+      COALESCE(t.message_count, 0) AS message_count,
+      t.last_message_at
     FROM support_tickets t
     LEFT JOIN accounts ra ON ra.account_id = t.requester_account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id
@@ -132,7 +132,7 @@ async function getSupportDisputes({ status, search, entityType } = {}) {
   return result.rows.map(mapDisputeRow);
 }
 
-// Chronological ticket log: status changes surface via updated_at, plus every message.
+// Chronological ticket log: ticket updates + last-message activity + disputes.
 async function getTicketLog() {
   const result = await pool.query(`
     (
@@ -151,12 +151,12 @@ async function getTicketLog() {
       SELECT
         'message' AS type,
         t.ticket_number AS ref,
-        COALESCE(tm.author_name, 'Someone') || ' replied on ' || t.ticket_number AS label,
+        'Chat activity on ' || t.ticket_number AS label,
         t.status,
-        tm.created_at AS at
-      FROM ticket_messages tm
-      INNER JOIN support_tickets t ON t.ticket_id = tm.ticket_id
-      ORDER BY tm.created_at DESC
+        t.last_message_at AS at
+      FROM support_tickets t
+      WHERE t.last_message_at IS NOT NULL
+      ORDER BY t.last_message_at DESC
       LIMIT 10
     )
     UNION ALL
@@ -195,8 +195,8 @@ async function getChatQueue() {
       ru.email_address AS requester_email,
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
       st.role AS assignee_role,
-      (SELECT COUNT(*)::int FROM ticket_messages tm WHERE tm.ticket_id = t.ticket_id) AS message_count,
-      (SELECT MAX(tm.created_at) FROM ticket_messages tm WHERE tm.ticket_id = t.ticket_id) AS last_message_at
+      COALESCE(t.message_count, 0) AS message_count,
+      t.last_message_at
     FROM support_tickets t
     LEFT JOIN accounts ra ON ra.account_id = t.requester_account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id
@@ -294,12 +294,10 @@ async function getSupportOverview() {
         (SELECT COUNT(*)::int FROM support_tickets t
           WHERE NOT (LOWER(t.category) = ANY($1))
             AND t.created_at >= NOW() - INTERVAL '7 days') AS tickets_this_week,
-        (SELECT COUNT(*)::int FROM ticket_messages tm
-          INNER JOIN support_tickets t ON t.ticket_id = tm.ticket_id
+        (SELECT COALESCE(SUM(t.message_count), 0)::int FROM support_tickets t
           WHERE NOT (LOWER(t.category) = ANY($1))
-            AND tm.created_at >= NOW() - INTERVAL '7 days') AS messages_this_week,
-        (SELECT COUNT(*)::int FROM ticket_messages tm
-          INNER JOIN support_tickets t ON t.ticket_id = tm.ticket_id
+            AND t.last_message_at >= NOW() - INTERVAL '7 days') AS messages_this_week,
+        (SELECT COALESCE(SUM(t.message_count), 0)::int FROM support_tickets t
           WHERE NOT (LOWER(t.category) = ANY($1))) AS total_messages,
         (SELECT COUNT(*)::int FROM violations v
           WHERE v.deleted_at IS NULL AND LOWER(v.status) = 'active') AS active_violations,
@@ -325,10 +323,9 @@ async function getSupportOverview() {
         (SELECT COUNT(*)::int FROM support_tickets t
           WHERE NOT (LOWER(t.category) = ANY($1))
             AND t.created_at::date = day::date) AS tickets,
-        (SELECT COUNT(*)::int FROM ticket_messages tm
-          INNER JOIN support_tickets t ON t.ticket_id = tm.ticket_id
+        (SELECT COALESCE(SUM(t.message_count), 0)::int FROM support_tickets t
           WHERE NOT (LOWER(t.category) = ANY($1))
-            AND tm.created_at::date = day::date) AS messages
+            AND t.last_message_at::date = day::date) AS messages
       FROM generate_series(NOW() - INTERVAL '13 days', NOW(), INTERVAL '1 day') day
       ORDER BY day
     `, [SPECIALIST_CATEGORIES]),
@@ -397,10 +394,10 @@ async function getSupportOverview() {
     dataSources: {
       tables: [
         'support_tickets',
-        'ticket_messages',
+        'ticket_chats',
+        'inbox/messages (mongo)',
         'disputes',
         'dispute_chats',
-        'inbox/messages (mongo)',
         'reports',
         'violations',
         'restrictions',

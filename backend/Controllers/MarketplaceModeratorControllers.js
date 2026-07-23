@@ -101,7 +101,8 @@ async function postTicketMessage(req, res) {
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error adding ticket message:', err);
-    res.status(500).json({ success: false, message: 'Failed to add message' });
+    const msg = err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
+    res.status(err?.message?.includes('MongoDB') ? 503 : 500).json({ success: false, message: msg });
   }
 }
 

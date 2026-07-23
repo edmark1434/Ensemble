@@ -129,5 +129,7 @@ export type TicketsOverview = {
 export type TicketDetail = {
   ticket: SupportTicket;
   messages: TicketMessage[];
-  assignableStaff: { staffId: number; name: string; role: string }[];
+  chatId?: string | null;
+  chatAvailable?: boolean;
+  assignableStaff: { staffId: number | string; name: string; role: string }[];
 };
