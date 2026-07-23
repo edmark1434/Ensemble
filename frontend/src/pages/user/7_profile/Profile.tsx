@@ -529,7 +529,7 @@ export default function Profile() {
             skills: compiledCompoundSkills,
             badges: profileData.badges || [],
             social_links: accountLinkResponse.data.links || accountLinkResponse.data || [],
-            subscriptionType: profileData.subscriptionType || "Free"
+            subscriptionType: profileData.subscriptiontype || "Free"
           });
         } catch (skillsError) {
           console.error("Error fetching user skills:", skillsError);

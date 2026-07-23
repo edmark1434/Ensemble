@@ -54,7 +54,7 @@ export const VerificationStatus: React.FC = () => {
   ];
 
   const handleStartVerification = () => {
-    navigate("/account-verification/level-2/submit-id");
+    
   };
 
   return (

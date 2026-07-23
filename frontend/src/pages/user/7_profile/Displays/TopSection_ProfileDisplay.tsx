@@ -57,7 +57,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
   const [isMetadataOpen, setIsMetadataOpen] = useState(false);
   const [isBioExpanded, setIsBioExpanded] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
+  console.log("Subscription Type:", subscriptionType);
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
