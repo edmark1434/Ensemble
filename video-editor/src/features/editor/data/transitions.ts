@@ -3,6 +3,7 @@ export const TRANSITIONS = [
   {
     id: "1",
     kind: "none",
+    name: "None",
     duration: 0,
     preview: "https://ik.imagekit.io/wombo/transitions-v2/transition-none.png",
     type: "transition"
@@ -10,99 +11,103 @@ export const TRANSITIONS = [
   {
     id: "2",
     kind: "fade",
+    name: "Fade",
     duration: 0.5,
     preview: "https://ik.imagekit.io/wombo/transitions-v2/fade.webp",
     type: "transition"
   },
   {
     id: "3",
+    kind: "flip",
+    name: "Flip",
+    duration: 0.5,
+    preview: "https://ik.imagekit.io/wombo/transitions-v2/flip.webp",
+    type: "transition"
+  },
+  {
+    id: "4",
+    kind: "clockWipe",
+    name: "Clock Wipe",
+    duration: 0.5,
+    preview: "https://ik.imagekit.io/wombo/transitions-v2/clock-wipe.webp",
+    type: "transition"
+  },
+  {
+    id: "5",
     kind: "slide",
-    name: "slide up",
+    name: "Slide Up",
     duration: 0.5,
     preview: "https://ik.imagekit.io/wombo/transitions-v2/slide-up.webp",
     type: "transition",
     direction: "from-bottom"
   },
   {
-    id: "4",
+    id: "6",
     kind: "slide",
-    name: "slide down",
+    name: "Slide Down",
     duration: 0.5,
     preview: "https://ik.imagekit.io/wombo/transitions-v2/slide-down.webp",
     type: "transition",
     direction: "from-top"
   },
   {
-    id: "5",
+    id: "7",
     kind: "slide",
-    name: "slide left",
+    name: "Slide Left",
     duration: 0.5,
     preview: "https://ik.imagekit.io/wombo/transitions-v2/slide-left.webp",
     type: "transition",
     direction: "from-right"
   },
   {
-    id: "6",
+    id: "8",
     kind: "slide",
-    name: "slide right",
+    name: "Slide Right",
     duration: 0.5,
     preview: "https://ik.imagekit.io/wombo/transitions-v2/slide-right.webp",
     type: "transition",
     direction: "from-left"
   },
   {
-    id: "7",
+    id: "9",
     kind: "wipe",
-    name: "wipe up",
+    name: "Wipe Up",
     duration: 0.5,
     preview: "https://ik.imagekit.io/wombo/transitions-v2/wipe-up.webp",
     type: "transition",
     direction: "from-bottom"
   },
   {
-    id: "8",
+    id: "10",
     kind: "wipe",
-    name: "wipe down",
+    name: "Wipe Down",
     duration: 0.5,
     preview: "https://ik.imagekit.io/wombo/transitions-v2/wipe-down.webp",
     type: "transition",
     direction: "from-top"
   },
   {
-    id: "9",
+    id: "11",
     kind: "wipe",
-    name: "wipe left",
+    name: "Wipe Left",
     duration: 0.5,
     preview: "https://ik.imagekit.io/wombo/transitions-v2/wipe-left.webp",
     type: "transition",
     direction: "from-right"
   },
   {
-    id: "10",
+    id: "12",
     kind: "wipe",
-    name: "wipe right",
+    name: "Wipe Right",
     duration: 0.5,
     preview: "https://ik.imagekit.io/wombo/transitions-v2/wipe-right.webp",
     type: "transition",
     direction: "from-left"
   },
   {
-    id: "11",
-    kind: "flip",
-    duration: 0.5,
-    preview: "https://ik.imagekit.io/wombo/transitions-v2/flip.webp",
-    type: "transition"
-  },
-  {
-    id: "12",
-    kind: "clockWipe",
-    duration: 0.5,
-    preview: "https://ik.imagekit.io/wombo/transitions-v2/clock-wipe.webp",
-    type: "transition"
-  },
-  {
     id: "13",
     kind: "star",
+    name: "Star",
     duration: 0.5,
     preview: "https://ik.imagekit.io/wombo/transitions-v2/star.webp",
     type: "transition"
@@ -110,6 +115,7 @@ export const TRANSITIONS = [
   {
     id: "14",
     kind: "circle",
+    name: "Circle",
     duration: 0.5,
     preview: "https://ik.imagekit.io/wombo/transitions-v2/circle.webp",
     type: "transition"
@@ -117,6 +123,7 @@ export const TRANSITIONS = [
   {
     id: "15",
     kind: "rectangle",
+    name: "Rectangle",
     duration: 0.5,
     preview: "https://ik.imagekit.io/wombo/transitions-v2/rectangle.webp",
     type: "transition"

@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@designcombo/transitions>remotion': ^4.0.315
+
 importers:
 
   .:
@@ -426,7 +429,7 @@ packages:
     resolution: {integrity: sha512-IaXOJWRgto/0mtCxFFkJDhwQ5LzvxSIz310zOEx4jjYUm/r6I9r0CMnnFRkZ++P/8i5dQY/XlDKHKRJqz2uZOQ==}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
-      remotion: 4.0.340
+      remotion: ^4.0.315
 
   '@designcombo/types@5.4.2':
     resolution: {integrity: sha512-9u66LmjuYX6fhJm0VocM+lpln5fnEn5yawVpIIZIQV/LIOHUt2eI0Mk36C0CQe1KGEnUsM5i+L1CmC3OlLebeA==}

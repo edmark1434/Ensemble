@@ -26,6 +26,7 @@ import PreviewTrackItem from "./items/preview-drag-item";
 import {useTimelineOffsetX} from "../hooks/use-timeline-offset";
 import {useStateManagerEvents} from "../hooks/use-state-manager-events";
 import {useResizbleTimeline} from "../hooks/use-resizable-timeline";
+import "./items/transition-render";
 
 CanvasTimeline.registerItems({
   Text,
@@ -254,6 +255,8 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     canvas.on('mouse:down', (e: any) => {
       isDragging = false;
 
+      if (e.target && e.target.type === "transition") return;
+
       const pointer = canvas.getScenePoint(e.e);
       const trackItems = canvas.getTrackItems() as any[];
       const target = trackItems.find(item => {
@@ -306,6 +309,8 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     });
     canvas.on('mouse:up', (e: any) => {
       if (isDragging) return;
+
+      if (e.target && e.target.type === "transition") return;
 
       const pointer = canvas.getScenePoint(e.e);
       const trackItems = canvas.getTrackItems() as any[];

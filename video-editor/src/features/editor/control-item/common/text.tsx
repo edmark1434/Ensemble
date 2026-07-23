@@ -52,20 +52,20 @@ interface TextControlsProps {
 }
 
 export const TextControls = ({
-                               trackItem,
-                               properties,
-                               selectedFont,
-                               onChangeFontFamily,
-                               handleChangeFontStyle,
-                               onChangeFontSize,
-                               handleColorChange,
-                               handleBackgroundChange,
-                               onChangeTextAlign,
-                               onChangeTextDecorationLines,
-                               onChangeTextDecorationColor,
-                               showFill = true,
-                               disabled = false,
-                             }: TextControlsProps) => {
+  trackItem,
+  properties,
+  selectedFont,
+  onChangeFontFamily,
+  handleChangeFontStyle,
+  onChangeFontSize,
+  handleColorChange,
+  handleBackgroundChange,
+  onChangeTextAlign,
+  onChangeTextDecorationLines,
+  onChangeTextDecorationColor,
+  showFill = true,
+  disabled = false,
+}: TextControlsProps) => {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">

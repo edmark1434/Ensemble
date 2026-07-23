@@ -3,29 +3,30 @@ import useLayoutStore from "./store/use-layout-store";
 import { Icons } from "@/components/shared/icons";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle
-} from "@/components/ui/drawer";
-import { MenuItem } from "./menu-item/menu-item";
 import { useIsLargeScreen } from "@/hooks/use-media-query";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger
 } from "@/components/ui/tooltip";
-import {Upload, Video, Image, Music, Type, Captions, Shuffle, ClosedCaption} from "lucide-react";
+import {
+  Image,
+  Music,
+  Type,
+  ClosedCaption,
+  Clapperboard,
+  CloudUpload,
+  ArrowBigRightDash
+} from "lucide-react";
 
 const MENU_ITEMS = [
-  { id: "uploads",     icon: Upload,        label: "Uploads",     ariaLabel: "Add and manage uploads" },
-  { id: "videos",      icon: Video,         label: "Videos",      ariaLabel: "Add and manage video content" },
-  { id: "images",      icon: Image,         label: "Images",      ariaLabel: "Add and manage images" },
-  { id: "audios",      icon: Music,         label: "Audios",       ariaLabel: "Add and manage audio content" },
-  { id: "texts",       icon: Type,          label: "Texts",       ariaLabel: "Add and edit text elements" },
-  { id: "captions",    icon: ClosedCaption, label: "Captions",    ariaLabel: "Add and edit captions" },
-  { id: "transitions", icon: Shuffle,       label: "Transitions", ariaLabel: "Add transition effects" },
+  {id: "videos",      icon: Clapperboard,       label: "Videos",      ariaLabel: "Add and manage video content"},
+  {id: "images",      icon: Image,              label: "Images",      ariaLabel: "Add and manage images"},
+  {id: "audios",      icon: Music,              label: "Audios",      ariaLabel: "Add and manage audio content" },
+  {id: "uploads",     icon: CloudUpload,        label: "Uploads",     ariaLabel: "Add and manage uploads"},
+  {id: "texts",       icon: Type,               label: "Texts",       ariaLabel: "Add and edit text elements" },
+  {id: "captions",    icon: ClosedCaption,      label: "Captions",    ariaLabel: "Add and edit captions" },
+  {id: "transitions", icon: ArrowBigRightDash,  label: "Transitions", ariaLabel: "Add transition effects" },
 ] as const;
 
 // Memoized menu button component for better performance
