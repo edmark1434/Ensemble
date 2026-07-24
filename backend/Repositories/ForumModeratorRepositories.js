@@ -10,6 +10,7 @@ const {
   toCategoryChart,
   ticketStatusChart,
 } = require('./ModeratorSharedRepositories');
+const { QUEUE_SCOPES } = require('../lib/ticketEnums');
 
 function forumDb() {
   const client = getMongoClient();
@@ -21,6 +22,8 @@ function mongoConnected() {
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const FORUM_TICKET_SCOPE = QUEUE_SCOPES.forums;
 
 // Resolve account UUIDs found in Mongo documents to display handles.
 async function lookupHandles(ids) {
@@ -40,8 +43,7 @@ async function lookupHandles(ids) {
   return map;
 }
 
-// Forum moderation covers community/forum tickets and reports about forum content.
-const FORUM_TICKET_SCOPE = { categoriesIn: ['community', 'forum'] };
+// Forum moderation covers Forums tickets and reports about forum content.
 const FORUM_REPORT_TYPES = ['discussion', 'comment', 'post', 'forum', 'thread'];
 
 async function getForumTickets({ status } = {}) {
@@ -304,7 +306,7 @@ async function getForumOverview() {
     notice: mongoConnected()
       ? null
       : 'MongoDB is not connected — forum groups, discussions and comment moderation are unavailable. Set MONGODB_URI in backend/.env to enable them. Ticket and report queues below always work.',
-    dataSources: { tables: ['support_tickets', 'reports', 'forum_groups (mongo)', 'forum_discussions (mongo)'], persisted: true },
+    dataSources: { tables: ['tickets', 'reports', 'forum_groups (mongo)', 'forum_discussions (mongo)'], persisted: true },
   };
 }
 

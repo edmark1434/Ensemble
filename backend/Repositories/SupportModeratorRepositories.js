@@ -1,5 +1,13 @@
 const { pool } = require('../lib/database');
 const {
+  QUEUE_SCOPES,
+  SPECIALIST_TYPES,
+  normalizeTicketType,
+  normalizeTicketStatus,
+  normalizeTicketPriority,
+  isClosedStatus,
+} = require('../lib/ticketEnums');
+const {
   fetchScopedReports,
   scopedTicketCounts,
   scopedTicketCategoryBreakdown,
@@ -13,33 +21,33 @@ const {
 } = require('./ModeratorSharedRepositories');
 
 // Support desk owns general support: everything not routed to a specialist queue.
-const SPECIALIST_CATEGORIES = ['marketplace', 'community', 'forum', 'jobs', 'gigs', 'job', 'gig'];
-const SUPPORT_SCOPE = { categoriesNotIn: SPECIALIST_CATEGORIES };
+const SUPPORT_SCOPE = QUEUE_SCOPES.support;
+const specialistTypes = SPECIALIST_TYPES;
 
-async function getSupportTickets({ status, search, category, priority } = {}) {
-  const where = [];
+async function getSupportTickets({ status, search, type, category, priority } = {}) {
+  const where = ['t.deleted_at IS NULL'];
   const params = [];
 
-  // Support desk owns general support: everything not routed to a specialist queue.
-  params.push(SPECIALIST_CATEGORIES);
-  where.push(`NOT (LOWER(t.category) = ANY($${params.length}))`);
+  params.push([...specialistTypes]);
+  where.push(`NOT (t.type = ANY($${params.length}))`);
 
   if (status && status !== 'all') {
-    params.push(String(status).toLowerCase());
-    where.push(`LOWER(t.status) = $${params.length}`);
+    params.push(normalizeTicketStatus(status));
+    where.push(`t.status = $${params.length}`);
   }
-  if (category && category !== 'all') {
-    params.push(String(category).toLowerCase());
-    where.push(`LOWER(t.category) = $${params.length}`);
+  const typeFilter = type || category;
+  if (typeFilter && typeFilter !== 'all') {
+    params.push(normalizeTicketType(typeFilter));
+    where.push(`t.type = $${params.length}`);
   }
   if (priority && priority !== 'all') {
-    params.push(String(priority).toLowerCase());
-    where.push(`LOWER(t.priority) = $${params.length}`);
+    params.push(normalizeTicketPriority(priority));
+    where.push(`t.priority = $${params.length}`);
   }
   if (search) {
     params.push(`%${String(search).toLowerCase()}%`);
     where.push(`(
-      LOWER(t.subject) LIKE $${params.length}
+      LOWER(t.reason) LIKE $${params.length}
       OR LOWER(t.ticket_number) LIKE $${params.length}
       OR LOWER(COALESCE(ra.handle, '')) LIKE $${params.length}
       OR LOWER(COALESCE(ra.display_name, '')) LIKE $${params.length}
@@ -55,18 +63,23 @@ async function getSupportTickets({ status, search, category, priority } = {}) {
       COALESCE(ra.display_name, ru.first_name || ' ' || ru.last_name) AS requester_name,
       ra.handle AS requester_handle,
       ru.email_address AS requester_email,
+      ru.user_id AS requester_user_id,
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
       st.role AS assignee_role,
+      COALESCE(ea.display_name, es.first_name || ' ' || es.last_name) AS escalated_by_name,
+      es.role AS escalated_by_role,
       COALESCE(t.message_count, 0) AS message_count,
       t.last_message_at
-    FROM support_tickets t
-    LEFT JOIN accounts ra ON ra.account_id = t.requester_account_id
+    FROM tickets t
+    LEFT JOIN accounts ra ON ra.account_id = t.account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id
-    LEFT JOIN staff st ON st.staff_id = t.assigned_staff_id
+    LEFT JOIN staff st ON st.staff_id = t.handled_by_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
+    LEFT JOIN staff es ON es.staff_id = t.escalated_by_staff_id
+    LEFT JOIN accounts ea ON ea.account_id = es.account_id
     ${whereSql}
     ORDER BY
-      CASE t.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
+      CASE t.priority WHEN 'High' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END,
       t.updated_at DESC
     LIMIT 100
     `,
@@ -139,10 +152,11 @@ async function getTicketLog() {
       SELECT
         'ticket' AS type,
         t.ticket_number AS ref,
-        t.subject AS label,
+        t.reason AS label,
         t.status,
         t.updated_at AS at
-      FROM support_tickets t
+      FROM tickets t
+      WHERE t.deleted_at IS NULL
       ORDER BY t.updated_at DESC
       LIMIT 14
     )
@@ -154,8 +168,8 @@ async function getTicketLog() {
         'Chat activity on ' || t.ticket_number AS label,
         t.status,
         t.last_message_at AS at
-      FROM support_tickets t
-      WHERE t.last_message_at IS NOT NULL
+      FROM tickets t
+      WHERE t.last_message_at IS NOT NULL AND t.deleted_at IS NULL
       ORDER BY t.last_message_at DESC
       LIMIT 10
     )
@@ -197,12 +211,13 @@ async function getChatQueue() {
       st.role AS assignee_role,
       COALESCE(t.message_count, 0) AS message_count,
       t.last_message_at
-    FROM support_tickets t
-    LEFT JOIN accounts ra ON ra.account_id = t.requester_account_id
+    FROM tickets t
+    LEFT JOIN accounts ra ON ra.account_id = t.account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id
-    LEFT JOIN staff st ON st.staff_id = t.assigned_staff_id
+    LEFT JOIN staff st ON st.staff_id = t.handled_by_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
-    WHERE LOWER(t.channel) IN ('chat', 'live', 'messenger')
+    WHERE t.deleted_at IS NULL
+      AND LOWER(t.channel) IN ('chat', 'live', 'messenger')
     ORDER BY t.updated_at DESC
     LIMIT 50
     `
@@ -216,8 +231,10 @@ async function getSupportStaffWorkload() {
       s.staff_id,
       s.role,
       COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name,
-      (SELECT COUNT(*)::int FROM support_tickets t
-        WHERE t.assigned_staff_id = s.staff_id AND LOWER(t.status) NOT IN ('resolved', 'closed')) AS open_tickets,
+      (SELECT COUNT(*)::int FROM tickets t
+        WHERE t.handled_by_staff_id = s.staff_id
+          AND t.deleted_at IS NULL
+          AND t.status NOT IN ('Resolved', 'Closed')) AS open_tickets,
       (SELECT COUNT(*)::int FROM reports r
         WHERE r.assigned_staff_id = s.staff_id AND LOWER(r.status) NOT IN ('resolved', 'closed') AND r.deleted_at IS NULL) AS open_reports
     FROM staff s
@@ -291,26 +308,30 @@ async function getSupportOverview() {
     getTicketLog(),
     pool.query(`
       SELECT
-        (SELECT COUNT(*)::int FROM support_tickets t
-          WHERE NOT (LOWER(t.category) = ANY($1))
+        (SELECT COUNT(*)::int FROM tickets t
+          WHERE t.deleted_at IS NULL
+            AND NOT (t.type = ANY($1))
             AND t.created_at >= NOW() - INTERVAL '7 days') AS tickets_this_week,
-        (SELECT COALESCE(SUM(t.message_count), 0)::int FROM support_tickets t
-          WHERE NOT (LOWER(t.category) = ANY($1))
+        (SELECT COALESCE(SUM(t.message_count), 0)::int FROM tickets t
+          WHERE t.deleted_at IS NULL
+            AND NOT (t.type = ANY($1))
             AND t.last_message_at >= NOW() - INTERVAL '7 days') AS messages_this_week,
-        (SELECT COALESCE(SUM(t.message_count), 0)::int FROM support_tickets t
-          WHERE NOT (LOWER(t.category) = ANY($1))) AS total_messages,
+        (SELECT COALESCE(SUM(t.message_count), 0)::int FROM tickets t
+          WHERE t.deleted_at IS NULL
+            AND NOT (t.type = ANY($1))) AS total_messages,
         (SELECT COUNT(*)::int FROM violations v
           WHERE v.deleted_at IS NULL AND LOWER(v.status) = 'active') AS active_violations,
         (SELECT COUNT(*)::int FROM restrictions r
           WHERE r.ends_at IS NULL OR r.ends_at > NOW()) AS active_restrictions
-    `, [SPECIALIST_CATEGORIES]),
+    `, [[...specialistTypes]]),
     pool.query(`
-      SELECT LOWER(priority) AS priority, COUNT(*)::int AS count
-      FROM support_tickets t
-      WHERE NOT (LOWER(t.category) = ANY($1))
-      GROUP BY LOWER(priority)
+      SELECT priority, COUNT(*)::int AS count
+      FROM tickets t
+      WHERE t.deleted_at IS NULL
+        AND NOT (t.type = ANY($1))
+      GROUP BY priority
       ORDER BY count DESC
-    `, [SPECIALIST_CATEGORIES]),
+    `, [[...specialistTypes]]),
     pool.query(`
       SELECT LOWER(status) AS status, COUNT(*)::int AS count
       FROM disputes
@@ -320,24 +341,26 @@ async function getSupportOverview() {
     `),
     pool.query(`
       SELECT day::date AS day,
-        (SELECT COUNT(*)::int FROM support_tickets t
-          WHERE NOT (LOWER(t.category) = ANY($1))
+        (SELECT COUNT(*)::int FROM tickets t
+          WHERE t.deleted_at IS NULL
+            AND NOT (t.type = ANY($1))
             AND t.created_at::date = day::date) AS tickets,
-        (SELECT COALESCE(SUM(t.message_count), 0)::int FROM support_tickets t
-          WHERE NOT (LOWER(t.category) = ANY($1))
+        (SELECT COALESCE(SUM(t.message_count), 0)::int FROM tickets t
+          WHERE t.deleted_at IS NULL
+            AND NOT (t.type = ANY($1))
             AND t.last_message_at::date = day::date) AS messages
       FROM generate_series(NOW() - INTERVAL '13 days', NOW(), INTERVAL '1 day') day
       ORDER BY day
-    `, [SPECIALIST_CATEGORIES]),
+    `, [[...specialistTypes]]),
   ]);
 
   const tc = ticketCounts;
   const rc = reportCounts;
   const dc = disputeCounts;
   const es = extraStats.rows[0];
-  const chatOpen = chatQueue.filter((t) => !['resolved', 'closed'].includes(t.status)).length;
+  const chatOpen = chatQueue.filter((t) => !isClosedStatus(t.status)).length;
 
-  const priorityColors = { high: '#f87171', medium: '#fbbf24', low: '#60a5fa' };
+  const priorityColors = { High: '#f87171', Medium: '#fbbf24', Low: '#60a5fa' };
   const disputeColors = {
     open: '#f87171',
     under_review: '#fbbf24',
@@ -370,7 +393,7 @@ async function getSupportOverview() {
       ticketStatusMix: ticketStatusChart(tc),
       ticketCategories: toCategoryChart(categoryRows),
       priorityMix: priorityMix.rows.map((r) => ({
-        label: (r.priority || 'medium').replace(/^./, (c) => c.toUpperCase()),
+        label: r.priority || 'Medium',
         value: Number(r.count),
         color: priorityColors[r.priority] || '#71717a',
       })),
@@ -393,7 +416,7 @@ async function getSupportOverview() {
     alerts: buildAlerts(tc, rc, dc, chatOpen),
     dataSources: {
       tables: [
-        'support_tickets',
+        'tickets',
         'ticket_chats',
         'inbox/messages (mongo)',
         'disputes',

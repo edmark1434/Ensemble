@@ -5,8 +5,8 @@ import ModeratorTicketDetailModal from "../shared/ModeratorTicketDetailModal";
 import { PriorityBadge, StatusBadge } from "../shared/ui";
 import type { SupportTicket } from "../shared/moderatorTypes";
 
-const STATUS_FILTERS = ["all", "open", "in_progress", "escalated", "resolved", "closed"] as const;
-const PRIORITY_FILTERS = ["all", "high", "medium", "low"] as const;
+const STATUS_FILTERS = ["all", "Open", "In Progress", "Resolved", "Closed"] as const;
+const PRIORITY_FILTERS = ["all", "High", "Medium", "Low"] as const;
 
 function relativeTime(value: string | null | undefined) {
   if (!value) return "—";
@@ -43,7 +43,7 @@ export default function SupportTicketManagement() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<(typeof STATUS_FILTERS)[number]>("all");
   const [priority, setPriority] = useState<(typeof PRIORITY_FILTERS)[number]>("all");
-  const [category, setCategory] = useState("all");
+  const [ticketType, setTicketType] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<number | string | null>(null);
 
@@ -54,7 +54,7 @@ export default function SupportTicketManagement() {
         params: {
           status: status === "all" ? undefined : status,
           priority: priority === "all" ? undefined : priority,
-          category: category === "all" ? undefined : category,
+          type: ticketType === "all" ? undefined : ticketType,
           search: search.trim() || undefined,
         },
       });
@@ -68,19 +68,19 @@ export default function SupportTicketManagement() {
     const timeout = setTimeout(() => void load(), search ? 350 : 0);
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, priority, category, search]);
+  }, [status, priority, ticketType, search]);
 
-  const categories = useMemo(() => {
-    const set = new Set(tickets.map((t) => t.category).filter(Boolean));
+  const types = useMemo(() => {
+    const set = new Set(tickets.map((t) => t.type || t.category).filter(Boolean) as string[]);
     return ["all", ...Array.from(set).sort()];
   }, [tickets]);
 
   const summary = useMemo(
     () => ({
       total: tickets.length,
-      open: tickets.filter((t) => t.status === "open" || t.status === "in_progress").length,
+      open: tickets.filter((t) => t.status === "Open" || t.status === "In Progress").length,
       unassigned: tickets.filter((t) => !t.assignee).length,
-      high: tickets.filter((t) => t.priority === "high").length,
+      high: tickets.filter((t) => t.priority === "High").length,
       messages: tickets.reduce((acc, t) => acc + (t.messageCount || 0), 0),
     }),
     [tickets]
@@ -93,7 +93,7 @@ export default function SupportTicketManagement() {
           <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-400">Support Moderator</p>
           <h1 className="text-2xl font-bold text-white">Ticket Management</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Triage, chat, escalate and resolve general support tickets (billing, account, security, disputes…).
+            Triage, chat, escalate and resolve support-scope tickets (Account Access, Credit Top-ups, Video Editor…).
           </p>
         </div>
         <button
@@ -164,17 +164,17 @@ export default function SupportTicketManagement() {
           ))}
         </div>
 
-        {categories.length > 1 && (
+        {types.length > 1 && (
           <>
             <div className="h-6 w-px bg-white/[0.06]" />
             <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              value={ticketType}
+              onChange={(e) => setTicketType(e.target.value)}
               className="rounded-lg border border-white/10 bg-[#0f1016] px-3 py-1.5 text-xs text-zinc-300 outline-none"
             >
-              {categories.map((c) => (
+              {types.map((c) => (
                 <option key={c} value={c}>
-                  {c === "all" ? "All categories" : c}
+                  {c === "all" ? "All types" : c}
                 </option>
               ))}
             </select>
@@ -199,13 +199,14 @@ export default function SupportTicketManagement() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left text-sm">
+            <table className="w-full min-w-[1100px] text-left text-sm">
               <thead>
                 <tr className="text-[10px] uppercase tracking-wide text-zinc-500">
                   <th className="pb-3">Ticket</th>
                   <th className="pb-3">Subject</th>
                   <th className="pb-3">Requester</th>
-                  <th className="pb-3">Category</th>
+                  <th className="pb-3">Type</th>
+                  <th className="pb-3">Flags</th>
                   <th className="pb-3">Channel</th>
                   <th className="pb-3">Priority</th>
                   <th className="pb-3">Status</th>
@@ -226,11 +227,30 @@ export default function SupportTicketManagement() {
                       <p className="truncate font-medium text-zinc-200">{t.subject}</p>
                       {t.relatedDisputeId && <p className="text-[10px] text-amber-400/80">Linked dispute</p>}
                     </td>
-                    <td className="py-3">
-                      <p className="text-zinc-300">@{t.requester.username}</p>
-                      <p className="text-[10px] text-zinc-600">{t.requester.name}</p>
+                    <td className="min-w-[140px] py-3">
+                      <p className="text-zinc-300">{t.requester.name}</p>
+                      <p className="text-[11px] text-zinc-500">@{t.requester.username || "—"}</p>
+                      <p className="font-mono text-[10px] text-zinc-600">
+                        acc {String(t.requester.accountId || "—").slice(0, 8)}
+                        {String(t.requester.accountId || "").length > 8 ? "…" : ""}
+                      </p>
                     </td>
-                    <td className="py-3 capitalize text-zinc-400">{t.category || "—"}</td>
+                    <td className="py-3 text-zinc-400">{t.type || t.category || "—"}</td>
+                    <td className="py-3">
+                      <div className="flex min-w-[120px] flex-col gap-1">
+                        {t.waitingForResponse && (
+                          <span className="w-fit rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
+                            Awaiting reply
+                          </span>
+                        )}
+                        {t.isEscalated && (
+                          <span className="w-fit rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] text-violet-200">
+                            Escalated{t.escalatedBy?.name ? `: ${t.escalatedBy.name}` : ""}
+                          </span>
+                        )}
+                        {!t.waitingForResponse && !t.isEscalated && <span className="text-zinc-600">—</span>}
+                      </div>
+                    </td>
                     <td className="py-3 capitalize text-zinc-500">{t.channel || "web"}</td>
                     <td className="py-3">
                       <PriorityBadge priority={t.priority} />

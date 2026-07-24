@@ -1,4 +1,5 @@
 const { pool } = require('../lib/database');
+const { QUEUE_SCOPES } = require('../lib/ticketEnums');
 const {
   fetchScopedTickets,
   scopedTicketCounts,
@@ -7,8 +8,8 @@ const {
   ticketStatusChart,
 } = require('./ModeratorSharedRepositories');
 
-// Jobs & Gigs moderation covers job/gig tickets and disputes tied to jobs, gigs and contracts.
-const JOBS_TICKET_SCOPE = { categoriesIn: ['jobs', 'gigs', 'job', 'gig'] };
+// Jobs & Gigs moderation covers Jobs and Gigs tickets + related disputes.
+const JOBS_TICKET_SCOPE = QUEUE_SCOPES.jobs;
 const JOBS_DISPUTE_ENTITIES = ['job', 'gig', 'contract'];
 
 async function getJobsTickets({ status } = {}) {
@@ -662,7 +663,7 @@ async function getJobsOverview() {
     alerts: buildAlerts(tc, dc),
     dataSources: {
       tables: [
-        'support_tickets',
+        'tickets',
         'disputes',
         'jobs',
         'gigs',

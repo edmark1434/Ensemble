@@ -6,10 +6,117 @@ const {
   createMessageRepositories,
   getConversationByConvoId,
 } = require('./InboxRepositories');
+const {
+  ROLE_TO_TICKET_TYPES,
+  TICKET_TYPES,
+  TICKET_STATUSES,
+  TICKET_PRIORITIES,
+  normalizeTicketType,
+  normalizeTicketStatus,
+  normalizeTicketPriority,
+  isClosedStatus,
+} = require('../lib/ticketEnums');
+const { mapTicketRow } = require('./ModeratorSharedRepositories');
+
+/** Prefer DB catalog (migration 109); fall back to ticketEnums.js */
+async function getTicketCatalog() {
+  try {
+    const [types, statuses, priorities] = await Promise.all([
+      pool.query(`
+        SELECT type_label, queue_role, sort_order, description
+        FROM ticket_type_catalog
+        WHERE is_active = TRUE
+        ORDER BY sort_order, type_label
+      `),
+      pool.query(`
+        SELECT status_label, sort_order, is_closed
+        FROM ticket_status_catalog
+        WHERE is_active = TRUE
+        ORDER BY sort_order, status_label
+      `),
+      pool.query(`
+        SELECT priority_label, sort_order
+        FROM ticket_priority_catalog
+        WHERE is_active = TRUE
+        ORDER BY sort_order, priority_label
+      `),
+    ]);
+
+    const typeRows = types.rows;
+    const escalateByRole = {};
+    for (const row of typeRows) {
+      const role = row.queue_role;
+      if (!escalateByRole[role]) escalateByRole[role] = [];
+      escalateByRole[role].push(row.type_label);
+    }
+    // Admin can escalate to any type
+    escalateByRole.Admin = typeRows.map((r) => r.type_label);
+    escalateByRole.Administrator = escalateByRole.Admin;
+
+    return {
+      types: typeRows.map((r) => r.type_label),
+      typeDetails: typeRows.map((r) => ({
+        label: r.type_label,
+        queueRole: r.queue_role,
+        description: r.description || null,
+      })),
+      statuses: statuses.rows.map((r) => r.status_label),
+      priorities: priorities.rows.map((r) => r.priority_label),
+      escalateByRole,
+      escalateRoles: [
+        'Support Moderator',
+        'Marketplace Moderator',
+        'Forum Moderator',
+        'Jobs N Gigs Moderator',
+        'Admin',
+      ],
+    };
+  } catch (err) {
+    console.warn('ticket catalog unavailable, using enums:', err.message);
+    return {
+      types: [...TICKET_TYPES],
+      typeDetails: TICKET_TYPES.map((label) => ({
+        label,
+        queueRole: Object.entries(ROLE_TO_TICKET_TYPES).find(([, list]) => list.includes(label))?.[0] || 'Support Moderator',
+        description: null,
+      })),
+      statuses: [...TICKET_STATUSES],
+      priorities: [...TICKET_PRIORITIES],
+      escalateByRole: { ...ROLE_TO_TICKET_TYPES },
+      escalateRoles: [
+        'Support Moderator',
+        'Marketplace Moderator',
+        'Forum Moderator',
+        'Jobs N Gigs Moderator',
+        'Admin',
+      ],
+    };
+  }
+}
 
 function mongoDb() {
   const client = getMongoClient();
   return client ? client.db('ensemble') : null;
+}
+
+/** Session stores snake_case account_id; some older code used camelCase. */
+function sessionAccountId(session) {
+  const id = session?.account_id ?? session?.accountId ?? null;
+  return id != null ? String(id) : null;
+}
+
+function sessionDisplayName(session) {
+  return session?.displayName || session?.display_name || session?.username || 'User';
+}
+
+function isStaffSession(session) {
+  const type = String(session?.type || '').toLowerCase();
+  return type === 'staff' || type === 'admin' || Boolean(session?.staff_id || session?.staffId);
+}
+
+function sessionStaffId(session) {
+  const id = session?.staff_id ?? session?.staffId ?? null;
+  return id != null ? String(id) : null;
 }
 
 function normalizeStatus(status) {
@@ -24,36 +131,85 @@ function normalizeStatus(status) {
   return status;
 }
 
-function mapTicketRow(row) {
-  return {
-    id: row.ticket_id,
-    number: row.ticket_number,
-    subject: row.subject,
-    category: row.category,
-    priority: row.priority,
-    status: normalizeStatus(row.status),
-    channel: row.channel,
-    requester: {
-      accountId: row.requester_account_id,
-      name: row.requester_name || 'Unknown',
-      username: row.requester_handle || '—',
-      email: row.requester_email || null,
-    },
-    assignee: row.assigned_staff_id
-      ? {
-          staffId: row.assigned_staff_id,
-          name: row.assignee_name || 'Unassigned',
-          role: row.assigned_role || row.assignee_role || 'Support',
-        }
-      : null,
-    relatedReportId: row.related_report_id,
-    relatedDisputeId: row.related_dispute_id,
-    messageCount: Number(row.message_count || 0),
-    lastMessageAt: row.last_message_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    closedAt: row.closed_at,
-  };
+async function nextTicketNumber() {
+  const result = await pool.query(`
+    SELECT COALESCE(
+      MAX(CAST(SUBSTRING(ticket_number FROM 5) AS INTEGER)),
+      50000
+    ) + 1 AS next_num
+    FROM tickets
+    WHERE ticket_number ~ '^TKT-[0-9]+$'
+  `);
+  return `TKT-${result.rows[0].next_num}`;
+}
+
+/**
+ * Create a support ticket in Postgres. Optional first message goes to Mongo chat.
+ * @returns {Promise<{ticket, messages, chatId, chatAvailable, assignableStaff}>}
+ */
+async function createSupportTicket(input, session = null) {
+  const reason = String(input?.reason || input?.subject || '').trim();
+  if (!reason) throw new Error('Subject is required');
+
+  const type = normalizeTicketType(input?.type || input?.category || 'Other');
+  const priority = normalizeTicketPriority(input?.priority || 'Medium');
+  const status = normalizeTicketStatus(input?.status || 'Open');
+  const channel = String(input?.channel || 'web').trim().toLowerCase() || 'web';
+  const requesterAccountId = input?.requesterAccountId || sessionAccountId(session);
+  if (!requesterAccountId) throw new Error('Requester account is required');
+
+  const description = input?.description ? String(input.description).trim() : '';
+  const ticketNumber = await nextTicketNumber();
+  const handledBy =
+    input?.handledByStaffId ?? input?.assignedStaffId ?? null;
+
+  const insert = await pool.query(
+    `
+    INSERT INTO tickets (
+      ticket_number, reason, type, priority, status, channel,
+      account_id, handled_by_staff_id,
+      related_report_id, related_dispute_id,
+      message_count, last_message_at
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6,
+      $7, $8,
+      $9, $10,
+      0, NULL
+    )
+    RETURNING ticket_id
+    `,
+    [
+      ticketNumber,
+      reason,
+      type,
+      priority,
+      status,
+      channel,
+      requesterAccountId,
+      handledBy,
+      input?.relatedReportId || null,
+      input?.relatedDisputeId || null,
+    ]
+  );
+
+  const ticketId = insert.rows[0].ticket_id;
+
+  if (description) {
+    const authorSession = session || {
+      account_id: requesterAccountId,
+      type: 'User',
+      username: sessionDisplayName(session),
+    };
+    try {
+      await addTicketMessage(ticketId, description, authorSession, false);
+    } catch (err) {
+      // Ticket metadata still exists; chat can be started later when Mongo is up.
+      if (!err?.message?.includes('MongoDB')) throw err;
+      console.warn('Ticket created without initial chat message:', err.message);
+    }
+  }
+
+  return getTicketDetail(ticketId);
 }
 
 function mapDisputeRow(row) {
@@ -122,18 +278,19 @@ async function getTicketsOverview() {
     reports,
     staffWorkload,
     recentActivity,
-    categoryBreakdown,
+    typeBreakdown,
     priorityBreakdown,
   ] = await Promise.all([
     pool.query(`
       SELECT
         COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'open')::int AS open_count,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'in_progress')::int AS in_progress,
-        COUNT(*) FILTER (WHERE LOWER(status) IN ('resolved', 'closed'))::int AS resolved,
-        COUNT(*) FILTER (WHERE priority = 'high')::int AS high_priority,
-        COUNT(*) FILTER (WHERE assigned_staff_id IS NULL AND LOWER(status) NOT IN ('resolved', 'closed'))::int AS unassigned
-      FROM support_tickets
+        COUNT(*) FILTER (WHERE status = 'Open')::int AS open_count,
+        COUNT(*) FILTER (WHERE status = 'In Progress')::int AS in_progress,
+        COUNT(*) FILTER (WHERE status IN ('Resolved', 'Closed'))::int AS resolved,
+        COUNT(*) FILTER (WHERE priority = 'High')::int AS high_priority,
+        COUNT(*) FILTER (WHERE handled_by_staff_id IS NULL AND status NOT IN ('Resolved', 'Closed'))::int AS unassigned
+      FROM tickets
+      WHERE deleted_at IS NULL
     `),
     pool.query(`
       SELECT
@@ -159,14 +316,19 @@ async function getTicketsOverview() {
     fetchStaffWorkload(),
     fetchRecentActivity(),
     pool.query(`
-      SELECT category, COUNT(*)::int AS count
-      FROM support_tickets GROUP BY category ORDER BY count DESC
+      SELECT type, COUNT(*)::int AS count
+      FROM tickets
+      WHERE deleted_at IS NULL
+      GROUP BY type
+      ORDER BY count DESC
     `),
     pool.query(`
       SELECT priority, COUNT(*)::int AS count
-      FROM support_tickets
-      WHERE LOWER(status) NOT IN ('resolved', 'closed')
-      GROUP BY priority ORDER BY count DESC
+      FROM tickets
+      WHERE deleted_at IS NULL
+        AND status NOT IN ('Resolved', 'Closed')
+      GROUP BY priority
+      ORDER BY count DESC
     `),
   ]);
 
@@ -180,11 +342,19 @@ async function getTicketsOverview() {
     { label: 'Resolved', value: Number(tc.resolved), color: '#34d399' },
   ].filter((x) => x.value > 0);
 
-  const categoryChart = categoryBreakdown.rows.map((r, i) => ({
-    label: r.category,
+  const categoryChart = typeBreakdown.rows.map((r, i) => ({
+    label: r.type,
     value: r.count,
     color: ['#fb7185', '#a78bfa', '#60a5fa', '#34d399', '#fbbf24'][i % 5],
   }));
+
+  const typesFromTickets = typeBreakdown.rows
+    .map((r) => String(r.type || '').trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+
+  const catalog = await getTicketCatalog();
+  const types = catalog.types.length ? catalog.types : typesFromTickets;
 
   return {
     lastUpdated: new Date().toISOString(),
@@ -214,6 +384,12 @@ async function getTicketsOverview() {
         { label: 'Resolved', value: Number(dc.resolved), color: '#34d399' },
       ].filter((x) => x.value > 0),
     },
+    types,
+    typeDetails: catalog.typeDetails,
+    escalateByRole: catalog.escalateByRole,
+    escalateRoles: catalog.escalateRoles,
+    statuses: catalog.statuses,
+    priorities: catalog.priorities,
     tickets,
     disputes,
     reports,
@@ -221,7 +397,7 @@ async function getTicketsOverview() {
     recentActivity,
     alerts: buildTicketAlerts(tc, dc, rc),
     dataSources: {
-      tables: ['support_tickets', 'ticket_chats', 'inbox/messages (mongo)', 'disputes', 'reports', 'violations'],
+      tables: ['tickets', 'ticket_chats', 'ticket_type_catalog', 'inbox/messages (mongo)', 'disputes', 'reports'],
       persisted: true,
     },
   };
@@ -274,19 +450,25 @@ async function fetchTicketsList() {
       COALESCE(ra.display_name, ru.first_name || ' ' || ru.last_name) AS requester_name,
       ra.handle AS requester_handle,
       ru.email_address AS requester_email,
+      ru.user_id AS requester_user_id,
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
       st.role AS assignee_role,
+      COALESCE(ea.display_name, es.first_name || ' ' || es.last_name) AS escalated_by_name,
+      es.role AS escalated_by_role,
       COALESCE(t.message_count, 0) AS message_count,
       t.last_message_at
-    FROM support_tickets t
-    LEFT JOIN accounts ra ON ra.account_id = t.requester_account_id
+    FROM tickets t
+    LEFT JOIN accounts ra ON ra.account_id = t.account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id
-    LEFT JOIN staff st ON st.staff_id = t.assigned_staff_id
+    LEFT JOIN staff st ON st.staff_id = t.handled_by_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
+    LEFT JOIN staff es ON es.staff_id = t.escalated_by_staff_id
+    LEFT JOIN accounts ea ON ea.account_id = es.account_id
+    WHERE t.deleted_at IS NULL
     ORDER BY
-      CASE t.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
+      CASE t.priority WHEN 'High' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END,
       t.updated_at DESC
-    LIMIT 50
+    LIMIT 200
   `);
   return result.rows.map(mapTicketRow);
 }
@@ -340,8 +522,10 @@ async function fetchStaffWorkload() {
       s.staff_id,
       s.role,
       COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name,
-      (SELECT COUNT(*)::int FROM support_tickets t
-        WHERE t.assigned_staff_id = s.staff_id AND LOWER(t.status) NOT IN ('resolved', 'closed')) AS open_tickets,
+      (SELECT COUNT(*)::int FROM tickets t
+        WHERE t.handled_by_staff_id = s.staff_id
+          AND t.deleted_at IS NULL
+          AND t.status NOT IN ('Resolved', 'Closed')) AS open_tickets,
       (SELECT COUNT(*)::int FROM disputes d
         WHERE d.assigned_staff_id = s.staff_id AND LOWER(d.status) NOT IN ('resolved', 'closed')) AS open_disputes,
       (SELECT COUNT(*)::int FROM reports r
@@ -364,8 +548,10 @@ async function fetchStaffWorkload() {
 async function fetchRecentActivity() {
   const result = await pool.query(`
     (
-      SELECT 'ticket' AS type, ticket_number AS ref, subject AS label, status, updated_at AS at
-      FROM support_tickets ORDER BY updated_at DESC LIMIT 8
+      SELECT 'ticket' AS type, ticket_number AS ref, reason AS label, status, updated_at AS at
+      FROM tickets
+      WHERE deleted_at IS NULL
+      ORDER BY updated_at DESC LIMIT 8
     )
     UNION ALL
     (
@@ -415,7 +601,7 @@ async function ensureTicketChat(ticketId, ticketRow) {
     members.push({ account_id: String(accountId), role, joined_at: new Date() });
   };
 
-  addMember(ticketRow.requester_account_id, 'member');
+  addMember(ticketRow.account_id, 'member');
 
   const insertResult = await createInboxRepositories({
     conversation_name: ticketRow.ticket_number
@@ -460,14 +646,19 @@ async function getTicketDetail(ticketId) {
       COALESCE(ra.display_name, ru.first_name || ' ' || ru.last_name) AS requester_name,
       ra.handle AS requester_handle,
       ru.email_address AS requester_email,
+      ru.user_id AS requester_user_id,
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
-      st.role AS assignee_role
-    FROM support_tickets t
-    LEFT JOIN accounts ra ON ra.account_id = t.requester_account_id
+      st.role AS assignee_role,
+      COALESCE(ea.display_name, es.first_name || ' ' || es.last_name) AS escalated_by_name,
+      es.role AS escalated_by_role
+    FROM tickets t
+    LEFT JOIN accounts ra ON ra.account_id = t.account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id
-    LEFT JOIN staff st ON st.staff_id = t.assigned_staff_id
+    LEFT JOIN staff st ON st.staff_id = t.handled_by_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
-    WHERE t.ticket_id = $1
+    LEFT JOIN staff es ON es.staff_id = t.escalated_by_staff_id
+    LEFT JOIN accounts ea ON ea.account_id = es.account_id
+    WHERE t.ticket_id = $1 AND t.deleted_at IS NULL
     `,
     [ticketId]
   );
@@ -498,6 +689,14 @@ async function getTicketDetail(ticketId) {
   }
 
   const row = ticketResult.rows[0];
+  const catalog = await getTicketCatalog();
+
+  const lastPublic = [...messages].reverse().find((m) => !m.isInternal);
+  const derivedAuthor =
+    lastPublic?.authorType === 'staff' || lastPublic?.authorType === 'user'
+      ? lastPublic.authorType
+      : row.last_message_author_type;
+
   return {
     ticket: mapTicketRow({
       ...row,
@@ -505,10 +704,17 @@ async function getTicketDetail(ticketId) {
       last_message_at: messages.length
         ? messages[messages.length - 1].createdAt
         : row.last_message_at,
+      last_message_author_type: derivedAuthor,
     }),
     messages,
     chatId,
     chatAvailable,
+    types: catalog.types,
+    statuses: catalog.statuses,
+    priorities: catalog.priorities,
+    typeDetails: catalog.typeDetails,
+    escalateByRole: catalog.escalateByRole,
+    escalateRoles: catalog.escalateRoles,
     assignableStaff: staffResult.rows.map((s) => ({
       staffId: s.staff_id,
       name: s.name,
@@ -518,15 +724,70 @@ async function getTicketDetail(ticketId) {
 }
 
 async function updateTicket(ticketId, patch, staffSession) {
-  const allowed = ['status', 'priority', 'assigned_staff_id', 'assigned_role'];
   const sets = [];
   const values = [];
   let idx = 1;
 
-  for (const key of allowed) {
-    if (patch[key] !== undefined) {
-      sets.push(`${key} = $${idx}`);
-      values.push(patch[key]);
+  // Normalize aliases onto the tickets schema.
+  if (patch.assigned_staff_id !== undefined && patch.handled_by_staff_id === undefined) {
+    patch.handled_by_staff_id = patch.assigned_staff_id;
+  }
+  if (patch.category !== undefined && patch.type === undefined) {
+    patch.type = patch.category;
+  }
+
+  // Escalate to a role → type is required and must be allowed for that queue.
+  if (patch.assigned_role) {
+    const catalog = await getTicketCatalog();
+    const allowed =
+      catalog.escalateByRole?.[patch.assigned_role] ||
+      ROLE_TO_TICKET_TYPES[patch.assigned_role] ||
+      [];
+    if (!allowed.length) {
+      throw new Error(`Unknown escalate role: ${patch.assigned_role}`);
+    }
+    if (patch.type === undefined || patch.type === null || String(patch.type).trim() === '') {
+      throw new Error(
+        `A ticket type is required when escalating to ${patch.assigned_role}. Allowed: ${allowed.join(', ')}`
+      );
+    }
+    const normalized = normalizeTicketType(patch.type);
+    if (!allowed.includes(normalized)) {
+      throw new Error(
+        `Ticket type "${normalized}" is not valid for ${patch.assigned_role}. Allowed: ${allowed.join(', ')}`
+      );
+    }
+    patch.type = normalized;
+  }
+
+  if (patch.status !== undefined) {
+    sets.push(`status = $${idx}`);
+    values.push(normalizeTicketStatus(patch.status));
+    idx += 1;
+  }
+  if (patch.priority !== undefined) {
+    sets.push(`priority = $${idx}`);
+    values.push(normalizeTicketPriority(patch.priority));
+    idx += 1;
+  }
+  if (patch.type !== undefined) {
+    sets.push(`type = $${idx}`);
+    values.push(normalizeTicketType(patch.type));
+    idx += 1;
+  }
+  if (patch.handled_by_staff_id !== undefined) {
+    sets.push(`handled_by_staff_id = $${idx}`);
+    values.push(patch.handled_by_staff_id === null || patch.handled_by_staff_id === ''
+      ? null
+      : patch.handled_by_staff_id);
+    idx += 1;
+  }
+
+  if (patch.assigned_role && ROLE_TO_TICKET_TYPES[patch.assigned_role]) {
+    const escalatedBy = sessionStaffId(staffSession);
+    if (escalatedBy) {
+      sets.push(`escalated_by_staff_id = $${idx}`);
+      values.push(escalatedBy);
       idx += 1;
     }
   }
@@ -534,15 +795,15 @@ async function updateTicket(ticketId, patch, staffSession) {
   if (!sets.length && !patch.note) return getTicketDetail(ticketId);
 
   if (sets.length) {
-    if (patch.status && ['resolved', 'closed'].includes(String(patch.status).toLowerCase())) {
-      sets.push(`closed_at = NOW()`);
+    if (patch.status && isClosedStatus(patch.status)) {
+      sets.push(`resolved_at = NOW()`);
     }
 
     sets.push(`updated_at = NOW()`);
     values.push(ticketId);
 
     await pool.query(
-      `UPDATE support_tickets SET ${sets.join(', ')} WHERE ticket_id = $${idx}`,
+      `UPDATE tickets SET ${sets.join(', ')} WHERE ticket_id = $${idx} AND deleted_at IS NULL`,
       values
     );
   }
@@ -560,12 +821,17 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
     throw new Error('MongoDB is not connected — cannot send ticket chat messages');
   }
 
-  const ticketResult = await pool.query(`SELECT * FROM support_tickets WHERE ticket_id = $1`, [ticketId]);
+  const ticketResult = await pool.query(
+    `SELECT * FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  );
   if (!ticketResult.rows.length) return null;
 
   const chatId = await ensureTicketChat(ticketId, ticketResult.rows[0]);
   const now = new Date();
-  const accountId = staffSession?.accountId ? String(staffSession.accountId) : null;
+  const accountId = sessionAccountId(staffSession);
+  const staff = isStaffSession(staffSession);
+  const memberRole = staff ? 'admin' : 'member';
 
   if (accountId && ObjectId.isValid(chatId)) {
     const db = mongoDb();
@@ -573,7 +839,7 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
       await db.collection('inbox').updateOne(
         { _id: new ObjectId(chatId), 'members.account_id': { $ne: accountId } },
         {
-          $push: { members: { account_id: accountId, role: 'admin', joined_at: now } },
+          $push: { members: { account_id: accountId, role: memberRole, joined_at: now } },
           $set: { updated_at: now },
         }
       );
@@ -592,20 +858,21 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
     read_by: accountId ? [{ account_id: accountId, read_at: now }] : [],
     is_edited: false,
     is_deleted: false,
-    is_internal: Boolean(isInternal),
-    author_type: 'staff',
-    author_name: staffSession?.username || 'Staff',
+    is_internal: staff ? Boolean(isInternal) : false,
+    author_type: staff ? 'staff' : 'user',
+    author_name: sessionDisplayName(staffSession) || (staff ? 'Staff' : 'User'),
     created_at: now,
     updated_at: now,
   });
 
   await pool.query(
-    `UPDATE support_tickets
+    `UPDATE tickets
      SET updated_at = NOW(),
          message_count = COALESCE(message_count, 0) + 1,
-         last_message_at = NOW()
-     WHERE ticket_id = $1`,
-    [ticketId]
+         last_message_at = NOW(),
+         last_message_author_type = $2
+     WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId, staff ? 'staff' : 'user']
   );
 
   if (ObjectId.isValid(chatId)) {
@@ -787,7 +1054,7 @@ async function addDisputeMessage(disputeId, body, staffSession, isInternal = fal
 
   const chatId = await ensureDisputeChat(disputeId, disputeResult.rows[0]);
   const now = new Date();
-  const accountId = staffSession?.accountId ? String(staffSession.accountId) : null;
+  const accountId = sessionAccountId(staffSession);
 
   // Keep staff on the conversation member list when they post.
   if (accountId && ObjectId.isValid(chatId)) {
@@ -817,7 +1084,7 @@ async function addDisputeMessage(disputeId, body, staffSession, isInternal = fal
     is_deleted: false,
     is_internal: Boolean(isInternal),
     author_type: 'staff',
-    author_name: staffSession?.username || 'Staff',
+    author_name: sessionDisplayName(staffSession) || 'Staff',
     created_at: now,
     updated_at: now,
   });
@@ -865,6 +1132,8 @@ async function updateReport(reportId, patch) {
 module.exports = {
   getTicketsOverview,
   getTicketDetail,
+  getTicketCatalog,
+  createSupportTicket,
   updateTicket,
   addTicketMessage,
   updateDispute,

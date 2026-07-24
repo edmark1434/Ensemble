@@ -59,7 +59,17 @@ async function patchTicket(req, res) {
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error updating ticket:', err);
-    res.status(500).json({ success: false, message: 'Failed to update ticket' });
+    const msg =
+      err?.message?.includes('not valid for') || err?.message?.includes('type is required')
+        ? err.message
+        : 'Failed to update ticket';
+    res
+      .status(
+        err?.message?.includes('not valid for') || err?.message?.includes('type is required')
+          ? 400
+          : 500
+      )
+      .json({ success: false, message: msg });
   }
 }
 

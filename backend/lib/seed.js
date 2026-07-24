@@ -40,7 +40,7 @@ async function resetSeedTables() {
     await pool.query(`
       TRUNCATE TABLE
         ticket_chats,
-        support_tickets,
+        tickets,
         reports,
         marketplace_listings,
         platform_settings,
@@ -95,6 +95,8 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   const supportStaffId = staffByRole['Support Moderator'];
   const adminStaffId = staffByRole.Admin;
   const marketplaceStaffId = staffByRole['Marketplace Moderator'] || supportStaffId;
+  const jobsStaffId = staffByRole['Jobs N Gigs Moderator'] || staffByRole['Jobs Moderator'] || supportStaffId;
+  const forumStaffId = staffByRole['Forum Moderator'] || supportStaffId;
 
   const reports = [
     ['RPT-10001', userAccountIds[0], 'member', 'u-3', '@noisy_creator', 'Harassment', 'Repeated hostile messages in forum thread.', 'open', 'high'],
@@ -171,37 +173,54 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   }
 
   const tickets = [
-    ['TKT-50001', 'Cannot verify payment method', 'billing', 'high', 'open', userAccountIds[0], supportStaffId, 'Support Moderator', reportIds[0], null],
-    ['TKT-50002', 'Account locked after password reset', 'account', 'high', 'in_progress', userAccountIds[3], supportStaffId, 'Support Moderator', null, null],
-    ['TKT-50003', 'Credits missing after package purchase', 'billing', 'high', 'open', userAccountIds[4], adminStaffId, 'Admin', null, disputeIds[1]],
-    ['TKT-50004', 'Forum group ownership transfer', 'community', 'medium', 'in_progress', userAccountIds[2], staffByRole['Forum Moderator'] || supportStaffId, 'Forum Moderator', reportIds[1], null],
-    ['TKT-50005', 'How to invite team members?', 'general', 'low', 'resolved', userAccountIds[6], supportStaffId, 'Support Moderator', null, null],
-    ['TKT-50006', 'Marketplace listing rejected', 'marketplace', 'medium', 'open', userAccountIds[7], marketplaceStaffId, 'Marketplace Moderator', reportIds[2], null],
-    ['TKT-50007', 'Two-factor not receiving codes', 'security', 'high', 'open', userAccountIds[1], adminStaffId, 'Admin', null, null],
-    ['TKT-50008', 'Dispute escalation request', 'dispute', 'high', 'in_progress', userAccountIds[5], adminStaffId, 'Admin', null, disputeIds[3]],
-    ['TKT-50009', 'Asset purchase never delivered', 'marketplace', 'high', 'in_progress', userAccountIds[9], marketplaceStaffId, 'Marketplace Moderator', null, null],
+    // ticket_number, reason, type, priority, status, channel, account_id, handled_by, related_report, related_dispute
+    ['TKT-50001', 'Cannot verify payment method', 'Credit Top-ups', 'High', 'Open', 'web', userAccountIds[0], supportStaffId, reportIds[0], null],
+    ['TKT-50002', 'Account locked after password reset', 'Account Access', 'High', 'In Progress', 'web', userAccountIds[3], supportStaffId, null, null],
+    ['TKT-50003', 'Credits missing after package purchase', 'Credit Top-ups', 'High', 'Open', 'web', userAccountIds[4], adminStaffId, null, disputeIds[1]],
+    ['TKT-50004', 'Forum group ownership transfer', 'Forums', 'Medium', 'In Progress', 'web', userAccountIds[2], forumStaffId, reportIds[1], null],
+    ['TKT-50005', 'How to invite team members?', 'Other', 'Low', 'Resolved', 'web', userAccountIds[6], supportStaffId, null, null],
+    ['TKT-50006', 'Marketplace listing rejected', 'Asset Marketplace', 'Medium', 'Open', 'web', userAccountIds[7], marketplaceStaffId, reportIds[2], null],
+    ['TKT-50007', 'Two-factor not receiving codes', 'Account Verification', 'High', 'Open', 'web', userAccountIds[1], adminStaffId, null, null],
+    ['TKT-50008', 'Dispute escalation request', 'Other', 'High', 'In Progress', 'web', userAccountIds[5], adminStaffId, null, disputeIds[3]],
+    ['TKT-50009', 'Asset purchase never delivered', 'Asset Marketplace', 'High', 'In Progress', 'web', userAccountIds[9], marketplaceStaffId, null, null],
+    ['TKT-50010', 'Gig milestone stuck in review', 'Jobs and Gigs', 'High', 'Open', 'web', userAccountIds[0], jobsStaffId, null, null],
+    ['TKT-50011', 'Freelancer proposal spam', 'Jobs and Gigs', 'Medium', 'In Progress', 'web', userAccountIds[4], jobsStaffId, null, null],
+    ['TKT-50012', 'Live chat: refund status check', 'Credit Top-ups', 'Medium', 'Open', 'chat', userAccountIds[2], supportStaffId, null, null],
+    ['TKT-50013', 'Live chat: cannot upload portfolio', 'Account Access', 'Low', 'Open', 'chat', userAccountIds[8], supportStaffId, null, null],
+    ['TKT-50014', 'Cancel annual subscription', 'Subscriptions and Plans', 'Medium', 'Open', 'web', userAccountIds[1], supportStaffId, null, null],
+    ['TKT-50015', 'Payout not arriving', 'Withdrawing Earnings', 'High', 'Open', 'web', userAccountIds[5], supportStaffId, null, null],
+    ['TKT-50016', 'Timeline editor crash on export', 'Video Editor', 'Medium', 'In Progress', 'web', userAccountIds[6], supportStaffId, null, null],
   ];
 
   const ticketIds = [];
   for (const t of tickets) {
     const res = await pool.query(
-      `INSERT INTO support_tickets (
-        ticket_number, subject, category, priority, status, channel,
-        requester_account_id, assigned_staff_id, assigned_role,
-        related_report_id, related_dispute_id, created_at, closed_at
-      ) VALUES ($1,$2,$3,$4,$5,'web',$6,$7,$8,$9,$10, NOW() - ($11 || ' hours')::interval, $12)
+      `INSERT INTO tickets (
+        ticket_number, reason, type, priority, status, channel,
+        account_id, handled_by_staff_id,
+        related_report_id, related_dispute_id, created_at, resolved_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, NOW() - ($11 || ' hours')::interval, $12)
       RETURNING ticket_id`,
       [
-        ...t,
+        t[0],
+        t[1],
+        t[2],
+        t[3],
+        t[4],
+        t[5],
+        t[6],
+        t[7],
+        t[8],
+        t[9],
         String(faker.number.int({ min: 4, max: 200 })),
-        t[4] === 'resolved' ? new Date() : null,
+        t[4] === 'Resolved' || t[4] === 'Closed' ? new Date() : null,
       ]
     );
     ticketIds.push(res.rows[0].ticket_id);
   }
 
   // Ticket chat threads live in MongoDB (inbox + messages), linked via ticket_chats.
-  // Seed does not require Mongo — chats are created when a moderator first replies.
+  // Seed does not require Mongo — chats are created when a moderator/user first replies.
 
   const violations = [
     ['VIO-21034', userAccountIds[3], 'Spam posting', 'Automated flag: duplicate promo links.', 2, adminStaffId],

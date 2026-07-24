@@ -47,7 +47,9 @@ function badgeClass(kind: 'status' | 'priority', value: string) {
     return 'bg-zinc-500/15 text-zinc-300 border-white/10';
   }
   if (v === 'open') return 'bg-red-500/15 text-red-300';
-  if (v === 'in_progress' || v === 'under_review' || v === 'in_review') return 'bg-amber-500/15 text-amber-200';
+  if (v === 'in progress' || v === 'in_progress' || v === 'under_review' || v === 'in_review') {
+    return 'bg-amber-500/15 text-amber-200';
+  }
   if (v === 'resolved' || v === 'closed') return 'bg-emerald-500/15 text-emerald-300';
   return 'bg-zinc-500/15 text-zinc-300';
 }
@@ -65,10 +67,10 @@ export default function TicketManagementPage() {
   const [tab, setTab] = useState<TabId>(initialTab);
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<number | string | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -106,7 +108,7 @@ export default function TicketManagementPage() {
     return data.tickets.filter((t) => {
       if (statusFilter !== 'all' && t.status !== statusFilter) return false;
       if (priorityFilter !== 'all' && t.priority !== priorityFilter) return false;
-      if (categoryFilter !== 'all' && t.category !== categoryFilter) return false;
+      if (typeFilter !== 'all' && (t.type || t.category) !== typeFilter) return false;
       if (!q) return true;
       return (
         t.subject.toLowerCase().includes(q) ||
@@ -115,7 +117,7 @@ export default function TicketManagementPage() {
         (t.assignee?.name || '').toLowerCase().includes(q)
       );
     });
-  }, [data, q, statusFilter, priorityFilter, categoryFilter]);
+  }, [data, q, statusFilter, priorityFilter, typeFilter]);
 
   const filteredDisputes = useMemo(() => {
     if (!data) return [];
@@ -139,9 +141,11 @@ export default function TicketManagementPage() {
     );
   }, [data, q]);
 
-  const categories = useMemo(() => {
+  const ticketTypes = useMemo(() => {
     if (!data) return [];
-    return [...new Set(data.tickets.map((t) => t.category))].sort();
+    if (Array.isArray(data.types) && data.types.length) return data.types;
+    if (Array.isArray(data.categories) && data.categories.length) return data.categories;
+    return [...new Set(data.tickets.map((t) => t.type || t.category).filter(Boolean) as string[])].sort();
   }, [data]);
 
   if (loading) {
@@ -183,8 +187,8 @@ export default function TicketManagementPage() {
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-400/80">Support desk</p>
             <h1 className="text-xl font-bold text-white">Ticket management</h1>
             <p className="mt-1 text-xs text-zinc-500">
-              {summary.openTickets} open tickets · {summary.openDisputes} disputes · {summary.openReports} reports · @
-              {user?.username || 'admin'}
+              {summary.openTickets} open tickets · {summary.totalTickets} in tickets · {summary.openDisputes}{' '}
+              disputes · {summary.openReports} reports · @{user?.username || 'admin'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -252,13 +256,13 @@ export default function TicketManagementPage() {
         {tab === 'tickets' && (
           <TicketsTab
             tickets={filteredTickets}
-            categories={categories}
+            ticketTypes={ticketTypes}
             statusFilter={statusFilter}
             priorityFilter={priorityFilter}
-            categoryFilter={categoryFilter}
+            typeFilter={typeFilter}
             onStatusFilter={setStatusFilter}
             onPriorityFilter={setPriorityFilter}
-            onCategoryFilter={setCategoryFilter}
+            onTypeFilter={setTypeFilter}
             onOpenTicket={setSelectedTicketId}
           />
         )}
@@ -314,7 +318,7 @@ function OverviewTab({
       <div className="grid gap-6 lg:grid-cols-2">
         <ChartCard>
           <VerticalBarChart
-            title="Tickets by category"
+            title="Tickets by type"
             data={charts.ticketCategories.map((c) => ({ label: c.label, value: c.value }))}
             color="#a78bfa"
           />
@@ -365,26 +369,26 @@ function OverviewTab({
 function FilterBar({
   statusFilter,
   priorityFilter,
-  categoryFilter,
-  categories,
+  typeFilter,
+  ticketTypes,
   onStatus,
   onPriority,
-  onCategory,
+  onType,
 }: {
   statusFilter: string;
   priorityFilter: string;
-  categoryFilter: string;
-  categories: string[];
+  typeFilter: string;
+  ticketTypes: string[];
   onStatus: (v: string) => void;
   onPriority: (v: string) => void;
-  onCategory: (v: string) => void;
+  onType: (v: string) => void;
 }) {
   return (
     <div className="grid gap-3 rounded-2xl border border-white/[0.08] bg-[#14151c] p-4 sm:grid-cols-3">
       {[
-        ['Status', statusFilter, ['all', 'open', 'in_progress', 'resolved', 'closed'], onStatus],
-        ['Priority', priorityFilter, ['all', 'high', 'medium', 'low'], onPriority],
-        ['Category', categoryFilter, ['all', ...categories], onCategory],
+        ['Status', statusFilter, ['all', 'Open', 'In Progress', 'Resolved', 'Closed'], onStatus],
+        ['Priority', priorityFilter, ['all', 'High', 'Medium', 'Low'], onPriority],
+        ['Type', typeFilter, ['all', ...ticketTypes], onType],
       ].map(([label, val, opts, onChange]) => (
         <label key={String(label)} className="flex flex-col gap-1">
           <span className="text-[10px] uppercase text-zinc-600">{label as string}</span>
@@ -395,7 +399,7 @@ function FilterBar({
           >
             {(opts as string[]).map((o) => (
               <option key={o} value={o}>
-                {o === 'all' ? 'All' : o.replace('_', ' ')}
+                {o === 'all' ? 'All' : o}
               </option>
             ))}
           </select>
@@ -407,46 +411,70 @@ function FilterBar({
 
 function TicketsTab({
   tickets,
-  categories,
+  ticketTypes,
   statusFilter,
   priorityFilter,
-  categoryFilter,
+  typeFilter,
   onStatusFilter,
   onPriorityFilter,
-  onCategoryFilter,
+  onTypeFilter,
   onOpenTicket,
 }: {
   tickets: SupportTicket[];
-  categories: string[];
+  ticketTypes: string[];
   statusFilter: string;
   priorityFilter: string;
-  categoryFilter: string;
+  typeFilter: string;
   onStatusFilter: (v: string) => void;
   onPriorityFilter: (v: string) => void;
-  onCategoryFilter: (v: string) => void;
-  onOpenTicket: (id: number) => void;
+  onTypeFilter: (v: string) => void;
+  onOpenTicket: (id: number | string) => void;
 }) {
+  const shortId = (value: string | number | null | undefined) => {
+    if (value == null || value === '') return '—';
+    const s = String(value);
+    return s.length > 10 ? `${s.slice(0, 8)}…` : s;
+  };
+
   return (
     <div className="space-y-4">
       <FilterBar
         statusFilter={statusFilter}
         priorityFilter={priorityFilter}
-        categoryFilter={categoryFilter}
-        categories={categories}
+        typeFilter={typeFilter}
+        ticketTypes={ticketTypes}
         onStatus={onStatusFilter}
         onPriority={onPriorityFilter}
-        onCategory={onCategoryFilter}
+        onType={onTypeFilter}
       />
       <p className="text-xs text-zinc-500">Showing {tickets.length} tickets</p>
       <DataTable
-        columns={['Ticket', 'Subject', 'Requester', 'Category', 'Priority', 'Status', 'Assignee', 'Updated']}
+        columns={['Ticket', 'Subject', 'Requester', 'Type', 'Flags', 'Priority', 'Status', 'Assignee', 'Updated']}
         rows={tickets.map((t) => ({
           key: t.id,
           cells: [
             t.number,
             t.subject,
-            t.requester.name,
-            t.category,
+            <div key="req" className="min-w-[140px]">
+              <p className="font-medium text-zinc-200">{t.requester.name}</p>
+              <p className="text-[11px] text-zinc-500">@{t.requester.username || '—'}</p>
+              <p className="font-mono text-[10px] text-zinc-600">acc {shortId(t.requester.accountId)}</p>
+              <p className="font-mono text-[10px] text-zinc-600">usr {shortId(t.requester.userId)}</p>
+            </div>,
+            t.type || t.category || '—',
+            <div key="flags" className="flex min-w-[120px] flex-col gap-1">
+              {t.waitingForResponse && (
+                <span className="w-fit rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
+                  Awaiting reply
+                </span>
+              )}
+              {t.isEscalated && (
+                <span className="w-fit rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] text-violet-200">
+                  Escalated{t.escalatedBy?.name ? `: ${t.escalatedBy.name}` : ''}
+                </span>
+              )}
+              {!t.waitingForResponse && !t.isEscalated && <span className="text-zinc-600">—</span>}
+            </div>,
             t.priority,
             t.status,
             t.assignee?.name || '—',
@@ -654,7 +682,7 @@ function DataTable({
   rows,
 }: {
   columns: string[];
-  rows: { key: string | number; cells: string[]; onClick?: () => void; actions?: ReactNode }[];
+  rows: { key: string | number; cells: ReactNode[]; onClick?: () => void; actions?: ReactNode }[];
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">

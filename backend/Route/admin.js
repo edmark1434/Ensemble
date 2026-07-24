@@ -13,6 +13,7 @@ const { getAdminAnalyticsOverview } = require('../Controllers/AdminAnalyticsCont
 const {
   getAdminTicketsOverview,
   getAdminTicketDetail,
+  createAdminTicket,
   patchAdminTicket,
   postAdminTicketMessage,
   patchAdminDispute,
@@ -28,6 +29,7 @@ router.get('/economy-overview', [checkSession, requireAdmin], getAdminEconomyOve
 router.get('/moderation-overview', [checkSession, requireAdmin], getAdminModerationOverview);
 router.get('/analytics-overview', [checkSession, requireAdmin], getAdminAnalyticsOverview);
 router.get('/tickets-overview', [checkSession, requireAdmin], getAdminTicketsOverview);
+router.post('/tickets', [checkSession, requireAdmin], createAdminTicket);
 router.get('/tickets/:id', [checkSession, requireAdmin], getAdminTicketDetail);
 router.patch('/tickets/:id', [checkSession, requireAdmin], patchAdminTicket);
 router.post('/tickets/:id/messages', [checkSession, requireAdmin], postAdminTicketMessage);

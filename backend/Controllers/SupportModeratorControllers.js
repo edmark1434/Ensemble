@@ -35,7 +35,7 @@ async function getTickets(req, res) {
     const data = await getSupportTickets({
       status: req.query.status,
       search: req.query.search,
-      category: req.query.category,
+      type: req.query.type || req.query.category,
       priority: req.query.priority,
     });
     res.status(200).json({ success: true, data });
@@ -63,7 +63,17 @@ async function patchTicket(req, res) {
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error updating ticket:', err);
-    res.status(500).json({ success: false, message: 'Failed to update ticket' });
+    const msg =
+      err?.message?.includes('not valid for') || err?.message?.includes('type is required')
+        ? err.message
+        : 'Failed to update ticket';
+    res
+      .status(
+        err?.message?.includes('not valid for') || err?.message?.includes('type is required')
+          ? 400
+          : 500
+      )
+      .json({ success: false, message: msg });
   }
 }
 

@@ -1,4 +1,6 @@
 const { pool } = require('../lib/database');
+const { QUEUE_SCOPES } = require('../lib/ticketEnums');
+const { fetchScopedTickets, scopedTicketCounts } = require('./ModeratorSharedRepositories');
 
 function mapListingRow(row) {
   return {
@@ -82,51 +84,7 @@ async function reviewMarketplaceListing(listingId, { status, rejectionReason }, 
 }
 
 async function getMarketplaceTickets() {
-  const result = await pool.query(`
-    SELECT
-      t.*,
-      COALESCE(ra.display_name, ru.first_name || ' ' || ru.last_name) AS requester_name,
-      ra.handle AS requester_handle,
-      ru.email_address AS requester_email,
-      COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
-      st.role AS assignee_role,
-      COALESCE(t.message_count, 0) AS message_count,
-      t.last_message_at
-    FROM support_tickets t
-    LEFT JOIN accounts ra ON ra.account_id = t.requester_account_id
-    LEFT JOIN users ru ON ru.account_id = ra.account_id
-    LEFT JOIN staff st ON st.staff_id = t.assigned_staff_id
-    LEFT JOIN accounts sa ON sa.account_id = st.account_id
-    WHERE t.category = 'marketplace'
-    ORDER BY
-      CASE t.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
-      t.updated_at DESC
-    LIMIT 50
-  `);
-
-  return result.rows.map((row) => ({
-    id: row.ticket_id,
-    number: row.ticket_number,
-    subject: row.subject,
-    category: row.category,
-    priority: row.priority,
-    status: row.status,
-    channel: row.channel,
-    requester: {
-      accountId: row.requester_account_id,
-      name: row.requester_name || 'Unknown',
-      username: row.requester_handle || '—',
-      email: row.requester_email || null,
-    },
-    assignee: row.assigned_staff_id
-      ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Unassigned', role: row.assigned_role || row.assignee_role }
-      : null,
-    messageCount: Number(row.message_count || 0),
-    lastMessageAt: row.last_message_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    closedAt: row.closed_at,
-  }));
+  return fetchScopedTickets(QUEUE_SCOPES.marketplace);
 }
 
 async function getMarketplaceOverview() {
@@ -144,17 +102,12 @@ async function getMarketplaceOverview() {
       SELECT category, COUNT(*)::int AS count
       FROM marketplace_listings GROUP BY category ORDER BY count DESC
     `),
-    pool.query(`
-      SELECT
-        COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE LOWER(status) NOT IN ('resolved', 'closed'))::int AS open_count
-      FROM support_tickets WHERE category = 'marketplace'
-    `),
+    scopedTicketCounts(QUEUE_SCOPES.marketplace),
     pool.query(`SELECT COUNT(*)::int AS count FROM accounts WHERE LOWER(status) IN ('suspended', 'banned')`),
   ]);
 
   const lc = listingCounts.rows[0];
-  const tc = ticketCounts.rows[0];
+  const tc = ticketCounts;
 
   const statusChart = [
     { label: 'Pending', value: Number(lc.pending), color: '#fbbf24' },

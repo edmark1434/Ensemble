@@ -76,27 +76,35 @@ export function AlertList({ alerts }: { alerts: Alert[] }) {
 }
 
 export function PriorityBadge({ priority }: { priority: string }) {
+  const p = priority.toLowerCase();
   const cls =
-    priority === "high"
+    p === "high"
       ? "bg-red-500/15 text-red-300"
-      : priority === "medium"
+      : p === "medium"
         ? "bg-amber-500/15 text-amber-300"
         : "bg-zinc-500/15 text-zinc-300";
   return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${cls}`}>{priority}</span>;
 }
 
 export function StatusBadge({ status }: { status: string }) {
+  const s = status.toLowerCase().replace(/_/g, " ");
   const cls =
-    status === "open"
+    s === "open"
       ? "bg-red-500/15 text-red-300"
-      : status === "in_progress"
+      : s === "in progress"
         ? "bg-amber-500/15 text-amber-300"
-        : status === "escalated"
-          ? "bg-violet-500/15 text-violet-300"
-          : status === "under_review"
-            ? "bg-sky-500/15 text-sky-300"
-            : "bg-emerald-500/15 text-emerald-300";
-  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${cls}`}>{status.replace("_", " ")}</span>;
+        : s === "under review" || s === "in review"
+          ? "bg-sky-500/15 text-sky-300"
+          : s === "resolved" || s === "closed"
+            ? "bg-emerald-500/15 text-emerald-300"
+            : "bg-zinc-500/15 text-zinc-300";
+  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${cls}`}>{status}</span>;
+}
+
+function shortId(value: string | number | null | undefined) {
+  if (value == null || value === "") return "—";
+  const s = String(value);
+  return s.length > 10 ? `${s.slice(0, 8)}…` : s;
 }
 
 export function TicketsTable({
@@ -108,13 +116,14 @@ export function TicketsTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[860px] text-left text-sm">
+      <table className="w-full min-w-[980px] text-left text-sm">
         <thead>
           <tr className="text-[10px] uppercase tracking-wide text-zinc-500">
             <th className="pb-2">ID</th>
             <th className="pb-2">Ticket</th>
             <th className="pb-2">Requester</th>
-            <th className="pb-2">Category</th>
+            <th className="pb-2">Type</th>
+            <th className="pb-2">Flags</th>
             <th className="pb-2">Priority</th>
             <th className="pb-2">Status</th>
             <th className="pb-2">Msgs</th>
@@ -127,8 +136,27 @@ export function TicketsTable({
             <tr key={t.id} onClick={() => onSelect(t.id)} className="cursor-pointer transition hover:bg-white/[0.03]">
               <td className="py-2.5 font-mono text-[11px] text-zinc-500">{t.number}</td>
               <td className="max-w-[220px] truncate py-2.5 font-medium text-zinc-200">{t.subject}</td>
-              <td className="py-2.5 text-zinc-400">@{t.requester.username}</td>
-              <td className="py-2.5 capitalize text-zinc-400">{t.category || "—"}</td>
+              <td className="min-w-[140px] py-2.5">
+                <p className="text-zinc-300">{t.requester.name}</p>
+                <p className="text-[11px] text-zinc-500">@{t.requester.username || "—"}</p>
+                <p className="font-mono text-[10px] text-zinc-600">acc {shortId(t.requester.accountId)}</p>
+              </td>
+              <td className="py-2.5 text-zinc-400">{t.type || t.category || "—"}</td>
+              <td className="py-2.5">
+                <div className="flex min-w-[120px] flex-col gap-1">
+                  {t.waitingForResponse && (
+                    <span className="w-fit rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
+                      Awaiting reply
+                    </span>
+                  )}
+                  {t.isEscalated && (
+                    <span className="w-fit rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] text-violet-200">
+                      Escalated{t.escalatedBy?.name ? `: ${t.escalatedBy.name}` : ""}
+                    </span>
+                  )}
+                  {!t.waitingForResponse && !t.isEscalated && <span className="text-zinc-600">—</span>}
+                </div>
+              </td>
               <td className="py-2.5">
                 <PriorityBadge priority={t.priority} />
               </td>

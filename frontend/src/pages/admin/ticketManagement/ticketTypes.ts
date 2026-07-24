@@ -1,5 +1,6 @@
 export type TicketPerson = {
   accountId?: number | string;
+  userId?: number | string | null;
   name: string;
   username?: string;
   email?: string | null;
@@ -15,12 +16,19 @@ export type SupportTicket = {
   id: number | string;
   number: string;
   subject: string;
-  category: string;
+  reason?: string;
+  type: string;
+  /** @deprecated use type */
+  category?: string;
   priority: string;
   status: string;
   channel: string;
   requester: TicketPerson;
   assignee: TicketAssignee | null;
+  escalatedBy?: TicketAssignee | null;
+  isEscalated?: boolean;
+  waitingForResponse?: boolean;
+  lastMessageAuthorType?: string | null;
   relatedReportId: number | string | null;
   relatedDisputeId: number | string | null;
   messageCount: number;
@@ -28,6 +36,7 @@ export type SupportTicket = {
   createdAt: string;
   updatedAt: string;
   closedAt: string | null;
+  resolvedAt?: string | null;
 };
 
 export type TicketMessage = {
@@ -96,6 +105,54 @@ export type TicketActivity = {
 
 export type ChartSegment = { label: string; value: number; color?: string };
 
+export const TICKET_STATUS_OPTIONS = ['Open', 'In Progress', 'Resolved', 'Closed'] as const;
+export const TICKET_PRIORITY_OPTIONS = ['Low', 'Medium', 'High'] as const;
+export const TICKET_TYPE_OPTIONS = [
+  'Account Access',
+  'Account Verification',
+  'Subscriptions and Plans',
+  'Credit Top-ups',
+  'Withdrawing Earnings',
+  'Video Editor',
+  'Forums',
+  'Asset Marketplace',
+  'Jobs and Gigs',
+  'Other',
+] as const;
+
+/** Escalate: pick a moderator queue, then a type allowed for that queue only */
+export const ESCALATE_ROLE_OPTIONS = [
+  'Support Moderator',
+  'Marketplace Moderator',
+  'Forum Moderator',
+  'Jobs N Gigs Moderator',
+  'Admin',
+] as const;
+
+export const ESCALATE_TYPES_BY_ROLE: Record<string, readonly string[]> = {
+  'Support Moderator': [
+    'Account Access',
+    'Account Verification',
+    'Subscriptions and Plans',
+    'Credit Top-ups',
+    'Withdrawing Earnings',
+    'Video Editor',
+    'Other',
+  ],
+  'Marketplace Moderator': ['Asset Marketplace'],
+  'Forum Moderator': ['Forums'],
+  'Forums Moderator': ['Forums'],
+  'Jobs N Gigs Moderator': ['Jobs and Gigs'],
+  'Jobs & Gigs Moderator': ['Jobs and Gigs'],
+  'Jobs Moderator': ['Jobs and Gigs'],
+  Admin: [...TICKET_TYPE_OPTIONS],
+  Administrator: [...TICKET_TYPE_OPTIONS],
+};
+
+export function escalateTypesForRole(role: string): string[] {
+  return [...(ESCALATE_TYPES_BY_ROLE[role] || [])];
+}
+
 export type TicketsOverview = {
   lastUpdated: string;
   summary: {
@@ -117,6 +174,10 @@ export type TicketsOverview = {
     openByPriority: { label: string; value: number }[];
     disputeStatusMix: ChartSegment[];
   };
+  /** Distinct ticket types from tickets table */
+  types: string[];
+  /** @deprecated use types */
+  categories?: string[];
   tickets: SupportTicket[];
   disputes: Dispute[];
   reports: UserReport[];
@@ -131,5 +192,17 @@ export type TicketDetail = {
   messages: TicketMessage[];
   chatId?: string | null;
   chatAvailable?: boolean;
+  types?: string[];
+  statuses?: string[];
+  priorities?: string[];
+  typeDetails?: { label: string; queueRole: string; description?: string | null }[];
+  escalateByRole?: Record<string, string[]>;
+  escalateRoles?: string[];
+  /** @deprecated use types */
+  categories?: string[];
   assignableStaff: { staffId: number | string; name: string; role: string }[];
 };
+
+export function ticketTypeOf(t: { type?: string; category?: string }) {
+  return t.type || t.category || 'Other';
+}
