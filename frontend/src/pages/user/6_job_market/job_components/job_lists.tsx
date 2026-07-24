@@ -1,5 +1,5 @@
 import React from "react";
-import { Star, Clock, Bookmark, CircleDollarSign, Edit2 } from "lucide-react";
+import { Star, Clock, Bookmark, CircleDollarSign, Edit2, Flag } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ViewType } from "./job_list_viewtype";
@@ -32,6 +32,7 @@ interface JobListProps {
   activeJobId?: string;
   viewType?: ViewType;
   onToggleSave: (e: React.MouseEvent, jobId: string) => void;
+  onReportJob?: (job: Job) => void;
   baseRoute: string;
 }
 
@@ -94,6 +95,7 @@ const JobList: React.FC<JobListProps> = ({
   activeJobId,
   viewType = "list",
   onToggleSave,
+  onReportJob,
   baseRoute,
 }) => {
   const navigate = useNavigate();
@@ -101,6 +103,11 @@ const JobList: React.FC<JobListProps> = ({
   const handleEditClick = (e: React.MouseEvent, jobId: string) => {
     e.stopPropagation();
     navigate(`/jobs/edit/${jobId}`);
+  };
+
+  const handleReportClick = (e: React.MouseEvent, job: Job) => {
+    e.stopPropagation();
+    if (onReportJob) onReportJob(job);
   };
 
   if (loading) {
@@ -174,6 +181,15 @@ const JobList: React.FC<JobListProps> = ({
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
                     <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                      {!job.isOwnPost && (
+                        <button
+                          title="Report Post"
+                          onClick={(e) => handleReportClick(e, job)}
+                          className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-zinc-400 hover:text-red-400 transition-colors"
+                        >
+                          <Flag className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                       {job.isOwnPost && (
                         <button
                           title="Edit Post"
@@ -291,6 +307,15 @@ const JobList: React.FC<JobListProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2">
+                      {!job.isOwnPost && (
+                        <button
+                          title="Report Post"
+                          onClick={(e) => handleReportClick(e, job)}
+                          className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-500 hover:text-red-400 transition-colors border border-white/10"
+                        >
+                          <Flag className="h-4 w-4" />
+                        </button>
+                      )}
                       {job.isOwnPost && (
                         <button
                           title="Edit Post"

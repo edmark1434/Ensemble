@@ -10,6 +10,7 @@ import JobFilters from "./job_components/job_filters";
 import JobListViewType from "./job_components/job_list_viewtype";
 import JobViewDetails from "./job_components/job_viewdetails";
 import UtilScrollTop from "./job_components/job_utilities/util_scroll_top";
+import PopupReportJob from "./job_components/job_popups/popup_report_job";
 import type { ViewType } from "./job_components/job_list_viewtype";
 
 // Datasets & Types
@@ -22,6 +23,7 @@ export interface JobMainContext {
   loading: boolean;
   viewType: ViewType;
   toggleSaveJob: (e: React.MouseEvent, jobId: string) => void;
+  handleReportJob: (job: Job) => void;
 }
 
 const SidebarSkeleton = () => (
@@ -59,6 +61,9 @@ const JobMain: React.FC = () => {
   const [activeCategoryFilter, setActiveCategoryFilter] = useState("All");
   const [jobsList, setJobsList] = useState<Job[]>(sampleJobs);
 
+  // Popup Report State
+  const [reportingJob, setReportingJob] = useState<Job | null>(null);
+
   // Filter States
   const [minPrice, setMinPrice] = useState<string>("");
   const [maxPrice, setMaxPrice] = useState<string>("");
@@ -89,6 +94,15 @@ const JobMain: React.FC = () => {
     );
   };
 
+  const handleReportJob = (job: Job) => {
+    setReportingJob(job);
+  };
+
+  const handleSubmitReport = (reason: string, details: string) => {
+    console.log(`Report submitted for ${reportingJob?.id}:`, { reason, details });
+    // Integrate backend API call here when ready
+  };
+
   const handleClearFilters = () => {
     setSearchQuery("");
     setActiveCategoryFilter("All");
@@ -103,7 +117,6 @@ const JobMain: React.FC = () => {
 
   const filteredJobs = useMemo(() => {
     const result = jobsList.filter((job) => {
-      // 🚫 Hide Closed Job Posts
       const isNotClosed = job.status !== "Closed";
 
       const matchesSearch =
@@ -218,6 +231,7 @@ const JobMain: React.FC = () => {
                   loading,
                   viewType,
                   toggleSaveJob,
+                  handleReportJob,
                 } satisfies JobMainContext
               }
             />
@@ -229,6 +243,15 @@ const JobMain: React.FC = () => {
       <JobViewDetails
         selectedJob={selectedJob}
         onClose={() => navigate(getParentRoute())}
+        onReportJob={handleReportJob}
+      />
+
+      {/* Report Popup Modal */}
+      <PopupReportJob
+        isOpen={Boolean(reportingJob)}
+        jobTitle={reportingJob?.title}
+        onClose={() => setReportingJob(null)}
+        onSubmitReport={handleSubmitReport}
       />
 
       {/* Scroll To Top Utility */}

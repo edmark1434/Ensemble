@@ -4,10 +4,11 @@ import JobList from "../job_components/job_lists";
 import type { JobMainContext } from "../job_main";
 
 const JobSavesPage: React.FC = () => {
-  const { jobsList, loading, viewType, toggleSaveJob } = useOutletContext<JobMainContext>();
+  const { jobsList, loading, viewType, toggleSaveJob, handleReportJob } =
+    useOutletContext<JobMainContext>();
   const { id } = useParams();
 
-  const savedJobs = jobsList.filter((job) => job.isSaved);
+  const savedJobs = jobsList.filter((j) => j.isSaved && j.status !== "Closed");
 
   return (
     <JobList
@@ -16,6 +17,7 @@ const JobSavesPage: React.FC = () => {
       viewType={viewType}
       activeJobId={id}
       onToggleSave={toggleSaveJob}
+      onReportJob={handleReportJob}
       baseRoute="/jobs/saved-posts"
     />
   );
