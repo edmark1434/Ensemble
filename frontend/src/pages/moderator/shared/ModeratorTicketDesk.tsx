@@ -5,6 +5,7 @@ import TicketFiltersPanel from "@/pages/admin/ticketManagement/TicketFiltersPane
 import {
   DEFAULT_TICKET_FILTERS,
   filterTickets,
+  formatEscalatedLabel,
   type TicketFilterState,
 } from "@/pages/admin/ticketManagement/ticketFilterUtils";
 import {
@@ -119,6 +120,20 @@ export default function ModeratorTicketDesk({
 
   const filtered = useMemo(() => filterTickets(tickets, filters), [tickets, filters]);
 
+  const moderators = useMemo(() => {
+    const map = new Map<string, { staffId: number | string; name: string; role: string }>();
+    for (const t of tickets) {
+      if (t.assignee?.staffId) {
+        map.set(String(t.assignee.staffId), {
+          staffId: t.assignee.staffId,
+          name: t.assignee.name,
+          role: t.assignee.role,
+        });
+      }
+    }
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [tickets]);
+
   const channels = useMemo(() => {
     const set = new Set(tickets.map((t) => String(t.channel || "web").toLowerCase()));
     return [...set].sort();
@@ -168,6 +183,7 @@ export default function ModeratorTicketDesk({
           onChange={setFilters}
           ticketTypes={typeCatalog}
           channels={channels}
+          moderators={moderators}
           accent={accent}
           showQueue={false}
           resultCount={filtered.length}
@@ -235,7 +251,7 @@ export default function ModeratorTicketDesk({
                         )}
                         {t.isEscalated && (
                           <span className="w-fit rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] text-violet-200">
-                            Escalated{t.escalatedBy?.name ? `: ${t.escalatedBy.name}` : ""}
+                            {formatEscalatedLabel(t)}
                           </span>
                         )}
                         {!t.waitingForResponse && !t.isEscalated && <span className="text-zinc-600">—</span>}

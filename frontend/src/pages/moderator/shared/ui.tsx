@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import type { Alert, SupportTicket } from "./moderatorTypes";
+import { formatEscalatedLabel } from "@/pages/admin/ticketManagement/ticketFilterUtils";
 
 export type Accent = "sky" | "violet" | "emerald" | "rose";
 
@@ -162,7 +163,7 @@ export function TicketsTable({
                   )}
                   {t.isEscalated && (
                     <span className="w-fit rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] text-violet-200">
-                      Escalated{t.escalatedBy?.name ? `: ${t.escalatedBy.name}` : ""}
+                      {formatEscalatedLabel(t)}
                     </span>
                   )}
                   {!t.waitingForResponse && !t.isEscalated && <span className="text-zinc-600">—</span>}

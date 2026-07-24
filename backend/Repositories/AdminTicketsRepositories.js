@@ -736,7 +736,6 @@ async function updateTicket(ticketId, patch, staffSession) {
     patch.type = patch.category;
   }
 
-  // Escalate to a role → type is required and must be allowed for that queue.
   if (patch.assigned_role) {
     const catalog = await getTicketCatalog();
     const allowed =
@@ -758,6 +757,17 @@ async function updateTicket(ticketId, patch, staffSession) {
       );
     }
     patch.type = normalized;
+
+    sets.push(`escalated_to_role = $${idx}`);
+    values.push(patch.assigned_role);
+    idx += 1;
+
+    const escalatedBy = sessionStaffId(staffSession);
+    if (escalatedBy) {
+      sets.push(`escalated_by_staff_id = $${idx}`);
+      values.push(escalatedBy);
+      idx += 1;
+    }
   }
 
   if (patch.status !== undefined) {
@@ -784,15 +794,6 @@ async function updateTicket(ticketId, patch, staffSession) {
       ? null
       : patch.handled_by_staff_id);
     idx += 1;
-  }
-
-  if (patch.assigned_role && ROLE_TO_TICKET_TYPES[patch.assigned_role]) {
-    const escalatedBy = sessionStaffId(staffSession);
-    if (escalatedBy) {
-      sets.push(`escalated_by_staff_id = $${idx}`);
-      values.push(escalatedBy);
-      idx += 1;
-    }
   }
 
   if (!sets.length && !patch.note) return getTicketDetail(ticketId);

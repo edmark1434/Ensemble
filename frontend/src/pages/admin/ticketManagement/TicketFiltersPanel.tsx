@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
-import { Search, X } from 'lucide-react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { Search, Shield, X } from 'lucide-react';
 import {
+  ESCALATE_ROLE_OPTIONS,
   TICKET_PRIORITY_OPTIONS,
   TICKET_STATUS_OPTIONS,
   TICKET_TYPE_GROUPS,
@@ -9,9 +10,11 @@ import {
   countActiveTicketFilters,
   DEFAULT_TICKET_FILTERS,
   TICKET_QUEUE_OPTIONS,
+  TICKET_SORT_OPTIONS,
   typesForQueue,
   type TicketFilterState,
   type TicketQueueFilter,
+  type TicketSortKey,
 } from './ticketFilterUtils';
 
 const selectCls =
@@ -42,13 +45,28 @@ const ACCENT_CHIP: Record<Accent, string> = {
   emerald: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
 };
 
+const ACCENT_BTN: Record<Accent, string> = {
+  rose: 'border-rose-500/40 bg-rose-500/15 text-rose-200',
+  sky: 'border-sky-500/40 bg-sky-500/15 text-sky-200',
+  violet: 'border-violet-500/40 bg-violet-500/15 text-violet-200',
+  emerald: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200',
+};
+
+export type ModeratorOption = {
+  staffId: number | string;
+  name: string;
+  role: string;
+};
+
 export default function TicketFiltersPanel({
   filters,
   onChange,
   ticketTypes,
   channels,
+  moderators = [],
   accent = 'rose',
   showQueue = true,
+  showAdminToggle = false,
   resultCount,
   totalCount,
 }: {
@@ -56,12 +74,14 @@ export default function TicketFiltersPanel({
   onChange: (next: TicketFilterState) => void;
   ticketTypes?: string[];
   channels?: string[];
+  moderators?: ModeratorOption[];
   accent?: Accent;
-  /** Admin sees all queues; specialist desks can hide this */
   showQueue?: boolean;
+  showAdminToggle?: boolean;
   resultCount?: number;
   totalCount?: number;
 }) {
+  const [moderatorSearch, setModeratorSearch] = useState('');
   const active = countActiveTicketFilters(filters);
   const typeChoices =
     filters.queue === 'all'
@@ -70,13 +90,24 @@ export default function TicketFiltersPanel({
         : [...TICKET_TYPE_GROUPS.flatMap((g) => g.types)]
       : [...typesForQueue(filters.queue)];
 
-  const channelChoices = channels?.length
-    ? channels
-    : ['web', 'chat', 'email', 'in_app'];
+  const channelChoices = channels?.length ? channels : ['web', 'chat', 'email', 'in_app'];
+
+  const filteredMods = useMemo(() => {
+    const q = moderatorSearch.trim().toLowerCase();
+    if (!q) return moderators;
+    return moderators.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.role.toLowerCase().includes(q) ||
+        String(m.staffId).toLowerCase().includes(q)
+    );
+  }, [moderators, moderatorSearch]);
 
   const patch = (partial: Partial<TicketFilterState>) => onChange({ ...filters, ...partial });
-
-  const clear = () => onChange({ ...DEFAULT_TICKET_FILTERS });
+  const clear = () => {
+    setModeratorSearch('');
+    onChange({ ...DEFAULT_TICKET_FILTERS });
+  };
 
   return (
     <div className="space-y-3 rounded-2xl border border-white/10 bg-[#14151c] p-4">
@@ -89,11 +120,25 @@ export default function TicketFiltersPanel({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3 text-xs text-zinc-500">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
           {typeof resultCount === 'number' && typeof totalCount === 'number' && (
             <span>
               Showing <span className="text-zinc-300">{resultCount}</span> of {totalCount}
             </span>
+          )}
+          {showAdminToggle && (
+            <button
+              type="button"
+              onClick={() => patch({ adminTicketsOnly: !filters.adminTicketsOnly })}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                filters.adminTicketsOnly
+                  ? ACCENT_BTN[accent]
+                  : 'border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <Shield className="h-3.5 w-3.5" />
+              {filters.adminTicketsOnly ? 'Showing Admin Tickets' : 'Show Admin Tickets'}
+            </button>
           )}
           {active > 0 && (
             <button
@@ -113,12 +158,12 @@ export default function TicketFiltersPanel({
         <input
           value={filters.search}
           onChange={(e) => patch({ search: e.target.value })}
-          placeholder="Search ticket #, subject, requester, email, account/user id, assignee…"
+          placeholder="Search ticket #, subject, requester, email, ids, assignee, escalated to/by…"
           className={`w-full rounded-xl border border-white/10 bg-[#0f1016] py-2.5 pl-10 pr-3 text-sm text-white outline-none placeholder:text-zinc-600 ${ACCENT_FOCUS[accent]}`}
         />
       </div>
 
-      <div className={`grid gap-3 sm:grid-cols-2 ${showQueue ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} xl:grid-cols-4`}>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         <Field label="Status">
           <select value={filters.status} onChange={(e) => patch({ status: e.target.value })} className={selectCls}>
             <option value="all">All Statuses</option>
@@ -136,6 +181,20 @@ export default function TicketFiltersPanel({
             {[...TICKET_PRIORITY_OPTIONS].reverse().map((p) => (
               <option key={p} value={p}>
                 {p}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Sort">
+          <select
+            value={filters.sort}
+            onChange={(e) => patch({ sort: e.target.value as TicketSortKey })}
+            className={selectCls}
+          >
+            {TICKET_SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
               </option>
             ))}
           </select>
@@ -188,15 +247,66 @@ export default function TicketFiltersPanel({
           </select>
         </Field>
 
-        <Field label="Assignee">
+        <Field label="Assignee Status">
           <select
             value={filters.assignee}
-            onChange={(e) => patch({ assignee: e.target.value as TicketFilterState['assignee'] })}
+            onChange={(e) =>
+              patch({
+                assignee: e.target.value as TicketFilterState['assignee'],
+                assigneeStaffId: e.target.value === 'unassigned' ? 'all' : filters.assigneeStaffId,
+              })
+            }
             className={selectCls}
           >
             <option value="all">Anyone</option>
             <option value="assigned">Assigned</option>
             <option value="unassigned">Unassigned</option>
+          </select>
+        </Field>
+
+        <Field label="Moderator / Assignee">
+          <div className="space-y-1.5">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600" />
+              <input
+                value={moderatorSearch}
+                onChange={(e) => setModeratorSearch(e.target.value)}
+                placeholder="Search moderators…"
+                className="w-full rounded-lg border border-white/10 bg-[#0f1016] py-2 pl-8 pr-2 text-xs text-white outline-none placeholder:text-zinc-600"
+              />
+            </div>
+            <select
+              value={filters.assigneeStaffId}
+              onChange={(e) =>
+                patch({
+                  assigneeStaffId: e.target.value,
+                  assignee: e.target.value === 'all' ? filters.assignee : 'assigned',
+                })
+              }
+              className={selectCls}
+            >
+              <option value="all">All Moderators</option>
+              {filteredMods.map((m) => (
+                <option key={String(m.staffId)} value={String(m.staffId)}>
+                  {m.name} ({m.role})
+                </option>
+              ))}
+            </select>
+          </div>
+        </Field>
+
+        <Field label="Escalated To">
+          <select
+            value={filters.escalatedToRole}
+            onChange={(e) => patch({ escalatedToRole: e.target.value })}
+            className={selectCls}
+          >
+            <option value="all">Any Queue</option>
+            {ESCALATE_ROLE_OPTIONS.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
           </select>
         </Field>
 
@@ -210,6 +320,8 @@ export default function TicketFiltersPanel({
             <option value="awaiting">Awaiting Reply</option>
             <option value="escalated">Escalated</option>
             <option value="open_only">Open / In Progress</option>
+            <option value="has_report">Has Related Report</option>
+            <option value="has_dispute">Has Related Dispute</option>
           </select>
         </Field>
 

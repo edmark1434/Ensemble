@@ -26,6 +26,8 @@ export type SupportTicket = {
   requester: TicketPerson;
   assignee: TicketAssignee | null;
   escalatedBy?: TicketAssignee | null;
+  /** Moderator queue this ticket was escalated TO */
+  escalatedToRole?: string | null;
   isEscalated?: boolean;
   waitingForResponse?: boolean;
   lastMessageAuthorType?: string | null;

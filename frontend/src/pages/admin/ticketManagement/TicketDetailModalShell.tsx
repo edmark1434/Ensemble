@@ -10,6 +10,7 @@ import {
   TICKET_STATUS_OPTIONS,
   TICKET_PRIORITY_OPTIONS,
 } from './ticketTypes';
+import { formatEscalatedLabel } from './ticketFilterUtils';
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '—';
@@ -205,6 +206,7 @@ export default function TicketDetailModalShell({
   const [assigneeId, setAssigneeId] = useState('');
   const [escalateRole, setEscalateRole] = useState<string>('Support Moderator');
   const [escalateType, setEscalateType] = useState<string>('');
+  const [confirmEscalate, setConfirmEscalate] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
   const escalateRoles = detail?.escalateRoles?.length
@@ -300,6 +302,7 @@ export default function TicketDetailModalShell({
       showErrorToast('Pick a ticket type allowed for this queue');
       return;
     }
+    setConfirmEscalate(false);
     setSaving(true);
     try {
       await api.patch(`${endpointBase}/${ticketId}`, {
@@ -343,7 +346,7 @@ export default function TicketDetailModalShell({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 sm:p-5">
-      <div className="flex h-[min(92vh,920px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0c0d12] shadow-2xl">
+      <div className="relative flex h-[min(92vh,920px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0c0d12] shadow-2xl">
         {/* Header */}
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
           <div className="min-w-0">
@@ -357,7 +360,7 @@ export default function TicketDetailModalShell({
               )}
               {t?.isEscalated && (
                 <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2.5 py-0.5 text-[10px] font-medium text-violet-200">
-                  Escalated{t.escalatedBy?.name ? ` · ${titleCaseLabel(t.escalatedBy.name)}` : ''}
+                  {formatEscalatedLabel(t)}
                 </span>
               )}
               {t?.waitingForResponse && (
@@ -513,7 +516,7 @@ export default function TicketDetailModalShell({
                     </Field>
                     <button
                       type="button"
-                      onClick={() => void escalateTo()}
+                      onClick={() => setConfirmEscalate(true)}
                       disabled={saving || !escalateType.trim() || !escalateTypeOptions.includes(escalateType)}
                       className="w-full rounded-xl border border-amber-500/40 px-4 py-2.5 text-sm font-medium text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
                     >
@@ -599,6 +602,41 @@ export default function TicketDetailModalShell({
           </div>
         ) : (
           <p className="py-16 text-center text-zinc-500">Ticket not found.</p>
+        )}
+
+        {confirmEscalate && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-[#14151c] p-5 shadow-2xl">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">Confirm Escalate</p>
+              <h3 className="mt-2 text-lg font-semibold text-white">Escalate this ticket?</h3>
+              <p className="mt-2 text-sm text-zinc-400">
+                Queue: <span className="text-amber-100">{escalateRole}</span>
+                <br />
+                Type: <span className="text-amber-100">{escalateType}</span>
+              </p>
+              <p className="mt-2 text-xs text-zinc-500">
+                Assignee will be cleared. Type changes only through escalate.
+              </p>
+              <div className="mt-5 flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmEscalate(false)}
+                  disabled={saving}
+                  className="rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:bg-white/5"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void escalateTo()}
+                  disabled={saving}
+                  className="rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 py-2 text-sm font-medium text-amber-100 hover:bg-amber-500/25 disabled:opacity-50"
+                >
+                  {saving ? 'Escalating…' : 'Confirm Escalate'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

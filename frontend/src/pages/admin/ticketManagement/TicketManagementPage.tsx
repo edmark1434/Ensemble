@@ -26,6 +26,7 @@ import TicketFiltersPanel from './TicketFiltersPanel';
 import {
   DEFAULT_TICKET_FILTERS,
   filterTickets,
+  formatEscalatedLabel,
   type TicketFilterState,
 } from './ticketFilterUtils';
 import type { Dispute, SupportTicket, TicketsOverview, UserReport } from './ticketTypes';
@@ -268,6 +269,11 @@ export default function TicketManagementPage() {
             totalCount={data.tickets.length}
             ticketTypes={ticketTypes}
             channels={ticketChannels}
+            moderators={data.staffWorkload.map((s) => ({
+              staffId: s.staffId,
+              name: s.name,
+              role: s.role,
+            }))}
             filters={ticketFilters}
             onFiltersChange={setTicketFilters}
             onOpenTicket={setSelectedTicketId}
@@ -378,6 +384,7 @@ function TicketsTab({
   totalCount,
   ticketTypes,
   channels,
+  moderators,
   filters,
   onFiltersChange,
   onOpenTicket,
@@ -386,6 +393,7 @@ function TicketsTab({
   totalCount: number;
   ticketTypes: string[];
   channels: string[];
+  moderators: { staffId: number | string; name: string; role: string }[];
   filters: TicketFilterState;
   onFiltersChange: (next: TicketFilterState) => void;
   onOpenTicket: (id: number | string) => void;
@@ -403,8 +411,10 @@ function TicketsTab({
         onChange={onFiltersChange}
         ticketTypes={ticketTypes}
         channels={channels}
+        moderators={moderators}
         accent="rose"
         showQueue
+        showAdminToggle
         resultCount={tickets.length}
         totalCount={totalCount}
       />
@@ -422,7 +432,7 @@ function TicketsTab({
               <p className="font-mono text-[10px] text-zinc-600">usr {shortId(t.requester.userId)}</p>
             </div>,
             t.type || t.category || '—',
-            <div key="flags" className="flex min-w-[120px] flex-col gap-1">
+            <div key="flags" className="flex min-w-[140px] flex-col gap-1">
               {t.waitingForResponse && (
                 <span className="w-fit rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
                   Awaiting Reply
@@ -430,7 +440,7 @@ function TicketsTab({
               )}
               {t.isEscalated && (
                 <span className="w-fit rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] text-violet-200">
-                  Escalated{t.escalatedBy?.name ? `: ${t.escalatedBy.name}` : ''}
+                  {formatEscalatedLabel(t)}
                 </span>
               )}
               {!t.waitingForResponse && !t.isEscalated && <span className="text-zinc-600">—</span>}
