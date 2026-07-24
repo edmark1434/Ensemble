@@ -1,5 +1,5 @@
 import React from "react";
-import { Star, Clock, Bookmark, CircleDollarSign, Edit2, Flag } from "lucide-react";
+import { Star, Clock, Bookmark, CircleDollarSign, Edit2, Flag, Wrench } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ViewType } from "./job_list_viewtype";
@@ -22,6 +22,7 @@ export interface Job {
   applicantsCount: number;
   timeline: string;
   thumbnail: string;
+  skills?: string[];
   isSaved?: boolean;
   isOwnPost?: boolean;
 }
@@ -154,7 +155,7 @@ const JobList: React.FC<JobListProps> = ({
         {jobs.map((job) => {
           const isActive = activeJobId === job.id;
 
-          /* --- GRID VIEW CARD --- */
+          /* --- GRID VIEW CARD (NO SKILLS DISPLAY) --- */
           if (viewType === "grid") {
             return (
               <motion.div
@@ -210,7 +211,7 @@ const JobList: React.FC<JobListProps> = ({
                     </div>
                   </div>
 
-                  {/* Pill Tags */}
+                  {/* Category Pill Tags */}
                   <div className="flex flex-wrap items-center gap-1.5 mb-2">
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
@@ -229,7 +230,7 @@ const JobList: React.FC<JobListProps> = ({
                     </span>
                   </div>
 
-                  {/* Price */}
+                  {/* Price & Title */}
                   <div className="text-yellow-500 text-base font-black mb-1 flex items-center gap-1">
                     <CircleDollarSign className="h-4 w-4 text-yellow-500 shrink-0" />
                     <span>{job.priceRange}</span>
@@ -260,7 +261,7 @@ const JobList: React.FC<JobListProps> = ({
             );
           }
 
-          /* --- LIST VIEW CARD --- */
+          /* --- LIST VIEW CARD (CLEAN SKILL TAGS) --- */
           return (
             <motion.div
               key={job.id}
@@ -276,7 +277,7 @@ const JobList: React.FC<JobListProps> = ({
                   : "border-white/10 bg-[#0d0f1a]/40 hover:border-white/20"
               }`}
             >
-              <div className="hidden md:block relative h-44 md:h-auto w-full md:w-56 shrink-0 overflow-hidden rounded-xl bg-zinc-900 border border-white/5">
+              <div className="hidden md:block relative h-auto min-h-[160px] w-full md:w-56 shrink-0 overflow-hidden rounded-xl bg-zinc-900 border border-white/5">
                 <img
                   src={job.thumbnail}
                   alt=""
@@ -341,6 +342,27 @@ const JobList: React.FC<JobListProps> = ({
                   </div>
                   <h3 className="text-white text-xl font-bold mb-1.5 group-hover:text-blue-400 transition-colors">{job.title}</h3>
                   <p className="text-sm text-zinc-400 line-clamp-2 leading-relaxed mb-3">{job.description}</p>
+
+                  {/* Clean Gray Skill Tags without Outer Box or 'Skills:' label */}
+                  {Array.isArray(job.skills) && job.skills.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                      <Wrench className="h-3 w-3 text-zinc-400 shrink-0 mr-0.5" />
+                      {job.skills.slice(0, 4).map((skill) => (
+                        <span
+                          key={skill}
+                          className="px-2 py-0.5 rounded-md bg-zinc-800/80 border border-white/10 text-zinc-300 text-[10px] font-semibold"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                      {job.skills.length > 4 && (
+                        <span className="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-zinc-400 text-[10px] font-medium">
+                          +{job.skills.length - 4} more
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   <p className="text-[11px] text-zinc-500 font-medium mb-1">{job.timeAgo}</p>
                 </div>
 

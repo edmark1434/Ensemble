@@ -1,5 +1,5 @@
 import React from "react";
-import { Calendar, Clock, Briefcase, Users, Star, Send, CircleDollarSign, MousePointerClick, User, Edit2, Flag } from "lucide-react";
+import { Calendar, Clock, Briefcase, Users, Star, Send, CircleDollarSign, MousePointerClick, User, Edit2, Flag, Wrench } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Job } from "./job_lists";
 
@@ -133,6 +133,26 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   {selectedJob.description}
                 </div>
               </div>
+
+              {/* Required Skills Section (Gray Styled Tags) */}
+              {selectedJob.skills && selectedJob.skills.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 flex items-center gap-1">
+                    <Wrench className="h-3 w-3 text-zinc-400" />
+                    Required Skills & Qualifications
+                  </h4>
+                  <div className="flex flex-wrap gap-1.5 p-3 rounded-xl border border-white/5 bg-white/[0.01]">
+                    {selectedJob.skills.map((skill) => (
+                      <span
+                        key={skill}
+                        className="px-2.5 py-1 rounded-lg bg-zinc-800/80 border border-white/10 text-zinc-300 text-xs font-semibold"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Client Profile Card */}
               <div className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02] flex items-center justify-between gap-3">
