@@ -1,5 +1,5 @@
 import React from "react";
-import { Calendar, Clock, Briefcase, Users, Star, Send, CircleDollarSign, MousePointerClick, User } from "lucide-react";
+import { Calendar, Clock, Briefcase, Users, Star, Send, CircleDollarSign, MousePointerClick, User, Edit2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Job } from "./job_lists";
 
@@ -65,7 +65,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose })
                     className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
                       selectedJob.status === "Open"
                         ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                        : "bg-zinc-800 text-zinc-300 border-white/10"
+                        : "bg-red-500/10 text-red-400 border-red-500/20"
                     }`}
                   >
                     {selectedJob.status}
@@ -120,7 +120,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose })
                 </div>
               </div>
 
-              {/* Client Profile Card with View Profile Action */}
+              {/* Client Profile Card */}
               <div className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02] flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="h-8 w-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs text-white font-bold border border-white/10 shrink-0">
@@ -173,12 +173,20 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose })
                   <Send className="h-3.5 w-3.5" /> Send Proposal
                 </button>
               ) : (
-                <button
-                  onClick={() => navigate(`/jobs/manage/${selectedJob.id}`)}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-zinc-800 border border-white/10 py-3 text-xs font-bold text-white hover:bg-zinc-700 transition"
-                >
-                  Manage Post Applicants
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => navigate(`/jobs/edit/${selectedJob.id}`)}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500/10 border border-blue-500/20 py-3 text-xs font-bold text-blue-400 hover:bg-blue-500/20 transition"
+                  >
+                    <Edit2 className="h-3.5 w-3.5" /> Edit Job Post
+                  </button>
+                  <button
+                    onClick={() => navigate(`/jobs/manage/${selectedJob.id}`)}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-zinc-800 border border-white/10 py-3 text-xs font-bold text-white hover:bg-zinc-700 transition"
+                  >
+                    Manage Applicants
+                  </button>
+                </div>
               )}
             </div>
           </>

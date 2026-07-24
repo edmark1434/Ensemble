@@ -1,5 +1,5 @@
 import React from "react";
-import { Star, Clock, Bookmark, CircleDollarSign } from "lucide-react";
+import { Star, Clock, Bookmark, CircleDollarSign, Edit2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ViewType } from "./job_list_viewtype";
@@ -98,6 +98,11 @@ const JobList: React.FC<JobListProps> = ({
 }) => {
   const navigate = useNavigate();
 
+  const handleEditClick = (e: React.MouseEvent, jobId: string) => {
+    e.stopPropagation();
+    navigate(`/jobs/edit/${jobId}`);
+  };
+
   if (loading) {
     return (
       <div
@@ -168,23 +173,34 @@ const JobList: React.FC<JobListProps> = ({
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
-                    <button
-                      onClick={(e) => onToggleSave(e, job.id)}
-                      className={`absolute top-2 right-2 p-1.5 rounded-full bg-black/50 backdrop-blur-sm transition-colors ${
-                        job.isSaved ? "text-yellow-500" : "text-zinc-400 hover:text-white"
-                      }`}
-                    >
-                      <Bookmark className={`h-4 w-4 ${job.isSaved ? "fill-current" : ""}`} />
-                    </button>
+                    <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                      {job.isOwnPost && (
+                        <button
+                          title="Edit Post"
+                          onClick={(e) => handleEditClick(e, job.id)}
+                          className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-zinc-300 hover:text-white transition-colors"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => onToggleSave(e, job.id)}
+                        className={`p-1.5 rounded-full bg-black/50 backdrop-blur-sm transition-colors ${
+                          job.isSaved ? "text-yellow-500" : "text-zinc-400 hover:text-white"
+                        }`}
+                      >
+                        <Bookmark className={`h-4 w-4 ${job.isSaved ? "fill-current" : ""}`} />
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Tags */}
+                  {/* Pill Tags */}
                   <div className="flex flex-wrap items-center gap-1.5 mb-2">
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
                         job.status === "Open"
                           ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                          : "bg-zinc-800 text-zinc-300 border-white/10"
+                          : "bg-red-500/10 text-red-400 border-red-500/20"
                       }`}
                     >
                       {job.status}
@@ -261,7 +277,7 @@ const JobList: React.FC<JobListProps> = ({
                         className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
                           job.status === "Open"
                             ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                            : "bg-zinc-800 text-zinc-300 border-white/10"
+                            : "bg-red-500/10 text-red-400 border-red-500/20"
                         }`}
                       >
                         {job.status}
@@ -273,12 +289,24 @@ const JobList: React.FC<JobListProps> = ({
                         {job.category}
                       </span>
                     </div>
-                    <button
-                      onClick={(e) => onToggleSave(e, job.id)}
-                      className={`transition-colors ${job.isSaved ? "text-yellow-500" : "text-zinc-600 hover:text-white"}`}
-                    >
-                      <Bookmark className={`h-5 w-5 ${job.isSaved ? "fill-current" : ""}`} />
-                    </button>
+
+                    <div className="flex items-center gap-2">
+                      {job.isOwnPost && (
+                        <button
+                          title="Edit Post"
+                          onClick={(e) => handleEditClick(e, job.id)}
+                          className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors border border-white/10"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => onToggleSave(e, job.id)}
+                        className={`transition-colors ${job.isSaved ? "text-yellow-500" : "text-zinc-600 hover:text-white"}`}
+                      >
+                        <Bookmark className={`h-5 w-5 ${job.isSaved ? "fill-current" : ""}`} />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Price */}
@@ -291,7 +319,7 @@ const JobList: React.FC<JobListProps> = ({
                   <p className="text-[11px] text-zinc-500 font-medium mb-1">{job.timeAgo}</p>
                 </div>
 
-                {/* Refined Footer Metrics & Profile */}
+                {/* Footer */}
                 <div className="mt-2 pt-4 border-t border-white/5 flex flex-wrap items-center justify-between text-[10px] text-zinc-400 gap-3">
                   <div className="flex items-center gap-2">
                     <div className="h-6 w-6 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] text-white font-bold border border-white/10 overflow-hidden">
@@ -306,13 +334,12 @@ const JobList: React.FC<JobListProps> = ({
                     </div>
                   </div>
 
-                  {/* Normal-case, Smaller Tags */}
                   <div className="flex items-center gap-2 text-[10px] font-medium text-zinc-400">
                     <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
-                       Positions Needed : {job.positionsNeeded}
+                      {job.positionsNeeded} positions needed
                     </span>
                     <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
-                      {job.applicantsCount} Applicants
+                      {job.applicantsCount} applicants
                     </span>
                     <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5 flex items-center gap-1">
                       <Clock className="h-3 w-3 text-zinc-500" /> {job.timeline}

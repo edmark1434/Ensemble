@@ -7,6 +7,7 @@ const JobMyPostPage: React.FC = () => {
   const { jobsList, loading, viewType, toggleSaveJob } = useOutletContext<JobMainContext>();
   const { id } = useParams();
 
+  // Show all user's posts (including Closed posts)
   const myJobs = jobsList.filter((job) => job.isOwnPost);
 
   return (
