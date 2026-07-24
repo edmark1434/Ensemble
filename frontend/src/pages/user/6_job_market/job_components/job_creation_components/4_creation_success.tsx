@@ -1,18 +1,39 @@
-import React from "react";
+import React, { useEffect } from "react";
 import SuccessModal from "@/components/ui/SuccessModal";
 
 interface CreationSuccessProps {
   isOpen: boolean;
   onConfirm: () => void;
+  autoCloseMs?: number;
 }
 
-export const CreationSuccess: React.FC<CreationSuccessProps> = ({ isOpen, onConfirm }) => {
+export const CreationSuccess: React.FC<CreationSuccessProps> = ({
+  isOpen,
+  onConfirm,
+  autoCloseMs = 2800,
+}) => {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Auto-close timer
+    const timer = setTimeout(() => {
+      onConfirm();
+    }, autoCloseMs);
+
+    return () => clearTimeout(timer);
+  }, [isOpen, autoCloseMs, onConfirm]);
+
+  if (!isOpen) return null;
+
   return (
-    <SuccessModal
-      isOpen={isOpen}
-      message="Your job post is now live. Freelancers can now send their applications and you'll be notified."
-      onConfirm={onConfirm}
-    />
+    <div className="relative z-[300]">
+      {/* Base SuccessModal with built-in confetti trigger */}
+      <SuccessModal
+        isOpen={isOpen}
+        message="Your job post is now live. Freelancers can now send their applications and you'll be notified."
+        onConfirm={onConfirm}
+      />
+    </div>
   );
 };
 

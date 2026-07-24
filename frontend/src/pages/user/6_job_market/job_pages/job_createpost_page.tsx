@@ -1,14 +1,15 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import ConfirmationModal from "@/components/ui/ConfirmationModal";
+import { motion, AnimatePresence } from "framer-motion";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 
-// Sub-components
+// Sub-components & Popups
 import JobCreateHeader from "../job_components/job_creation_components/job_create_header";
 import CreateCoreInfo from "../job_components/job_creation_components/1_create_coreinfo";
 import CreateBudgetSkills from "../job_components/job_creation_components/2_create_budgetskills";
 import CreateReview from "../job_components/job_creation_components/3_create_review";
 import CreationSuccess from "../job_components/job_creation_components/4_creation_success";
+import PopupConfirmReturn from "../job_components/job_popups/popup_confirm_return";
 
 const JobCreatePostPage: React.FC = () => {
   const navigate = useNavigate();
@@ -157,106 +158,151 @@ const JobCreatePostPage: React.FC = () => {
         />
       </div>
 
-      {/* Main Form Content */}
-      <div className="relative z-10 mx-auto max-w-3xl p-6 md:p-8 w-full space-y-6">
-
-        {/* Title Heading Display (Clean text without pill container) */}
-        <div>
+      {/* Main Form Content with Entry Animations */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3 }}
+        className="relative z-10 mx-auto max-w-3xl p-6 md:p-8 w-full space-y-6"
+      >
+        {/* Title Heading Display */}
+        <motion.div
+          initial={{ opacity: 0, y: -15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+        >
           <h1 className="text-2xl font-bold text-white tracking-tight">
             Creating a Job Post
           </h1>
           <p className="text-xs text-zinc-400 mt-1">
             Fill in the details below to publish a new job post to the marketplace.
           </p>
-        </div>
+        </motion.div>
 
         {/* Header Stepper & Return Button */}
-        <JobCreateHeader currentSlide={currentSlide} onReturn={handleReturnTrigger} />
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" }}
+        >
+          <JobCreateHeader currentSlide={currentSlide} onReturn={handleReturnTrigger} />
+        </motion.div>
 
-        {/* Form Box Wrapper */}
-        <div className="rounded-3xl border border-white/10 bg-[#0d0f1a]/80 p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6">
-          {currentSlide === 1 && (
-            <CreateCoreInfo
-              title={title}
-              setTitle={setTitle}
-              description={description}
-              setDescription={setDescription}
-              category={category}
-              setCategory={setCategory}
-              difficulty={difficulty}
-              setDifficulty={setDifficulty}
-              postingAs={postingAs}
-              setPostingAs={setPostingAs}
-              selectedTeam={selectedTeam}
-              setSelectedTeam={setSelectedTeam}
-              previewUrl={previewUrl}
-              setPreviewUrl={setPreviewUrl}
-              setThumbnail={setThumbnail}
-              isDragging={isDragging}
-              setIsDragging={setIsDragging}
-              errors={errors}
-              setErrors={setErrors}
-              onNext={handleNextSlide}
-              onDiscard={handleReturnTrigger}
-            />
-          )}
+        {/* Form Box Wrapper with Slide Transition */}
+        <motion.div
+          initial={{ opacity: 0, y: 20, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.45, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
+          className="rounded-3xl border border-white/10 bg-[#0d0f1a]/80 p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6"
+        >
+          <AnimatePresence mode="wait">
+            {currentSlide === 1 && (
+              <motion.div
+                key="step-1"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{ duration: 0.25 }}
+              >
+                <CreateCoreInfo
+                  title={title}
+                  setTitle={setTitle}
+                  description={description}
+                  setDescription={setDescription}
+                  category={category}
+                  setCategory={setCategory}
+                  difficulty={difficulty}
+                  setDifficulty={setDifficulty}
+                  postingAs={postingAs}
+                  setPostingAs={setPostingAs}
+                  selectedTeam={selectedTeam}
+                  setSelectedTeam={setSelectedTeam}
+                  previewUrl={previewUrl}
+                  setPreviewUrl={setPreviewUrl}
+                  setThumbnail={setThumbnail}
+                  isDragging={isDragging}
+                  setIsDragging={setIsDragging}
+                  errors={errors}
+                  setErrors={setErrors}
+                  onNext={handleNextSlide}
+                  onDiscard={handleReturnTrigger}
+                />
+              </motion.div>
+            )}
 
-          {currentSlide === 2 && (
-            <CreateBudgetSkills
-              skills={skills}
-              setSkills={setSkills}
-              skillInput={skillInput}
-              setSkillInput={setSkillInput}
-              minBudget={minBudget}
-              setMinBudget={setMinBudget}
-              maxBudget={maxBudget}
-              setMaxBudget={setMaxBudget}
-              minTimeline={minTimeline}
-              setMinTimeline={setMinTimeline}
-              maxTimeline={maxTimeline}
-              setMaxTimeline={setMaxTimeline}
-              positions={positions}
-              setPositions={setPositions}
-              errors={errors}
-              setErrors={setErrors}
-              formatCommaString={formatCommaString}
-              onBack={() => setCurrentSlide(1)}
-              onAdvance={handleSlide2Advance}
-            />
-          )}
+            {currentSlide === 2 && (
+              <motion.div
+                key="step-2"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.25 }}
+              >
+                <CreateBudgetSkills
+                  skills={skills}
+                  setSkills={setSkills}
+                  skillInput={skillInput}
+                  setSkillInput={setSkillInput}
+                  minBudget={minBudget}
+                  setMinBudget={setMinBudget}
+                  maxBudget={maxBudget}
+                  setMaxBudget={setMaxBudget}
+                  minTimeline={minTimeline}
+                  setMinTimeline={setMinTimeline}
+                  maxTimeline={maxTimeline}
+                  setMaxTimeline={setMaxTimeline}
+                  positions={positions}
+                  setPositions={setPositions}
+                  errors={errors}
+                  setErrors={setErrors}
+                  formatCommaString={formatCommaString}
+                  onBack={() => setCurrentSlide(1)}
+                  onAdvance={handleSlide2Advance}
+                />
+              </motion.div>
+            )}
 
-          {currentSlide === 3 && (
-            <CreateReview
-              title={title}
-              description={description}
-              category={category}
-              difficulty={difficulty}
-              previewUrl={previewUrl}
-              minBudget={minBudget}
-              maxBudget={maxBudget}
-              minTimeline={minTimeline}
-              maxTimeline={maxTimeline}
-              positions={positions}
-              postingAs={postingAs}
-              selectedTeam={selectedTeam}
-              skills={skills}
-              formatCommaString={formatCommaString}
-              onEditStep={setCurrentSlide}
-              onBack={() => setCurrentSlide(2)}
-              onSubmit={handleSubmit}
-            />
-          )}
-        </div>
-      </div>
+            {currentSlide === 3 && (
+              <motion.div
+                key="step-3"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.25 }}
+              >
+                <CreateReview
+                  title={title}
+                  description={description}
+                  category={category}
+                  difficulty={difficulty}
+                  previewUrl={previewUrl}
+                  minBudget={minBudget}
+                  maxBudget={maxBudget}
+                  minTimeline={minTimeline}
+                  maxTimeline={maxTimeline}
+                  positions={positions}
+                  postingAs={postingAs}
+                  selectedTeam={selectedTeam}
+                  skills={skills}
+                  formatCommaString={formatCommaString}
+                  onEditStep={setCurrentSlide}
+                  onBack={() => setCurrentSlide(2)}
+                  onSubmit={handleSubmit}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </motion.div>
 
       <CreationSuccess
         isOpen={isSuccessOpen}
         onConfirm={() => navigate("/jobs")}
       />
 
-      <ConfirmationModal
+      {/* Extracted Confirm Return Modal */}
+      <PopupConfirmReturn
         isOpen={isDiscardOpen}
-        message="Are you sure you want to leave? All unsaved changes will be lost."
         onConfirm={() => {
           setIsDiscardOpen(false);
           navigate("/jobs");
