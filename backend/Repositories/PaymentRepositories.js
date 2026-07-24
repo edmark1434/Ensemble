@@ -213,6 +213,37 @@ async function createTopUpPaymentSession(payload){
     }
 }
 
+async function createSubscriptionPayment(payload){
+    try{
+        const query = `
+            INSERT INTO PAYMENTS(
+            user_id,reference_id,amount,
+            currency,status,description,payment_type, payment_request_id, payment_id, channel_code,
+            payment_token_id,customer_id,processed_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *;
+        `;
+        const result = await pool.query(query, [
+            payload.user_id,
+            payload.reference_id,
+            payload.amount,
+            payload.currency,
+            payload.status,
+            payload.description,
+            payload.payment_type,
+            payload.payment_request_id,
+            payload.payment_id,
+            payload.channel_code,
+            payload.payment_token_id,
+            payload.customer_id,
+            payload.processed_at
+        ]);
+        return result.rows[0];
+    }catch(err){
+        console.error("Error creating subscription payment:", err);
+        throw err;
+    }
+}
+
 async function getPaymentCheckOutByPayload(payload, type = 'checkout') {
     try{
         const paymentTokenCondition = type === 'checkout' ? 'AND PAYMENT_TOKEN_ID IS NULL' : 'AND PAYMENT_TOKEN_ID IS NOT NULL';
@@ -419,6 +450,7 @@ module.exports = {
     updateTopUpStatus,
     updateWalletFromTopUp,
     createTopUpPaymentSession,
+    createSubscriptionPayment,
     getPaymentCheckOutByPayload,
     updateUserCustomerId,
     updatePayment,

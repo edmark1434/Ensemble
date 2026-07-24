@@ -77,7 +77,7 @@ const CheckoutPage: React.FC = () => {
   const [loadingPaymentMethods, setLoadingPaymentMethods] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [selectedPaymentOption, setSelectedPaymentOption] = useState<PaymentOption>("checkout");
-
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const userCurrentCredits = 1250;
 
   useEffect(() => {
@@ -243,6 +243,7 @@ const CheckoutPage: React.FC = () => {
       const payload = {
         planId: checkoutItem.id,
         paymentMethodId: selectedPaymentMethod,
+        amount: checkoutItem.priceValue,
       };
       
       console.log("📤 Subscription Payload:", payload);
@@ -255,8 +256,12 @@ const CheckoutPage: React.FC = () => {
 
       const data = response.data;
       console.log("✅ Subscription Response:", data);
-       if (response.status === 200 && data?.subscriptionUpdate?.reference_id) {
-        setReferenceNumber(data?.subscriptionUpdate?.reference_id);
+      if(response.status === 200 && data?.payment_link){
+        window.location.href = data.payment_link;
+      }
+      else if (response.status === 200 && (data?.subscriptionUpdate?.reference_id || data.reference_id)) {
+        setReferenceNumber(data?.subscriptionUpdate?.reference_id || data.reference_id);
+        setSuccessMessage(data?.message || "Subscription payment processed successfully");
         setIsSuccess(true);
       } else {
         setError("Subscription initiation failed. Please try again.");
@@ -344,7 +349,7 @@ const CheckoutPage: React.FC = () => {
             <p className="text-zinc-400 mb-4">
               {checkoutItem.type === "topup" || checkoutItem.type === "custom"
                 ? `+${checkoutItem.credits} credits will be added to your account.`
-                : `Your account will be upgraded to ${checkoutItem.name}.`}
+                : successMessage || `Your account will be upgraded to ${checkoutItem.name}.`}
             </p>
             <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
               <p className="text-sm text-zinc-400">Order Summary</p>

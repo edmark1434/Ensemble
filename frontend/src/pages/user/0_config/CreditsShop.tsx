@@ -50,6 +50,16 @@ interface CheckoutItem {
   isCustom?: boolean;
   trialDays?: number;
   isUserEligibleForTrial?: boolean;
+  proratedDetails?: {
+    originalPrice: number;
+    currentPlanPrice: number;
+    proratedAmount: number;
+    remainingDays: number;
+    priceDifference: number;
+  };
+  isUpgrade?: boolean;
+  isDowngrade?: boolean;
+  currentPlanPrice?: number;
 }
 
 interface SubscriptionData {
@@ -90,6 +100,8 @@ const CreditShop: React.FC = () => {
   // Track user's current subscription
   const [userSubscription, setUserSubscription] = useState<SubscriptionData | null>(null);
   const [isUserSubscribed, setIsUserSubscribed] = useState(false);
+  const [hasXenditPlan, setHasXenditPlan] = useState(false);
+  const [isOnFreePlan, setIsOnFreePlan] = useState(true); // Track if user is on free plan
 
   useEffect(() => {
     const fetchMemberships = async () => {
@@ -115,24 +127,37 @@ const CreditShop: React.FC = () => {
           const sub = subscriptionData[0];
           setUserSubscription(sub);
           
-          // Check if user has a REAL subscription (not free plan)
-          // User is considered "subscribed" if they have xendit_plan_id and trial data
-          const hasRealSubscription = sub.xendit_plan_id !== null && 
-                                      sub.trial_starts_at !== null && 
-                                      sub.trial_ends_at !== null;
+          // Check if user has xendit_plan_id
+          const hasValidPlan = sub.xendit_plan_id !== null && sub.xendit_plan_id !== "";
+          setHasXenditPlan(hasValidPlan);
           
-          // User is eligible for trial if:
-          // 1. No subscription at all OR
-          // 2. Has subscription but it's the FREE plan (plan_id matches Free plan)
+          // Check if user is on free plan
           const isFreePlan = sub.plan_id === "75e5c586-eab8-4954-ac14-9874d5429b68";
+          setIsOnFreePlan(isFreePlan);
           
-          setIsUserSubscribed(!isFreePlan && hasRealSubscription);
-          console.log(`User has real subscription: ${!isFreePlan && hasRealSubscription}`);
+          // Check status case-insensitively
+          const status = sub.status?.toUpperCase() || "";
+          const isActiveOrTrialing = status === "ACTIVE" || status === "TRIALING" || status === "TRIAL";
+          
+          // User is subscribed if they have a valid plan and status is active/trialing
+          const subscribed = hasValidPlan && isActiveOrTrialing;
+          
+          setIsUserSubscribed(subscribed);
+          console.log(`===== SUBSCRIPTION STATUS =====`);
+          console.log(`Plan ID: ${sub.plan_id}`);
+          console.log(`Has xendit_plan_id: ${hasValidPlan}`);
           console.log(`Is free plan: ${isFreePlan}`);
-          console.log(`Has xendit_plan_id: ${sub.xendit_plan_id !== null}`);
+          console.log(`Status: ${sub.status}`);
+          console.log(`Is active or trialing: ${isActiveOrTrialing}`);
+          console.log(`User has real subscription: ${subscribed}`);
+          console.log(`Has xendit_plan_id: ${hasValidPlan}`);
+          console.log(`Is on free plan: ${isFreePlan}`);
+          console.log(`===============================`);
         } else {
           setUserSubscription(null);
           setIsUserSubscribed(false);
+          setHasXenditPlan(false);
+          setIsOnFreePlan(true);
           console.log("User has NO subscription");
         }
         
@@ -142,6 +167,8 @@ const CreditShop: React.FC = () => {
         setMemberships([]);
         setUserSubscription(null);
         setIsUserSubscribed(false);
+        setHasXenditPlan(false);
+        setIsOnFreePlan(true);
       } finally {
         setLoading(false);
       }
@@ -149,7 +176,52 @@ const CreditShop: React.FC = () => {
     fetchMemberships();
   }, []);
 
+  // Helper function to calculate remaining days
+  const calculateRemainingDays = (subscription: SubscriptionData): number => {
+    if (!subscription || !subscription.current_period_end) return 0;
+    
+    const now = new Date();
+    const periodEnd = new Date(subscription.current_period_end);
+    const remainingMs = periodEnd.getTime() - now.getTime();
+    return Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60 * 24)));
+  };
+
+  // Helper function to calculate prorated amount
+  const calculateProratedAmount = (upgradePrice: number, currentPlanPrice: number, subscription: SubscriptionData): number => {
+    if (!subscription || !subscription.current_period_start || !subscription.current_period_end) {
+      console.log("No subscription period data, using full price");
+      return upgradePrice;
+    }
+
+    const now = new Date();
+    const periodStart = new Date(subscription.current_period_start);
+    const periodEnd = new Date(subscription.current_period_end);
+    
+    const totalPeriod = periodEnd.getTime() - periodStart.getTime();
+    const elapsedTime = now.getTime() - periodStart.getTime();
+    const remainingPercent = Math.max(0, Math.min(1, 1 - (elapsedTime / totalPeriod)));
+    
+    const priceDifference = upgradePrice - currentPlanPrice;
+    const proratedAmount = priceDifference * remainingPercent;
+    
+    console.log(`Prorated calculation:
+      - Remaining percent: ${remainingPercent}
+      - Price difference: ${priceDifference}
+      - Prorated amount: ${proratedAmount}
+    `);
+    
+    return Math.round(proratedAmount * 100) / 100;
+  };
+
   const navigateToCheckout = (item: CheckoutItem) => {
+    if (item.isUpgrade && item.proratedDetails) {
+      console.log(`💳 Prorated upgrade checkout: ${item.name}`);
+      console.log(`   Original price: ₱${item.proratedDetails.originalPrice}`);
+      console.log(`   Current plan: ₱${item.proratedDetails.currentPlanPrice}`);
+      console.log(`   Prorated amount: ₱${item.proratedDetails.proratedAmount}`);
+      console.log(`   Remaining days: ${item.proratedDetails.remainingDays}`);
+    }
+    
     navigate("/credits/checkout", { state: { item } });
   };
 
@@ -181,18 +253,65 @@ const CreditShop: React.FC = () => {
   const handleMembershipCheckout = (membership: Membership) => {
     if (membership.price === 0) return;
     
-    const isEligibleForTrial = !isUserSubscribed && membership.days_of_trials > 0;
-    console.log(`Checking out: ${membership.name}, eligible for trial: ${isEligibleForTrial}`);
+    // User is eligible for trial ONLY if they have NO xendit_plan_id AND on free plan
+    const isEligibleForTrial = !hasXenditPlan && isOnFreePlan && membership.days_of_trials > 0;
+    const currentPlan = getCurrentPlan();
+    
+    let finalPrice = membership.price;
+    let isUpgrade = false;
+    let isDowngrade = false;
+    let proratedDetails = null;
+    
+    console.log(`\n===== CHECKOUT: ${membership.name} =====`);
+    console.log(`isUserSubscribed: ${isUserSubscribed}`);
+    console.log(`hasXenditPlan: ${hasXenditPlan}`);
+    console.log(`isOnFreePlan: ${isOnFreePlan}`);
+    console.log(`Current plan:`, currentPlan);
+    
+    // ONLY apply upgrade/downgrade logic if user:
+    // 1. Has xendit_plan_id AND
+    // 2. Is NOT on free plan
+    if (isUserSubscribed && hasXenditPlan && !isOnFreePlan && currentPlan && userSubscription) {
+      if (membership.price > currentPlan.price) {
+        isUpgrade = true;
+        const proratedAmount = calculateProratedAmount(
+          membership.price, 
+          currentPlan.price, 
+          userSubscription
+        );
+        finalPrice = Math.max(0, proratedAmount);
+        
+        proratedDetails = {
+          originalPrice: membership.price,
+          currentPlanPrice: currentPlan.price,
+          proratedAmount: proratedAmount,
+          remainingDays: calculateRemainingDays(userSubscription),
+          priceDifference: membership.price - currentPlan.price
+        };
+        
+        console.log(`✅ UPGRADE! Prorated: ₱${proratedAmount}`);
+      } else if (membership.price < currentPlan.price) {
+        isDowngrade = true;
+        finalPrice = membership.price;
+        console.log(`⬇️ DOWNGRADE! New price: ₱${membership.price}`);
+      }
+    } else {
+      console.log(`User is on free plan or no xendit_plan_id - using full price`);
+    }
     
     navigateToCheckout({
       id: membership.plan_id,
       name: membership.name,
       type: "subscription",
-      price: formatPHP(membership.price),
-      priceValue: membership.price,
+      price: formatPHP(finalPrice),
+      priceValue: finalPrice,
       features: membership.features || [],
       trialDays: membership.days_of_trials || 0,
       isUserEligibleForTrial: isEligibleForTrial,
+      proratedDetails: proratedDetails,
+      isUpgrade: isUpgrade,
+      isDowngrade: isDowngrade,
+      currentPlanPrice: currentPlan?.price || 0,
     });
   };
 
@@ -208,10 +327,118 @@ const CreditShop: React.FC = () => {
     return planId === userSubscription.plan_id;
   };
 
-  // Check if user is on Free plan
-  const isOnFreePlan = (): boolean => {
-    if (!userSubscription) return false;
-    return userSubscription.plan_id === "75e5c586-eab8-4954-ac14-9874d5429b68";
+  const getCurrentPlan = (): Membership | null => {
+    if (!userSubscription) return null;
+    const current = memberships.find(m => m.plan_id === userSubscription.plan_id) || null;
+    console.log(`Current plan found:`, current?.name || 'None');
+    return current;
+  };
+
+  // Determine button text and state for membership
+  const getMembershipButtonState = (tier: Membership) => {
+    const isFree = tier.price === 0;
+    const currentPlan = isCurrentPlan(tier.plan_id);
+    const hasFreeTrial = tier.days_of_trials > 0;
+    
+    // User is eligible for trial ONLY if:
+    // 1. Has NO xendit_plan_id AND
+    // 2. Is on free plan
+    const isEligibleForTrial = !hasXenditPlan && isOnFreePlan && hasFreeTrial && !isFree;
+    
+    console.log(`\n===== BUTTON STATE: ${tier.name} =====`);
+    console.log(`isUserSubscribed: ${isUserSubscribed}`);
+    console.log(`hasXenditPlan: ${hasXenditPlan}`);
+    console.log(`isOnFreePlan: ${isOnFreePlan}`);
+    console.log(`isCurrentPlan: ${currentPlan}`);
+    console.log(`tier price: ${tier.price}`);
+    console.log(`isEligibleForTrial: ${isEligibleForTrial}`);
+    
+    if (currentPlan) {
+      console.log(`This is the current plan`);
+      return {
+        buttonText: "Current Plan",
+        isDisabled: true,
+        isUpgrade: false,
+        isDowngrade: false,
+        proratedPrice: null,
+        isCurrent: true
+      };
+    }
+    
+    if (isFree) {
+      console.log(`This is the free plan`);
+      return {
+        buttonText: "Free",
+        isDisabled: true,
+        isUpgrade: false,
+        isDowngrade: false,
+        proratedPrice: null,
+        isCurrent: false
+      };
+    }
+    
+    // ONLY apply upgrade/downgrade logic if user:
+    // 1. Has xendit_plan_id AND
+    // 2. Is NOT on free plan
+    if (isUserSubscribed && hasXenditPlan && !isOnFreePlan) {
+      const currentPlanDetails = getCurrentPlan();
+      console.log(`currentPlanDetails:`, currentPlanDetails);
+      
+      if (currentPlanDetails) {
+        console.log(`Comparing: ${tier.price} vs ${currentPlanDetails.price}`);
+        
+        if (tier.price > currentPlanDetails.price) {
+          const proratedPrice = calculateProratedAmount(
+            tier.price, 
+            currentPlanDetails.price, 
+            userSubscription!
+          );
+          console.log(`✅ UPGRADE to ${tier.name}! Prorated: ${proratedPrice}`);
+          return {
+            buttonText: `Upgrade to ${tier.name}`,
+            isDisabled: false,
+            isUpgrade: true,
+            isDowngrade: false,
+            proratedPrice: proratedPrice,
+            isCurrent: false
+          };
+        } 
+        else if (tier.price < currentPlanDetails.price) {
+          console.log(`⬇️ DOWNGRADE to ${tier.name}`);
+          return {
+            buttonText: `Downgrade to ${tier.name}`,
+            isDisabled: false,
+            isUpgrade: false,
+            isDowngrade: true,
+            proratedPrice: null,
+            isCurrent: false
+          };
+        }
+      }
+    }
+    
+    // User is on free plan - show subscribe or trial
+    if (isEligibleForTrial) {
+      console.log(`🎯 Free trial available: ${tier.days_of_trials} days`);
+      return {
+        buttonText: `Start Free Trial (${tier.days_of_trials} days)`,
+        isDisabled: false,
+        isUpgrade: false,
+        isDowngrade: false,
+        proratedPrice: null,
+        isCurrent: false
+      };
+    }
+    
+    console.log(`📝 Default Subscribe button`);
+    return {
+      buttonText: "Subscribe",
+      isDisabled: false,
+      isUpgrade: false,
+      isDowngrade: false,
+      proratedPrice: null,
+      isCurrent: false
+    };
   };
 
   if (loading) {
@@ -414,55 +641,30 @@ const CreditShop: React.FC = () => {
             {memberships.map((tier) => {
               const isFree = tier.price === 0;
               const isPopular = tier.name === "Premium";
-              const hasFreeTrial = tier.days_of_trials > 0;
               const currentPlan = isCurrentPlan(tier.plan_id);
               
-              // Determine if user is eligible for trial
-              // User is eligible if: NOT subscribed to a paid plan AND has free trial days
-              const isEligibleForTrial = !isUserSubscribed && hasFreeTrial && !isFree;
+              const { buttonText, isDisabled, isUpgrade, isDowngrade, proratedPrice, isCurrent } = getMembershipButtonState(tier);
               
-              console.log(`=== ${tier.name} ===`);
-              console.log(`isFree: ${isFree}`);
-              console.log(`hasFreeTrial: ${hasFreeTrial} (days: ${tier.days_of_trials})`);
-              console.log(`currentPlan: ${currentPlan}`);
-              console.log(`isUserSubscribed: ${isUserSubscribed}`);
-              console.log(`isEligibleForTrial: ${isEligibleForTrial}`);
-              
-              // Determine button text and state
-              let buttonText = "Subscribe";
-              let isDisabled = false;
-              
-              if (isFree) {
-                buttonText = currentPlan ? "Current Plan" : "Free";
-                isDisabled = true;
-              } else if (currentPlan) {
-                buttonText = "Current Plan";
-                isDisabled = true;
-              } else if (isEligibleForTrial) {
-                // User on Free plan or no subscription - show trial
-                buttonText = `Start Free Trial (${tier.days_of_trials} days)`;
-                isDisabled = false;
-                console.log(`✅ Button text set to: ${buttonText}`);
-              } else {
-                buttonText = "Subscribe";
-                isDisabled = false;
-              }
-
+              // User eligible for trial ONLY if:
+              // 1. Has NO xendit_plan_id AND
+              // 2. Is on free plan
+              const isEligibleForTrial = !hasXenditPlan && isOnFreePlan && tier.days_of_trials > 0 && !isFree;
               const showTrialBadge = isEligibleForTrial;
+              const currentPlanDetails = getCurrentPlan();
 
               return (
                 <div
                   key={tier.plan_id}
                   className={`flex flex-col justify-between rounded-lg border p-6 relative ${
-                    isPopular && !currentPlan
-                      ? "border-white/40 bg-zinc-900/50"
-                      : currentPlan
+                    isCurrent
                       ? "border-emerald-500/40 bg-zinc-900/30"
+                      : isPopular && !isCurrent
+                      ? "border-white/40 bg-zinc-900/50"
                       : "border-zinc-800 bg-zinc-900/30"
                   }`}
                 >
-                  {/* Current Plan Badge */}
-                  {currentPlan && (
+                  {/* Badges */}
+                  {isCurrent && (
                     <div className="absolute -top-2.5 left-4">
                       <span className="bg-emerald-500 text-white text-[10px] font-medium px-3 py-0.5 rounded-full">
                         CURRENT PLAN
@@ -470,7 +672,23 @@ const CreditShop: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Trial Badge */}
+                  {/* ONLY show upgrade/downgrade badges if user has xendit_plan_id AND is NOT on free plan */}
+                  {isUpgrade && !isCurrent && hasXenditPlan && !isOnFreePlan && (
+                    <div className="absolute -top-2.5 left-4">
+                      <span className="bg-blue-500 text-white text-[10px] font-medium px-3 py-0.5 rounded-full">
+                        UPGRADE
+                      </span>
+                    </div>
+                  )}
+
+                  {isDowngrade && !isCurrent && hasXenditPlan && !isOnFreePlan && (
+                    <div className="absolute -top-2.5 left-4">
+                      <span className="bg-amber-500 text-white text-[10px] font-medium px-3 py-0.5 rounded-full">
+                        DOWNGRADE
+                      </span>
+                    </div>
+                  )}
+
                   {showTrialBadge && (
                     <div className="absolute -top-2.5 left-4">
                       <span className="bg-blue-500 text-white text-[10px] font-medium px-3 py-0.5 rounded-full">
@@ -485,21 +703,52 @@ const CreditShop: React.FC = () => {
                         {!isFree && <Crown className="h-3.5 w-3.5 text-zinc-400" />}
                         {tier.name}
                       </h3>
-                      {isPopular && !currentPlan && (
+                      {isPopular && !isCurrent && (
                         <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white">
                           Most popular
                         </span>
                       )}
                     </div>
                     <p className="text-sm text-zinc-400 mb-4">{tier.description}</p>
+                    
                     <p className="text-3xl font-semibold text-white mb-1">
-                      {isFree ? "Free" : formatPHP(tier.price)}
+                      {isFree ? "Free" : (
+                        <>
+                          {/* ONLY show prorated pricing if user has xendit_plan_id AND is NOT on free plan */}
+                          {isUpgrade && proratedPrice !== null && proratedPrice > 0 && hasXenditPlan && !isOnFreePlan && (
+                            <>
+                              <span className="line-through text-zinc-500 text-xl mr-2">{formatPHP(tier.price)}</span>
+                              <span className="text-emerald-400">{formatPHP(proratedPrice)}</span>
+                              <span className="text-sm font-normal text-emerald-400 ml-1">(prorated)</span>
+                            </>
+                          )}
+                          {isUpgrade && proratedPrice !== null && proratedPrice === 0 && hasXenditPlan && !isOnFreePlan && (
+                            <>
+                              <span className="line-through text-zinc-500 text-xl mr-2">{formatPHP(tier.price)}</span>
+                              <span className="text-emerald-400">Free</span>
+                              <span className="text-sm font-normal text-emerald-400 ml-1">(prorated)</span>
+                            </>
+                          )}
+                          {(!isUpgrade || proratedPrice === null || !hasXenditPlan || isOnFreePlan) && (
+                            formatPHP(tier.price)
+                          )}
+                        </>
+                      )}
                       {tier.billing_period === "MONTH" && !isFree && (
                         <span className="text-sm font-normal text-zinc-500"> /mo</span>
                       )}
                     </p>
 
-                    {/* Show trial info for eligible users */}
+                    {/* ONLY show prorated explanation if user has xendit_plan_id AND is NOT on free plan */}
+                    {isUpgrade && proratedPrice !== null && !isCurrent && isUserSubscribed && hasXenditPlan && !isOnFreePlan && currentPlanDetails && (
+                      <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1">
+                        <span>⏱️</span>
+                        <span>
+                          Prorated charge of {formatPHP(proratedPrice)} (based on remaining period of your {currentPlanDetails.name} plan)
+                        </span>
+                      </p>
+                    )}
+
                     {isEligibleForTrial && (
                       <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1">
                         <span>✦</span>
@@ -533,12 +782,22 @@ const CreditShop: React.FC = () => {
                     className={`w-full rounded-md py-2.5 text-sm font-medium transition-colors ${
                       isDisabled
                         ? "border border-zinc-800 text-zinc-500 cursor-default bg-zinc-800/20"
+                        : isUpgrade && hasXenditPlan && !isOnFreePlan
+                        ? "bg-emerald-500 text-white hover:bg-emerald-600"
+                        : isDowngrade && hasXenditPlan && !isOnFreePlan
+                        ? "bg-amber-500 text-white hover:bg-amber-600"
                         : isPopular
                         ? "bg-white text-zinc-950 hover:bg-zinc-200"
                         : "border border-zinc-700 text-white hover:bg-zinc-800"
                     }`}
                   >
                     {buttonText}
+                    {isUpgrade && !isDisabled && hasXenditPlan && !isOnFreePlan && (
+                      <span className="ml-2 text-xs opacity-80">↑</span>
+                    )}
+                    {isDowngrade && !isDisabled && hasXenditPlan && !isOnFreePlan && (
+                      <span className="ml-2 text-xs opacity-80">↓</span>
+                    )}
                   </button>
                 </div>
               );

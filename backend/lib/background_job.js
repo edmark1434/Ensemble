@@ -203,7 +203,8 @@ async function reconcilePendingPayments() {
 
 async function cancelledSubscriptionReconciliation(subscription) {
     try {
-        await endSubscription(subscription);
+        console.log(`Ending subscription ${subscription.subscription_id}... ${subscription}`);
+        await endSubscription(subscription.subscription_id);
     } catch (err) {
         console.error(
             `Failed to end subscription ${subscription.subscription_id}`,
