@@ -1,5 +1,5 @@
 import React from "react";
-import { Calendar, Clock, Briefcase, Users, Star, Send, CircleDollarSign, MousePointerClick } from "lucide-react";
+import { Calendar, Clock, Briefcase, Users, Star, Send, CircleDollarSign, MousePointerClick, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Job } from "./job_lists";
 
@@ -11,6 +11,16 @@ interface JobViewDetailsProps {
 const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose }) => {
   const navigate = useNavigate();
 
+  const handleViewProfile = () => {
+    if (!selectedJob) return;
+
+    if (selectedJob.isOwnPost) {
+      navigate("/profile");
+    } else {
+      navigate(`/profile/${encodeURIComponent(selectedJob.postedBy)}`);
+    }
+  };
+
   return (
     <>
       {/* Backdrop Overlay with Click-Away Indicator */}
@@ -20,7 +30,6 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose })
         }`}
         onClick={onClose}
       >
-        {/* Subtle Indicator for user click-away action */}
         {selectedJob && (
           <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/10 text-zinc-300 text-xs font-medium animate-pulse backdrop-blur-md">
             <MousePointerClick className="h-3.5 w-3.5 text-zinc-400" />
@@ -80,7 +89,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose })
                 </div>
               </div>
 
-              {/* Price & Budget Row with CircleDollarSign */}
+              {/* Price & Budget Row */}
               <div className="p-3.5 rounded-xl border border-white/10 bg-white/5 flex items-center justify-between">
                 <div>
                   <p className="text-[9px] uppercase font-bold text-zinc-500 mb-0.5">
@@ -111,25 +120,35 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose })
                 </div>
               </div>
 
-              {/* Client Profile Card */}
-              <div className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02] flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="h-8 w-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs text-white font-bold border border-white/10">
+              {/* Client Profile Card with View Profile Action */}
+              <div className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02] flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="h-8 w-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs text-white font-bold border border-white/10 shrink-0">
                     {selectedJob.postedBy.charAt(0)}
                   </div>
-                  <div className="text-left">
+                  <div className="text-left min-w-0">
                     <p className="text-[9px] uppercase text-zinc-500 font-bold tracking-wider">
                       Project Client
                     </p>
-                    <p className="text-xs font-bold text-white leading-tight">
-                      {selectedJob.postedBy}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-bold text-white leading-tight truncate">
+                        {selectedJob.postedBy}
+                      </p>
+                      <div className="flex items-center gap-1 rounded-md bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400 border border-white/5 shrink-0">
+                        <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
+                        <span>{selectedJob.clientRating} ({selectedJob.ratingCount})</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 rounded-md bg-yellow-500/10 px-2 py-1 text-[11px] font-semibold text-yellow-500 border border-yellow-500/10">
-                  <Star className="h-3 w-3 fill-current" />
-                  <span>{selectedJob.clientRating} Rating</span>
-                </div>
+
+                <button
+                  onClick={handleViewProfile}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-zinc-300 hover:text-white transition shrink-0"
+                >
+                  <User className="h-3.5 w-3.5 text-blue-400" />
+                  <span>View Profile</span>
+                </button>
               </div>
             </div>
 

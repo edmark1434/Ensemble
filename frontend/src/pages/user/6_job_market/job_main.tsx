@@ -9,6 +9,7 @@ import JobCategories from "./job_components/job_categories";
 import JobFilters from "./job_components/job_filters";
 import JobListViewType from "./job_components/job_list_viewtype";
 import JobViewDetails from "./job_components/job_viewdetails";
+import UtilScrollTop from "./job_components/job_utilities/util_scroll_top";
 import type { ViewType } from "./job_components/job_list_viewtype";
 
 // Datasets & Types
@@ -102,6 +103,9 @@ const JobMain: React.FC = () => {
 
   const filteredJobs = useMemo(() => {
     const result = jobsList.filter((job) => {
+      // 🚫 Hide Closed Job Posts
+      const isNotClosed = job.status !== "Closed";
+
       const matchesSearch =
         job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         job.postedBy.toLowerCase().includes(searchQuery.toLowerCase());
@@ -113,6 +117,7 @@ const JobMain: React.FC = () => {
       const matchesPos = posValue === "" || job.positionsNeeded === parseInt(posValue);
 
       return (
+        isNotClosed &&
         matchesSearch &&
         matchesCategory &&
         matchesMinPrice &&
@@ -152,8 +157,11 @@ const JobMain: React.FC = () => {
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#080a12] overflow-x-hidden relative">
-      <UserHeader pageTitle="Job Market" credits={1250} />
+    <div className="w-full min-h-screen bg-[#080a12] relative">
+      {/* Sticky User Header */}
+      <div className="sticky top-0 z-50">
+        <UserHeader pageTitle="Job Market" credits={1250} />
+      </div>
 
       <div className="mx-auto max-w-7xl p-6 md:p-8 w-full">
         <JobSearchbar searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
@@ -217,11 +225,14 @@ const JobMain: React.FC = () => {
         </div>
       </div>
 
-      {/* --- RIGHT SLIDE-OUT PANEL DRAWER COMPONENT --- */}
+      {/* Slide-out details drawer */}
       <JobViewDetails
         selectedJob={selectedJob}
         onClose={() => navigate(getParentRoute())}
       />
+
+      {/* Scroll To Top Utility */}
+      <UtilScrollTop />
     </div>
   );
 };

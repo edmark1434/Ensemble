@@ -178,7 +178,7 @@ const JobList: React.FC<JobListProps> = ({
                     </button>
                   </div>
 
-                  {/* Smaller Pill Tags */}
+                  {/* Tags */}
                   <div className="flex flex-wrap items-center gap-1.5 mb-2">
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
@@ -197,7 +197,7 @@ const JobList: React.FC<JobListProps> = ({
                     </span>
                   </div>
 
-                  {/* Price with CircleDollarSign */}
+                  {/* Price */}
                   <div className="text-yellow-500 text-base font-black mb-1 flex items-center gap-1">
                     <CircleDollarSign className="h-4 w-4 text-yellow-500 shrink-0" />
                     <span>{job.priceRange}</span>
@@ -216,7 +216,7 @@ const JobList: React.FC<JobListProps> = ({
                     <div className="h-5 w-5 shrink-0 rounded-full bg-zinc-800 flex items-center justify-center text-[9px] text-white font-bold border border-white/10">
                       {job.postedBy.charAt(0)}
                     </div>
-                    <span className="truncate text-zinc-300 font-bold">{job.postedBy}</span>
+                    <span className="truncate text-zinc-300 font-semibold">{job.postedBy}</span>
                   </div>
 
                   <div className="flex items-center gap-1 text-zinc-400 text-[10px] shrink-0 ml-2">
@@ -281,7 +281,7 @@ const JobList: React.FC<JobListProps> = ({
                     </button>
                   </div>
 
-                  {/* Price with CircleDollarSign */}
+                  {/* Price */}
                   <div className="text-yellow-500 text-lg font-black mb-1 flex items-center gap-1.5">
                     <CircleDollarSign className="h-5 w-5 text-yellow-500 shrink-0" />
                     <span>{job.priceRange}</span>
@@ -291,23 +291,29 @@ const JobList: React.FC<JobListProps> = ({
                   <p className="text-[11px] text-zinc-500 font-medium mb-1">{job.timeAgo}</p>
                 </div>
 
-                <div className="mt-2 pt-4 border-t border-white/5 flex flex-wrap items-center justify-between text-[11px] font-bold text-zinc-500 uppercase tracking-widest gap-3">
+                {/* Refined Footer Metrics & Profile */}
+                <div className="mt-2 pt-4 border-t border-white/5 flex flex-wrap items-center justify-between text-[10px] text-zinc-400 gap-3">
                   <div className="flex items-center gap-2">
                     <div className="h-6 w-6 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] text-white font-bold border border-white/10 overflow-hidden">
                       {job.postedBy.charAt(0)}
                     </div>
                     <div className="text-left leading-tight">
-                      <p className="text-xs font-bold text-zinc-300 normal-case">{job.postedBy}</p>
-                      <div className="flex items-center gap-1 text-[10px] text-yellow-500">
-                        <Star className="h-2.5 w-2.5 fill-current" />
-                        <span>{job.clientRating} ({job.ratingCount} reviews)</span>
+                      <p className="text-xs font-bold text-zinc-300">{job.postedBy}</p>
+                      <div className="flex items-center gap-1 text-[10px] text-zinc-400">
+                        <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
+                        <span>{job.clientRating} ({job.ratingCount})</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 text-[10px] font-bold text-zinc-400 tracking-wider">
-                    <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5">{job.positionsNeeded} Positions Needed</span>
-                    <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5">{job.applicantsCount} Applicants</span>
+                  {/* Normal-case, Smaller Tags */}
+                  <div className="flex items-center gap-2 text-[10px] font-medium text-zinc-400">
+                    <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
+                       Positions Needed : {job.positionsNeeded}
+                    </span>
+                    <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
+                      {job.applicantsCount} Applicants
+                    </span>
                     <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5 flex items-center gap-1">
                       <Clock className="h-3 w-3 text-zinc-500" /> {job.timeline}
                     </span>
