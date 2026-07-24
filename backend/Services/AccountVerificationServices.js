@@ -1,58 +1,164 @@
 const axios = require('axios');
 const dotenv = require('dotenv');
 dotenv.config();
+const { v4: uuidv4 } = require("uuid");
+const countries = require("i18n-iso-countries");
+const en = require("i18n-iso-countries/langs/en.json");
 
+countries.registerLocale(en);
 
-async function createAccountVerificationSession() {
-  try {
-    const response = await axios.post(
-      "https://verification.didit.me/v3/session/",
-      {
-        workflow_id: "11111111-2222-3333-4444-555555555555",
-        vendor_data: "user-123",
-        callback: "https://example.com/verification/callback",
-        callback_method: "both",
-        metadata: {
-          user_type: "premium",
-          account_id: "ABC123",
-        },
-        language: "en",
-        contact_details: {
-          email: "john.doe@example.com",
-          send_notification_emails: true,
-          email_lang: "en",
-          phone: "+14155552671",
-        },
-        expected_details: {
-          first_name: "John",
-          last_name: "Doe",
-          date_of_birth: "1990-05-15",
-          id_country: "USA",
-          expected_document_types: ["P", "ID"],
-        },
-      },
-      {
-        headers: {
-          "x-api-key": process.env.DIDIT_API_KEY,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+const {
+    getUserById
+} = require('../Repositories/UserRepositories');
+const {
+    getReusableAccountVerificationSessionByUserId,
+    createAccountVerificationSessionRepository
+        } = require('../Repositories/AccountVerificationRepositories');
 
-    console.log("Session created successfully");
-    console.log(response.data);
+async function createAccountVerificationSession(userId) {
+    try {
+        // ============================================================
+        // 1. Check reusable session in database
+        // ============================================================
 
-    console.log("Session ID:", response.data.session_id);
-    console.log("Verification URL:", response.data.url);
+        const existingSession =
+            await getReusableAccountVerificationSessionByUserId(userId);
 
-    return response.data;
-  } catch (error) {
-    console.error(
-      "Failed to create session:",
-      error.response?.data || error.message
-    );
-    throw error;
-  }
+        if (existingSession) {
+            return existingSession;
+        }
+
+        // ============================================================
+        // 2. Check existing reusable Didit session
+        // ============================================================
+
+        const reusableStatuses = [
+            "Not Started",
+            "In Progress",
+            "Awaiting User",
+            "In Review",
+            "Resubmitted",
+        ];
+
+        const diditResponse = await axios.get(
+            "https://verification.didit.me/v3/sessions",
+            {
+                headers: {
+                    "x-api-key": process.env.DIDIT_API_KEY,
+                },
+                params: {
+                    vendor_data: `user-${userId}`,
+                },
+            }
+        );
+
+        const reusableDiditSession = diditResponse.data.results?.find(session =>
+            reusableStatuses.includes(session.status)
+        );
+
+        if (reusableDiditSession) {
+
+            const verificationSession =
+                await createAccountVerificationSessionRepository({
+                    user_id: userId,
+                    didit_session_id: reusableDiditSession.session_id,
+                    verification_url: reusableDiditSession.session_url,
+                    status: reusableDiditSession.status,
+                });
+
+            return verificationSession;
+        }
+
+        // ============================================================
+        // 3. Fetch user
+        // ============================================================
+
+        const user = await getUserById(userId);
+
+        if (!user) {
+            throw new Error("User not found.");
+        }
+
+        const alpha2 = countries.getAlpha2Code(user.country, "en");
+
+        const alpha3 = alpha2
+            ? countries.alpha2ToAlpha3(alpha2)
+            : "PHL";
+
+        const dateOfBirth = user.date_of_birth
+            ? new Date(user.date_of_birth).toISOString().split("T")[0]
+            : undefined;
+
+        const expectedDetails = {};
+
+        if (user.first_name)
+            expectedDetails.first_name = user.first_name;
+
+        if (user.last_name)
+            expectedDetails.last_name = user.last_name;
+
+        if (dateOfBirth)
+            expectedDetails.date_of_birth = dateOfBirth;
+
+        if (alpha3)
+            expectedDetails.id_country = alpha3;
+
+        // ============================================================
+        // 4. Create Didit session
+        // ============================================================
+
+        const response = await axios.post(
+            "https://verification.didit.me/v3/session/",
+            {
+                workflow_id: process.env.DIDIT_WORKFLOW_ID,
+
+                vendor_data: `user-${user.user_id}`,
+
+                callback: `${process.env.FRONTEND_URL}/verification/result`,
+
+                callback_method: "both",
+
+                metadata: {
+                    account_id: user.account_id,
+                },
+
+                language: "en",
+
+                contact_details: {
+                    email: user.email_address,
+                    send_notification_emails: true,
+                    email_lang: "en",
+                },
+
+                expected_details: expectedDetails,
+            },
+            {
+                headers: {
+                    "x-api-key": process.env.DIDIT_API_KEY,
+                    "Content-Type": "application/json",
+                },
+            }
+        );
+
+        const didit = response.data;
+
+        const verificationSession =
+            await createAccountVerificationSessionRepository({
+                user_id: user.user_id,
+                didit_session_id: didit.session_id,
+                verification_url: didit.url,
+                status: didit.status,
+            });
+
+        return verificationSession;
+
+    } catch (error) {
+        console.error(
+            "Failed to create account verification session:",
+            error.response?.data || error.message
+        );
+        throw error;
+    }
 }
 
 
