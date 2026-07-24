@@ -1,5 +1,5 @@
 import React from "react";
-import { Star, Clock, Bookmark } from "lucide-react";
+import { Star, Clock, Bookmark, CircleDollarSign } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ViewType } from "./job_list_viewtype";
@@ -197,7 +197,11 @@ const JobList: React.FC<JobListProps> = ({
                     </span>
                   </div>
 
-                  <div className="text-yellow-500 text-base font-black mb-1">{job.priceRange}</div>
+                  {/* Price with CircleDollarSign */}
+                  <div className="text-yellow-500 text-base font-black mb-1 flex items-center gap-1">
+                    <CircleDollarSign className="h-4 w-4 text-yellow-500 shrink-0" />
+                    <span>{job.priceRange}</span>
+                  </div>
                   <h3 className="text-white text-base font-bold mb-1 group-hover:text-blue-400 transition-colors line-clamp-1">
                     {job.title}
                   </h3>
@@ -206,7 +210,7 @@ const JobList: React.FC<JobListProps> = ({
                   </p>
                 </div>
 
-                {/* Footer showing Relative Time ("Posted 2 hours ago") */}
+                {/* Footer showing Relative Time */}
                 <div className="pt-3 border-t border-white/5 flex items-center justify-between text-[11px] text-zinc-400 font-medium">
                   <div className="flex items-center gap-1.5 truncate">
                     <div className="h-5 w-5 shrink-0 rounded-full bg-zinc-800 flex items-center justify-center text-[9px] text-white font-bold border border-white/10">
@@ -240,7 +244,6 @@ const JobList: React.FC<JobListProps> = ({
                   : "border-white/10 bg-[#0d0f1a]/40 hover:border-white/20"
               }`}
             >
-              {/* Image hidden on narrower viewports (< md), visible on md+ */}
               <div className="hidden md:block relative h-44 md:h-auto w-full md:w-56 shrink-0 overflow-hidden rounded-xl bg-zinc-900 border border-white/5">
                 <img
                   src={job.thumbnail}
@@ -278,7 +281,11 @@ const JobList: React.FC<JobListProps> = ({
                     </button>
                   </div>
 
-                  <div className="text-yellow-500 text-lg font-black mb-1">{job.priceRange}</div>
+                  {/* Price with CircleDollarSign */}
+                  <div className="text-yellow-500 text-lg font-black mb-1 flex items-center gap-1.5">
+                    <CircleDollarSign className="h-5 w-5 text-yellow-500 shrink-0" />
+                    <span>{job.priceRange}</span>
+                  </div>
                   <h3 className="text-white text-xl font-bold mb-1.5 group-hover:text-blue-400 transition-colors">{job.title}</h3>
                   <p className="text-sm text-zinc-400 line-clamp-2 leading-relaxed mb-3">{job.description}</p>
                   <p className="text-[11px] text-zinc-500 font-medium mb-1">{job.timeAgo}</p>
@@ -310,7 +317,7 @@ const JobList: React.FC<JobListProps> = ({
             </motion.div>
           );
         })}
-      </AnimatePresence>a
+      </AnimatePresence>
     </motion.div>
   );
 };
