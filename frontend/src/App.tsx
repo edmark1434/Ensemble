@@ -34,7 +34,12 @@ import Inbox from "@/pages/user/10_inbox/Main.tsx";
 
 import SectionPlaceholder from './pages/user/0_config/SectionPlaceholder.tsx'
 
-import JobPostingMain from "@/pages/user/6_jobs/Job_Posting/main.tsx";
+// Updated Job Market Sub-Routes Imports
+import JobMain from "@/pages/user/6_job_market/job_main.tsx";
+import JobPostingPage from "@/pages/user/6_job_market/job_pages/job_posting_page.tsx";
+import JobSavesPage from "@/pages/user/6_job_market/job_pages/job_saves_page.tsx";
+import JobMyPostPage from "@/pages/user/6_job_market/job_pages/job_mypost_page.tsx";
+
 import {CreateJobWizard} from "@/pages/user/6_jobs/Job_Posting/CreateJobWizard.tsx";
 
 import GigMarketplace from "@/pages/user/7_gigs/Gig_Posting/main.tsx";
@@ -49,7 +54,6 @@ import {VerificationStatus} from "@/pages/user/7_profile/VerificationStatus/Veri
 
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminDashboard from './pages/admin/AdminDashboard'
-// import AdminSectionPlaceholder from './pages/admin/AdminSectionPlaceholder'
 import UserTeamPage from './pages/admin/userTeam/UserTeamPage'
 import CreditEconomyPage from './pages/admin/creditEconomy/CreditEconomyPage'
 import ModerationPage from './pages/admin/moderation/ModerationPage'
@@ -94,7 +98,7 @@ import ModeratorSectionPlaceholder from './pages/moderator/SectionPlaceholder'
 import RouteMiddleware from './lib/RouteMiddleware'
 import StaffMiddleware from './lib/StaffMiddleware'
 
-// ─── Landing Dropdown Pages Imports ──────────────────────────────────────────
+// Landing Dropdown Pages Imports
 import PageAboutUs from "@/pages/landing/pages/page_AboutUs.tsx";
 import PageAskOurChatbot from './pages/landing/pages/page_AskOurChatbot';
 import PageFAQ from './pages/landing/pages/page_FAQ';
@@ -115,7 +119,6 @@ function App() {
     <>
       <ToastProvider />
       <Routes>
-      {/* Staff / admin portal logins (public; production: admin.ensemble / staff.ensemble) */}
       <Route path="/admin" element={<AdminLoginPage />} />
       <Route path="/staff" element={<StaffLoginPage />} />
 
@@ -136,9 +139,6 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-
-        {/* Modular Public Dropdown Landing Pages */}
-        {/* Nested structural grouping under the /landing prefix path */}
         <Route path="/landing">
           <Route path="Pricing" element={<PagePricing />} />
           <Route path="HowToHire" element={<PageHowToHire />} />
@@ -173,7 +173,6 @@ function App() {
 
           <Route path='/inbox' element={<Inbox />} />
 
-          {/* Teams Routes - Nested structure */}
           <Route path='/teams'>
             <Route index element={<Teams />} />
             <Route path=':id' element={<SelectedTeam />} />
@@ -181,11 +180,19 @@ function App() {
 
           <Route path='/assets' element={<SectionPlaceholder title='ASSET LIBRARY' />} />
 
-          <Route path='/jobs'>
-            <Route index element={<JobPostingMain />} />
-            <Route path='create' element={<CreateJobWizard />} />
-            <Route path=':id' element={<JobPostingMain />} />
+          {/* Reworked Job Market Nested Sub-Routes */}
+          <Route path='/jobs' element={<JobMain />}>
+            <Route index element={<Navigate to="/jobs/postings" replace />} />
+            <Route path='postings' element={<JobPostingPage />} />
+            <Route path='postings/:id' element={<JobPostingPage />} />
+            <Route path='saved-posts' element={<JobSavesPage />} />
+            <Route path='saved-posts/:id' element={<JobSavesPage />} />
+            <Route path='my-job-post' element={<JobMyPostPage />} />
+            <Route path='my-job-post/:id' element={<JobMyPostPage />} />
           </Route>
+
+          <Route path='/jobs/create' element={<CreateJobWizard />} />
+
           <Route path='/gigs'>
             <Route index element={<GigMarketplace />} />
             <Route path='create' element={<CreateGigWizard />} />
@@ -203,13 +210,10 @@ function App() {
       </Route>
 
       <Route element={<StaffMiddleware />}>
-
-        {/* Staff portal dashboard — login is /staff */}
         <Route path='/staff' element={<StaffPortalLayout />}>
           <Route path='dashboard' element={<StaffDashboard />} />
         </Route>
 
-        {/* Admin Routes — dashboard lives under /admin/dashboard; login is /admin */}
         <Route path='/admin' element={<AdminLayout />}>
           <Route path='dashboard' element={<AdminDashboard />} />
           <Route path='user-team' element={<UserTeamPage />} />
