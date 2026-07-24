@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Coins, Loader2, RefreshCw, Scale, Search } from "lucide-react";
 import api from "@/lib/axios";
 import ModeratorDisputeDetailModal from "../shared/ModeratorDisputeDetailModal";
-import { PriorityBadge, StatusBadge } from "../shared/ui";
+import { PriorityBadge, StatusBadge, titleCaseWords } from "../shared/ui";
 import type { Dispute } from "../shared/moderatorTypes";
 
 const STATUS_FILTERS = ["all", "open", "under_review", "resolved", "closed"] as const;
@@ -105,7 +105,7 @@ export default function SupportDisputes() {
 
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <SummaryChip label="In view" value={summary.total} tone="text-white" />
-        <SummaryChip label="Open / under review" value={summary.open} tone="text-sky-300" />
+        <SummaryChip label="Open / Under Review" value={summary.open} tone="text-sky-300" />
         <SummaryChip label="Credits at risk (view)" value={summary.credits.toLocaleString()} tone="text-amber-300" />
         <SummaryChip label="Unassigned open" value={summary.unassigned} tone="text-red-300" />
       </div>
@@ -129,13 +129,13 @@ export default function SupportDisputes() {
               key={s}
               type="button"
               onClick={() => setStatus(s)}
-              className={`rounded-lg border px-3 py-1.5 text-xs font-medium capitalize transition ${
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
                 status === s
                   ? "border-sky-500/40 bg-sky-500/10 text-sky-300"
                   : "border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white"
               }`}
             >
-              {s.replace("_", " ")}
+              {titleCaseWords(s)}
             </button>
           ))}
         </div>

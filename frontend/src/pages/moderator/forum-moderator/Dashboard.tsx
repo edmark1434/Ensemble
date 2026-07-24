@@ -3,7 +3,7 @@ import { AlertCircle, Flag, Info, Loader2, MessageSquare, MessagesSquare, Ticket
 import api from "@/lib/axios";
 import { ChartCard, DonutChart, HorizontalBarChart } from "@/pages/admin/analytics/components/AnalyticsCharts";
 import type { ForumOverview } from "../shared/moderatorTypes";
-import { AlertList, StatCard } from "../shared/ui";
+import { AlertList, StatCard, titleCaseWords } from "../shared/ui";
 
 export default function ForumModeratorDashboard() {
   const [data, setData] = useState<ForumOverview | null>(null);
@@ -82,7 +82,7 @@ export default function ForumModeratorDashboard() {
           />
         </ChartCard>
         <ChartCard>
-          <HorizontalBarChart title="Tickets by category" data={charts.ticketCategories} />
+          <HorizontalBarChart title="Tickets by type" data={charts.ticketCategories} />
         </ChartCard>
       </div>
 
@@ -102,7 +102,7 @@ export default function ForumModeratorDashboard() {
               <li key={t.id} className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm">
                 <p className="text-zinc-200">{t.subject}</p>
                 <p className="text-[11px] text-zinc-500">
-                  @{t.requester.username} · {t.priority} · {t.status.replace("_", " ")}
+                  @{t.requester.username} · {titleCaseWords(t.priority)} · {titleCaseWords(t.status)}
                 </p>
               </li>
             ))}
@@ -117,7 +117,7 @@ export default function ForumModeratorDashboard() {
               <li key={r.id} className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm">
                 <p className="text-zinc-200">{r.reason}</p>
                 <p className="text-[11px] text-zinc-500">
-                  {r.targetLabel || r.targetId} · {r.targetType} · {r.status.replace("_", " ")}
+                  {r.targetLabel || r.targetId} · {r.targetType} · {titleCaseWords(r.status)}
                 </p>
               </li>
             ))}

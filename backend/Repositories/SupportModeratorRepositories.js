@@ -16,6 +16,7 @@ const {
   toCategoryChart,
   ticketStatusChart,
   normalizeStatus,
+  displayLabel,
   mapTicketRow,
   mapDisputeRow,
 } = require('./ModeratorSharedRepositories');
@@ -197,10 +198,10 @@ async function getTicketLog() {
   `);
   return result.rows.map((r, i) => ({
     id: `log-${i}`,
-    type: r.type,
+    type: displayLabel(r.type),
     ref: r.ref,
     label: r.label,
-    status: normalizeStatus(r.status),
+    status: displayLabel(r.status),
     at: r.at,
   }));
 }
@@ -261,11 +262,19 @@ async function getSupportStaffWorkload() {
 
 function buildAlerts(tc, rc, dc, chatOpen) {
   const alerts = [];
+  const openTickets = Number(tc.open_count) + Number(tc.in_progress);
+
   if (Number(tc.unassigned) > 0) {
     alerts.push({ id: 'unassigned', message: `${tc.unassigned} support ticket(s) have no assignee.`, severity: 'warning' });
   }
   if (Number(tc.high_priority) > 0) {
     alerts.push({ id: 'high-priority', message: `${tc.high_priority} high-priority ticket(s) need attention.`, severity: 'error' });
+  }
+  if (Number(tc.awaiting_reply) > 0) {
+    alerts.push({ id: 'awaiting-reply', message: `${tc.awaiting_reply} ticket(s) awaiting a staff reply.`, severity: 'warning' });
+  }
+  if (Number(tc.escalated) > 0) {
+    alerts.push({ id: 'escalated', message: `${tc.escalated} escalated ticket(s) need a queue handoff.`, severity: 'error' });
   }
   if (Number(dc.open_count) > 0) {
     alerts.push({
@@ -279,6 +288,9 @@ function buildAlerts(tc, rc, dc, chatOpen) {
   }
   if (chatOpen > 0) {
     alerts.push({ id: 'chat-queue', message: `${chatOpen} live chat conversation(s) waiting.`, severity: 'warning' });
+  }
+  if (openTickets > 0 && !alerts.some((a) => a.id === 'high-priority' || a.id === 'unassigned' || a.id === 'awaiting-reply')) {
+    alerts.push({ id: 'open-tickets', message: `${openTickets} support ticket(s) still open.`, severity: 'info' });
   }
   if (!alerts.length) {
     alerts.push({ id: 'clear', message: 'Support desk is clear — no urgent queues.', severity: 'success' });
@@ -405,9 +417,9 @@ async function getSupportOverview() {
         color: priorityColors[r.priority] || '#71717a',
       })),
       disputeStatusMix: disputeMix.rows.map((r) => ({
-        label: String(r.status || 'open').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase()),
+        label: displayLabel(String(r.status || 'open')),
         value: Number(r.count),
-        color: disputeColors[r.status] || '#71717a',
+        color: disputeColors[String(r.status || '').toLowerCase()] || '#71717a',
       })),
       activityTrend: ticketTrend.rows.map((r) => ({
         day: r.day,

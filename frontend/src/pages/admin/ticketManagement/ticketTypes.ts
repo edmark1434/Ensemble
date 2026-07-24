@@ -195,6 +195,8 @@ export type TicketsOverview = {
     totalTickets: number;
     unassignedTickets: number;
     highPriorityTickets: number;
+    awaitingReplyTickets?: number;
+    escalatedTickets?: number;
     openDisputes: number;
     totalDisputes: number;
     creditsAtRisk: number;
@@ -206,11 +208,17 @@ export type TicketsOverview = {
   charts: {
     ticketStatusMix: ChartSegment[];
     ticketCategories: ChartSegment[];
+    ticketTypes?: ChartSegment[];
     openByPriority: { label: string; value: number }[];
     disputeStatusMix: ChartSegment[];
   };
-  /** Distinct ticket types from tickets table */
+  /** Distinct ticket types from ticket_type_catalog */
   types: string[];
+  typeDetails?: { label: string; queueRole: string; description?: string | null }[];
+  escalateByRole?: Record<string, string[]>;
+  escalateRoles?: string[];
+  statuses?: string[];
+  priorities?: string[];
   /** @deprecated use types */
   categories?: string[];
   tickets: SupportTicket[];
@@ -218,7 +226,22 @@ export type TicketsOverview = {
   reports: UserReport[];
   staffWorkload: StaffWorkload[];
   recentActivity: TicketActivity[];
-  alerts: { id: string; message: string; severity: string }[];
+  alerts: {
+    id: string;
+    message: string;
+    severity: string;
+    action?: {
+      tab?: 'overview' | 'tickets' | 'disputes' | 'reports' | 'assignments';
+      ticketFilters?: Partial<{
+        search: string;
+        status: string;
+        priority: string;
+        type: string;
+        assignee: string;
+        flag: string;
+      }>;
+    };
+  }[];
   dataSources: { tables: string[]; persisted: boolean };
 };
 

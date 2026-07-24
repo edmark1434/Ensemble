@@ -16,7 +16,7 @@ import {
 import api from "@/lib/axios";
 import { ChartCard, DonutChart, HorizontalBarChart, LineChart } from "@/pages/admin/analytics/components/AnalyticsCharts";
 import type { SupportOverview } from "../shared/moderatorTypes";
-import { AlertList, PriorityBadge, StatCard, StatusBadge } from "../shared/ui";
+import { AlertList, PriorityBadge, StatCard, StatusBadge, titleCaseWords } from "../shared/ui";
 
 function SectionTitle({ icon: Icon, children }: { icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
   return (
@@ -152,7 +152,7 @@ export default function SupportModeratorDashboard() {
           />
         </ChartCard>
         <ChartCard>
-          <HorizontalBarChart title="Tickets by category" data={charts.ticketCategories} color="#38bdf8" />
+          <HorizontalBarChart title="Tickets by type" data={charts.ticketCategories} color="#38bdf8" />
         </ChartCard>
       </div>
 
@@ -309,7 +309,7 @@ export default function SupportModeratorDashboard() {
               <div className="min-w-0">
                 <p className="truncate text-zinc-200">{entry.label}</p>
                 <p className="text-[11px] text-zinc-500">
-                  {entry.ref} · {entry.type} · {entry.status.replace("_", " ")}
+                  {entry.ref} · {entry.type} · {titleCaseWords(entry.status)}
                 </p>
               </div>
               <span className="shrink-0 text-[11px] text-zinc-500">{new Date(entry.at).toLocaleString()}</span>

@@ -257,14 +257,25 @@ async function getForumContentStats() {
 
 function buildAlerts(tc, rc) {
   const alerts = [];
+  const openTickets = Number(tc.open_count) + Number(tc.in_progress);
+
   if (Number(tc.unassigned) > 0) {
     alerts.push({ id: 'unassigned', message: `${tc.unassigned} forum ticket(s) have no assignee.`, severity: 'warning' });
+  }
+  if (Number(tc.high_priority) > 0) {
+    alerts.push({ id: 'high-priority', message: `${tc.high_priority} high-priority forum ticket(s) need attention.`, severity: 'error' });
+  }
+  if (Number(tc.awaiting_reply) > 0) {
+    alerts.push({ id: 'awaiting-reply', message: `${tc.awaiting_reply} forum ticket(s) awaiting a staff reply.`, severity: 'warning' });
+  }
+  if (Number(tc.escalated) > 0) {
+    alerts.push({ id: 'escalated', message: `${tc.escalated} escalated forum ticket(s) need a handoff.`, severity: 'error' });
   }
   if (Number(rc.open_count) > 0) {
     alerts.push({ id: 'flagged-content', message: `${rc.open_count} flagged forum item(s) awaiting review.`, severity: 'error' });
   }
-  if (Number(tc.open_count) + Number(tc.in_progress) > 0) {
-    alerts.push({ id: 'open-tickets', message: `${Number(tc.open_count) + Number(tc.in_progress)} forum ticket(s) open.`, severity: 'info' });
+  if (openTickets > 0) {
+    alerts.push({ id: 'open-tickets', message: `${openTickets} forum ticket(s) open.`, severity: 'info' });
   }
   if (!alerts.length) {
     alerts.push({ id: 'clear', message: 'Forum queues are clear.', severity: 'success' });

@@ -528,6 +528,8 @@ async function getUserJobsHistory(accountId) {
 
 function buildAlerts(tc, dc) {
   const alerts = [];
+  const openTickets = Number(tc.open_count) + Number(tc.in_progress);
+
   if (Number(dc.open_count) > 0) {
     alerts.push({
       id: 'open-disputes',
@@ -538,8 +540,17 @@ function buildAlerts(tc, dc) {
   if (Number(tc.unassigned) > 0) {
     alerts.push({ id: 'unassigned', message: `${tc.unassigned} job/gig ticket(s) have no assignee.`, severity: 'warning' });
   }
-  if (Number(tc.open_count) + Number(tc.in_progress) > 0) {
-    alerts.push({ id: 'open-tickets', message: `${Number(tc.open_count) + Number(tc.in_progress)} job/gig ticket(s) open.`, severity: 'info' });
+  if (Number(tc.high_priority) > 0) {
+    alerts.push({ id: 'high-priority', message: `${tc.high_priority} high-priority job/gig ticket(s) need attention.`, severity: 'error' });
+  }
+  if (Number(tc.awaiting_reply) > 0) {
+    alerts.push({ id: 'awaiting-reply', message: `${tc.awaiting_reply} job/gig ticket(s) awaiting a staff reply.`, severity: 'warning' });
+  }
+  if (Number(tc.escalated) > 0) {
+    alerts.push({ id: 'escalated', message: `${tc.escalated} escalated job/gig ticket(s) need a handoff.`, severity: 'error' });
+  }
+  if (openTickets > 0) {
+    alerts.push({ id: 'open-tickets', message: `${openTickets} job/gig ticket(s) open.`, severity: 'info' });
   }
   if (!alerts.length) {
     alerts.push({ id: 'clear', message: 'Jobs & Gigs queues are clear.', severity: 'success' });
@@ -597,7 +608,7 @@ async function getJobsOverview() {
 
   const disputeStatusMix = [
     { label: 'Open', value: disputes.filter((d) => d.status === 'open').length, color: '#f87171' },
-    { label: 'Under review', value: disputes.filter((d) => d.status === 'under_review').length, color: '#fbbf24' },
+    { label: 'Under Review', value: disputes.filter((d) => d.status === 'under_review').length, color: '#fbbf24' },
     { label: 'Resolved', value: disputes.filter((d) => ['resolved', 'closed'].includes(d.status)).length, color: '#34d399' },
   ].filter((x) => x.value > 0);
 

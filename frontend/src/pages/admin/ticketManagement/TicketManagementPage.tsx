@@ -47,15 +47,25 @@ function formatDateTime(value: string | null) {
   return new Date(value).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+function formatStatusLabel(value: string) {
+  return String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
 function badgeClass(kind: 'status' | 'priority', value: string) {
-  const v = value.toLowerCase();
+  const v = value.toLowerCase().replace(/_/g, ' ');
   if (kind === 'priority') {
     if (v === 'high') return 'bg-red-500/15 text-red-300 border-red-500/25';
     if (v === 'medium') return 'bg-amber-500/15 text-amber-200 border-amber-500/25';
     return 'bg-zinc-500/15 text-zinc-300 border-white/10';
   }
   if (v === 'open') return 'bg-red-500/15 text-red-300';
-  if (v === 'in progress' || v === 'in_progress' || v === 'under_review' || v === 'in_review') {
+  if (v === 'in progress' || v === 'under review' || v === 'in review' || v === 'escalated') {
     return 'bg-amber-500/15 text-amber-200';
   }
   if (v === 'resolved' || v === 'closed') return 'bg-emerald-500/15 text-emerald-300';
@@ -104,6 +114,18 @@ export default function TicketManagementPage() {
   const switchTab = (id: TabId) => {
     setTab(id);
     setSearchParams(id === 'overview' ? {} : { tab: id }, { replace: true });
+  };
+
+  const handleAlertClick = (alert: TicketsOverview['alerts'][number]) => {
+    const action = alert.action;
+    if (!action?.tab) return;
+    if (action.ticketFilters) {
+      setTicketFilters({
+        ...DEFAULT_TICKET_FILTERS,
+        ...(action.ticketFilters as Partial<TicketFilterState>),
+      });
+    }
+    switchTab(action.tab as TabId);
   };
 
   const q = search.trim().toLowerCase();
@@ -241,23 +263,30 @@ export default function TicketManagementPage() {
 
       <div className="space-y-6 px-6 py-6 md:px-8 md:py-8">
         <div className="flex flex-wrap gap-2">
-          {alerts.map((a) => (
-            <span
-              key={a.id}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs ${
-                a.severity === 'warning'
-                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-100'
-                  : a.severity === 'error'
-                    ? 'border-red-500/30 bg-red-500/10 text-red-200'
-                    : a.severity === 'success'
-                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                      : 'border-white/10 bg-white/[0.03] text-zinc-300'
-              }`}
-            >
-              {a.severity === 'success' ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
-              {a.message}
-            </span>
-          ))}
+          {alerts.map((a) => {
+            const clickable = Boolean(a.action?.tab);
+            return (
+              <button
+                key={a.id}
+                type="button"
+                disabled={!clickable}
+                onClick={() => handleAlertClick(a)}
+                title={clickable ? 'Open related queue' : undefined}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-left text-xs transition ${
+                  a.severity === 'warning'
+                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-100'
+                    : a.severity === 'error'
+                      ? 'border-red-500/30 bg-red-500/10 text-red-200'
+                      : a.severity === 'success'
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                        : 'border-white/10 bg-white/[0.03] text-zinc-300'
+                } ${clickable ? 'hover:brightness-110 cursor-pointer' : 'cursor-default'}`}
+              >
+                {a.severity === 'success' ? <CheckCircle2 className="h-3 w-3 shrink-0" /> : <AlertTriangle className="h-3 w-3 shrink-0" />}
+                {a.message}
+              </button>
+            );
+          })}
         </div>
 
         {tab === 'overview' && (
@@ -313,10 +342,10 @@ function OverviewTab({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
         <Kpi label="Open tickets" value={summary.openTickets} sub={`${summary.totalTickets} total`} />
         <Kpi label="Unassigned" value={summary.unassignedTickets} sub="Need assignee" />
-        <Kpi label="High priority" value={summary.highPriorityTickets} sub="Tickets flagged urgent" />
+        <Kpi label="High priority" value={summary.highPriorityTickets} sub="Open tickets flagged urgent" />
+        <Kpi label="Awaiting reply" value={summary.awaitingReplyTickets ?? 0} sub="User message waiting" />
         <Kpi label="Open disputes" value={summary.openDisputes} sub={`${summary.creditsAtRisk.toLocaleString()} credits at risk`} />
         <Kpi label="Open reports" value={summary.openReports} sub={`${summary.totalReports} total reports`} />
-        <Kpi label="SLA compliance" value={`${summary.slaCompliancePercent}%`} sub={`~${summary.avgResolutionHours}h avg resolution`} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -332,7 +361,7 @@ function OverviewTab({
         <ChartCard>
           <VerticalBarChart
             title="Tickets by type"
-            data={charts.ticketCategories.map((c) => ({ label: c.label, value: c.value }))}
+            data={(charts.ticketTypes || charts.ticketCategories).map((c) => ({ label: c.label, value: c.value }))}
             color="#a78bfa"
           />
         </ChartCard>
@@ -355,7 +384,9 @@ function OverviewTab({
                   <span className="font-medium text-white">{a.ref}</span>
                   <p className="text-xs text-zinc-500">{a.label}</p>
                 </div>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] ${badgeClass('status', a.status)}`}>{a.status}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] ${badgeClass('status', a.status)}`}>
+                  {formatStatusLabel(a.status)}
+                </span>
               </li>
             ))}
           </ul>
@@ -459,13 +490,19 @@ function TicketsTab({
 
 function DisputesTab({ disputes, onUpdated }: { disputes: Dispute[]; onUpdated: () => void }) {
   const [selected, setSelected] = useState<Dispute | null>(null);
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState('open');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const toApiStatus = (value: string) =>
+    String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '_');
+
   const open = (d: Dispute) => {
     setSelected(d);
-    setStatus(d.status);
+    setStatus(toApiStatus(d.status));
     setNotes(d.resolutionNotes || '');
   };
 
@@ -495,7 +532,7 @@ function DisputesTab({ disputes, onUpdated }: { disputes: Dispute[]; onUpdated: 
             d.title,
             `${d.initiator.name} vs ${d.respondent.name}`,
             d.creditAmount.toLocaleString(),
-            d.status,
+            formatStatusLabel(d.status),
             d.assignee?.name || '—',
             formatDateTime(d.openedAt),
           ],
@@ -543,9 +580,15 @@ function DisputesTab({ disputes, onUpdated }: { disputes: Dispute[]; onUpdated: 
                 onChange={(e) => setStatus(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
               >
-                {['open', 'under_review', 'resolved', 'escalated', 'closed'].map((s) => (
-                  <option key={s} value={s}>
-                    {s.replace('_', ' ')}
+                {[
+                  { value: 'open', label: 'Open' },
+                  { value: 'under_review', label: 'Under Review' },
+                  { value: 'resolved', label: 'Resolved' },
+                  { value: 'escalated', label: 'Escalated' },
+                  { value: 'closed', label: 'Closed' },
+                ].map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
                   </option>
                 ))}
               </select>
@@ -595,8 +638,8 @@ function ReportsTab({ reports, onUpdated }: { reports: UserReport[]; onUpdated: 
           `${r.targetType}: ${r.targetLabel || r.targetId}`,
           r.reason,
           r.reporter.name,
-          r.priority,
-          r.status,
+          formatStatusLabel(r.priority),
+          formatStatusLabel(r.status),
           formatDateTime(r.createdAt),
           'actions',
         ],

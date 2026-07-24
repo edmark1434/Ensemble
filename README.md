@@ -107,15 +107,15 @@ Default seeded passwords:
 - **Staff & admin accounts:** `staff123`
 - **Regular user accounts:** `user123`
 
-**Staff & admin test accounts** (fixed emails — same every seed):
+**Staff & admin test accounts** (fixed named accounts — same every seed):
 
-| Role | Email | Username (handle) | Portal |
-|------|-------|-------------------|--------|
-| Admin | `admin@ensemble.dev` | `admin` | http://localhost:5173/admin |
-| Support Moderator | `support@ensemble.dev` | `support_moderator` | http://localhost:5173/staff |
-| Marketplace Moderator | `marketplace@ensemble.dev` | `marketplace_moderator` | http://localhost:5173/staff |
-| Jobs N Gigs Moderator | `jobs@ensemble.dev` | `jobs_n_gigs_moderator` | http://localhost:5173/staff |
-| Forum Moderator | `forum@ensemble.dev` | `forum_moderator` | http://localhost:5173/staff |
+| Name | Role | Email | Username (handle) | Portal |
+|------|------|-------|-------------------|--------|
+| Admin | Admin | `admin@ensemble.dev` | `admin` | http://localhost:5173/admin |
+| Maya Reyes | Support Moderator | `maya.reyes@ensemble.dev` | `maya_reyes` | http://localhost:5173/staff |
+| Noah Patel | Marketplace Moderator | `noah.patel@ensemble.dev` | `noah_patel` | http://localhost:5173/staff |
+| Lena Brooks | Jobs N Gigs Moderator | `lena.brooks@ensemble.dev` | `lena_brooks` | http://localhost:5173/staff |
+| Owen Park | Forum Moderator | `owen.park@ensemble.dev` | `owen_park` | http://localhost:5173/staff |
 
 Sign in with **email or username** and password `staff123`.
 
@@ -204,9 +204,9 @@ Set `VITE_BASE_URL=http://localhost:4000` in `frontend/.env` (required for login
 | Portal | Example login |
 |--------|----------------|
 | Admin | `admin` or `admin@ensemble.dev` |
-| Staff | `support_moderator` or `support@ensemble.dev` (and other staff emails above) |
+| Staff | `maya.reyes@ensemble.dev` / `maya_reyes` (Support), `noah.patel@ensemble.dev`, `lena.brooks@ensemble.dev`, `owen.park@ensemble.dev` |
 
-Re-run `npm run seed` to reset data; staff emails stay the same.
+Re-run `npm run seed` to reset data; named staff accounts stay the same.
 
 **Terminal 3 — video editor (optional):**
 

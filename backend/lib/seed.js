@@ -173,33 +173,42 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   }
 
   const tickets = [
-    // ticket_number, reason, type, priority, status, channel, account_id, handled_by, related_report, related_dispute
-    ['TKT-50001', 'Cannot verify payment method', 'Credit Top-ups', 'High', 'Open', 'web', userAccountIds[0], supportStaffId, reportIds[0], null],
-    ['TKT-50002', 'Account locked after password reset', 'Account Access', 'High', 'In Progress', 'web', userAccountIds[3], supportStaffId, null, null],
-    ['TKT-50003', 'Credits missing after package purchase', 'Credit Top-ups', 'High', 'Open', 'web', userAccountIds[4], adminStaffId, null, disputeIds[1]],
-    ['TKT-50004', 'Forum group ownership transfer', 'Forums', 'Medium', 'In Progress', 'web', userAccountIds[2], forumStaffId, reportIds[1], null],
-    ['TKT-50005', 'How to invite team members?', 'Other', 'Low', 'Resolved', 'web', userAccountIds[6], supportStaffId, null, null],
-    ['TKT-50006', 'Marketplace listing rejected', 'Asset Marketplace', 'Medium', 'Open', 'web', userAccountIds[7], marketplaceStaffId, reportIds[2], null],
-    ['TKT-50007', 'Two-factor not receiving codes', 'Account Verification', 'High', 'Open', 'web', userAccountIds[1], adminStaffId, null, null],
-    ['TKT-50008', 'Dispute escalation request', 'Other', 'High', 'In Progress', 'web', userAccountIds[5], adminStaffId, null, disputeIds[3]],
-    ['TKT-50009', 'Asset purchase never delivered', 'Asset Marketplace', 'High', 'In Progress', 'web', userAccountIds[9], marketplaceStaffId, null, null],
-    ['TKT-50010', 'Gig milestone stuck in review', 'Jobs and Gigs', 'High', 'Open', 'web', userAccountIds[0], jobsStaffId, null, null],
-    ['TKT-50011', 'Freelancer proposal spam', 'Jobs and Gigs', 'Medium', 'In Progress', 'web', userAccountIds[4], jobsStaffId, null, null],
-    ['TKT-50012', 'Live chat: refund status check', 'Credit Top-ups', 'Medium', 'Open', 'chat', userAccountIds[2], supportStaffId, null, null],
-    ['TKT-50013', 'Live chat: cannot upload portfolio', 'Account Access', 'Low', 'Open', 'chat', userAccountIds[8], supportStaffId, null, null],
-    ['TKT-50014', 'Cancel annual subscription', 'Subscriptions and Plans', 'Medium', 'Open', 'web', userAccountIds[1], supportStaffId, null, null],
-    ['TKT-50015', 'Payout not arriving', 'Withdrawing Earnings', 'High', 'Open', 'web', userAccountIds[5], supportStaffId, null, null],
-    ['TKT-50016', 'Timeline editor crash on export', 'Video Editor', 'Medium', 'In Progress', 'web', userAccountIds[6], supportStaffId, null, null],
+    // ticket_number, reason, type, priority, status, channel, account_id, handled_by, related_report, related_dispute, lastAuthor, escalatedTo
+    ['TKT-50001', 'Cannot verify payment method', 'Credit Top-ups', 'High', 'Open', 'web', userAccountIds[0], supportStaffId, reportIds[0], null, 'user', null],
+    ['TKT-50002', 'Account locked after password reset', 'Account Access', 'High', 'In Progress', 'web', userAccountIds[3], supportStaffId, null, null, 'user', null],
+    ['TKT-50003', 'Credits missing after package purchase', 'Credit Top-ups', 'High', 'Open', 'web', userAccountIds[4], adminStaffId, null, disputeIds[1], 'staff', null],
+    ['TKT-50004', 'Forum group ownership transfer', 'Forums', 'Medium', 'In Progress', 'web', userAccountIds[2], forumStaffId, reportIds[1], null, 'user', null],
+    ['TKT-50005', 'How to invite team members?', 'Other', 'Low', 'Resolved', 'web', userAccountIds[6], supportStaffId, null, null, 'staff', null],
+    ['TKT-50006', 'Marketplace listing rejected', 'Asset Marketplace', 'Medium', 'Open', 'web', userAccountIds[7], marketplaceStaffId, reportIds[2], null, 'user', null],
+    ['TKT-50007', 'Two-factor not receiving codes', 'Account Verification', 'High', 'Open', 'web', userAccountIds[1], null, null, null, 'user', null],
+    ['TKT-50008', 'Dispute escalation request', 'Contracts and Milestones', 'High', 'In Progress', 'web', userAccountIds[5], null, null, disputeIds[3], 'user', 'Jobs N Gigs Moderator'],
+    ['TKT-50009', 'Asset purchase never delivered', 'Asset Marketplace', 'High', 'In Progress', 'web', userAccountIds[9], marketplaceStaffId, null, null, 'staff', null],
+    ['TKT-50010', 'Gig milestone stuck in review', 'Jobs and Gigs', 'High', 'Open', 'web', userAccountIds[0], jobsStaffId, null, null, 'user', null],
+    ['TKT-50011', 'Freelancer proposal spam', 'Jobs and Gigs', 'Medium', 'In Progress', 'web', userAccountIds[4], jobsStaffId, null, null, 'staff', null],
+    ['TKT-50012', 'Live chat: refund status check', 'Credit Top-ups', 'Medium', 'Open', 'chat', userAccountIds[2], supportStaffId, null, null, 'user', null],
+    ['TKT-50013', 'Live chat: cannot upload portfolio', 'Account Access', 'Low', 'Open', 'chat', userAccountIds[8], supportStaffId, null, null, 'user', null],
+    ['TKT-50014', 'Cancel annual subscription', 'Subscriptions and Plans', 'Medium', 'Open', 'web', userAccountIds[1], supportStaffId, null, null, 'staff', null],
+    ['TKT-50015', 'Payout not arriving', 'Withdrawing Earnings', 'High', 'Open', 'web', userAccountIds[5], null, null, null, 'user', 'Support Moderator'],
+    ['TKT-50016', 'Timeline editor crash on export', 'Video Editor', 'Medium', 'In Progress', 'web', userAccountIds[6], supportStaffId, null, null, 'user', null],
   ];
 
   const ticketIds = [];
   for (const t of tickets) {
+    const escalatedTo = t[11];
     const res = await pool.query(
       `INSERT INTO tickets (
         ticket_number, reason, type, priority, status, channel,
         account_id, handled_by_staff_id,
-        related_report_id, related_dispute_id, created_at, resolved_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, NOW() - ($11 || ' hours')::interval, $12)
+        related_report_id, related_dispute_id,
+        last_message_author_type, message_count, last_message_at,
+        escalated_to_role, escalated_by_staff_id,
+        created_at, resolved_at
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,
+        $12, NOW() - ($13 || ' hours')::interval,
+        $14,$15,
+        NOW() - ($16 || ' hours')::interval, $17
+      )
       RETURNING ticket_id`,
       [
         t[0],
@@ -212,6 +221,11 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         t[7],
         t[8],
         t[9],
+        t[10],
+        faker.number.int({ min: 1, max: 8 }),
+        String(faker.number.int({ min: 1, max: 48 })),
+        escalatedTo,
+        escalatedTo ? adminStaffId : null,
         String(faker.number.int({ min: 4, max: 200 })),
         t[4] === 'Resolved' || t[4] === 'Closed' ? new Date() : null,
       ]
@@ -248,11 +262,46 @@ async function seed() {
     await ensurePasswordHashColumnCapacity();
 
     const STAFF_SEED = [
-      { role: 'Admin', handle: 'admin', email: 'admin@ensemble.dev', firstName: 'Platform', lastName: 'Admin' },
-      { role: 'Support Moderator', handle: 'support_moderator', email: 'support@ensemble.dev', firstName: 'Support', lastName: 'Moderator' },
-      { role: 'Marketplace Moderator', handle: 'marketplace_moderator', email: 'marketplace@ensemble.dev', firstName: 'Marketplace', lastName: 'Moderator' },
-      { role: 'Jobs N Gigs Moderator', handle: 'jobs_n_gigs_moderator', email: 'jobs@ensemble.dev', firstName: 'Jobs', lastName: 'Moderator' },
-      { role: 'Forum Moderator', handle: 'forum_moderator', email: 'forum@ensemble.dev', firstName: 'Forum', lastName: 'Moderator' },
+      {
+        role: 'Admin',
+        handle: 'admin',
+        email: 'admin@ensemble.dev',
+        firstName: 'Admin',
+        lastName: 'User',
+        displayName: 'Admin',
+      },
+      {
+        role: 'Support Moderator',
+        handle: 'maya_reyes',
+        email: 'maya.reyes@ensemble.dev',
+        firstName: 'Maya',
+        lastName: 'Reyes',
+        displayName: 'Maya Reyes',
+      },
+      {
+        role: 'Marketplace Moderator',
+        handle: 'noah_patel',
+        email: 'noah.patel@ensemble.dev',
+        firstName: 'Noah',
+        lastName: 'Patel',
+        displayName: 'Noah Patel',
+      },
+      {
+        role: 'Jobs N Gigs Moderator',
+        handle: 'lena_brooks',
+        email: 'lena.brooks@ensemble.dev',
+        firstName: 'Lena',
+        lastName: 'Brooks',
+        displayName: 'Lena Brooks',
+      },
+      {
+        role: 'Forum Moderator',
+        handle: 'owen_park',
+        email: 'owen.park@ensemble.dev',
+        firstName: 'Owen',
+        lastName: 'Park',
+        displayName: 'Owen Park',
+      },
     ];
     const staffByRole = {};
     const userAccountIds = [];
@@ -260,12 +309,12 @@ async function seed() {
     const staffPasswordHash = await bcrypt.hash('staff123', saltRounds);
     const userPasswordHash = await bcrypt.hash('user123', saltRounds);
 
-    // 1. Seed STAFF (fixed dev credentials — always the same after seed)
+    // 1. Seed STAFF (fixed named moderators — always the same after seed)
     for (const staff of STAFF_SEED) {
       const accountRes = await pool.query(
         `INSERT INTO ACCOUNTS (display_name, handle, type, merit_score, status, created_at) 
          VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING account_id`,
-        [cap(staff.role, 50), cap(staff.handle, 50), 'Staff', 100, 'Active']
+        [cap(staff.displayName, 50), cap(staff.handle, 50), 'Staff', 100, 'Active']
       );
 
       const accountId = accountRes.rows[0].account_id;
@@ -284,7 +333,7 @@ async function seed() {
         ]
       );
       staffByRole[staff.role] = staffRes.rows[0].staff_id;
-      console.log(`✅ Created Staff: ${staff.role} (${staff.email} / ${staff.handle})`);
+      console.log(`✅ Created ${staff.displayName} — ${staff.role} (${staff.email} / @${staff.handle})`);
     }
 
     // 2. Seed Regular USERS (10 random users)
@@ -323,7 +372,9 @@ async function seed() {
 
     console.log('');
     console.log('🔑 Staff login (password: staff123):');
-    console.log('   Admin portal → admin@ensemble.dev  or  username: admin');
+    for (const staff of STAFF_SEED) {
+      console.log(`   ${staff.role.padEnd(24)} ${staff.email}  /  @${staff.handle}  (${staff.displayName})`);
+    }
     console.log(`✨ Seeding complete! ${userAccountIds.length} users, ${STAFF_SEED.length} staff, tickets & settings loaded.`);
   } catch (err) {
     console.error("❌ Seeding Error:", err);

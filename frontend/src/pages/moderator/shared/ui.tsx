@@ -76,11 +76,12 @@ export function AlertList({ alerts }: { alerts: Alert[] }) {
   );
 }
 
-function titleCaseWords(value: string) {
+export function titleCaseWords(value: string) {
   return String(value || "")
-    .replace(/_/g, " ")
+    .replace(/[_-]+/g, " ")
     .trim()
     .split(/\s+/)
+    .filter(Boolean)
     .map((w) => (w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w))
     .join(" ");
 }

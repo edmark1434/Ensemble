@@ -146,11 +146,25 @@ async function getMarketplaceOverview() {
 
 function buildMarketplaceAlerts(lc, tc) {
   const alerts = [];
+  const openTickets = Number(tc.open_count) + Number(tc.in_progress || 0);
+
   if (Number(lc.pending) > 0) {
     alerts.push({ id: 'pending-listings', message: `${lc.pending} listing(s) awaiting review.`, severity: 'warning' });
   }
-  if (Number(tc.open_count) > 0) {
-    alerts.push({ id: 'open-tickets', message: `${tc.open_count} marketplace ticket(s) open.`, severity: 'info' });
+  if (Number(tc.unassigned) > 0) {
+    alerts.push({ id: 'unassigned', message: `${tc.unassigned} marketplace ticket(s) have no assignee.`, severity: 'warning' });
+  }
+  if (Number(tc.high_priority) > 0) {
+    alerts.push({ id: 'high-priority', message: `${tc.high_priority} high-priority marketplace ticket(s) need attention.`, severity: 'error' });
+  }
+  if (Number(tc.awaiting_reply) > 0) {
+    alerts.push({ id: 'awaiting-reply', message: `${tc.awaiting_reply} marketplace ticket(s) awaiting a staff reply.`, severity: 'warning' });
+  }
+  if (Number(tc.escalated) > 0) {
+    alerts.push({ id: 'escalated', message: `${tc.escalated} escalated marketplace ticket(s) need a handoff.`, severity: 'error' });
+  }
+  if (openTickets > 0) {
+    alerts.push({ id: 'open-tickets', message: `${openTickets} marketplace ticket(s) open.`, severity: 'info' });
   }
   if (!alerts.length) {
     alerts.push({ id: 'clear', message: 'Marketplace queue is clear.', severity: 'success' });

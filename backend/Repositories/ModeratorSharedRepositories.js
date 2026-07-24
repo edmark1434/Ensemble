@@ -71,6 +71,16 @@ function mapTicketRow(row) {
   };
 }
 
+function displayLabel(value) {
+  return String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
 function mapReportRow(row) {
   return {
     id: row.report_id,
@@ -80,13 +90,14 @@ function mapReportRow(row) {
       name: row.reporter_name || 'Anonymous',
       username: row.reporter_handle || '—',
     },
-    targetType: row.target_type || row.type,
+    // Keep status/priority as DB snake_case for filters/forms; format in UI.
+    targetType: displayLabel(row.target_type || row.type),
     targetId: row.target_id || row.reference_id,
     targetLabel: row.target_label,
     reason: row.reason,
     description: row.description,
-    status: normalizeStatus(row.status),
-    priority: row.priority || 'medium',
+    status: String(row.status || 'open').toLowerCase(),
+    priority: String(row.priority || 'medium').toLowerCase(),
     assignee: row.assigned_staff_id
       ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Unassigned' }
       : null,
@@ -102,8 +113,9 @@ function mapDisputeRow(row) {
     number: row.dispute_number,
     title: row.title,
     reason: row.reason,
-    status: normalizeStatus(row.status),
-    priority: row.priority,
+    // Keep status/priority as DB snake_case for filters/forms; format in UI.
+    status: String(row.status || 'open').toLowerCase(),
+    priority: String(row.priority || 'medium').toLowerCase(),
     initiator: {
       accountId: row.initiator_account_id,
       name: row.initiator_name || 'Unknown',
@@ -114,7 +126,7 @@ function mapDisputeRow(row) {
       name: row.respondent_name || 'Unknown',
       username: row.respondent_handle || '—',
     },
-    relatedEntityType: row.related_entity_type,
+    relatedEntityType: row.related_entity_type ? displayLabel(row.related_entity_type) : null,
     relatedEntityId: row.related_entity_id,
     assignee: row.assigned_staff_id
       ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Unassigned', role: row.assignee_role }
@@ -204,8 +216,22 @@ async function scopedTicketCounts({ typesIn, typesNotIn, categoriesIn, categorie
       COUNT(*) FILTER (WHERE status = 'Open')::int AS open_count,
       COUNT(*) FILTER (WHERE status = 'In Progress')::int AS in_progress,
       COUNT(*) FILTER (WHERE status IN ('Resolved', 'Closed'))::int AS resolved,
-      COUNT(*) FILTER (WHERE priority = 'High')::int AS high_priority,
-      COUNT(*) FILTER (WHERE handled_by_staff_id IS NULL AND status NOT IN ('Resolved', 'Closed'))::int AS unassigned
+      COUNT(*) FILTER (
+        WHERE priority = 'High'
+          AND status NOT IN ('Resolved', 'Closed')
+      )::int AS high_priority,
+      COUNT(*) FILTER (
+        WHERE handled_by_staff_id IS NULL
+          AND status NOT IN ('Resolved', 'Closed')
+      )::int AS unassigned,
+      COUNT(*) FILTER (
+        WHERE status NOT IN ('Resolved', 'Closed')
+          AND LOWER(COALESCE(last_message_author_type, '')) = 'user'
+      )::int AS awaiting_reply,
+      COUNT(*) FILTER (
+        WHERE status NOT IN ('Resolved', 'Closed')
+          AND (escalated_to_role IS NOT NULL OR escalated_by_staff_id IS NOT NULL)
+      )::int AS escalated
     FROM tickets
     ${whereSql}
     `,
@@ -366,7 +392,7 @@ const CHART_COLORS = ['#fb7185', '#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#3
 
 function toCategoryChart(rows) {
   return rows.map((r, i) => ({
-    label: r.type || r.category || 'Other',
+    label: displayLabel(r.type || r.category || 'Other'),
     value: Number(r.count),
     color: CHART_COLORS[i % CHART_COLORS.length],
   }));
@@ -382,6 +408,7 @@ function ticketStatusChart(counts) {
 
 module.exports = {
   normalizeStatus,
+  displayLabel,
   mapTicketRow,
   mapReportRow,
   mapDisputeRow,

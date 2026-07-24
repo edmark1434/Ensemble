@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Flag, Loader2, RefreshCw, Search, ShieldAlert } from "lucide-react";
 import api from "@/lib/axios";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
-import { PriorityBadge, StatusBadge } from "../shared/ui";
+import { PriorityBadge, StatusBadge, titleCaseWords } from "../shared/ui";
 import type { UserReport } from "../shared/moderatorTypes";
 
 const STATUS_OPTIONS = ["open", "in_review", "resolved", "closed"];
@@ -36,7 +36,7 @@ export default function SupportUserTeam() {
     setSavingId(report.id);
     try {
       await api.patch(`/api/moderator/support/reports/${report.id}`, { status: nextStatus });
-      showSuccessToast(`Report ${report.number} marked ${nextStatus.replace("_", " ")}`);
+      showSuccessToast(`Report ${report.number} marked ${titleCaseWords(nextStatus)}`);
       await load();
     } catch {
       showErrorToast("Failed to update report");
@@ -120,13 +120,13 @@ export default function SupportUserTeam() {
               key={s}
               type="button"
               onClick={() => setStatus(s)}
-              className={`rounded-lg border px-3 py-1.5 text-xs font-medium capitalize transition ${
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
                 status === s
                   ? "border-sky-500/40 bg-sky-500/10 text-sky-300"
                   : "border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white"
               }`}
             >
-              {s.replace("_", " ")}
+              {titleCaseWords(s)}
             </button>
           ))}
         </div>
@@ -186,7 +186,7 @@ export default function SupportUserTeam() {
                       >
                         {STATUS_OPTIONS.map((s) => (
                           <option key={s} value={s}>
-                            {s.replace("_", " ")}
+                            {titleCaseWords(s)}
                           </option>
                         ))}
                       </select>

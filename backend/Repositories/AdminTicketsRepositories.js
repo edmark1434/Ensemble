@@ -218,8 +218,9 @@ function mapDisputeRow(row) {
     number: row.dispute_number,
     title: row.title,
     reason: row.reason,
-    status: normalizeStatus(row.status),
-    priority: row.priority,
+    // Keep status/priority as DB snake_case for filters/forms; format in UI.
+    status: String(row.status || 'open').toLowerCase(),
+    priority: String(row.priority || 'medium').toLowerCase(),
     initiator: {
       accountId: row.initiator_account_id,
       name: row.initiator_name || 'Unknown',
@@ -230,7 +231,7 @@ function mapDisputeRow(row) {
       name: row.respondent_name || 'Unknown',
       username: row.respondent_handle || '—',
     },
-    relatedEntityType: row.related_entity_type,
+    relatedEntityType: row.related_entity_type ? displayLabel(row.related_entity_type) : null,
     relatedEntityId: row.related_entity_id,
     assignee: row.assigned_staff_id
       ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Unassigned', role: row.assignee_role }
@@ -243,6 +244,16 @@ function mapDisputeRow(row) {
   };
 }
 
+function displayLabel(value) {
+  return String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
 function mapReportRow(row) {
   return {
     id: row.report_id,
@@ -252,13 +263,14 @@ function mapReportRow(row) {
       name: row.reporter_name || 'Anonymous',
       username: row.reporter_handle || '—',
     },
-    targetType: row.target_type || row.type,
+    targetType: displayLabel(row.target_type || row.type),
     targetId: row.target_id || row.reference_id,
     targetLabel: row.target_label,
     reason: row.reason,
     description: row.description,
-    status: normalizeStatus(row.status),
-    priority: row.priority || 'medium',
+    // Keep status/priority as DB snake_case for filters/forms; format in UI.
+    status: String(row.status || 'open').toLowerCase(),
+    priority: String(row.priority || 'medium').toLowerCase(),
     assignee: row.assigned_staff_id
       ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Unassigned' }
       : null,
@@ -287,8 +299,22 @@ async function getTicketsOverview() {
         COUNT(*) FILTER (WHERE status = 'Open')::int AS open_count,
         COUNT(*) FILTER (WHERE status = 'In Progress')::int AS in_progress,
         COUNT(*) FILTER (WHERE status IN ('Resolved', 'Closed'))::int AS resolved,
-        COUNT(*) FILTER (WHERE priority = 'High')::int AS high_priority,
-        COUNT(*) FILTER (WHERE handled_by_staff_id IS NULL AND status NOT IN ('Resolved', 'Closed'))::int AS unassigned
+        COUNT(*) FILTER (
+          WHERE priority = 'High'
+            AND status NOT IN ('Resolved', 'Closed')
+        )::int AS high_priority,
+        COUNT(*) FILTER (
+          WHERE handled_by_staff_id IS NULL
+            AND status NOT IN ('Resolved', 'Closed')
+        )::int AS unassigned,
+        COUNT(*) FILTER (
+          WHERE status NOT IN ('Resolved', 'Closed')
+            AND LOWER(COALESCE(last_message_author_type, '')) = 'user'
+        )::int AS awaiting_reply,
+        COUNT(*) FILTER (
+          WHERE status NOT IN ('Resolved', 'Closed')
+            AND (escalated_to_role IS NOT NULL OR escalated_by_staff_id IS NOT NULL)
+        )::int AS escalated
       FROM tickets
       WHERE deleted_at IS NULL
     `),
@@ -298,7 +324,10 @@ async function getTicketsOverview() {
         COUNT(*) FILTER (WHERE LOWER(status) = 'open')::int AS open_count,
         COUNT(*) FILTER (WHERE LOWER(status) = 'under_review')::int AS under_review,
         COUNT(*) FILTER (WHERE LOWER(status) IN ('resolved', 'closed'))::int AS resolved,
-        COALESCE(SUM(credit_amount_involved) FILTER (WHERE LOWER(status) = 'open'), 0)::int AS credits_at_risk
+        COALESCE(
+          SUM(credit_amount_involved) FILTER (WHERE LOWER(status) IN ('open', 'under_review')),
+          0
+        )::int AS credits_at_risk
       FROM disputes
     `),
     pool.query(`
@@ -306,7 +335,8 @@ async function getTicketsOverview() {
         COUNT(*)::int AS total,
         COUNT(*) FILTER (WHERE LOWER(status) = 'open')::int AS open_count,
         COUNT(*) FILTER (WHERE LOWER(status) = 'in_review')::int AS in_review,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'resolved')::int AS resolved
+        COUNT(*) FILTER (WHERE LOWER(status) = 'resolved')::int AS resolved,
+        COUNT(*) FILTER (WHERE LOWER(status) NOT IN ('resolved', 'closed'))::int AS awaiting_triage
       FROM reports
       WHERE deleted_at IS NULL
     `),
@@ -338,23 +368,37 @@ async function getTicketsOverview() {
 
   const statusChart = [
     { label: 'Open', value: Number(tc.open_count), color: '#f87171' },
-    { label: 'In progress', value: Number(tc.in_progress), color: '#fbbf24' },
+    { label: 'In Progress', value: Number(tc.in_progress), color: '#fbbf24' },
     { label: 'Resolved', value: Number(tc.resolved), color: '#34d399' },
   ].filter((x) => x.value > 0);
 
-  const categoryChart = typeBreakdown.rows.map((r, i) => ({
-    label: r.type,
-    value: r.count,
-    color: ['#fb7185', '#a78bfa', '#60a5fa', '#34d399', '#fbbf24'][i % 5],
-  }));
-
-  const typesFromTickets = typeBreakdown.rows
-    .map((r) => String(r.type || '').trim())
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b));
-
   const catalog = await getTicketCatalog();
-  const types = catalog.types.length ? catalog.types : typesFromTickets;
+  const typeCountMap = Object.fromEntries(
+    typeBreakdown.rows.map((r) => [String(r.type || '').trim(), Number(r.count || 0)])
+  );
+  const typeLabels = catalog.types.length
+    ? catalog.types
+    : Object.keys(typeCountMap).sort((a, b) => a.localeCompare(b));
+  const typeChart = typeLabels
+    .map((label, i) => ({
+      label,
+      value: typeCountMap[label] || 0,
+      color: ['#fb7185', '#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#f472b6', '#38bdf8'][i % 7],
+    }))
+    .filter((x) => x.value > 0);
+
+  const priorityOrder = { High: 0, Medium: 1, Low: 2 };
+  const priorityChart = (catalog.priorities.length ? catalog.priorities : ['High', 'Medium', 'Low'])
+    .map((label) => {
+      const row = priorityBreakdown.rows.find(
+        (r) => String(r.priority || '').toLowerCase() === label.toLowerCase()
+      );
+      return { label, value: Number(row?.count || 0) };
+    })
+    .filter((x) => x.value > 0)
+    .sort((a, b) => (priorityOrder[a.label] ?? 9) - (priorityOrder[b.label] ?? 9));
+
+  const types = catalog.types.length ? catalog.types : typeLabels;
 
   return {
     lastUpdated: new Date().toISOString(),
@@ -363,6 +407,8 @@ async function getTicketsOverview() {
       totalTickets: Number(tc.total),
       unassignedTickets: Number(tc.unassigned),
       highPriorityTickets: Number(tc.high_priority),
+      awaitingReplyTickets: Number(tc.awaiting_reply),
+      escalatedTickets: Number(tc.escalated),
       openDisputes: Number(dc.open_count) + Number(dc.under_review),
       totalDisputes: Number(dc.total),
       creditsAtRisk: Number(dc.credits_at_risk),
@@ -373,14 +419,12 @@ async function getTicketsOverview() {
     },
     charts: {
       ticketStatusMix: statusChart,
-      ticketCategories: categoryChart,
-      openByPriority: priorityBreakdown.rows.map((r) => ({
-        label: r.priority,
-        value: r.count,
-      })),
+      ticketCategories: typeChart,
+      ticketTypes: typeChart,
+      openByPriority: priorityChart,
       disputeStatusMix: [
         { label: 'Open', value: Number(dc.open_count), color: '#f87171' },
-        { label: 'Under review', value: Number(dc.under_review), color: '#fbbf24' },
+        { label: 'Under Review', value: Number(dc.under_review), color: '#fbbf24' },
         { label: 'Resolved', value: Number(dc.resolved), color: '#34d399' },
       ].filter((x) => x.value > 0),
     },
@@ -397,7 +441,16 @@ async function getTicketsOverview() {
     recentActivity,
     alerts: buildTicketAlerts(tc, dc, rc),
     dataSources: {
-      tables: ['tickets', 'ticket_chats', 'ticket_type_catalog', 'inbox/messages (mongo)', 'disputes', 'reports'],
+      tables: [
+        'tickets',
+        'ticket_chats',
+        'ticket_type_catalog',
+        'ticket_status_catalog',
+        'ticket_priority_catalog',
+        'inbox/messages (mongo)',
+        'disputes',
+        'reports',
+      ],
       persisted: true,
     },
   };
@@ -405,11 +458,15 @@ async function getTicketsOverview() {
 
 function buildTicketAlerts(tc, dc, rc) {
   const alerts = [];
+  const openDisputes = Number(dc.open_count) + Number(dc.under_review);
+  const openReports = Number(rc.awaiting_triage ?? Number(rc.open_count) + Number(rc.in_review || 0));
+
   if (Number(tc.unassigned) > 0) {
     alerts.push({
       id: 'unassigned',
       message: `${tc.unassigned} ticket(s) have no assignee.`,
       severity: 'warning',
+      action: { tab: 'tickets', ticketFilters: { assignee: 'unassigned', flag: 'open_only' } },
     });
   }
   if (Number(tc.high_priority) > 0) {
@@ -417,20 +474,39 @@ function buildTicketAlerts(tc, dc, rc) {
       id: 'high-priority',
       message: `${tc.high_priority} high-priority ticket(s) need attention.`,
       severity: 'error',
+      action: { tab: 'tickets', ticketFilters: { priority: 'High', flag: 'open_only' } },
     });
   }
-  if (Number(dc.open_count) > 0) {
+  if (Number(tc.awaiting_reply) > 0) {
+    alerts.push({
+      id: 'awaiting-reply',
+      message: `${tc.awaiting_reply} ticket(s) awaiting a staff reply.`,
+      severity: 'warning',
+      action: { tab: 'tickets', ticketFilters: { flag: 'awaiting' } },
+    });
+  }
+  if (Number(tc.escalated) > 0) {
+    alerts.push({
+      id: 'escalated',
+      message: `${tc.escalated} escalated ticket(s) need a queue handoff.`,
+      severity: 'error',
+      action: { tab: 'tickets', ticketFilters: { flag: 'escalated' } },
+    });
+  }
+  if (openDisputes > 0) {
     alerts.push({
       id: 'open-disputes',
-      message: `${dc.open_count} open dispute(s) — ${Number(dc.credits_at_risk).toLocaleString()} credits at risk.`,
+      message: `${openDisputes} open dispute(s) — ${Number(dc.credits_at_risk).toLocaleString()} credits at risk.`,
       severity: 'warning',
+      action: { tab: 'disputes' },
     });
   }
-  if (Number(rc.open_count) > 0) {
+  if (openReports > 0) {
     alerts.push({
       id: 'open-reports',
-      message: `${rc.open_count} user report(s) awaiting triage.`,
+      message: `${openReports} user report(s) awaiting triage.`,
       severity: 'info',
+      action: { tab: 'reports' },
     });
   }
   if (!alerts.length) {
@@ -568,10 +644,10 @@ async function fetchRecentActivity() {
   `);
   return result.rows.map((r, i) => ({
     id: `act-${i}`,
-    type: r.type,
+    type: displayLabel(r.type),
     ref: r.ref,
     label: r.label,
-    status: normalizeStatus(r.status),
+    status: displayLabel(r.status),
     at: r.at,
   }));
 }
