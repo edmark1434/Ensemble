@@ -67,9 +67,9 @@ export const VerificationStatus: React.FC = () => {
         qrCodeRef.current.removeChild(qrCodeRef.current.firstChild);
       }
 
-      // Extract URL from the nested session object or directly from response
-      const url = sessionData.session?.verification_url || 
-                  sessionData.verification_url || 
+      // Extract URL from the response
+      const url = sessionData.verification_url || 
+                  sessionData.session?.verification_url || 
                   sessionData.session?.url || 
                   sessionData.url;
       
@@ -142,9 +142,9 @@ export const VerificationStatus: React.FC = () => {
       // Store the full response data
       setSessionData(response.data);
       
-      // Extract the verification URL - check both nested and flat structures
-      const verificationUrl = response.data.session?.verification_url || 
-                             response.data.verification_url || 
+      // Extract the verification URL
+      const verificationUrl = response.data.verification_url || 
+                             response.data.session?.verification_url || 
                              response.data.session?.url || 
                              response.data.url;
       
@@ -164,7 +164,6 @@ export const VerificationStatus: React.FC = () => {
         window.location.href = verificationUrl;
       } else {
         console.error("No verification URL found in response");
-        // Show error to user
         alert("Unable to create verification session. Please try again.");
       }
     } catch (error) {
@@ -201,9 +200,7 @@ export const VerificationStatus: React.FC = () => {
 
   const handleCloseModal = () => {
     setShowQRModal(false);
-    // Reset processing state when closing modal
     setIsProcessing(false);
-    // Clear QR code from DOM
     if (qrCodeRef.current) {
       while (qrCodeRef.current.firstChild) {
         qrCodeRef.current.removeChild(qrCodeRef.current.firstChild);
@@ -516,15 +513,13 @@ export const VerificationStatus: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Session Info - Compact */}
+                {/* Session Info - Updated for new schema */}
                 <div className="flex justify-center gap-3 text-[9px] text-zinc-500">
-                  <span>Session: {sessionData?.verification_session_id?.slice(0, 12) || 
-                                  sessionData?.session?.verification_session_id?.slice(0, 12) || 
-                                  'N/A'}</span>
+                  <span>Session: {sessionData?.verification_session_id?.slice(0, 12) || 'N/A'}</span>
                   <span>•</span>
-                  <span className="text-emerald-400/60">Status: {sessionData?.status || 
-                                                              sessionData?.session?.status || 
-                                                              'pending'}</span>
+                  <span className="text-emerald-400/60">KYC: {sessionData?.kyc_status || 'Not Started'}</span>
+                  <span>•</span>
+                  <span className="text-blue-400/60">Status: {sessionData?.verification_status || 'Pending'}</span>
                 </div>
               </div>
 

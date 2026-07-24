@@ -1,35 +1,48 @@
-const axios = require('axios');
-const dotenv = require('dotenv');
+const axios = require("axios");
+const dotenv = require("dotenv");
 dotenv.config();
-const { v4: uuidv4 } = require("uuid");
+
 const countries = require("i18n-iso-countries");
 const en = require("i18n-iso-countries/langs/en.json");
 
 countries.registerLocale(en);
 
 const {
-    getUserById
-} = require('../Repositories/UserRepositories');
+    getUserById,
+} = require("../Repositories/UserRepositories");
+
 const {
-    getReusableAccountVerificationSessionByUserId,
-    createAccountVerificationSessionRepository
-        } = require('../Repositories/AccountVerificationRepositories');
+    getReusableAccountVerificationSessionByAccountId,
+    createAccountVerificationSessionRepository,
+} = require("../Repositories/AccountVerificationRepositories");
 
 async function createAccountVerificationSession(userId) {
     try {
         // ============================================================
-        // 1. Check reusable session in database
+        // 1. Fetch user
+        // ============================================================
+
+        const user = await getUserById(userId);
+
+        if (!user) {
+            throw new Error("User not found.");
+        }
+
+        // ============================================================
+        // 2. Check reusable session in database
         // ============================================================
 
         const existingSession =
-            await getReusableAccountVerificationSessionByUserId(userId);
+            await getReusableAccountVerificationSessionByAccountId(
+                user.account_id
+            );
 
         if (existingSession) {
             return existingSession;
         }
 
         // ============================================================
-        // 2. Check existing reusable Didit session
+        // 3. Check existing reusable Didit session
         // ============================================================
 
         const reusableStatuses = [
@@ -47,7 +60,7 @@ async function createAccountVerificationSession(userId) {
                     "x-api-key": process.env.DIDIT_API_KEY,
                 },
                 params: {
-                    vendor_data: `user-${userId}`,
+                    vendor_data: `account-${user.account_id}`,
                 },
             }
         );
@@ -57,27 +70,20 @@ async function createAccountVerificationSession(userId) {
         );
 
         if (reusableDiditSession) {
-
             const verificationSession =
                 await createAccountVerificationSessionRepository({
-                    user_id: userId,
+                    account_id: user.account_id,
                     didit_session_id: reusableDiditSession.session_id,
                     verification_url: reusableDiditSession.session_url,
-                    status: reusableDiditSession.status,
+                    kyc_status: reusableDiditSession.status,
                 });
 
             return verificationSession;
         }
 
         // ============================================================
-        // 3. Fetch user
+        // 4. Build expected details
         // ============================================================
-
-        const user = await getUserById(userId);
-
-        if (!user) {
-            throw new Error("User not found.");
-        }
 
         const alpha2 = countries.getAlpha2Code(user.country, "en");
 
@@ -104,7 +110,7 @@ async function createAccountVerificationSession(userId) {
             expectedDetails.id_country = alpha3;
 
         // ============================================================
-        // 4. Create Didit session
+        // 5. Create Didit session
         // ============================================================
 
         const response = await axios.post(
@@ -112,7 +118,7 @@ async function createAccountVerificationSession(userId) {
             {
                 workflow_id: process.env.DIDIT_WORKFLOW_ID,
 
-                vendor_data: `user-${user.user_id}`,
+                vendor_data: `account-${user.account_id}`,
 
                 callback: `${process.env.FRONTEND_URL}/verification/result`,
 
@@ -142,16 +148,19 @@ async function createAccountVerificationSession(userId) {
 
         const didit = response.data;
 
+        // ============================================================
+        // 6. Save session
+        // ============================================================
+
         const verificationSession =
             await createAccountVerificationSessionRepository({
-                user_id: user.user_id,
+                account_id: user.account_id,
                 didit_session_id: didit.session_id,
                 verification_url: didit.url,
-                status: didit.status,
+                kyc_status: didit.status,
             });
 
         return verificationSession;
-
     } catch (error) {
         console.error(
             "Failed to create account verification session:",
@@ -160,9 +169,6 @@ async function createAccountVerificationSession(userId) {
         throw error;
     }
 }
-
-
- 
 
 module.exports = {
     createAccountVerificationSession,

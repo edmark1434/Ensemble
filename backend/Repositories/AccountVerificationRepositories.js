@@ -1,12 +1,12 @@
-const { pool } = require('../lib/database');
+const { pool } = require("../lib/database");
 
-async function getReusableAccountVerificationSessionByUserId(userId) {
+async function getReusableAccountVerificationSessionByAccountId(accountId) {
     try {
         const query = `
             SELECT *
             FROM account_verification_sessions
-            WHERE user_id = $1
-            AND status IN (
+            WHERE account_id = $1
+            AND kyc_status IN (
                 'Not Started',
                 'In Progress',
                 'Awaiting User',
@@ -14,10 +14,10 @@ async function getReusableAccountVerificationSessionByUserId(userId) {
                 'Resubmitted'
             )
             ORDER BY created_at DESC
-            LIMIT 1
+            LIMIT 1;
         `;
 
-        const { rows } = await pool.query(query, [userId]);
+        const { rows } = await pool.query(query, [accountId]);
 
         return rows[0] || null;
     } catch (err) {
@@ -27,19 +27,19 @@ async function getReusableAccountVerificationSessionByUserId(userId) {
 }
 
 async function createAccountVerificationSessionRepository({
-    user_id,
+    account_id,
     didit_session_id,
     verification_url,
-    status,
+    kyc_status,
     expires_at = null,
 }) {
     try {
         const query = `
             INSERT INTO account_verification_sessions (
-                user_id,
+                account_id,
                 didit_session_id,
                 verification_url,
-                status,
+                kyc_status,
                 expires_at
             )
             VALUES ($1, $2, $3, $4, $5)
@@ -47,10 +47,10 @@ async function createAccountVerificationSessionRepository({
         `;
 
         const values = [
-            user_id,
+            account_id,
             didit_session_id,
             verification_url,
-            status,
+            kyc_status,
             expires_at,
         ];
 
@@ -63,7 +63,84 @@ async function createAccountVerificationSessionRepository({
     }
 }
 
+
+async function updateAccountVerificationSessionStatus(sessionId, payload) {
+    try {
+        if (!payload || Object.keys(payload).length === 0) {
+            throw new Error("No fields provided to update.");
+        }
+
+        const fields = [];
+        const values = [];
+        let index = 1;
+
+        for (const [key, value] of Object.entries(payload)) {
+            fields.push(`${key} = $${index}`);
+            values.push(value);
+            index++;
+        }
+
+        // WHERE parameter
+        values.push(sessionId);
+
+        const query = `
+            UPDATE account_verification_sessions
+            SET
+                ${fields.join(", ")},
+                updated_at = CURRENT_TIMESTAMP
+            WHERE didit_session_id = $${index}
+            RETURNING *;
+        `;
+
+        const { rows } = await pool.query(query, values);
+
+        return rows[0] || null;
+    } catch (err) {
+        console.error("Error updating account verification session status:", err);
+        throw err;
+    }
+}
+
+async function updateAccountVerifications(accountId,payload){
+try {
+        if (!payload || Object.keys(payload).length === 0) {
+            throw new Error("No fields provided to update.");
+        }
+
+        const fields = [];
+        const values = [];
+        let index = 1;
+
+        for (const [key, value] of Object.entries(payload)) {
+            fields.push(`${key} = $${index}`);
+            values.push(value);
+            index++;
+        }
+
+        // WHERE parameter
+        values.push(accountId);
+
+        const query = `
+            UPDATE verifications
+            SET
+                ${fields.join(", ")},
+                updated_at = CURRENT_TIMESTAMP
+            WHERE account_id = $${index}
+            RETURNING *;
+        `;
+
+        const { rows } = await pool.query(query, values);
+
+        return rows[0] || null;
+    } catch (err) {
+        console.error("Error updating account verification :", err);
+        throw err;
+    }
+}
+
 module.exports = {
-    getReusableAccountVerificationSessionByUserId,
+    getReusableAccountVerificationSessionByAccountId,
     createAccountVerificationSessionRepository,
+    updateAccountVerificationSessionStatus,
+    updateAccountVerifications
 };
