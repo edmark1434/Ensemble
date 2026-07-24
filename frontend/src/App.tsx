@@ -34,12 +34,13 @@ import Inbox from "@/pages/user/10_inbox/Main.tsx";
 
 import SectionPlaceholder from './pages/user/0_config/SectionPlaceholder.tsx'
 
-// Updated Job Market Sub-Routes & Create Page Imports
+// Updated Job Market Sub-Routes & Create/Edit Page Imports
 import JobMain from "@/pages/user/6_job_market/job_main.tsx";
 import JobPostingPage from "@/pages/user/6_job_market/job_pages/job_posting_page.tsx";
 import JobSavesPage from "@/pages/user/6_job_market/job_pages/job_saves_page.tsx";
 import JobMyPostPage from "@/pages/user/6_job_market/job_pages/job_mypost_page.tsx";
 import JobCreatePostPage from "@/pages/user/6_job_market/job_pages/job_createpost_page.tsx";
+import JobEditPostPage from "@/pages/user/6_job_market/job_pages/job_editpost_page.tsx";
 
 import GigMarketplace from "@/pages/user/7_gigs/Gig_Posting/main.tsx";
 import {CreateGigWizard} from "@/pages/user/7_gigs/Gig_Posting/CreateGigWizard.tsx";
@@ -190,8 +191,9 @@ function App() {
             <Route path='my-job-post/:id' element={<JobMyPostPage />} />
           </Route>
 
-          {/* Modularized Job Creation Page */}
+          {/* Modularized Job Creation & Edit Pages */}
           <Route path='/jobs/create' element={<JobCreatePostPage />} />
+          <Route path='/jobs/edit/:id' element={<JobEditPostPage />} />
 
           <Route path='/gigs'>
             <Route index element={<GigMarketplace />} />

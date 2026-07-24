@@ -26,6 +26,8 @@ const JobCreatePostPage: React.FC = () => {
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [difficulty, setDifficulty] = useState("");
+
+  // --- REVIEW STEP (POSTING IDENTITY) STATES ---
   const [postingAs, setPostingAs] = useState<"self" | "team">("self");
   const [selectedTeam, setSelectedTeam] = useState("");
 
@@ -80,7 +82,6 @@ const JobCreatePostPage: React.FC = () => {
     if (description.length > 2000) stepErrors.description = "Description cannot exceed 2000 characters.";
     if (!category) stepErrors.category = "Please select a category.";
     if (!difficulty) stepErrors.difficulty = "Please select a difficulty level.";
-    if (postingAs === "team" && !selectedTeam) stepErrors.selectedTeam = "Please assign a posting team entity.";
 
     setErrors(stepErrors);
     return Object.keys(stepErrors).length === 0;
@@ -132,8 +133,9 @@ const JobCreatePostPage: React.FC = () => {
       status: "Open",
       postingAs: postingAs === "self" ? "Self" : selectedTeam,
       skills,
-      priceRange: `${formatCommaString(minBudget)} ~ ${formatCommaString(maxBudget)}`,
+      priceRange: `₱${formatCommaString(minBudget)} ~ ₱${formatCommaString(maxBudget)}`,
       minBudget: rawMinBudget,
+      maxBudget: rawMaxBudget,
       timeline: `${minTimeline}-${maxTimeline} Days`,
       positionsNeeded: positions,
       thumbnail: thumbnail || "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=600&q=80",
@@ -158,7 +160,7 @@ const JobCreatePostPage: React.FC = () => {
         />
       </div>
 
-      {/* Main Form Content with Entry Animations */}
+      {/* Main Form Content */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -213,10 +215,6 @@ const JobCreatePostPage: React.FC = () => {
                   setCategory={setCategory}
                   difficulty={difficulty}
                   setDifficulty={setDifficulty}
-                  postingAs={postingAs}
-                  setPostingAs={setPostingAs}
-                  selectedTeam={selectedTeam}
-                  setSelectedTeam={setSelectedTeam}
                   previewUrl={previewUrl}
                   setPreviewUrl={setPreviewUrl}
                   setThumbnail={setThumbnail}
@@ -282,8 +280,12 @@ const JobCreatePostPage: React.FC = () => {
                   maxTimeline={maxTimeline}
                   positions={positions}
                   postingAs={postingAs}
+                  setPostingAs={setPostingAs}
                   selectedTeam={selectedTeam}
+                  setSelectedTeam={setSelectedTeam}
                   skills={skills}
+                  errors={errors}
+                  setErrors={setErrors}
                   formatCommaString={formatCommaString}
                   onEditStep={setCurrentSlide}
                   onBack={() => setCurrentSlide(2)}
@@ -300,7 +302,6 @@ const JobCreatePostPage: React.FC = () => {
         onConfirm={() => navigate("/jobs")}
       />
 
-      {/* Extracted Confirm Return Modal */}
       <PopupConfirmReturn
         isOpen={isDiscardOpen}
         onConfirm={() => {

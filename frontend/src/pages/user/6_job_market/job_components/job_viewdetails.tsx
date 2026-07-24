@@ -1,5 +1,5 @@
 import React from "react";
-import { Calendar, Clock, Briefcase, Users, Star, Send, CircleDollarSign, MousePointerClick, User, Edit2, Flag, Wrench } from "lucide-react";
+import { Calendar, Clock, Briefcase, Users, Star, Send, CircleDollarSign, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Job } from "./job_lists";
 
@@ -24,7 +24,6 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
 
   return (
     <>
-      {/* Backdrop Overlay with Click-Away Indicator */}
       <div
         className={`fixed inset-0 bg-black/60 backdrop-blur-xs z-[100] transition-opacity flex items-center justify-start pl-8 ${
           selectedJob ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
@@ -39,7 +38,6 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
         )}
       </div>
 
-      {/* Right Slide-Out Panel Drawer */}
       <div
         className={`fixed right-0 top-0 bottom-0 w-full md:w-[500px] lg:w-[560px] bg-[#0d0f1a] border-l border-white/10 z-[101] shadow-2xl flex flex-col transition-transform duration-300 ${
           selectedJob ? "translate-x-0" : "translate-x-full"
@@ -47,7 +45,6 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
       >
         {selectedJob && (
           <>
-            {/* Header Image */}
             <div className="relative h-48 shrink-0 bg-zinc-950 border-b border-white/5">
               <img
                 src={selectedJob.thumbnail}
@@ -57,10 +54,8 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
               <div className="absolute inset-0 bg-gradient-to-t from-[#0d0f1a] via-transparent to-transparent" />
             </div>
 
-            {/* Scrollable Content Container */}
             <div className="flex-1 overflow-y-auto p-5 md:p-6 space-y-5 thin-scrollbar">
               <div>
-                {/* Pill Tags & Action Icons */}
                 <div className="flex items-center justify-between mb-2.5">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span
@@ -95,11 +90,20 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                 <h2 className="text-xl font-bold text-white leading-snug mb-1">
                   {selectedJob.title}
                 </h2>
-                <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
-                  <Calendar className="h-3 w-3" />
-                  <span>
-                    {selectedJob.postedAt} • {selectedJob.timeAgo}
-                  </span>
+
+                {/* Post Date & Updated Timestamp Row */}
+                <div className="flex flex-wrap items-center gap-3 text-[11px] text-zinc-500 mt-1">
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="h-3 w-3 text-zinc-500" />
+                    <span>Posted {selectedJob.postedAt}</span>
+                  </div>
+
+                  {selectedJob.updatedAt && (
+                    <div className="flex items-center gap-1 text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20 text-[10px] font-medium">
+                      <RefreshCw className="h-2.5 w-2.5" />
+                      <span>{selectedJob.updatedAt}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -134,7 +138,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                 </div>
               </div>
 
-              {/* Required Skills Section (Gray Styled Tags) */}
+              {/* Required Skills Section */}
               {selectedJob.skills && selectedJob.skills.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 flex items-center gap-1">

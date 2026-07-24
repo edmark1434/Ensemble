@@ -15,6 +15,7 @@ export interface Job {
   minBudget: number;
   postedBy: string;
   postedAt: string;
+  updatedAt?: string;
   timeAgo: string;
   clientRating: number;
   ratingCount: number;
