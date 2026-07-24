@@ -1,6 +1,7 @@
 import React from "react";
 import { Grid3x3, Bookmark, Briefcase } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { motion } from "framer-motion";
 
 const JobTabs: React.FC = () => {
   const navigate = useNavigate();
@@ -13,20 +14,35 @@ const JobTabs: React.FC = () => {
   ];
 
   return (
-    <div className="mb-8 flex gap-1 border-b border-white/10">
+    <div className="flex gap-1 relative">
       {tabs.map((tab) => {
         const isActive = location.pathname.startsWith(tab.path);
         return (
           <button
             key={tab.path}
             onClick={() => navigate(tab.path)}
-            className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-all ${
-              isActive
-                ? "text-blue-400 border-b-2 border-blue-500 bg-blue-500/5"
-                : "text-zinc-400 hover:text-white"
+            className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
+              isActive ? "text-blue-400" : "text-zinc-400 hover:text-white"
             }`}
           >
-            {tab.icon} {tab.label}
+            <span className="relative z-10 flex items-center gap-2">
+              {tab.icon} {tab.label}
+            </span>
+
+            {isActive && (
+              <>
+                <motion.div
+                  layoutId="activeTabGlow"
+                  className="absolute inset-0 bg-blue-500/5 rounded-t-lg"
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                />
+                <motion.div
+                  layoutId="activeTabUnderline"
+                  className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 z-10"
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                />
+              </>
+            )}
           </button>
         );
       })}
