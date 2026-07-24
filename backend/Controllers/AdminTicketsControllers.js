@@ -78,12 +78,16 @@ async function patchAdminTicket(req, res) {
   } catch (err) {
     console.error('Error updating ticket:', err);
     const msg =
-      err?.message?.includes('not valid for') || err?.message?.includes('type is required')
+      err?.message?.includes('not valid for') ||
+      err?.message?.includes('type is required') ||
+      err?.message?.includes('only be changed when escalating')
         ? err.message
         : 'Failed to update ticket';
     res
       .status(
-        err?.message?.includes('not valid for') || err?.message?.includes('type is required')
+        err?.message?.includes('not valid for') ||
+          err?.message?.includes('type is required') ||
+          err?.message?.includes('only be changed when escalating')
           ? 400
           : 500
       )

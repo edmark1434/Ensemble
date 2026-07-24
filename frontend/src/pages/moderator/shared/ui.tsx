@@ -75,19 +75,30 @@ export function AlertList({ alerts }: { alerts: Alert[] }) {
   );
 }
 
+function titleCaseWords(value: string) {
+  return String(value || "")
+    .replace(/_/g, " ")
+    .trim()
+    .split(/\s+/)
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w))
+    .join(" ");
+}
+
 export function PriorityBadge({ priority }: { priority: string }) {
   const p = priority.toLowerCase();
+  const label = titleCaseWords(priority);
   const cls =
     p === "high"
       ? "bg-red-500/15 text-red-300"
       : p === "medium"
         ? "bg-amber-500/15 text-amber-300"
         : "bg-zinc-500/15 text-zinc-300";
-  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${cls}`}>{priority}</span>;
+  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${cls}`}>{label}</span>;
 }
 
 export function StatusBadge({ status }: { status: string }) {
   const s = status.toLowerCase().replace(/_/g, " ");
+  const label = titleCaseWords(status);
   const cls =
     s === "open"
       ? "bg-red-500/15 text-red-300"
@@ -98,7 +109,7 @@ export function StatusBadge({ status }: { status: string }) {
           : s === "resolved" || s === "closed"
             ? "bg-emerald-500/15 text-emerald-300"
             : "bg-zinc-500/15 text-zinc-300";
-  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${cls}`}>{status}</span>;
+  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${cls}`}>{label}</span>;
 }
 
 function shortId(value: string | number | null | undefined) {

@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Loader2, MessageSquare, Send, X } from 'lucide-react';
+import { Loader2, Lock, MessageSquare, Send, UserRound, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
-import type { TicketDetail } from './ticketTypes';
+import type { TicketDetail, TicketMessage } from './ticketTypes';
 import {
   ticketTypeOf,
   ESCALATE_ROLE_OPTIONS,
   escalateTypesForRole,
-  TICKET_TYPE_OPTIONS,
   TICKET_STATUS_OPTIONS,
   TICKET_PRIORITY_OPTIONS,
 } from './ticketTypes';
@@ -28,50 +27,152 @@ function shortId(value: string | number | null | undefined) {
   return s.length > 12 ? `${s.slice(0, 10)}…` : s;
 }
 
+function titleCaseLabel(value: string | null | undefined) {
+  const raw = String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .trim();
+  if (!raw) return 'Unknown';
+  return raw
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function initials(name: string) {
+  const parts = String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!parts.length) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+}
+
+function messageKind(m: TicketMessage): 'internal' | 'staff' | 'user' {
+  if (m.isInternal) return 'internal';
+  const t = String(m.authorType || '').toLowerCase();
+  if (t === 'staff' || t === 'admin' || t === 'moderator') return 'staff';
+  return 'user';
+}
+
+function MessageBubble({
+  message,
+  accentSoft,
+}: {
+  message: TicketMessage;
+  accentSoft: string;
+}) {
+  const kind = messageKind(message);
+  const isStaffSide = kind === 'staff' || kind === 'internal';
+  const displayName = titleCaseLabel(message.authorName);
+  const roleLabel =
+    kind === 'internal'
+      ? 'Internal Note'
+      : kind === 'staff'
+        ? 'Staff'
+        : 'Requester';
+
+  const shell =
+    kind === 'internal'
+      ? 'border-amber-500/30 bg-gradient-to-br from-amber-500/15 to-amber-500/[0.04]'
+      : kind === 'staff'
+        ? `border-white/10 ${accentSoft}`
+        : 'border-white/10 bg-[#14151c]';
+
+  const avatar =
+    kind === 'internal'
+      ? 'bg-amber-500/20 text-amber-200 ring-amber-500/30'
+      : kind === 'staff'
+        ? 'bg-white/10 text-white ring-white/15'
+        : 'bg-sky-500/15 text-sky-200 ring-sky-500/25';
+
+  const tag =
+    kind === 'internal'
+      ? 'border-amber-400/40 bg-amber-500/20 text-amber-100'
+      : kind === 'staff'
+        ? 'border-white/20 bg-white/10 text-zinc-100'
+        : 'border-sky-400/30 bg-sky-500/15 text-sky-100';
+
+  return (
+    <div className={`flex gap-2.5 ${isStaffSide ? 'flex-row-reverse' : 'flex-row'}`}>
+      <div
+        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ring-1 ${avatar}`}
+        title={displayName}
+      >
+        {kind === 'internal' ? <Lock className="h-3.5 w-3.5" /> : initials(displayName)}
+      </div>
+
+      <div className={`min-w-0 max-w-[min(85%,420px)] flex-1 ${isStaffSide ? 'items-end' : 'items-start'} flex flex-col`}>
+        <div className={`mb-1.5 flex flex-wrap items-center gap-1.5 ${isStaffSide ? 'justify-end' : 'justify-start'}`}>
+          <span className="text-xs font-semibold text-zinc-200">{displayName}</span>
+          <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${tag}`}>
+            {kind === 'user' ? <UserRound className="h-2.5 w-2.5" /> : null}
+            {kind === 'internal' ? <Lock className="h-2.5 w-2.5" /> : null}
+            {roleLabel}
+          </span>
+          <span className="text-[10px] text-zinc-600">{formatDateTime(message.createdAt)}</span>
+        </div>
+
+        <div className={`w-full rounded-2xl border px-3.5 py-2.5 shadow-sm ${shell} ${isStaffSide ? 'rounded-tr-md' : 'rounded-tl-md'}`}>
+          {kind === 'internal' && (
+            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-amber-200/80">
+              Visible to staff only
+            </p>
+          )}
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-100">{message.body}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const ACCENT: Record<string, { text: string; spin: string; btn: string; soft: string }> = {
   rose: {
     text: 'text-rose-400',
     spin: 'text-rose-400',
     btn: 'bg-rose-500/90 hover:bg-rose-500',
-    soft: 'bg-rose-500/10 text-rose-200 border-rose-500/25',
+    soft: 'bg-rose-500/10 text-rose-50 border-rose-500/25',
   },
   sky: {
     text: 'text-sky-400',
     spin: 'text-sky-400',
     btn: 'bg-sky-500/90 hover:bg-sky-500',
-    soft: 'bg-sky-500/10 text-sky-200 border-sky-500/25',
+    soft: 'bg-sky-500/10 text-sky-50 border-sky-500/25',
   },
   violet: {
     text: 'text-violet-400',
     spin: 'text-violet-400',
     btn: 'bg-violet-500/90 hover:bg-violet-500',
-    soft: 'bg-violet-500/10 text-violet-200 border-violet-500/25',
+    soft: 'bg-violet-500/10 text-violet-50 border-violet-500/25',
   },
   emerald: {
     text: 'text-emerald-400',
     spin: 'text-emerald-400',
     btn: 'bg-emerald-500/90 hover:bg-emerald-500',
-    soft: 'bg-emerald-500/10 text-emerald-200 border-emerald-500/25',
+    soft: 'bg-emerald-500/10 text-emerald-50 border-emerald-500/25',
   },
 };
 
 function Field({
   label,
+  hint,
   children,
 }: {
   label: string;
+  hint?: string;
   children: ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-      {label}
+    <div className="flex flex-col gap-1.5">
+      <span className="text-[11px] font-medium text-zinc-500">{label}</span>
       {children}
-    </label>
+      {hint ? <span className="text-[11px] text-zinc-600">{hint}</span> : null}
+    </div>
   );
 }
 
 const selectCls =
-  'rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm font-normal normal-case tracking-normal text-white outline-none focus:border-white/25';
+  'rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none focus:border-white/25';
 
 /**
  * Shared ticket detail shell — left meta / right conversation.
@@ -100,7 +201,7 @@ export default function TicketDetailModalShell({
   const [internalNote, setInternalNote] = useState(false);
   const [status, setStatus] = useState('');
   const [priority, setPriority] = useState('');
-  const [ticketType, setTicketType] = useState('');
+  const [currentType, setCurrentType] = useState('');
   const [assigneeId, setAssigneeId] = useState('');
   const [escalateRole, setEscalateRole] = useState<string>('Support Moderator');
   const [escalateType, setEscalateType] = useState<string>('');
@@ -115,11 +216,6 @@ export default function TicketDetailModalShell({
     if (fromApi?.length) return fromApi;
     return escalateTypesForRole(escalateRole);
   }, [detail, escalateRole]);
-
-  const allTypeOptions = useMemo(() => {
-    const fromApi = detail?.types?.length ? detail.types : [...TICKET_TYPE_OPTIONS];
-    return [...new Set([...fromApi, ticketType].filter(Boolean))];
-  }, [detail, ticketType]);
 
   const statusOptions = detail?.statuses?.length ? detail.statuses : [...TICKET_STATUS_OPTIONS];
   const priorityOptions = detail?.priorities?.length ? detail.priorities : [...TICKET_PRIORITY_OPTIONS];
@@ -150,12 +246,14 @@ export default function TicketDetailModalShell({
         setStatus(data.ticket.status);
         setPriority(data.ticket.priority);
         const t = ticketTypeOf(data.ticket);
-        setTicketType(t);
+        setCurrentType(t);
         setAssigneeId(data.ticket.assignee?.staffId?.toString() || '');
-        const roles = data.escalateRoles?.length ? data.escalateRoles : [...ESCALATE_ROLE_OPTIONS];
-        const role = roles[0];
-        setEscalateRole(role);
-        const opts = data.escalateByRole?.[role] || escalateTypesForRole(role);
+        const ownerRole =
+          data.typeDetails?.find((d) => d.label === t)?.queueRole ||
+          Object.entries(data.escalateByRole || {}).find(([, types]) => types.includes(t))?.[0] ||
+          'Support Moderator';
+        setEscalateRole(ownerRole);
+        const opts = data.escalateByRole?.[ownerRole] || escalateTypesForRole(ownerRole);
         setEscalateType(opts.includes(t) ? t : opts[0] || '');
       }
     } catch {
@@ -176,7 +274,7 @@ export default function TicketDetailModalShell({
 
   const onEscalateRoleChange = (role: string) => {
     setEscalateRole(role);
-    syncEscalateType(role, ticketType);
+    syncEscalateType(role, currentType);
   };
 
   const saveChanges = async () => {
@@ -185,7 +283,6 @@ export default function TicketDetailModalShell({
       await api.patch(`${endpointBase}/${ticketId}`, {
         status,
         priority,
-        type: ticketType,
         handled_by_staff_id: assigneeId ? assigneeId : null,
       });
       showSuccessToast('Ticket updated');
@@ -199,13 +296,8 @@ export default function TicketDetailModalShell({
   };
 
   const escalateTo = async () => {
-    const typeToUse = escalateTypeOptions.length === 1 ? escalateTypeOptions[0] : escalateType;
-    if (!typeToUse?.trim()) {
-      showErrorToast('Pick a type allowed for this queue');
-      return;
-    }
-    if (!escalateTypeOptions.includes(typeToUse)) {
-      showErrorToast(`${typeToUse} is not allowed for ${escalateRole}`);
+    if (!escalateType.trim() || !escalateTypeOptions.includes(escalateType)) {
+      showErrorToast('Pick a ticket type allowed for this queue');
       return;
     }
     setSaving(true);
@@ -213,10 +305,10 @@ export default function TicketDetailModalShell({
       await api.patch(`${endpointBase}/${ticketId}`, {
         status: 'In Progress',
         assigned_role: escalateRole,
-        type: typeToUse,
+        type: escalateType,
         handled_by_staff_id: null,
       });
-      showSuccessToast(`Escalated to ${escalateRole}`);
+      showSuccessToast(`Escalated to ${escalateRole} as ${escalateType}`);
       await load();
       onUpdated();
     } catch {
@@ -246,7 +338,8 @@ export default function TicketDetailModalShell({
   };
 
   const t = detail?.ticket;
-  const typeMeta = detail?.typeDetails?.find((d) => d.label === ticketType);
+  const typeMeta = detail?.typeDetails?.find((d) => d.label === currentType);
+  const escalateTypeMeta = detail?.typeDetails?.find((d) => d.label === escalateType);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 sm:p-5">
@@ -257,14 +350,19 @@ export default function TicketDetailModalShell({
             <p className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${tone.text}`}>Ticket detail</p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <h2 className="truncate text-lg font-bold text-white">{t?.number || `TKT-${ticketId}`}</h2>
+              {t?.type && (
+                <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] font-medium text-zinc-300">
+                  {ticketTypeOf(t)}
+                </span>
+              )}
               {t?.isEscalated && (
                 <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2.5 py-0.5 text-[10px] font-medium text-violet-200">
-                  Escalated{t.escalatedBy?.name ? ` · ${t.escalatedBy.name}` : ''}
+                  Escalated{t.escalatedBy?.name ? ` · ${titleCaseLabel(t.escalatedBy.name)}` : ''}
                 </span>
               )}
               {t?.waitingForResponse && (
                 <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-medium text-amber-200">
-                  Awaiting reply
+                  Awaiting Reply
                 </span>
               )}
             </div>
@@ -326,6 +424,14 @@ export default function TicketDetailModalShell({
 
                 <section className="space-y-3 rounded-xl border border-white/10 bg-[#14151c] p-4">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Ticket fields</p>
+                  <div className="rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2.5">
+                    <p className="text-[11px] text-zinc-500">Current Type</p>
+                    <p className="mt-0.5 text-sm font-medium text-white">{currentType || '—'}</p>
+                    {typeMeta?.description && (
+                      <p className="mt-1 text-[11px] text-zinc-600">{typeMeta.description}</p>
+                    )}
+                    <p className="mt-1.5 text-[11px] text-zinc-600">Type can only change when escalating.</p>
+                  </div>
                   <Field label="Status">
                     <select value={status} onChange={(e) => setStatus(e.target.value)} className={selectCls}>
                       {statusOptions.map((s) => (
@@ -343,20 +449,6 @@ export default function TicketDetailModalShell({
                         </option>
                       ))}
                     </select>
-                  </Field>
-                  <Field label="Type">
-                    <select value={ticketType} onChange={(e) => setTicketType(e.target.value)} className={selectCls}>
-                      {allTypeOptions.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                    {typeMeta?.description && (
-                      <span className="mt-1 text-[11px] font-normal normal-case tracking-normal text-zinc-500">
-                        {typeMeta.description}
-                      </span>
-                    )}
                   </Field>
                   <Field label="Assignee">
                     <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className={selectCls}>
@@ -381,12 +473,13 @@ export default function TicketDetailModalShell({
                 {allowEscalate && (
                   <section className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4">
                     <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/80">Escalate</p>
-                      <p className="mt-1 text-[11px] text-zinc-500">
-                        Queue role decides which types appear below — Marketplace only shows Asset Marketplace.
+                      <p className="text-[10px] font-semibold tracking-wide text-amber-200/80">Escalate</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+                        Pick a moderator queue, then choose the correct type for that desk. Example: created as Forums but
+                        it is Subscriptions and Plans → Support Moderator + Subscriptions and Plans.
                       </p>
                     </div>
-                    <Field label="Queue">
+                    <Field label="Moderator Queue">
                       <select
                         value={escalateRole}
                         onChange={(e) => onEscalateRoleChange(e.target.value)}
@@ -399,32 +492,32 @@ export default function TicketDetailModalShell({
                         ))}
                       </select>
                     </Field>
-                    <Field label="Type for this queue">
-                      {escalateTypeOptions.length <= 1 ? (
-                        <div className="rounded-lg border border-amber-500/25 bg-[#0f1016] px-3 py-2 text-sm text-amber-100">
-                          {escalateTypeOptions[0] || '—'}
-                        </div>
-                      ) : (
-                        <select
-                          value={escalateType}
-                          onChange={(e) => setEscalateType(e.target.value)}
-                          className={`${selectCls} border-amber-500/25 text-amber-100`}
-                        >
-                          {escalateTypeOptions.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
-                      )}
+                    <Field
+                      label="Type"
+                      hint={
+                        escalateTypeMeta?.description ||
+                        `${escalateTypeOptions.length} type${escalateTypeOptions.length === 1 ? '' : 's'} for ${escalateRole}`
+                      }
+                    >
+                      <select
+                        value={escalateType}
+                        onChange={(e) => setEscalateType(e.target.value)}
+                        className={`${selectCls} border-amber-500/25 text-amber-100`}
+                      >
+                        {escalateTypeOptions.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
                     </Field>
                     <button
                       type="button"
                       onClick={() => void escalateTo()}
-                      disabled={saving || !escalateTypeOptions.length}
+                      disabled={saving || !escalateType.trim() || !escalateTypeOptions.includes(escalateType)}
                       className="w-full rounded-xl border border-amber-500/40 px-4 py-2.5 text-sm font-medium text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
                     >
-                      Escalate to {escalateRole}
+                      Escalate as {escalateType || '…'}
                     </button>
                   </section>
                 )}
@@ -434,59 +527,41 @@ export default function TicketDetailModalShell({
             {/* RIGHT — conversation */}
             <section className="flex min-h-0 flex-col bg-[#0a0b0f]">
               <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
-                <p className="flex items-center gap-2 text-sm font-semibold text-white">
-                  <MessageSquare className={`h-4 w-4 ${tone.text}`} />
-                  Conversation
-                  <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-medium text-zinc-400">
-                    {detail.messages.length}
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-white">
+                    <MessageSquare className={`h-4 w-4 ${tone.text}`} />
+                    Conversation
+                  </p>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-medium text-zinc-400">
+                    {detail.messages.length} message{detail.messages.length === 1 ? '' : 's'}
                   </span>
-                </p>
+                  {t.waitingForResponse && (
+                    <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-200">
+                      Awaiting Reply
+                    </span>
+                  )}
+                </div>
                 {t.lastMessageAt && (
                   <p className="text-[11px] text-zinc-600">Last {formatDateTime(t.lastMessageAt)}</p>
                 )}
               </div>
 
-              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
                 {detail.chatAvailable === false && (
                   <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
                     MongoDB is not connected — chats unavailable until MONGODB_URI is set. Status updates still work.
                   </p>
                 )}
                 {detail.messages.length === 0 && detail.chatAvailable !== false && (
-                  <div className="flex h-full min-h-[160px] flex-col items-center justify-center text-center">
+                  <div className="flex h-full min-h-40 flex-col items-center justify-center text-center">
                     <MessageSquare className="mb-2 h-8 w-8 text-zinc-700" />
                     <p className="text-sm text-zinc-500">No messages yet</p>
                     <p className="mt-1 text-xs text-zinc-600">Start the thread with a reply below.</p>
                   </div>
                 )}
-                {detail.messages.map((m) => {
-                  const isStaff = m.authorType === 'staff';
-                  return (
-                    <div
-                      key={m.id}
-                      className={`flex ${isStaff ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`max-w-[85%] rounded-2xl border px-3.5 py-2.5 ${
-                          m.isInternal
-                            ? 'border-amber-500/25 bg-amber-500/10'
-                            : isStaff
-                              ? `border-white/10 ${tone.soft}`
-                              : 'border-white/10 bg-[#14151c]'
-                        }`}
-                      >
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-zinc-500">
-                          <span className="font-medium text-zinc-300">{m.authorName}</span>
-                          <span>·</span>
-                          <span>{m.authorType}</span>
-                          {m.isInternal && <span className="text-amber-300">· internal</span>}
-                          <span className="ml-auto text-zinc-600">{formatDateTime(m.createdAt)}</span>
-                        </div>
-                        <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-zinc-100">{m.body}</p>
-                      </div>
-                    </div>
-                  );
-                })}
+                {detail.messages.map((m) => (
+                  <MessageBubble key={m.id} message={m} accentSoft={tone.soft} />
+                ))}
                 <div ref={threadEndRef} />
               </div>
 
@@ -507,7 +582,7 @@ export default function TicketDetailModalShell({
                       onChange={(e) => setInternalNote(e.target.checked)}
                       disabled={detail.chatAvailable === false}
                     />
-                    Internal note (hidden from requester)
+                    Internal Note (hidden from requester)
                   </label>
                   <button
                     type="button"
@@ -516,7 +591,7 @@ export default function TicketDetailModalShell({
                     className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${tone.btn}`}
                   >
                     <Send className="h-3.5 w-3.5" />
-                    Send
+                    {internalNote ? 'Add Note' : 'Send Reply'}
                   </button>
                 </div>
               </div>

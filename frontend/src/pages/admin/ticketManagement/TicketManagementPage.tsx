@@ -22,7 +22,14 @@ import {
   VerticalBarChart,
 } from '../analytics/components/AnalyticsCharts';
 import TicketDetailModal from './TicketDetailModal';
+import TicketFiltersPanel from './TicketFiltersPanel';
+import {
+  DEFAULT_TICKET_FILTERS,
+  filterTickets,
+  type TicketFilterState,
+} from './ticketFilterUtils';
 import type { Dispute, SupportTicket, TicketsOverview, UserReport } from './ticketTypes';
+import { TICKET_TYPE_OPTIONS } from './ticketTypes';
 
 type TabId = 'overview' | 'tickets' | 'disputes' | 'reports' | 'assignments';
 
@@ -68,10 +75,7 @@ export default function TicketManagementPage() {
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState<number | string | null>(null);
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [priorityFilter, setPriorityFilter] = useState('all');
-  const [typeFilter, setTypeFilter] = useState('all');
-
+  const [ticketFilters, setTicketFilters] = useState<TicketFilterState>(DEFAULT_TICKET_FILTERS);
   const load = async (silent = false) => {
     if (!silent) setLoading(true);
     else setRefreshing(true);
@@ -105,19 +109,14 @@ export default function TicketManagementPage() {
 
   const filteredTickets = useMemo(() => {
     if (!data) return [];
-    return data.tickets.filter((t) => {
-      if (statusFilter !== 'all' && t.status !== statusFilter) return false;
-      if (priorityFilter !== 'all' && t.priority !== priorityFilter) return false;
-      if (typeFilter !== 'all' && (t.type || t.category) !== typeFilter) return false;
-      if (!q) return true;
-      return (
-        t.subject.toLowerCase().includes(q) ||
-        t.number.toLowerCase().includes(q) ||
-        t.requester.name.toLowerCase().includes(q) ||
-        (t.assignee?.name || '').toLowerCase().includes(q)
-      );
-    });
-  }, [data, q, statusFilter, priorityFilter, typeFilter]);
+    // Header search still applies across tickets when on tickets tab;
+    // ticketFilters.search is the dedicated ticket search.
+    const merged: TicketFilterState = {
+      ...ticketFilters,
+      search: ticketFilters.search || (tab === 'tickets' ? search : ticketFilters.search),
+    };
+    return filterTickets(data.tickets, merged);
+  }, [data, ticketFilters, search, tab]);
 
   const filteredDisputes = useMemo(() => {
     if (!data) return [];
@@ -142,10 +141,20 @@ export default function TicketManagementPage() {
   }, [data, q]);
 
   const ticketTypes = useMemo(() => {
-    if (!data) return [];
-    if (Array.isArray(data.types) && data.types.length) return data.types;
+    if (!data) return [...TICKET_TYPE_OPTIONS];
+    if (Array.isArray(data.types) && data.types.length) {
+      return [...new Set([...data.types, ...TICKET_TYPE_OPTIONS])];
+    }
     if (Array.isArray(data.categories) && data.categories.length) return data.categories;
-    return [...new Set(data.tickets.map((t) => t.type || t.category).filter(Boolean) as string[])].sort();
+    return [...TICKET_TYPE_OPTIONS];
+  }, [data]);
+
+  const ticketChannels = useMemo(() => {
+    if (!data) return ['web', 'chat', 'email', 'in_app'];
+    const fromData = [
+      ...new Set(data.tickets.map((t) => String(t.channel || 'web').toLowerCase()).filter(Boolean)),
+    ];
+    return fromData.length ? fromData.sort() : ['web', 'chat', 'email', 'in_app'];
   }, [data]);
 
   if (loading) {
@@ -256,13 +265,11 @@ export default function TicketManagementPage() {
         {tab === 'tickets' && (
           <TicketsTab
             tickets={filteredTickets}
+            totalCount={data.tickets.length}
             ticketTypes={ticketTypes}
-            statusFilter={statusFilter}
-            priorityFilter={priorityFilter}
-            typeFilter={typeFilter}
-            onStatusFilter={setStatusFilter}
-            onPriorityFilter={setPriorityFilter}
-            onTypeFilter={setTypeFilter}
+            channels={ticketChannels}
+            filters={ticketFilters}
+            onFiltersChange={setTicketFilters}
             onOpenTicket={setSelectedTicketId}
           />
         )}
@@ -366,68 +373,21 @@ function OverviewTab({
   );
 }
 
-function FilterBar({
-  statusFilter,
-  priorityFilter,
-  typeFilter,
-  ticketTypes,
-  onStatus,
-  onPriority,
-  onType,
-}: {
-  statusFilter: string;
-  priorityFilter: string;
-  typeFilter: string;
-  ticketTypes: string[];
-  onStatus: (v: string) => void;
-  onPriority: (v: string) => void;
-  onType: (v: string) => void;
-}) {
-  return (
-    <div className="grid gap-3 rounded-2xl border border-white/[0.08] bg-[#14151c] p-4 sm:grid-cols-3">
-      {[
-        ['Status', statusFilter, ['all', 'Open', 'In Progress', 'Resolved', 'Closed'], onStatus],
-        ['Priority', priorityFilter, ['all', 'High', 'Medium', 'Low'], onPriority],
-        ['Type', typeFilter, ['all', ...ticketTypes], onType],
-      ].map(([label, val, opts, onChange]) => (
-        <label key={String(label)} className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase text-zinc-600">{label as string}</span>
-          <select
-            value={val as string}
-            onChange={(e) => (onChange as (v: string) => void)(e.target.value)}
-            className="rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white"
-          >
-            {(opts as string[]).map((o) => (
-              <option key={o} value={o}>
-                {o === 'all' ? 'All' : o}
-              </option>
-            ))}
-          </select>
-        </label>
-      ))}
-    </div>
-  );
-}
-
 function TicketsTab({
   tickets,
+  totalCount,
   ticketTypes,
-  statusFilter,
-  priorityFilter,
-  typeFilter,
-  onStatusFilter,
-  onPriorityFilter,
-  onTypeFilter,
+  channels,
+  filters,
+  onFiltersChange,
   onOpenTicket,
 }: {
   tickets: SupportTicket[];
+  totalCount: number;
   ticketTypes: string[];
-  statusFilter: string;
-  priorityFilter: string;
-  typeFilter: string;
-  onStatusFilter: (v: string) => void;
-  onPriorityFilter: (v: string) => void;
-  onTypeFilter: (v: string) => void;
+  channels: string[];
+  filters: TicketFilterState;
+  onFiltersChange: (next: TicketFilterState) => void;
   onOpenTicket: (id: number | string) => void;
 }) {
   const shortId = (value: string | number | null | undefined) => {
@@ -438,16 +398,16 @@ function TicketsTab({
 
   return (
     <div className="space-y-4">
-      <FilterBar
-        statusFilter={statusFilter}
-        priorityFilter={priorityFilter}
-        typeFilter={typeFilter}
+      <TicketFiltersPanel
+        filters={filters}
+        onChange={onFiltersChange}
         ticketTypes={ticketTypes}
-        onStatus={onStatusFilter}
-        onPriority={onPriorityFilter}
-        onType={onTypeFilter}
+        channels={channels}
+        accent="rose"
+        showQueue
+        resultCount={tickets.length}
+        totalCount={totalCount}
       />
-      <p className="text-xs text-zinc-500">Showing {tickets.length} tickets</p>
       <DataTable
         columns={['Ticket', 'Subject', 'Requester', 'Type', 'Flags', 'Priority', 'Status', 'Assignee', 'Updated']}
         rows={tickets.map((t) => ({
@@ -465,7 +425,7 @@ function TicketsTab({
             <div key="flags" className="flex min-w-[120px] flex-col gap-1">
               {t.waitingForResponse && (
                 <span className="w-fit rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
-                  Awaiting reply
+                  Awaiting Reply
                 </span>
               )}
               {t.isEscalated && (

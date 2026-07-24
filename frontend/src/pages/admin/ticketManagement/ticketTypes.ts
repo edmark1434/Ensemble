@@ -107,18 +107,59 @@ export type ChartSegment = { label: string; value: number; color?: string };
 
 export const TICKET_STATUS_OPTIONS = ['Open', 'In Progress', 'Resolved', 'Closed'] as const;
 export const TICKET_PRIORITY_OPTIONS = ['Low', 'Medium', 'High'] as const;
-export const TICKET_TYPE_OPTIONS = [
+
+export const SUPPORT_TICKET_TYPES = [
   'Account Access',
   'Account Verification',
+  'Profile and Settings',
   'Subscriptions and Plans',
   'Credit Top-ups',
   'Withdrawing Earnings',
+  'Billing and Payments',
   'Video Editor',
-  'Forums',
-  'Asset Marketplace',
-  'Jobs and Gigs',
+  'Notifications and Email',
+  'Technical Issue',
   'Other',
 ] as const;
+
+export const FORUM_TICKET_TYPES = [
+  'Forums',
+  'Forum Posts',
+  'Forum Groups',
+  'Forum Comments',
+  'Forum Reports',
+] as const;
+
+export const MARKETPLACE_TICKET_TYPES = [
+  'Asset Marketplace',
+  'Listing Issues',
+  'Purchase and Delivery',
+  'Seller Verification',
+  'Marketplace Refunds',
+  'Asset Quality',
+] as const;
+
+export const JOBS_TICKET_TYPES = [
+  'Jobs and Gigs',
+  'Job Posts',
+  'Gig Posts',
+  'Applications and Hiring',
+  'Contracts and Milestones',
+] as const;
+
+export const TICKET_TYPE_OPTIONS = [
+  ...SUPPORT_TICKET_TYPES,
+  ...FORUM_TICKET_TYPES,
+  ...MARKETPLACE_TICKET_TYPES,
+  ...JOBS_TICKET_TYPES,
+] as const;
+
+export const TICKET_TYPE_GROUPS: { label: string; types: readonly string[] }[] = [
+  { label: 'Support', types: SUPPORT_TICKET_TYPES },
+  { label: 'Forums', types: FORUM_TICKET_TYPES },
+  { label: 'Marketplace', types: MARKETPLACE_TICKET_TYPES },
+  { label: 'Jobs and Gigs', types: JOBS_TICKET_TYPES },
+];
 
 /** Escalate: pick a moderator queue, then a type allowed for that queue only */
 export const ESCALATE_ROLE_OPTIONS = [
@@ -130,23 +171,15 @@ export const ESCALATE_ROLE_OPTIONS = [
 ] as const;
 
 export const ESCALATE_TYPES_BY_ROLE: Record<string, readonly string[]> = {
-  'Support Moderator': [
-    'Account Access',
-    'Account Verification',
-    'Subscriptions and Plans',
-    'Credit Top-ups',
-    'Withdrawing Earnings',
-    'Video Editor',
-    'Other',
-  ],
-  'Marketplace Moderator': ['Asset Marketplace'],
-  'Forum Moderator': ['Forums'],
-  'Forums Moderator': ['Forums'],
-  'Jobs N Gigs Moderator': ['Jobs and Gigs'],
-  'Jobs & Gigs Moderator': ['Jobs and Gigs'],
-  'Jobs Moderator': ['Jobs and Gigs'],
-  Admin: [...TICKET_TYPE_OPTIONS],
-  Administrator: [...TICKET_TYPE_OPTIONS],
+  'Support Moderator': SUPPORT_TICKET_TYPES,
+  'Marketplace Moderator': MARKETPLACE_TICKET_TYPES,
+  'Forum Moderator': FORUM_TICKET_TYPES,
+  'Forums Moderator': FORUM_TICKET_TYPES,
+  'Jobs N Gigs Moderator': JOBS_TICKET_TYPES,
+  'Jobs & Gigs Moderator': JOBS_TICKET_TYPES,
+  'Jobs Moderator': JOBS_TICKET_TYPES,
+  Admin: TICKET_TYPE_OPTIONS,
+  Administrator: TICKET_TYPE_OPTIONS,
 };
 
 export function escalateTypesForRole(role: string): string[] {

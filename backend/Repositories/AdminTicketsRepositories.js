@@ -771,6 +771,9 @@ async function updateTicket(ticketId, patch, staffSession) {
     idx += 1;
   }
   if (patch.type !== undefined) {
+    if (!patch.assigned_role) {
+      throw new Error('Ticket type can only be changed when escalating to a moderator queue');
+    }
     sets.push(`type = $${idx}`);
     values.push(normalizeTicketType(patch.type));
     idx += 1;

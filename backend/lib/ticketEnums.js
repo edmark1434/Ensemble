@@ -1,58 +1,80 @@
 /**
- * TICKET enums as strings in Postgres; validate/normalize in the backend.
- * @see Ensemble DB Enums — TICKET type / status / priority
+ * Ticket enums — canonical Title Case labels for Ensemble.
+ * Each type is owned by one moderator queue (see ROLE_TO_TICKET_TYPES).
  */
-
-const TICKET_TYPES = Object.freeze([
-  'Account Access',
-  'Account Verification',
-  'Subscriptions and Plans',
-  'Credit Top-ups',
-  'Withdrawing Earnings',
-  'Video Editor',
-  'Forums',
-  'Asset Marketplace',
-  'Jobs and Gigs',
-  'Other',
-]);
-
-const TICKET_STATUSES = Object.freeze(['Open', 'In Progress', 'Resolved', 'Closed']);
-
-const TICKET_PRIORITIES = Object.freeze(['Low', 'Medium', 'High']);
-
-const SPECIALIST_TYPES = Object.freeze(['Forums', 'Asset Marketplace', 'Jobs and Gigs']);
 
 const SUPPORT_TYPES = Object.freeze([
   'Account Access',
   'Account Verification',
+  'Profile and Settings',
   'Subscriptions and Plans',
   'Credit Top-ups',
   'Withdrawing Earnings',
+  'Billing and Payments',
   'Video Editor',
+  'Notifications and Email',
+  'Technical Issue',
   'Other',
 ]);
 
+const MARKETPLACE_TYPES = Object.freeze([
+  'Asset Marketplace',
+  'Listing Issues',
+  'Purchase and Delivery',
+  'Seller Verification',
+  'Marketplace Refunds',
+  'Asset Quality',
+]);
+
+const FORUM_TYPES = Object.freeze([
+  'Forums',
+  'Forum Posts',
+  'Forum Groups',
+  'Forum Comments',
+  'Forum Reports',
+]);
+
+const JOBS_TYPES = Object.freeze([
+  'Jobs and Gigs',
+  'Job Posts',
+  'Gig Posts',
+  'Applications and Hiring',
+  'Contracts and Milestones',
+]);
+
+const TICKET_TYPES = Object.freeze([
+  ...SUPPORT_TYPES,
+  ...FORUM_TYPES,
+  ...MARKETPLACE_TYPES,
+  ...JOBS_TYPES,
+]);
+
+const SPECIALIST_TYPES = Object.freeze([...FORUM_TYPES, ...MARKETPLACE_TYPES, ...JOBS_TYPES]);
+
+const TICKET_STATUSES = Object.freeze(['Open', 'In Progress', 'Resolved', 'Closed']);
+const TICKET_PRIORITIES = Object.freeze(['Low', 'Medium', 'High']);
+
 const QUEUE_SCOPES = Object.freeze({
-  support: { typesNotIn: [...SPECIALIST_TYPES] },
-  forums: { typesIn: ['Forums'] },
-  marketplace: { typesIn: ['Asset Marketplace'] },
-  jobs: { typesIn: ['Jobs and Gigs'] },
+  support: { typesIn: [...SUPPORT_TYPES], typesNotIn: [...SPECIALIST_TYPES] },
+  forums: { typesIn: [...FORUM_TYPES] },
+  marketplace: { typesIn: [...MARKETPLACE_TYPES] },
+  jobs: { typesIn: [...JOBS_TYPES] },
 });
 
 /** Role label → allowed ticket types when escalating into that queue */
 const ROLE_TO_TICKET_TYPES = Object.freeze({
   'Support Moderator': [...SUPPORT_TYPES],
-  'Marketplace Moderator': ['Asset Marketplace'],
-  'Forum Moderator': ['Forums'],
-  'Forums Moderator': ['Forums'],
-  'Jobs Moderator': ['Jobs and Gigs'],
-  'Jobs N Gigs Moderator': ['Jobs and Gigs'],
-  'Jobs & Gigs Moderator': ['Jobs and Gigs'],
+  'Marketplace Moderator': [...MARKETPLACE_TYPES],
+  'Forum Moderator': [...FORUM_TYPES],
+  'Forums Moderator': [...FORUM_TYPES],
+  'Jobs Moderator': [...JOBS_TYPES],
+  'Jobs N Gigs Moderator': [...JOBS_TYPES],
+  'Jobs & Gigs Moderator': [...JOBS_TYPES],
   Administrator: [...TICKET_TYPES],
   Admin: [...TICKET_TYPES],
 });
 
-/** @deprecated prefer ROLE_TO_TICKET_TYPES — default/first type for a role */
+/** @deprecated prefer ROLE_TO_TICKET_TYPES */
 const ROLE_TO_TICKET_TYPE = Object.freeze(
   Object.fromEntries(
     Object.entries(ROLE_TO_TICKET_TYPES).map(([role, types]) => [role, types[0]])
@@ -67,12 +89,11 @@ function getEscalateTypesForRole(role) {
 function isTypeAllowedForRole(role, type) {
   const allowed = ROLE_TO_TICKET_TYPES[role];
   if (!allowed) return false;
-  const normalized = normalizeTicketType(type);
-  return allowed.includes(normalized);
+  return allowed.includes(normalizeTicketType(type));
 }
 
 const LEGACY_TYPE_MAP = Object.freeze({
-  billing: 'Credit Top-ups',
+  billing: 'Billing and Payments',
   account: 'Account Access',
   security: 'Account Verification',
   general: 'Other',
@@ -95,6 +116,23 @@ const LEGACY_TYPE_MAP = Object.freeze({
   'credit topups': 'Credit Top-ups',
   'withdrawing earnings': 'Withdrawing Earnings',
   'video editor': 'Video Editor',
+  'profile and settings': 'Profile and Settings',
+  'notifications and email': 'Notifications and Email',
+  'technical issue': 'Technical Issue',
+  'billing and payments': 'Billing and Payments',
+  'listing issues': 'Listing Issues',
+  'purchase and delivery': 'Purchase and Delivery',
+  'seller verification': 'Seller Verification',
+  'marketplace refunds': 'Marketplace Refunds',
+  'asset quality': 'Asset Quality',
+  'forum posts': 'Forum Posts',
+  'forum groups': 'Forum Groups',
+  'forum comments': 'Forum Comments',
+  'forum reports': 'Forum Reports',
+  'job posts': 'Job Posts',
+  'gig posts': 'Gig Posts',
+  'applications and hiring': 'Applications and Hiring',
+  'contracts and milestones': 'Contracts and Milestones',
 });
 
 const LEGACY_STATUS_MAP = Object.freeze({
@@ -174,6 +212,9 @@ module.exports = {
   TICKET_STATUSES,
   TICKET_PRIORITIES,
   SUPPORT_TYPES,
+  MARKETPLACE_TYPES,
+  FORUM_TYPES,
+  JOBS_TYPES,
   SPECIALIST_TYPES,
   QUEUE_SCOPES,
   ROLE_TO_TICKET_TYPE,

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import api from "@/lib/axios";
-import { TICKET_TYPE_OPTIONS } from "@/pages/admin/ticketManagement/ticketTypes";
+import { TICKET_TYPE_GROUPS } from "@/pages/admin/ticketManagement/ticketTypes";
 
 const PageSubmitATicket: React.FC = () => {
   const navigate = useNavigate();
@@ -129,10 +129,14 @@ const PageSubmitATicket: React.FC = () => {
                   outline: "none",
                 }}
               >
-                {TICKET_TYPE_OPTIONS.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
+                {TICKET_TYPE_GROUPS.map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.types.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </div>

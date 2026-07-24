@@ -48,9 +48,16 @@ async function getSupportTickets({ status, search, type, category, priority } = 
     params.push(`%${String(search).toLowerCase()}%`);
     where.push(`(
       LOWER(t.reason) LIKE $${params.length}
-      OR LOWER(t.ticket_number) LIKE $${params.length}
+      OR LOWER(COALESCE(t.ticket_number, '')) LIKE $${params.length}
+      OR LOWER(COALESCE(t.type, '')) LIKE $${params.length}
+      OR LOWER(COALESCE(t.channel, '')) LIKE $${params.length}
       OR LOWER(COALESCE(ra.handle, '')) LIKE $${params.length}
       OR LOWER(COALESCE(ra.display_name, '')) LIKE $${params.length}
+      OR LOWER(COALESCE(ru.email_address, '')) LIKE $${params.length}
+      OR LOWER(COALESCE(ru.user_id::text, '')) LIKE $${params.length}
+      OR LOWER(COALESCE(t.account_id::text, '')) LIKE $${params.length}
+      OR LOWER(COALESCE(sa.display_name, '')) LIKE $${params.length}
+      OR LOWER(COALESCE(ea.display_name, '')) LIKE $${params.length}
       OR t.ticket_id::text LIKE $${params.length}
     )`);
   }
