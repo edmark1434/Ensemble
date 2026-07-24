@@ -1,4 +1,5 @@
 import React from "react";
+import { ArrowUp, ArrowDown } from "lucide-react";
 
 export interface FilterState {
   minPrice: string;
@@ -28,63 +29,158 @@ interface JobFiltersProps {
 
 const JobFilters: React.FC<JobFiltersProps> = ({ filters, setters, onClear }) => {
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-5 backdrop-blur-sm space-y-6">
-      <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em]">Filter Options</h2>
+    <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-4 backdrop-blur-sm space-y-4">
+      <div className="flex items-center justify-between border-b border-white/5 pb-2">
+        <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em]">
+          Filter Options
+        </h2>
+        <button
+          onClick={onClear}
+          className="text-[10px] font-semibold text-zinc-500 hover:text-red-400 transition-colors"
+        >
+          Reset All
+        </button>
+      </div>
 
       {/* Price Range */}
-      <div className="space-y-3">
-        <label className="text-[11px] font-bold text-zinc-400 uppercase">Price Range (₱)</label>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+            Price Range (₱)
+          </label>
+
+          {/* Compact Price Sort Buttons */}
+          <div className="flex gap-1 bg-white/5 p-0.5 rounded-lg border border-white/5">
+            <button
+              title="Increasing Price"
+              onClick={() => setters.setPriceSort(filters.priceSort === "inc" ? null : "inc")}
+              className={`p-1 rounded text-xs transition ${
+                filters.priceSort === "inc"
+                  ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              <ArrowUp className="h-3 w-3" />
+            </button>
+            <button
+              title="Decreasing Price"
+              onClick={() => setters.setPriceSort(filters.priceSort === "dec" ? null : "dec")}
+              className={`p-1 rounded text-xs transition ${
+                filters.priceSort === "dec"
+                  ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              <ArrowDown className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+
         <div className="flex gap-2">
-          <input type="number" placeholder="Min" value={filters.minPrice} onChange={e => setters.setMinPrice(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/50" />
-          <input type="number" placeholder="Max" value={filters.maxPrice} onChange={e => setters.setMaxPrice(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/50" />
-        </div>
-        <div className="flex flex-col gap-2 pt-1">
-          <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
-            <input type="checkbox" className="accent-blue-500" checked={filters.priceSort === "inc"} onChange={() => setters.setPriceSort(filters.priceSort === "inc" ? null : "inc")} /> Increasing Price
-          </label>
-          <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
-            <input type="checkbox" className="accent-blue-500" checked={filters.priceSort === "dec"} onChange={() => setters.setPriceSort(filters.priceSort === "dec" ? null : "dec")} /> Decreasing Price
-          </label>
-        </div>
-      </div>
-
-      {/* Difficulty */}
-      <div className="space-y-3">
-        <label className="text-[11px] font-bold text-zinc-400 uppercase">Difficulty</label>
-        <div className="flex flex-col gap-2">
-          {["Beginner", "Intermediate", "Expert"].map(d => (
-            <label key={d} className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
-              <input type="checkbox" className="accent-blue-500" checked={filters.selectedDiffs.includes(d)} onChange={() => setters.setSelectedDifficulty(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])} /> {d}
-            </label>
-          ))}
+          <input
+            type="number"
+            placeholder="Min"
+            value={filters.minPrice}
+            onChange={(e) => setters.setMinPrice(e.target.value)}
+            className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/50 placeholder:text-zinc-600"
+          />
+          <input
+            type="number"
+            placeholder="Max"
+            value={filters.maxPrice}
+            onChange={(e) => setters.setMaxPrice(e.target.value)}
+            className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/50 placeholder:text-zinc-600"
+          />
         </div>
       </div>
 
-      {/* Positions */}
-      <div className="space-y-3">
-        <label className="text-[11px] font-bold text-zinc-400 uppercase">Positions</label>
-        <input type="number" placeholder="Exact value" value={filters.posValue} onChange={e => setters.setPosValue(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none" />
-        <div className="flex flex-col gap-2">
-          <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
-            <input type="checkbox" checked={filters.posSort === "inc"} onChange={() => setters.setPosSort(filters.posSort === "inc" ? null : "inc")} /> Increasing Slots
-          </label>
-          <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
-            <input type="checkbox" checked={filters.posSort === "dec"} onChange={() => setters.setPosSort(filters.posSort === "dec" ? null : "dec")} /> Decreasing Slots
-          </label>
-        </div>
-      </div>
-
-      {/* Top Rated */}
-      <div className="space-y-3">
-        <label className="text-[11px] font-bold text-zinc-400 uppercase">Client Rating</label>
-        <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
-          <input type="checkbox" checked={filters.ratingSort} onChange={() => setters.setRatingSort(!filters.ratingSort)} /> Top Rated First
+      {/* Difficulty Chips */}
+      <div className="space-y-2 pt-1 border-t border-white/5">
+        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+          Difficulty
         </label>
+        <div className="flex flex-wrap gap-1.5">
+          {["Beginner", "Intermediate", "Expert"].map((d) => {
+            const isSelected = filters.selectedDiffs.includes(d);
+            return (
+              <button
+                key={d}
+                type="button"
+                onClick={() =>
+                  setters.setSelectedDifficulty((prev) =>
+                    prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]
+                  )
+                }
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  isSelected
+                    ? "bg-blue-500/15 border border-blue-500/40 text-blue-400"
+                    : "bg-white/5 border border-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-300"
+                }`}
+              >
+                {d}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <button onClick={onClear} className="w-full py-2 text-xs font-bold text-zinc-500 hover:text-red-400 transition-colors border-t border-white/5 pt-4">
-        Clear All Filters
-      </button>
+      {/* Positions Slots */}
+      <div className="space-y-2 pt-1 border-t border-white/5">
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+            Positions Needed
+          </label>
+          <div className="flex gap-1 bg-white/5 p-0.5 rounded-lg border border-white/5">
+            <button
+              title="Increasing Slots"
+              onClick={() => setters.setPosSort(filters.posSort === "inc" ? null : "inc")}
+              className={`p-1 rounded text-xs transition ${
+                filters.posSort === "inc"
+                  ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              <ArrowUp className="h-3 w-3" />
+            </button>
+            <button
+              title="Decreasing Slots"
+              onClick={() => setters.setPosSort(filters.posSort === "dec" ? null : "dec")}
+              className={`p-1 rounded text-xs transition ${
+                filters.posSort === "dec"
+                  ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              <ArrowDown className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+        <input
+          type="number"
+          placeholder="Exact positionsNeeded"
+          value={filters.posValue}
+          onChange={(e) => setters.setPosValue(e.target.value)}
+          className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/50 placeholder:text-zinc-600"
+        />
+      </div>
+
+      {/* Toggle for Top Rated */}
+      <div className="pt-2 border-t border-white/5 flex items-center justify-between cursor-pointer" onClick={() => setters.setRatingSort(!filters.ratingSort)}>
+        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+          Top Rated First
+        </span>
+        <div
+          className={`w-8 h-4 flex items-center rounded-full p-0.5 transition-colors ${
+            filters.ratingSort ? "bg-blue-500" : "bg-white/10"
+          }`}
+        >
+          <div
+            className={`bg-white w-3 h-3 rounded-full shadow-md transform transition-transform ${
+              filters.ratingSort ? "translate-x-4" : "translate-x-0"
+            }`}
+          />
+        </div>
+      </div>
     </div>
   );
 };
