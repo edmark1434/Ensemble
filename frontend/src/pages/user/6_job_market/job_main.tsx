@@ -8,85 +8,51 @@ import JobSearchbar from "./job_components/job_searchbar";
 import JobTabs from "./job_components/job_tabs";
 import JobCategories from "./job_components/job_categories";
 import JobFilters from "./job_components/job_filters";
-import type {Job} from "./job_components/job_lists";
+import JobListViewType from "./job_components/job_list_viewtype";
+import type { ViewType } from "./job_components/job_list_viewtype";
 
-const sampleJobs: Job[] = [
-  {
-    id: "JP001",
-    title: "Wedding Video Edit - Romantic Style",
-    description: "Looking for an experienced editor to create a 10-minute wedding highlight reel. Must be proficient in color grading and narrative storytelling. Raw footage provided is around 50GB in 4K.\n\nRequirements:\n• Advanced Multi-cam editing\n• Dynamic Audio syncing & sound design\n• High-end cinematic color grading matching log profiles.",
-    status: "Open",
-    category: "Events",
-    difficulty: "Intermediate",
-    priceRange: "₱28,000 ~ 36,000",
-    minBudget: 28000,
-    postedBy: "Edmark Talingting",
-    postedAt: "Oct 24, 2026 • 2:30 PM",
-    timeAgo: "Posted 2 hours ago",
-    clientRating: 4.5,
-    ratingCount: 12,
-    positionsNeeded: 3,
-    applicantsCount: 28,
-    timeline: "3-5 Days",
-    thumbnail: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80",
-    isSaved: true,
-    isOwnPost: false
-  },
-  {
-    id: "JP002",
-    title: "YouTube Channel Intro Animation",
-    description: "Need a 10-second animated intro for a tech review channel. Should include clean typography, slick sound effects, and source project delivery file formats.",
-    status: "Open",
-    category: "YouTube",
-    difficulty: "Beginner",
-    priceRange: "₱12,000 ~ 14,000",
-    minBudget: 12000,
-    postedBy: "Jodeci Pacibe",
-    postedAt: "Oct 24, 2026 • 11:15 AM",
-    timeAgo: "Posted 2 hours ago",
-    clientRating: 4.5,
-    ratingCount: 5,
-    positionsNeeded: 1,
-    applicantsCount: 33,
-    timeline: "1-3 Days",
-    thumbnail: "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?auto=format&fit=crop&w=600&q=80",
-    isSaved: false,
-    isOwnPost: true
-  },
-  {
-    id: "JP003",
-    title: "Corporate Brand Identity Video",
-    description: "Seeking a professional video creator to craft a high-end promotional commercial sequence highlighting global enterprise logistics infrastructure updates.",
-    status: "Open",
-    category: "Corporate",
-    difficulty: "Expert",
-    priceRange: "₱45,000 ~ 60,000",
-    minBudget: 45000,
-    postedBy: "Sarah Chen",
-    postedAt: "Oct 24, 2026 • 9:00 AM",
-    timeAgo: "Posted 5 hours ago",
-    clientRating: 4.9,
-    ratingCount: 42,
-    positionsNeeded: 2,
-    applicantsCount: 14,
-    timeline: "1-2 Weeks",
-    thumbnail: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=600&q=80",
-    isSaved: false,
-    isOwnPost: false
-  }
-];
+// Datasets & Types
+import { sampleJobs, sampleCategories } from "./job_datasets";
+import type { Job } from "./job_components/job_lists";
 
 export interface JobMainContext {
   jobsList: Job[];
   filteredJobs: Job[];
+  loading: boolean;
+  viewType: ViewType;
   toggleSaveJob: (e: React.MouseEvent, jobId: string) => void;
 }
+
+const SidebarSkeleton = () => (
+  <div className="space-y-6">
+    <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-5 backdrop-blur-sm">
+      <div className="mb-4 h-3 w-20 animate-pulse rounded bg-white/10" />
+      <div className="flex flex-wrap gap-2">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="h-7 w-20 animate-pulse rounded-full bg-white/5" />
+        ))}
+      </div>
+    </div>
+    <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-5 backdrop-blur-sm space-y-4">
+      <div className="h-3 w-28 animate-pulse rounded bg-white/10" />
+      <div className="space-y-2">
+        <div className="h-4 w-24 animate-pulse rounded bg-white/5" />
+        <div className="flex gap-2">
+          <div className="h-8 flex-1 animate-pulse rounded-lg bg-white/5" />
+          <div className="h-8 flex-1 animate-pulse rounded-lg bg-white/5" />
+        </div>
+      </div>
+    </div>
+  </div>
+);
 
 const JobMain: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams();
 
+  const [loading, setLoading] = useState(true);
+  const [viewType, setViewType] = useState<ViewType>("list");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [activeCategoryFilter, setActiveCategoryFilter] = useState("All");
@@ -101,11 +67,14 @@ const JobMain: React.FC = () => {
   const [posSort, setPosSort] = useState<"inc" | "dec" | null>(null);
   const [ratingSort, setRatingSort] = useState<boolean>(false);
 
-  // Drawer URL route sync
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 800);
+    return () => clearTimeout(timer);
+  }, []);
+
   useEffect(() => {
     if (id) {
       const found = jobsList.find((j) => j.id === id);
-        // eslint-disable-next-line react-hooks/set-state-in-effect
       if (found) setSelectedJob(found);
     } else {
       setSelectedJob(null);
@@ -143,17 +112,46 @@ const JobMain: React.FC = () => {
       const matchesDiff = selectedDiffs.length === 0 || selectedDiffs.includes(job.difficulty);
       const matchesPos = posValue === "" || job.positionsNeeded === parseInt(posValue);
 
-      return matchesSearch && matchesCategory && matchesMinPrice && matchesMaxPrice && matchesDiff && matchesPos;
+      return (
+        matchesSearch &&
+        matchesCategory &&
+        matchesMinPrice &&
+        matchesMaxPrice &&
+        matchesDiff &&
+        matchesPos
+      );
     });
 
-    if (priceSort) result.sort((a, b) => (priceSort === "inc" ? a.minBudget - b.minBudget : b.minBudget - a.minBudget));
-    else if (posSort) result.sort((a, b) => (posSort === "inc" ? a.positionsNeeded - b.positionsNeeded : b.positionsNeeded - a.positionsNeeded));
-    else if (ratingSort) result.sort((a, b) => b.clientRating - a.clientRating);
+    // Flexible multi-attribute sorting comparator
+    result.sort((a, b) => {
+      // 1. Price Sorting Priority
+      if (priceSort === "inc") return a.minBudget - b.minBudget;
+      if (priceSort === "dec") return b.minBudget - a.minBudget;
+
+      // 2. Positions Needed Sorting
+      if (posSort === "inc") return a.positionsNeeded - b.positionsNeeded;
+      if (posSort === "dec") return b.positionsNeeded - a.positionsNeeded;
+
+      // 3. Client Rating Sorting
+      if (ratingSort) return b.clientRating - a.clientRating;
+
+      return 0;
+    });
 
     return result;
-  }, [jobsList, searchQuery, activeCategoryFilter, minPrice, maxPrice, priceSort, selectedDiffs, posValue, posSort, ratingSort]);
+  }, [
+    jobsList,
+    searchQuery,
+    activeCategoryFilter,
+    minPrice,
+    maxPrice,
+    priceSort,
+    selectedDiffs,
+    posValue,
+    posSort,
+    ratingSort,
+  ]);
 
-  // Determine active tab route path to close drawer safely back to the parent list route
   const getParentRoute = () => {
     if (location.pathname.includes("/saved-posts")) return "/jobs/saved-posts";
     if (location.pathname.includes("/my-job-post")) return "/jobs/my-job-post";
@@ -166,30 +164,62 @@ const JobMain: React.FC = () => {
 
       <div className="mx-auto max-w-7xl p-6 md:p-8 w-full">
         <JobSearchbar searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
-        <JobTabs />
+
+        <div className="mb-8 flex flex-wrap items-center justify-between border-b border-white/10 gap-4">
+          <JobTabs />
+          <div className="py-2">
+            <JobListViewType viewType={viewType} onViewTypeChange={setViewType} />
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
           <div className="space-y-6 sticky top-24">
-            <JobCategories
-              categories={[
-                { label: "All", count: 748 },
-                { label: "Social", count: 119 },
-                { label: "YouTube", count: 101 },
-                { label: "Corporate", count: 78 },
-                { label: "Events", count: 65 }
-              ]}
-              activeCategory={activeCategoryFilter}
-              onCategoryChange={setActiveCategoryFilter}
-            />
-            <JobFilters
-              filters={{ minPrice, maxPrice, priceSort, selectedDiffs, posValue, posSort, ratingSort }}
-              setters={{ setMinPrice, setMaxPrice, setPriceSort, setSelectedDifficulty, setPosValue, setPosSort, setRatingSort }}
-              onClear={handleClearFilters}
-            />
+            {loading ? (
+              <SidebarSkeleton />
+            ) : (
+              <>
+                <JobCategories
+                  categories={sampleCategories}
+                  activeCategory={activeCategoryFilter}
+                  onCategoryChange={setActiveCategoryFilter}
+                />
+                <JobFilters
+                  filters={{
+                    minPrice,
+                    maxPrice,
+                    priceSort,
+                    selectedDiffs,
+                    posValue,
+                    posSort,
+                    ratingSort,
+                  }}
+                  setters={{
+                    setMinPrice,
+                    setMaxPrice,
+                    setPriceSort,
+                    setSelectedDifficulty,
+                    setPosValue,
+                    setPosSort,
+                    setRatingSort,
+                  }}
+                  onClear={handleClearFilters}
+                />
+              </>
+            )}
           </div>
 
           <div className="lg:col-span-3">
-            <Outlet context={{ jobsList, filteredJobs, toggleSaveJob } satisfies JobMainContext} />
+            <Outlet
+              context={
+                {
+                  jobsList,
+                  filteredJobs,
+                  loading,
+                  viewType,
+                  toggleSaveJob,
+                } satisfies JobMainContext
+              }
+            />
           </div>
         </div>
       </div>
