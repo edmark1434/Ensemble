@@ -506,8 +506,6 @@ async function updateUserPersonalDetails(userId,details) {
     const { middleName, suffix, birthDate, country, zipCode, address } = details;
     console.log('Updating personal details for user:', userId, details);
     let listErrors = {};
-    if (!middleName) listErrors.middleName = "Middle name is required";
-    if (!suffix) listErrors.suffix = "Suffix is required";
     if (!birthDate) listErrors.birthDate = "Birth date is required";
     if (!country) listErrors.country = "Country is required";
     if (!zipCode) listErrors.zipCode = "Zip code is required";

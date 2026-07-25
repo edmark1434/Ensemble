@@ -463,7 +463,7 @@ async function getUserSession(req, res) {
         let steps = await getUserOnboardingStep(req.session.userId);
         return res.status(200).json({
             success: true,
-            steps: steps.completed_onboarding
+            steps: steps.completed_onboarding ?? null
         });
     } catch (err) {
         console.error('Error fetching user session:', err);

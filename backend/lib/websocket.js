@@ -97,9 +97,15 @@ async function initSocket(httpServer) {
   return io;
 }
 
-
+function getIo(){
+  if(!io){
+    throw new Error("Socket.IO server not initialized. Call initSocket first.");
+  }
+  return io;
+}
 
 
 module.exports = {
-  initSocket
+  initSocket,
+  getIo
 };
