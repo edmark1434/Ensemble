@@ -14,6 +14,8 @@ const {
 const {
     getReusableAccountVerificationSessionByAccountId,
     createAccountVerificationSessionRepository,
+    createAccountVerificationRepository,
+    getAccountVerificationByAccountId
 } = require("../Repositories/AccountVerificationRepositories");
 
 async function createAccountVerificationSession(userId) {
@@ -21,7 +23,7 @@ async function createAccountVerificationSession(userId) {
         // ============================================================
         // 1. Fetch user
         // ============================================================
-
+        
         const user = await getUserById(userId);
 
         if (!user) {
@@ -32,15 +34,16 @@ async function createAccountVerificationSession(userId) {
         // 2. Check reusable session in database
         // ============================================================
 
-        const existingSession =
-            await getReusableAccountVerificationSessionByAccountId(
-                user.account_id
-            );
-
+        const [existingSession, existingVerification] = await Promise.all([
+            getReusableAccountVerificationSessionByAccountId(user.account_id),
+            getAccountVerificationByAccountId(user.account_id)
+        ]);
         if (existingSession) {
             return existingSession;
         }
-
+        if(!existingVerification){
+            await createAccountVerificationRepository(user.account_id);
+        }
         // ============================================================
         // 3. Check existing reusable Didit session
         // ============================================================
@@ -64,7 +67,7 @@ async function createAccountVerificationSession(userId) {
                 },
             }
         );
-
+        console.log("Didit sessions response:", diditResponse);
         const reusableDiditSession = diditResponse.data.results?.find(session =>
             reusableStatuses.includes(session.status)
         );

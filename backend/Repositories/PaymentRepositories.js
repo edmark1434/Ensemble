@@ -382,7 +382,7 @@ async function getActivePaymentSessions(LIMIT = process.env.ACTIVE_PAYMENT_LIMIT
         const query = `
             SELECT *
             FROM payments
-            WHERE status IN ('PENDING', 'REQUIRES_ACTION')
+            WHERE status IN ('PENDING', 'REQUIRES_ACTION','ACTIVE')
             ORDER BY created_at ASC
             LIMIT $1
         `;

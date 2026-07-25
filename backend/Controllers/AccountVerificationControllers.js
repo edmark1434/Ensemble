@@ -2,8 +2,15 @@ const {
     createAccountVerificationSession 
 } = require('../Services/AccountVerificationServices');
 const {
-    updateAccountVerificationSessionStatus
+    updateAccountVerificationSessionStatus,
+    updateAccountVerifications
 } = require('../Repositories/AccountVerificationRepositories');
+
+const {
+    updateUserDetailsByAccountId
+} = require('../Repositories/UserRepositories');
+
+const {getIo} = require('../lib/websocket');
 
 async function createAccountVerificationController(req,res){
     try{
@@ -19,7 +26,8 @@ async function createAccountVerificationController(req,res){
 async function handleVerificationWebhookStatusUpdated(req, res) {
     try {
         console.log("Received verification webhook:", req.body);
-
+        const io = getIo();
+        io.emit("verificationWebhook", req.body);
         const {
             session_id: sessionId,
             status,
@@ -38,9 +46,51 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
 
         switch (status) {
             case "Approved":
-            case "In Review":
-                payload.verification_status = "In Review";
+            case "In Review": {
+                payload.verification_status = status;
+                if(status === "Approved"){
+                    await updateAccountVerifications(req.body.metadata?.account_id, { is_verified: true, verified_at: new Date() ,verification_session_id: sessionId});
+                }
+                
+                const verification =
+                    req.body.decision?.id_verifications?.[0];
+
+                if (verification) {
+                    let firstName = verification.first_name || "";
+                    const middleName =
+                        verification.extra_fields?.middle_name || "";
+
+                    // Remove middle name if appended to first name
+                    if (
+                        middleName &&
+                        firstName
+                            .toLowerCase()
+                            .endsWith(` ${middleName.toLowerCase()}`)
+                    ) {
+                        firstName = firstName
+                            .slice(0, firstName.length - middleName.length)
+                            .trim();
+                    }
+
+                    const verificationDetails = {
+                        first_name: firstName,
+                        middle_name: middleName,
+                        last_name: verification.last_name,
+                        birth_date: verification.date_of_birth,
+                    };
+
+                    if (verification.extra_fields?.suffix) {
+                        verificationDetails.suffix = verification.extra_fields.suffix;
+                    }
+                    console.log("Updating user details with verification details:", verificationDetails);
+                    await updateUserDetailsByAccountId(req.body.metadata?.account_id, verificationDetails);
+
+                    // TODO:
+                    // await saveVerificationDetails(sessionId, verificationDetails);
+                }
+
                 break;
+            }
 
             case "Declined":
             case "Expired":
@@ -73,7 +123,6 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
         });
     }
 }
-
 
 
 
