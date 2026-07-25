@@ -19,8 +19,7 @@ exports.up = (pgm) => {
     },
 
     verification_session_id: {
-      type: "uuid",
-      notNull: true,
+      type: "uuid"
     },
 
     is_verified: {

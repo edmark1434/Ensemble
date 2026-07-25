@@ -138,9 +138,42 @@ try {
     }
 }
 
+
+async function createAccountVerificationRepository(accountId){
+    try{
+        const query = `
+            INSERT INTO verifications (
+                account_id,
+                created_at,
+                updated_at
+            ) VALUES ($1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING *;
+        `
+        const result = await pool.query(query, [
+            accountId
+        ]);
+        return result.rows[0];
+    }catch(err){
+        console.error("Error creating account verification :", err);
+        throw err;
+    }
+}
+
+async function getAccountVerificationByAccountId(accountId) {
+    try{
+        const result = await pool.query('SELECT * FROM verifications WHERE account_id = $1 limit 1' , [accountId]);
+        return result.rows[0] || null;
+    }catch(err){
+        console.error("Error fetching account verification by accountId:", err);
+        throw err;
+    }
+}
+
 module.exports = {
     getReusableAccountVerificationSessionByAccountId,
     createAccountVerificationSessionRepository,
     updateAccountVerificationSessionStatus,
-    updateAccountVerifications
+    updateAccountVerifications,
+    createAccountVerificationRepository,
+    getAccountVerificationByAccountId
 };

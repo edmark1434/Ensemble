@@ -250,6 +250,46 @@ async function updateUserDetails(userId, updates) {
         throw err;
     }
 }
+async function updateUserDetailsByAccountId(accountId, updates) {
+    try {
+        if (!accountId) {
+            throw new Error("accountId is required.");
+        }
+
+        if (!updates || Object.keys(updates).length === 0) {
+            throw new Error("No fields to update.");
+        }
+
+        const setClauses = [];
+        const values = [];
+        let index = 1;
+
+        for (const [column, value] of Object.entries(updates)) {
+            if (value === undefined) continue;
+
+            setClauses.push(`${column} = $${index}`);
+            values.push(value);
+            index++;
+        }
+
+        // Always update updated_at
+        values.push(accountId);
+
+        const query = `
+            UPDATE users
+            SET ${setClauses.join(", ")}
+            WHERE account_id = $${index}
+            RETURNING *;
+        `;
+
+        const result = await pool.query(query, values);
+
+        return result.rows[0];
+    } catch (err) {
+        console.error("Error updating user:", err);
+        throw err;
+    }
+}
 
 async function getUserOnboardingStep(userId) {
     try {
@@ -274,5 +314,6 @@ module.exports = {
     getUserByListofIdsRepositories,
     getNameByUserId,
     updateUserDetails,
+    updateUserDetailsByAccountId,
     getUserOnboardingStep,
 };
