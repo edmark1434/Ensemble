@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import UserHeader from "@/components/nav/user_header";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
@@ -24,6 +24,9 @@ import AvatarEditModal from "@/pages/user/7_profile/Edits/AvatarEditModal.tsx";
 import ProfileEditModal from "@/pages/user/7_profile/Edits/ProfileEditModal.tsx";
 import { BadgeEditModal } from "./Edits/BadgeEditModal.tsx";
 import SkillsEditModal from "@/pages/user/7_profile/Edits/SkillsEditModal.tsx";
+
+// Chat Interface Context Types
+import type { ChatTarget } from "@/components/ui/Layout";
 
 interface SkillObject {
   tag_id: number | string;
@@ -76,21 +79,18 @@ const services = [
 // Helper function to construct avatar URL
 const constructAvatarUrl = (path: string | undefined): string | undefined => {
   if (!path) return undefined;
-  
-  // If it's already a full URL (starts with http), return as is
+
   if (path.startsWith('http')) {
     return path;
   }
-  
+
   const cloudfrontUrl = import.meta.env.VITE_CLOUDFRONT_URL;
   if (!cloudfrontUrl) return path;
-  
-  // Remove leading slash from path if it exists, then add it back with cloudfront URL
+
   const cleanPath = path.startsWith('/') ? path.substring(1) : path;
   return `${cloudfrontUrl}/${cleanPath}`;
 };
 
-// Preset interface
 interface Preset {
   file_id: number;
   path: string;
@@ -104,6 +104,11 @@ export default function Profile() {
   const user = useGlobalState((state) => state.user);
   const id = useParams().id || user?.account_id;
 
+  // Outlet context handler for global chat control
+  const { openChatWithUser } = useOutletContext<{
+    openChatWithUser: (target?: ChatTarget) => void;
+  }>();
+
   const [userDetails, setUserDetails] = useState<UserDetail | null>(null);
   const [availableSkills, setAvailableSkills] = useState<{ tag_id: number; name: string }[]>([]);
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
@@ -111,17 +116,28 @@ export default function Profile() {
   const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
   const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
   const [isSavingSkills, setIsSavingSkills] = useState(false);
-  
-  // State for avatar upload
+
   const [avatarPresets, setAvatarPresets] = useState<Preset[]>([]);
   const [currentAvatar, setCurrentAvatar] = useState<Preset | null>(null);
 
   const isOwner = id == user?.account_id;
 
-  // Upload file using pre-signed URL
+  // Open Chat Trigger Handler
+  const handleOpenChat = () => {
+    if (!userDetails) return;
+
+    const fullName = [userDetails.name, userDetails.middleName, userDetails.suffix]
+      .filter(Boolean)
+      .join(" ");
+
+    openChatWithUser({
+      name: fullName || userDetails.username,
+      avatarUrl: userDetails.avatar_preset_url,
+    });
+  };
+
   const uploadFile = async (file: File): Promise<string> => {
     try {
-      // 1. Get pre-signed URL from server
       const response = await api.post("/api/files/upload-url", {
         folder: "profile",
         filename: file.name,
@@ -133,16 +149,15 @@ export default function Profile() {
       }
 
       let { uploadUrl, key, expiresIn, maxFileSize } = response.data;
-      
+
       console.log('📤 Upload URL received:', {
         key,
         expiresIn: `${expiresIn} seconds`,
         maxFileSize: `${maxFileSize / 1024 / 1024}MB`
       });
 
-      // 2. Upload directly to S3 using fetch with timeout
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
 
       let uploadResponse = await fetch(uploadUrl, {
         method: "PUT",
@@ -155,10 +170,9 @@ export default function Profile() {
 
       clearTimeout(timeoutId);
 
-      // 3. If URL expired (403), get a new one and retry
       if (uploadResponse.status === 403) {
         console.log("⚠️ Upload URL expired, requesting new one...");
-        
+
         const newResponse = await api.post("/api/files/upload-url", {
           folder: "profile",
           filename: file.name,
@@ -171,7 +185,6 @@ export default function Profile() {
 
         const { uploadUrl: newUploadUrl, key: newKey } = newResponse.data;
 
-        // Retry the upload with new URL
         uploadResponse = await fetch(newUploadUrl, {
           method: "PUT",
           headers: {
@@ -183,9 +196,7 @@ export default function Profile() {
         key = newKey;
       }
 
-      // 4. Check if upload succeeded
       if (!uploadResponse.ok) {
-        // Handle specific S3 errors
         if (uploadResponse.status === 413) {
           throw new Error('File is too large. Maximum size is 5MB.');
         }
@@ -200,8 +211,7 @@ export default function Profile() {
 
     } catch (error: any) {
       console.error('❌ Upload error:', error);
-      
-      // Handle specific errors
+
       if (error.name === 'AbortError') {
         throw new Error('Upload timed out. Please try again.');
       }
@@ -214,45 +224,36 @@ export default function Profile() {
       if (error.response?.status === 400) {
         throw new Error(error.response?.data?.message || 'Invalid file or folder.');
       }
-      
+
       throw new Error(error.message || 'Failed to upload image. Please try again.');
     }
   };
 
-  // Fetch avatar presets - combines presets with current avatar
   const fetchAvatarPresets = async () => {
     try {
-      // Fetch preset avatars
       const presetsResponse = await api.get("/api/files/profile-presets");
       const presetFiles = presetsResponse.data.files || [];
-      
-      // Fetch current user's avatar(s)
+
       const currentAvatarResponse = await api.get(`/api/accounts/profile/avatars/${id}`);
       let currentAvatarData = currentAvatarResponse.data.data || currentAvatarResponse.data;
-      
-      // Handle if the response is an array
+
       let currentAvatarItems = [];
       if (Array.isArray(currentAvatarData)) {
         currentAvatarItems = currentAvatarData;
       } else if (currentAvatarData && typeof currentAvatarData === 'object') {
-        // If it's a single object, wrap it in an array
         currentAvatarItems = [currentAvatarData];
       }
-      
+
       console.log("Fetched current avatar data:", currentAvatarItems);
-      
-      // Combine presets with current avatars
+
       let combinedPresets = [...presetFiles];
-      
-      // Process each current avatar item
+
       if (currentAvatarItems.length > 0) {
         for (const avatar of currentAvatarItems) {
           if (avatar && avatar.file_id) {
-            // Check if the current avatar is already in the presets
             const existsInPresets = presetFiles.some((p: Preset) => p.file_id === avatar.file_id);
-            
+
             if (!existsInPresets) {
-              // Add current avatar to the list
               const currentAvatarPreset: Preset = {
                 file_id: avatar.file_id,
                 path: avatar.path || avatar.avatar_preset_url || avatar.avatar_url || '',
@@ -262,8 +263,7 @@ export default function Profile() {
             }
           }
         }
-        
-        // Store the first avatar as the current avatar for reference
+
         const firstAvatar = currentAvatarItems[0];
         if (firstAvatar && firstAvatar.file_id) {
           setCurrentAvatar({
@@ -273,7 +273,7 @@ export default function Profile() {
           });
         }
       }
-      
+
       setAvatarPresets(combinedPresets);
       return combinedPresets;
     } catch (error) {
@@ -283,11 +283,9 @@ export default function Profile() {
     }
   };
 
-  // Save avatar edit
   const saveAvatarEdit = async (fileOrPresetId: File | number, isPreset: boolean) => {
     try {
       if (isPreset) {
-        // Same logic as UploadImage: find preset by ID
         const selectedPreset = avatarPresets.find(
           p => p.file_id === fileOrPresetId
         );
@@ -297,34 +295,26 @@ export default function Profile() {
           return;
         }
 
-        // Same API call as UploadImage
         await api.put("/api/accounts/update-profile-id", {
           fileId: selectedPreset.file_id
         });
-        
-        // Update local state with the full URL
+
         const fullUrl = constructAvatarUrl(selectedPreset.path);
-        setUserDetails(prev => prev ? { 
-          ...prev, 
-          avatar_preset_url: fullUrl, 
-          avatar_file_id: selectedPreset.file_id 
+        setUserDetails(prev => prev ? {
+          ...prev,
+          avatar_preset_url: fullUrl,
+          avatar_file_id: selectedPreset.file_id
         } : null);
         toast.success("Preset avatar updated successfully.");
       } else {
-        // Upload custom file
         const file = fileOrPresetId as File;
-        
-        // Show uploading toast
         const toastId = toast.loading('Uploading avatar...');
-        
+
         try {
           const key = await uploadFile(file);
-          
-          // Get the full URL from CloudFront
           const cloudfrontUrl = import.meta.env.VITE_CLOUDFRONT_URL;
           const fullUrl = `${cloudfrontUrl}/${key}`;
-          
-          // Update profile with the uploaded file
+
           await api.post("/api/accounts/update-profile", {
             name: file.name,
             path: key,
@@ -332,26 +322,23 @@ export default function Profile() {
             size_bytes: file.size,
           });
 
-          // Update local state
-          setUserDetails(prev => prev ? { 
-            ...prev, 
-            avatar_preset_url: fullUrl, 
-            avatar_file_id: null 
+          setUserDetails(prev => prev ? {
+            ...prev,
+            avatar_preset_url: fullUrl,
+            avatar_file_id: null
           } : null);
-          
+
           toast.success("Custom avatar uploaded successfully.", { id: toastId });
         } catch (error) {
           toast.error(error instanceof Error ? error.message : "Failed to upload avatar.", { id: toastId });
           throw error;
         }
       }
-      
+
       setIsAvatarModalOpen(false);
-      // Refresh presets after update
       await fetchAvatarPresets();
     } catch (e) {
       console.error("Error saving avatar:", e);
-      // Error already handled above
     }
   };
 
@@ -360,7 +347,7 @@ export default function Profile() {
       setUserDetails({
         ...updatedData,
         joinedDate: updatedData.joinedDate || "",
-        location:updatedData.address
+        location: updatedData.address
       });
       setIsProfileModalOpen(false);
     } catch (e) {
@@ -374,15 +361,13 @@ export default function Profile() {
     setIsBadgeModalOpen(false);
   };
 
-  // Updated skills save function with API call to /api/tags/skills
   const saveSkillsCuration = async (originalSkills: SkillObject[], updatedSkills: SkillObject[]) => {
     setIsSavingSkills(true);
-    
+
     try {
       console.log("📊 Skills Save - Original Skills:", originalSkills);
       console.log("📊 Skills Save - Updated Skills:", updatedSkills);
-      
-      // Call the API to update skills - matches PUT /api/tags/skills route
+
       const response = await api.put('/api/tags/skills', {
         originalSkills: originalSkills,
         updatedSkills: updatedSkills
@@ -391,15 +376,13 @@ export default function Profile() {
       console.log("📊 API Response:", response.data);
 
       if (response.data.success) {
-        // Update local state
         setUserDetails((prev) => (prev ? { ...prev, skills: updatedSkills } : null));
-        
-        // Show success message with details
+
         const { added, removed, modified, totalSkills } = response.data.data;
         toast.success(
           `Skills updated: ${added} added, ${removed} removed, ${modified} modified. Total: ${totalSkills} skills`
         );
-        
+
         setIsSkillsModalOpen(false);
       } else {
         toast.error(response.data.message || "Failed to update skills");
@@ -414,10 +397,8 @@ export default function Profile() {
 
   const saveSocialLinks = async (updatedLinksList: SocialLink[]) => {
     try {
-      // Get original links from current state
       const originalLinks = userDetails?.social_links || [];
-      
-      // Prepare payload for API
+
       const payload = {
         originalLinks: originalLinks.map(link => ({
           account_link_id: link.account_link_id,
@@ -425,25 +406,21 @@ export default function Profile() {
           url: link.url
         })),
         updatedLinks: updatedLinksList.map(link => ({
-          account_link_id: link.account_link_id || null, // null for new links
+          account_link_id: link.account_link_id || null,
           platform: link.platform,
           url: link.url
         }))
       };
-      
+
       console.log("📊 Social Links Payload:", payload);
-      
-      // Call API to update social links
+
       const response = await api.put('/api/accounts/update-profile-social-media', payload);
-      
+
       console.log("📊 API Response:", response.data);
-      
+
       if (response.data.success) {
-        // Update local state with the response data (which includes IDs for new links)
         const updatedLinksWithIds = response.data.result.updatedLinks || updatedLinksList;
         setUserDetails((prev) => (prev ? { ...prev, social_links: updatedLinksWithIds } : null));
-        
-        // Show success message with details
         toast.success(`Social links updated successfully`);
       } else {
         toast.error(response.data.message || "Failed to update social links");
@@ -454,7 +431,6 @@ export default function Profile() {
     }
   };
 
-  // Fetch presets on component mount
   useEffect(() => {
     if (id) {
       fetchAvatarPresets();
@@ -466,14 +442,12 @@ export default function Profile() {
     return () => { socket.off("connect"); };
   }, []);
 
-  // Combined fetch profile effect
   useEffect(() => {
     const fetchProfile = async () => {
       try {
         setLoading(true);
         const startTime = Date.now();
 
-        // Check if user exists
         const [isUser] = await Promise.all([api.get(`/api/accounts/check-user/${id}`)]);
         if (isUser.data.isUser === false) {
           toast.error("Profile not found.");
@@ -481,7 +455,6 @@ export default function Profile() {
           return;
         }
 
-        // Fetch all data in parallel
         const [profileResponse, tagsResponse, accountLinkResponse] = await Promise.all([
           api.get(`/api/accounts/profile/${id}`),
           api.get(`/api/tags/`),
@@ -490,13 +463,12 @@ export default function Profile() {
 
         const profileData = profileResponse.data.data || profileResponse.data.profile;
         console.log("Fetched profile data:", profileData);
-        
+
         setAvailableSkills(tagsResponse.data.data || []);
 
-        // Fetch user skills using the new GET /api/tags/skills endpoint
         try {
           const userSkillsResponse = await api.get(`/api/tags/users/${id}/tags`);
-          
+
           const compiledCompoundSkills: SkillObject[] = (userSkillsResponse.data.data || []).map((tag: any) => ({
             tag_id: tag.tag_id,
             name: tag.tag_name || tag.name,
@@ -504,10 +476,8 @@ export default function Profile() {
             years: tag.years || 0
           }));
 
-          // Determine avatar URL
           let avatarUrl = constructAvatarUrl(profileData.avatar_preset_url);
-          
-          // Set user details with all data
+
           setUserDetails({
             username: profileData.username || profileData.handle,
             name: profileData.name || profileData.display_name,
@@ -533,13 +503,11 @@ export default function Profile() {
           });
         } catch (skillsError) {
           console.error("Error fetching user skills:", skillsError);
-          
-          // Fallback: try the old endpoint /api/tags/users/:userId/tags
+
           try {
-            // Get the current user ID from session or use profileData
             const userId = user?.account_id || profileData.user_id;
             const userTagResponse = await api.get(`/api/tags/users/${userId}/tags`);
-            
+
             const compiledCompoundSkills: SkillObject[] = (userTagResponse.data.tags || []).map((tag: any) => ({
               tag_id: tag.tag_id,
               name: tag.name,
@@ -547,7 +515,6 @@ export default function Profile() {
               years: tag.years || 0
             }));
 
-            // Determine avatar URL
             let avatarUrl = constructAvatarUrl(profileData.avatar_preset_url);
 
             setUserDetails({
@@ -574,8 +541,7 @@ export default function Profile() {
             });
           } catch (fallbackError) {
             console.error("Error fetching user skills from fallback:", fallbackError);
-            
-            // Set user details without skills
+
             let avatarUrl = constructAvatarUrl(profileData.avatar_preset_url);
 
             setUserDetails({
@@ -602,8 +568,7 @@ export default function Profile() {
             });
           }
         }
-        
-        // Minimum loading time for smooth UX
+
         const minimumDelay = 800;
         const elapsedTime = Date.now() - startTime;
         const remainingTime = Math.max(0, minimumDelay - elapsedTime);
@@ -618,7 +583,7 @@ export default function Profile() {
         setLoading(false);
       }
     };
-    
+
     if (id) {
       fetchProfile();
     }
@@ -652,7 +617,7 @@ export default function Profile() {
           subscriptionType={userDetails?.subscriptionType || "Free"}
           onEditAvatar={() => setIsAvatarModalOpen(true)}
           onEditProfile={() => setIsProfileModalOpen(true)}
-          onChatClick={() => toast.success("Communications synchronization protocol initiated.")}
+          onChatClick={handleOpenChat}
           onVerificationClick={() => navigate("/account-verification-status")}
         />
 

@@ -9,7 +9,7 @@ import JobCategories from "./job_components/job_categories";
 import JobFilters from "./job_components/job_filters";
 import JobListViewType from "./job_components/job_list_viewtype";
 import JobViewDetails from "./job_components/job_viewdetails";
-import UtilScrollTop from "./job_components/job_utilities/util_scroll_top";
+// import UtilScrollTop from "../../../components/utility/util_scroll_top.tsx";
 import PopupReportJob from "./job_components/job_popups/popup_report_job";
 import type { ViewType } from "./job_components/job_list_viewtype";
 
@@ -255,7 +255,7 @@ const JobMain: React.FC = () => {
       />
 
       {/* Scroll To Top Utility */}
-      <UtilScrollTop />
+      {/*<UtilScrollTop />*/}
     </div>
   );
 };
