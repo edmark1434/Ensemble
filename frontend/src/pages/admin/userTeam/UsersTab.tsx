@@ -4,15 +4,30 @@ import api from '@/lib/axios';
 import StatCards from './components/StatCards';
 import RowActionsMenu from './components/RowActionsMenu';
 import {
+  ConfirmStatusModal,
   CreditActivityModal,
   HistoryModal,
+  ModerationActionModal,
   UserOverviewModal,
   VerificationModal,
+  WarnAccountModal,
 } from './components/AccountModals';
+import { handleAccountActionError, setAccountStatus } from './accountActions';
 import { formatDateTime } from './formatDateTime';
 import type { PlatformUserAccount, UserManagementData } from './userTeamTypes';
 
-type ModalKind = 'overview' | 'credit' | 'verification' | 'history' | null;
+type ModalKind =
+  | 'overview'
+  | 'credit'
+  | 'verification'
+  | 'history'
+  | 'moderation'
+  | 'warn'
+  | 'ban'
+  | 'suspend'
+  | 'restore'
+  | 'lock'
+  | null;
 
 type UsersTabProps = {
   search: string;
@@ -65,11 +80,51 @@ export default function UsersTab({ search, onStatsLoaded, refreshToken = 0 }: Us
     setModal(kind);
   };
 
+  const closeModal = () => setModal(null);
+
+  const refreshAfterChange = async () => {
+    const res = await api.get('/api/admin/users-management');
+    if (res.data?.success) {
+      setData(res.data.data);
+      onStatsLoaded?.(res.data.data.stats.totalPendingVerification);
+      if (selected) {
+        const next = res.data.data.users.find(
+          (u: PlatformUserAccount) => String(u.accountId) === String(selected.accountId)
+        );
+        if (next) setSelected(next);
+      }
+    }
+  };
+
   const handleAction = (user: PlatformUserAccount, actionId: string) => {
-    if (actionId === 'credit') open(user, 'credit');
-    else if (actionId === 'verification') open(user, 'verification');
-    else if (actionId === 'history') open(user, 'history');
-    else open(user, 'overview');
+    switch (actionId) {
+      case 'view':
+        open(user, 'overview');
+        break;
+      case 'credit':
+        open(user, 'credit');
+        break;
+      case 'verification':
+        open(user, 'verification');
+        break;
+      case 'history':
+        open(user, 'history');
+        break;
+      case 'moderation':
+        open(user, 'moderation');
+        break;
+      case 'warn':
+        open(user, 'warn');
+        break;
+      case 'ban':
+      case 'suspend':
+      case 'restore':
+      case 'lock':
+        open(user, actionId);
+        break;
+      default:
+        open(user, 'overview');
+    }
   };
 
   if (loading) {
@@ -144,7 +199,7 @@ export default function UsersTab({ search, onStatsLoaded, refreshToken = 0 }: Us
             </thead>
             <tbody>
               {users.map((user) => (
-                <tr key={user.id} className="border-b border-white/[0.04] text-zinc-300 hover:bg-white/[0.02]">
+                <tr key={String(user.id)} className="border-b border-white/[0.04] text-zinc-300 hover:bg-white/[0.02]">
                   <td className="px-4 py-3">
                     <p className="font-medium text-white">{user.name}</p>
                     <p className="text-[10px] text-zinc-600">{user.profileId}</p>
@@ -174,25 +229,69 @@ export default function UsersTab({ search, onStatsLoaded, refreshToken = 0 }: Us
       </section>
 
       {selected && modal === 'overview' && (
-        <UserOverviewModal user={selected} onClose={() => setModal(null)} />
+        <UserOverviewModal
+          user={selected}
+          onClose={closeModal}
+          onOpenCredit={() => open(selected, 'credit')}
+          onOpenVerification={() => open(selected, 'verification')}
+          onOpenHistory={() => open(selected, 'history')}
+          onOpenModeration={() => open(selected, 'moderation')}
+        />
       )}
       {selected && modal === 'credit' && (
         <CreditActivityModal
           title={selected.name}
+          accountId={selected.accountId}
           activity={selected.creditActivity}
           totalCredits={selected.stats.totalCredits}
-          onClose={() => setModal(null)}
+          onClose={closeModal}
+          onChanged={() => void refreshAfterChange()}
         />
       )}
       {selected && modal === 'verification' && (
         <VerificationModal
           entityName={selected.name}
+          accountId={selected.accountId}
           verification={selected.verification}
-          onClose={() => setModal(null)}
+          onClose={closeModal}
+          onChanged={() => void refreshAfterChange()}
         />
       )}
       {selected && modal === 'history' && (
-        <HistoryModal entityName={selected.name} history={selected.history} onClose={() => setModal(null)} />
+        <HistoryModal entityName={selected.name} history={selected.history} onClose={closeModal} />
+      )}
+      {selected && modal === 'moderation' && (
+        <ModerationActionModal
+          entityName={selected.name}
+          accountId={selected.accountId}
+          currentStatus={selected.status}
+          onClose={closeModal}
+          onChanged={() => void refreshAfterChange()}
+        />
+      )}
+      {selected && modal === 'warn' && (
+        <WarnAccountModal
+          entityName={selected.name}
+          accountId={selected.accountId}
+          onClose={closeModal}
+          onChanged={() => void refreshAfterChange()}
+        />
+      )}
+      {selected && (modal === 'ban' || modal === 'suspend' || modal === 'restore' || modal === 'lock') && (
+        <ConfirmStatusModal
+          entityName={selected.name}
+          action={modal}
+          onClose={closeModal}
+          onConfirm={async () => {
+            try {
+              await setAccountStatus(selected.accountId, modal);
+              await refreshAfterChange();
+            } catch (err) {
+              handleAccountActionError(err);
+              throw err;
+            }
+          }}
+        />
       )}
     </>
   );

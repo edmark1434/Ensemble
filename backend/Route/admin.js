@@ -6,6 +6,11 @@ const {
   getAdminTeamsManagement,
   getAdminUsersManagement,
   getAdminUserTeamOverview,
+  patchAdminAccountStatus,
+  patchAdminAccountVerification,
+  postAdminAccountCreditAdjust,
+  postAdminAccountCreditFreeze,
+  postAdminAccountWarn,
 } = require('../Controllers/AdminUserTeamControllers');
 const { getAdminEconomyOverview } = require('../Controllers/AdminEconomyControllers');
 const { getAdminModerationOverview } = require('../Controllers/AdminModerationControllers');
@@ -25,6 +30,11 @@ router.get('/dashboard-overview', [checkSession, requireAdmin], getAdminDashboar
 router.get('/teams-management', [checkSession, requireAdmin], getAdminTeamsManagement);
 router.get('/users-management', [checkSession, requireAdmin], getAdminUsersManagement);
 router.get('/user-team-overview', [checkSession, requireAdmin], getAdminUserTeamOverview);
+router.patch('/accounts/:accountId/status', [checkSession, requireAdmin], patchAdminAccountStatus);
+router.patch('/accounts/:accountId/verification', [checkSession, requireAdmin], patchAdminAccountVerification);
+router.post('/accounts/:accountId/credits/adjust', [checkSession, requireAdmin], postAdminAccountCreditAdjust);
+router.post('/accounts/:accountId/credits/freeze', [checkSession, requireAdmin], postAdminAccountCreditFreeze);
+router.post('/accounts/:accountId/warn', [checkSession, requireAdmin], postAdminAccountWarn);
 router.get('/economy-overview', [checkSession, requireAdmin], getAdminEconomyOverview);
 router.get('/moderation-overview', [checkSession, requireAdmin], getAdminModerationOverview);
 router.get('/analytics-overview', [checkSession, requireAdmin], getAdminAnalyticsOverview);

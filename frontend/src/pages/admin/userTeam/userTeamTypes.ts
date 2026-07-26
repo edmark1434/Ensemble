@@ -1,5 +1,5 @@
 export type TeamMember = {
-  id: number;
+  id: string | number;
   name: string;
   email: string;
   username: string;
@@ -8,10 +8,11 @@ export type TeamMember = {
 
 export type PlatformTeam = {
   id: string;
+  accountId: string;
   name: string;
   logoInitial: string;
   leaderName: string;
-  leaderId: number;
+  leaderId: string | number | null;
   leaderEmail: string;
   memberCount: number;
   members: TeamMember[];
@@ -30,7 +31,14 @@ export type PlatformTeam = {
     totalReactions: number;
     totalComments: number;
   };
-  documents: { id: string; name: string; type: string; pages: number | null; sizeMb: number; uploadedAt: string | null }[];
+  documents: {
+    id: string;
+    name: string;
+    type: string;
+    pages: number | null;
+    sizeMb: number;
+    uploadedAt: string | null;
+  }[];
   creditActivity: CreditActivityItem[];
   verification: VerificationDetail;
   history: TeamHistory;
@@ -55,7 +63,7 @@ export type VerificationDetail = {
     pages: number;
     sizeMb: number;
     uploadedAt: string | null;
-  };
+  } | null;
   logs: { id: string; title: string; timeAgo: string; by: string; ref: string }[];
 };
 
@@ -90,8 +98,8 @@ export type TeamManagementData = {
 };
 
 export type PlatformUserAccount = {
-  id: number;
-  accountId: number;
+  id: string | number;
+  accountId: string;
   profileId: string;
   name: string;
   email: string;
@@ -129,4 +137,10 @@ export type UserManagementData = {
   };
   users: PlatformUserAccount[];
   lastUpdated: string;
+};
+
+export type AccountTarget = {
+  accountId: string;
+  name: string;
+  status?: string;
 };

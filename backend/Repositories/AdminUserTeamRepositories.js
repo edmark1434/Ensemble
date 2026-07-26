@@ -17,6 +17,7 @@ function mapVerificationLabel(raw, { forTeam = false } = {}) {
   }
   if (s.includes('pending') || s.includes('review')) return 'Pending Review';
   if (s.includes('partial')) return 'Partially Verified';
+  if (s.includes('declin') || s.includes('reject')) return 'Unverified';
   return 'Unverified';
 }
 
@@ -437,6 +438,7 @@ async function fetchTeamsFromDatabase() {
 
     return {
       id: row.team_id,
+      accountId: row.account_id,
       name: teamName,
       logoInitial: (teamName || 'T').charAt(0).toUpperCase(),
       leaderName: leader.name,
@@ -672,8 +674,230 @@ function buildUserTeamAlerts(teamStats, userStats, verification) {
   return alerts;
 }
 
+const STATUS_MAP = {
+  ban: 'Banned',
+  banned: 'Banned',
+  suspend: 'Suspended',
+  suspended: 'Suspended',
+  restore: 'Active',
+  active: 'Active',
+  lock: 'Locked',
+  locked: 'Locked',
+};
+
+async function assertAccountExists(accountId) {
+  const result = await pool.query(
+    `SELECT account_id, handle, display_name, status, type
+     FROM accounts WHERE account_id = $1 AND deleted_at IS NULL`,
+    [accountId]
+  );
+  if (!result.rows.length) throw new Error('Account not found');
+  return result.rows[0];
+}
+
+async function getAccountWallet(accountId) {
+  const result = await pool.query(
+    `
+    SELECT w.wallet_id, w.balance_credits, w.frozen_balance_credits, w.status
+    FROM wallets w
+    INNER JOIN account_wallets aw ON aw.wallet_id = w.wallet_id
+    WHERE aw.account_id = $1 AND w.type = 'account wallets'
+    ORDER BY w.created_at DESC
+    LIMIT 1
+    `,
+    [accountId]
+  );
+  return result.rows[0] || null;
+}
+
+async function updateAccountStatus(accountId, actionOrStatus) {
+  await assertAccountExists(accountId);
+  const key = String(actionOrStatus || '').toLowerCase();
+  const status = STATUS_MAP[key] || null;
+  if (!status) throw new Error(`Invalid account status action: ${actionOrStatus}`);
+
+  await pool.query(`UPDATE accounts SET status = $1 WHERE account_id = $2`, [status, accountId]);
+  return { accountId, status };
+}
+
+async function updateAccountVerification(accountId, action, staffId) {
+  await assertAccountExists(accountId);
+  const key = String(action || '').toLowerCase();
+  const statusMap = {
+    approve: 'verified',
+    approved: 'verified',
+    verified: 'verified',
+    decline: 'declined',
+    declined: 'declined',
+    reject: 'declined',
+    pending: 'pending',
+    reverify: 'pending',
+    unverified: 'unverified',
+  };
+  const nextStatus = statusMap[key];
+  if (!nextStatus) throw new Error(`Invalid verification action: ${action}`);
+
+  const existing = await pool.query(
+    `
+    SELECT account_verification_id
+    FROM account_verification
+    WHERE account_id = $1 AND deleted_at IS NULL
+    ORDER BY created_at DESC
+    LIMIT 1
+    `,
+    [accountId]
+  );
+
+  if (existing.rows.length) {
+    await pool.query(
+      `
+      UPDATE account_verification
+      SET status = $1,
+          updated_at = NOW(),
+          verified_by_staff_id = $2,
+          expires_at = CASE WHEN $1 = 'verified' THEN NOW() + INTERVAL '365 days' ELSE NULL END
+      WHERE account_verification_id = $3
+      `,
+      [nextStatus, staffId || null, existing.rows[0].account_verification_id]
+    );
+  } else {
+    await pool.query(
+      `
+      INSERT INTO account_verification (account_id, status, created_at, updated_at, verified_by_staff_id, expires_at)
+      VALUES ($1, $2, NOW(), NOW(), $3, CASE WHEN $2 = 'verified' THEN NOW() + INTERVAL '365 days' ELSE NULL END)
+      `,
+      [accountId, nextStatus, staffId || null]
+    );
+  }
+
+  return { accountId, verificationStatus: mapVerificationLabel(nextStatus) };
+}
+
+async function adjustAccountCredits(accountId, amount, note, staffId) {
+  await assertAccountExists(accountId);
+  const delta = Number(amount);
+  if (!Number.isFinite(delta) || delta === 0) throw new Error('Credit amount must be a non-zero number');
+
+  const wallet = await getAccountWallet(accountId);
+  if (!wallet) throw new Error('No account wallet found for this account');
+
+  const nextBalance = Number(wallet.balance_credits || 0) + delta;
+  if (nextBalance < 0) throw new Error('Insufficient wallet balance for this adjustment');
+
+  await pool.query(`UPDATE wallets SET balance_credits = $1 WHERE wallet_id = $2`, [
+    nextBalance,
+    wallet.wallet_id,
+  ]);
+
+  const txType = note?.trim() || (delta > 0 ? 'Admin credit grant' : 'Admin credit deduction');
+  await pool.query(
+    `
+    INSERT INTO credit_transactions (type, amount_credits, status, source_wallet_id, destination_wallet_id)
+    VALUES ($1, $2, 'completed', $3, $3)
+    `,
+    [txType, Math.abs(delta), wallet.wallet_id]
+  );
+
+  return {
+    accountId,
+    walletId: wallet.wallet_id,
+    balanceCredits: nextBalance,
+    adjustedBy: delta,
+    staffId: staffId || null,
+  };
+}
+
+async function freezeAccountCredits(accountId, freeze = true) {
+  await assertAccountExists(accountId);
+  const wallet = await getAccountWallet(accountId);
+  if (!wallet) throw new Error('No account wallet found for this account');
+
+  const balance = Number(wallet.balance_credits || 0);
+  const frozen = Number(wallet.frozen_balance_credits || 0);
+
+  if (freeze) {
+    if (balance <= 0) throw new Error('No available credits to freeze');
+    await pool.query(
+      `UPDATE wallets
+       SET balance_credits = 0,
+           frozen_balance_credits = $1
+       WHERE wallet_id = $2`,
+      [frozen + balance, wallet.wallet_id]
+    );
+    await pool.query(
+      `
+      INSERT INTO credit_transactions (type, amount_credits, status, source_wallet_id, destination_wallet_id)
+      VALUES ('Credit freeze', $1, 'completed', $2, $2)
+      `,
+      [balance, wallet.wallet_id]
+    );
+    return {
+      accountId,
+      walletId: wallet.wallet_id,
+      balanceCredits: 0,
+      frozenBalanceCredits: frozen + balance,
+      frozen: true,
+    };
+  }
+
+  if (frozen <= 0) throw new Error('No frozen credits to restore');
+  await pool.query(
+    `UPDATE wallets
+     SET balance_credits = $1,
+         frozen_balance_credits = 0
+     WHERE wallet_id = $2`,
+    [balance + frozen, wallet.wallet_id]
+  );
+  await pool.query(
+    `
+    INSERT INTO credit_transactions (type, amount_credits, status, source_wallet_id, destination_wallet_id)
+    VALUES ('Credit unfreeze', $1, 'completed', $2, $2)
+    `,
+    [frozen, wallet.wallet_id]
+  );
+  return {
+    accountId,
+    walletId: wallet.wallet_id,
+    balanceCredits: balance + frozen,
+    frozenBalanceCredits: 0,
+    frozen: false,
+  };
+}
+
+async function warnAccount(accountId, { title, reason, points } = {}, staffId) {
+  await assertAccountExists(accountId);
+  if (!staffId) throw new Error('Staff session required to issue a warning');
+
+  const violationNumber = `VIO-${Date.now().toString().slice(-8)}`;
+  const warnTitle = String(title || 'Account warning').trim();
+  const warnReason = String(reason || 'Warning issued by administrator').trim();
+  const warnPoints = Number(points) || 1;
+
+  await pool.query(
+    `
+    INSERT INTO violations (
+      violation_number, account_id, title, reason, points,
+      issued_by_staff_id, type, status, staff_id
+    ) VALUES ($1, $2, $3, $4, $5, $6, $3, 'active', $6)
+    `,
+    [violationNumber, accountId, warnTitle, warnReason, warnPoints, staffId]
+  );
+
+  return {
+    accountId,
+    violationNumber,
+    title: warnTitle,
+    points: warnPoints,
+  };
+}
+
 module.exports = {
   getTeamsManagement,
   getUsersManagement,
   getUserTeamOverview,
+  updateAccountStatus,
+  updateAccountVerification,
+  adjustAccountCredits,
+  freezeAccountCredits,
+  warnAccount,
 };
