@@ -453,7 +453,7 @@ async function fetchRecentModerationActivity() {
       executedByRole: v.executed_by_role || 'Staff',
       executedByHandle: v.executed_by_handle || '—',
       timestamp: v.created_at,
-      status: v.status || 'Completed',
+      status: titleCaseStatus(v.status || 'completed'),
       notes: v.reason || v.violation_number || '',
     });
   }
@@ -461,7 +461,7 @@ async function fetchRecentModerationActivity() {
   for (const l of listings.rows) {
     activities.push({
       id: `lst-${l.listing_id}`,
-      action: `Listing ${l.status}`,
+      action: `Listing ${String(l.status || 'reviewed').replace(/_/g, ' ').toLowerCase()}`,
       category: 'marketplace',
       target: l.title,
       targetHandle: l.target_handle || l.listing_number,
@@ -478,7 +478,7 @@ async function fetchRecentModerationActivity() {
   for (const r of reports.rows) {
     activities.push({
       id: `rep-${r.report_id}`,
-      action: `Report ${r.status || 'updated'}`,
+      action: `Report ${String(r.status || 'updated').replace(/_/g, ' ').toLowerCase()}`,
       category: 'report',
       target: r.target_name,
       targetHandle: r.target_handle || r.report_number,
@@ -487,7 +487,7 @@ async function fetchRecentModerationActivity() {
       executedByRole: r.executed_by_role || 'Support Moderator',
       executedByHandle: r.executed_by_handle || '—',
       timestamp: r.updated_at || r.created_at,
-      status: r.status || 'Open',
+      status: titleCaseStatus(r.status || 'open'),
       notes: r.reason || '',
     });
   }
@@ -495,7 +495,7 @@ async function fetchRecentModerationActivity() {
   for (const d of disputes.rows) {
     activities.push({
       id: `dis-${d.dispute_id}`,
-      action: `Dispute ${d.status || 'updated'}`,
+      action: `Dispute ${String(d.status || 'updated').replace(/_/g, ' ').toLowerCase()}`,
       category: 'dispute',
       target: d.title || d.target_name,
       targetHandle: d.target_handle || d.dispute_number,
@@ -504,7 +504,7 @@ async function fetchRecentModerationActivity() {
       executedByRole: d.executed_by_role || 'Support Moderator',
       executedByHandle: d.executed_by_handle || '—',
       timestamp: d.updated_at || d.opened_at,
-      status: d.status || 'Open',
+      status: titleCaseStatus(d.status || 'open'),
       notes: d.dispute_number || '',
     });
   }
@@ -734,11 +734,15 @@ async function getModerationOverview(staffSession = null) {
     })),
     forumReviewQueue: forum.groups.slice(0, 12),
     contentSnapshots: forum.flaggedDiscussions.slice(0, 8),
-    automatedSettings: {
-      ...DEFAULT_SETTINGS.moderation,
-      ...(moderationSettingsRow.rows[0]?.setting_value || {}),
-      forumLinkScanning: forum.connected,
-    },
+    automatedSettings: (() => {
+      const saved = {
+        ...DEFAULT_SETTINGS.moderation,
+        ...(moderationSettingsRow.rows[0]?.setting_value || {}),
+      };
+      // Link scanning can only run while the forum database is reachable.
+      if (!forum.connected) saved.forumLinkScanning = false;
+      return saved;
+    })(),
     alerts: buildModerationAlerts(
       pendingCases,
       forum,

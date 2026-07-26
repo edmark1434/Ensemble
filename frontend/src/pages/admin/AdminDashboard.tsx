@@ -1,49 +1,23 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
   BadgeCheck,
   CheckCircle2,
-  Clock,
   Coins,
   Loader2,
   MessageSquare,
   RefreshCw,
-  Search,
   Shield,
   Ticket,
   TrendingUp,
   UserCog,
   Users,
   UserPlus,
-  X,
 } from 'lucide-react';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
-import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
-import type {
-  AdminDashboardData,
-  PlatformUser,
-  StaffMember,
-  VerificationItem,
-} from './adminDashboardTypes';
-
-const MODERATOR_ROLE_OPTIONS = [
-  { value: 'Support Moderator', label: 'Support Moderator' },
-  { value: 'Marketplace Moderator', label: 'Marketplace Moderator' },
-  { value: 'Forum Moderator', label: 'Forum Moderator' },
-  { value: 'Jobs N Gigs Moderator', label: 'Jobs & Gigs Moderator' },
-  { value: 'Admin', label: 'Administrator' },
-] as const;
-
-type TabId = 'overview' | 'users' | 'staff' | 'verifications';
-
-const TABS: { id: TabId; label: string; icon: typeof Activity }[] = [
-  { id: 'overview', label: 'Overview', icon: Activity },
-  { id: 'users', label: 'Platform users', icon: Users },
-  { id: 'staff', label: 'Team & moderators', icon: UserCog },
-  { id: 'verifications', label: 'Verifications', icon: BadgeCheck },
-];
+import type { AdminDashboardData } from './adminDashboardTypes';
 
 function formatDateTime(value: string | null) {
   if (!value) return '—';
@@ -76,8 +50,6 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [tab, setTab] = useState<TabId>('overview');
-  const [search, setSearch] = useState('');
 
   const loadData = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -102,44 +74,6 @@ export default function AdminDashboard() {
   useEffect(() => {
     void loadData();
   }, []);
-
-  const searchLower = search.trim().toLowerCase();
-
-  const matchesSearch = (text: string) =>
-    !searchLower || text.toLowerCase().includes(searchLower);
-
-  const filteredUsers = useMemo(() => {
-    if (!data) return [];
-    return data.platformUsers.filter(
-      (u) =>
-        matchesSearch(u.name) ||
-        matchesSearch(u.email) ||
-        matchesSearch(u.username) ||
-        matchesSearch(u.status)
-    );
-  }, [data, searchLower]);
-
-  const filteredStaff = useMemo(() => {
-    if (!data) return [];
-    return data.staffRoster.filter(
-      (s) =>
-        matchesSearch(s.name) ||
-        matchesSearch(s.email) ||
-        matchesSearch(s.username) ||
-        matchesSearch(s.role)
-    );
-  }, [data, searchLower]);
-
-  const filteredQueue = useMemo(() => {
-    if (!data) return [];
-    return data.verificationQueue.filter(
-      (v) =>
-        matchesSearch(v.name) ||
-        matchesSearch(v.email) ||
-        matchesSearch(v.username) ||
-        matchesSearch(v.status)
-    );
-  }, [data, searchLower]);
 
   if (loading) {
     return (
@@ -177,63 +111,20 @@ export default function AdminDashboard() {
               Updated {formatDateTime(data.lastUpdated)} · Signed in as @{user?.username || 'admin'}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[200px] flex-1 lg:w-72">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search users, staff, emails…"
-                className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => void loadData(true)}
-              disabled={refreshing}
-              className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-4 py-2 text-sm text-zinc-300 hover:text-white"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        <div className="flex gap-1 overflow-x-auto px-4 pb-0 md:px-6">
-          {TABS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition ${
-                tab === id
-                  ? 'border-rose-400 text-white'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-              {id === 'verifications' && kpis.pendingVerifications > 0 && (
-                <span className="rounded-full bg-amber-500/20 px-1.5 text-[10px] font-bold text-amber-200">
-                  {kpis.pendingVerifications}
-                </span>
-              )}
-            </button>
-          ))}
+          <button
+            type="button"
+            onClick={() => void loadData(true)}
+            disabled={refreshing}
+            className="flex items-center gap-2 self-start rounded-xl border border-white/[0.08] px-4 py-2 text-sm text-zinc-300 hover:text-white"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
         </div>
       </header>
 
       <div className="space-y-6 px-6 py-6 md:px-8 md:py-8">
-        {tab === 'overview' && (
-          <OverviewTab data={data} kpis={kpis} alerts={alerts} breakdowns={breakdowns} />
-        )}
-        {tab === 'users' && <UsersTab users={filteredUsers} total={data.platformUsers.length} />}
-        {tab === 'staff' && (
-          <StaffTab staff={filteredStaff} onStaffCreated={() => void loadData(true)} />
-        )}
-        {tab === 'verifications' && (
-          <VerificationsTab queue={filteredQueue} pending={kpis.pendingVerifications} />
-        )}
+        <OverviewTab data={data} kpis={kpis} alerts={alerts} breakdowns={breakdowns} />
       </div>
     </main>
   );
@@ -523,417 +414,6 @@ function BreakdownCard({ title, rows }: { title: string; rows: { label: string; 
           </li>
         ))}
       </ul>
-    </section>
-  );
-}
-
-function UsersTab({ users, total }: { users: PlatformUser[]; total: number }) {
-  return (
-    <section className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h2 className="text-lg font-semibold text-white">All platform members</h2>
-          <p className="mt-1 text-sm text-zinc-500">
-            Showing {users.length} of {total} users — name, contact, username, account status, and merit credits.
-          </p>
-        </div>
-      </div>
-      <div className="mt-6 overflow-x-auto">
-        <table className="w-full min-w-[900px] text-left text-sm">
-          <thead>
-            <tr className="border-b border-white/[0.06] text-[10px] uppercase tracking-wide text-zinc-600">
-              <th className="pb-3 pr-4 font-medium">Member</th>
-              <th className="pb-3 pr-4 font-medium">Email</th>
-              <th className="pb-3 pr-4 font-medium">Username</th>
-              <th className="pb-3 pr-4 font-medium">Display name</th>
-              <th className="pb-3 pr-4 font-medium">Status</th>
-              <th className="pb-3 pr-4 font-medium text-right">Merit</th>
-              <th className="pb-3 pr-4 font-medium">Avatar</th>
-              <th className="pb-3 font-medium">Joined</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
-                <td className="py-3 pr-4">
-                  <p className="font-medium text-white">{u.name}</p>
-                  {u.tagline && <p className="text-xs text-zinc-600 truncate max-w-[180px]">{u.tagline}</p>}
-                </td>
-                <td className="py-3 pr-4 text-zinc-400">{u.email}</td>
-                <td className="py-3 pr-4">@{u.username}</td>
-                <td className="py-3 pr-4 text-zinc-400">{u.displayName || '—'}</td>
-                <td className="py-3 pr-4">
-                  <span className={`rounded-full border px-2 py-0.5 text-xs ${statusPill(u.status)}`}>
-                    {u.status}
-                  </span>
-                </td>
-                <td className="py-3 pr-4 text-right tabular-nums font-medium text-emerald-300/90">
-                  {u.meritCredits}
-                </td>
-                <td className="py-3 pr-4 text-zinc-500">{u.hasAvatar ? 'Yes' : 'No'}</td>
-                <td className="py-3 text-xs text-zinc-500">
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {formatDateTime(u.joinedAt)}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-function StaffTab({
-  staff,
-  onStaffCreated,
-}: {
-  staff: StaffMember[];
-  onStaffCreated: () => void;
-}) {
-  const [showAddModal, setShowAddModal] = useState(false);
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-zinc-500">
-          {staff.length} staff accounts — administrators and specialized moderators. Merit shown for
-          internal tracking.
-        </p>
-        <button
-          type="button"
-          onClick={() => setShowAddModal(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500"
-        >
-          <UserPlus className="h-4 w-4" />
-          Add moderator
-        </button>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {staff.map((s) => (
-          <article
-            key={s.id}
-            className="rounded-2xl border border-white/[0.06] bg-gradient-to-br from-white/[0.03] to-transparent p-5"
-          >
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-500/20 text-lg font-bold text-rose-100">
-                {s.name.charAt(0)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold text-white">{s.name}</p>
-                <p className="text-xs text-zinc-500">@{s.username}</p>
-                <span className={`mt-2 inline-block rounded-full border px-2 py-0.5 text-[10px] ${rolePill(s.role)}`}>
-                  {s.roleLabel}
-                </span>
-              </div>
-            </div>
-            <dl className="mt-4 space-y-2 border-t border-white/[0.06] pt-4 text-xs">
-              <div className="flex justify-between">
-                <dt className="text-zinc-600">Work email</dt>
-                <dd className="truncate text-zinc-300 max-w-[55%] text-right">{s.email}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-zinc-600">Account status</dt>
-                <dd>
-                  <span className={`rounded-full border px-2 py-0.5 ${statusPill(s.status)}`}>{s.status}</span>
-                </dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-zinc-600">Merit credits</dt>
-                <dd className="tabular-nums text-emerald-300">{s.meritCredits}</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-zinc-600">On platform since</dt>
-                <dd className="text-zinc-400">{formatDateTime(s.joinedAt)}</dd>
-              </div>
-            </dl>
-          </article>
-        ))}
-        {staff.length === 0 && (
-          <p className="col-span-full rounded-2xl border border-dashed border-white/[0.08] py-12 text-center text-sm text-zinc-500">
-            No staff match your search. Add a moderator to get started.
-          </p>
-        )}
-      </div>
-
-      {showAddModal && (
-        <AddModeratorModal
-          onClose={() => setShowAddModal(false)}
-          onCreated={() => {
-            setShowAddModal(false);
-            onStaffCreated();
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-function AddModeratorModal({
-  onClose,
-  onCreated,
-}: {
-  onClose: () => void;
-  onCreated: () => void;
-}) {
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [role, setRole] = useState<string>(MODERATOR_ROLE_OPTIONS[0].value);
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState('');
-
-  const inputClass =
-    'mt-1.5 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-rose-500/20';
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setFormError('');
-
-    if (!firstName.trim() || !lastName.trim()) {
-      setFormError('First and last name are required.');
-      return;
-    }
-    if (!username.trim()) {
-      setFormError('Username is required.');
-      return;
-    }
-    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username.trim())) {
-      setFormError('Username must be 3–20 characters (letters, numbers, underscores).');
-      return;
-    }
-    if (!email.trim()) {
-      setFormError('Email is required.');
-      return;
-    }
-    if (password.length < 8) {
-      setFormError('Password must be at least 8 characters.');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setFormError('Passwords do not match.');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const res = await api.post('/api/admin/staff', {
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        username: username.trim(),
-        email: email.trim(),
-        password,
-        role,
-      });
-      if (!res.data?.success) {
-        throw new Error(res.data?.message || 'Failed to create moderator');
-      }
-      showSuccessToast(res.data.message || 'Moderator created');
-      onCreated();
-    } catch (err: unknown) {
-      const message =
-        (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data
-          ?.message ||
-        (err as { message?: string })?.message ||
-        'Failed to create moderator';
-      setFormError(message);
-      showErrorToast(message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:pl-[260px]">
-      <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
-      <div className="relative max-h-[90vh] w-full max-w-lg overflow-hidden rounded-2xl border border-white/[0.1] bg-[#12131a] shadow-2xl">
-        <div className="flex items-start justify-between border-b border-white/[0.08] px-6 py-4">
-          <div>
-            <h2 className="text-lg font-bold text-white">Add moderator</h2>
-            <p className="mt-1 text-xs text-zinc-500">
-              Create a staff account and assign a moderation role.
-            </p>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:text-white">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <form onSubmit={(e) => void handleSubmit(e)}>
-          <div className="max-h-[calc(90vh-160px)] space-y-4 overflow-y-auto px-6 py-5">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block text-xs text-zinc-500">
-                First name
-                <input
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  className={inputClass}
-                  autoComplete="given-name"
-                  required
-                />
-              </label>
-              <label className="block text-xs text-zinc-500">
-                Last name
-                <input
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  className={inputClass}
-                  autoComplete="family-name"
-                  required
-                />
-              </label>
-            </div>
-
-            <label className="block text-xs text-zinc-500">
-              Username
-              <input
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className={inputClass}
-                placeholder="e.g. jordan_lee"
-                autoComplete="username"
-                required
-              />
-            </label>
-
-            <label className="block text-xs text-zinc-500">
-              Work email
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className={inputClass}
-                placeholder="name@ensemble.dev"
-                autoComplete="email"
-                required
-              />
-            </label>
-
-            <label className="block text-xs text-zinc-500">
-              Role
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className={`${inputClass} appearance-none`}
-              >
-                {MODERATOR_ROLE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value} className="bg-zinc-900">
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block text-xs text-zinc-500">
-                Password
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={inputClass}
-                  autoComplete="new-password"
-                  required
-                  minLength={8}
-                />
-              </label>
-              <label className="block text-xs text-zinc-500">
-                Confirm password
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className={inputClass}
-                  autoComplete="new-password"
-                  required
-                  minLength={8}
-                />
-              </label>
-            </div>
-
-            {formError && (
-              <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
-                {formError}
-              </p>
-            )}
-          </div>
-
-          <div className="flex justify-end gap-2 border-t border-white/[0.08] px-6 py-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl border border-white/[0.08] px-4 py-2 text-sm text-zinc-300 hover:text-white"
-              disabled={saving}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="inline-flex items-center gap-2 rounded-xl bg-rose-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-60"
-            >
-              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              Create account
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function VerificationsTab({ queue, pending }: { queue: VerificationItem[]; pending: number }) {
-  return (
-    <section className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-      <h2 className="text-lg font-semibold text-white">Account verification & approval</h2>
-      <p className="mt-2 text-sm text-zinc-500">
-        {pending} account(s) need your attention. Review each member&apos;s profile status before they get full platform
-        access. Approve or reject from your moderation tools when those actions are wired up.
-      </p>
-      <div className="mt-6 overflow-x-auto">
-        <table className="w-full min-w-[800px] text-left text-sm">
-          <thead>
-            <tr className="border-b border-white/[0.06] text-[10px] uppercase tracking-wide text-zinc-600">
-              <th className="pb-3 pr-4 font-medium">Member</th>
-              <th className="pb-3 pr-4 font-medium">Email</th>
-              <th className="pb-3 pr-4 font-medium">Username</th>
-              <th className="pb-3 pr-4 font-medium">Account type</th>
-              <th className="pb-3 pr-4 font-medium">Status</th>
-              <th className="pb-3 pr-4 font-medium text-right">Merit</th>
-              <th className="pb-3 font-medium">Submitted</th>
-            </tr>
-          </thead>
-          <tbody>
-            {queue.map((v) => (
-              <tr key={v.id} className="border-b border-white/[0.04]">
-                <td className="py-3 pr-4 font-medium text-white">{v.name}</td>
-                <td className="py-3 pr-4 text-zinc-400">{v.email}</td>
-                <td className="py-3 pr-4">@{v.username}</td>
-                <td className="py-3 pr-4 text-zinc-400">{v.accountType}</td>
-                <td className="py-3 pr-4">
-                  <span className={`rounded-full border px-2 py-0.5 text-xs ${statusPill(v.status)}`}>
-                    {v.status}
-                  </span>
-                </td>
-                <td className="py-3 pr-4 text-right tabular-nums">{v.meritCredits}</td>
-                <td className="py-3 text-xs text-zinc-500">{formatDateTime(v.submittedAt)}</td>
-              </tr>
-            ))}
-            {queue.length === 0 && (
-              <tr>
-                <td colSpan={7} className="py-12 text-center text-zinc-500">
-                  Queue is empty — every account is in good standing.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
     </section>
   );
 }
