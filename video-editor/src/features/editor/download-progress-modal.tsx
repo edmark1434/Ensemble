@@ -1,62 +1,108 @@
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+"use client";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import { useDownloadState } from "./store/use-download-state";
+import useStore from "./store/use-store";
 import { Button } from "@/components/ui/button";
-import { CircleCheckIcon, XIcon } from "lucide-react";
-import { DialogDescription, DialogTitle } from "@radix-ui/react-dialog";
+import { CircleCheckIcon, CircleXIcon } from "lucide-react";
 import { download } from "@/utils/download";
+import { useEffect, useState } from "react";
+import { millisecondsToHHMMSS } from "./utils/format";
+
+const sanitizeFilename = (name: string): string => {
+  const trimmed = name.trim();
+  if (!trimmed) return "Untitled";
+  return trimmed.replace(/[/\\?%*:|"<>]/g, "-");
+};
 
 const DownloadProgressModal = () => {
-  const { progress, displayProgressModal, output, actions } =
+  const { progress, exporting, exportStartedAt, displayProgressModal, output, error, actions } =
     useDownloadState();
-  const isCompleted = progress === 100;
+  const { projectName } = useStore();
+  const isCompleted = !!output;
+  const isFailed = !!error;
+
+  const [elapsedMs, setElapsedMs] = useState(0);
+
+  useEffect(() => {
+    if (!exporting || !exportStartedAt) return;
+
+    const tick = () => setElapsedMs(Date.now() - exportStartedAt);
+    tick();
+
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [exporting, exportStartedAt]);
 
   const handleDownload = async () => {
     if (output?.url) {
-      await download(output.url, "untitled.mp4");
-      console.log("downloading");
+      await download(output.url, `${sanitizeFilename(projectName)}`);
     }
   };
+
+  const handleCancel = () => {
+    actions.cancelExport();
+  };
+
   return (
     <Dialog
       open={displayProgressModal}
       onOpenChange={actions.setDisplayProgressModal}
     >
-      <DialogContent className="flex h-[627px] flex-col gap-0 bg-background p-0 sm:max-w-[844px]">
-        <DialogTitle className="hidden" />
-        <DialogDescription className="hidden" />
-        <XIcon
-          onClick={() => actions.setDisplayProgressModal(false)}
-          className="absolute right-4 top-5 h-5 w-5 text-zinc-400 hover:cursor-pointer hover:text-zinc-500"
-        />
-        <div className="flex h-16 items-center border-b px-4 font-medium">
-          Download
+      <DialogContent className="border bg-card px-2 py-8 gap-6 overflow-hidden sm:max-w-md">
+        <DialogHeader className="px-6 -mt-0.75">
+          <DialogTitle className="text-md font-medium">Export</DialogTitle>
+        </DialogHeader>
+
+        <div className="px-6">
+          {isCompleted ? (
+            <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
+              <CircleCheckIcon size={32} className="text-primary" />
+              <div className="space-y-1">
+                <div className="font-medium">Exported</div>
+                <div className="text-muted-foreground text-sm">
+                  You can download the video to your device.
+                </div>
+              </div>
+              <Button onClick={handleDownload}>Download</Button>
+            </div>
+          ) : isFailed ? (
+            <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
+              <CircleXIcon size={32} className="text-destructive" />
+              <div className="space-y-1">
+                <div className="font-medium">Export failed</div>
+                <div className="text-muted-foreground text-sm">{error}</div>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => actions.setDisplayProgressModal(false)}
+              >
+                Close
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
+              <div className="text-4xl font-medium">
+                {Math.floor(progress * 100)}%
+              </div>
+              <div className="text-muted-foreground text-sm">
+                <div>Closing the browser will not cancel the export.</div>
+                <div>The video will be saved in your space.</div>
+              </div>
+              <div className="text-muted-foreground text-sm">
+                {millisecondsToHHMMSS(elapsedMs)}
+              </div>
+              <Button variant="outline" onClick={handleCancel}>
+                Cancel
+              </Button>
+            </div>
+          )}
         </div>
-        {isCompleted ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 space-y-4">
-            <div className="flex flex-col items-center space-y-1 text-center">
-              <div className="font-semibold">
-                <CircleCheckIcon />
-              </div>
-              <div className="font-bold">Exported</div>
-              <div className="text-muted-foreground">
-                You can download the video to your device.
-              </div>
-            </div>
-            <Button onClick={handleDownload}>Download</Button>
-          </div>
-        ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-4">
-            <div className="text-5xl font-semibold">
-              {Math.floor(progress)}%
-            </div>
-            <div className="font-bold">Exporting...</div>
-            <div className="text-center text-zinc-500">
-              <div>Closing the browser will not cancel the export.</div>
-              <div>The video will be saved in your space.</div>
-            </div>
-            <Button variant={"outline"}>Cancel</Button>
-          </div>
-        )}
       </DialogContent>
     </Dialog>
   );

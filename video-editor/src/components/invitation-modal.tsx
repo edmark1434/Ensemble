@@ -66,7 +66,7 @@ export function InvitationModal() {
                         <div className="pt-4 flex flex-col gap-3">
                             <Button
                                 asChild
-                                className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground text-base font-semibold transition-all duration-300 shadow-[0_0_20px_color-mix(in_srgb,var(--primary),transparent_60%)]"
+                                className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground text-base font-medium transition-all duration-300 shadow-[0_0_20px_color-mix(in_srgb,var(--primary),transparent_60%)]"
                             >
                                 <a href="https://editor.openvideo.dev/" target="_blank" rel="noopener noreferrer">
                                     Try it now
@@ -95,7 +95,7 @@ function FeatureItem({ icon, title, description }: { icon: React.ReactNode, titl
                 {icon}
             </div>
             <div>
-                <h4 className="font-semibold text-white">{title}</h4>
+                <h4 className="font-medium text-white">{title}</h4>
                 <p className="text-sm text-zinc-400">{description}</p>
             </div>
         </div>

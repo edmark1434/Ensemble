@@ -155,7 +155,7 @@ export const LazyPresetPreview: React.FC<{
       {visible ? (
         <RemotionPresetPreview presetKey={presetKey} type={type} />
       ) : (
-        <span className="text-lg font-semibold text-white">Text</span>
+        <span className="text-lg font-medium text-white">Text</span>
       )}
     </div>
   );

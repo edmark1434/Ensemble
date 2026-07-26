@@ -247,7 +247,7 @@ export const AiVoice = () => {
       <div className="space-y-4 p-4">
         {/* Text Input */}
         <div className="space-y-2">
-          <Label className="font-sans text-xs font-semibold">
+          <Label className="font-sans text-xs font-medium">
             Enter your script
           </Label>
 
@@ -266,7 +266,7 @@ export const AiVoice = () => {
         {/* Voice Selection */}
         <div className="space-y-3">
           <div className="flex gap-2 min-w-0 flex-col">
-            <Label className="font-sans text-xs font-semibold">
+            <Label className="font-sans text-xs font-medium">
               Select voice
             </Label>
             <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>

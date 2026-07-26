@@ -64,6 +64,9 @@ interface ITimelineStore {
 
   muted: boolean;
   setMuted: (muted: boolean) => void;
+
+  projectName: string;
+  setProjectName: (name: string) => void;
 }
 
 export interface IMarker {
@@ -174,6 +177,9 @@ const useStore = create<ITimelineStore>((set, get) => ({
 
   muted: false,
   setMuted: (muted: boolean) => set({ muted }),
+
+  projectName: "My Project",
+  setProjectName: (name: string) => set({ projectName: name }),
 }));
 
 export default useStore;
