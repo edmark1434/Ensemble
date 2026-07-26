@@ -4,6 +4,7 @@ export type WalletTransaction = {
   amount: number;
   label: string;
   timeAgo: string;
+  createdAt?: string;
   positive: boolean;
   reversible: boolean;
   status: string;

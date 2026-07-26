@@ -22,7 +22,17 @@ import {
   VerticalBarChart,
 } from '../analytics/components/AnalyticsCharts';
 import TicketDetailModal from './TicketDetailModal';
+import TicketFiltersPanel from './TicketFiltersPanel';
+import ModeratorDisputeDetailModal from '@/pages/moderator/shared/ModeratorDisputeDetailModal';
+import { ReportCaseDetailModal } from '../moderation/CaseDetailModals';
+import {
+  DEFAULT_TICKET_FILTERS,
+  filterTickets,
+  formatEscalatedLabel,
+  type TicketFilterState,
+} from './ticketFilterUtils';
 import type { Dispute, SupportTicket, TicketsOverview, UserReport } from './ticketTypes';
+import { TICKET_TYPE_OPTIONS } from './ticketTypes';
 
 type TabId = 'overview' | 'tickets' | 'disputes' | 'reports' | 'assignments';
 
@@ -39,15 +49,27 @@ function formatDateTime(value: string | null) {
   return new Date(value).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+function formatStatusLabel(value: string) {
+  return String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
 function badgeClass(kind: 'status' | 'priority', value: string) {
-  const v = value.toLowerCase();
+  const v = value.toLowerCase().replace(/_/g, ' ');
   if (kind === 'priority') {
     if (v === 'high') return 'bg-red-500/15 text-red-300 border-red-500/25';
     if (v === 'medium') return 'bg-amber-500/15 text-amber-200 border-amber-500/25';
     return 'bg-zinc-500/15 text-zinc-300 border-white/10';
   }
   if (v === 'open') return 'bg-red-500/15 text-red-300';
-  if (v === 'in_progress' || v === 'under_review' || v === 'in_review') return 'bg-amber-500/15 text-amber-200';
+  if (v === 'in progress' || v === 'under review' || v === 'in review' || v === 'escalated') {
+    return 'bg-amber-500/15 text-amber-200';
+  }
   if (v === 'resolved' || v === 'closed') return 'bg-emerald-500/15 text-emerald-300';
   return 'bg-zinc-500/15 text-zinc-300';
 }
@@ -65,11 +87,8 @@ export default function TicketManagementPage() {
   const [tab, setTab] = useState<TabId>(initialTab);
   const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [priorityFilter, setPriorityFilter] = useState('all');
-  const [categoryFilter, setCategoryFilter] = useState('all');
-
+  const [selectedTicketId, setSelectedTicketId] = useState<number | string | null>(null);
+  const [ticketFilters, setTicketFilters] = useState<TicketFilterState>(DEFAULT_TICKET_FILTERS);
   const load = async (silent = false) => {
     if (!silent) setLoading(true);
     else setRefreshing(true);
@@ -99,23 +118,30 @@ export default function TicketManagementPage() {
     setSearchParams(id === 'overview' ? {} : { tab: id }, { replace: true });
   };
 
+  const handleAlertClick = (alert: TicketsOverview['alerts'][number]) => {
+    const action = alert.action;
+    if (!action?.tab) return;
+    if (action.ticketFilters) {
+      setTicketFilters({
+        ...DEFAULT_TICKET_FILTERS,
+        ...(action.ticketFilters as Partial<TicketFilterState>),
+      });
+    }
+    switchTab(action.tab as TabId);
+  };
+
   const q = search.trim().toLowerCase();
 
   const filteredTickets = useMemo(() => {
     if (!data) return [];
-    return data.tickets.filter((t) => {
-      if (statusFilter !== 'all' && t.status !== statusFilter) return false;
-      if (priorityFilter !== 'all' && t.priority !== priorityFilter) return false;
-      if (categoryFilter !== 'all' && t.category !== categoryFilter) return false;
-      if (!q) return true;
-      return (
-        t.subject.toLowerCase().includes(q) ||
-        t.number.toLowerCase().includes(q) ||
-        t.requester.name.toLowerCase().includes(q) ||
-        (t.assignee?.name || '').toLowerCase().includes(q)
-      );
-    });
-  }, [data, q, statusFilter, priorityFilter, categoryFilter]);
+    // Header search still applies across tickets when on tickets tab;
+    // ticketFilters.search is the dedicated ticket search.
+    const merged: TicketFilterState = {
+      ...ticketFilters,
+      search: ticketFilters.search || (tab === 'tickets' ? search : ticketFilters.search),
+    };
+    return filterTickets(data.tickets, merged);
+  }, [data, ticketFilters, search, tab]);
 
   const filteredDisputes = useMemo(() => {
     if (!data) return [];
@@ -139,9 +165,21 @@ export default function TicketManagementPage() {
     );
   }, [data, q]);
 
-  const categories = useMemo(() => {
-    if (!data) return [];
-    return [...new Set(data.tickets.map((t) => t.category))].sort();
+  const ticketTypes = useMemo(() => {
+    if (!data) return [...TICKET_TYPE_OPTIONS];
+    if (Array.isArray(data.types) && data.types.length) {
+      return [...new Set([...data.types, ...TICKET_TYPE_OPTIONS])];
+    }
+    if (Array.isArray(data.categories) && data.categories.length) return data.categories;
+    return [...TICKET_TYPE_OPTIONS];
+  }, [data]);
+
+  const ticketChannels = useMemo(() => {
+    if (!data) return ['web', 'chat', 'email', 'in_app'];
+    const fromData = [
+      ...new Set(data.tickets.map((t) => String(t.channel || 'web').toLowerCase()).filter(Boolean)),
+    ];
+    return fromData.length ? fromData.sort() : ['web', 'chat', 'email', 'in_app'];
   }, [data]);
 
   if (loading) {
@@ -183,8 +221,8 @@ export default function TicketManagementPage() {
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-400/80">Support desk</p>
             <h1 className="text-xl font-bold text-white">Ticket management</h1>
             <p className="mt-1 text-xs text-zinc-500">
-              {summary.openTickets} open tickets · {summary.openDisputes} disputes · {summary.openReports} reports · @
-              {user?.username || 'admin'}
+              {summary.openTickets} open tickets · {summary.totalTickets} in tickets · {summary.openDisputes}{' '}
+              disputes · {summary.openReports} reports · @{user?.username || 'admin'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -227,23 +265,30 @@ export default function TicketManagementPage() {
 
       <div className="space-y-6 px-6 py-6 md:px-8 md:py-8">
         <div className="flex flex-wrap gap-2">
-          {alerts.map((a) => (
-            <span
-              key={a.id}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs ${
-                a.severity === 'warning'
-                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-100'
-                  : a.severity === 'error'
-                    ? 'border-red-500/30 bg-red-500/10 text-red-200'
-                    : a.severity === 'success'
-                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                      : 'border-white/10 bg-white/[0.03] text-zinc-300'
-              }`}
-            >
-              {a.severity === 'success' ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
-              {a.message}
-            </span>
-          ))}
+          {alerts.map((a) => {
+            const clickable = Boolean(a.action?.tab);
+            return (
+              <button
+                key={a.id}
+                type="button"
+                disabled={!clickable}
+                onClick={() => handleAlertClick(a)}
+                title={clickable ? 'Open related queue' : undefined}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-left text-xs transition ${
+                  a.severity === 'warning'
+                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-100'
+                    : a.severity === 'error'
+                      ? 'border-red-500/30 bg-red-500/10 text-red-200'
+                      : a.severity === 'success'
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                        : 'border-white/10 bg-white/[0.03] text-zinc-300'
+                } ${clickable ? 'hover:brightness-110 cursor-pointer' : 'cursor-default'}`}
+              >
+                {a.severity === 'success' ? <CheckCircle2 className="h-3 w-3 shrink-0" /> : <AlertTriangle className="h-3 w-3 shrink-0" />}
+                {a.message}
+              </button>
+            );
+          })}
         </div>
 
         {tab === 'overview' && (
@@ -252,13 +297,16 @@ export default function TicketManagementPage() {
         {tab === 'tickets' && (
           <TicketsTab
             tickets={filteredTickets}
-            categories={categories}
-            statusFilter={statusFilter}
-            priorityFilter={priorityFilter}
-            categoryFilter={categoryFilter}
-            onStatusFilter={setStatusFilter}
-            onPriorityFilter={setPriorityFilter}
-            onCategoryFilter={setCategoryFilter}
+            totalCount={data.tickets.length}
+            ticketTypes={ticketTypes}
+            channels={ticketChannels}
+            moderators={data.staffWorkload.map((s) => ({
+              staffId: s.staffId,
+              name: s.name,
+              role: s.role,
+            }))}
+            filters={ticketFilters}
+            onFiltersChange={setTicketFilters}
             onOpenTicket={setSelectedTicketId}
           />
         )}
@@ -296,10 +344,10 @@ function OverviewTab({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
         <Kpi label="Open tickets" value={summary.openTickets} sub={`${summary.totalTickets} total`} />
         <Kpi label="Unassigned" value={summary.unassignedTickets} sub="Need assignee" />
-        <Kpi label="High priority" value={summary.highPriorityTickets} sub="Tickets flagged urgent" />
+        <Kpi label="High priority" value={summary.highPriorityTickets} sub="Open tickets flagged urgent" />
+        <Kpi label="Awaiting reply" value={summary.awaitingReplyTickets ?? 0} sub="User message waiting" />
         <Kpi label="Open disputes" value={summary.openDisputes} sub={`${summary.creditsAtRisk.toLocaleString()} credits at risk`} />
         <Kpi label="Open reports" value={summary.openReports} sub={`${summary.totalReports} total reports`} />
-        <Kpi label="SLA compliance" value={`${summary.slaCompliancePercent}%`} sub={`~${summary.avgResolutionHours}h avg resolution`} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -314,8 +362,8 @@ function OverviewTab({
       <div className="grid gap-6 lg:grid-cols-2">
         <ChartCard>
           <VerticalBarChart
-            title="Tickets by category"
-            data={charts.ticketCategories.map((c) => ({ label: c.label, value: c.value }))}
+            title="Tickets by type"
+            data={(charts.ticketTypes || charts.ticketCategories).map((c) => ({ label: c.label, value: c.value }))}
             color="#a78bfa"
           />
         </ChartCard>
@@ -338,7 +386,9 @@ function OverviewTab({
                   <span className="font-medium text-white">{a.ref}</span>
                   <p className="text-xs text-zinc-500">{a.label}</p>
                 </div>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] ${badgeClass('status', a.status)}`}>{a.status}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] ${badgeClass('status', a.status)}`}>
+                  {formatStatusLabel(a.status)}
+                </span>
               </li>
             ))}
           </ul>
@@ -362,91 +412,72 @@ function OverviewTab({
   );
 }
 
-function FilterBar({
-  statusFilter,
-  priorityFilter,
-  categoryFilter,
-  categories,
-  onStatus,
-  onPriority,
-  onCategory,
-}: {
-  statusFilter: string;
-  priorityFilter: string;
-  categoryFilter: string;
-  categories: string[];
-  onStatus: (v: string) => void;
-  onPriority: (v: string) => void;
-  onCategory: (v: string) => void;
-}) {
-  return (
-    <div className="grid gap-3 rounded-2xl border border-white/[0.08] bg-[#14151c] p-4 sm:grid-cols-3">
-      {[
-        ['Status', statusFilter, ['all', 'open', 'in_progress', 'resolved', 'closed'], onStatus],
-        ['Priority', priorityFilter, ['all', 'high', 'medium', 'low'], onPriority],
-        ['Category', categoryFilter, ['all', ...categories], onCategory],
-      ].map(([label, val, opts, onChange]) => (
-        <label key={String(label)} className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase text-zinc-600">{label as string}</span>
-          <select
-            value={val as string}
-            onChange={(e) => (onChange as (v: string) => void)(e.target.value)}
-            className="rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white"
-          >
-            {(opts as string[]).map((o) => (
-              <option key={o} value={o}>
-                {o === 'all' ? 'All' : o.replace('_', ' ')}
-              </option>
-            ))}
-          </select>
-        </label>
-      ))}
-    </div>
-  );
-}
-
 function TicketsTab({
   tickets,
-  categories,
-  statusFilter,
-  priorityFilter,
-  categoryFilter,
-  onStatusFilter,
-  onPriorityFilter,
-  onCategoryFilter,
+  totalCount,
+  ticketTypes,
+  channels,
+  moderators,
+  filters,
+  onFiltersChange,
   onOpenTicket,
 }: {
   tickets: SupportTicket[];
-  categories: string[];
-  statusFilter: string;
-  priorityFilter: string;
-  categoryFilter: string;
-  onStatusFilter: (v: string) => void;
-  onPriorityFilter: (v: string) => void;
-  onCategoryFilter: (v: string) => void;
-  onOpenTicket: (id: number) => void;
+  totalCount: number;
+  ticketTypes: string[];
+  channels: string[];
+  moderators: { staffId: number | string; name: string; role: string }[];
+  filters: TicketFilterState;
+  onFiltersChange: (next: TicketFilterState) => void;
+  onOpenTicket: (id: number | string) => void;
 }) {
+  const shortId = (value: string | number | null | undefined) => {
+    if (value == null || value === '') return '—';
+    const s = String(value);
+    return s.length > 10 ? `${s.slice(0, 8)}…` : s;
+  };
+
   return (
     <div className="space-y-4">
-      <FilterBar
-        statusFilter={statusFilter}
-        priorityFilter={priorityFilter}
-        categoryFilter={categoryFilter}
-        categories={categories}
-        onStatus={onStatusFilter}
-        onPriority={onPriorityFilter}
-        onCategory={onCategoryFilter}
+      <TicketFiltersPanel
+        filters={filters}
+        onChange={onFiltersChange}
+        ticketTypes={ticketTypes}
+        channels={channels}
+        moderators={moderators}
+        accent="rose"
+        showQueue
+        showAdminToggle
+        resultCount={tickets.length}
+        totalCount={totalCount}
       />
-      <p className="text-xs text-zinc-500">Showing {tickets.length} tickets</p>
       <DataTable
-        columns={['Ticket', 'Subject', 'Requester', 'Category', 'Priority', 'Status', 'Assignee', 'Updated']}
+        columns={['Ticket', 'Subject', 'Requester', 'Type', 'Flags', 'Priority', 'Status', 'Assignee', 'Updated']}
         rows={tickets.map((t) => ({
           key: t.id,
           cells: [
             t.number,
             t.subject,
-            t.requester.name,
-            t.category,
+            <div key="req" className="min-w-[140px]">
+              <p className="font-medium text-zinc-200">{t.requester.name}</p>
+              <p className="text-[11px] text-zinc-500">@{t.requester.username || '—'}</p>
+              <p className="font-mono text-[10px] text-zinc-600">acc {shortId(t.requester.accountId)}</p>
+              <p className="font-mono text-[10px] text-zinc-600">usr {shortId(t.requester.userId)}</p>
+            </div>,
+            t.type || t.category || '—',
+            <div key="flags" className="flex min-w-[140px] flex-col gap-1">
+              {t.waitingForResponse && (
+                <span className="w-fit rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
+                  Awaiting Reply
+                </span>
+              )}
+              {t.isEscalated && (
+                <span className="w-fit rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] text-violet-200">
+                  {formatEscalatedLabel(t)}
+                </span>
+              )}
+              {!t.waitingForResponse && !t.isEscalated && <span className="text-zinc-600">—</span>}
+            </div>,
             t.priority,
             t.status,
             t.assignee?.name || '—',
@@ -460,31 +491,7 @@ function TicketsTab({
 }
 
 function DisputesTab({ disputes, onUpdated }: { disputes: Dispute[]; onUpdated: () => void }) {
-  const [selected, setSelected] = useState<Dispute | null>(null);
-  const [status, setStatus] = useState('');
-  const [notes, setNotes] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const open = (d: Dispute) => {
-    setSelected(d);
-    setStatus(d.status);
-    setNotes(d.resolutionNotes || '');
-  };
-
-  const save = async () => {
-    if (!selected) return;
-    setSaving(true);
-    try {
-      await api.patch(`/api/admin/disputes/${selected.id}`, { status, resolution_notes: notes });
-      showSuccessToast('Dispute updated');
-      setSelected(null);
-      onUpdated();
-    } catch {
-      showErrorToast('Failed to update dispute');
-    } finally {
-      setSaving(false);
-    }
-  };
+  const [selectedId, setSelectedId] = useState<string | number | null>(null);
 
   return (
     <div className="space-y-4">
@@ -497,135 +504,66 @@ function DisputesTab({ disputes, onUpdated }: { disputes: Dispute[]; onUpdated: 
             d.title,
             `${d.initiator.name} vs ${d.respondent.name}`,
             d.creditAmount.toLocaleString(),
-            d.status,
+            formatStatusLabel(d.status),
             d.assignee?.name || '—',
             formatDateTime(d.openedAt),
           ],
-          onClick: () => open(d),
+          onClick: () => setSelectedId(d.id),
         }))}
       />
 
-      {selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0f1016] p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs text-rose-400">{selected.number}</p>
-                <h3 className="text-lg font-bold text-white">{selected.title}</h3>
-                <p className="mt-1 text-sm text-zinc-500">{selected.reason}</p>
-              </div>
-              <button type="button" onClick={() => setSelected(null)} className="text-zinc-500 hover:text-white">
-                ✕
-              </button>
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
-              <div>
-                <p className="text-zinc-500">Initiator</p>
-                <p className="text-white">{selected.initiator.name}</p>
-              </div>
-              <div>
-                <p className="text-zinc-500">Respondent</p>
-                <p className="text-white">{selected.respondent.name}</p>
-              </div>
-              <div>
-                <p className="text-zinc-500">Related</p>
-                <p className="text-white">
-                  {selected.relatedEntityType} {selected.relatedEntityId}
-                </p>
-              </div>
-              <div>
-                <p className="text-zinc-500">Credits involved</p>
-                <p className="text-white">{selected.creditAmount.toLocaleString()}</p>
-              </div>
-            </div>
-            <label className="mt-4 block text-xs text-zinc-500">
-              Status
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
-              >
-                {['open', 'under_review', 'resolved', 'escalated', 'closed'].map((s) => (
-                  <option key={s} value={s}>
-                    {s.replace('_', ' ')}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="mt-3 block text-xs text-zinc-500">
-              Resolution notes
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-                className="mt-1 w-full rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => void save()}
-              disabled={saving}
-              className="mt-4 rounded-xl bg-rose-500/90 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            >
-              Save dispute
-            </button>
-          </div>
-        </div>
+      {selectedId != null && (
+        <ModeratorDisputeDetailModal
+          disputeId={selectedId}
+          endpointBase="/api/admin/disputes"
+          accent="rose"
+          onClose={() => setSelectedId(null)}
+          onUpdated={onUpdated}
+        />
       )}
     </div>
   );
 }
 
 function ReportsTab({ reports, onUpdated }: { reports: UserReport[]; onUpdated: () => void }) {
-  const triage = async (id: number, status: string) => {
-    try {
-      await api.patch(`/api/admin/reports/${id}`, { status });
-      showSuccessToast(`Report marked ${status}`);
-      onUpdated();
-    } catch {
-      showErrorToast('Failed to update report');
-    }
-  };
+  const [selectedId, setSelectedId] = useState<string | number | null>(null);
 
   return (
-    <DataTable
-      columns={['Report', 'Target', 'Reason', 'Reporter', 'Priority', 'Status', 'Created', 'Actions']}
-      rows={reports.map((r) => ({
-        key: r.id,
-        cells: [
-          r.number,
-          `${r.targetType}: ${r.targetLabel || r.targetId}`,
-          r.reason,
-          r.reporter.name,
-          r.priority,
-          r.status,
-          formatDateTime(r.createdAt),
-          'actions',
-        ],
-        actions: (
-          <div className="flex gap-1">
-            {r.status !== 'in_review' && (
-              <button
-                type="button"
-                onClick={() => void triage(r.id, 'in_review')}
-                className="rounded px-2 py-1 text-[10px] text-amber-300 hover:bg-amber-500/10"
-              >
-                Review
-              </button>
-            )}
-            {r.status !== 'resolved' && (
-              <button
-                type="button"
-                onClick={() => void triage(r.id, 'resolved')}
-                className="rounded px-2 py-1 text-[10px] text-emerald-300 hover:bg-emerald-500/10"
-              >
-                Resolve
-              </button>
-            )}
-          </div>
-        ),
-      }))}
-    />
+    <>
+      <DataTable
+        columns={['Report', 'Target', 'Reason', 'Reporter', 'Priority', 'Status', 'Created', 'Actions']}
+        rows={reports.map((r) => ({
+          key: r.id,
+          cells: [
+            r.number,
+            `${r.targetType}: ${r.targetLabel || r.targetId}`,
+            r.reason,
+            r.reporter.name,
+            formatStatusLabel(r.priority),
+            formatStatusLabel(r.status),
+            formatDateTime(r.createdAt),
+            'actions',
+          ],
+          onClick: () => setSelectedId(r.id),
+          actions: (
+            <button
+              type="button"
+              onClick={() => setSelectedId(r.id)}
+              className="rounded px-2 py-1 text-[10px] text-rose-300 hover:bg-rose-500/10"
+            >
+              View
+            </button>
+          ),
+        }))}
+      />
+      {selectedId != null && (
+        <ReportCaseDetailModal
+          reportId={selectedId}
+          onClose={() => setSelectedId(null)}
+          onUpdated={onUpdated}
+        />
+      )}
+    </>
   );
 }
 
@@ -654,7 +592,7 @@ function DataTable({
   rows,
 }: {
   columns: string[];
-  rows: { key: string | number; cells: string[]; onClick?: () => void; actions?: ReactNode }[];
+  rows: { key: string | number; cells: ReactNode[]; onClick?: () => void; actions?: ReactNode }[];
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">

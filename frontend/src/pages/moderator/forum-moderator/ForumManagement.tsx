@@ -3,6 +3,7 @@ import { Info, Loader2 } from "lucide-react";
 import api from "@/lib/axios";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
 import type { UserReport } from "../shared/moderatorTypes";
+import { titleCaseWords } from "../shared/ui";
 
 const STATUS_OPTIONS = ["open", "in_review", "resolved", "closed"];
 
@@ -29,7 +30,7 @@ export default function ForumManagement() {
     setSavingId(report.id);
     try {
       await api.patch(`/api/moderator/forum/reports/${report.id}`, { status });
-      showSuccessToast(`Report ${report.number} marked ${status.replace("_", " ")}`);
+      showSuccessToast(`Report ${report.number} marked ${titleCaseWords(status)}`);
       await load();
     } catch {
       showErrorToast("Failed to update report");
@@ -84,7 +85,7 @@ export default function ForumManagement() {
                     </td>
                     <td className="py-2.5 text-zinc-300">{r.reason}</td>
                     <td className="py-2.5 text-zinc-400">@{r.reporter.username}</td>
-                    <td className="py-2.5 text-zinc-400">{r.status.replace("_", " ")}</td>
+                    <td className="py-2.5 text-zinc-400">{titleCaseWords(r.status)}</td>
                     <td className="py-2.5">
                       <select
                         value={r.status}
@@ -94,7 +95,7 @@ export default function ForumManagement() {
                       >
                         {STATUS_OPTIONS.map((s) => (
                           <option key={s} value={s}>
-                            {s.replace("_", " ")}
+                            {titleCaseWords(s)}
                           </option>
                         ))}
                       </select>

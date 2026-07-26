@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const requireAuth = require('../middleware/requireAuth');
 const checkSession = require('../middleware/checkSession');
+const optionalSession = require('../middleware/optionalSession');
 const {
     getAllUsers,
     signup,
@@ -19,6 +20,12 @@ const {
     updatePersonalDetailsController,
     getUserSession
 } = require('../controllers/UserControllers');
+const {
+    createPublicTicket,
+    listMyTickets,
+    getMyTicket,
+    postMyTicketMessage,
+} = require('../Controllers/AdminTicketsControllers');
 
 router.get('/', [checkSession, requireAuth], getAllUsers);
 
@@ -35,6 +42,12 @@ router.get('/logout', [requireAuth], LogoutUsers);
 router.get('/check-user-role', [checkSession, requireAuth], CheckUserRole);
 router.get('/session', [checkSession, requireAuth], getUserSession);
 router.post('/update-personal-details', [checkSession, requireAuth],updatePersonalDetailsController);
+
+// Support tickets (Postgres metadata + Mongo chat)
+router.post('/tickets', [optionalSession], createPublicTicket);
+router.get('/tickets', [checkSession, requireAuth], listMyTickets);
+router.get('/tickets/:id', [checkSession, requireAuth], getMyTicket);
+router.post('/tickets/:id/messages', [checkSession, requireAuth], postMyTicketMessage);
 
 router.get('/:email', [checkSession, requireAuth], getUserByEmail);
 

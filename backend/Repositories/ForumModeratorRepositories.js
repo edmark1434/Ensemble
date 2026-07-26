@@ -10,6 +10,7 @@ const {
   toCategoryChart,
   ticketStatusChart,
 } = require('./ModeratorSharedRepositories');
+const { QUEUE_SCOPES } = require('../lib/ticketEnums');
 
 function forumDb() {
   const client = getMongoClient();
@@ -21,6 +22,8 @@ function mongoConnected() {
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const FORUM_TICKET_SCOPE = QUEUE_SCOPES.forums;
 
 // Resolve account UUIDs found in Mongo documents to display handles.
 async function lookupHandles(ids) {
@@ -40,8 +43,7 @@ async function lookupHandles(ids) {
   return map;
 }
 
-// Forum moderation covers community/forum tickets and reports about forum content.
-const FORUM_TICKET_SCOPE = { categoriesIn: ['community', 'forum'] };
+// Forum moderation covers Forums tickets and reports about forum content.
 const FORUM_REPORT_TYPES = ['discussion', 'comment', 'post', 'forum', 'thread'];
 
 async function getForumTickets({ status } = {}) {
@@ -255,14 +257,25 @@ async function getForumContentStats() {
 
 function buildAlerts(tc, rc) {
   const alerts = [];
+  const openTickets = Number(tc.open_count) + Number(tc.in_progress);
+
   if (Number(tc.unassigned) > 0) {
     alerts.push({ id: 'unassigned', message: `${tc.unassigned} forum ticket(s) have no assignee.`, severity: 'warning' });
+  }
+  if (Number(tc.high_priority) > 0) {
+    alerts.push({ id: 'high-priority', message: `${tc.high_priority} high-priority forum ticket(s) need attention.`, severity: 'error' });
+  }
+  if (Number(tc.awaiting_reply) > 0) {
+    alerts.push({ id: 'awaiting-reply', message: `${tc.awaiting_reply} forum ticket(s) awaiting a staff reply.`, severity: 'warning' });
+  }
+  if (Number(tc.escalated) > 0) {
+    alerts.push({ id: 'escalated', message: `${tc.escalated} escalated forum ticket(s) need a handoff.`, severity: 'error' });
   }
   if (Number(rc.open_count) > 0) {
     alerts.push({ id: 'flagged-content', message: `${rc.open_count} flagged forum item(s) awaiting review.`, severity: 'error' });
   }
-  if (Number(tc.open_count) + Number(tc.in_progress) > 0) {
-    alerts.push({ id: 'open-tickets', message: `${Number(tc.open_count) + Number(tc.in_progress)} forum ticket(s) open.`, severity: 'info' });
+  if (openTickets > 0) {
+    alerts.push({ id: 'open-tickets', message: `${openTickets} forum ticket(s) open.`, severity: 'info' });
   }
   if (!alerts.length) {
     alerts.push({ id: 'clear', message: 'Forum queues are clear.', severity: 'success' });
@@ -304,7 +317,7 @@ async function getForumOverview() {
     notice: mongoConnected()
       ? null
       : 'MongoDB is not connected — forum groups, discussions and comment moderation are unavailable. Set MONGODB_URI in backend/.env to enable them. Ticket and report queues below always work.',
-    dataSources: { tables: ['support_tickets', 'reports', 'forum_groups (mongo)', 'forum_discussions (mongo)'], persisted: true },
+    dataSources: { tables: ['tickets', 'reports', 'forum_groups (mongo)', 'forum_discussions (mongo)'], persisted: true },
   };
 }
 

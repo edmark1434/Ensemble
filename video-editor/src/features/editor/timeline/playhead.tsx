@@ -134,7 +134,7 @@ const Playhead = ({ scrollLeft }: { scrollLeft: number }) => {
           borderRadius: "0 0 4px 4px",
           backgroundColor: playheadColor,
         }}
-        className="absolute top-0 h-4 w-2 -translate-x-1/2 transform text-xs font-semibold text-zinc-800"
+        className="absolute top-0 h-4 w-2 -translate-x-1/2 transform text-xs font-medium text-zinc-800"
       />
       <div className="relative h-full">
         <div className="absolute top-0 h-full w-3 -translate-x-1/2 transform" />

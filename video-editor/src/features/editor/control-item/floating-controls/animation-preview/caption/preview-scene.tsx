@@ -144,7 +144,7 @@ export const LazyCaptionPresetPreview: React.FC<{ presetKey: PresetName; type: "
       {visible ? (
         <RemotionCaptionPresetPreview presetKey={presetKey} type={type} />
       ) : (
-        <span className="text-[10px] font-semibold text-white text-center px-1">This is a caption</span>
+        <span className="text-[10px] font-medium text-white text-center px-1">This is a caption</span>
       )}
     </div>
   );

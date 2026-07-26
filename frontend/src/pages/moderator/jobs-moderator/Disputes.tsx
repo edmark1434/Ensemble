@@ -3,8 +3,19 @@ import { Loader2 } from "lucide-react";
 import api from "@/lib/axios";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
 import type { Dispute } from "../shared/moderatorTypes";
+import { PriorityBadge } from "../shared/ui";
 
 const STATUS_OPTIONS = ["open", "under_review", "resolved", "closed"];
+
+function titleCaseLabel(value: string) {
+  return String(value || "")
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
 
 export default function JobsDisputes() {
   const [disputes, setDisputes] = useState<Dispute[]>([]);
@@ -29,7 +40,7 @@ export default function JobsDisputes() {
     setSavingId(dispute.id);
     try {
       await api.patch(`/api/moderator/jobs/disputes/${dispute.id}`, { status });
-      showSuccessToast(`Dispute ${dispute.number} marked ${status.replace("_", " ")}`);
+      showSuccessToast(`Dispute ${dispute.number} marked ${titleCaseLabel(status)}`);
       await load();
     } catch {
       showErrorToast("Failed to update dispute");
@@ -81,17 +92,7 @@ export default function JobsDisputes() {
                     </td>
                     <td className="py-2.5 text-zinc-300">{d.creditAmount.toLocaleString()}</td>
                     <td className="py-2.5">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                          d.priority === "high"
-                            ? "bg-red-500/15 text-red-300"
-                            : d.priority === "medium"
-                              ? "bg-amber-500/15 text-amber-300"
-                              : "bg-zinc-500/15 text-zinc-300"
-                        }`}
-                      >
-                        {d.priority}
-                      </span>
+                      <PriorityBadge priority={d.priority} />
                     </td>
                     <td className="py-2.5">
                       <select
@@ -102,7 +103,7 @@ export default function JobsDisputes() {
                       >
                         {STATUS_OPTIONS.map((s) => (
                           <option key={s} value={s}>
-                            {s.replace("_", " ")}
+                            {titleCaseLabel(s)}
                           </option>
                         ))}
                       </select>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { dispatch } from "@designcombo/events";
 import { HISTORY_UNDO, HISTORY_REDO, DESIGN_RESIZE } from "@designcombo/state";
@@ -47,20 +47,16 @@ import {Kbd, KbdGroup} from "@/components/ui/kbd";
 
 export default function Navbar({
   user,
-  stateManager,
-  setProjectName,
-  projectName
+  stateManager
 }: {
-  user: any | null;
+  user: unknown | null;
   stateManager: StateManager;
-  setProjectName: (name: string) => void;
-  projectName: string;
 }) {
-  const [title, setTitle] = useState(projectName);
   const isLargeScreen = useIsLargeScreen();
   const isMediumScreen = useIsMediumScreen();
   const isSmallScreen = useIsSmallScreen();
-  const { isShortcutsModalOpen, setShortcutsModalOpen } = useStore();
+  const { isShortcutsModalOpen, setShortcutsModalOpen, projectName, setProjectName } = useStore();
+  const [title, setTitle] = useState(projectName);
 
   const handleUndo = () => {
     dispatch(HISTORY_UNDO);
@@ -70,21 +66,22 @@ export default function Navbar({
     dispatch(HISTORY_REDO);
   };
 
-  const handleCreateProject = async () => {};
-
-  // Create a debounced function for setting the project name
   const debouncedSetProjectName = useCallback(
     debounce((name: string) => {
-      console.log("Debounced setProjectName:", name);
       setProjectName(name);
-    }, 2000), // 2 seconds delay
+    }, 2000),
     []
   );
 
-  // Update the debounced function whenever the title changes
   useEffect(() => {
     debouncedSetProjectName(title);
   }, [title, debouncedSetProjectName]);
+
+  useEffect(() => {
+    return () => {
+      debouncedSetProjectName.cancel();
+    };
+  }, [debouncedSetProjectName]);
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setTitle(e.target.value);
@@ -120,11 +117,11 @@ export default function Navbar({
           <Tooltip delayDuration={10}>
             <TooltipTrigger asChild>
               <Button
-                  onClick={handleUndo}
-                  className="hover:!bg-accent/30"
-                  variant="ghost"
-                  size="icon"
-                  disabled={!canUndo}
+                onClick={handleUndo}
+                className="hover:!bg-accent/30"
+                variant="ghost"
+                size="icon"
+                disabled={!canUndo}
               >
                 <Icons.undo width={20} />
               </Button>
@@ -145,11 +142,11 @@ export default function Navbar({
           <Tooltip delayDuration={10}>
             <TooltipTrigger asChild>
               <Button
-                  onClick={handleRedo}
-                  className="hover:!bg-accent/30"
-                  variant="ghost"
-                  size="icon"
-                  disabled={!canRedo}
+                onClick={handleRedo}
+                className="hover:!bg-accent/30"
+                variant="ghost"
+                size="icon"
+                disabled={!canRedo}
               >
                 <Icons.redo width={20} />
               </Button>
@@ -172,10 +169,9 @@ export default function Navbar({
           <Tooltip delayDuration={10}>
             <TooltipTrigger asChild>
               <Button
-                  onClick={handleUndo}
-                  className="hover:!bg-accent/30"
-                  variant="ghost"
-                  size="icon"
+                className="hover:!bg-accent/30 cursor-default"
+                variant="ghost"
+                size="icon"
               >
                 <CloudCheck size={20} />
               </Button>
@@ -206,10 +202,10 @@ export default function Navbar({
           <Tooltip delayDuration={10}>
             <TooltipTrigger asChild>
               <Button
-                  onClick={() => setShortcutsModalOpen(true)}
-                  className="hover:!bg-accent/30"
-                  variant="ghost"
-                  size="icon"
+                onClick={() => setShortcutsModalOpen(true)}
+                className="hover:!bg-accent/30"
+                variant="ghost"
+                size="icon"
               >
                 <Keyboard size={20} />
               </Button>
@@ -226,8 +222,6 @@ export default function Navbar({
               </KbdGroup>
             </TooltipContent>
           </Tooltip>
-
-          {/*<ModeToggle />*/}
 
           <DownloadPopover stateManager={stateManager} />
           <Button
@@ -251,24 +245,33 @@ export default function Navbar({
 
 const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
   const isMediumScreen = useIsMediumScreen();
-  const { actions, exportType } = useDownloadState();
+  const { actions, exportType, exporting } = useDownloadState();
+  const { duration } = useStore();
   const [isExportTypeOpen, setIsExportTypeOpen] = useState(false);
   const [open, setOpen] = useState(false);
 
   const handleExport = () => {
     const data: IDesign = {
+      ...stateManager.toJSON(),
       id: generateId(),
-      ...stateManager.toJSON()
+      duration
     };
-
-    console.log({ data });
 
     actions.setState({ payload: data });
     actions.startExport();
+    setOpen(false);
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen && exporting) {
+      actions.setDisplayProgressModal(true);
+      return;
+    }
+    setOpen(nextOpen);
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           className="flex h-8 gap-2 hover:!bg-accent/30"

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Activity, RefreshCw, Search, UserCircle, Users } from 'lucide-react';
+import { Activity, RefreshCw, UserCircle, Users } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import useGlobalState from '@/lib/global_state';
 import TeamsTab from './TeamsTab';
@@ -22,7 +22,6 @@ export default function UserTeamPage() {
   const initialTab = paramTab && valid.includes(paramTab) ? paramTab : 'overview';
 
   const [tab, setTab] = useState<TabId>(initialTab);
-  const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
   const [overviewPending, setOverviewPending] = useState(0);
@@ -61,39 +60,15 @@ export default function UserTeamPage() {
               Signed in as @{user?.username || 'admin'}
             </p>
           </div>
-          {tab !== 'overview' && (
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative min-w-[200px] flex-1 lg:w-72">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search by name / email / id…"
-                  className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-4 py-2 text-sm text-zinc-300 hover:text-white"
-              >
-                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
-            </div>
-          )}
-          {tab === 'overview' && (
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-4 py-2 text-sm text-zinc-300 hover:text-white"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-2 self-start rounded-xl border border-white/[0.08] px-4 py-2 text-sm text-zinc-300 hover:text-white"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
         </div>
 
         <div className="flex gap-1 overflow-x-auto px-4 pb-0 md:px-6">
@@ -135,10 +110,10 @@ export default function UserTeamPage() {
           />
         )}
         {tab === 'teams' && (
-          <TeamsTab search={search} refreshToken={refreshToken} onStatsLoaded={setTeamsPending} />
+          <TeamsTab refreshToken={refreshToken} onStatsLoaded={setTeamsPending} />
         )}
         {tab === 'users' && (
-          <UsersTab search={search} refreshToken={refreshToken} onStatsLoaded={setUsersPending} />
+          <UsersTab refreshToken={refreshToken} onStatsLoaded={setUsersPending} />
         )}
       </div>
     </main>

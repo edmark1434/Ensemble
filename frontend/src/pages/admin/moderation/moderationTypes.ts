@@ -1,14 +1,24 @@
 export type ModerationCase = {
   id: string;
+  source?: 'report' | 'dispute' | 'listing' | 'identity' | string;
   type: string;
   priority: string;
   target: string;
   targetHandle: string;
   targetType: string;
   reason: string;
-  assignedRole: string;
+  description?: string | null;
+  referenceNumber?: string | null;
+  accountId?: string | null;
+  verificationStatus?: string | null;
+  assignedRole?: string | null;
+  assignedStaffId?: string | number | null;
+  assignedStaffName?: string | null;
   openedAt: string | null;
   status: string;
+  canTakeOver?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
 };
 
 export type ModerationActivity = {
@@ -27,7 +37,10 @@ export type ModerationActivity = {
 };
 
 export type ModeratorProfile = {
-  id: number;
+  id: string | number;
+  accountId?: string;
+  firstName?: string;
+  lastName?: string;
   name: string;
   role: string;
   handle: string;
@@ -83,6 +96,7 @@ export type ModerationOverview = {
     forumDiscussions: number;
     disputeQueueCount: number;
   };
+  currentStaffId?: string | number | null;
   pendingCases: ModerationCase[];
   recentActivity: ModerationActivity[];
   moderatorRoster: ModeratorProfile[];

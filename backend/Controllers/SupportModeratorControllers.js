@@ -32,7 +32,12 @@ async function getOverview(req, res) {
 
 async function getTickets(req, res) {
   try {
-    const data = await getSupportTickets({ status: req.query.status });
+    const data = await getSupportTickets({
+      status: req.query.status,
+      search: req.query.search,
+      type: req.query.type || req.query.category,
+      priority: req.query.priority,
+    });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching support tickets:', err);
@@ -58,7 +63,19 @@ async function patchTicket(req, res) {
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error updating ticket:', err);
-    res.status(500).json({ success: false, message: 'Failed to update ticket' });
+    const msg =
+      err?.message?.includes('not valid for') || err?.message?.includes('type is required') ||
+        err?.message?.includes('only be changed when escalating')
+        ? err.message
+        : 'Failed to update ticket';
+    res
+      .status(
+        err?.message?.includes('not valid for') || err?.message?.includes('type is required') ||
+        err?.message?.includes('only be changed when escalating')
+          ? 400
+          : 500
+      )
+      .json({ success: false, message: msg });
   }
 }
 
@@ -73,7 +90,8 @@ async function postTicketMessage(req, res) {
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error adding ticket message:', err);
-    res.status(500).json({ success: false, message: 'Failed to add message' });
+    const msg = err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
+    res.status(err?.message?.includes('MongoDB') ? 503 : 500).json({ success: false, message: msg });
   }
 }
 
@@ -110,7 +128,11 @@ async function getChat(req, res) {
 
 async function getDisputes(req, res) {
   try {
-    const data = await getSupportDisputes({ status: req.query.status });
+    const data = await getSupportDisputes({
+      status: req.query.status,
+      search: req.query.search,
+      entityType: req.query.entityType,
+    });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching disputes:', err);

@@ -163,12 +163,12 @@ function childrenTakeAllStringContents(element: any): string {
 }
 
 const COMPONENTS = {
-  h1: withClass("h1", "text-2xl font-semibold"),
-  h2: withClass("h2", "font-semibold text-xl"),
-  h3: withClass("h3", "font-semibold text-lg"),
-  h4: withClass("h4", "font-semibold text-base"),
+  h1: withClass("h1", "text-2xl font-medium"),
+  h2: withClass("h2", "font-medium text-xl"),
+  h3: withClass("h3", "font-medium text-lg"),
+  h4: withClass("h4", "font-medium text-base"),
   h5: withClass("h5", "font-medium"),
-  strong: withClass("strong", "font-semibold"),
+  strong: withClass("strong", "font-medium"),
   a: withClass("a", "text-primary underline underline-offset-2"),
   blockquote: withClass("blockquote", "border-l-2 border-primary pl-4"),
   code: ({ children, className, node, ...rest }: any) => {

@@ -6,10 +6,117 @@ const {
   createMessageRepositories,
   getConversationByConvoId,
 } = require('./InboxRepositories');
+const {
+  ROLE_TO_TICKET_TYPES,
+  TICKET_TYPES,
+  TICKET_STATUSES,
+  TICKET_PRIORITIES,
+  normalizeTicketType,
+  normalizeTicketStatus,
+  normalizeTicketPriority,
+  isClosedStatus,
+} = require('../lib/ticketEnums');
+const { mapTicketRow } = require('./ModeratorSharedRepositories');
+
+/** Prefer DB catalog (migration 109); fall back to ticketEnums.js */
+async function getTicketCatalog() {
+  try {
+    const [types, statuses, priorities] = await Promise.all([
+      pool.query(`
+        SELECT type_label, queue_role, sort_order, description
+        FROM ticket_type_catalog
+        WHERE is_active = TRUE
+        ORDER BY sort_order, type_label
+      `),
+      pool.query(`
+        SELECT status_label, sort_order, is_closed
+        FROM ticket_status_catalog
+        WHERE is_active = TRUE
+        ORDER BY sort_order, status_label
+      `),
+      pool.query(`
+        SELECT priority_label, sort_order
+        FROM ticket_priority_catalog
+        WHERE is_active = TRUE
+        ORDER BY sort_order, priority_label
+      `),
+    ]);
+
+    const typeRows = types.rows;
+    const escalateByRole = {};
+    for (const row of typeRows) {
+      const role = row.queue_role;
+      if (!escalateByRole[role]) escalateByRole[role] = [];
+      escalateByRole[role].push(row.type_label);
+    }
+    // Admin can escalate to any type
+    escalateByRole.Admin = typeRows.map((r) => r.type_label);
+    escalateByRole.Administrator = escalateByRole.Admin;
+
+    return {
+      types: typeRows.map((r) => r.type_label),
+      typeDetails: typeRows.map((r) => ({
+        label: r.type_label,
+        queueRole: r.queue_role,
+        description: r.description || null,
+      })),
+      statuses: statuses.rows.map((r) => r.status_label),
+      priorities: priorities.rows.map((r) => r.priority_label),
+      escalateByRole,
+      escalateRoles: [
+        'Support Moderator',
+        'Marketplace Moderator',
+        'Forum Moderator',
+        'Jobs N Gigs Moderator',
+        'Admin',
+      ],
+    };
+  } catch (err) {
+    console.warn('ticket catalog unavailable, using enums:', err.message);
+    return {
+      types: [...TICKET_TYPES],
+      typeDetails: TICKET_TYPES.map((label) => ({
+        label,
+        queueRole: Object.entries(ROLE_TO_TICKET_TYPES).find(([, list]) => list.includes(label))?.[0] || 'Support Moderator',
+        description: null,
+      })),
+      statuses: [...TICKET_STATUSES],
+      priorities: [...TICKET_PRIORITIES],
+      escalateByRole: { ...ROLE_TO_TICKET_TYPES },
+      escalateRoles: [
+        'Support Moderator',
+        'Marketplace Moderator',
+        'Forum Moderator',
+        'Jobs N Gigs Moderator',
+        'Admin',
+      ],
+    };
+  }
+}
 
 function mongoDb() {
   const client = getMongoClient();
   return client ? client.db('ensemble') : null;
+}
+
+/** Session stores snake_case account_id; some older code used camelCase. */
+function sessionAccountId(session) {
+  const id = session?.account_id ?? session?.accountId ?? null;
+  return id != null ? String(id) : null;
+}
+
+function sessionDisplayName(session) {
+  return session?.displayName || session?.display_name || session?.username || 'User';
+}
+
+function isStaffSession(session) {
+  const type = String(session?.type || '').toLowerCase();
+  return type === 'staff' || type === 'admin' || Boolean(session?.staff_id || session?.staffId);
+}
+
+function sessionStaffId(session) {
+  const id = session?.staff_id ?? session?.staffId ?? null;
+  return id != null ? String(id) : null;
 }
 
 function normalizeStatus(status) {
@@ -24,36 +131,85 @@ function normalizeStatus(status) {
   return status;
 }
 
-function mapTicketRow(row) {
-  return {
-    id: row.ticket_id,
-    number: row.ticket_number,
-    subject: row.subject,
-    category: row.category,
-    priority: row.priority,
-    status: normalizeStatus(row.status),
-    channel: row.channel,
-    requester: {
-      accountId: row.requester_account_id,
-      name: row.requester_name || 'Unknown',
-      username: row.requester_handle || '—',
-      email: row.requester_email || null,
-    },
-    assignee: row.assigned_staff_id
-      ? {
-          staffId: row.assigned_staff_id,
-          name: row.assignee_name || 'Unassigned',
-          role: row.assigned_role || row.assignee_role || 'Support',
-        }
-      : null,
-    relatedReportId: row.related_report_id,
-    relatedDisputeId: row.related_dispute_id,
-    messageCount: Number(row.message_count || 0),
-    lastMessageAt: row.last_message_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    closedAt: row.closed_at,
-  };
+async function nextTicketNumber() {
+  const result = await pool.query(`
+    SELECT COALESCE(
+      MAX(CAST(SUBSTRING(ticket_number FROM 5) AS INTEGER)),
+      50000
+    ) + 1 AS next_num
+    FROM tickets
+    WHERE ticket_number ~ '^TKT-[0-9]+$'
+  `);
+  return `TKT-${result.rows[0].next_num}`;
+}
+
+/**
+ * Create a support ticket in Postgres. Optional first message goes to Mongo chat.
+ * @returns {Promise<{ticket, messages, chatId, chatAvailable, assignableStaff}>}
+ */
+async function createSupportTicket(input, session = null) {
+  const reason = String(input?.reason || input?.subject || '').trim();
+  if (!reason) throw new Error('Subject is required');
+
+  const type = normalizeTicketType(input?.type || input?.category || 'Other');
+  const priority = normalizeTicketPriority(input?.priority || 'Medium');
+  const status = normalizeTicketStatus(input?.status || 'Open');
+  const channel = String(input?.channel || 'web').trim().toLowerCase() || 'web';
+  const requesterAccountId = input?.requesterAccountId || sessionAccountId(session);
+  if (!requesterAccountId) throw new Error('Requester account is required');
+
+  const description = input?.description ? String(input.description).trim() : '';
+  const ticketNumber = await nextTicketNumber();
+  const handledBy =
+    input?.handledByStaffId ?? input?.assignedStaffId ?? null;
+
+  const insert = await pool.query(
+    `
+    INSERT INTO tickets (
+      ticket_number, reason, type, priority, status, channel,
+      account_id, handled_by_staff_id,
+      related_report_id, related_dispute_id,
+      message_count, last_message_at
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6,
+      $7, $8,
+      $9, $10,
+      0, NULL
+    )
+    RETURNING ticket_id
+    `,
+    [
+      ticketNumber,
+      reason,
+      type,
+      priority,
+      status,
+      channel,
+      requesterAccountId,
+      handledBy,
+      input?.relatedReportId || null,
+      input?.relatedDisputeId || null,
+    ]
+  );
+
+  const ticketId = insert.rows[0].ticket_id;
+
+  if (description) {
+    const authorSession = session || {
+      account_id: requesterAccountId,
+      type: 'User',
+      username: sessionDisplayName(session),
+    };
+    try {
+      await addTicketMessage(ticketId, description, authorSession, false);
+    } catch (err) {
+      // Ticket metadata still exists; chat can be started later when Mongo is up.
+      if (!err?.message?.includes('MongoDB')) throw err;
+      console.warn('Ticket created without initial chat message:', err.message);
+    }
+  }
+
+  return getTicketDetail(ticketId);
 }
 
 function mapDisputeRow(row) {
@@ -62,8 +218,9 @@ function mapDisputeRow(row) {
     number: row.dispute_number,
     title: row.title,
     reason: row.reason,
-    status: normalizeStatus(row.status),
-    priority: row.priority,
+    // Keep status/priority as DB snake_case for filters/forms; format in UI.
+    status: String(row.status || 'open').toLowerCase(),
+    priority: String(row.priority || 'medium').toLowerCase(),
     initiator: {
       accountId: row.initiator_account_id,
       name: row.initiator_name || 'Unknown',
@@ -74,7 +231,7 @@ function mapDisputeRow(row) {
       name: row.respondent_name || 'Unknown',
       username: row.respondent_handle || '—',
     },
-    relatedEntityType: row.related_entity_type,
+    relatedEntityType: row.related_entity_type ? displayLabel(row.related_entity_type) : null,
     relatedEntityId: row.related_entity_id,
     assignee: row.assigned_staff_id
       ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Unassigned', role: row.assignee_role }
@@ -87,6 +244,16 @@ function mapDisputeRow(row) {
   };
 }
 
+function displayLabel(value) {
+  return String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
 function mapReportRow(row) {
   return {
     id: row.report_id,
@@ -96,13 +263,14 @@ function mapReportRow(row) {
       name: row.reporter_name || 'Anonymous',
       username: row.reporter_handle || '—',
     },
-    targetType: row.target_type || row.type,
+    targetType: displayLabel(row.target_type || row.type),
     targetId: row.target_id || row.reference_id,
     targetLabel: row.target_label,
     reason: row.reason,
     description: row.description,
-    status: normalizeStatus(row.status),
-    priority: row.priority || 'medium',
+    // Keep status/priority as DB snake_case for filters/forms; format in UI.
+    status: String(row.status || 'open').toLowerCase(),
+    priority: String(row.priority || 'medium').toLowerCase(),
     assignee: row.assigned_staff_id
       ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Unassigned' }
       : null,
@@ -122,18 +290,33 @@ async function getTicketsOverview() {
     reports,
     staffWorkload,
     recentActivity,
-    categoryBreakdown,
+    typeBreakdown,
     priorityBreakdown,
   ] = await Promise.all([
     pool.query(`
       SELECT
         COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'open')::int AS open_count,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'in_progress')::int AS in_progress,
-        COUNT(*) FILTER (WHERE LOWER(status) IN ('resolved', 'closed'))::int AS resolved,
-        COUNT(*) FILTER (WHERE priority = 'high')::int AS high_priority,
-        COUNT(*) FILTER (WHERE assigned_staff_id IS NULL AND LOWER(status) NOT IN ('resolved', 'closed'))::int AS unassigned
-      FROM support_tickets
+        COUNT(*) FILTER (WHERE status = 'Open')::int AS open_count,
+        COUNT(*) FILTER (WHERE status = 'In Progress')::int AS in_progress,
+        COUNT(*) FILTER (WHERE status IN ('Resolved', 'Closed'))::int AS resolved,
+        COUNT(*) FILTER (
+          WHERE priority = 'High'
+            AND status NOT IN ('Resolved', 'Closed')
+        )::int AS high_priority,
+        COUNT(*) FILTER (
+          WHERE handled_by_staff_id IS NULL
+            AND status NOT IN ('Resolved', 'Closed')
+        )::int AS unassigned,
+        COUNT(*) FILTER (
+          WHERE status NOT IN ('Resolved', 'Closed')
+            AND LOWER(COALESCE(last_message_author_type, '')) = 'user'
+        )::int AS awaiting_reply,
+        COUNT(*) FILTER (
+          WHERE status NOT IN ('Resolved', 'Closed')
+            AND (escalated_to_role IS NOT NULL OR escalated_by_staff_id IS NOT NULL)
+        )::int AS escalated
+      FROM tickets
+      WHERE deleted_at IS NULL
     `),
     pool.query(`
       SELECT
@@ -141,7 +324,10 @@ async function getTicketsOverview() {
         COUNT(*) FILTER (WHERE LOWER(status) = 'open')::int AS open_count,
         COUNT(*) FILTER (WHERE LOWER(status) = 'under_review')::int AS under_review,
         COUNT(*) FILTER (WHERE LOWER(status) IN ('resolved', 'closed'))::int AS resolved,
-        COALESCE(SUM(credit_amount_involved) FILTER (WHERE LOWER(status) = 'open'), 0)::int AS credits_at_risk
+        COALESCE(
+          SUM(credit_amount_involved) FILTER (WHERE LOWER(status) IN ('open', 'under_review')),
+          0
+        )::int AS credits_at_risk
       FROM disputes
     `),
     pool.query(`
@@ -149,7 +335,8 @@ async function getTicketsOverview() {
         COUNT(*)::int AS total,
         COUNT(*) FILTER (WHERE LOWER(status) = 'open')::int AS open_count,
         COUNT(*) FILTER (WHERE LOWER(status) = 'in_review')::int AS in_review,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'resolved')::int AS resolved
+        COUNT(*) FILTER (WHERE LOWER(status) = 'resolved')::int AS resolved,
+        COUNT(*) FILTER (WHERE LOWER(status) NOT IN ('resolved', 'closed'))::int AS awaiting_triage
       FROM reports
       WHERE deleted_at IS NULL
     `),
@@ -159,14 +346,19 @@ async function getTicketsOverview() {
     fetchStaffWorkload(),
     fetchRecentActivity(),
     pool.query(`
-      SELECT category, COUNT(*)::int AS count
-      FROM support_tickets GROUP BY category ORDER BY count DESC
+      SELECT type, COUNT(*)::int AS count
+      FROM tickets
+      WHERE deleted_at IS NULL
+      GROUP BY type
+      ORDER BY count DESC
     `),
     pool.query(`
       SELECT priority, COUNT(*)::int AS count
-      FROM support_tickets
-      WHERE LOWER(status) NOT IN ('resolved', 'closed')
-      GROUP BY priority ORDER BY count DESC
+      FROM tickets
+      WHERE deleted_at IS NULL
+        AND status NOT IN ('Resolved', 'Closed')
+      GROUP BY priority
+      ORDER BY count DESC
     `),
   ]);
 
@@ -176,15 +368,37 @@ async function getTicketsOverview() {
 
   const statusChart = [
     { label: 'Open', value: Number(tc.open_count), color: '#f87171' },
-    { label: 'In progress', value: Number(tc.in_progress), color: '#fbbf24' },
+    { label: 'In Progress', value: Number(tc.in_progress), color: '#fbbf24' },
     { label: 'Resolved', value: Number(tc.resolved), color: '#34d399' },
   ].filter((x) => x.value > 0);
 
-  const categoryChart = categoryBreakdown.rows.map((r, i) => ({
-    label: r.category,
-    value: r.count,
-    color: ['#fb7185', '#a78bfa', '#60a5fa', '#34d399', '#fbbf24'][i % 5],
-  }));
+  const catalog = await getTicketCatalog();
+  const typeCountMap = Object.fromEntries(
+    typeBreakdown.rows.map((r) => [String(r.type || '').trim(), Number(r.count || 0)])
+  );
+  const typeLabels = catalog.types.length
+    ? catalog.types
+    : Object.keys(typeCountMap).sort((a, b) => a.localeCompare(b));
+  const typeChart = typeLabels
+    .map((label, i) => ({
+      label,
+      value: typeCountMap[label] || 0,
+      color: ['#fb7185', '#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#f472b6', '#38bdf8'][i % 7],
+    }))
+    .filter((x) => x.value > 0);
+
+  const priorityOrder = { High: 0, Medium: 1, Low: 2 };
+  const priorityChart = (catalog.priorities.length ? catalog.priorities : ['High', 'Medium', 'Low'])
+    .map((label) => {
+      const row = priorityBreakdown.rows.find(
+        (r) => String(r.priority || '').toLowerCase() === label.toLowerCase()
+      );
+      return { label, value: Number(row?.count || 0) };
+    })
+    .filter((x) => x.value > 0)
+    .sort((a, b) => (priorityOrder[a.label] ?? 9) - (priorityOrder[b.label] ?? 9));
+
+  const types = catalog.types.length ? catalog.types : typeLabels;
 
   return {
     lastUpdated: new Date().toISOString(),
@@ -193,6 +407,8 @@ async function getTicketsOverview() {
       totalTickets: Number(tc.total),
       unassignedTickets: Number(tc.unassigned),
       highPriorityTickets: Number(tc.high_priority),
+      awaitingReplyTickets: Number(tc.awaiting_reply),
+      escalatedTickets: Number(tc.escalated),
       openDisputes: Number(dc.open_count) + Number(dc.under_review),
       totalDisputes: Number(dc.total),
       creditsAtRisk: Number(dc.credits_at_risk),
@@ -203,17 +419,21 @@ async function getTicketsOverview() {
     },
     charts: {
       ticketStatusMix: statusChart,
-      ticketCategories: categoryChart,
-      openByPriority: priorityBreakdown.rows.map((r) => ({
-        label: r.priority,
-        value: r.count,
-      })),
+      ticketCategories: typeChart,
+      ticketTypes: typeChart,
+      openByPriority: priorityChart,
       disputeStatusMix: [
         { label: 'Open', value: Number(dc.open_count), color: '#f87171' },
-        { label: 'Under review', value: Number(dc.under_review), color: '#fbbf24' },
+        { label: 'Under Review', value: Number(dc.under_review), color: '#fbbf24' },
         { label: 'Resolved', value: Number(dc.resolved), color: '#34d399' },
       ].filter((x) => x.value > 0),
     },
+    types,
+    typeDetails: catalog.typeDetails,
+    escalateByRole: catalog.escalateByRole,
+    escalateRoles: catalog.escalateRoles,
+    statuses: catalog.statuses,
+    priorities: catalog.priorities,
     tickets,
     disputes,
     reports,
@@ -221,7 +441,16 @@ async function getTicketsOverview() {
     recentActivity,
     alerts: buildTicketAlerts(tc, dc, rc),
     dataSources: {
-      tables: ['support_tickets', 'ticket_messages', 'disputes', 'reports', 'violations'],
+      tables: [
+        'tickets',
+        'ticket_chats',
+        'ticket_type_catalog',
+        'ticket_status_catalog',
+        'ticket_priority_catalog',
+        'inbox/messages (mongo)',
+        'disputes',
+        'reports',
+      ],
       persisted: true,
     },
   };
@@ -229,11 +458,15 @@ async function getTicketsOverview() {
 
 function buildTicketAlerts(tc, dc, rc) {
   const alerts = [];
+  const openDisputes = Number(dc.open_count) + Number(dc.under_review);
+  const openReports = Number(rc.awaiting_triage ?? Number(rc.open_count) + Number(rc.in_review || 0));
+
   if (Number(tc.unassigned) > 0) {
     alerts.push({
       id: 'unassigned',
       message: `${tc.unassigned} ticket(s) have no assignee.`,
       severity: 'warning',
+      action: { tab: 'tickets', ticketFilters: { assignee: 'unassigned', flag: 'open_only' } },
     });
   }
   if (Number(tc.high_priority) > 0) {
@@ -241,20 +474,39 @@ function buildTicketAlerts(tc, dc, rc) {
       id: 'high-priority',
       message: `${tc.high_priority} high-priority ticket(s) need attention.`,
       severity: 'error',
+      action: { tab: 'tickets', ticketFilters: { priority: 'High', flag: 'open_only' } },
     });
   }
-  if (Number(dc.open_count) > 0) {
+  if (Number(tc.awaiting_reply) > 0) {
+    alerts.push({
+      id: 'awaiting-reply',
+      message: `${tc.awaiting_reply} ticket(s) awaiting a staff reply.`,
+      severity: 'warning',
+      action: { tab: 'tickets', ticketFilters: { flag: 'awaiting' } },
+    });
+  }
+  if (Number(tc.escalated) > 0) {
+    alerts.push({
+      id: 'escalated',
+      message: `${tc.escalated} escalated ticket(s) need a queue handoff.`,
+      severity: 'error',
+      action: { tab: 'tickets', ticketFilters: { flag: 'escalated' } },
+    });
+  }
+  if (openDisputes > 0) {
     alerts.push({
       id: 'open-disputes',
-      message: `${dc.open_count} open dispute(s) — ${Number(dc.credits_at_risk).toLocaleString()} credits at risk.`,
+      message: `${openDisputes} open dispute(s) — ${Number(dc.credits_at_risk).toLocaleString()} credits at risk.`,
       severity: 'warning',
+      action: { tab: 'disputes' },
     });
   }
-  if (Number(rc.open_count) > 0) {
+  if (openReports > 0) {
     alerts.push({
       id: 'open-reports',
-      message: `${rc.open_count} user report(s) awaiting triage.`,
+      message: `${openReports} user report(s) awaiting triage.`,
       severity: 'info',
+      action: { tab: 'reports' },
     });
   }
   if (!alerts.length) {
@@ -274,19 +526,25 @@ async function fetchTicketsList() {
       COALESCE(ra.display_name, ru.first_name || ' ' || ru.last_name) AS requester_name,
       ra.handle AS requester_handle,
       ru.email_address AS requester_email,
+      ru.user_id AS requester_user_id,
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
       st.role AS assignee_role,
-      (SELECT COUNT(*)::int FROM ticket_messages tm WHERE tm.ticket_id = t.ticket_id) AS message_count,
-      (SELECT MAX(tm.created_at) FROM ticket_messages tm WHERE tm.ticket_id = t.ticket_id) AS last_message_at
-    FROM support_tickets t
-    LEFT JOIN accounts ra ON ra.account_id = t.requester_account_id
+      COALESCE(ea.display_name, es.first_name || ' ' || es.last_name) AS escalated_by_name,
+      es.role AS escalated_by_role,
+      COALESCE(t.message_count, 0) AS message_count,
+      t.last_message_at
+    FROM tickets t
+    LEFT JOIN accounts ra ON ra.account_id = t.account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id
-    LEFT JOIN staff st ON st.staff_id = t.assigned_staff_id
+    LEFT JOIN staff st ON st.staff_id = t.handled_by_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
+    LEFT JOIN staff es ON es.staff_id = t.escalated_by_staff_id
+    LEFT JOIN accounts ea ON ea.account_id = es.account_id
+    WHERE t.deleted_at IS NULL
     ORDER BY
-      CASE t.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
+      CASE t.priority WHEN 'High' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END,
       t.updated_at DESC
-    LIMIT 50
+    LIMIT 200
   `);
   return result.rows.map(mapTicketRow);
 }
@@ -340,8 +598,10 @@ async function fetchStaffWorkload() {
       s.staff_id,
       s.role,
       COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name,
-      (SELECT COUNT(*)::int FROM support_tickets t
-        WHERE t.assigned_staff_id = s.staff_id AND LOWER(t.status) NOT IN ('resolved', 'closed')) AS open_tickets,
+      (SELECT COUNT(*)::int FROM tickets t
+        WHERE t.handled_by_staff_id = s.staff_id
+          AND t.deleted_at IS NULL
+          AND t.status NOT IN ('Resolved', 'Closed')) AS open_tickets,
       (SELECT COUNT(*)::int FROM disputes d
         WHERE d.assigned_staff_id = s.staff_id AND LOWER(d.status) NOT IN ('resolved', 'closed')) AS open_disputes,
       (SELECT COUNT(*)::int FROM reports r
@@ -364,8 +624,10 @@ async function fetchStaffWorkload() {
 async function fetchRecentActivity() {
   const result = await pool.query(`
     (
-      SELECT 'ticket' AS type, ticket_number AS ref, subject AS label, status, updated_at AS at
-      FROM support_tickets ORDER BY updated_at DESC LIMIT 8
+      SELECT 'ticket' AS type, ticket_number AS ref, reason AS label, status, updated_at AS at
+      FROM tickets
+      WHERE deleted_at IS NULL
+      ORDER BY updated_at DESC LIMIT 8
     )
     UNION ALL
     (
@@ -382,12 +644,74 @@ async function fetchRecentActivity() {
   `);
   return result.rows.map((r, i) => ({
     id: `act-${i}`,
-    type: r.type,
+    type: displayLabel(r.type),
     ref: r.ref,
     label: r.label,
-    status: normalizeStatus(r.status),
+    status: displayLabel(r.status),
     at: r.at,
   }));
+}
+
+async function getTicketChatId(ticketId) {
+  const result = await pool.query(
+    `SELECT chat_id FROM ticket_chats WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  );
+  return result.rows[0]?.chat_id || null;
+}
+
+/** Create (or reuse) the Mongo inbox for a support ticket and link it via ticket_chats. */
+async function ensureTicketChat(ticketId, ticketRow) {
+  const existing = await getTicketChatId(ticketId);
+  if (existing) return existing;
+
+  if (!getMongoClient()) {
+    throw new Error('MongoDB is not connected — ticket chats require MONGODB_URI');
+  }
+
+  const members = [];
+  const seen = new Set();
+  const addMember = (accountId, role) => {
+    if (!accountId || seen.has(String(accountId))) return;
+    seen.add(String(accountId));
+    members.push({ account_id: String(accountId), role, joined_at: new Date() });
+  };
+
+  addMember(ticketRow.account_id, 'member');
+
+  const insertResult = await createInboxRepositories({
+    conversation_name: ticketRow.ticket_number
+      ? `Ticket ${ticketRow.ticket_number}`
+      : `Ticket ${ticketId}`,
+    conversation_type: 'group',
+    ticket_id: String(ticketId),
+    support_ticket_id: String(ticketId),
+    members,
+    pinned_messages: [],
+    created_at: new Date(),
+    updated_at: new Date(),
+  });
+
+  const chatId = String(insertResult.insertedId);
+  await pool.query(
+    `INSERT INTO ticket_chats (ticket_id, chat_id)
+     VALUES ($1, $2)
+     ON CONFLICT (ticket_id) DO UPDATE
+       SET chat_id = EXCLUDED.chat_id, deleted_at = NULL, created_at = CURRENT_TIMESTAMP`,
+    [ticketId, chatId]
+  );
+  return chatId;
+}
+
+function mapMongoTicketMessage(m) {
+  return {
+    id: String(m._id),
+    authorType: m.author_type || (m.is_internal ? 'staff' : 'user'),
+    authorName: m.author_name || 'Unknown',
+    body: m.message_content || m.body || '',
+    isInternal: Boolean(m.is_internal),
+    createdAt: m.created_at || m.createdAt || null,
+  };
 }
 
 async function getTicketDetail(ticketId) {
@@ -398,23 +722,23 @@ async function getTicketDetail(ticketId) {
       COALESCE(ra.display_name, ru.first_name || ' ' || ru.last_name) AS requester_name,
       ra.handle AS requester_handle,
       ru.email_address AS requester_email,
+      ru.user_id AS requester_user_id,
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
-      st.role AS assignee_role
-    FROM support_tickets t
-    LEFT JOIN accounts ra ON ra.account_id = t.requester_account_id
+      st.role AS assignee_role,
+      COALESCE(ea.display_name, es.first_name || ' ' || es.last_name) AS escalated_by_name,
+      es.role AS escalated_by_role
+    FROM tickets t
+    LEFT JOIN accounts ra ON ra.account_id = t.account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id
-    LEFT JOIN staff st ON st.staff_id = t.assigned_staff_id
+    LEFT JOIN staff st ON st.staff_id = t.handled_by_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
-    WHERE t.ticket_id = $1
+    LEFT JOIN staff es ON es.staff_id = t.escalated_by_staff_id
+    LEFT JOIN accounts ea ON ea.account_id = es.account_id
+    WHERE t.ticket_id = $1 AND t.deleted_at IS NULL
     `,
     [ticketId]
   );
   if (!ticketResult.rows.length) return null;
-
-  const messagesResult = await pool.query(
-    `SELECT * FROM ticket_messages WHERE ticket_id = $1 ORDER BY created_at ASC`,
-    [ticketId]
-  );
 
   const staffResult = await pool.query(`
     SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
@@ -422,16 +746,51 @@ async function getTicketDetail(ticketId) {
     ORDER BY s.role
   `);
 
+  let messages = [];
+  let chatId = null;
+  let chatAvailable = Boolean(getMongoClient());
+
+  try {
+    chatId = await getTicketChatId(ticketId);
+    if (chatId && chatAvailable) {
+      const { Messages } = await getConversationByConvoId(chatId);
+      messages = (Messages || [])
+        .filter((m) => !m.is_deleted && !m.deleted_at)
+        .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))
+        .map(mapMongoTicketMessage);
+    }
+  } catch (err) {
+    console.error('Error loading ticket chat from MongoDB:', err.message);
+    chatAvailable = false;
+  }
+
+  const row = ticketResult.rows[0];
+  const catalog = await getTicketCatalog();
+
+  const lastPublic = [...messages].reverse().find((m) => !m.isInternal);
+  const derivedAuthor =
+    lastPublic?.authorType === 'staff' || lastPublic?.authorType === 'user'
+      ? lastPublic.authorType
+      : row.last_message_author_type;
+
   return {
-    ticket: mapTicketRow({ ...ticketResult.rows[0], message_count: messagesResult.rows.length }),
-    messages: messagesResult.rows.map((m) => ({
-      id: m.message_id,
-      authorType: m.author_type,
-      authorName: m.author_name,
-      body: m.body,
-      isInternal: m.is_internal,
-      createdAt: m.created_at,
-    })),
+    ticket: mapTicketRow({
+      ...row,
+      message_count: messages.length || Number(row.message_count || 0),
+      last_message_at: messages.length
+        ? messages[messages.length - 1].createdAt
+        : row.last_message_at,
+      last_message_author_type: derivedAuthor,
+    }),
+    messages,
+    chatId,
+    chatAvailable,
+    types: catalog.types,
+    statuses: catalog.statuses,
+    priorities: catalog.priorities,
+    typeDetails: catalog.typeDetails,
+    escalateByRole: catalog.escalateByRole,
+    escalateRoles: catalog.escalateRoles,
     assignableStaff: staffResult.rows.map((s) => ({
       staffId: s.staff_id,
       name: s.name,
@@ -441,57 +800,171 @@ async function getTicketDetail(ticketId) {
 }
 
 async function updateTicket(ticketId, patch, staffSession) {
-  const allowed = ['status', 'priority', 'assigned_staff_id', 'assigned_role'];
   const sets = [];
   const values = [];
   let idx = 1;
 
-  for (const key of allowed) {
-    if (patch[key] !== undefined) {
-      sets.push(`${key} = $${idx}`);
-      values.push(patch[key]);
+  // Normalize aliases onto the tickets schema.
+  if (patch.assigned_staff_id !== undefined && patch.handled_by_staff_id === undefined) {
+    patch.handled_by_staff_id = patch.assigned_staff_id;
+  }
+  if (patch.category !== undefined && patch.type === undefined) {
+    patch.type = patch.category;
+  }
+
+  if (patch.assigned_role) {
+    const catalog = await getTicketCatalog();
+    const allowed =
+      catalog.escalateByRole?.[patch.assigned_role] ||
+      ROLE_TO_TICKET_TYPES[patch.assigned_role] ||
+      [];
+    if (!allowed.length) {
+      throw new Error(`Unknown escalate role: ${patch.assigned_role}`);
+    }
+    if (patch.type === undefined || patch.type === null || String(patch.type).trim() === '') {
+      throw new Error(
+        `A ticket type is required when escalating to ${patch.assigned_role}. Allowed: ${allowed.join(', ')}`
+      );
+    }
+    const normalized = normalizeTicketType(patch.type);
+    if (!allowed.includes(normalized)) {
+      throw new Error(
+        `Ticket type "${normalized}" is not valid for ${patch.assigned_role}. Allowed: ${allowed.join(', ')}`
+      );
+    }
+    patch.type = normalized;
+
+    sets.push(`escalated_to_role = $${idx}`);
+    values.push(patch.assigned_role);
+    idx += 1;
+
+    const escalatedBy = sessionStaffId(staffSession);
+    if (escalatedBy) {
+      sets.push(`escalated_by_staff_id = $${idx}`);
+      values.push(escalatedBy);
       idx += 1;
     }
   }
 
-  if (!sets.length) return getTicketDetail(ticketId);
-
-  if (patch.status && ['resolved', 'closed'].includes(String(patch.status).toLowerCase())) {
-    sets.push(`closed_at = NOW()`);
+  if (patch.status !== undefined) {
+    sets.push(`status = $${idx}`);
+    values.push(normalizeTicketStatus(patch.status));
+    idx += 1;
+  }
+  if (patch.priority !== undefined) {
+    sets.push(`priority = $${idx}`);
+    values.push(normalizeTicketPriority(patch.priority));
+    idx += 1;
+  }
+  if (patch.type !== undefined) {
+    if (!patch.assigned_role) {
+      throw new Error('Ticket type can only be changed when escalating to a moderator queue');
+    }
+    sets.push(`type = $${idx}`);
+    values.push(normalizeTicketType(patch.type));
+    idx += 1;
+  }
+  if (patch.handled_by_staff_id !== undefined) {
+    sets.push(`handled_by_staff_id = $${idx}`);
+    values.push(patch.handled_by_staff_id === null || patch.handled_by_staff_id === ''
+      ? null
+      : patch.handled_by_staff_id);
+    idx += 1;
   }
 
-  sets.push(`updated_at = NOW()`);
-  values.push(ticketId);
+  if (!sets.length && !patch.note) return getTicketDetail(ticketId);
 
-  await pool.query(
-    `UPDATE support_tickets SET ${sets.join(', ')} WHERE ticket_id = $${idx}`,
-    values
-  );
+  if (sets.length) {
+    if (patch.status && isClosedStatus(patch.status)) {
+      sets.push(`resolved_at = NOW()`);
+    }
+
+    sets.push(`updated_at = NOW()`);
+    values.push(ticketId);
+
+    await pool.query(
+      `UPDATE tickets SET ${sets.join(', ')} WHERE ticket_id = $${idx} AND deleted_at IS NULL`,
+      values
+    );
+  }
 
   if (patch.note) {
-    await pool.query(
-      `INSERT INTO ticket_messages (ticket_id, author_account_id, author_type, author_name, body, is_internal)
-       VALUES ($1, $2, 'staff', $3, $4, $5)`,
-      [
-        ticketId,
-        staffSession?.accountId || null,
-        staffSession?.username || 'Admin',
-        patch.note,
-        Boolean(patch.internalNote),
-      ]
-    );
+    await addTicketMessage(ticketId, patch.note, staffSession, Boolean(patch.internalNote));
+    return getTicketDetail(ticketId);
   }
 
   return getTicketDetail(ticketId);
 }
 
 async function addTicketMessage(ticketId, body, staffSession, isInternal = false) {
-  await pool.query(
-    `INSERT INTO ticket_messages (ticket_id, author_account_id, author_type, author_name, body, is_internal)
-     VALUES ($1, $2, 'staff', $3, $4, $5)`,
-    [ticketId, staffSession?.accountId || null, staffSession?.username || 'Admin', body, isInternal]
+  if (!getMongoClient()) {
+    throw new Error('MongoDB is not connected — cannot send ticket chat messages');
+  }
+
+  const ticketResult = await pool.query(
+    `SELECT * FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
   );
-  await pool.query(`UPDATE support_tickets SET updated_at = NOW() WHERE ticket_id = $1`, [ticketId]);
+  if (!ticketResult.rows.length) return null;
+
+  const chatId = await ensureTicketChat(ticketId, ticketResult.rows[0]);
+  const now = new Date();
+  const accountId = sessionAccountId(staffSession);
+  const staff = isStaffSession(staffSession);
+  const memberRole = staff ? 'admin' : 'member';
+
+  if (accountId && ObjectId.isValid(chatId)) {
+    const db = mongoDb();
+    if (db) {
+      await db.collection('inbox').updateOne(
+        { _id: new ObjectId(chatId), 'members.account_id': { $ne: accountId } },
+        {
+          $push: { members: { account_id: accountId, role: memberRole, joined_at: now } },
+          $set: { updated_at: now },
+        }
+      );
+    }
+  }
+
+  await createMessageRepositories({
+    conversation_id: String(chatId),
+    sender_id: accountId,
+    message_type: 'text',
+    message_content: body,
+    message_id_reply: null,
+    attachments: [],
+    links: [],
+    message_react: [],
+    read_by: accountId ? [{ account_id: accountId, read_at: now }] : [],
+    is_edited: false,
+    is_deleted: false,
+    is_internal: staff ? Boolean(isInternal) : false,
+    author_type: staff ? 'staff' : 'user',
+    author_name: sessionDisplayName(staffSession) || (staff ? 'Staff' : 'User'),
+    created_at: now,
+    updated_at: now,
+  });
+
+  await pool.query(
+    `UPDATE tickets
+     SET updated_at = NOW(),
+         message_count = COALESCE(message_count, 0) + 1,
+         last_message_at = NOW(),
+         last_message_author_type = $2
+     WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId, staff ? 'staff' : 'user']
+  );
+
+  if (ObjectId.isValid(chatId)) {
+    const db = mongoDb();
+    if (db) {
+      await db.collection('inbox').updateOne(
+        { _id: new ObjectId(chatId) },
+        { $set: { updated_at: now, last_message: body, last_message_time: now } }
+      );
+    }
+  }
+
   return getTicketDetail(ticketId);
 }
 
@@ -661,7 +1134,7 @@ async function addDisputeMessage(disputeId, body, staffSession, isInternal = fal
 
   const chatId = await ensureDisputeChat(disputeId, disputeResult.rows[0]);
   const now = new Date();
-  const accountId = staffSession?.accountId ? String(staffSession.accountId) : null;
+  const accountId = sessionAccountId(staffSession);
 
   // Keep staff on the conversation member list when they post.
   if (accountId && ObjectId.isValid(chatId)) {
@@ -691,7 +1164,7 @@ async function addDisputeMessage(disputeId, body, staffSession, isInternal = fal
     is_deleted: false,
     is_internal: Boolean(isInternal),
     author_type: 'staff',
-    author_name: staffSession?.username || 'Staff',
+    author_name: sessionDisplayName(staffSession) || 'Staff',
     created_at: now,
     updated_at: now,
   });
@@ -736,13 +1209,62 @@ async function updateReport(reportId, patch) {
   return list.find((r) => String(r.id) === String(reportId)) || null;
 }
 
+async function getReportDetail(reportId) {
+  const reportResult = await pool.query(
+    `
+    SELECT
+      r.*,
+      COALESCE(fa.display_name, fu.first_name || ' ' || fu.last_name, r.target_label) AS target_name,
+      fa.handle AS target_handle,
+      COALESCE(repa.display_name, repu.first_name || ' ' || repu.last_name) AS reporter_name,
+      repa.handle AS reporter_handle,
+      COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
+      st.role AS assignee_role
+    FROM reports r
+    LEFT JOIN accounts fa ON fa.account_id = r.for_account_id
+    LEFT JOIN users fu ON fu.account_id = fa.account_id
+    LEFT JOIN accounts repa ON repa.account_id = r.by_account_id
+    LEFT JOIN users repu ON repu.account_id = repa.account_id
+    LEFT JOIN staff st ON st.staff_id = r.assigned_staff_id
+    LEFT JOIN accounts sa ON sa.account_id = st.account_id
+    WHERE r.report_id = $1 AND r.deleted_at IS NULL
+    `,
+    [reportId]
+  );
+  if (!reportResult.rows.length) return null;
+
+  const staffResult = await pool.query(`
+    SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
+    FROM staff s INNER JOIN accounts a ON a.account_id = s.account_id
+    WHERE a.deleted_at IS NULL
+    ORDER BY s.role
+  `);
+
+  return {
+    report: mapReportRow({
+      ...reportResult.rows[0],
+      reporter_name: reportResult.rows[0].reporter_name,
+      reporter_handle: reportResult.rows[0].reporter_handle,
+      assignee_name: reportResult.rows[0].assignee_name,
+    }),
+    assignableStaff: staffResult.rows.map((s) => ({
+      staffId: s.staff_id,
+      name: s.name,
+      role: s.role,
+    })),
+  };
+}
+
 module.exports = {
   getTicketsOverview,
   getTicketDetail,
+  getTicketCatalog,
+  createSupportTicket,
   updateTicket,
   addTicketMessage,
   updateDispute,
   getDisputeDetail,
   addDisputeMessage,
   updateReport,
+  getReportDetail,
 };
