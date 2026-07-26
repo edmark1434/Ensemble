@@ -5,11 +5,9 @@ import {
   freezeAccountCredits,
   handleAccountActionError,
   pardonAccount,
-  setAccountStatus,
   setAccountVerification,
   warnAccount,
 } from '../accountActions';
-import { getManageActionsForStatus, normalizeAccountStatus } from '../statusActions';
 import type {
   CreditActivityItem,
   PlatformTeam,
@@ -343,14 +341,12 @@ export function TeamOverviewModal({
   onOpenCredit,
   onOpenVerification,
   onOpenHistory,
-  onOpenModeration,
 }: {
   team: PlatformTeam;
   onClose: () => void;
   onOpenCredit?: () => void;
   onOpenVerification?: () => void;
   onOpenHistory?: () => void;
-  onOpenModeration?: () => void;
 }) {
   return (
     <ModalShell
@@ -364,7 +360,7 @@ export function TeamOverviewModal({
             onClick={onOpenCredit}
             className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
           >
-            Credit action
+            Credits & wallet
           </button>
           <button
             type="button"
@@ -378,14 +374,7 @@ export function TeamOverviewModal({
             onClick={onOpenHistory}
             className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
           >
-            Violations
-          </button>
-          <button
-            type="button"
-            onClick={onOpenModeration}
-            className="rounded-xl bg-rose-500/90 px-4 py-2.5 text-sm font-medium text-white hover:bg-rose-500"
-          >
-            Moderation
+            Violations & disputes
           </button>
         </div>
       }
@@ -986,128 +975,6 @@ export function HistoryModal({
   );
 }
 
-export function ModerationActionModal({
-  entityName,
-  accountId,
-  currentStatus,
-  hasViolations = false,
-  onClose,
-  onChanged,
-}: {
-  entityName: string;
-  accountId: string;
-  currentStatus: string;
-  hasViolations?: boolean;
-  onClose: () => void;
-  onChanged?: () => void;
-}) {
-  const [reason, setReason] = useState('Moderation action by administrator');
-  const [points, setPoints] = useState('1');
-  const [saving, setSaving] = useState(false);
-  const statusKey = normalizeAccountStatus(currentStatus);
-  const manageActions = getManageActionsForStatus(currentStatus, { hasViolations }).filter(
-    (a) => a.id !== 'warn' && a.id !== 'pardon'
-  );
-
-  const run = async (fn: () => Promise<unknown>) => {
-    setSaving(true);
-    try {
-      await fn();
-      onChanged?.();
-      onClose();
-    } catch (err) {
-      handleAccountActionError(err);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const actionTone = (id: string) => {
-    if (id === 'ban') return 'bg-rose-500/90 px-4 py-2 text-sm font-medium text-white';
-    if (id === 'unban' || id === 'unsuspend' || id === 'unlock') {
-      return 'bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white';
-    }
-    if (id === 'suspend') return 'border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-200';
-    return 'border border-white/[0.1] px-4 py-2 text-sm text-white';
-  };
-
-  return (
-    <ModalShell
-      title={`Moderation — ${entityName}`}
-      subtitle={`Current status: ${currentStatus}`}
-      onClose={onClose}
-      footer={
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() =>
-              void run(() =>
-                warnAccount(accountId, {
-                  title: 'Account warning',
-                  reason,
-                  points: Number(points) || 1,
-                })
-              )
-            }
-            className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-200 disabled:opacity-50"
-          >
-            Warn
-          </button>
-          {manageActions.map((action) => (
-            <button
-              key={action.id}
-              type="button"
-              disabled={saving}
-              onClick={() => void run(() => setAccountStatus(accountId, action.id))}
-              className={`rounded-xl disabled:opacity-50 ${actionTone(action.id)}`}
-            >
-              {action.label.replace(' account', '')}
-            </button>
-          ))}
-          {(hasViolations || ['banned', 'suspended', 'locked'].includes(statusKey)) && (
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => void run(() => pardonAccount(accountId, reason))}
-              className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200 disabled:opacity-50"
-            >
-              Pardon
-            </button>
-          )}
-        </div>
-      }
-    >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="text-xs text-zinc-500 sm:col-span-2">
-          Reason / notes
-          <textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            rows={3}
-            className="mt-1 w-full rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
-          />
-        </label>
-        <label className="text-xs text-zinc-500">
-          Warning points
-          <input
-            type="number"
-            min={1}
-            value={points}
-            onChange={(e) => setPoints(e.target.value)}
-            className="mt-1 block w-28 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
-          />
-        </label>
-      </div>
-      <p className="mt-4 text-xs text-zinc-500">
-        Actions adapt to the current status (e.g. Banned shows Unban). Warn creates a violation.
-        Pardon writes to the <code className="text-zinc-400">pardons</code> table, clears active
-        violations, and restores the account to Active.
-      </p>
-    </ModalShell>
-  );
-}
-
 export function WarnAccountModal({
   entityName,
   accountId,
@@ -1202,14 +1069,12 @@ export function UserOverviewModal({
   onOpenCredit,
   onOpenVerification,
   onOpenHistory,
-  onOpenModeration,
 }: {
   user: PlatformUserAccount;
   onClose: () => void;
   onOpenCredit?: () => void;
   onOpenVerification?: () => void;
   onOpenHistory?: () => void;
-  onOpenModeration?: () => void;
 }) {
   return (
     <ModalShell
@@ -1223,7 +1088,7 @@ export function UserOverviewModal({
             onClick={onOpenCredit}
             className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
           >
-            Credit action
+            Credits & wallet
           </button>
           <button
             type="button"
@@ -1237,14 +1102,7 @@ export function UserOverviewModal({
             onClick={onOpenHistory}
             className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
           >
-            Violations
-          </button>
-          <button
-            type="button"
-            onClick={onOpenModeration}
-            className="rounded-xl bg-rose-500/90 px-4 py-2.5 text-sm font-medium text-white hover:bg-rose-500"
-          >
-            Moderation
+            Violations & disputes
           </button>
         </div>
       }

@@ -10,7 +10,6 @@ import {
   ConfirmStatusModal,
   CreditActivityModal,
   HistoryModal,
-  ModerationActionModal,
   PardonAccountModal,
   UserOverviewModal,
   VerificationModal,
@@ -30,7 +29,6 @@ type ModalKind =
   | 'credit'
   | 'verification'
   | 'history'
-  | 'moderation'
   | 'warn'
   | 'pardon'
   | 'ban'
@@ -264,9 +262,6 @@ export default function UsersTab({ onStatsLoaded, refreshToken = 0 }: UsersTabPr
       case 'history':
         open(user, 'history');
         break;
-      case 'moderation':
-        open(user, 'moderation');
-        break;
       case 'warn':
         open(user, 'warn');
         break;
@@ -444,6 +439,7 @@ export default function UsersTab({ onStatsLoaded, refreshToken = 0 }: UsersTabPr
                     <td className="px-4 py-3 text-xs">{formatDateTime(user.joinedAt)}</td>
                     <td className="px-4 py-3 text-right">
                       <RowActionsMenu
+                        status={user.status}
                         items={buildRowActionItems(user.status, {
                           hasViolations: (user.history?.totalViolations ?? 0) > 0,
                         })}
@@ -472,7 +468,6 @@ export default function UsersTab({ onStatsLoaded, refreshToken = 0 }: UsersTabPr
           onOpenCredit={() => open(selected, 'credit')}
           onOpenVerification={() => open(selected, 'verification')}
           onOpenHistory={() => open(selected, 'history')}
-          onOpenModeration={() => open(selected, 'moderation')}
         />
       )}
       {selected && modal === 'credit' && (
@@ -497,16 +492,6 @@ export default function UsersTab({ onStatsLoaded, refreshToken = 0 }: UsersTabPr
       )}
       {selected && modal === 'history' && (
         <HistoryModal entityName={selected.name} history={selected.history} onClose={closeModal} />
-      )}
-      {selected && modal === 'moderation' && (
-        <ModerationActionModal
-          entityName={selected.name}
-          accountId={selected.accountId}
-          currentStatus={selected.status}
-          hasViolations={(selected.history?.totalViolations ?? 0) > 0}
-          onClose={closeModal}
-          onChanged={() => void refreshAfterChange()}
-        />
       )}
       {selected && modal === 'warn' && (
         <WarnAccountModal

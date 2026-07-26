@@ -18,14 +18,8 @@ export function normalizeAccountStatus(status?: string | null): string {
 }
 
 /**
- * Management actions depend on current status:
- * - Banned → Unban (not Ban)
- * - Suspended → Unsuspend
- * - Locked → Unlock
- * - Active → Ban / Suspend / Lock
- *
- * "Restore" was a catch-all for returning to Active; we use the clearer
- * unban / unsuspend / unlock labels instead.
+ * Status actions depend on current account state.
+ * Reverse actions replace Ban/Suspend/Lock when already applied.
  */
 export function getManageActionsForStatus(
   status?: string | null,
@@ -35,26 +29,25 @@ export function getManageActionsForStatus(
   const items: MenuItem[] = [];
 
   if (s === 'banned') {
-    items.push({ id: 'unban', label: 'Unban account', section: 'manage' });
+    items.push({ id: 'unban', label: 'Unban', section: 'manage' });
   } else if (s === 'suspended') {
-    items.push({ id: 'unsuspend', label: 'Unsuspend account', section: 'manage' });
-    items.push({ id: 'ban', label: 'Ban account', danger: true, section: 'manage' });
-    items.push({ id: 'lock', label: 'Lock account', section: 'manage' });
+    items.push({ id: 'unsuspend', label: 'Unsuspend', section: 'manage' });
+    items.push({ id: 'lock', label: 'Lock', section: 'manage' });
+    items.push({ id: 'ban', label: 'Ban', danger: true, section: 'manage' });
   } else if (s === 'locked') {
-    items.push({ id: 'unlock', label: 'Unlock account', section: 'manage' });
-    items.push({ id: 'ban', label: 'Ban account', danger: true, section: 'manage' });
-    items.push({ id: 'suspend', label: 'Suspend account', danger: true, section: 'manage' });
+    items.push({ id: 'unlock', label: 'Unlock', section: 'manage' });
+    items.push({ id: 'suspend', label: 'Suspend', danger: true, section: 'manage' });
+    items.push({ id: 'ban', label: 'Ban', danger: true, section: 'manage' });
   } else {
-    // Active / Pending / Unknown
-    items.push({ id: 'ban', label: 'Ban account', danger: true, section: 'manage' });
-    items.push({ id: 'suspend', label: 'Suspend account', danger: true, section: 'manage' });
-    items.push({ id: 'lock', label: 'Lock account', section: 'manage' });
+    items.push({ id: 'suspend', label: 'Suspend', danger: true, section: 'manage' });
+    items.push({ id: 'lock', label: 'Lock', section: 'manage' });
+    items.push({ id: 'ban', label: 'Ban', danger: true, section: 'manage' });
   }
 
-  items.push({ id: 'warn', label: 'Warn account', section: 'manage' });
+  items.push({ id: 'warn', label: 'Issue warning', section: 'manage' });
 
   if (options?.hasViolations || s === 'banned' || s === 'suspended' || s === 'locked') {
-    items.push({ id: 'pardon', label: 'Pardon account', section: 'manage' });
+    items.push({ id: 'pardon', label: 'Pardon & restore', section: 'manage' });
   }
 
   return items;
@@ -63,11 +56,10 @@ export function getManageActionsForStatus(
 export function getPrimaryRowActions(): MenuItem[] {
   return [
     { id: 'view', label: 'View profile' },
-    { id: 'credit', label: 'Credit action' },
-    { id: 'moderation', label: 'Moderation action' },
-    { id: 'verification', label: 'Verification action' },
-    { id: 'history', label: 'Violations overview' },
-    { id: 'export', label: 'Export account', section: 'divider' },
+    { id: 'credit', label: 'Credits & wallet' },
+    { id: 'verification', label: 'Verification' },
+    { id: 'history', label: 'Violations & disputes' },
+    { id: 'export', label: 'Export JSON', section: 'tools' },
   ];
 }
 

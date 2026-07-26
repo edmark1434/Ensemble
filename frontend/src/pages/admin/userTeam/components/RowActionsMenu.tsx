@@ -1,6 +1,19 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { MoreHorizontal } from 'lucide-react';
+import {
+  BadgeCheck,
+  Ban,
+  Download,
+  History,
+  Lock,
+  MoreHorizontal,
+  Scale,
+  ShieldAlert,
+  ShieldCheck,
+  Unlock,
+  User,
+  Wallet,
+} from 'lucide-react';
 
 type MenuItem = { id: string; label: string; danger?: boolean; section?: string };
 
@@ -8,26 +21,68 @@ export type { MenuItem };
 
 const DEFAULT_ITEMS: MenuItem[] = [
   { id: 'view', label: 'View profile' },
-  { id: 'credit', label: 'Credit action' },
-  { id: 'moderation', label: 'Moderation action' },
-  { id: 'verification', label: 'Verification action' },
-  { id: 'history', label: 'Violations overview' },
-  { id: 'export', label: 'Export account', section: 'divider' },
-  { id: 'ban', label: 'Ban account', danger: true, section: 'manage' },
-  { id: 'suspend', label: 'Suspend account', danger: true, section: 'manage' },
-  { id: 'restore', label: 'Restore account', section: 'manage' },
-  { id: 'lock', label: 'Lock account', section: 'manage' },
-  { id: 'warn', label: 'Warn account', section: 'manage' },
+  { id: 'credit', label: 'Credits & wallet' },
+  { id: 'verification', label: 'Verification' },
+  { id: 'history', label: 'Violations & disputes' },
+  { id: 'export', label: 'Export JSON', section: 'tools' },
+  { id: 'ban', label: 'Ban', danger: true, section: 'manage' },
+  { id: 'suspend', label: 'Suspend', danger: true, section: 'manage' },
+  { id: 'lock', label: 'Lock', section: 'manage' },
+  { id: 'warn', label: 'Issue warning', section: 'manage' },
 ];
 
 type RowActionsMenuProps = {
   onAction: (actionId: string) => void;
   items?: MenuItem[];
+  status?: string | null;
 };
 
 type MenuCoords = { top: number; left: number; openUp: boolean };
 
-export default function RowActionsMenu({ onAction, items = DEFAULT_ITEMS }: RowActionsMenuProps) {
+function iconForAction(id: string) {
+  switch (id) {
+    case 'view':
+      return User;
+    case 'credit':
+      return Wallet;
+    case 'verification':
+      return BadgeCheck;
+    case 'history':
+      return History;
+    case 'export':
+      return Download;
+    case 'ban':
+      return Ban;
+    case 'unban':
+    case 'unsuspend':
+    case 'pardon':
+      return ShieldCheck;
+    case 'unlock':
+      return Unlock;
+    case 'suspend':
+    case 'warn':
+      return ShieldAlert;
+    case 'lock':
+      return Lock;
+    default:
+      return Scale;
+  }
+}
+
+function statusTone(status?: string | null) {
+  const s = String(status || '').toLowerCase();
+  if (s === 'banned') return 'border-rose-500/30 bg-rose-500/10 text-rose-200';
+  if (s === 'suspended') return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
+  if (s === 'locked') return 'border-zinc-400/30 bg-zinc-400/10 text-zinc-200';
+  if (s === 'active') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200';
+  return 'border-white/10 bg-white/[0.04] text-zinc-300';
+}
+
+export default function RowActionsMenu({
+  onAction,
+  items = DEFAULT_ITEMS,
+  status,
+}: RowActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<MenuCoords | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -38,8 +93,8 @@ export default function RowActionsMenu({ onAction, items = DEFAULT_ITEMS }: RowA
     if (!button) return;
 
     const rect = button.getBoundingClientRect();
-    const menuHeight = menuRef.current?.offsetHeight ?? 320;
-    const menuWidth = menuRef.current?.offsetWidth ?? 200;
+    const menuHeight = menuRef.current?.offsetHeight ?? 360;
+    const menuWidth = menuRef.current?.offsetWidth ?? 240;
     const spaceBelow = window.innerHeight - rect.bottom;
     const openUp = spaceBelow < menuHeight + 12 && rect.top > spaceBelow;
 
@@ -60,7 +115,7 @@ export default function RowActionsMenu({ onAction, items = DEFAULT_ITEMS }: RowA
       return;
     }
     updatePosition();
-  }, [open]);
+  }, [open, items, status]);
 
   useEffect(() => {
     if (!open) return;
@@ -84,7 +139,28 @@ export default function RowActionsMenu({ onAction, items = DEFAULT_ITEMS }: RowA
   }, [open]);
 
   const primary = items.filter((i) => !i.section);
+  const tools = items.filter((i) => i.section === 'tools' || i.section === 'divider');
   const manage = items.filter((i) => i.section === 'manage');
+
+  const renderItem = (item: MenuItem) => {
+    const Icon = iconForAction(item.id);
+    return (
+      <button
+        key={item.id}
+        type="button"
+        onClick={() => {
+          onAction(item.id);
+          setOpen(false);
+        }}
+        className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition hover:bg-white/[0.06] ${
+          item.danger ? 'text-red-300' : 'text-zinc-200'
+        }`}
+      >
+        <Icon className={`h-3.5 w-3.5 shrink-0 ${item.danger ? 'text-red-400' : 'text-zinc-500'}`} />
+        {item.label}
+      </button>
+    );
+  };
 
   const menu = open
     ? createPortal(
@@ -95,40 +171,45 @@ export default function RowActionsMenu({ onAction, items = DEFAULT_ITEMS }: RowA
               ? { top: coords.top, left: coords.left }
               : { top: -9999, left: -9999, visibility: 'hidden' }
           }
-          className="fixed z-[200] max-h-[min(360px,calc(100vh-16px))] min-w-[200px] overflow-y-auto rounded-xl border border-white/[0.1] bg-[#1a1b24] py-1 shadow-2xl"
+          className="fixed z-[200] max-h-[min(420px,calc(100vh-16px))] w-[236px] overflow-y-auto rounded-xl border border-white/[0.1] bg-[#1a1b24] py-1.5 shadow-2xl"
         >
-          {primary.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => {
-                onAction(item.id);
-                setOpen(false);
-              }}
-              className="block w-full px-4 py-2 text-left text-sm text-zinc-200 hover:bg-white/[0.06]"
-            >
-              {item.label}
-            </button>
-          ))}
-          <div className="my-1 border-t border-white/[0.08]" />
-          <p className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
-            Management
+          {status && (
+            <div className="border-b border-white/[0.06] px-3 pb-2 pt-1.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+                Account status
+              </p>
+              <span
+                className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusTone(status)}`}
+              >
+                {status}
+              </span>
+            </div>
+          )}
+
+          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+            Account
           </p>
-          {manage.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => {
-                onAction(item.id);
-                setOpen(false);
-              }}
-              className={`block w-full px-4 py-2 text-left text-sm hover:bg-white/[0.06] ${
-                item.danger ? 'text-red-300' : 'text-zinc-200'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
+          {primary.map(renderItem)}
+
+          {tools.length > 0 && (
+            <>
+              <div className="my-1 border-t border-white/[0.08]" />
+              <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+                Tools
+              </p>
+              {tools.map(renderItem)}
+            </>
+          )}
+
+          {manage.length > 0 && (
+            <>
+              <div className="my-1 border-t border-white/[0.08]" />
+              <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+                Enforcement
+              </p>
+              {manage.map(renderItem)}
+            </>
+          )}
         </div>,
         document.body
       )
@@ -143,6 +224,7 @@ export default function RowActionsMenu({ onAction, items = DEFAULT_ITEMS }: RowA
         className="rounded-lg p-2 text-zinc-400 hover:bg-white/[0.06] hover:text-white"
         aria-haspopup="menu"
         aria-expanded={open}
+        title="Actions"
       >
         <MoreHorizontal className="h-4 w-4" />
       </button>
