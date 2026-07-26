@@ -1,37 +1,5 @@
 const { pool } = require('../lib/database');
 
-const TEAM_TEMPLATES = [
-  { name: 'RavenLabs', suffix: 'LLC', verification: 'Business Verified', status: 'Active' },
-  { name: 'Graphitee', suffix: '', verification: 'Unverified', status: 'Suspended' },
-  { name: 'FrameForge', suffix: 'Collective', verification: 'Business Verified', status: 'Active' },
-  { name: 'PixelPulse', suffix: 'Media', verification: 'Pending Review', status: 'Active' },
-];
-
-function mapUserRow(row) {
-  const name =
-    [row.first_name, row.last_name].filter(Boolean).join(' ').trim() ||
-    row.display_name ||
-    'Unnamed member';
-  const status = normalizeStatus(row.status);
-  return {
-    id: row.user_id,
-    accountId: row.account_id,
-    name,
-    email: row.email_address,
-    username: row.handle,
-    displayName: row.display_name,
-    status,
-    meritCredits: row.merit_score ?? 0,
-    verificationStatus: deriveUserVerification(row),
-    joinedAt: row.created_at,
-    lastSeenAt: row.created_at,
-    hasAvatar: Boolean(row.avatar_file_id),
-    tagline: row.tagline || null,
-    hasPaymentProfile: Boolean(row.customer_id),
-    hasFirebase: Boolean(row.firebase_user_uuid),
-  };
-}
-
 function normalizeStatus(status) {
   if (!status) return 'Pending';
   const s = String(status).toLowerCase();
@@ -42,158 +10,461 @@ function normalizeStatus(status) {
   return status;
 }
 
-function deriveUserVerification(row) {
-  if (normalizeStatus(row.status) !== 'Active') return 'Pending Review';
-  if (row.customer_id && row.firebase_user_uuid) return 'Verified';
-  if (row.customer_id || row.firebase_user_uuid) return 'Partially Verified';
+function mapVerificationLabel(raw, { forTeam = false } = {}) {
+  const s = String(raw || 'unverified').toLowerCase();
+  if (s === 'verified' || s === 'approved' || s === 'business verified') {
+    return forTeam ? 'Business Verified' : 'Verified';
+  }
+  if (s.includes('pending') || s.includes('review')) return 'Pending Review';
+  if (s.includes('partial')) return 'Partially Verified';
   return 'Unverified';
 }
 
-function buildTeamsFromUsers(users) {
-  const teams = [];
-  let idx = 0;
-
-  for (const tmpl of TEAM_TEMPLATES) {
-    if (idx >= users.length) break;
-    const leader = users[idx];
-    const extra = Math.min(4, users.length - idx - 1);
-    const members = users.slice(idx, idx + 1 + extra);
-    idx += members.length;
-
-    const teamStatus = tmpl.status;
-    teams.push(buildTeamRecord(teams.length + 1, tmpl, leader, members, teamStatus));
-  }
-
-  while (idx < users.length) {
-    const leader = users[idx];
-    const members = [leader];
-    idx += 1;
-    teams.push(
-      buildTeamRecord(
-        teams.length + 1,
-        {
-          name: (leader.displayName || leader.name).split(' ')[0],
-          suffix: 'Studio',
-          verification: leader.verificationStatus === 'Verified' ? 'Business Verified' : 'Unverified',
-          status: leader.status === 'Active' ? 'Active' : leader.status,
-        },
-        leader,
-        members,
-        leader.status
-      )
-    );
-  }
-
-  return teams;
+function formatRelativeTime(dateValue) {
+  if (!dateValue) return 'Recently';
+  const diffSec = Math.floor((Date.now() - new Date(dateValue).getTime()) / 1000);
+  if (Number.isNaN(diffSec)) return 'Recently';
+  if (diffSec < 60) return 'Just now';
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} min ago`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} hr ago`;
+  if (diffSec < 604800) return `${Math.floor(diffSec / 86400)} days ago`;
+  return new Date(dateValue).toLocaleDateString();
 }
 
-function buildTeamRecord(num, tmpl, leader, members, status) {
-  const teamName = tmpl.suffix ? `${tmpl.name} ${tmpl.suffix}` : tmpl.name;
-  const totalMerit = members.reduce((s, m) => s + m.meritCredits, 0);
-  const id = `TM-${String(200 + num).padStart(5, '0')}`;
-
+function mapUserRow(row) {
+  const name =
+    [row.first_name, row.last_name].filter(Boolean).join(' ').trim() ||
+    row.display_name ||
+    'Unnamed member';
   return {
-    id,
-    name: teamName,
-    logoInitial: tmpl.name.charAt(0),
-    leaderName: leader.name,
-    leaderId: leader.id,
-    leaderEmail: leader.email,
-    memberCount: members.length,
-    members: members.map((m) => ({
-      id: m.id,
-      name: m.name,
-      email: m.email,
-      username: m.username,
-      role: m.id === leader.id ? 'Team Leader' : 'Member',
-    })),
-    email: `${tmpl.name.toLowerCase().replace(/\s/g, '')}@business.com`,
-    verificationStatus: tmpl.verification,
-    status,
-    lastSeenAt: leader.lastSeenAt,
-    createdAt: leader.joinedAt,
-    stats: {
-      totalAssets: Math.max(1, Math.floor(members.length * 2.4)),
-      totalCredits: totalMerit * 1200 + members.length * 500,
-      totalJobs: Math.max(0, Math.floor(totalMerit / 8)),
-      totalJobEarnings: totalMerit * 4200,
-      totalRevenue: totalMerit * 9800 + 120000,
-      totalPosts: Math.max(10, totalMerit * 12),
-      totalReactions: Math.max(50, totalMerit * 45),
-      totalComments: Math.max(100, totalMerit * 180),
+    id: row.user_id,
+    accountId: row.account_id,
+    name,
+    email: row.email_address,
+    username: row.handle,
+    displayName: row.display_name,
+    status: normalizeStatus(row.status),
+    meritCredits: row.merit_score ?? 0,
+    verificationStatus: mapVerificationLabel(row.verification_status),
+    joinedAt: row.created_at,
+    lastSeenAt: row.created_at,
+    hasAvatar: Boolean(row.avatar_file_id),
+    tagline: row.tagline || null,
+    hasPaymentProfile: Boolean(row.customer_id),
+    hasFirebase: Boolean(row.firebase_user_uuid),
+    walletBalance: Number(row.balance_credits || 0),
+    frozenBalance: Number(row.frozen_balance_credits || 0),
+    verificationMeta: {
+      account_id: row.account_id,
+      account_verification_id: row.account_verification_id,
+      verification_status: row.verification_status,
+      verification_expires_at: row.verification_expires_at,
+      verification_updated_at: row.verification_updated_at,
+      created_at: row.created_at,
+      verified_by_name: row.verified_by_name,
     },
-    documents: [
-      { id: 'doc-1', name: 'Business registration', type: 'PDF', pages: 12, sizeMb: 2.1, uploadedAt: leader.joinedAt },
-      { id: 'doc-2', name: 'Portfolio reel', type: 'Video', pages: null, sizeMb: 48.5, uploadedAt: leader.joinedAt },
-    ],
-    creditActivity: buildCreditActivity(leader, totalMerit),
-    verification: buildVerificationDetail(teamName, tmpl.verification, leader.joinedAt),
-    history: buildTeamHistory(teamName, status),
   };
 }
 
-function buildCreditActivity(leader, merit) {
-  const base = merit || 50;
-  return [
-    { id: 'ca-1', type: 'Credit Adjustment', amount: 1500, label: 'System correction', timeAgo: '5 sec ago', positive: true },
-    { id: 'ca-2', type: 'Freelancer Payout', amount: Math.round(base * 24), label: 'Contract payout', timeAgo: '10 min ago', positive: true },
-    { id: 'ca-3', type: 'Asset Purchased', amount: -502, label: 'Marketplace asset', timeAgo: '52 min ago', positive: false },
-    { id: 'ca-4', type: 'Credit Refunded', amount: 2521, label: 'Dispute resolution', timeAgo: '1 hr ago', positive: true },
-    { id: 'ca-5', type: 'Merit Sync', amount: base, label: `@${leader.username}`, timeAgo: '2 hr ago', positive: true },
-  ];
+async function fetchCreditActivityForAccounts(accountIds) {
+  if (!accountIds.length) return new Map();
+
+  const result = await pool.query(
+    `
+    SELECT
+      aw.account_id,
+      ct.credit_transaction_id,
+      ct.type,
+      ct.amount_credits,
+      ct.status,
+      ct.created_at,
+      ct.source_wallet_id,
+      ct.destination_wallet_id,
+      aw.wallet_id AS account_wallet_id
+    FROM credit_transactions ct
+    INNER JOIN account_wallets aw
+      ON aw.wallet_id IN (ct.source_wallet_id, ct.destination_wallet_id)
+    WHERE aw.account_id = ANY($1::uuid[])
+    ORDER BY ct.created_at DESC
+    LIMIT 500
+    `,
+    [accountIds]
+  );
+
+  const map = new Map();
+  for (const row of result.rows) {
+    const list = map.get(row.account_id) || [];
+    if (list.length >= 8) continue;
+    const isCredit = String(row.destination_wallet_id) === String(row.account_wallet_id);
+    const amount = Number(row.amount_credits || 0);
+    list.push({
+      id: row.credit_transaction_id,
+      type: row.type || 'Credit transaction',
+      amount: isCredit ? Math.abs(amount) : -Math.abs(amount),
+      label: row.status || 'Completed',
+      timeAgo: formatRelativeTime(row.created_at),
+      positive: isCredit,
+    });
+    map.set(row.account_id, list);
+  }
+  return map;
 }
 
-function buildVerificationDetail(teamName, status, submittedAt) {
-  const verified = status === 'Business Verified';
-  return {
-    status: verified ? 'Verified' : status === 'Pending Review' ? 'Pending' : 'Unverified',
-    reverificationDueDays: verified ? 5 : null,
-    applicationId: 'BP-2111',
-    document: {
-      name: 'Business Document',
-      uploadedBy: 'Admin',
-      pages: 30,
-      sizeMb: 5.4,
-      uploadedAt: submittedAt,
-    },
-    logs: [
-      { id: 'vl-1', title: 'Application Approved', timeAgo: '3 months ago', by: 'Admin', ref: 'BP-2111' },
-      { id: 'vl-2', title: 'Resubmitted Application', timeAgo: '4 months ago', by: 'Team', ref: 'BP-2111' },
-      { id: 'vl-3', title: 'Application Denied', timeAgo: '5 months ago', by: 'Admin', ref: 'BP-2111' },
-      { id: 'vl-4', title: 'Submitted Application', timeAgo: '6 months ago', by: teamName, ref: 'BP-2111' },
-    ],
-  };
+async function fetchHistoryForAccounts(accountIds) {
+  if (!accountIds.length) {
+    return new Map();
+  }
+
+  const [violationsResult, disputesResult] = await Promise.all([
+    pool.query(
+      `
+      SELECT
+        v.violation_id,
+        v.violation_number,
+        v.account_id,
+        v.title,
+        v.reason,
+        v.points,
+        v.status,
+        v.created_at,
+        COALESCE(sa.display_name, s.first_name || ' ' || s.last_name, 'Staff') AS issued_by
+      FROM violations v
+      LEFT JOIN staff s ON s.staff_id = COALESCE(v.issued_by_staff_id, v.staff_id)
+      LEFT JOIN accounts sa ON sa.account_id = s.account_id
+      WHERE v.account_id = ANY($1::uuid[])
+        AND v.deleted_at IS NULL
+      ORDER BY v.created_at DESC
+      `,
+      [accountIds]
+    ),
+    pool.query(
+      `
+      SELECT
+        d.dispute_id,
+        d.dispute_number,
+        d.title,
+        d.reason,
+        d.status,
+        d.opened_at,
+        d.updated_at,
+        d.initiator_account_id,
+        d.respondent_account_id,
+        COALESCE(sa.display_name, st.first_name || ' ' || st.last_name, 'Staff') AS handler_name,
+        COALESCE(ra.display_name, ra.handle, 'Counterparty') AS against_name
+      FROM disputes d
+      LEFT JOIN staff st ON st.staff_id = COALESCE(d.assigned_staff_id, d.handled_by_staff_id)
+      LEFT JOIN accounts sa ON sa.account_id = st.account_id
+      LEFT JOIN accounts ra ON ra.account_id = d.respondent_account_id
+      WHERE d.initiator_account_id = ANY($1::uuid[])
+         OR d.respondent_account_id = ANY($1::uuid[])
+      ORDER BY COALESCE(d.opened_at, d.created_at) DESC
+      `,
+      [accountIds]
+    ),
+  ]);
+
+  const map = new Map();
+  for (const accountId of accountIds) {
+    map.set(accountId, { violations: [], disputes: [] });
+  }
+
+  for (const row of violationsResult.rows) {
+    const bucket = map.get(row.account_id);
+    if (!bucket) continue;
+    bucket.violations.push({
+      id: row.violation_number || row.violation_id,
+      title: row.title || 'Violation',
+      reason: row.reason || '—',
+      points: Number(row.points || 0),
+      by: row.issued_by,
+      timeAgo: formatRelativeTime(row.created_at),
+    });
+  }
+
+  for (const row of disputesResult.rows) {
+    const relatedIds = [row.initiator_account_id, row.respondent_account_id].filter(Boolean);
+    for (const accountId of relatedIds) {
+      const bucket = map.get(accountId);
+      if (!bucket) continue;
+      bucket.disputes.push({
+        id: row.dispute_number || row.dispute_id,
+        title: row.title || 'Dispute',
+        reason: row.reason || '—',
+        status: row.status || 'open',
+        by: row.handler_name,
+        timeAgo: formatRelativeTime(row.opened_at || row.updated_at),
+        against: row.against_name,
+        handler: row.handler_name,
+      });
+    }
+  }
+
+  return map;
 }
 
-function buildTeamHistory(teamName, status) {
-  const caution = status === 'Suspended' || status === 'Banned';
+function buildHistory(accountId, historyMap) {
+  const data = historyMap.get(accountId) || { violations: [], disputes: [] };
+  const openDisputes = data.disputes.filter((d) => {
+    const s = String(d.status).toLowerCase();
+    return !s.includes('resolv') && !s.includes('closed');
+  });
+  const active = openDisputes[0] || null;
+  const caution = data.violations.length > 0 || openDisputes.length > 0;
+
   return {
-    summaryLabel: caution ? 'Active, Under Review, Deal with Caution' : 'Active — Good standing',
-    totalViolations: caution ? 3 : 0,
-    totalDisputes: caution ? 7 : 1,
-    openDisputes: caution ? 2 : 0,
-    activeDispute: caution
+    summaryLabel: caution
+      ? 'Active, Under Review, Deal with Caution'
+      : 'Active — Good standing',
+    totalViolations: data.violations.length,
+    totalDisputes: data.disputes.length,
+    openDisputes: openDisputes.length,
+    activeDispute: active
       ? {
-          title: 'Scam Dispute',
-          handler: 'Susan (Admin)',
-          against: 'Graphitee',
-          reason: 'Client reported deliverables not matching scope.',
-          status: 'On-going',
+          title: active.title,
+          handler: active.handler || active.by || 'Staff',
+          against: active.against || '—',
+          reason: active.reason,
+          status: active.status,
         }
       : null,
-    violations: caution
-      ? [
-          { id: 'VIO-21034', title: 'Spamming comments', reason: 'Repeated promotional links in forum threads.', points: 15, by: 'Admin', timeAgo: '3 months ago' },
-          { id: 'VIO-21012', title: 'Violated Marketplace ToS', reason: 'Listed asset with misleading preview.', points: 50, by: 'Admin', timeAgo: '5 months ago' },
-        ]
-      : [],
-    disputes: [
-      { id: 'DIS-21123', title: 'Feedback Dispute', reason: 'Rating contested after project delivery.', status: 'Resolved', by: 'Admin', timeAgo: '4 months ago' },
-      ...(caution
-        ? [{ id: 'DIS-21124', title: 'Scam Dispute', reason: `Payment dispute involving ${teamName}.`, status: 'Open', by: 'Admin', timeAgo: '2 weeks ago' }]
-        : []),
+    violations: data.violations.slice(0, 10),
+    disputes: data.disputes.slice(0, 10).map(({ against, handler, ...rest }) => rest),
+  };
+}
+
+function buildVerificationDetail(row) {
+  const label = mapVerificationLabel(row.verification_status);
+  const verified = label === 'Verified' || label === 'Business Verified';
+  return {
+    status: verified ? 'Verified' : label === 'Pending Review' ? 'Pending' : 'Unverified',
+    reverificationDueDays: row.verification_expires_at
+      ? Math.max(
+          0,
+          Math.ceil((new Date(row.verification_expires_at) - Date.now()) / 86400000)
+        )
+      : null,
+    applicationId: row.account_verification_id || '—',
+    document: null,
+    logs: [
+      {
+        id: `vl-${row.account_id}`,
+        title: `Verification status: ${row.verification_status || 'unverified'}`,
+        timeAgo: formatRelativeTime(row.verification_updated_at || row.created_at),
+        by: row.verified_by_name || 'System',
+        ref: row.account_verification_id || '—',
+      },
     ],
   };
+}
+
+async function fetchAllUsers() {
+  const result = await pool.query(`
+    SELECT
+      u.user_id,
+      u.account_id,
+      u.first_name,
+      u.last_name,
+      u.email_address,
+      u.firebase_user_uuid,
+      u.customer_id,
+      a.handle,
+      a.display_name,
+      a.status,
+      a.merit_score,
+      a.created_at,
+      a.avatar_file_id,
+      a.tagline,
+      av.account_verification_id,
+      av.status AS verification_status,
+      av.expires_at AS verification_expires_at,
+      av.updated_at AS verification_updated_at,
+      COALESCE(va.display_name, vs.first_name || ' ' || vs.last_name) AS verified_by_name,
+      w.balance_credits,
+      w.frozen_balance_credits
+    FROM users u
+    INNER JOIN accounts a ON a.account_id = u.account_id
+    LEFT JOIN LATERAL (
+      SELECT *
+      FROM account_verification av
+      WHERE av.account_id = a.account_id AND av.deleted_at IS NULL
+      ORDER BY av.created_at DESC
+      LIMIT 1
+    ) av ON TRUE
+    LEFT JOIN staff vs ON vs.staff_id = av.verified_by_staff_id
+    LEFT JOIN accounts va ON va.account_id = vs.account_id
+    LEFT JOIN LATERAL (
+      SELECT w.balance_credits, w.frozen_balance_credits
+      FROM account_wallets aw
+      INNER JOIN wallets w ON w.wallet_id = aw.wallet_id
+      WHERE aw.account_id = a.account_id
+        AND w.type = 'account wallets'
+      ORDER BY w.created_at DESC
+      LIMIT 1
+    ) w ON TRUE
+    WHERE a.deleted_at IS NULL
+    ORDER BY a.created_at DESC NULLS LAST, u.user_id DESC
+  `);
+  return result.rows.map(mapUserRow);
+}
+
+async function fetchTeamsFromDatabase() {
+  const teamsResult = await pool.query(`
+    SELECT
+      t.team_id,
+      t.account_id,
+      a.handle,
+      a.display_name,
+      a.status,
+      a.merit_score,
+      a.created_at,
+      a.avatar_file_id,
+      a.tagline,
+      av.account_verification_id,
+      av.status AS verification_status,
+      av.expires_at AS verification_expires_at,
+      av.updated_at AS verification_updated_at,
+      COALESCE(va.display_name, vs.first_name || ' ' || vs.last_name) AS verified_by_name,
+      w.balance_credits,
+      w.frozen_balance_credits,
+      w.wallet_id,
+      (
+        SELECT COUNT(*)::int
+        FROM team_members tm
+        WHERE tm.team_id = t.team_id AND tm.deleted_at IS NULL
+      ) AS member_count
+    FROM teams t
+    INNER JOIN accounts a ON a.account_id = t.account_id
+    LEFT JOIN LATERAL (
+      SELECT *
+      FROM account_verification av
+      WHERE av.account_id = a.account_id AND av.deleted_at IS NULL
+      ORDER BY av.created_at DESC
+      LIMIT 1
+    ) av ON TRUE
+    LEFT JOIN staff vs ON vs.staff_id = av.verified_by_staff_id
+    LEFT JOIN accounts va ON va.account_id = vs.account_id
+    LEFT JOIN LATERAL (
+      SELECT w.wallet_id, w.balance_credits, w.frozen_balance_credits
+      FROM account_wallets aw
+      INNER JOIN wallets w ON w.wallet_id = aw.wallet_id
+      WHERE aw.account_id = a.account_id
+        AND w.type = 'account wallets'
+      ORDER BY w.created_at DESC
+      LIMIT 1
+    ) w ON TRUE
+    WHERE a.deleted_at IS NULL
+    ORDER BY a.created_at DESC
+  `);
+
+  if (!teamsResult.rows.length) return [];
+
+  const teamIds = teamsResult.rows.map((r) => r.team_id);
+  const membersResult = await pool.query(
+    `
+    SELECT
+      tm.team_id,
+      tm.role,
+      tm.status AS member_status,
+      tm.joined_at,
+      u.user_id,
+      u.email_address,
+      u.first_name,
+      u.last_name,
+      a.handle,
+      a.display_name
+    FROM team_members tm
+    INNER JOIN users u ON u.user_id = tm.user_id
+    INNER JOIN accounts a ON a.account_id = u.account_id
+    WHERE tm.team_id = ANY($1::uuid[])
+      AND tm.deleted_at IS NULL
+    ORDER BY
+      CASE WHEN LOWER(tm.role) LIKE '%leader%' THEN 0 ELSE 1 END,
+      tm.joined_at ASC
+    `,
+    [teamIds]
+  );
+
+  const membersByTeam = new Map();
+  for (const row of membersResult.rows) {
+    const list = membersByTeam.get(row.team_id) || [];
+    const name =
+      [row.first_name, row.last_name].filter(Boolean).join(' ').trim() ||
+      row.display_name ||
+      row.handle;
+    list.push({
+      id: row.user_id,
+      name,
+      email: row.email_address,
+      username: row.handle,
+      role: row.role || 'Member',
+    });
+    membersByTeam.set(row.team_id, list);
+  }
+
+  const accountIds = teamsResult.rows.map((r) => r.account_id);
+  const [creditMap, historyMap, assetStats] = await Promise.all([
+    fetchCreditActivityForAccounts(accountIds),
+    fetchHistoryForAccounts(accountIds),
+    pool.query(
+      `
+      SELECT submitted_by_account_id AS account_id,
+        COUNT(*)::int AS listing_count,
+        COALESCE(SUM(price_credits), 0)::int AS listing_value
+      FROM marketplace_listings
+      WHERE submitted_by_account_id = ANY($1::uuid[])
+      GROUP BY submitted_by_account_id
+      `,
+      [accountIds]
+    ).catch(() => ({ rows: [] })),
+  ]);
+
+  const assetsByAccount = new Map(
+    assetStats.rows.map((r) => [r.account_id, r])
+  );
+
+  return teamsResult.rows.map((row) => {
+    const members = membersByTeam.get(row.team_id) || [];
+    const leader = members[0] || {
+      id: null,
+      name: row.display_name || row.handle || 'Unknown',
+      email: '',
+      username: row.handle,
+      role: 'Team Leader',
+    };
+    const teamName = row.display_name || row.handle || 'Unnamed team';
+    const assets = assetsByAccount.get(row.account_id) || { listing_count: 0, listing_value: 0 };
+    const balance = Number(row.balance_credits || 0);
+
+    return {
+      id: row.team_id,
+      name: teamName,
+      logoInitial: (teamName || 'T').charAt(0).toUpperCase(),
+      leaderName: leader.name,
+      leaderId: leader.id,
+      leaderEmail: leader.email,
+      memberCount: members.length || Number(row.member_count || 0),
+      members,
+      email: leader.email || `${(row.handle || 'team').toLowerCase()}@ensemble.app`,
+      verificationStatus: mapVerificationLabel(row.verification_status, { forTeam: true }),
+      status: normalizeStatus(row.status),
+      lastSeenAt: row.created_at,
+      createdAt: row.created_at,
+      stats: {
+        totalAssets: Number(assets.listing_count || 0),
+        totalCredits: balance,
+        totalJobs: 0,
+        totalJobEarnings: 0,
+        totalRevenue: Number(assets.listing_value || 0),
+        totalPosts: 0,
+        totalReactions: 0,
+        totalComments: 0,
+      },
+      documents: [],
+      creditActivity: creditMap.get(row.account_id) || [],
+      verification: buildVerificationDetail(row),
+      history: buildHistory(row.account_id, historyMap),
+    };
+  });
 }
 
 function computeTeamStats(teams) {
@@ -219,7 +490,9 @@ function computeUserStats(users) {
   const suspended = users.filter((u) => u.status === 'Suspended').length;
   const banned = users.filter((u) => u.status === 'Banned').length;
   const active = users.filter((u) => u.status === 'Active').length;
-  const pending = users.filter((u) => u.status === 'Pending' || u.verificationStatus === 'Pending Review').length;
+  const pending = users.filter(
+    (u) => u.status === 'Pending' || u.verificationStatus === 'Pending Review'
+  ).length;
   const verified = users.filter((u) => u.verificationStatus === 'Verified').length;
   const unverified = users.filter((u) => u.verificationStatus === 'Unverified').length;
 
@@ -234,33 +507,8 @@ function computeUserStats(users) {
   };
 }
 
-async function fetchAllUsers() {
-  const result = await pool.query(`
-    SELECT
-      u.user_id,
-      u.account_id,
-      u.first_name,
-      u.last_name,
-      u.email_address,
-      u.firebase_user_uuid,
-      u.customer_id,
-      a.handle,
-      a.display_name,
-      a.status,
-      a.merit_score,
-      a.created_at,
-      a.avatar_file_id,
-      a.tagline
-    FROM users u
-    INNER JOIN accounts a ON a.account_id = u.account_id
-    ORDER BY a.created_at DESC NULLS LAST, u.user_id DESC
-  `);
-  return result.rows.map(mapUserRow);
-}
-
 async function getTeamsManagement() {
-  const users = await fetchAllUsers();
-  const teams = buildTeamsFromUsers(users);
+  const teams = await fetchTeamsFromDatabase();
   return {
     stats: computeTeamStats(teams),
     teams,
@@ -270,19 +518,46 @@ async function getTeamsManagement() {
 
 async function getUsersManagement() {
   const users = await fetchAllUsers();
-  const enriched = users.map((u) => ({
-    ...u,
-    profileId: `USR-${String(u.id).padStart(5, '0')}`,
-    creditActivity: buildCreditActivity(u, u.meritCredits),
-    verification: buildVerificationDetail(u.displayName || u.name, u.verificationStatus === 'Verified' ? 'Business Verified' : 'Unverified', u.joinedAt),
-    history: buildTeamHistory(u.displayName || u.name, u.status === 'Active' ? 'Active' : u.status),
-    stats: {
-      totalAssets: Math.max(0, Math.floor(u.meritCredits / 15)),
-      totalCredits: u.meritCredits * 800,
-      totalJobs: Math.max(0, Math.floor(u.meritCredits / 10)),
-      totalPosts: Math.max(5, u.meritCredits * 8),
-    },
-  }));
+  const accountIds = users.map((u) => u.accountId);
+  const [creditMap, historyMap, assetStats] = await Promise.all([
+    fetchCreditActivityForAccounts(accountIds),
+    fetchHistoryForAccounts(accountIds),
+    accountIds.length
+      ? pool.query(
+          `
+          SELECT submitted_by_account_id AS account_id, COUNT(*)::int AS listing_count
+          FROM marketplace_listings
+          WHERE submitted_by_account_id = ANY($1::uuid[])
+          GROUP BY submitted_by_account_id
+          `,
+          [accountIds]
+        ).catch(() => ({ rows: [] }))
+      : { rows: [] },
+  ]);
+  const assetsByAccount = new Map(assetStats.rows.map((r) => [r.account_id, r.listing_count]));
+
+  const enriched = users.map((u) => {
+    const { verificationMeta, walletBalance, ...rest } = u;
+    return {
+      ...rest,
+      profileId: `USR-${String(u.id).slice(0, 8).toUpperCase()}`,
+      creditActivity: creditMap.get(u.accountId) || [],
+      verification: buildVerificationDetail(
+        verificationMeta || {
+          account_id: u.accountId,
+          verification_status: u.verificationStatus,
+          created_at: u.joinedAt,
+        }
+      ),
+      history: buildHistory(u.accountId, historyMap),
+      stats: {
+        totalAssets: Number(assetsByAccount.get(u.accountId) || 0),
+        totalCredits: walletBalance,
+        totalJobs: 0,
+        totalPosts: 0,
+      },
+    };
+  });
 
   return {
     stats: computeUserStats(users),
@@ -378,6 +653,13 @@ function buildUserTeamAlerts(teamStats, userStats, verification) {
       id: 'suspended',
       message: `${teamStats.totalSuspended + userStats.totalSuspended} suspended account(s) on record.`,
       severity: 'warning',
+    });
+  }
+  if (teamStats.totalTeams === 0) {
+    alerts.push({
+      id: 'no-teams',
+      message: 'No production teams found in the database yet.',
+      severity: 'info',
     });
   }
   if (alerts.length === 0) {

@@ -254,6 +254,96 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   console.log(`✅ Seeded ${tickets.length} tickets, ${disputes.length} disputes, ${reports.length} reports`);
 }
 
+async function seedTeams(userAccountIds) {
+  if (userAccountIds.length < 4) return;
+
+  const usersResult = await pool.query(
+    `SELECT u.user_id, u.account_id, a.handle, a.display_name
+     FROM users u
+     INNER JOIN accounts a ON a.account_id = u.account_id
+     WHERE u.account_id = ANY($1::uuid[])
+     ORDER BY u.user_id`,
+    [userAccountIds]
+  );
+  const users = usersResult.rows;
+  if (users.length < 4) return;
+
+  const teamDefs = [
+    { name: 'RavenLabs LLC', handle: 'ravenlabs', leaderIdx: 0, memberIdxs: [0, 1, 2] },
+    { name: 'FrameForge Collective', handle: 'frameforge', leaderIdx: 3, memberIdxs: [3, 4, 5].filter((i) => i < users.length) },
+  ];
+
+  for (const def of teamDefs) {
+    const accountRes = await pool.query(
+      `INSERT INTO accounts (display_name, handle, type, merit_score, status, created_at)
+       VALUES ($1, $2, 'Team', 75, 'Active', NOW())
+       RETURNING account_id`,
+      [cap(def.name, 50), cap(def.handle, 50)]
+    );
+    const teamAccountId = accountRes.rows[0].account_id;
+
+    const teamRes = await pool.query(
+      `INSERT INTO teams (account_id) VALUES ($1) RETURNING team_id`,
+      [teamAccountId]
+    );
+    const teamId = teamRes.rows[0].team_id;
+
+    for (const idx of def.memberIdxs) {
+      const member = users[idx];
+      if (!member) continue;
+      await pool.query(
+        `INSERT INTO team_members (team_id, user_id, role, status, joined_at)
+         VALUES ($1, $2, $3, 'active', NOW())
+         ON CONFLICT (team_id, user_id) DO NOTHING`,
+        [teamId, member.user_id, idx === def.leaderIdx ? 'Team Leader' : 'Member']
+      );
+    }
+
+    // Give the team wallet a small balance for admin economy views
+    await pool.query(
+      `UPDATE wallets w
+       SET balance_credits = $2
+       FROM account_wallets aw
+       WHERE aw.account_id = $1
+         AND aw.wallet_id = w.wallet_id
+         AND w.type = 'account wallets'`,
+      [teamAccountId, faker.number.int({ min: 500, max: 8000 })]
+    );
+  }
+
+  // Seed a few user wallet balances + credit transactions for economy audit
+  for (let i = 0; i < Math.min(5, users.length); i++) {
+    const balance = faker.number.int({ min: 100, max: 5000 });
+    const walletRes = await pool.query(
+      `SELECT w.wallet_id
+       FROM wallets w
+       INNER JOIN account_wallets aw ON aw.wallet_id = w.wallet_id
+       WHERE aw.account_id = $1 AND w.type = 'account wallets'
+       LIMIT 1`,
+      [users[i].account_id]
+    );
+    if (!walletRes.rows.length) continue;
+    const walletId = walletRes.rows[0].wallet_id;
+    await pool.query(`UPDATE wallets SET balance_credits = $2 WHERE wallet_id = $1`, [
+      walletId,
+      balance,
+    ]);
+
+    // Platform fee wallet as counterparty if available; otherwise self-transfer style record
+    const platformWallet = await pool.query(
+      `SELECT wallet_id FROM wallets WHERE type = 'platform wallets' LIMIT 1`
+    );
+    const otherWalletId = platformWallet.rows[0]?.wallet_id || walletId;
+    await pool.query(
+      `INSERT INTO credit_transactions (type, amount_credits, status, source_wallet_id, destination_wallet_id)
+       VALUES ('Credit Adjustment', $1, 'completed', $2, $3)`,
+      [balance, otherWalletId, walletId]
+    );
+  }
+
+  console.log(`✅ Seeded ${teamDefs.length} teams with members and sample wallet activity`);
+}
+
 async function seed() {
   try {
     console.log("🌱 Starting Seeding...");
@@ -369,6 +459,7 @@ async function seed() {
     await ensureDefaultSettings();
     await seedTicketsAndDisputes(userAccountIds, staffByRole);
     await seedMarketplaceListings(userAccountIds, staffByRole);
+    await seedTeams(userAccountIds);
 
     console.log('');
     console.log('🔑 Staff login (password: staff123):');

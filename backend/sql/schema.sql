@@ -1,10 +1,29 @@
--- Ensemble PostgreSQL schema (minimal tables required for seed + auth)
+-- Ensemble PostgreSQL schema notes for admin console data sources.
+-- Canonical schema lives in backend/migrations (UUID primary keys).
+-- This file documents the tables the admin console reads/writes.
+
+-- Auth / identity
+-- accounts, users, staff, account_verification
+
+-- Teams
+-- teams(team_id uuid PK, account_id uuid FK -> accounts)
+-- team_members(team_id, user_id, role, status, joined_at, deleted_at)
+
+-- Economy
+-- wallets(wallet_id, type, status, balance_credits, frozen_balance_credits)
+-- account_wallets(wallet_id, account_id)
+-- credit_transactions(credit_transaction_id, type, amount_credits, status, source_wallet_id, destination_wallet_id)
+-- platform_settings(setting_key PK, setting_value jsonb, updated_at, updated_by_staff_id)
+
+-- Moderation / support
+-- reports, disputes, violations, marketplace_listings
+-- tickets, ticket_chats, ticket_type_catalog, ticket_status_catalog, ticket_priority_catalog
 
 CREATE TABLE IF NOT EXISTS accounts (
-    account_id SERIAL PRIMARY KEY,
-    display_name VARCHAR(50),
+    account_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    display_name VARCHAR(50) NOT NULL,
     handle VARCHAR(50) UNIQUE,
-    avatar_file_id VARCHAR(255),
+    avatar_file_id UUID,
     tagline VARCHAR(255),
     description TEXT,
     type VARCHAR(50) NOT NULL DEFAULT 'User',
@@ -15,8 +34,8 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 
 CREATE TABLE IF NOT EXISTS users (
-    user_id SERIAL PRIMARY KEY,
-    account_id INTEGER REFERENCES accounts(account_id) ON DELETE CASCADE,
+    user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    account_id UUID REFERENCES accounts(account_id) ON DELETE CASCADE,
     firebase_user_uuid VARCHAR(50),
     customer_id VARCHAR(255),
     first_name VARCHAR(50),
@@ -26,8 +45,8 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS staff (
-    staff_id SERIAL PRIMARY KEY,
-    account_id INTEGER REFERENCES accounts(account_id) ON DELETE CASCADE,
+    staff_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    account_id UUID REFERENCES accounts(account_id) ON DELETE CASCADE,
     firebase_staff_uuid VARCHAR(50),
     first_name VARCHAR(50),
     last_name VARCHAR(50),
@@ -36,31 +55,78 @@ CREATE TABLE IF NOT EXISTS staff (
     password_hash TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_users_account_id ON users(account_id);
-CREATE INDEX IF NOT EXISTS idx_staff_account_id ON staff(account_id);
+CREATE TABLE IF NOT EXISTS account_verification (
+    account_verification_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    account_id UUID REFERENCES accounts(account_id),
+    status VARCHAR(50) NOT NULL DEFAULT 'unverified',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    expires_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ,
+    verified_by_staff_id UUID REFERENCES staff(staff_id)
+);
 
--- Platform configuration (JSON blobs keyed by section)
+CREATE TABLE IF NOT EXISTS teams (
+    team_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    account_id UUID NOT NULL REFERENCES accounts(account_id)
+);
+
+CREATE TABLE IF NOT EXISTS team_members (
+    team_id UUID NOT NULL REFERENCES teams(team_id),
+    user_id UUID NOT NULL REFERENCES users(user_id),
+    role VARCHAR(50) NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    joined_at TIMESTAMPTZ DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ,
+    PRIMARY KEY (team_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS wallets (
+    wallet_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    type VARCHAR(50) NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    balance_credits INTEGER NOT NULL DEFAULT 0,
+    frozen_balance_credits INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS account_wallets (
+    wallet_id UUID NOT NULL REFERENCES wallets(wallet_id),
+    account_id UUID NOT NULL REFERENCES accounts(account_id),
+    PRIMARY KEY (wallet_id, account_id)
+);
+
+CREATE TABLE IF NOT EXISTS credit_transactions (
+    credit_transaction_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    type VARCHAR(50) NOT NULL,
+    amount_credits INTEGER NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    fee_transaction_id UUID REFERENCES credit_transactions(credit_transaction_id),
+    source_wallet_id UUID NOT NULL REFERENCES wallets(wallet_id),
+    destination_wallet_id UUID NOT NULL REFERENCES wallets(wallet_id)
+);
+
 CREATE TABLE IF NOT EXISTS platform_settings (
     setting_key VARCHAR(100) PRIMARY KEY,
     setting_value JSONB NOT NULL DEFAULT '{}',
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_by_staff_id INTEGER REFERENCES staff(staff_id)
+    updated_by_staff_id UUID REFERENCES staff(staff_id)
 );
 
--- User-submitted reports (feeds tickets & moderation)
 CREATE TABLE IF NOT EXISTS reports (
-    report_id SERIAL PRIMARY KEY,
-    report_number VARCHAR(20) UNIQUE NOT NULL,
-    by_account_id INTEGER REFERENCES accounts(account_id),
-    for_account_id INTEGER REFERENCES accounts(account_id),
-    target_type VARCHAR(50) NOT NULL,
+    report_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    report_number VARCHAR(20) UNIQUE,
+    by_account_id UUID REFERENCES accounts(account_id),
+    for_account_id UUID REFERENCES accounts(account_id),
+    target_type VARCHAR(50),
     target_id VARCHAR(100),
     target_label VARCHAR(255),
-    reason VARCHAR(100) NOT NULL,
+    reason VARCHAR(100),
     description TEXT,
     status VARCHAR(50) NOT NULL DEFAULT 'open',
     priority VARCHAR(20) NOT NULL DEFAULT 'medium',
-    assigned_staff_id INTEGER REFERENCES staff(staff_id),
+    assigned_staff_id UUID REFERENCES staff(staff_id),
     type VARCHAR(50),
     reference_table VARCHAR(50),
     reference_prefix VARCHAR(50),
@@ -72,50 +138,18 @@ CREATE TABLE IF NOT EXISTS reports (
     deleted_at TIMESTAMPTZ
 );
 
--- Support tickets
-CREATE TABLE IF NOT EXISTS support_tickets (
-    ticket_id SERIAL PRIMARY KEY,
-    ticket_number VARCHAR(20) UNIQUE NOT NULL,
-    subject VARCHAR(255) NOT NULL,
-    category VARCHAR(50) NOT NULL,
-    priority VARCHAR(20) NOT NULL DEFAULT 'medium',
-    status VARCHAR(50) NOT NULL DEFAULT 'open',
-    channel VARCHAR(50) NOT NULL DEFAULT 'web',
-    requester_account_id INTEGER REFERENCES accounts(account_id),
-    assigned_staff_id INTEGER REFERENCES staff(staff_id),
-    assigned_role VARCHAR(50),
-    related_report_id INTEGER REFERENCES reports(report_id),
-    related_dispute_id INTEGER,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    closed_at TIMESTAMPTZ
-);
-
--- Ticket conversation thread
-CREATE TABLE IF NOT EXISTS ticket_messages (
-    message_id SERIAL PRIMARY KEY,
-    ticket_id INTEGER NOT NULL REFERENCES support_tickets(ticket_id) ON DELETE CASCADE,
-    author_account_id INTEGER REFERENCES accounts(account_id),
-    author_type VARCHAR(20) NOT NULL DEFAULT 'user',
-    author_name VARCHAR(100),
-    body TEXT NOT NULL,
-    is_internal BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Disputes between members
 CREATE TABLE IF NOT EXISTS disputes (
-    dispute_id SERIAL PRIMARY KEY,
-    dispute_number VARCHAR(20) UNIQUE NOT NULL,
-    title VARCHAR(255) NOT NULL,
+    dispute_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    dispute_number VARCHAR(20) UNIQUE,
+    title VARCHAR(255),
     reason TEXT,
     status VARCHAR(50) NOT NULL DEFAULT 'open',
     priority VARCHAR(20) NOT NULL DEFAULT 'high',
-    initiator_account_id INTEGER REFERENCES accounts(account_id),
-    respondent_account_id INTEGER REFERENCES accounts(account_id),
+    initiator_account_id UUID REFERENCES accounts(account_id),
+    respondent_account_id UUID REFERENCES accounts(account_id),
     related_entity_type VARCHAR(50),
     related_entity_id VARCHAR(100),
-    assigned_staff_id INTEGER REFERENCES staff(staff_id),
+    assigned_staff_id UUID REFERENCES staff(staff_id),
     credit_amount_involved INTEGER NOT NULL DEFAULT 0,
     opened_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -123,24 +157,25 @@ CREATE TABLE IF NOT EXISTS disputes (
     resolution_notes TEXT
 );
 
--- Account violations / strikes
 CREATE TABLE IF NOT EXISTS violations (
-    violation_id SERIAL PRIMARY KEY,
-    violation_number VARCHAR(20) UNIQUE NOT NULL,
-    account_id INTEGER REFERENCES accounts(account_id),
-    title VARCHAR(255) NOT NULL,
+    violation_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    violation_number VARCHAR(20) UNIQUE,
+    account_id UUID REFERENCES accounts(account_id),
+    title VARCHAR(255),
     reason TEXT,
     points INTEGER NOT NULL DEFAULT 0,
     status VARCHAR(50) NOT NULL DEFAULT 'active',
-    issued_by_staff_id INTEGER REFERENCES staff(staff_id),
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    type VARCHAR(50),
+    staff_id UUID REFERENCES staff(staff_id),
+    issued_by_staff_id UUID REFERENCES staff(staff_id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
 );
 
--- Marketplace asset listing requests (Marketplace Moderator approval queue)
 CREATE TABLE IF NOT EXISTS marketplace_listings (
-    listing_id SERIAL PRIMARY KEY,
-    listing_number VARCHAR(20) UNIQUE NOT NULL,
-    submitted_by_account_id INTEGER REFERENCES accounts(account_id),
+    listing_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    listing_number VARCHAR(20) UNIQUE,
+    submitted_by_account_id UUID REFERENCES accounts(account_id),
     title VARCHAR(255) NOT NULL,
     description TEXT,
     category VARCHAR(50),
@@ -148,26 +183,15 @@ CREATE TABLE IF NOT EXISTS marketplace_listings (
     thumbnail_url TEXT,
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
     rejection_reason TEXT,
-    reviewed_by_staff_id INTEGER REFERENCES staff(staff_id),
+    reviewed_by_staff_id UUID REFERENCES staff(staff_id),
     reviewed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'support_tickets_related_dispute_id_fkey'
-    ) THEN
-        ALTER TABLE support_tickets
-            ADD CONSTRAINT support_tickets_related_dispute_id_fkey
-            FOREIGN KEY (related_dispute_id) REFERENCES disputes(dispute_id);
-    END IF;
-END $$;
-
+CREATE INDEX IF NOT EXISTS idx_users_account_id ON users(account_id);
+CREATE INDEX IF NOT EXISTS idx_staff_account_id ON staff(account_id);
 CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
-CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status);
-CREATE INDEX IF NOT EXISTS idx_support_tickets_assigned ON support_tickets(assigned_staff_id);
 CREATE INDEX IF NOT EXISTS idx_marketplace_listings_status ON marketplace_listings(status);
 CREATE INDEX IF NOT EXISTS idx_disputes_status ON disputes(status);
-CREATE INDEX IF NOT EXISTS idx_ticket_messages_ticket ON ticket_messages(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_account_verification_account ON account_verification(account_id);

@@ -38,9 +38,17 @@ async function getDashboardOverview() {
       .query(`
         SELECT
           (SELECT COUNT(*)::int FROM tickets WHERE deleted_at IS NULL AND status NOT IN ('Resolved', 'Closed')) AS open_tickets,
-          (SELECT COUNT(*)::int FROM disputes WHERE LOWER(status) NOT IN ('resolved', 'closed')) AS open_disputes
+          (SELECT COUNT(*)::int FROM disputes WHERE LOWER(COALESCE(status, 'open')) NOT IN ('resolved', 'closed')) AS open_disputes,
+          (SELECT COUNT(*)::int FROM teams) AS total_teams,
+          (SELECT COUNT(*)::int FROM marketplace_listings WHERE LOWER(status) = 'pending') AS pending_listings,
+          (SELECT COALESCE(SUM(w.balance_credits), 0)::int
+             FROM wallets w
+             INNER JOIN account_wallets aw ON aw.wallet_id = w.wallet_id
+             WHERE w.type = 'account wallets') AS total_wallet_credits
       `)
-      .catch(() => ({ rows: [{ open_tickets: 0, open_disputes: 0 }] })),
+      .catch(() => ({
+        rows: [{ open_tickets: 0, open_disputes: 0, total_teams: 0, pending_listings: 0, total_wallet_credits: 0 }],
+      })),
     pool.query(`
       SELECT
         (SELECT COUNT(*)::int FROM users) AS total_users,
@@ -50,7 +58,9 @@ async function getDashboardOverview() {
         (SELECT COUNT(*)::int FROM accounts WHERE type = 'Staff') AS staff_accounts,
         (SELECT COUNT(*)::int FROM accounts WHERE LOWER(COALESCE(status, '')) != 'active' OR status IS NULL) AS pending_review,
         (SELECT COALESCE(SUM(merit_score), 0)::int FROM accounts WHERE type = 'User') AS total_user_merit,
-        (SELECT COALESCE(AVG(merit_score), 0)::numeric(10,1) FROM accounts WHERE type = 'User') AS avg_user_merit
+        (SELECT COALESCE(AVG(merit_score), 0)::numeric(10,1) FROM accounts WHERE type = 'User') AS avg_user_merit,
+        (SELECT COUNT(*)::int FROM account_verification
+          WHERE deleted_at IS NULL AND LOWER(COALESCE(status, 'unverified')) IN ('unverified', 'pending', 'pending review')) AS pending_verifications
     `),
     pool.query(`
       SELECT
@@ -96,13 +106,24 @@ async function getDashboardOverview() {
         COALESCE(a.display_name, u.first_name || ' ' || u.last_name) AS full_name,
         u.email_address,
         a.handle,
-        a.status,
+        COALESCE(av.status, a.status) AS status,
         a.merit_score,
         a.created_at,
         a.type
       FROM accounts a
       LEFT JOIN users u ON u.account_id = a.account_id
-      WHERE LOWER(COALESCE(a.status, '')) != 'active' OR a.status IS NULL
+      LEFT JOIN LATERAL (
+        SELECT status
+        FROM account_verification av
+        WHERE av.account_id = a.account_id AND av.deleted_at IS NULL
+        ORDER BY av.created_at DESC
+        LIMIT 1
+      ) av ON TRUE
+      WHERE a.deleted_at IS NULL
+        AND (
+          LOWER(COALESCE(a.status, '')) != 'active'
+          OR LOWER(COALESCE(av.status, 'unverified')) IN ('unverified', 'pending', 'pending review')
+        )
       ORDER BY a.created_at DESC NULLS LAST
       LIMIT 50
     `),
@@ -150,7 +171,13 @@ async function getDashboardOverview() {
   ]);
 
   const stats = statsResult.rows[0];
-  const ticketStats = ticketCountsResult?.rows?.[0] || { open_tickets: 0, open_disputes: 0 };
+  const ticketStats = ticketCountsResult?.rows?.[0] || {
+    open_tickets: 0,
+    open_disputes: 0,
+    total_teams: 0,
+    pending_listings: 0,
+    total_wallet_credits: 0,
+  };
   const users = usersResult.rows.map(mapPlatformUser);
   const staff = staffResult.rows.map(mapStaffMember);
   const verificationQueue = pendingVerifications.rows.map(mapVerificationItem);
@@ -158,20 +185,21 @@ async function getDashboardOverview() {
 
   const recentActivity = buildPlatformActivity(signups, staff, verificationQueue);
   const economyFeed = meritLeaders.rows.map(mapEconomyItem);
-  const alerts = buildPlatformAlerts(stats, verificationQueue, staff, forumCounts);
+  const alerts = buildPlatformAlerts(stats, verificationQueue, staff, forumCounts, ticketStats);
 
   return {
     lastUpdated: new Date().toISOString(),
     kpis: {
-      pendingVerifications: Number(stats.pending_review),
+      pendingVerifications: Number(stats.pending_verifications ?? stats.pending_review),
       openDisputes: Number(ticketStats.open_disputes),
-      platformRevenueCredits: Number(stats.total_user_merit),
+      platformRevenueCredits: Number(ticketStats.total_wallet_credits || 0),
       activeUsers: Number(stats.active_users),
       totalUsers: Number(stats.total_users),
       openTickets: Number(ticketStats.open_tickets),
-      pendingApproval: Number(stats.pending_review),
+      pendingApproval: Number(ticketStats.pending_listings || stats.pending_review),
       totalStaff: Number(stats.total_staff),
       avgUserMerit: Number(stats.avg_user_merit),
+      totalTeams: Number(ticketStats.total_teams || 0),
       forumGroups: forumCounts.available ? forumCounts.groups : null,
       forumDiscussions: forumCounts.available ? forumCounts.discussions : null,
     },
@@ -332,14 +360,31 @@ function buildPlatformActivity(signups, staff, verificationQueue) {
     .slice(0, 12);
 }
 
-function buildPlatformAlerts(stats, verificationQueue, staff, forumCounts) {
+function buildPlatformAlerts(stats, verificationQueue, staff, forumCounts, ticketStats = {}) {
   const alerts = [];
 
-  if (Number(stats.pending_review) > 0) {
+  const pendingVerify = Number(stats.pending_verifications ?? stats.pending_review);
+  if (pendingVerify > 0) {
     alerts.push({
       id: 'pending-verify',
-      message: `${stats.pending_review} account(s) waiting for verification or approval.`,
+      message: `${pendingVerify} account(s) waiting for verification or approval.`,
       severity: 'warning',
+    });
+  }
+
+  if (Number(ticketStats.open_tickets) > 0) {
+    alerts.push({
+      id: 'open-tickets',
+      message: `${ticketStats.open_tickets} support ticket(s) still open.`,
+      severity: 'info',
+    });
+  }
+
+  if (Number(ticketStats.pending_listings) > 0) {
+    alerts.push({
+      id: 'pending-listings',
+      message: `${ticketStats.pending_listings} marketplace listing(s) awaiting review.`,
+      severity: 'info',
     });
   }
 
@@ -352,11 +397,11 @@ function buildPlatformAlerts(stats, verificationQueue, staff, forumCounts) {
     });
   }
 
-  const highMerit = Number(stats.total_user_merit) > 5000;
-  if (highMerit) {
+  const highWalletCredits = Number(ticketStats.total_wallet_credits || 0) > 500000;
+  if (highWalletCredits) {
     alerts.push({
-      id: 'merit-volume',
-      message: 'High total merit credits in circulation — review economy health.',
+      id: 'credit-volume',
+      message: 'High total wallet credits in circulation — review economy health.',
       severity: 'info',
     });
   }
