@@ -15,6 +15,7 @@ import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage.tsx";
 import CreditShop from "@/pages/user/0_config/CreditsShop.tsx";
 import Checkout from "@/pages/payment/checkout.tsx";
 import Profile from "@/pages/user/7_profile/Profile.tsx";
+import UserSettings from "@/components/nav/Settings/user_settings.tsx";
 
 import Layout from './components/ui/Layout.tsx'
 
@@ -139,6 +140,9 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
 
+        {/* Fullscreen Settings Route */}
+        <Route path='/settings' element={<UserSettings />} />
+
         <Route path="/landing">
           <Route path="Pricing" element={<PagePricing />} />
           <Route path="HowToHire" element={<PageHowToHire />} />
@@ -157,6 +161,7 @@ function App() {
         <Route element={<Layout />}>
           <Route path='/home' element={<Home />} />
             <Route path='/credits' element={<CreditShop />} />
+            <Route path='/credits-subscriptions' element={<CreditShop />} />
             <Route path='/credits/checkout' element={<Checkout />} />
             <Route path='/profile/:id?' element={<Profile />} />
             <Route path='/account-verification-status' element={<VerificationStatus />} />

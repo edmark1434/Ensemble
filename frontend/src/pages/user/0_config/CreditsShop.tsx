@@ -10,7 +10,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import api from "@/lib/axios";
 
 // ---- Data models ----
@@ -88,20 +88,44 @@ const CREDIT_RATE = 1.25;
 
 const CreditShop: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const userCurrentCredits = 1250;
 
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"topup" | "membership">("topup");
+
+  // Tab state synced with URL pathname
+  const [activeTab, setActiveTab] = useState<"topup" | "membership">(
+    location.pathname.includes("/credits-subscriptions") ? "membership" : "topup"
+  );
+
   const [showCustom, setShowCustom] = useState(false);
   const [customCredits, setCustomCredits] = useState<number>(100);
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [currentBalance, setCurrentBalance] = useState<number>(0);
-  
+
   // Track user's current subscription
   const [userSubscription, setUserSubscription] = useState<SubscriptionData | null>(null);
   const [isUserSubscribed, setIsUserSubscribed] = useState(false);
   const [hasXenditPlan, setHasXenditPlan] = useState(false);
-  const [isOnFreePlan, setIsOnFreePlan] = useState(true); // Track if user is on free plan
+  const [isOnFreePlan, setIsOnFreePlan] = useState(true);
+
+  // Sync tab state when URL route changes
+  useEffect(() => {
+    if (location.pathname.includes("/credits-subscriptions")) {
+      setActiveTab("membership");
+    } else {
+      setActiveTab("topup");
+    }
+  }, [location.pathname]);
+
+  const handleTabChange = (tab: "topup" | "membership") => {
+    setActiveTab(tab);
+    if (tab === "membership") {
+      navigate("/credits-subscriptions");
+    } else {
+      navigate("/credits");
+    }
+  };
 
   useEffect(() => {
     const fetchMemberships = async () => {
@@ -110,38 +134,34 @@ const CreditShop: React.FC = () => {
           api.get("api/subscription/plans"),
           api.get("api/subscription"),
           api.get("/api/accounts/wallet", {
-            params: { type: 'account_wallets' },
+            params: { type: "account_wallets" },
           }),
         ]);
-        
+
         console.log("Fetch wallet response:", getWalletResponse.data);
         setCurrentBalance(getWalletResponse.data?.wallet?.balance_credits || 0);
-        
+
         const plansData = planResponse.data.plans || [];
         console.log("Fetched memberships:", plansData);
-        
+
         const subscriptionData = userSubscriptionResponse.data.subscription;
         console.log("Fetched user subscription:", subscriptionData);
-        
+
         if (subscriptionData && subscriptionData.length > 0) {
           const sub = subscriptionData[0];
           setUserSubscription(sub);
-          
-          // Check if user has xendit_plan_id
+
           const hasValidPlan = sub.xendit_plan_id !== null && sub.xendit_plan_id !== "";
           setHasXenditPlan(hasValidPlan);
-          
-          // Check if user is on free plan
+
           const isFreePlan = sub.plan_id === "75e5c586-eab8-4954-ac14-9874d5429b68";
           setIsOnFreePlan(isFreePlan);
-          
-          // Check status case-insensitively
+
           const status = sub.status?.toUpperCase() || "";
           const isActiveOrTrialing = status === "ACTIVE" || status === "TRIALING" || status === "TRIAL";
-          
-          // User is subscribed if they have a valid plan and status is active/trialing
+
           const subscribed = hasValidPlan && isActiveOrTrialing;
-          
+
           setIsUserSubscribed(subscribed);
           console.log(`===== SUBSCRIPTION STATUS =====`);
           console.log(`Plan ID: ${sub.plan_id}`);
@@ -160,7 +180,7 @@ const CreditShop: React.FC = () => {
           setIsOnFreePlan(true);
           console.log("User has NO subscription");
         }
-        
+
         setMemberships(plansData);
       } catch (error) {
         console.error("Error fetching memberships:", error);
@@ -176,18 +196,19 @@ const CreditShop: React.FC = () => {
     fetchMemberships();
   }, []);
 
-  // Helper function to calculate remaining days
   const calculateRemainingDays = (subscription: SubscriptionData): number => {
     if (!subscription || !subscription.current_period_end) return 0;
-    
     const now = new Date();
     const periodEnd = new Date(subscription.current_period_end);
     const remainingMs = periodEnd.getTime() - now.getTime();
     return Math.max(0, Math.ceil(remainingMs / (1000 * 60 * 60 * 24)));
   };
 
-  // Helper function to calculate prorated amount
-  const calculateProratedAmount = (upgradePrice: number, currentPlanPrice: number, subscription: SubscriptionData): number => {
+  const calculateProratedAmount = (
+    upgradePrice: number,
+    currentPlanPrice: number,
+    subscription: SubscriptionData
+  ): number => {
     if (!subscription || !subscription.current_period_start || !subscription.current_period_end) {
       console.log("No subscription period data, using full price");
       return upgradePrice;
@@ -196,20 +217,20 @@ const CreditShop: React.FC = () => {
     const now = new Date();
     const periodStart = new Date(subscription.current_period_start);
     const periodEnd = new Date(subscription.current_period_end);
-    
+
     const totalPeriod = periodEnd.getTime() - periodStart.getTime();
     const elapsedTime = now.getTime() - periodStart.getTime();
-    const remainingPercent = Math.max(0, Math.min(1, 1 - (elapsedTime / totalPeriod)));
-    
+    const remainingPercent = Math.max(0, Math.min(1, 1 - elapsedTime / totalPeriod));
+
     const priceDifference = upgradePrice - currentPlanPrice;
     const proratedAmount = priceDifference * remainingPercent;
-    
+
     console.log(`Prorated calculation:
       - Remaining percent: ${remainingPercent}
       - Price difference: ${priceDifference}
       - Prorated amount: ${proratedAmount}
     `);
-    
+
     return Math.round(proratedAmount * 100) / 100;
   };
 
@@ -221,7 +242,7 @@ const CreditShop: React.FC = () => {
       console.log(`   Prorated amount: ₱${item.proratedDetails.proratedAmount}`);
       console.log(`   Remaining days: ${item.proratedDetails.remainingDays}`);
     }
-    
+
     navigate("/credits/checkout", { state: { item } });
   };
 
@@ -252,43 +273,39 @@ const CreditShop: React.FC = () => {
 
   const handleMembershipCheckout = (membership: Membership) => {
     if (membership.price === 0) return;
-    
-    // User is eligible for trial ONLY if they have NO xendit_plan_id AND on free plan
+
     const isEligibleForTrial = !hasXenditPlan && isOnFreePlan && membership.days_of_trials > 0;
     const currentPlan = getCurrentPlan();
-    
+
     let finalPrice = membership.price;
     let isUpgrade = false;
     let isDowngrade = false;
     let proratedDetails = null;
-    
+
     console.log(`\n===== CHECKOUT: ${membership.name} =====`);
     console.log(`isUserSubscribed: ${isUserSubscribed}`);
     console.log(`hasXenditPlan: ${hasXenditPlan}`);
     console.log(`isOnFreePlan: ${isOnFreePlan}`);
     console.log(`Current plan:`, currentPlan);
-    
-    // ONLY apply upgrade/downgrade logic if user:
-    // 1. Has xendit_plan_id AND
-    // 2. Is NOT on free plan
+
     if (isUserSubscribed && hasXenditPlan && !isOnFreePlan && currentPlan && userSubscription) {
       if (membership.price > currentPlan.price) {
         isUpgrade = true;
         const proratedAmount = calculateProratedAmount(
-          membership.price, 
-          currentPlan.price, 
+          membership.price,
+          currentPlan.price,
           userSubscription
         );
         finalPrice = Math.max(0, proratedAmount);
-        
+
         proratedDetails = {
           originalPrice: membership.price,
           currentPlanPrice: currentPlan.price,
           proratedAmount: proratedAmount,
           remainingDays: calculateRemainingDays(userSubscription),
-          priceDifference: membership.price - currentPlan.price
+          priceDifference: membership.price - currentPlan.price,
         };
-        
+
         console.log(`✅ UPGRADE! Prorated: ₱${proratedAmount}`);
       } else if (membership.price < currentPlan.price) {
         isDowngrade = true;
@@ -298,7 +315,7 @@ const CreditShop: React.FC = () => {
     } else {
       console.log(`User is on free plan or no xendit_plan_id - using full price`);
     }
-    
+
     navigateToCheckout({
       id: membership.plan_id,
       name: membership.name,
@@ -329,22 +346,18 @@ const CreditShop: React.FC = () => {
 
   const getCurrentPlan = (): Membership | null => {
     if (!userSubscription) return null;
-    const current = memberships.find(m => m.plan_id === userSubscription.plan_id) || null;
-    console.log(`Current plan found:`, current?.name || 'None');
+    const current = memberships.find((m) => m.plan_id === userSubscription.plan_id) || null;
+    console.log(`Current plan found:`, current?.name || "None");
     return current;
   };
 
-  // Determine button text and state for membership
   const getMembershipButtonState = (tier: Membership) => {
     const isFree = tier.price === 0;
     const currentPlan = isCurrentPlan(tier.plan_id);
     const hasFreeTrial = tier.days_of_trials > 0;
-    
-    // User is eligible for trial ONLY if:
-    // 1. Has NO xendit_plan_id AND
-    // 2. Is on free plan
+
     const isEligibleForTrial = !hasXenditPlan && isOnFreePlan && hasFreeTrial && !isFree;
-    
+
     console.log(`\n===== BUTTON STATE: ${tier.name} =====`);
     console.log(`isUserSubscribed: ${isUserSubscribed}`);
     console.log(`hasXenditPlan: ${hasXenditPlan}`);
@@ -352,7 +365,7 @@ const CreditShop: React.FC = () => {
     console.log(`isCurrentPlan: ${currentPlan}`);
     console.log(`tier price: ${tier.price}`);
     console.log(`isEligibleForTrial: ${isEligibleForTrial}`);
-    
+
     if (currentPlan) {
       console.log(`This is the current plan`);
       return {
@@ -361,36 +374,33 @@ const CreditShop: React.FC = () => {
         isUpgrade: false,
         isDowngrade: false,
         proratedPrice: null,
-        isCurrent: true
+        isCurrent: true,
       };
     }
-    
+
     if (isFree) {
       console.log(`This is the free plan`);
       return {
-        buttonText: "Free",
+        buttonText: "Free Tier",
         isDisabled: true,
         isUpgrade: false,
         isDowngrade: false,
         proratedPrice: null,
-        isCurrent: false
+        isCurrent: false,
       };
     }
-    
-    // ONLY apply upgrade/downgrade logic if user:
-    // 1. Has xendit_plan_id AND
-    // 2. Is NOT on free plan
+
     if (isUserSubscribed && hasXenditPlan && !isOnFreePlan) {
       const currentPlanDetails = getCurrentPlan();
       console.log(`currentPlanDetails:`, currentPlanDetails);
-      
+
       if (currentPlanDetails) {
         console.log(`Comparing: ${tier.price} vs ${currentPlanDetails.price}`);
-        
+
         if (tier.price > currentPlanDetails.price) {
           const proratedPrice = calculateProratedAmount(
-            tier.price, 
-            currentPlanDetails.price, 
+            tier.price,
+            currentPlanDetails.price,
             userSubscription!
           );
           console.log(`✅ UPGRADE to ${tier.name}! Prorated: ${proratedPrice}`);
@@ -400,10 +410,9 @@ const CreditShop: React.FC = () => {
             isUpgrade: true,
             isDowngrade: false,
             proratedPrice: proratedPrice,
-            isCurrent: false
+            isCurrent: false,
           };
-        } 
-        else if (tier.price < currentPlanDetails.price) {
+        } else if (tier.price < currentPlanDetails.price) {
           console.log(`⬇️ DOWNGRADE to ${tier.name}`);
           return {
             buttonText: `Downgrade to ${tier.name}`,
@@ -411,13 +420,12 @@ const CreditShop: React.FC = () => {
             isUpgrade: false,
             isDowngrade: true,
             proratedPrice: null,
-            isCurrent: false
+            isCurrent: false,
           };
         }
       }
     }
-    
-    // User is on free plan - show subscribe or trial
+
     if (isEligibleForTrial) {
       console.log(`🎯 Free trial available: ${tier.days_of_trials} days`);
       return {
@@ -426,158 +434,159 @@ const CreditShop: React.FC = () => {
         isUpgrade: false,
         isDowngrade: false,
         proratedPrice: null,
-        isCurrent: false
+        isCurrent: false,
       };
     }
-    
+
     console.log(`📝 Default Subscribe button`);
     return {
-      buttonText: "Subscribe",
+      buttonText: "Subscribe Plan",
       isDisabled: false,
       isUpgrade: false,
       isDowngrade: false,
       proratedPrice: null,
-      isCurrent: false
+      isCurrent: false,
     };
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0b0d12]">
+      <div className="min-h-screen bg-[#080a12] text-zinc-300 font-['Plus_Jakarta_Sans',sans-serif]">
         <UserHeader pageTitle="Credit Shop" credits={userCurrentCredits} />
         <div className="mx-auto max-w-6xl px-6 py-24 flex items-center justify-center">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-600 border-t-white" />
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500/30 border-t-blue-500" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0b0d12] text-white">
+    <div className="min-h-screen bg-[#080a12] text-zinc-200 font-['Plus_Jakarta_Sans',sans-serif] selection:bg-blue-500/30">
       <UserHeader pageTitle="Credit Shop" credits={userCurrentCredits} />
 
-      <div className="mx-auto max-w-6xl px-6 py-10">
-        {/* Page header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold tracking-tight">Billing</h1>
-          <p className="text-sm text-zinc-400 mt-1">
-            Top up your credit balance or manage your subscription plan.
+      <div className="mx-auto max-w-6xl px-6 py-10 space-y-8">
+        {/* Page Header */}
+        <div>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Billing & Credits</h1>
+          <p className="text-xs text-zinc-400 mt-1">
+            Top up your credit balance or upgrade your account membership subscription.
           </p>
         </div>
 
-        {/* Current balance strip */}
-        <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/40 px-5 py-4 mb-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-zinc-800">
-              <Wallet className="h-4 w-4 text-zinc-300" />
+        {/* Current Balance Card - Ensemble Glassmorphic Styled */}
+        <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-gradient-to-r from-blue-900/20 via-[#0d0f1a] to-[#0d0f1a] p-5 shadow-xl backdrop-blur-md">
+          <div className="flex items-center gap-4">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
+              <Wallet className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs text-zinc-400">Current balance</p>
-              <p className="text-sm font-semibold text-white">
-                {currentBalance.toLocaleString()} credits
+              <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Current Balance</p>
+              <p className="text-xl font-bold text-white">
+                {currentBalance.toLocaleString()}{" "}
+                <span className="text-xs font-normal text-zinc-400">Credits</span>
               </p>
             </div>
           </div>
-          <div className="hidden sm:flex items-center gap-1.5 text-xs text-zinc-500">
-            <Shield className="h-3.5 w-3.5" />
-            Secure checkout via Xendit
+          <div className="hidden sm:flex items-center gap-2 text-xs text-zinc-400 bg-white/5 border border-white/5 px-3 py-1.5 rounded-xl">
+            <Shield className="h-3.5 w-3.5 text-blue-400" />
+            <span>Encrypted checkout via Xendit</span>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="border-b border-zinc-800 mb-8">
-          <nav className="flex gap-6" aria-label="Tabs">
+        {/* Tabs - Ensemble Theme */}
+        <div className="border-b border-white/10">
+          <nav className="flex gap-8" aria-label="Tabs">
             <button
-              onClick={() => setActiveTab("topup")}
-              className={`relative pb-3 text-sm font-medium transition-colors ${
-                activeTab === "topup" ? "text-white" : "text-zinc-500 hover:text-zinc-300"
+              onClick={() => handleTabChange("topup")}
+              className={`relative pb-3 text-sm font-semibold transition-all ${
+                activeTab === "topup" ? "text-blue-400" : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
-              Top up credits
+              Top up Credits
               {activeTab === "topup" && (
-                <span className="absolute -bottom-px left-0 right-0 h-0.5 bg-white rounded-full" />
+                <span className="absolute -bottom-px left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
               )}
             </button>
             <button
-              onClick={() => setActiveTab("membership")}
-              className={`relative pb-3 text-sm font-medium transition-colors ${
-                activeTab === "membership" ? "text-white" : "text-zinc-500 hover:text-zinc-300"
+              onClick={() => handleTabChange("membership")}
+              className={`relative pb-3 text-sm font-semibold transition-all ${
+                activeTab === "membership" ? "text-blue-400" : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
-              Subscription plans
+              Subscription Plans
               {activeTab === "membership" && (
-                <span className="absolute -bottom-px left-0 right-0 h-0.5 bg-white rounded-full" />
+                <span className="absolute -bottom-px left-0 right-0 h-0.5 bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
               )}
             </button>
           </nav>
         </div>
 
-        {/* TOP UP */}
+        {/* TOP UP SECTION */}
         {activeTab === "topup" && (
-          <div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-4">
+          <div className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {creditPacks.map((pack) => {
                 const isBestValue = pack.id === "vault";
                 return (
                   <div
                     key={pack.id}
-                    className="flex flex-col justify-between rounded-lg border border-zinc-800 bg-zinc-900/30 p-5 hover:border-zinc-700 transition-colors"
+                    className="flex flex-col justify-between rounded-2xl border border-white/10 bg-[#0d0f1a] p-5 shadow-xl hover:border-blue-500/30 transition-all duration-300 group"
                   >
                     <div>
                       <div className="flex items-center justify-between mb-3">
                         <h3 className="text-sm font-semibold text-white">{pack.name}</h3>
                         {isBestValue && (
-                          <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
-                            Best value
+                          <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-[10px] font-bold text-emerald-400 uppercase tracking-wider">
+                            Best Value
                           </span>
                         )}
                       </div>
-                      <p className="text-2xl font-semibold text-white">
+                      <p className="text-2xl font-extrabold text-white">
                         {pack.credits.toLocaleString()}
-                        <span className="text-sm font-normal text-zinc-500"> credits</span>
+                        <span className="text-xs font-normal text-zinc-400 ml-1">Credits</span>
                       </p>
-                      <p className="text-sm text-zinc-400 mt-1">{formatPHP(pack.price)}</p>
+                      <p className="text-sm text-zinc-400 mt-1 font-medium">{formatPHP(pack.price)}</p>
                     </div>
                     <button
                       onClick={() => handlePackCheckout(pack)}
-                      className="mt-5 w-full rounded-md bg-white py-2 text-sm font-medium text-zinc-950 hover:bg-zinc-200 transition-colors"
+                      className="mt-6 w-full rounded-xl bg-blue-600 hover:bg-blue-500 py-2.5 text-xs font-bold text-white transition-all shadow-lg hover:shadow-blue-500/20"
                     >
-                      Buy now
+                      Buy Pack
                     </button>
                   </div>
                 );
               })}
             </div>
 
-            {/* Custom amount toggle */}
-            <div className="rounded-lg border border-zinc-800 bg-zinc-900/30">
+            {/* Custom Amount Toggle */}
+            <div className="rounded-2xl border border-white/10 bg-[#0d0f1a] overflow-hidden shadow-xl">
               <button
                 onClick={() => setShowCustom(!showCustom)}
-                className="flex w-full items-center justify-between px-5 py-4 text-left"
+                className="flex w-full items-center justify-between px-6 py-4 text-left hover:bg-white/[0.02] transition-colors"
               >
                 <div>
-                  <p className="text-sm font-medium text-white">Enter a custom amount</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">
-                    {formatPHP(CREDIT_RATE)} per credit · minimum 10 credits
+                  <p className="text-sm font-medium text-white">Enter a Custom Credit Amount</p>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    {formatPHP(CREDIT_RATE)} per credit • Minimum 10 credits
                   </p>
                 </div>
                 <ChevronDown
-                  className={`h-4 w-4 text-zinc-400 transition-transform ${
-                    showCustom ? "rotate-180" : ""
+                  className={`h-4 w-4 text-zinc-400 transition-transform duration-300 ${
+                    showCustom ? "rotate-180 text-blue-400" : ""
                   }`}
                 />
               </button>
 
               {showCustom && (
-                <div className="border-t border-zinc-800 px-5 py-5">
-                  <label className="text-xs font-medium text-zinc-400 block mb-2">
-                    Number of credits
+                <div className="border-t border-white/5 px-6 py-6 space-y-4">
+                  <label className="text-xs font-medium text-zinc-400 block">
+                    Number of Credits
                   </label>
                   <div className="flex items-center gap-2 max-w-xs">
                     <button
                       onClick={decrementCredits}
                       aria-label="Decrease amount"
-                      className="flex h-10 w-10 items-center justify-center rounded-md border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors"
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10 transition-colors"
                     >
                       <Minus className="h-4 w-4" />
                     </button>
@@ -587,26 +596,26 @@ const CreditShop: React.FC = () => {
                       onChange={handleCustomInputChange}
                       min={10}
                       max={10000}
-                      className="h-10 flex-1 rounded-md border border-zinc-700 bg-zinc-950 text-center text-base font-semibold text-white focus:outline-none focus:border-zinc-500"
+                      className="h-10 flex-1 rounded-xl border border-white/10 bg-white/5 text-center text-sm font-bold text-white focus:outline-none focus:border-blue-500 transition-colors"
                     />
                     <button
                       onClick={incrementCredits}
                       aria-label="Increase amount"
-                      className="flex h-10 w-10 items-center justify-center rounded-md border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors"
+                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10 transition-colors"
                     >
                       <Plus className="h-4 w-4" />
                     </button>
                   </div>
 
-                  <div className="flex flex-wrap gap-2 mt-3">
+                  <div className="flex flex-wrap gap-2 pt-1">
                     {[50, 100, 250, 500, 1000].map((amount) => (
                       <button
                         key={amount}
                         onClick={() => setCustomCredits(amount)}
-                        className={`rounded-md px-3 py-1 text-xs font-medium border transition-colors ${
+                        className={`rounded-xl px-3 py-1.5 text-xs font-medium border transition-all ${
                           customCredits === amount
-                            ? "border-white bg-white text-zinc-950"
-                            : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                            ? "border-blue-500/50 bg-blue-500/20 text-blue-300"
+                            : "border-white/10 bg-white/5 text-zinc-400 hover:text-white"
                         }`}
                       >
                         {amount}
@@ -614,9 +623,9 @@ const CreditShop: React.FC = () => {
                     ))}
                   </div>
 
-                  <div className="mt-5 flex items-center justify-between rounded-md bg-zinc-950 border border-zinc-800 px-4 py-3">
-                    <span className="text-sm text-zinc-400">Total due</span>
-                    <span className="text-lg font-semibold text-white">
+                  <div className="flex items-center justify-between rounded-xl bg-white/[0.02] border border-white/5 px-4 py-3">
+                    <span className="text-xs text-zinc-400">Total Due</span>
+                    <span className="text-base font-bold text-white">
                       {formatPHP(Math.round(customCredits * CREDIT_RATE * 100) / 100)}
                     </span>
                   </div>
@@ -624,9 +633,9 @@ const CreditShop: React.FC = () => {
                   <button
                     onClick={handleCustomCheckout}
                     disabled={customCredits < 10}
-                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-white py-2.5 text-sm font-medium text-zinc-950 hover:bg-zinc-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 py-2.5 text-xs font-bold text-white transition-all shadow-lg hover:shadow-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Continue to checkout
+                    Continue to Checkout
                     <ArrowRight className="h-4 w-4" />
                   </button>
                 </div>
@@ -635,19 +644,16 @@ const CreditShop: React.FC = () => {
           </div>
         )}
 
-        {/* MEMBERSHIP */}
+        {/* MEMBERSHIP SECTION */}
         {activeTab === "membership" && (
-          <div className="grid gap-4 md:grid-cols-3 items-stretch">
+          <div className="grid gap-6 md:grid-cols-3 items-stretch">
             {memberships.map((tier) => {
               const isFree = tier.price === 0;
               const isPopular = tier.name === "Premium";
               const currentPlan = isCurrentPlan(tier.plan_id);
-              
-              const { buttonText, isDisabled, isUpgrade, isDowngrade, proratedPrice, isCurrent } = getMembershipButtonState(tier);
-              
-              // User eligible for trial ONLY if:
-              // 1. Has NO xendit_plan_id AND
-              // 2. Is on free plan
+
+              const { buttonText, isDisabled, isUpgrade, isDowngrade, proratedPrice, isCurrent } =
+                getMembershipButtonState(tier);
               const isEligibleForTrial = !hasXenditPlan && isOnFreePlan && tier.days_of_trials > 0 && !isFree;
               const showTrialBadge = isEligibleForTrial;
               const currentPlanDetails = getCurrentPlan();
@@ -655,123 +661,120 @@ const CreditShop: React.FC = () => {
               return (
                 <div
                   key={tier.plan_id}
-                  className={`flex flex-col justify-between rounded-lg border p-6 relative ${
+                  className={`flex flex-col justify-between rounded-2xl border p-6 relative transition-all duration-300 ${
                     isCurrent
-                      ? "border-emerald-500/40 bg-zinc-900/30"
+                      ? "border-emerald-500/60 bg-[#0d131f] shadow-[0_0_20px_rgba(16,185,129,0.1)]"
                       : isPopular && !isCurrent
-                      ? "border-white/40 bg-zinc-900/50"
-                      : "border-zinc-800 bg-zinc-900/30"
+                      ? "border-blue-500/40 bg-[#0d0f1a] shadow-xl"
+                      : "border-white/10 bg-[#0d0f1a] hover:border-white/20"
                   }`}
                 >
                   {/* Badges */}
                   {isCurrent && (
-                    <div className="absolute -top-2.5 left-4">
-                      <span className="bg-emerald-500 text-white text-[10px] font-medium px-3 py-0.5 rounded-full">
-                        CURRENT PLAN
-                      </span>
+                    <div className="absolute -top-3 left-4 bg-emerald-500 text-[#080a12] text-[10px] font-extrabold tracking-wider uppercase px-3 py-0.5 rounded-full shadow-md">
+                      Current Plan
                     </div>
                   )}
 
-                  {/* ONLY show upgrade/downgrade badges if user has xendit_plan_id AND is NOT on free plan */}
                   {isUpgrade && !isCurrent && hasXenditPlan && !isOnFreePlan && (
-                    <div className="absolute -top-2.5 left-4">
-                      <span className="bg-blue-500 text-white text-[10px] font-medium px-3 py-0.5 rounded-full">
-                        UPGRADE
-                      </span>
+                    <div className="absolute -top-3 left-4 bg-blue-600 text-white text-[10px] font-extrabold tracking-wider uppercase px-3 py-0.5 rounded-full shadow-md">
+                      Upgrade
                     </div>
                   )}
 
                   {isDowngrade && !isCurrent && hasXenditPlan && !isOnFreePlan && (
-                    <div className="absolute -top-2.5 left-4">
-                      <span className="bg-amber-500 text-white text-[10px] font-medium px-3 py-0.5 rounded-full">
-                        DOWNGRADE
-                      </span>
+                    <div className="absolute -top-3 left-4 bg-amber-500 text-[#080a12] text-[10px] font-extrabold tracking-wider uppercase px-3 py-0.5 rounded-full shadow-md">
+                      Downgrade
                     </div>
                   )}
 
                   {showTrialBadge && (
-                    <div className="absolute -top-2.5 left-4">
-                      <span className="bg-blue-500 text-white text-[10px] font-medium px-3 py-0.5 rounded-full">
-                        {tier.days_of_trials}-DAY FREE TRIAL
-                      </span>
+                    <div className="absolute -top-3 left-4 bg-blue-600 text-white text-[10px] font-bold px-3 py-0.5 rounded-full shadow-md">
+                      {tier.days_of_trials}-Day Free Trial
                     </div>
                   )}
 
                   <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm font-semibold text-white flex items-center gap-1.5">
-                        {!isFree && <Crown className="h-3.5 w-3.5 text-zinc-400" />}
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-base font-bold text-white flex items-center gap-2">
+                        {!isFree && <Crown className="h-4 w-4 text-amber-400" />}
                         {tier.name}
                       </h3>
                       {isPopular && !isCurrent && (
-                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white">
+                        <span className="rounded-full bg-white/10 border border-white/10 px-2.5 py-0.5 text-[10px] font-medium text-white">
                           Most popular
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-zinc-400 mb-4">{tier.description}</p>
-                    
-                    <p className="text-3xl font-semibold text-white mb-1">
-                      {isFree ? "Free" : (
+                    <p className="text-xs text-zinc-400 mb-5">{tier.description}</p>
+
+                    <div className="text-3xl font-extrabold text-white mb-2">
+                      {isFree ? (
+                        "Free"
+                      ) : (
                         <>
-                          {/* ONLY show prorated pricing if user has xendit_plan_id AND is NOT on free plan */}
                           {isUpgrade && proratedPrice !== null && proratedPrice > 0 && hasXenditPlan && !isOnFreePlan && (
                             <>
                               <span className="line-through text-zinc-500 text-xl mr-2">{formatPHP(tier.price)}</span>
                               <span className="text-emerald-400">{formatPHP(proratedPrice)}</span>
-                              <span className="text-sm font-normal text-emerald-400 ml-1">(prorated)</span>
+                              <span className="text-xs font-normal text-emerald-400 ml-1">(prorated)</span>
                             </>
                           )}
                           {isUpgrade && proratedPrice !== null && proratedPrice === 0 && hasXenditPlan && !isOnFreePlan && (
                             <>
                               <span className="line-through text-zinc-500 text-xl mr-2">{formatPHP(tier.price)}</span>
                               <span className="text-emerald-400">Free</span>
-                              <span className="text-sm font-normal text-emerald-400 ml-1">(prorated)</span>
+                              <span className="text-xs font-normal text-emerald-400 ml-1">(prorated)</span>
                             </>
                           )}
-                          {(!isUpgrade || proratedPrice === null || !hasXenditPlan || isOnFreePlan) && (
-                            formatPHP(tier.price)
-                          )}
+                          {(!isUpgrade || proratedPrice === null || !hasXenditPlan || isOnFreePlan) &&
+                            formatPHP(tier.price)}
                         </>
                       )}
                       {tier.billing_period === "MONTH" && !isFree && (
-                        <span className="text-sm font-normal text-zinc-500"> /mo</span>
+                        <span className="text-xs font-normal text-zinc-400"> /mo</span>
                       )}
-                    </p>
+                    </div>
 
-                    {/* ONLY show prorated explanation if user has xendit_plan_id AND is NOT on free plan */}
-                    {isUpgrade && proratedPrice !== null && !isCurrent && isUserSubscribed && hasXenditPlan && !isOnFreePlan && currentPlanDetails && (
-                      <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1">
-                        <span>⏱️</span>
-                        <span>
-                          Prorated charge of {formatPHP(proratedPrice)} (based on remaining period of your {currentPlanDetails.name} plan)
-                        </span>
-                      </p>
-                    )}
+                    {isUpgrade &&
+                      proratedPrice !== null &&
+                      !isCurrent &&
+                      isUserSubscribed &&
+                      hasXenditPlan &&
+                      !isOnFreePlan &&
+                      currentPlanDetails && (
+                        <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1.5">
+                          <span>⏱️</span>
+                          <span>
+                            Prorated charge of {formatPHP(proratedPrice)} (based on remaining period of {currentPlanDetails.name} plan)
+                          </span>
+                        </p>
+                      )}
 
                     {isEligibleForTrial && (
-                      <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1">
+                      <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1.5">
                         <span>✦</span>
                         <span>Try free for {tier.days_of_trials} days, then {formatPHP(tier.price)}/mo</span>
                       </p>
                     )}
 
-                    <div className="h-px bg-zinc-800 my-5" />
-                    <ul className="space-y-2.5 mb-6">
+                    <div className="h-px bg-white/10 my-6" />
+
+                    <ul className="space-y-3 mb-8">
                       {tier.features && tier.features.length > 0 ? (
                         tier.features.map((feature) => (
-                          <li key={feature.feature_id} className="flex items-start gap-2 text-sm">
-                            <Check className="h-4 w-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                          <li key={feature.feature_id} className="flex items-start gap-2 text-xs">
+                            <Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
                             <span className="text-zinc-300">
                               {feature.description}{" "}
-                              <span className="font-semibold text-white/90 bg-white/5 px-2 py-0.5 rounded-md border border-white/10">
+                              <span className="font-semibold text-white bg-white/5 border border-white/10 px-1.5 py-0.5 rounded text-[11px] ml-1 inline-block">
                                 {feature.value}
                               </span>
                             </span>
                           </li>
                         ))
                       ) : (
-                        <li className="text-sm text-zinc-500">No features available</li>
+                        <li className="text-xs text-zinc-500">No features available</li>
                       )}
                     </ul>
                   </div>
@@ -779,24 +782,24 @@ const CreditShop: React.FC = () => {
                   <button
                     onClick={() => handleMembershipCheckout(tier)}
                     disabled={isDisabled}
-                    className={`w-full rounded-md py-2.5 text-sm font-medium transition-colors ${
+                    className={`w-full rounded-xl py-2.5 text-xs font-bold transition-all shadow-md ${
                       isDisabled
-                        ? "border border-zinc-800 text-zinc-500 cursor-default bg-zinc-800/20"
+                        ? "border border-white/10 bg-white/5 text-zinc-500 cursor-not-allowed"
                         : isUpgrade && hasXenditPlan && !isOnFreePlan
-                        ? "bg-emerald-500 text-white hover:bg-emerald-600"
+                        ? "bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/20"
                         : isDowngrade && hasXenditPlan && !isOnFreePlan
-                        ? "bg-amber-500 text-white hover:bg-amber-600"
+                        ? "bg-amber-500 text-black hover:bg-amber-400 shadow-amber-500/20"
                         : isPopular
-                        ? "bg-white text-zinc-950 hover:bg-zinc-200"
-                        : "border border-zinc-700 text-white hover:bg-zinc-800"
+                        ? "bg-white text-black hover:bg-zinc-200"
+                        : "bg-white/10 border border-white/10 text-white hover:bg-white/20"
                     }`}
                   >
                     {buttonText}
                     {isUpgrade && !isDisabled && hasXenditPlan && !isOnFreePlan && (
-                      <span className="ml-2 text-xs opacity-80">↑</span>
+                      <span className="ml-1.5 text-xs">↑</span>
                     )}
                     {isDowngrade && !isDisabled && hasXenditPlan && !isOnFreePlan && (
-                      <span className="ml-2 text-xs opacity-80">↓</span>
+                      <span className="ml-1.5 text-xs">↓</span>
                     )}
                   </button>
                 </div>
@@ -805,9 +808,9 @@ const CreditShop: React.FC = () => {
           </div>
         )}
 
-        {/* Footer note */}
-        <p className="mt-10 text-center text-xs text-zinc-600">
-          Payments are processed securely by Xendit. Prices shown in Philippine pesos (PHP).
+        {/* Footer Note */}
+        <p className="mt-10 text-center text-xs text-zinc-500">
+          Payments are processed securely via Xendit. Prices shown in Philippine Pesos (PHP).
         </p>
       </div>
     </div>
