@@ -1,4 +1,6 @@
 const { pool } = require('../lib/database');
+const { QUEUE_SCOPES } = require('../lib/ticketEnums');
+const { fetchScopedTickets, scopedTicketCounts } = require('./ModeratorSharedRepositories');
 
 function mapListingRow(row) {
   return {
@@ -82,51 +84,7 @@ async function reviewMarketplaceListing(listingId, { status, rejectionReason }, 
 }
 
 async function getMarketplaceTickets() {
-  const result = await pool.query(`
-    SELECT
-      t.*,
-      COALESCE(ra.display_name, ru.first_name || ' ' || ru.last_name) AS requester_name,
-      ra.handle AS requester_handle,
-      ru.email_address AS requester_email,
-      COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
-      st.role AS assignee_role,
-      (SELECT COUNT(*)::int FROM ticket_messages tm WHERE tm.ticket_id = t.ticket_id) AS message_count,
-      (SELECT MAX(tm.created_at) FROM ticket_messages tm WHERE tm.ticket_id = t.ticket_id) AS last_message_at
-    FROM support_tickets t
-    LEFT JOIN accounts ra ON ra.account_id = t.requester_account_id
-    LEFT JOIN users ru ON ru.account_id = ra.account_id
-    LEFT JOIN staff st ON st.staff_id = t.assigned_staff_id
-    LEFT JOIN accounts sa ON sa.account_id = st.account_id
-    WHERE t.category = 'marketplace'
-    ORDER BY
-      CASE t.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
-      t.updated_at DESC
-    LIMIT 50
-  `);
-
-  return result.rows.map((row) => ({
-    id: row.ticket_id,
-    number: row.ticket_number,
-    subject: row.subject,
-    category: row.category,
-    priority: row.priority,
-    status: row.status,
-    channel: row.channel,
-    requester: {
-      accountId: row.requester_account_id,
-      name: row.requester_name || 'Unknown',
-      username: row.requester_handle || '—',
-      email: row.requester_email || null,
-    },
-    assignee: row.assigned_staff_id
-      ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Unassigned', role: row.assigned_role || row.assignee_role }
-      : null,
-    messageCount: Number(row.message_count || 0),
-    lastMessageAt: row.last_message_at,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    closedAt: row.closed_at,
-  }));
+  return fetchScopedTickets(QUEUE_SCOPES.marketplace);
 }
 
 async function getMarketplaceOverview() {
@@ -144,17 +102,12 @@ async function getMarketplaceOverview() {
       SELECT category, COUNT(*)::int AS count
       FROM marketplace_listings GROUP BY category ORDER BY count DESC
     `),
-    pool.query(`
-      SELECT
-        COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE LOWER(status) NOT IN ('resolved', 'closed'))::int AS open_count
-      FROM support_tickets WHERE category = 'marketplace'
-    `),
+    scopedTicketCounts(QUEUE_SCOPES.marketplace),
     pool.query(`SELECT COUNT(*)::int AS count FROM accounts WHERE LOWER(status) IN ('suspended', 'banned')`),
   ]);
 
   const lc = listingCounts.rows[0];
-  const tc = ticketCounts.rows[0];
+  const tc = ticketCounts;
 
   const statusChart = [
     { label: 'Pending', value: Number(lc.pending), color: '#fbbf24' },
@@ -193,11 +146,25 @@ async function getMarketplaceOverview() {
 
 function buildMarketplaceAlerts(lc, tc) {
   const alerts = [];
+  const openTickets = Number(tc.open_count) + Number(tc.in_progress || 0);
+
   if (Number(lc.pending) > 0) {
     alerts.push({ id: 'pending-listings', message: `${lc.pending} listing(s) awaiting review.`, severity: 'warning' });
   }
-  if (Number(tc.open_count) > 0) {
-    alerts.push({ id: 'open-tickets', message: `${tc.open_count} marketplace ticket(s) open.`, severity: 'info' });
+  if (Number(tc.unassigned) > 0) {
+    alerts.push({ id: 'unassigned', message: `${tc.unassigned} marketplace ticket(s) have no assignee.`, severity: 'warning' });
+  }
+  if (Number(tc.high_priority) > 0) {
+    alerts.push({ id: 'high-priority', message: `${tc.high_priority} high-priority marketplace ticket(s) need attention.`, severity: 'error' });
+  }
+  if (Number(tc.awaiting_reply) > 0) {
+    alerts.push({ id: 'awaiting-reply', message: `${tc.awaiting_reply} marketplace ticket(s) awaiting a staff reply.`, severity: 'warning' });
+  }
+  if (Number(tc.escalated) > 0) {
+    alerts.push({ id: 'escalated', message: `${tc.escalated} escalated marketplace ticket(s) need a handoff.`, severity: 'error' });
+  }
+  if (openTickets > 0) {
+    alerts.push({ id: 'open-tickets', message: `${openTickets} marketplace ticket(s) open.`, severity: 'info' });
   }
   if (!alerts.length) {
     alerts.push({ id: 'clear', message: 'Marketplace queue is clear.', severity: 'success' });

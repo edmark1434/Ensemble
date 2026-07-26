@@ -1,0 +1,269 @@
+import React, { useRef, useState, type ChangeEvent } from "react";
+import { ArrowRight, Image as ImageIcon, ChevronDown, Check } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+
+export const categories = ["Social", "YouTube", "Corporate", "Events", "Design", "Development"];
+export const difficulties = ["Beginner", "Intermediate", "Expert"];
+
+interface CreateCoreInfoProps {
+  title: string;
+  setTitle: (val: string) => void;
+  description: string;
+  setDescription: (val: string) => void;
+  category: string;
+  setCategory: (val: string) => void;
+  difficulty: string;
+  setDifficulty: (val: string) => void;
+  previewUrl: string | null;
+  setPreviewUrl: (val: string | null) => void;
+  setThumbnail: (val: string) => void;
+  isDragging: boolean;
+  setIsDragging: (val: boolean) => void;
+  errors: { [key: string]: string };
+  setErrors: React.Dispatch<React.SetStateAction<{ [key: string]: string }>>;
+  onNext: () => void;
+  onDiscard: () => void;
+}
+
+interface CustomSelectProps {
+  label: string;
+  value: string;
+  options: string[];
+  placeholder: string;
+  error?: string;
+  onSelect: (val: string) => void;
+}
+
+const CustomDropdown: React.FC<CustomSelectProps> = ({
+  label,
+  value,
+  options,
+  placeholder,
+  error,
+  onSelect,
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="space-y-1.5 relative">
+      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+        {label} <span className="text-red-500">*</span>
+      </label>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className={`w-full flex items-center justify-between rounded-xl border bg-[#0d0f1a] px-3.5 py-2.5 text-xs text-left transition-all ${
+            error
+              ? "border-red-500/50 focus:border-red-500"
+              : isOpen
+              ? "border-blue-500 ring-2 ring-blue-500/10"
+              : "border-white/10 hover:border-white/20"
+          }`}
+        >
+          <span className={value ? "text-white font-medium" : "text-zinc-500"}>
+            {value || placeholder}
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 text-zinc-400 transition-transform duration-200 ${
+              isOpen ? "rotate-180 text-blue-400" : ""
+            }`}
+          />
+        </button>
+
+        <AnimatePresence>
+          {isOpen && (
+            <>
+              <div
+                className="fixed inset-0 z-20 cursor-default"
+                onClick={() => setIsOpen(false)}
+              />
+              <motion.div
+                initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                animate={{ opacity: 1, y: 4, scale: 1 }}
+                exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                className="absolute left-0 right-0 z-30 max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-[#0d0f1a] p-1.5 shadow-2xl space-y-0.5 custom-scrollbar"
+              >
+                {options.map((opt) => {
+                  const isSelected = value === opt;
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => {
+                        onSelect(opt);
+                        setIsOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
+                        isSelected
+                          ? "bg-blue-500/15 text-blue-400"
+                          : "text-zinc-300 hover:bg-white/5 hover:text-white"
+                      }`}
+                    >
+                      <span>{opt}</span>
+                      {isSelected && <Check className="h-3.5 w-3.5 text-blue-400" />}
+                    </button>
+                  );
+                })}
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+      </div>
+      {error && <p className="text-[11px] text-red-400">{error}</p>}
+    </div>
+  );
+};
+
+export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
+  title,
+  setTitle,
+  description,
+  setDescription,
+  category,
+  setCategory,
+  difficulty,
+  setDifficulty,
+  previewUrl,
+  setPreviewUrl,
+  setThumbnail,
+  isDragging,
+  setIsDragging,
+  errors,
+  setErrors,
+  onNext,
+  onDiscard,
+}) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const processFile = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      alert("Please upload an image file.");
+      return;
+    }
+    const localUrl = URL.createObjectURL(file);
+    setPreviewUrl(localUrl);
+    setThumbnail(localUrl);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      processFile(e.target.files[0]);
+    }
+  };
+
+  const clearError = (key: string) => {
+    setErrors((prev) => {
+      const { [key]: _, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  return (
+    <div className="space-y-5 text-left">
+      <div>
+        <h2 className="text-lg font-bold text-white mb-0.5">Job Core Specifications</h2>
+        <p className="text-xs text-zinc-400">Provide fundamental background criteria for your project.</p>
+      </div>
+
+      {/* Compact Thumbnail Upload Area */}
+      <div className="space-y-1.5">
+        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Job Thumbnail Image</label>
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={`relative h-28 w-full rounded-xl border border-dashed flex items-center justify-center p-3 cursor-pointer transition-all duration-200 ${
+            isDragging ? "border-blue-500 bg-blue-500/10" : previewUrl ? "border-white/20 bg-white/5" : "border-white/10 bg-white/5 hover:border-white/20"
+          }`}
+        >
+          <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+          {previewUrl ? (
+            <div className="absolute inset-0 w-full h-full rounded-xl overflow-hidden group">
+              <img src={previewUrl} alt="Preview" className="w-full h-full object-cover opacity-80" />
+            </div>
+          ) : (
+            <div className="text-center space-y-1 pointer-events-none">
+              <ImageIcon className="h-4 w-4 mx-auto text-zinc-400" />
+              <div className="text-xs text-zinc-400"><span className="font-bold text-blue-400">Click to browse file</span> or drop asset here</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Job Title */}
+      <div className="space-y-1.5">
+        <div className="flex justify-between items-center">
+          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Job Post Title <span className="text-red-500">*</span></label>
+          <span className="text-[10px] font-mono text-zinc-500">{title.length}/300</span>
+        </div>
+        <input type="text" maxLength={300} placeholder="e.g., Wedding Video Edit - Romantic Style" value={title} onChange={e => { setTitle(e.target.value); if(e.target.value.trim()) clearError("title"); }} className={`w-full rounded-xl border bg-white/5 px-3.5 py-2.5 text-xs text-white outline-none transition-all ${errors.title ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-blue-500/50"}`} />
+        {errors.title && <p className="text-[11px] text-red-400">{errors.title}</p>}
+      </div>
+
+      {/* Larger Job Description Input Field */}
+      <div className="space-y-1.5">
+        <div className="flex justify-between items-center">
+          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Job Post Description <span className="text-red-500">*</span></label>
+          <span className="text-[10px] font-mono text-zinc-500">{description.length}/2000</span>
+        </div>
+        <textarea rows={8} maxLength={2000} placeholder="Outline requirements, raw footage details, deliverables..." value={description} onChange={e => { setDescription(e.target.value); if(e.target.value.trim()) clearError("description"); }} className={`w-full min-h-[180px] rounded-xl border bg-white/5 px-3.5 py-3 text-xs text-white outline-none transition-all resize-y leading-relaxed custom-scrollbar ${errors.description ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-blue-500/50"}`} />
+        {errors.description && <p className="text-[11px] text-red-400">{errors.description}</p>}
+      </div>
+
+      {/* Category & Difficulty Dropdowns */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <CustomDropdown
+          label="Job Category"
+          value={category}
+          options={categories}
+          placeholder="Select Category"
+          error={errors.category}
+          onSelect={(val) => {
+            setCategory(val);
+            clearError("category");
+          }}
+        />
+
+        <CustomDropdown
+          label="Job Difficulty"
+          value={difficulty}
+          options={difficulties}
+          placeholder="Select Level"
+          error={errors.difficulty}
+          onSelect={(val) => {
+            setDifficulty(val);
+            clearError("difficulty");
+          }}
+        />
+      </div>
+
+      {/* Actions */}
+      <div className="pt-4 border-t border-white/5 flex gap-2.5">
+        <button type="button" onClick={onDiscard} className="px-4 py-2.5 rounded-xl border border-white/10 text-zinc-400 font-bold hover:text-red-400 hover:border-red-500/30 transition text-xs focus:outline-none">Discard Changes</button>
+        <button type="button" onClick={onNext} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-2.5 text-xs font-bold text-white hover:bg-blue-600 transition focus:outline-none shadow-lg shadow-blue-500/20">Confirm and Next <ArrowRight className="h-3.5 w-3.5" /></button>
+      </div>
+    </div>
+  );
+};
+
+export default CreateCoreInfo;

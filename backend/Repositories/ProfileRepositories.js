@@ -185,7 +185,7 @@ async function getProfileByAccountId(accountId) {
         const profileQuery = `
             SELECT 
                 A.HANDLE AS username, 
-                A.DISPLAY_NAME as name, 
+                U.FIRST_NAME || ' ' || U.LAST_NAME AS name, 
                 U.MIDDLE_NAME as middleName, 
                 U.SUFFIX as suffix,
                 A.TAGLINE as tagline,

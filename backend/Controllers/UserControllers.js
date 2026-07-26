@@ -171,6 +171,17 @@ async function loginCredentials(req, res) {
         credentials.userId = credentials.user_id;
         delete credentials.user_id;
         delete credentials.handle; // Remove handle if it's redundant with username
+        // Keep both casings so staff APIs can resolve the logged-in moderator/admin.
+        if (credentials.staff_id != null) {
+            credentials.staffId = credentials.staff_id;
+        } else if (credentials.staffId != null) {
+            credentials.staff_id = credentials.staffId;
+        }
+        if (credentials.account_id != null) {
+            credentials.accountId = credentials.account_id;
+        } else if (credentials.accountId != null) {
+            credentials.account_id = credentials.accountId;
+        }
         const accessToken = await AccessTokens(credentials);
         setAccessTokenCookie(res, accessToken);
         await Promise.all([
@@ -188,7 +199,7 @@ async function loginCredentials(req, res) {
                 role: credentials.role,
                 userId: credentials.userId,
                 displayName: credentials.display_name,
-                staffId: credentials.staff_id
+                staffId: credentials.staff_id ?? credentials.staffId
             },
         });
     } catch (err) {
@@ -463,7 +474,7 @@ async function getUserSession(req, res) {
         let steps = await getUserOnboardingStep(req.session.userId);
         return res.status(200).json({
             success: true,
-            steps: steps.completed_onboarding
+            steps: steps.completed_onboarding ?? null
         });
     } catch (err) {
         console.error('Error fetching user session:', err);

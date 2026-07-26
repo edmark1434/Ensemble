@@ -1,8 +1,6 @@
 const { pool } = require('../lib/database');
 const { getMongoClient, connectMongoDB } = require('../lib/mongodb');
 
-const CREDIT_MULTIPLIER = 1000;
-
 function normalizeStatus(status) {
   if (!status) return 'Pending';
   const s = String(status).toLowerCase();
@@ -13,9 +11,12 @@ function normalizeStatus(status) {
 }
 
 function deriveVerification(row) {
+  const v = String(row.verification_status || '').toLowerCase();
+  if (v === 'verified' || v === 'approved' || v === 'business verified') return 'Fully verified';
+  if (v.includes('pending') || v.includes('review')) return 'Pending review';
+  if (v.includes('partial')) return 'Partially verified';
   if (normalizeStatus(row.status) !== 'Active') return 'Pending review';
-  if (row.firebase_user_uuid && row.xendit_customer_id) return 'Fully verified';
-  if (row.firebase_user_uuid || row.xendit_customer_id) return 'Partially verified';
+  if (row.firebase_user_uuid && row.customer_id) return 'Partially verified';
   return 'Unverified';
 }
 
@@ -27,16 +28,34 @@ async function fetchPlatformMembers() {
       u.last_name,
       u.email_address,
       u.firebase_user_uuid,
-      u.xendit_customer_id,
+      u.customer_id,
       a.handle,
       a.display_name,
       a.status,
       a.merit_score,
       a.avatar_file_id,
       a.tagline,
-      a.created_at
+      a.created_at,
+      av.status AS verification_status,
+      COALESCE(w.balance_credits, 0)::int AS balance_credits
     FROM users u
     INNER JOIN accounts a ON a.account_id = u.account_id
+    LEFT JOIN LATERAL (
+      SELECT status
+      FROM account_verification av
+      WHERE av.account_id = a.account_id AND av.deleted_at IS NULL
+      ORDER BY av.created_at DESC
+      LIMIT 1
+    ) av ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT w.balance_credits
+      FROM account_wallets aw
+      INNER JOIN wallets w ON w.wallet_id = aw.wallet_id
+      WHERE aw.account_id = a.account_id
+        AND w.type = 'account wallets'
+      ORDER BY w.created_at DESC
+      LIMIT 1
+    ) w ON TRUE
     WHERE a.deleted_at IS NULL
     ORDER BY a.created_at DESC
   `);
@@ -53,7 +72,7 @@ async function fetchPlatformMembers() {
       status: normalizeStatus(r.status),
       verification: deriveVerification(r),
       merit: r.merit_score ?? 0,
-      credits: (r.merit_score ?? 0) * CREDIT_MULTIPLIER,
+      credits: Number(r.balance_credits || 0),
       hasAvatar: Boolean(r.avatar_file_id),
       hasTagline: Boolean(r.tagline),
       joinedAt: r.created_at,
@@ -504,17 +523,38 @@ async function getAnalyticsOverview() {
       platformHealthScore: engagementScore,
     },
     insights: buildInsights(members, forum, growthPercent, engagementScore),
+    liveModules: await fetchLiveModuleCounts(),
     comingSoon: {
-      title: 'Metrics coming when these modules launch',
+      title: 'Metrics still estimated or awaiting session instrumentation',
       modules: [
-        { name: 'Jobs & gigs', metrics: 'Postings, applications, completion rate' },
-        { name: 'Marketplace', metrics: 'Listings, sales, revenue' },
-        { name: 'Production teams', metrics: 'Team count, collaboration sessions' },
-        { name: 'Projects', metrics: 'Active projects, deliverables' },
-        { name: 'Video editor', metrics: 'Renders, export volume' },
-        { name: 'Session analytics', metrics: 'DAU/WAU from real session data' },
+        { name: 'Session analytics', metrics: 'DAU/WAU currently estimated from member base' },
       ],
     },
+  };
+}
+
+async function fetchLiveModuleCounts() {
+  const [teams, listings, jobs, projects, tx] = await Promise.all([
+    pool.query(`SELECT COUNT(*)::int AS c FROM teams`).catch(() => ({ rows: [{ c: 0 }] })),
+    pool.query(`
+      SELECT COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE LOWER(status) = 'pending')::int AS pending,
+        COUNT(*) FILTER (WHERE LOWER(status) = 'approved')::int AS approved
+      FROM marketplace_listings
+    `).catch(() => ({ rows: [{ total: 0, pending: 0, approved: 0 }] })),
+    pool.query(`SELECT COUNT(*)::int AS c FROM jobs`).catch(() => ({ rows: [{ c: 0 }] })),
+    pool.query(`SELECT COUNT(*)::int AS c FROM projects`).catch(() => ({ rows: [{ c: 0 }] })),
+    pool.query(`SELECT COUNT(*)::int AS c FROM credit_transactions`).catch(() => ({ rows: [{ c: 0 }] })),
+  ]);
+
+  return {
+    teams: Number(teams.rows[0].c),
+    marketplaceListings: Number(listings.rows[0].total),
+    pendingListings: Number(listings.rows[0].pending),
+    approvedListings: Number(listings.rows[0].approved),
+    jobs: Number(jobs.rows[0].c),
+    projects: Number(projects.rows[0].c),
+    creditTransactions: Number(tx.rows[0].c),
   };
 }
 

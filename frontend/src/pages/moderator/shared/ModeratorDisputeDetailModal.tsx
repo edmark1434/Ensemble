@@ -11,6 +11,23 @@ function formatDateTime(value: string | null) {
   return new Date(value).toLocaleString();
 }
 
+function titleCaseLabel(value: string) {
+  return String(value || "")
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function toApiToken(value: string) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+}
+
 const ACCENT_BTN: Record<Accent, string> = {
   sky: "bg-sky-500/90 hover:bg-sky-500",
   violet: "bg-violet-500/90 hover:bg-violet-500",
@@ -52,8 +69,8 @@ export default function ModeratorDisputeDetailModal({
       if (res.data?.success) {
         const d = res.data.data as DisputeDetail;
         setDetail(d);
-        setStatus(d.dispute.status);
-        setPriority(d.dispute.priority);
+        setStatus(toApiToken(d.dispute.status));
+        setPriority(toApiToken(d.dispute.priority));
         setAssigneeId(d.dispute.assignee?.staffId?.toString() || "");
         setResolutionNotes(d.dispute.resolutionNotes || "");
       }
@@ -147,7 +164,7 @@ export default function ModeratorDisputeDetailModal({
                 >
                   {["open", "under_review", "resolved", "closed"].map((s) => (
                     <option key={s} value={s}>
-                      {s.replace("_", " ")}
+                      {titleCaseLabel(s)}
                     </option>
                   ))}
                 </select>
@@ -161,7 +178,7 @@ export default function ModeratorDisputeDetailModal({
                 >
                   {["low", "medium", "high"].map((p) => (
                     <option key={p} value={p}>
-                      {p}
+                      {titleCaseLabel(p)}
                     </option>
                   ))}
                 </select>
@@ -203,7 +220,7 @@ export default function ModeratorDisputeDetailModal({
               >
                 Save dispute changes
               </button>
-              {!["resolved", "closed"].includes(dispute.status) && (
+              {!["resolved", "closed"].includes(toApiToken(dispute.status)) && (
                 <button
                   type="button"
                   onClick={() => void saveChanges("resolved")}

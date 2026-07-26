@@ -240,10 +240,10 @@ async function getSubscriptionInvoiceByCycleIdRepositories(xenditCycleId) {
     }
 }
 
-async function getPlanDetailsByPlanNameRepositories(planName) {
+async function getFreePlanRepositories() {
     try{
-        const query = `SELECT * FROM PLANS WHERE NAME = $1`;
-        const result = await pool.query(query, [planName]);
+        const query = `SELECT * FROM PLANS WHERE amount_php_cents = 0`;
+        const result = await pool.query(query);
         return result.rows[0];
     }catch(err){
         console.error("Error fetching plan details by plan name:", err);
@@ -276,6 +276,19 @@ async function getSubscriptionByXenditPlanIdRepositories(xenditPlanId) {
     }
 }
 
+async function updateSubscriptionInvoiceAmountRepositories(xenditPlanId, amount_php_cents) {
+    try{
+        const query = `
+            UPDATE subscription_invoices SET amount_php_cents = $1, updated_at = CURRENT_TIMESTAMP WHERE xendit_plan_id = $2 AND status NOT IN ('CANCELLED', 'SUCCEEDED');
+        `;
+        const result = await pool.query(query, [amount_php_cents, xenditPlanId]);
+        return result.rows[0];
+    }catch(err){
+        console.error("Error updating subscription invoice amount:", err);
+        throw err;
+    }
+}
+
 module.exports = {
     getAllPlanRepositories,
     getSubcriptionByUserIdRepositories,
@@ -286,7 +299,8 @@ module.exports = {
     createSubscriptionInvoice,
     updateSubscriptionInvoiceByCycleIdRepositories,
     getSubscriptionInvoiceByCycleIdRepositories,
-    getPlanDetailsByPlanNameRepositories,
+    getFreePlanRepositories,
     getCancelledSubscriptionRepositories,
-    getSubscriptionByXenditPlanIdRepositories
+    getSubscriptionByXenditPlanIdRepositories,
+    updateSubscriptionInvoiceAmountRepositories
 };

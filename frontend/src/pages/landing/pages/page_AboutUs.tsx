@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Code, X, Briefcase, Cpu, Layers, ExternalLink, Globe } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import LightPillar from "@/components/ui/LightPillar"; // Adjust this path if needed
-import TargetCursor from "@/components/ui/TargetCursor"; // Adjust this path if needed
+import LightPillar from "@/components/ui/LightPillar";
+import TargetCursor from "@/components/ui/TargetCursor";
 
 // Expanded mock data featuring updated universal socials (GitHub, LinkedIn, Instagram)
 const TEAM_MEMBERS = [
@@ -89,18 +89,66 @@ const PageAboutUs: React.FC = () => {
   const navigate = useNavigate();
   const [selectedMember, setSelectedMember] = useState<typeof TEAM_MEMBERS[0] | null>(null);
 
-  // Audio elements refs to keep overlap fluid
+  // Audio elements refs to keep overlap fluid[cite: 19]
+  const bgmAudioRef = useRef<HTMLAudioElement | null>(null);
   const hoverAudioRef = useRef<HTMLAudioElement | null>(null);
   const clickAudioRef = useRef<HTMLAudioElement | null>(null);
+  const softClickAudioRef = useRef<HTMLAudioElement | null>(null); // Added softclick engine link slot
+
+  const targetBgmVolume = 0.22;
+
+  const fadeInBgm = (audio: HTMLAudioElement) => {
+    audio.volume = 0;
+    audio.play()
+      .then(() => {
+        const fadeInterval = setInterval(() => {
+          if (audio.volume < targetBgmVolume) {
+            audio.volume = Math.min(audio.volume + 0.005, targetBgmVolume);
+          } else {
+            clearInterval(fadeInterval);
+          }
+        }, 40);
+      })
+      .catch(() => {
+        const playAndFadeOnFirstClick = () => {
+          document.removeEventListener("click", playAndFadeOnFirstClick);
+          if (bgmAudioRef.current) fadeInBgm(bgmAudioRef.current);
+        };
+        document.addEventListener("click", playAndFadeOnFirstClick);
+      });
+  };
+
+  useEffect(() => {
+    bgmAudioRef.current = new Audio("/sounds/devs.mp3");
+    bgmAudioRef.current.loop = true;
+
+    const bgmTimer = setTimeout(() => {
+      if (bgmAudioRef.current) {
+        fadeInBgm(bgmAudioRef.current);
+      }
+    }, 400);
+
+    return () => {
+      clearTimeout(bgmTimer);
+      if (bgmAudioRef.current) {
+        bgmAudioRef.current.pause();
+        bgmAudioRef.current = null;
+      }
+    };
+  }, []);
 
   const initAudio = () => {
     if (!hoverAudioRef.current) {
       hoverAudioRef.current = new Audio("/sounds/hover.mp3");
-      hoverAudioRef.current.volume = 0.2; // Soft subtle target lock blip
+      hoverAudioRef.current.volume = 0.2;
     }
     if (!clickAudioRef.current) {
       clickAudioRef.current = new Audio("/sounds/click.mp3");
-      clickAudioRef.current.volume = 0.35; // Crisp snap selection tick
+      clickAudioRef.current.volume = 0.35;
+    }
+    if (!softClickAudioRef.current) {
+      softClickAudioRef.current = new Audio("/sounds/softclick.mp3");
+      softClickAudioRef.current.volume = 0.4; // Crisper output separation
     }
   };
 
@@ -117,6 +165,15 @@ const PageAboutUs: React.FC = () => {
     if (clickAudioRef.current) {
       clickAudioRef.current.currentTime = 0;
       clickAudioRef.current.play().catch(() => {});
+    }
+  }, []);
+
+  // Snappy softclick execution helper
+  const playSoftClick = useCallback(() => {
+    initAudio();
+    if (softClickAudioRef.current) {
+      softClickAudioRef.current.currentTime = 0;
+      softClickAudioRef.current.play().catch(() => {});
     }
   }, []);
 
@@ -140,39 +197,34 @@ const PageAboutUs: React.FC = () => {
   return (
     <div style={{ background: "#080a12", minHeight: "100vh", color: "#fff", padding: "80px 24px", position: "relative", overflowX: "hidden" }}>
 
-      {/* ─── Premium Target Cursor System ─── */}
+      {/* Target Cursor System[cite: 19] */}
       <TargetCursor
         targetSelector=".cursor-target"
         spinDuration={2.5}
         hideDefaultCursor={true}
         parallaxOn={true}
         cursorColor="rgba(255, 255, 255, 0.4)"
-        cursorColorOnTarget="#8b0000" // Turns into crimson red upon targeting components
+        cursorColorOnTarget="#8b0000"
       />
 
-      {/* ─── LightPillar Ambient Dark Background Layer ─── */}
+      {/* LightPillar Ambient Dark Background Layer[cite: 19] */}
       <div
         style={{
           position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          zIndex: 0,
-          opacity: 0.75,
-          pointerEvents: "none"
+          top: 0, left: 0, width: "100%", height: "100%",
+          zIndex: 0, opacity: 0.75, pointerEvents: "none"
         }}
       >
         <LightPillar
-          topColor="#8b0000"      // Moody Crimson Red
-          bottomColor="#4a0005"   // Dark Ruby Sub backdrop
-          intensity={0.6}         // Dimmed for sleek contrast atmosphere
+          topColor="#8b0000"
+          bottomColor="#4a0005"
+          intensity={0.6}
           rotationSpeed={0.15}
-          glowAmount={0.003}      // Narrow spotlight concentration beam
+          glowAmount={0.003}
           pillarWidth={4.5}
           pillarHeight={0.3}
           noiseIntensity={0.06}
-          pillarRotation={90}     // Lay horizontally across layout axis
+          pillarRotation={90}
           mixBlendMode="screen"
           quality="high"
         />
@@ -278,24 +330,25 @@ const PageAboutUs: React.FC = () => {
         }
       `}</style>
 
-      {/* Decorative ambient background blur */}
       <div style={{ position: "absolute", width: "600px", height: "600px", background: "rgba(139, 0, 0, 0.02)", filter: "blur(140px)", top: "20%", right: "-10%", pointerEvents: "none" }} />
 
       <div style={{ maxWidth: 1200, margin: "0 auto", position: "relative", zIndex: 2 }}>
 
-        {/* Header layout */}
+        {/* Header layout[cite: 19] */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
         >
           <button
-            onClick={() => { playClick(); navigate(-1); }}
-            onMouseEnter={playHover}
+            onClick={() => { playSoftClick(); navigate(-1); }} // Updated to play softclick on navigate back
+            onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
+              playHover();
+              e.currentTarget.style.color = "#fff";
+            }}
+            onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "#7a8499"; }}
             className="cursor-target"
             style={{ background: "none", border: "none", color: "#7a8499", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 40, fontSize: 14, fontWeight: 600, transition: "color 0.2s" }}
-            onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "#fff"; }}
-            onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.color = "#7a8499"; }}
           >
             <ArrowLeft size={16} /> Back
           </button>
@@ -306,14 +359,14 @@ const PageAboutUs: React.FC = () => {
           </p>
         </motion.div>
 
-        {/* Section divider & Team grid wrapper */}
+        {/* Section divider & Team grid wrapper[cite: 19] */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2, duration: 0.6 }}
           style={{ borderTop: "1px solid #1e2130", paddingTop: 48, marginBottom: 40 }}
         >
-          {/* Identity block displaying public png asset cleanly matched to left line */}
+          {/* Identity block displaying public png asset[cite: 19] */}
           <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32 }}>
             <img
               src="/logo/ravenlabs.png"
@@ -330,14 +383,14 @@ const PageAboutUs: React.FC = () => {
             </div>
           </div>
 
-          {/* Staggered Grid Presentation */}
+          {/* Staggered Grid Presentation[cite: 19] */}
           <div className="team-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24 }}>
             {TEAM_MEMBERS.map((member, idx) => (
               <motion.div
                 key={idx}
                 className="member-card cursor-target"
                 onMouseEnter={playHover}
-                onClick={() => { playClick(); setSelectedMember(member); }}
+                onClick={() => { playClick(); setSelectedMember(member); }} // Keeps normal click sound for selecting cards
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 whileHover={{ y: -8 }}
@@ -379,7 +432,7 @@ const PageAboutUs: React.FC = () => {
         </motion.div>
       </div>
 
-      {/* Side Panel / Sliding Details Component */}
+      {/* Side Panel / Sliding Details Component[cite: 19] */}
       <AnimatePresence>
         {selectedMember && (
           <>
@@ -388,7 +441,7 @@ const PageAboutUs: React.FC = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.6 }}
               exit={{ opacity: 0 }}
-              onClick={() => { playClick(); setSelectedMember(null); }}
+              onClick={() => { playSoftClick(); setSelectedMember(null); }} // Clicking the background layout also triggers softclick
               style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "#000", zIndex: 100, cursor: "pointer" }}
             />
 
@@ -400,23 +453,13 @@ const PageAboutUs: React.FC = () => {
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
               style={{
                 position: "fixed",
-                top: 0,
-                right: 0,
-                bottom: 0,
-                height: "100vh",
-                width: "100%",
-                maxWidth: "460px",
-                background: "#0b0e17",
-                borderLeft: "1px solid #1e2130",
-                boxShadow: "-10px 0 40px rgba(0,0,0,0.7)",
-                zIndex: 101,
-                display: "flex",
-                flexDirection: "column",
-                overflowY: "auto"
+                top: 0, right: 0, bottom: 0, height: "100vh", width: "100%", maxWidth: "460px",
+                background: "#0b0e17", borderLeft: "1px solid #1e2130",
+                boxShadow: "-10px 0 40px rgba(0,0,0,0.7)", zIndex: 101,
+                display: "flex", flexDirection: "column", overflowY: "auto"
               }}
             >
 
-              {/* Drawer Content Area */}
               <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", zIndex: 0, pointerEvents: "none", overflow: "hidden" }}>
                 <img
                   src={selectedMember.img}
@@ -426,14 +469,16 @@ const PageAboutUs: React.FC = () => {
                 <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at top right, transparent 20%, #0b0e17 80%)" }} />
               </div>
 
-              {/* Close Drawer Button */}
+              {/* Close Drawer Button (X)[cite: 19] */}
               <button
-                onClick={() => { playClick(); setSelectedMember(null); }}
-                onMouseEnter={playHover}
+                onClick={() => { playSoftClick(); setSelectedMember(null); }} // Updated to trigger softclick when closing the detail pane
+                onMouseEnter={(e) => {
+                  playHover();
+                  e.currentTarget.style.color = "#fff";
+                }}
+                onMouseLeave={(e) => e.currentTarget.style.color = "#7a8499"}
                 className="cursor-target"
                 style={{ position: "absolute", top: 24, right: 24, width: 36, height: 36, borderRadius: "50%", background: "rgba(30, 33, 48, 0.4)", border: "1px solid rgba(255,255,255,0.08)", color: "#7a8499", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", backdropFilter: "blur(4px)", zIndex: 10, transition: "color 0.2s" }}
-                onMouseEnter={(e) => e.currentTarget.style.color = "#fff"}
-                onMouseLeave={(e) => e.currentTarget.style.color = "#7a8499"}
               >
                 <X size={18} />
               </button>

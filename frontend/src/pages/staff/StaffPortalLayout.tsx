@@ -1,8 +1,7 @@
-import { Gem, LayoutDashboard, LogOut } from 'lucide-react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Gem, LayoutDashboard } from 'lucide-react';
+import { NavLink, Outlet } from 'react-router-dom';
 import useGlobalState from '@/lib/global_state';
-import api from '@/lib/axios';
-import { STAFF_LOGIN_PATH } from '@/lib/staffRoutes';
+import LogoutButton from '@/pages/moderator/shared/LogoutButton';
 
 const navClassName = (isActive: boolean) =>
   `flex w-full items-center gap-3 rounded-md border px-3 py-2 text-sm transition ${
@@ -12,18 +11,7 @@ const navClassName = (isActive: boolean) =>
   }`;
 
 const StaffPortalLayout = () => {
-  const { user, clearUser } = useGlobalState();
-  const navigate = useNavigate();
-
-  const handleLogout = async () => {
-    try {
-      await api.get('/api/users/logout');
-    } catch {
-      // Still clear local session if the request fails.
-    }
-    clearUser();
-    navigate(STAFF_LOGIN_PATH, { replace: true });
-  };
+  const { user } = useGlobalState();
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-[#07080e] text-zinc-100 [font-family:Space_Grotesk,Segoe_UI,sans-serif]">
@@ -48,14 +36,7 @@ const StaffPortalLayout = () => {
         </nav>
 
         <div className="border-t border-white/10 p-4">
-          <button
-            type="button"
-            onClick={() => void handleLogout()}
-            className="flex w-full items-center gap-3 rounded-md border border-transparent px-3 py-2 text-sm text-zinc-300 transition hover:border-white/15 hover:bg-white/5 hover:text-white"
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
-          </button>
+          <LogoutButton />
         </div>
       </aside>
 

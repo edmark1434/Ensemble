@@ -12,6 +12,7 @@ const paymentRoutes = require('./payment');
 const subscriptionRoutes = require('./subscription');
 const surveyRoutes = require('./survey');
 const fileRoutes = require('./file');
+const verificationRoutes = require('./verification');
 const { getAllCountriesController,
     getAllPlacesController
 } = require('../Controllers/SystemControllers')
@@ -28,6 +29,8 @@ router.use('/accounts', accountRoutes);
 router.use('/tags', tagRoutes);
 router.use('/files', fileRoutes);
 router.use('/surveys', surveyRoutes);
+router.use('/verification', verificationRoutes);
+
 router.get('/countries', getAllCountriesController);
 router.get('/places', getAllPlacesController);
 module.exports = router;
