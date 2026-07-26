@@ -13,7 +13,10 @@ const {
   postAdminAccountWarn,
   postAdminAccountPardon,
 } = require('../Controllers/AdminUserTeamControllers');
-const { getAdminEconomyOverview } = require('../Controllers/AdminEconomyControllers');
+const {
+  getAdminEconomyOverview,
+  getAdminWalletDetail,
+} = require('../Controllers/AdminEconomyControllers');
 const { getAdminModerationOverview } = require('../Controllers/AdminModerationControllers');
 const { getAdminAnalyticsOverview } = require('../Controllers/AdminAnalyticsControllers');
 const {
@@ -41,6 +44,7 @@ router.post('/accounts/:accountId/credits/freeze', [checkSession, requireAdmin],
 router.post('/accounts/:accountId/warn', [checkSession, requireAdmin], postAdminAccountWarn);
 router.post('/accounts/:accountId/pardon', [checkSession, requireAdmin], postAdminAccountPardon);
 router.get('/economy-overview', [checkSession, requireAdmin], getAdminEconomyOverview);
+router.get('/economy/wallets/:walletId', [checkSession, requireAdmin], getAdminWalletDetail);
 router.get('/moderation-overview', [checkSession, requireAdmin], getAdminModerationOverview);
 router.get('/analytics-overview', [checkSession, requireAdmin], getAdminAnalyticsOverview);
 router.get('/tickets-overview', [checkSession, requireAdmin], getAdminTicketsOverview);

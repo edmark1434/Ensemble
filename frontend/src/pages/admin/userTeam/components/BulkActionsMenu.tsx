@@ -2,6 +2,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Loader2 } from 'lucide-react';
 
+export type BulkActionItem = {
+  id: string;
+  label: string;
+  danger?: boolean;
+  section?: string;
+};
+
 export type BulkActionId =
   | 'ban'
   | 'suspend'
@@ -11,34 +18,29 @@ export type BulkActionId =
   | 'reject'
   | 'clear';
 
-type BulkActionItem = {
-  id: BulkActionId;
-  label: string;
-  danger?: boolean;
-  section?: 'status' | 'verification' | 'other';
-};
-
-const BULK_ITEMS: BulkActionItem[] = [
-  { id: 'restore', label: 'Restore to Active', section: 'status' },
-  { id: 'suspend', label: 'Suspend accounts', danger: true, section: 'status' },
-  { id: 'lock', label: 'Lock accounts', section: 'status' },
-  { id: 'ban', label: 'Ban accounts', danger: true, section: 'status' },
-  { id: 'approve', label: 'Approve verification', section: 'verification' },
-  { id: 'reject', label: 'Reject verification', danger: true, section: 'verification' },
-  { id: 'clear', label: 'Clear selection', section: 'other' },
+const DEFAULT_BULK_ITEMS: BulkActionItem[] = [
+  { id: 'restore', label: 'Restore to Active', section: 'Status' },
+  { id: 'suspend', label: 'Suspend accounts', danger: true, section: 'Status' },
+  { id: 'lock', label: 'Lock accounts', section: 'Status' },
+  { id: 'ban', label: 'Ban accounts', danger: true, section: 'Status' },
+  { id: 'approve', label: 'Approve verification', section: 'Verification' },
+  { id: 'reject', label: 'Reject verification', danger: true, section: 'Verification' },
+  { id: 'clear', label: 'Clear selection', section: 'Other' },
 ];
 
 type BulkActionsMenuProps = {
   selectedCount: number;
   disabled?: boolean;
   busy?: boolean;
-  onAction: (actionId: BulkActionId) => void;
+  items?: BulkActionItem[];
+  onAction: (actionId: string) => void;
 };
 
 export default function BulkActionsMenu({
   selectedCount,
   disabled,
   busy,
+  items = DEFAULT_BULK_ITEMS,
   onAction,
 }: BulkActionsMenuProps) {
   const [open, setOpen] = useState(false);
@@ -46,6 +48,14 @@ export default function BulkActionsMenu({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const noSelection = selectedCount === 0;
+
+  const sections = items.reduce<{ name: string; items: BulkActionItem[] }[]>((acc, item) => {
+    const name = item.section || 'Actions';
+    const existing = acc.find((s) => s.name === name);
+    if (existing) existing.items.push(item);
+    else acc.push({ name, items: [item] });
+    return acc;
+  }, []);
 
   const updatePosition = () => {
     const button = buttonRef.current;
@@ -94,10 +104,6 @@ export default function BulkActionsMenu({
     };
   }, [open]);
 
-  const statusItems = BULK_ITEMS.filter((i) => i.section === 'status');
-  const verificationItems = BULK_ITEMS.filter((i) => i.section === 'verification');
-  const otherItems = BULK_ITEMS.filter((i) => i.section === 'other');
-
   const menu = open
     ? createPortal(
         <div
@@ -112,59 +118,35 @@ export default function BulkActionsMenu({
           {noSelection ? (
             <p className="px-4 py-3 text-xs text-zinc-500">Select rows with the checkboxes first.</p>
           ) : (
-            <>
-              <p className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
-                Status ({selectedCount})
-              </p>
-              {statusItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    onAction(item.id);
-                    setOpen(false);
-                  }}
-                  className={`block w-full px-4 py-2 text-left text-sm hover:bg-white/[0.06] ${
-                    item.danger ? 'text-red-300' : 'text-zinc-200'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-              <div className="my-1 border-t border-white/[0.08]" />
-              <p className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
-                Verification
-              </p>
-              {verificationItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    onAction(item.id);
-                    setOpen(false);
-                  }}
-                  className={`block w-full px-4 py-2 text-left text-sm hover:bg-white/[0.06] ${
-                    item.danger ? 'text-red-300' : 'text-zinc-200'
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-              <div className="my-1 border-t border-white/[0.08]" />
-              {otherItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    onAction(item.id);
-                    setOpen(false);
-                  }}
-                  className="block w-full px-4 py-2 text-left text-sm text-zinc-400 hover:bg-white/[0.06] hover:text-white"
-                >
-                  {item.label}
-                </button>
-              ))}
-            </>
+            sections.map((section, idx) => (
+              <div key={section.name}>
+                {idx > 0 && <div className="my-1 border-t border-white/[0.08]" />}
+                {section.name !== 'Other' && (
+                  <p className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+                    {section.name} ({selectedCount})
+                  </p>
+                )}
+                {section.items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      onAction(item.id);
+                      setOpen(false);
+                    }}
+                    className={`block w-full px-4 py-2 text-left text-sm hover:bg-white/[0.06] ${
+                      item.danger
+                        ? 'text-red-300'
+                        : item.section === 'Other'
+                          ? 'text-zinc-400 hover:text-white'
+                          : 'text-zinc-200'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            ))
           )}
         </div>,
         document.body

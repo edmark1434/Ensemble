@@ -372,7 +372,7 @@ export default function TeamsTab({ onStatsLoaded, refreshToken = 0 }: TeamsTabPr
           <BulkActionsMenu
             selectedCount={selectedIds.size}
             busy={bulkBusy}
-            onAction={handleBulkAction}
+            onAction={(id) => handleBulkAction(id as BulkActionId)}
           />
         </div>
 

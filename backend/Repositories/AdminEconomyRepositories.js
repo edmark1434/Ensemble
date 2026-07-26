@@ -53,7 +53,23 @@ function mapWalletRow(row) {
   };
 }
 
-async function fetchWalletTransactions(walletIds) {
+function mapTransactionRow(row, walletId) {
+  const isCredit = String(row.destination_wallet_id) === String(walletId);
+  const amount = Number(row.amount_credits || 0);
+  return {
+    id: row.credit_transaction_id,
+    type: row.type || 'Credit transaction',
+    amount: isCredit ? Math.abs(amount) : -Math.abs(amount),
+    label: row.status || 'Completed',
+    timeAgo: formatRelativeTime(row.created_at),
+    createdAt: row.created_at,
+    positive: isCredit,
+    reversible: String(row.status || '').toLowerCase() === 'completed',
+    status: row.status || 'Completed',
+  };
+}
+
+async function fetchWalletTransactions(walletIds, { limitPerWallet = 8 } = {}) {
   if (!walletIds.length) return new Map();
 
   const result = await pool.query(
@@ -70,7 +86,7 @@ async function fetchWalletTransactions(walletIds) {
     WHERE ct.source_wallet_id = ANY($1::uuid[])
        OR ct.destination_wallet_id = ANY($1::uuid[])
     ORDER BY ct.created_at DESC
-    LIMIT 1000
+    LIMIT 2000
     `,
     [walletIds]
   );
@@ -81,23 +97,124 @@ async function fetchWalletTransactions(walletIds) {
     for (const walletId of [row.source_wallet_id, row.destination_wallet_id]) {
       if (!walletIdSet.has(String(walletId))) continue;
       const list = map.get(walletId) || [];
-      if (list.length >= 8) continue;
-      const isCredit = String(row.destination_wallet_id) === String(walletId);
-      const amount = Number(row.amount_credits || 0);
-      list.push({
-        id: row.credit_transaction_id,
-        type: row.type || 'Credit transaction',
-        amount: isCredit ? Math.abs(amount) : -Math.abs(amount),
-        label: row.status || 'Completed',
-        timeAgo: formatRelativeTime(row.created_at),
-        positive: isCredit,
-        reversible: String(row.status || '').toLowerCase() === 'completed',
-        status: row.status || 'Completed',
-      });
+      if (limitPerWallet != null && list.length >= limitPerWallet) continue;
+      list.push(mapTransactionRow(row, walletId));
       map.set(walletId, list);
     }
   }
   return map;
+}
+
+async function fetchAllWalletTransactions(walletId) {
+  const result = await pool.query(
+    `
+    SELECT
+      ct.credit_transaction_id,
+      ct.type,
+      ct.amount_credits,
+      ct.status,
+      ct.created_at,
+      ct.source_wallet_id,
+      ct.destination_wallet_id
+    FROM credit_transactions ct
+    WHERE ct.source_wallet_id = $1::uuid
+       OR ct.destination_wallet_id = $1::uuid
+    ORDER BY ct.created_at DESC
+    `,
+    [walletId]
+  );
+
+  return result.rows.map((row) => mapTransactionRow(row, walletId));
+}
+
+async function getWalletDetail(walletId) {
+  const result = await pool.query(
+    `
+    SELECT
+      a.account_id,
+      a.handle,
+      a.display_name,
+      a.merit_score,
+      a.status AS account_status,
+      a.type AS account_type,
+      w.wallet_id,
+      w.balance_credits,
+      w.frozen_balance_credits,
+      w.status AS wallet_status,
+      u.user_id,
+      u.first_name AS user_first_name,
+      u.last_name AS user_last_name,
+      u.email_address AS user_email,
+      s.staff_id,
+      s.first_name AS staff_first_name,
+      s.last_name AS staff_last_name,
+      s.email_address AS staff_email,
+      t.team_id,
+      CASE
+        WHEN u.user_id IS NOT NULL THEN 'User'
+        WHEN s.staff_id IS NOT NULL THEN 'Staff'
+        WHEN t.team_id IS NOT NULL THEN 'Team'
+        ELSE COALESCE(a.type, 'User')
+      END AS account_type_label,
+      (
+        SELECT COUNT(*)::int FROM team_members tm
+        WHERE tm.team_id = t.team_id AND tm.deleted_at IS NULL
+      ) AS member_count,
+      (
+        SELECT COALESCE(a2.display_name, u2.first_name || ' ' || u2.last_name, a2.handle)
+        FROM team_members tm
+        INNER JOIN users u2 ON u2.user_id = tm.user_id
+        INNER JOIN accounts a2 ON a2.account_id = u2.account_id
+        WHERE tm.team_id = t.team_id AND tm.deleted_at IS NULL
+        ORDER BY CASE WHEN LOWER(tm.role) LIKE '%leader%' THEN 0 ELSE 1 END, tm.joined_at
+        LIMIT 1
+      ) AS leader_name,
+      COALESCE(assets.asset_count, 0) AS asset_count,
+      COALESCE(assets.asset_value, 0) AS asset_value
+    FROM wallets w
+    INNER JOIN account_wallets aw ON aw.wallet_id = w.wallet_id
+    INNER JOIN accounts a ON a.account_id = aw.account_id
+    LEFT JOIN users u ON u.account_id = a.account_id
+    LEFT JOIN staff s ON s.account_id = a.account_id
+    LEFT JOIN teams t ON t.account_id = a.account_id
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS asset_count, COALESCE(SUM(price_credits), 0)::int AS asset_value
+      FROM marketplace_listings ml
+      WHERE ml.submitted_by_account_id = a.account_id
+    ) assets ON TRUE
+    WHERE w.wallet_id = $1::uuid
+      AND w.type = 'account wallets'
+      AND a.deleted_at IS NULL
+    LIMIT 1
+    `,
+    [walletId]
+  );
+
+  if (!result.rows.length) {
+    const err = new Error('Wallet not found');
+    err.status = 404;
+    throw err;
+  }
+
+  const row = result.rows[0];
+  const mapped = mapWalletRow({
+    ...row,
+    first_name: row.user_first_name || row.staff_first_name,
+    last_name: row.user_last_name || row.staff_last_name,
+    email_address: row.user_email || row.staff_email,
+    user_id: row.user_id,
+    staff_id: row.staff_id,
+    team_id: row.team_id,
+    leader_user_id: undefined,
+  });
+
+  const transactions = await fetchAllWalletTransactions(walletId);
+
+  return {
+    ...mapped,
+    transactions,
+    transactionCount: transactions.length,
+  };
 }
 
 async function loadEconomySettings() {
@@ -384,4 +501,4 @@ function buildEconomyAlerts(totalCredits, pending, frozen, walletCount) {
   return alerts;
 }
 
-module.exports = { getEconomyOverview };
+module.exports = { getEconomyOverview, getWalletDetail };

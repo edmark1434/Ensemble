@@ -35,10 +35,16 @@ export async function adjustAccountCredits(accountId: string, amount: number, no
   return res.data.data;
 }
 
-export async function freezeAccountCredits(accountId: string, freeze = true) {
+export async function freezeAccountCredits(
+  accountId: string,
+  freeze = true,
+  options?: ActionOptions
+) {
   const res = await api.post(`/api/admin/accounts/${accountId}/credits/freeze`, { freeze });
   if (!res.data?.success) throw new Error(res.data?.message || 'Credit freeze failed');
-  showSuccessToast(res.data.message || (freeze ? 'Credits frozen' : 'Credits unfrozen'));
+  if (!options?.silent) {
+    showSuccessToast(res.data.message || (freeze ? 'Credits frozen' : 'Credits unfrozen'));
+  }
   return res.data.data;
 }
 

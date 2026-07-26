@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
   BadgeDollarSign,
@@ -11,7 +11,6 @@ import {
   Percent,
   RefreshCw,
   ScrollText,
-  Search,
   Settings2,
   Store,
   TrendingUp,
@@ -20,16 +19,33 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
+import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
+import AuditTab from './AuditTab';
 import WalletDetailModal from './WalletDetailModal';
-import type { AuditEntry, EconomyOverview, EconomyWallet } from './creditEconomyTypes';
+import WalletsTab from './WalletsTab';
+import type {
+  AuditEntry,
+  CreditPackage,
+  EconomyOverview,
+  EconomyWallet,
+  FeeSetting,
+} from './creditEconomyTypes';
 
-type TabId = 'overview' | 'wallets' | 'audit' | 'settings';
+type TabId = 'overview' | 'wallets' | 'audit' | 'management';
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
   { id: 'wallets', label: 'Wallets', icon: Wallet },
   { id: 'audit', label: 'Audit log', icon: ScrollText },
-  { id: 'settings', label: 'Packages & fees', icon: Settings2 },
+  { id: 'management', label: 'Management', icon: Settings2 },
+];
+
+type ManagementSection = 'packages' | 'fees' | 'marketplace';
+
+const MANAGEMENT_SECTIONS: { id: ManagementSection; label: string; icon: typeof Package }[] = [
+  { id: 'packages', label: 'Credit packages', icon: Package },
+  { id: 'fees', label: 'Fees', icon: Percent },
+  { id: 'marketplace', label: 'Marketplace', icon: Store },
 ];
 
 function formatDateTime(value: string) {
@@ -51,17 +67,15 @@ export default function CreditEconomyPage() {
   const { user } = useGlobalState();
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab') as TabId | null;
-  const validTabs: TabId[] = ['overview', 'wallets', 'audit', 'settings'];
+  const validTabs: TabId[] = ['overview', 'wallets', 'audit', 'management'];
   const initialTab = paramTab && validTabs.includes(paramTab) ? paramTab : 'overview';
 
   const [data, setData] = useState<EconomyOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<TabId>(initialTab);
-  const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [selectedWallet, setSelectedWallet] = useState<EconomyWallet | null>(null);
-  const [managementPanel, setManagementPanel] = useState<'packages' | 'fees' | 'marketplace' | null>(null);
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -90,33 +104,7 @@ export default function CreditEconomyPage() {
   const switchTab = (id: TabId) => {
     setTab(id);
     setSearchParams(id === 'overview' ? {} : { tab: id }, { replace: true });
-    setManagementPanel(null);
   };
-
-  const q = search.trim().toLowerCase();
-
-  const filteredWallets = useMemo(() => {
-    if (!data) return [];
-    if (!q) return data.wallets;
-    return data.wallets.filter(
-      (w) =>
-        w.name.toLowerCase().includes(q) ||
-        w.email.toLowerCase().includes(q) ||
-        w.username.toLowerCase().includes(q) ||
-        w.walletId.toLowerCase().includes(q)
-    );
-  }, [data, q]);
-
-  const filteredAudit = useMemo(() => {
-    if (!data) return [];
-    if (!q) return data.auditLog;
-    return data.auditLog.filter(
-      (a) =>
-        a.name.toLowerCase().includes(q) ||
-        a.username.toLowerCase().includes(q) ||
-        a.type.toLowerCase().includes(q)
-    );
-  }, [data, q]);
 
   if (loading) {
     return (
@@ -156,15 +144,6 @@ export default function CreditEconomyPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[200px] flex-1 lg:w-72">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search wallets, users, transactions…"
-                className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
-              />
-            </div>
             <button
               type="button"
               onClick={() => void load(true)}
@@ -222,35 +201,38 @@ export default function CreditEconomyPage() {
         {tab === 'overview' && (
           <OverviewTab
             allWallets={data.wallets}
-            filteredWallets={filteredWallets}
-            filteredAudit={filteredAudit.slice(0, 8)}
-            managementPanel={managementPanel}
-            setManagementPanel={setManagementPanel}
+            previewWallets={data.wallets.slice(0, 6)}
+            previewAudit={data.auditLog.slice(0, 8)}
             onViewWallet={setSelectedWallet}
-            creditPackages={creditPackages}
-            feeSettings={feeSettings}
-            marketplaceSettings={marketplaceSettings}
             topBuyers={topBuyers}
             summary={summary}
           />
         )}
 
         {tab === 'wallets' && (
-          <WalletsTable wallets={filteredWallets} onView={setSelectedWallet} full />
+          <WalletsTab
+            wallets={data.wallets}
+            onView={setSelectedWallet}
+            onChanged={() => void load(true)}
+          />
         )}
 
         {tab === 'audit' && (
-          <AuditTable entries={filteredAudit} onViewWallet={(walletId) => {
-            const w = data.wallets.find((x) => x.walletId === walletId);
-            if (w) setSelectedWallet(w);
-          }} full />
+          <AuditTab
+            entries={data.auditLog}
+            onViewWallet={(walletId) => {
+              const w = data.wallets.find((x) => x.walletId === walletId);
+              if (w) setSelectedWallet(w);
+            }}
+          />
         )}
 
-        {tab === 'settings' && (
-          <SettingsTab
+        {tab === 'management' && (
+          <ManagementTab
             creditPackages={creditPackages}
             feeSettings={feeSettings}
             marketplaceSettings={marketplaceSettings}
+            onSaved={() => void load(true)}
           />
         )}
       </div>
@@ -265,27 +247,17 @@ export default function CreditEconomyPage() {
 function OverviewTab({
   summary,
   allWallets,
-  filteredWallets,
-  filteredAudit,
+  previewWallets,
+  previewAudit,
   topBuyers,
   onViewWallet,
-  managementPanel,
-  setManagementPanel,
-  creditPackages,
-  feeSettings,
-  marketplaceSettings,
 }: {
   summary: EconomyOverview['summary'];
   allWallets: EconomyWallet[];
-  filteredWallets: EconomyWallet[];
-  filteredAudit: AuditEntry[];
+  previewWallets: EconomyWallet[];
+  previewAudit: AuditEntry[];
   topBuyers: EconomyOverview['topBuyers'];
   onViewWallet: (w: EconomyWallet) => void;
-  managementPanel: 'packages' | 'fees' | 'marketplace' | null;
-  setManagementPanel: (p: 'packages' | 'fees' | 'marketplace' | null) => void;
-  creditPackages: EconomyOverview['creditPackages'];
-  feeSettings: EconomyOverview['feeSettings'];
-  marketplaceSettings: EconomyOverview['marketplaceSettings'];
 }) {
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_280px]">
@@ -330,9 +302,9 @@ function OverviewTab({
           </div>
         </div>
 
-        <WalletsTable wallets={filteredWallets.slice(0, 6)} onView={onViewWallet} />
-        <AuditTable
-          entries={filteredAudit}
+        <WalletsPreview wallets={previewWallets} onView={onViewWallet} />
+        <AuditPreview
+          entries={previewAudit}
           onViewWallet={(walletId) => {
             const w = allWallets.find((x) => x.walletId === walletId);
             if (w) onViewWallet(w);
@@ -341,83 +313,6 @@ function OverviewTab({
       </div>
 
       <div className="space-y-4">
-        <div className="space-y-2">
-          <MgmtButton
-            icon={Package}
-            label="Credit package management"
-            active={managementPanel === 'packages'}
-            onClick={() => setManagementPanel(managementPanel === 'packages' ? null : 'packages')}
-          />
-          <MgmtButton
-            icon={Percent}
-            label="Fee management"
-            active={managementPanel === 'fees'}
-            onClick={() => setManagementPanel(managementPanel === 'fees' ? null : 'fees')}
-          />
-          <MgmtButton
-            icon={Store}
-            label="Marketplace management"
-            active={managementPanel === 'marketplace'}
-            onClick={() => setManagementPanel(managementPanel === 'marketplace' ? null : 'marketplace')}
-          />
-        </div>
-
-        {managementPanel === 'packages' && (
-          <Panel title="Credit packages">
-            <ul className="space-y-2 text-sm">
-              {creditPackages.map((p) => (
-                <li key={p.id} className="rounded-lg bg-white/[0.03] px-3 py-2">
-                  <p className="font-medium text-white">{p.name}</p>
-                  <p className="text-xs text-zinc-500">
-                    {p.credits.toLocaleString()} credits · ₱{p.pricePhp} · {p.salesCount} sales
-                    {!p.active && ' · Inactive'}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </Panel>
-        )}
-        {managementPanel === 'fees' && (
-          <Panel title="Platform fees">
-            <ul className="space-y-2 text-sm">
-              {feeSettings.map((f) => (
-                <li key={f.id} className="rounded-lg bg-white/[0.03] px-3 py-2">
-                  <p className="font-medium text-white">{f.label}</p>
-                  <p className="text-xs text-zinc-500">
-                    {f.percent}% + ₱{f.flatFee} · {f.appliesTo}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </Panel>
-        )}
-        {managementPanel === 'marketplace' && (
-          <Panel title="Marketplace rules">
-            <dl className="space-y-2 text-xs">
-              <div className="flex justify-between">
-                <dt className="text-zinc-500">Listing fee</dt>
-                <dd className="text-white">{marketplaceSettings.listingFeeCredits} credits</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-zinc-500">Transaction fee</dt>
-                <dd className="text-white">{marketplaceSettings.transactionFeePercent}%</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-zinc-500">Escrow hold</dt>
-                <dd className="text-white">{marketplaceSettings.escrowHoldDays} days</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-zinc-500">Min payout</dt>
-                <dd className="text-white">{marketplaceSettings.minPayoutCredits} credits</dd>
-              </div>
-              <div className="flex justify-between">
-                <dt className="text-zinc-500">Refund window</dt>
-                <dd className="text-white">{marketplaceSettings.refundWindowDays} days</dd>
-              </div>
-            </dl>
-          </Panel>
-        )}
-
         <Panel title="Top 10 credit buyers">
           <ul className="space-y-3">
             {topBuyers.map((b) => (
@@ -442,33 +337,6 @@ function OverviewTab({
   );
 }
 
-function MgmtButton({
-  icon: Icon,
-  label,
-  active,
-  onClick,
-}: {
-  icon: typeof Package;
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3.5 text-left text-sm font-medium transition ${
-        active
-          ? 'border-rose-500/40 bg-rose-500/10 text-white'
-          : 'border-white/[0.08] bg-[#14151c] text-zinc-300 hover:border-white/15 hover:text-white'
-      }`}
-    >
-      <Icon className="h-4 w-4 shrink-0 text-rose-400" />
-      {label}
-    </button>
-  );
-}
-
 function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-4">
@@ -478,20 +346,18 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function WalletsTable({
+function WalletsPreview({
   wallets,
   onView,
-  full,
 }: {
   wallets: EconomyWallet[];
   onView: (w: EconomyWallet) => void;
-  full?: boolean;
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
       <div className="border-b border-white/[0.06] px-4 py-3">
         <h2 className="text-sm font-semibold text-white">Users wallet</h2>
-        {!full && <p className="text-xs text-zinc-500">Platform balances — tap view for transaction history</p>}
+        <p className="text-xs text-zinc-500">Platform balances — open the Wallets tab for search and bulk actions</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[640px] text-left text-sm">
@@ -544,20 +410,18 @@ function WalletsTable({
   );
 }
 
-function AuditTable({
+function AuditPreview({
   entries,
   onViewWallet,
-  full,
 }: {
   entries: AuditEntry[];
   onViewWallet: (walletId: string) => void;
-  full?: boolean;
 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
       <div className="border-b border-white/[0.06] px-4 py-3">
         <h2 className="text-sm font-semibold text-white">Audit log</h2>
-        {!full && <p className="text-xs text-zinc-500">Recent credit movements across the platform</p>}
+        <p className="text-xs text-zinc-500">Recent credit movements — open Audit log for full filters</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[800px] text-left text-sm">
@@ -622,98 +486,515 @@ function AuditTable({
   );
 }
 
-function SettingsTab({
+function ManagementTab({
   creditPackages,
   feeSettings,
   marketplaceSettings,
+  onSaved,
 }: {
   creditPackages: EconomyOverview['creditPackages'];
   feeSettings: EconomyOverview['feeSettings'];
   marketplaceSettings: EconomyOverview['marketplaceSettings'];
+  onSaved?: () => void;
+}) {
+  const [section, setSection] = useState<ManagementSection>('packages');
+  const [packages, setPackages] = useState<CreditPackage[]>(creditPackages);
+  const [fees, setFees] = useState<FeeSetting[]>(feeSettings);
+  const [market, setMarket] = useState(marketplaceSettings);
+  const [saving, setSaving] = useState(false);
+  const [editingPkg, setEditingPkg] = useState<CreditPackage | null>(null);
+  const [isNewPkg, setIsNewPkg] = useState(false);
+  const [editingFee, setEditingFee] = useState<FeeSetting | null>(null);
+
+  useEffect(() => setPackages(creditPackages), [creditPackages]);
+  useEffect(() => setFees(feeSettings), [feeSettings]);
+  useEffect(() => setMarket(marketplaceSettings), [marketplaceSettings]);
+
+  const persist = async (next: {
+    packages?: CreditPackage[];
+    fees?: FeeSetting[];
+    market?: EconomyOverview['marketplaceSettings'];
+  }) => {
+    setSaving(true);
+    try {
+      const res = await api.patch('/api/admin/settings', {
+        section: 'economy',
+        values: {
+          creditPackages: next.packages ?? packages,
+          feeSettings: next.fees ?? fees,
+          marketplaceSettings: next.market ?? market,
+        },
+      });
+      if (!res.data?.success) throw new Error(res.data?.message || 'Save failed');
+      showSuccessToast('Economy settings saved');
+      onSaved?.();
+      return true;
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to save economy settings');
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const savePackage = async (pkg: CreditPackage) => {
+    const next = isNewPkg
+      ? [...packages, pkg]
+      : packages.map((p) => (p.id === pkg.id ? pkg : p));
+    if (await persist({ packages: next })) {
+      setPackages(next);
+      setEditingPkg(null);
+    }
+  };
+
+  const deletePackage = async (id: string) => {
+    const next = packages.filter((p) => p.id !== id);
+    if (await persist({ packages: next })) {
+      setPackages(next);
+      setEditingPkg(null);
+    }
+  };
+
+  const togglePackageActive = async (pkg: CreditPackage) => {
+    const next = packages.map((p) => (p.id === pkg.id ? { ...p, active: !p.active } : p));
+    if (await persist({ packages: next })) setPackages(next);
+  };
+
+  const saveFee = async (fee: FeeSetting) => {
+    const next = fees.map((f) => (f.id === fee.id ? fee : f));
+    if (await persist({ fees: next })) {
+      setFees(next);
+      setEditingFee(null);
+    }
+  };
+
+  const sectionMeta: Record<ManagementSection, { title: string; description: string }> = {
+    packages: {
+      title: 'Credit package management',
+      description: 'Purchasable credit bundles available in the platform shop. Changes save to platform settings.',
+    },
+    fees: {
+      title: 'Fee management',
+      description: 'Platform fees applied to purchases, payouts, and services.',
+    },
+    marketplace: {
+      title: 'Marketplace management',
+      description: 'Economy rules governing listings, escrow, payouts, and refunds.',
+    },
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="inline-flex flex-wrap gap-1 rounded-2xl border border-white/[0.08] bg-[#14151c] p-1.5">
+        {MANAGEMENT_SECTIONS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setSection(id)}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${
+              section === id
+                ? 'bg-rose-500/15 text-white shadow-[inset_0_0_0_1px_rgba(244,63,94,0.35)]'
+                : 'text-zinc-500 hover:text-zinc-200'
+            }`}
+          >
+            <Icon className={`h-4 w-4 ${section === id ? 'text-rose-400' : ''}`} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div>
+        <h2 className="text-lg font-bold text-white">{sectionMeta[section].title}</h2>
+        <p className="mt-1 text-sm text-zinc-500">{sectionMeta[section].description}</p>
+      </div>
+
+      {section === 'packages' && (
+        <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
+          <div className="grid gap-px bg-white/[0.04] sm:grid-cols-2 xl:grid-cols-3">
+            {packages.map((p) => (
+              <div key={p.id} className="flex flex-col gap-3 bg-[#14151c] p-5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-500/10">
+                      <Package className="h-4 w-4 text-rose-400" />
+                    </div>
+                    <p className="font-semibold text-white">{p.name}</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void togglePackageActive(p)}
+                    title={p.active ? 'Click to deactivate' : 'Click to activate'}
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition disabled:opacity-50 ${
+                      p.active
+                        ? 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
+                        : 'bg-zinc-500/15 text-zinc-400 hover:bg-zinc-500/25'
+                    }`}
+                  >
+                    {p.active ? 'Active' : 'Inactive'}
+                  </button>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-2xl font-bold tabular-nums text-white">
+                    {p.credits.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-zinc-500">credits</p>
+                </div>
+                <div className="mt-auto flex items-center justify-between text-xs text-zinc-500">
+                  <span>
+                    ₱{p.pricePhp.toLocaleString()} · {p.salesCount} sold
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsNewPkg(false);
+                      setEditingPkg(p);
+                    }}
+                    className="rounded-lg border border-white/10 px-3 py-1 text-zinc-300 hover:bg-white/[0.05] hover:text-white"
+                  >
+                    Edit
+                  </button>
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                setIsNewPkg(true);
+                setEditingPkg({
+                  id: `pkg-${Date.now()}`,
+                  name: '',
+                  credits: 1000,
+                  pricePhp: 999,
+                  active: true,
+                  salesCount: 0,
+                });
+              }}
+              className="flex min-h-[140px] items-center justify-center gap-2 bg-[#14151c] p-5 text-sm text-zinc-500 hover:text-zinc-300"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-dashed border-white/15 text-lg leading-none">
+                +
+              </span>
+              Add package
+            </button>
+          </div>
+        </section>
+      )}
+
+      {section === 'fees' && (
+        <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
+          <table className="w-full min-w-[560px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-white/[0.06] bg-[#0f1016] text-[10px] uppercase tracking-wide text-zinc-500">
+                <th className="px-5 py-3">Fee</th>
+                <th className="px-5 py-3 text-right">Rate</th>
+                <th className="px-5 py-3 text-right">Flat fee</th>
+                <th className="px-5 py-3">Applies to</th>
+                <th className="px-5 py-3 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fees.map((f) => (
+                <tr key={f.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
+                  <td className="px-5 py-3.5 font-medium text-white">{f.label}</td>
+                  <td className="px-5 py-3.5 text-right tabular-nums text-rose-300">{f.percent}%</td>
+                  <td className="px-5 py-3.5 text-right tabular-nums text-zinc-300">₱{f.flatFee}</td>
+                  <td className="px-5 py-3.5 text-zinc-400">{f.appliesTo}</td>
+                  <td className="px-5 py-3.5 text-right">
+                    <button
+                      type="button"
+                      onClick={() => setEditingFee(f)}
+                      className="rounded-lg border border-white/10 px-3 py-1 text-xs text-zinc-300 hover:bg-white/[0.05] hover:text-white"
+                    >
+                      Adjust rate
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {section === 'marketplace' && (
+        <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-6">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            {(
+              [
+                ['listingFeeCredits', 'Listing fee', 'credits'],
+                ['transactionFeePercent', 'Transaction fee', '%'],
+                ['escrowHoldDays', 'Escrow hold period', 'days'],
+                ['minPayoutCredits', 'Minimum payout', 'credits'],
+                ['refundWindowDays', 'Refund window', 'days'],
+              ] as const
+            ).map(([key, label, unit]) => (
+              <label key={key} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-600">{label}</p>
+                <div className="mt-2 flex items-baseline gap-1.5">
+                  <input
+                    type="number"
+                    min={0}
+                    value={market[key]}
+                    onChange={(e) =>
+                      setMarket((m) => ({ ...m, [key]: Number(e.target.value) || 0 }))
+                    }
+                    className="w-full bg-transparent text-2xl font-bold tabular-nums text-white outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                  <span className="shrink-0 text-xs text-zinc-500">{unit}</span>
+                </div>
+              </label>
+            ))}
+          </div>
+          <div className="mt-5 flex items-center justify-between gap-3 border-t border-white/[0.06] pt-5">
+            <p className="flex items-center gap-2 text-xs text-zinc-500">
+              <BadgeDollarSign className="h-4 w-4 text-rose-400" />
+              Changes take effect immediately for new listings and transactions.
+            </p>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void persist({ market })}
+              className="rounded-xl bg-rose-500/90 px-5 py-2.5 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Save settings'}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {editingPkg && (
+        <PackageEditModal
+          pkg={editingPkg}
+          isNew={isNewPkg}
+          saving={saving}
+          onClose={() => setEditingPkg(null)}
+          onSave={(pkg) => void savePackage(pkg)}
+          onDelete={isNewPkg ? undefined : (id) => void deletePackage(id)}
+        />
+      )}
+
+      {editingFee && (
+        <FeeEditModal
+          fee={editingFee}
+          saving={saving}
+          onClose={() => setEditingFee(null)}
+          onSave={(fee) => void saveFee(fee)}
+        />
+      )}
+    </div>
+  );
+}
+
+function ManagementModalShell({
+  title,
+  onClose,
+  children,
+  footer,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  footer: ReactNode;
 }) {
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
-        <div className="mb-4 flex items-center gap-2">
-          <Package className="h-5 w-5 text-rose-400" />
-          <h2 className="font-semibold text-white">Credit packages</h2>
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 md:pl-[260px]">
+      <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
+      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/[0.1] bg-[#12131a] shadow-2xl">
+        <div className="border-b border-white/[0.08] px-5 py-4">
+          <h2 className="text-lg font-bold text-white">{title}</h2>
         </div>
-        <p className="mb-4 text-xs text-zinc-500">Configure purchasable credit bundles for the platform shop.</p>
-        <div className="space-y-3">
-          {creditPackages.map((p) => (
-            <div
-              key={p.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3"
-            >
-              <div>
-                <p className="font-medium text-white">{p.name}</p>
-                <p className="text-xs text-zinc-500">
-                  {p.credits.toLocaleString()} credits · ₱{p.pricePhp.toLocaleString()} · {p.salesCount} sold
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] ${
-                    p.active ? 'bg-emerald-500/15 text-emerald-300' : 'bg-zinc-500/15 text-zinc-400'
-                  }`}
-                >
-                  {p.active ? 'Active' : 'Inactive'}
-                </span>
-                <button type="button" className="rounded-lg border border-white/10 px-3 py-1 text-xs text-zinc-300">
-                  Edit
-                </button>
-              </div>
-            </div>
-          ))}
+        <div className="space-y-4 px-5 py-4">{children}</div>
+        <div className="flex items-center justify-between gap-2 border-t border-white/[0.08] px-5 py-4">
+          {footer}
         </div>
-        <button type="button" className="mt-4 w-full rounded-xl border border-dashed border-white/15 py-2.5 text-sm text-zinc-400">
-          + Add package
-        </button>
-      </section>
-
-      <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
-        <div className="mb-4 flex items-center gap-2">
-          <Percent className="h-5 w-5 text-rose-400" />
-          <h2 className="font-semibold text-white">Fee management</h2>
-        </div>
-        <ul className="space-y-3">
-          {feeSettings.map((f) => (
-            <li key={f.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
-              <p className="font-medium text-white">{f.label}</p>
-              <p className="mt-1 text-sm text-zinc-400">
-                {f.percent}% platform fee · ₱{f.flatFee} flat · Applies to: {f.appliesTo}
-              </p>
-              <button type="button" className="mt-2 text-xs text-rose-400 underline">
-                Adjust rate
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5 lg:col-span-2">
-        <div className="mb-4 flex items-center gap-2">
-          <BadgeDollarSign className="h-5 w-5 text-rose-400" />
-          <h2 className="font-semibold text-white">Marketplace economy rules</h2>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          {[
-            ['Listing fee', `${marketplaceSettings.listingFeeCredits} credits`],
-            ['Transaction fee', `${marketplaceSettings.transactionFeePercent}%`],
-            ['Escrow hold period', `${marketplaceSettings.escrowHoldDays} days`],
-            ['Minimum payout', `${marketplaceSettings.minPayoutCredits} credits`],
-            ['Refund window', `${marketplaceSettings.refundWindowDays} days`],
-          ].map(([label, value]) => (
-            <div key={String(label)} className="rounded-xl bg-white/[0.03] p-4">
-              <p className="text-[10px] uppercase text-zinc-600">{label}</p>
-              <p className="mt-1 font-semibold text-white">{value}</p>
-            </div>
-          ))}
-        </div>
-        <button type="button" className="mt-4 rounded-xl bg-rose-500/90 px-5 py-2.5 text-sm font-medium text-white hover:bg-rose-500">
-          Save marketplace settings
-        </button>
-      </section>
+      </div>
     </div>
+  );
+}
+
+const mgmtInputClass =
+  'mt-1 w-full rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/20';
+
+function PackageEditModal({
+  pkg,
+  isNew,
+  saving,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  pkg: CreditPackage;
+  isNew: boolean;
+  saving: boolean;
+  onClose: () => void;
+  onSave: (pkg: CreditPackage) => void;
+  onDelete?: (id: string) => void;
+}) {
+  const [name, setName] = useState(pkg.name);
+  const [credits, setCredits] = useState(String(pkg.credits));
+  const [pricePhp, setPricePhp] = useState(String(pkg.pricePhp));
+  const [active, setActive] = useState(pkg.active);
+
+  const valid = name.trim().length > 0 && Number(credits) > 0 && Number(pricePhp) >= 0;
+
+  return (
+    <ManagementModalShell
+      title={isNew ? 'Add credit package' : `Edit ${pkg.name}`}
+      onClose={onClose}
+      footer={
+        <>
+          {onDelete ? (
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => onDelete(pkg.id)}
+              className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-300 disabled:opacity-50"
+            >
+              Delete
+            </button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={saving || !valid}
+              onClick={() =>
+                onSave({
+                  ...pkg,
+                  name: name.trim(),
+                  credits: Number(credits) || 0,
+                  pricePhp: Number(pricePhp) || 0,
+                  active,
+                })
+              }
+              className="rounded-xl bg-rose-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : isNew ? 'Add package' : 'Save changes'}
+            </button>
+          </div>
+        </>
+      }
+    >
+      <label className="block text-xs text-zinc-500">
+        Package name
+        <input value={name} onChange={(e) => setName(e.target.value)} className={mgmtInputClass} />
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block text-xs text-zinc-500">
+          Credits
+          <input
+            type="number"
+            min={1}
+            value={credits}
+            onChange={(e) => setCredits(e.target.value)}
+            className={mgmtInputClass}
+          />
+        </label>
+        <label className="block text-xs text-zinc-500">
+          Price (₱)
+          <input
+            type="number"
+            min={0}
+            value={pricePhp}
+            onChange={(e) => setPricePhp(e.target.value)}
+            className={mgmtInputClass}
+          />
+        </label>
+      </div>
+      <label className="flex items-center gap-2 text-sm text-zinc-300">
+        <input
+          type="checkbox"
+          checked={active}
+          onChange={(e) => setActive(e.target.checked)}
+          className="h-4 w-4 rounded border-white/20 bg-transparent accent-rose-500"
+        />
+        Active (visible in the credits shop)
+      </label>
+      {!isNew && (
+        <p className="text-xs text-zinc-600">{pkg.salesCount} sold — sales count is preserved.</p>
+      )}
+    </ManagementModalShell>
+  );
+}
+
+function FeeEditModal({
+  fee,
+  saving,
+  onClose,
+  onSave,
+}: {
+  fee: FeeSetting;
+  saving: boolean;
+  onClose: () => void;
+  onSave: (fee: FeeSetting) => void;
+}) {
+  const [percent, setPercent] = useState(String(fee.percent));
+  const [flatFee, setFlatFee] = useState(String(fee.flatFee));
+
+  return (
+    <ManagementModalShell
+      title={`Adjust — ${fee.label}`}
+      onClose={onClose}
+      footer={
+        <>
+          <span className="text-xs text-zinc-600">Applies to: {fee.appliesTo}</span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() =>
+                onSave({
+                  ...fee,
+                  percent: Number(percent) || 0,
+                  flatFee: Number(flatFee) || 0,
+                })
+              }
+              className="rounded-xl bg-rose-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50"
+            >
+              {saving ? 'Saving…' : 'Save rate'}
+            </button>
+          </div>
+        </>
+      }
+    >
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block text-xs text-zinc-500">
+          Rate (%)
+          <input
+            type="number"
+            min={0}
+            step="0.1"
+            value={percent}
+            onChange={(e) => setPercent(e.target.value)}
+            className={mgmtInputClass}
+          />
+        </label>
+        <label className="block text-xs text-zinc-500">
+          Flat fee (₱)
+          <input
+            type="number"
+            min={0}
+            value={flatFee}
+            onChange={(e) => setFlatFee(e.target.value)}
+            className={mgmtInputClass}
+          />
+        </label>
+      </div>
+    </ManagementModalShell>
   );
 }

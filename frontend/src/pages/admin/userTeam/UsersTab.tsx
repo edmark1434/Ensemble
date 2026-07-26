@@ -375,7 +375,7 @@ export default function UsersTab({ onStatsLoaded, refreshToken = 0 }: UsersTabPr
           <BulkActionsMenu
             selectedCount={selectedIds.size}
             busy={bulkBusy}
-            onAction={handleBulkAction}
+            onAction={(id) => handleBulkAction(id as BulkActionId)}
           />
         </div>
 
