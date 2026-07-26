@@ -233,7 +233,10 @@ const UserHeader: React.FC<UserHeaderProps> = ({
                       className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10">
                       <User className="h-4 w-4" /> Profile
                     </button>
-                    <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10">
+                    <button
+                      onClick={() => { navigate("/settings"); setIsProfileOpen(false); }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10"
+                    >
                       <Settings className="h-4 w-4" /> Settings
                     </button>
                   </div>
