@@ -181,7 +181,8 @@ export default function Caption({
                 globalOpacity,
                 true,
                 updatedDetails.borderRadius || 0,
-                shapeWordStyle
+                shapeWordStyle,
+                frame || 0
               )}
             </div>
           </div>
@@ -197,7 +198,8 @@ export default function Caption({
                 globalOpacity,
                 false,
                 updatedDetails.borderRadius || 0,
-                fillWordStyle
+                fillWordStyle,
+                frame || 0
               )}
             </div>
           </div>
@@ -500,45 +502,23 @@ function renderWords(
   globalOpacity: number | undefined,
   isShapeLayer: boolean,
   activeFillBorderRadius: number,
-  sharedWordStyle: SharedWordStyle
+  sharedWordStyle: SharedWordStyle,
+  globalFrame: number
 ) {
-  if (
-    updatedDetails?.showObject === "line" &&
-    updatedDetails?.linesPerCaption
-  ) {
+  if (updatedDetails?.showObject === "line" && updatedDetails?.linesPerCaption) {
     return renderLineBasedWords(
-      item,
-      updatedDetails,
-      scaleFactor,
-      offsetFrom,
-      fps,
-      currentFrame,
-      globalOpacity,
-      isShapeLayer,
-      activeFillBorderRadius,
-      sharedWordStyle
+      item, updatedDetails, scaleFactor, offsetFrom, fps, currentFrame,
+      globalOpacity, isShapeLayer, activeFillBorderRadius, sharedWordStyle, globalFrame
     );
   } else if (updatedDetails?.animation === "customAnimation1") {
     return renderCustomAnimation1Words(
-      item,
-      updatedDetails,
-      scaleFactor,
-      offsetFrom,
-      globalOpacity,
-      isShapeLayer,
-      activeFillBorderRadius,
-      sharedWordStyle
+      item, updatedDetails, scaleFactor, offsetFrom, globalOpacity,
+      isShapeLayer, activeFillBorderRadius, sharedWordStyle, globalFrame
     );
   } else {
     return renderStandardWords(
-      item,
-      updatedDetails,
-      scaleFactor,
-      offsetFrom,
-      globalOpacity,
-      isShapeLayer,
-      activeFillBorderRadius,
-      sharedWordStyle
+      item, updatedDetails, scaleFactor, offsetFrom, globalOpacity,
+      isShapeLayer, activeFillBorderRadius, sharedWordStyle, globalFrame
     );
   }
 }
@@ -553,7 +533,8 @@ function renderLineBasedWords(
   globalOpacity: number | undefined,
   isShapeLayer: boolean,
   activeFillBorderRadius: number,
-  sharedWordStyle: SharedWordStyle
+  sharedWordStyle: SharedWordStyle,
+  globalFrame: number
 ) {
   const wordsPerLine = Math.ceil(
     item.details.words.length / updatedDetails.linesPerCaption
@@ -592,7 +573,7 @@ function renderLineBasedWords(
             {...createCaptionWordProps(
               word, updatedDetails, scaleFactor, offsetFrom,
               updatedDetails.animation || "", globalOpacity, isShapeLayer,
-              activeFillBorderRadius, sharedWordStyle
+              activeFillBorderRadius, sharedWordStyle, globalFrame
             )}
             key={`${lineIndex}-${wordIndex}`}
           />
@@ -613,7 +594,8 @@ function renderCustomAnimation1Words(
   globalOpacity: number | undefined,
   isShapeLayer: boolean,
   activeFillBorderRadius: number,
-  sharedWordStyle: SharedWordStyle
+  sharedWordStyle: SharedWordStyle,
+  globalFrame: number
 ) {
   const nonKeywordWords = item.details.words.filter(
     (word: any) => !word.is_keyword
@@ -650,7 +632,7 @@ function renderCustomAnimation1Words(
         {...createCaptionWordProps(
           word, updatedDetails, scaleFactor, offsetFrom,
           updatedDetails.animation || "", globalOpacity, isShapeLayer,
-          activeFillBorderRadius, sharedWordStyle
+          activeFillBorderRadius, sharedWordStyle, globalFrame
         )}
         key={index}
       />
@@ -669,7 +651,8 @@ function renderStandardWords(
   globalOpacity: number | undefined,
   isShapeLayer: boolean,
   activeFillBorderRadius: number,
-  sharedWordStyle: SharedWordStyle
+  sharedWordStyle: SharedWordStyle,
+  globalFrame: number
 ) {
   return item.details.words.flatMap((word: any, index: number) => {
     const el = (
@@ -677,7 +660,7 @@ function renderStandardWords(
         {...createCaptionWordProps(
           word, updatedDetails, scaleFactor, offsetFrom,
           updatedDetails.animation || "", globalOpacity, isShapeLayer,
-          activeFillBorderRadius, sharedWordStyle
+          activeFillBorderRadius, sharedWordStyle, globalFrame
         )}
         key={index}
       />
@@ -699,6 +682,7 @@ const createCaptionWordProps = (
   isShapeLayer: boolean,
   activeFillBorderRadius: number,
   sharedWordStyle: SharedWordStyle,
+  globalFrame: number,
   showObject?: string,
   lineIndex?: number,
   currentLine?: number
@@ -721,5 +705,6 @@ const createCaptionWordProps = (
   isShapeLayer,
   activeFillBorderRadius,
   wordSpacing: sharedWordStyle.wordSpacing,
-  textDecoration: sharedWordStyle.textDecoration
+  textDecoration: sharedWordStyle.textDecoration,
+  frame: globalFrame
 });

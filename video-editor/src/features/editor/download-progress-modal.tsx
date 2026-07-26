@@ -61,7 +61,7 @@ const DownloadProgressModal = () => {
 
         <div className="px-6">
           {isCompleted ? (
-            <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
+            <div className="flex flex-col items-center justify-center gap-4 py-4 text-center">
               <CircleCheckIcon size={32} className="text-primary" />
               <div className="space-y-1">
                 <div className="font-medium">Exported</div>
@@ -72,7 +72,7 @@ const DownloadProgressModal = () => {
               <Button onClick={handleDownload}>Download</Button>
             </div>
           ) : isFailed ? (
-            <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
+            <div className="flex flex-col items-center justify-center gap-4 py-4 text-center">
               <CircleXIcon size={32} className="text-destructive" />
               <div className="space-y-1">
                 <div className="font-medium">Export failed</div>
@@ -86,7 +86,7 @@ const DownloadProgressModal = () => {
               </Button>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
+            <div className="flex flex-col items-center justify-center gap-4 text-center">
               <div className="text-4xl font-medium">
                 {Math.floor(progress * 100)}%
               </div>

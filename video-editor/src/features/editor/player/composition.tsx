@@ -246,7 +246,8 @@ const Composition = () => {
                 handleTextChange,
                 editableTextId,
                 isTransition: true,
-                size
+                size,
+                frame
               });
             })}
           </TransitionSeries>
