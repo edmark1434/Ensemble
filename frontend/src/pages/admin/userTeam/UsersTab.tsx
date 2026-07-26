@@ -99,9 +99,15 @@ const BULK_META: Record<
 type UsersTabProps = {
   onStatsLoaded?: (pendingVerification: number) => void;
   refreshToken?: number;
+  /** Pre-select verification filter (value is lowercased option key, e.g. "pending review"). */
+  defaultVerificationFilter?: string;
 };
 
-export default function UsersTab({ onStatsLoaded, refreshToken = 0 }: UsersTabProps) {
+export default function UsersTab({
+  onStatsLoaded,
+  refreshToken = 0,
+  defaultVerificationFilter = 'all',
+}: UsersTabProps) {
   const [data, setData] = useState<UserManagementData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -109,7 +115,7 @@ export default function UsersTab({ onStatsLoaded, refreshToken = 0 }: UsersTabPr
   const [selected, setSelected] = useState<PlatformUserAccount | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [verificationFilter, setVerificationFilter] = useState('all');
+  const [verificationFilter, setVerificationFilter] = useState(defaultVerificationFilter);
   const [sortBy, setSortBy] = useState('newest');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkPending, setBulkPending] = useState<BulkPending | null>(null);

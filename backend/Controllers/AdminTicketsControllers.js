@@ -5,7 +5,10 @@ const {
   updateTicket,
   addTicketMessage,
   updateDispute,
+  getDisputeDetail,
+  addDisputeMessage,
   updateReport,
+  getReportDetail,
 } = require('../Repositories/AdminTicketsRepositories');
 const { pool } = require('../lib/database');
 
@@ -122,6 +125,33 @@ async function patchAdminDispute(req, res) {
   }
 }
 
+async function getAdminDisputeDetail(req, res) {
+  try {
+    const data = await getDisputeDetail(req.params.id);
+    if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching dispute detail:', err);
+    res.status(500).json({ success: false, message: 'Failed to load dispute' });
+  }
+}
+
+async function postAdminDisputeMessage(req, res) {
+  try {
+    const { body, isInternal } = req.body;
+    if (!body?.trim()) {
+      return res.status(400).json({ success: false, message: 'Message body is required' });
+    }
+    const data = await addDisputeMessage(req.params.id, body.trim(), req.session, Boolean(isInternal));
+    if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error adding dispute message:', err);
+    const msg = err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
+    res.status(err?.message?.includes('MongoDB') ? 503 : 500).json({ success: false, message: msg });
+  }
+}
+
 async function patchAdminReport(req, res) {
   try {
     const data = await updateReport(req.params.id, req.body);
@@ -130,6 +160,17 @@ async function patchAdminReport(req, res) {
   } catch (err) {
     console.error('Error updating report:', err);
     res.status(500).json({ success: false, message: 'Failed to update report' });
+  }
+}
+
+async function getAdminReportDetail(req, res) {
+  try {
+    const data = await getReportDetail(req.params.id);
+    if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching report detail:', err);
+    res.status(500).json({ success: false, message: 'Failed to load report' });
   }
 }
 
@@ -295,7 +336,10 @@ module.exports = {
   createAdminTicket,
   patchAdminTicket,
   postAdminTicketMessage,
+  getAdminDisputeDetail,
   patchAdminDispute,
+  postAdminDisputeMessage,
+  getAdminReportDetail,
   patchAdminReport,
   createPublicTicket,
   listMyTickets,
