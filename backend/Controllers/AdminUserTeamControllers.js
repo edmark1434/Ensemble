@@ -7,6 +7,7 @@ const {
   adjustAccountCredits,
   freezeAccountCredits,
   warnAccount,
+  pardonAccount,
 } = require('../Repositories/AdminUserTeamRepositories');
 
 function staffIdFromSession(session) {
@@ -130,6 +131,26 @@ async function postAdminAccountWarn(req, res) {
   }
 }
 
+async function postAdminAccountPardon(req, res) {
+  try {
+    const { accountId } = req.params;
+    if (!accountId) {
+      return res.status(400).json({ success: false, message: 'accountId is required' });
+    }
+    const data = await pardonAccount(accountId, staffIdFromSession(req.session), {
+      note: req.body?.note,
+    });
+    res.status(200).json({
+      success: true,
+      data,
+      message: `Pardon issued — ${data.violationsCleared} violation(s) cleared, account set to Active`,
+    });
+  } catch (err) {
+    console.error('Error issuing pardon:', err);
+    res.status(400).json({ success: false, message: err.message || 'Failed to issue pardon' });
+  }
+}
+
 module.exports = {
   getAdminTeamsManagement,
   getAdminUsersManagement,
@@ -139,4 +160,5 @@ module.exports = {
   postAdminAccountCreditAdjust,
   postAdminAccountCreditFreeze,
   postAdminAccountWarn,
+  postAdminAccountPardon,
 };

@@ -50,11 +50,26 @@ function mapUserRow(row) {
     joinedAt: row.created_at,
     lastSeenAt: row.created_at,
     hasAvatar: Boolean(row.avatar_file_id),
+    avatarPath: row.avatar_path || null,
     tagline: row.tagline || null,
+    description: row.description || null,
     hasPaymentProfile: Boolean(row.customer_id),
     hasFirebase: Boolean(row.firebase_user_uuid),
     walletBalance: Number(row.balance_credits || 0),
     frozenBalance: Number(row.frozen_balance_credits || 0),
+    profile: {
+      firstName: row.first_name || null,
+      middleName: row.middle_name || null,
+      lastName: row.last_name || null,
+      suffix: row.suffix || null,
+      birthDate: row.birth_date || null,
+      country: row.country || null,
+      address: row.address || null,
+      zipCode: row.zip_code ?? null,
+      isEmailVerified: Boolean(row.is_email_verified),
+      completedOnboarding: row.completed_onboarding || null,
+      subscriptionPlan: row.subscription_plan || null,
+    },
     verificationMeta: {
       account_id: row.account_id,
       account_verification_id: row.account_verification_id,
@@ -264,10 +279,18 @@ async function fetchAllUsers() {
       u.user_id,
       u.account_id,
       u.first_name,
+      u.middle_name,
       u.last_name,
+      u.suffix,
       u.email_address,
       u.firebase_user_uuid,
       u.customer_id,
+      u.birth_date,
+      u.country,
+      u.zip_code,
+      u.address,
+      u.is_email_verified,
+      u.completed_onboarding,
       a.handle,
       a.display_name,
       a.status,
@@ -275,6 +298,9 @@ async function fetchAllUsers() {
       a.created_at,
       a.avatar_file_id,
       a.tagline,
+      a.description,
+      f.path AS avatar_path,
+      p.name AS subscription_plan,
       av.account_verification_id,
       av.status AS verification_status,
       av.expires_at AS verification_expires_at,
@@ -284,6 +310,15 @@ async function fetchAllUsers() {
       w.frozen_balance_credits
     FROM users u
     INNER JOIN accounts a ON a.account_id = u.account_id
+    LEFT JOIN files f ON f.file_id = a.avatar_file_id
+    LEFT JOIN LATERAL (
+      SELECT pl.name
+      FROM subscriptions s
+      INNER JOIN plans pl ON pl.plan_id = s.plan_id
+      WHERE s.user_id = u.user_id
+      ORDER BY s.created_at DESC
+      LIMIT 1
+    ) p ON TRUE
     LEFT JOIN LATERAL (
       SELECT *
       FROM account_verification av
@@ -320,6 +355,8 @@ async function fetchTeamsFromDatabase() {
       a.created_at,
       a.avatar_file_id,
       a.tagline,
+      a.description,
+      f.path AS avatar_path,
       av.account_verification_id,
       av.status AS verification_status,
       av.expires_at AS verification_expires_at,
@@ -335,6 +372,7 @@ async function fetchTeamsFromDatabase() {
       ) AS member_count
     FROM teams t
     INNER JOIN accounts a ON a.account_id = t.account_id
+    LEFT JOIN files f ON f.file_id = a.avatar_file_id
     LEFT JOIN LATERAL (
       SELECT *
       FROM account_verification av
@@ -441,6 +479,13 @@ async function fetchTeamsFromDatabase() {
       accountId: row.account_id,
       name: teamName,
       logoInitial: (teamName || 'T').charAt(0).toUpperCase(),
+      avatarPath: row.avatar_path || null,
+      handle: row.handle || null,
+      tagline: row.tagline || null,
+      description: row.description || null,
+      meritCredits: row.merit_score ?? 0,
+      walletBalance: Number(row.balance_credits || 0),
+      frozenBalance: Number(row.frozen_balance_credits || 0),
       leaderName: leader.name,
       leaderId: leader.id,
       leaderEmail: leader.email,
@@ -681,6 +726,9 @@ const STATUS_MAP = {
   suspended: 'Suspended',
   restore: 'Active',
   active: 'Active',
+  unban: 'Active',
+  unsuspend: 'Active',
+  unlock: 'Active',
   lock: 'Locked',
   locked: 'Locked',
 };
@@ -891,6 +939,70 @@ async function warnAccount(accountId, { title, reason, points } = {}, staffId) {
   };
 }
 
+/**
+ * Pardon: staff forgive an account's active violations / restrictions and
+ * restore the account to Active. Records a row in `pardons` as an audit trail.
+ */
+async function pardonAccount(accountId, staffId, { note } = {}) {
+  const account = await assertAccountExists(accountId);
+  if (!staffId) throw new Error('Staff session required to issue a pardon');
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const pardonRes = await client.query(
+      `INSERT INTO pardons (account_id, staff_id) VALUES ($1, $2) RETURNING pardon_id, created_at`,
+      [accountId, staffId]
+    );
+
+    const clearedViolations = await client.query(
+      `
+      UPDATE violations
+      SET status = 'pardoned', deleted_at = COALESCE(deleted_at, NOW())
+      WHERE account_id = $1
+        AND deleted_at IS NULL
+        AND LOWER(COALESCE(status, '')) IN ('active', 'open', 'pending')
+      RETURNING violation_id
+      `,
+      [accountId]
+    );
+
+    // End any open restrictions linked to this account's violations
+    await client.query(
+      `
+      UPDATE restrictions r
+      SET ends_at = NOW()
+      FROM violations v
+      WHERE r.violation_id = v.violation_id
+        AND v.account_id = $1
+        AND (r.ends_at IS NULL OR r.ends_at > NOW())
+      `,
+      [accountId]
+    ).catch(() => null);
+
+    const previousStatus = account.status;
+    await client.query(`UPDATE accounts SET status = 'Active' WHERE account_id = $1`, [accountId]);
+
+    await client.query('COMMIT');
+
+    return {
+      accountId,
+      pardonId: pardonRes.rows[0].pardon_id,
+      pardonedAt: pardonRes.rows[0].created_at,
+      previousStatus,
+      status: 'Active',
+      violationsCleared: clearedViolations.rowCount || 0,
+      note: note || null,
+    };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   getTeamsManagement,
   getUsersManagement,
@@ -900,4 +1012,5 @@ module.exports = {
   adjustAccountCredits,
   freezeAccountCredits,
   warnAccount,
+  pardonAccount,
 };

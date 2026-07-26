@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -16,15 +16,25 @@ import {
   UserCog,
   Users,
   UserPlus,
+  X,
 } from 'lucide-react';
 import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
+import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import type {
   AdminDashboardData,
   PlatformUser,
   StaffMember,
   VerificationItem,
 } from './adminDashboardTypes';
+
+const MODERATOR_ROLE_OPTIONS = [
+  { value: 'Support Moderator', label: 'Support Moderator' },
+  { value: 'Marketplace Moderator', label: 'Marketplace Moderator' },
+  { value: 'Forum Moderator', label: 'Forum Moderator' },
+  { value: 'Jobs N Gigs Moderator', label: 'Jobs & Gigs Moderator' },
+  { value: 'Admin', label: 'Administrator' },
+] as const;
 
 type TabId = 'overview' | 'users' | 'staff' | 'verifications';
 
@@ -218,7 +228,9 @@ export default function AdminDashboard() {
           <OverviewTab data={data} kpis={kpis} alerts={alerts} breakdowns={breakdowns} />
         )}
         {tab === 'users' && <UsersTab users={filteredUsers} total={data.platformUsers.length} />}
-        {tab === 'staff' && <StaffTab staff={filteredStaff} />}
+        {tab === 'staff' && (
+          <StaffTab staff={filteredStaff} onStaffCreated={() => void loadData(true)} />
+        )}
         {tab === 'verifications' && (
           <VerificationsTab queue={filteredQueue} pending={kpis.pendingVerifications} />
         )}
@@ -574,12 +586,31 @@ function UsersTab({ users, total }: { users: PlatformUser[]; total: number }) {
   );
 }
 
-function StaffTab({ staff }: { staff: StaffMember[] }) {
+function StaffTab({
+  staff,
+  onStaffCreated,
+}: {
+  staff: StaffMember[];
+  onStaffCreated: () => void;
+}) {
+  const [showAddModal, setShowAddModal] = useState(false);
+
   return (
     <div className="space-y-4">
-      <p className="text-sm text-zinc-500">
-        {staff.length} staff accounts — administrators and specialized moderators. Merit shown for internal tracking.
-      </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-zinc-500">
+          {staff.length} staff accounts — administrators and specialized moderators. Merit shown for
+          internal tracking.
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowAddModal(true)}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500"
+        >
+          <UserPlus className="h-4 w-4" />
+          Add moderator
+        </button>
+      </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {staff.map((s) => (
           <article
@@ -620,6 +651,237 @@ function StaffTab({ staff }: { staff: StaffMember[] }) {
             </dl>
           </article>
         ))}
+        {staff.length === 0 && (
+          <p className="col-span-full rounded-2xl border border-dashed border-white/[0.08] py-12 text-center text-sm text-zinc-500">
+            No staff match your search. Add a moderator to get started.
+          </p>
+        )}
+      </div>
+
+      {showAddModal && (
+        <AddModeratorModal
+          onClose={() => setShowAddModal(false)}
+          onCreated={() => {
+            setShowAddModal(false);
+            onStaffCreated();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function AddModeratorModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [role, setRole] = useState<string>(MODERATOR_ROLE_OPTIONS[0].value);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  const inputClass =
+    'mt-1.5 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600 focus:ring-2 focus:ring-rose-500/20';
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setFormError('');
+
+    if (!firstName.trim() || !lastName.trim()) {
+      setFormError('First and last name are required.');
+      return;
+    }
+    if (!username.trim()) {
+      setFormError('Username is required.');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username.trim())) {
+      setFormError('Username must be 3–20 characters (letters, numbers, underscores).');
+      return;
+    }
+    if (!email.trim()) {
+      setFormError('Email is required.');
+      return;
+    }
+    if (password.length < 8) {
+      setFormError('Password must be at least 8 characters.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setFormError('Passwords do not match.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await api.post('/api/admin/staff', {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        username: username.trim(),
+        email: email.trim(),
+        password,
+        role,
+      });
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || 'Failed to create moderator');
+      }
+      showSuccessToast(res.data.message || 'Moderator created');
+      onCreated();
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data
+          ?.message ||
+        (err as { message?: string })?.message ||
+        'Failed to create moderator';
+      setFormError(message);
+      showErrorToast(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:pl-[260px]">
+      <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
+      <div className="relative max-h-[90vh] w-full max-w-lg overflow-hidden rounded-2xl border border-white/[0.1] bg-[#12131a] shadow-2xl">
+        <div className="flex items-start justify-between border-b border-white/[0.08] px-6 py-4">
+          <div>
+            <h2 className="text-lg font-bold text-white">Add moderator</h2>
+            <p className="mt-1 text-xs text-zinc-500">
+              Create a staff account and assign a moderation role.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-zinc-400 hover:text-white">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={(e) => void handleSubmit(e)}>
+          <div className="max-h-[calc(90vh-160px)] space-y-4 overflow-y-auto px-6 py-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-xs text-zinc-500">
+                First name
+                <input
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  className={inputClass}
+                  autoComplete="given-name"
+                  required
+                />
+              </label>
+              <label className="block text-xs text-zinc-500">
+                Last name
+                <input
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className={inputClass}
+                  autoComplete="family-name"
+                  required
+                />
+              </label>
+            </div>
+
+            <label className="block text-xs text-zinc-500">
+              Username
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className={inputClass}
+                placeholder="e.g. jordan_lee"
+                autoComplete="username"
+                required
+              />
+            </label>
+
+            <label className="block text-xs text-zinc-500">
+              Work email
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={inputClass}
+                placeholder="name@ensemble.dev"
+                autoComplete="email"
+                required
+              />
+            </label>
+
+            <label className="block text-xs text-zinc-500">
+              Role
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                className={`${inputClass} appearance-none`}
+              >
+                {MODERATOR_ROLE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value} className="bg-zinc-900">
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-xs text-zinc-500">
+                Password
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={inputClass}
+                  autoComplete="new-password"
+                  required
+                  minLength={8}
+                />
+              </label>
+              <label className="block text-xs text-zinc-500">
+                Confirm password
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className={inputClass}
+                  autoComplete="new-password"
+                  required
+                  minLength={8}
+                />
+              </label>
+            </div>
+
+            {formError && (
+              <p className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                {formError}
+              </p>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 border-t border-white/[0.08] px-6 py-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-white/[0.08] px-4 py-2 text-sm text-zinc-300 hover:text-white"
+              disabled={saving}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-2 rounded-xl bg-rose-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-60"
+            >
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              Create account
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

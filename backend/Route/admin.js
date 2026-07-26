@@ -11,6 +11,7 @@ const {
   postAdminAccountCreditAdjust,
   postAdminAccountCreditFreeze,
   postAdminAccountWarn,
+  postAdminAccountPardon,
 } = require('../Controllers/AdminUserTeamControllers');
 const { getAdminEconomyOverview } = require('../Controllers/AdminEconomyControllers');
 const { getAdminModerationOverview } = require('../Controllers/AdminModerationControllers');
@@ -25,8 +26,11 @@ const {
   patchAdminReport,
 } = require('../Controllers/AdminTicketsControllers');
 const { getAdminSettingsOverview, patchAdminSettings } = require('../Controllers/AdminSettingsControllers');
+const { createAdminStaff, getAdminStaffRoles } = require('../Controllers/AdminStaffControllers');
 
 router.get('/dashboard-overview', [checkSession, requireAdmin], getAdminDashboardOverview);
+router.get('/staff/roles', [checkSession, requireAdmin], getAdminStaffRoles);
+router.post('/staff', [checkSession, requireAdmin], createAdminStaff);
 router.get('/teams-management', [checkSession, requireAdmin], getAdminTeamsManagement);
 router.get('/users-management', [checkSession, requireAdmin], getAdminUsersManagement);
 router.get('/user-team-overview', [checkSession, requireAdmin], getAdminUserTeamOverview);
@@ -35,6 +39,7 @@ router.patch('/accounts/:accountId/verification', [checkSession, requireAdmin], 
 router.post('/accounts/:accountId/credits/adjust', [checkSession, requireAdmin], postAdminAccountCreditAdjust);
 router.post('/accounts/:accountId/credits/freeze', [checkSession, requireAdmin], postAdminAccountCreditFreeze);
 router.post('/accounts/:accountId/warn', [checkSession, requireAdmin], postAdminAccountWarn);
+router.post('/accounts/:accountId/pardon', [checkSession, requireAdmin], postAdminAccountPardon);
 router.get('/economy-overview', [checkSession, requireAdmin], getAdminEconomyOverview);
 router.get('/moderation-overview', [checkSession, requireAdmin], getAdminModerationOverview);
 router.get('/analytics-overview', [checkSession, requireAdmin], getAdminAnalyticsOverview);

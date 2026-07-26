@@ -4,10 +4,12 @@ import {
   adjustAccountCredits,
   freezeAccountCredits,
   handleAccountActionError,
+  pardonAccount,
   setAccountStatus,
   setAccountVerification,
   warnAccount,
-} from './accountActions';
+} from '../accountActions';
+import { getManageActionsForStatus, normalizeAccountStatus } from '../statusActions';
 import type {
   CreditActivityItem,
   PlatformTeam,
@@ -24,6 +26,57 @@ function formatDateTime(value: string | null) {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+function formatDate(value: string | null) {
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString(undefined, {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function buildAvatarUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+  const cloudfrontUrl = import.meta.env.VITE_CLOUDFRONT_URL;
+  if (!cloudfrontUrl) return null;
+  const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+  return `${cloudfrontUrl}/${cleanPath}`;
+}
+
+function ProfileAvatar({
+  path,
+  name,
+  size = 'lg',
+}: {
+  path: string | null | undefined;
+  name: string;
+  size?: 'lg' | 'xl';
+}) {
+  const [failed, setFailed] = useState(false);
+  const url = buildAvatarUrl(path);
+  const dims = size === 'xl' ? 'h-24 w-24 text-3xl' : 'h-16 w-16 text-2xl';
+
+  if (url && !failed) {
+    return (
+      <img
+        src={url}
+        alt={`${name} avatar`}
+        onError={() => setFailed(true)}
+        className={`${dims} shrink-0 rounded-2xl border border-white/[0.1] object-cover`}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={`${dims} flex shrink-0 items-center justify-center rounded-2xl border border-white/[0.08] bg-rose-500/20 font-bold text-rose-100`}
+    >
+      {(name || '?').charAt(0).toUpperCase()}
+    </div>
+  );
 }
 
 function ModalShell({
@@ -66,7 +119,7 @@ export function ConfirmStatusModal({
   onConfirm,
 }: {
   entityName: string;
-  action: 'ban' | 'suspend' | 'restore' | 'lock';
+  action: 'ban' | 'suspend' | 'restore' | 'lock' | 'unban' | 'unsuspend' | 'unlock';
   onClose: () => void;
   onConfirm: () => Promise<void>;
 }) {
@@ -82,6 +135,24 @@ export function ConfirmStatusModal({
     restore: {
       title: 'Restore account',
       verb: 'restore',
+      result: 'Active',
+      tone: 'bg-emerald-500/90 hover:bg-emerald-500',
+    },
+    unban: {
+      title: 'Unban account',
+      verb: 'unban',
+      result: 'Active',
+      tone: 'bg-emerald-500/90 hover:bg-emerald-500',
+    },
+    unsuspend: {
+      title: 'Unsuspend account',
+      verb: 'unsuspend',
+      result: 'Active',
+      tone: 'bg-emerald-500/90 hover:bg-emerald-500',
+    },
+    unlock: {
+      title: 'Unlock account',
+      verb: 'unlock',
       result: 'Active',
       tone: 'bg-emerald-500/90 hover:bg-emerald-500',
     },
@@ -129,7 +200,138 @@ export function ConfirmStatusModal({
       }
     >
       <p className="text-sm text-zinc-300">
-        This updates the account status in the database immediately. You can reverse most actions with Restore.
+        This updates the account status in the database immediately.
+        {['unban', 'unsuspend', 'unlock', 'restore'].includes(action)
+          ? ' The account will regain normal platform access.'
+          : ' Use Unban / Unsuspend / Unlock later to return them to Active.'}
+      </p>
+    </ModalShell>
+  );
+}
+
+export function PardonAccountModal({
+  entityName,
+  accountId,
+  onClose,
+  onChanged,
+}: {
+  entityName: string;
+  accountId: string;
+  onClose: () => void;
+  onChanged?: () => void;
+}) {
+  const [note, setNote] = useState('Administrative pardon');
+  const [saving, setSaving] = useState(false);
+
+  return (
+    <ModalShell
+      title="Pardon account"
+      subtitle={`${entityName} — clear active violations and restore access`}
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await pardonAccount(accountId, note);
+                onChanged?.();
+                onClose();
+              } catch (err) {
+                handleAccountActionError(err);
+              } finally {
+                setSaving(false);
+              }
+            }}
+            className="rounded-xl bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {saving ? 'Pardoning…' : 'Issue pardon'}
+          </button>
+        </div>
+      }
+    >
+      <p className="mb-4 text-sm text-zinc-300">
+        A <span className="text-white">pardon</span> records forgiveness in the{' '}
+        <code className="text-xs text-zinc-400">pardons</code> table, marks active violations as
+        pardoned, ends open restrictions, and sets the account back to Active.
+      </p>
+      <label className="block text-xs text-zinc-500">
+        Note (optional)
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={3}
+          className="mt-1 w-full rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
+        />
+      </label>
+    </ModalShell>
+  );
+}
+
+export function BulkConfirmModal({
+  count,
+  actionLabel,
+  resultLabel,
+  tone = 'bg-rose-500/90 hover:bg-rose-500',
+  onClose,
+  onConfirm,
+}: {
+  count: number;
+  actionLabel: string;
+  resultLabel: string;
+  tone?: string;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  return (
+    <ModalShell
+      title={actionLabel}
+      subtitle={`${count} selected account${count === 1 ? '' : 's'} → ${resultLabel}`}
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await onConfirm();
+                onClose();
+              } catch (err) {
+                handleAccountActionError(err);
+              } finally {
+                setSaving(false);
+              }
+            }}
+            className={`rounded-xl px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${tone}`}
+          >
+            {saving ? 'Applying…' : `Apply to ${count}`}
+          </button>
+        </div>
+      }
+    >
+      <p className="text-sm text-zinc-300">
+        This runs the same action on every highlighted row. Accounts that fail individually will be
+        reported without blocking the rest.
       </p>
     </ModalShell>
   );
@@ -188,16 +390,38 @@ export function TeamOverviewModal({
         </div>
       }
     >
+      {/* Identity header with team avatar */}
+      <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 sm:flex-row sm:items-center">
+        <ProfileAvatar path={team.avatarPath} name={team.name} size="xl" />
+        <div className="min-w-0">
+          <p className="text-lg font-bold text-white">{team.name}</p>
+          {team.handle && <p className="text-sm text-zinc-400">@{team.handle}</p>}
+          {team.tagline && <p className="mt-1 text-sm italic text-zinc-500">“{team.tagline}”</p>}
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">{team.status}</span>
+            <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">
+              {team.verificationStatus}
+            </span>
+            <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">
+              {team.memberCount} member{team.memberCount === 1 ? '' : 's'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {team.description && (
+        <div className="mb-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">About</p>
+          <p className="mt-1 text-sm text-zinc-300">{team.description}</p>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500/30 text-2xl font-bold text-white">
-              {team.logoInitial}
-            </div>
-            <div>
-              <p className="text-sm text-zinc-500">Team leader</p>
-              <p className="font-semibold text-white">{team.leaderName}</p>
-            </div>
+          <div>
+            <p className="text-sm text-zinc-500">Team leader</p>
+            <p className="font-semibold text-white">{team.leaderName}</p>
+            {team.leaderEmail && <p className="text-xs text-zinc-500">{team.leaderEmail}</p>}
           </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Members</p>
@@ -205,6 +429,7 @@ export function TeamOverviewModal({
               {team.members.map((m) => (
                 <li key={String(m.id)}>
                   {m.name} <span className="text-zinc-600">· {m.role}</span>
+                  {m.email && <span className="ml-1 text-xs text-zinc-600">({m.email})</span>}
                 </li>
               ))}
               {team.members.length === 0 && <li className="text-zinc-500">No members linked yet.</li>}
@@ -231,19 +456,23 @@ export function TeamOverviewModal({
               <dt className="text-zinc-500">Verification</dt>
               <dd className="text-white">{team.verificationStatus}</dd>
             </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-zinc-500">Merit score</dt>
+              <dd className="text-emerald-300">{(team.meritCredits ?? 0).toLocaleString()}</dd>
+            </div>
           </dl>
         </div>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-2 text-sm">
             {[
+              ['Wallet balance', (team.walletBalance ?? team.stats.totalCredits).toLocaleString()],
+              ['Frozen credits', (team.frozenBalance ?? 0).toLocaleString()],
               ['Total assets', team.stats.totalAssets],
-              ['Total credits', team.stats.totalCredits.toLocaleString()],
               ['Total jobs', team.stats.totalJobs],
               ['Job earnings', team.stats.totalJobEarnings.toLocaleString()],
               ['Total revenue', `₱${team.stats.totalRevenue.toLocaleString()}`],
               ['Total posts', team.stats.totalPosts.toLocaleString()],
               ['Reactions', team.stats.totalReactions.toLocaleString()],
-              ['Comments', team.stats.totalComments.toLocaleString()],
             ].map(([label, val]) => (
               <div key={String(label)} className="rounded-lg bg-white/[0.03] px-3 py-2">
                 <p className="text-[10px] uppercase text-zinc-600">{label}</p>
@@ -281,6 +510,7 @@ export function CreditActivityModal({
   accountId,
   activity,
   totalCredits,
+  frozenBalance = 0,
   totalRevenue,
   onClose,
   onChanged,
@@ -289,6 +519,7 @@ export function CreditActivityModal({
   accountId: string;
   activity: CreditActivityItem[];
   totalCredits: number;
+  frozenBalance?: number;
   totalRevenue?: number;
   onClose: () => void;
   onChanged?: () => void;
@@ -296,6 +527,7 @@ export function CreditActivityModal({
   const [amount, setAmount] = useState('100');
   const [note, setNote] = useState('Admin credit adjustment');
   const [saving, setSaving] = useState(false);
+  const isFrozen = frozenBalance > 0;
 
   const run = async (fn: () => Promise<unknown>) => {
     setSaving(true);
@@ -355,30 +587,40 @@ export function CreditActivityModal({
             </button>
           </div>
           <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => void run(() => freezeAccountCredits(accountId, true))}
-              className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-200 disabled:opacity-50"
-            >
-              Freeze credits
-            </button>
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => void run(() => freezeAccountCredits(accountId, false))}
-              className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white disabled:opacity-50"
-            >
-              Unfreeze
-            </button>
+            {!isFrozen && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void run(() => freezeAccountCredits(accountId, true))}
+                className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-200 disabled:opacity-50"
+              >
+                Freeze credits
+              </button>
+            )}
+            {isFrozen && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void run(() => freezeAccountCredits(accountId, false))}
+                className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white disabled:opacity-50"
+              >
+                Unfreeze
+              </button>
+            )}
           </div>
         </div>
       }
     >
-      <div className="mb-4 flex gap-8 text-sm">
+      <div className="mb-4 flex flex-wrap gap-8 text-sm">
         <div>
           <p className="text-zinc-500">Total credits</p>
           <p className="text-xl font-bold text-white">{totalCredits.toLocaleString()}</p>
+        </div>
+        <div>
+          <p className="text-zinc-500">Frozen credits</p>
+          <p className={`text-xl font-bold ${isFrozen ? 'text-amber-300' : 'text-zinc-500'}`}>
+            {frozenBalance.toLocaleString()}
+          </p>
         </div>
         {totalRevenue != null && (
           <div>
@@ -589,18 +831,24 @@ export function ModerationActionModal({
   entityName,
   accountId,
   currentStatus,
+  hasViolations = false,
   onClose,
   onChanged,
 }: {
   entityName: string;
   accountId: string;
   currentStatus: string;
+  hasViolations?: boolean;
   onClose: () => void;
   onChanged?: () => void;
 }) {
   const [reason, setReason] = useState('Moderation action by administrator');
   const [points, setPoints] = useState('1');
   const [saving, setSaving] = useState(false);
+  const statusKey = normalizeAccountStatus(currentStatus);
+  const manageActions = getManageActionsForStatus(currentStatus, { hasViolations }).filter(
+    (a) => a.id !== 'warn' && a.id !== 'pardon'
+  );
 
   const run = async (fn: () => Promise<unknown>) => {
     setSaving(true);
@@ -613,6 +861,15 @@ export function ModerationActionModal({
     } finally {
       setSaving(false);
     }
+  };
+
+  const actionTone = (id: string) => {
+    if (id === 'ban') return 'bg-rose-500/90 px-4 py-2 text-sm font-medium text-white';
+    if (id === 'unban' || id === 'unsuspend' || id === 'unlock') {
+      return 'bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white';
+    }
+    if (id === 'suspend') return 'border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-200';
+    return 'border border-white/[0.1] px-4 py-2 text-sm text-white';
   };
 
   return (
@@ -638,38 +895,27 @@ export function ModerationActionModal({
           >
             Warn
           </button>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void run(() => setAccountStatus(accountId, 'suspend'))}
-            className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white disabled:opacity-50"
-          >
-            Suspend
-          </button>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void run(() => setAccountStatus(accountId, 'lock'))}
-            className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white disabled:opacity-50"
-          >
-            Lock
-          </button>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void run(() => setAccountStatus(accountId, 'ban'))}
-            className="rounded-xl bg-rose-500/90 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            Ban
-          </button>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void run(() => setAccountStatus(accountId, 'restore'))}
-            className="rounded-xl bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            Restore
-          </button>
+          {manageActions.map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              disabled={saving}
+              onClick={() => void run(() => setAccountStatus(accountId, action.id))}
+              className={`rounded-xl disabled:opacity-50 ${actionTone(action.id)}`}
+            >
+              {action.label.replace(' account', '')}
+            </button>
+          ))}
+          {(hasViolations || ['banned', 'suspended', 'locked'].includes(statusKey)) && (
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => void run(() => pardonAccount(accountId, reason))}
+              className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200 disabled:opacity-50"
+            >
+              Pardon
+            </button>
+          )}
         </div>
       }
     >
@@ -695,7 +941,9 @@ export function ModerationActionModal({
         </label>
       </div>
       <p className="mt-4 text-xs text-zinc-500">
-        Warn creates a violation record. Suspend / Ban / Lock / Restore update the account status in Postgres.
+        Actions adapt to the current status (e.g. Banned shows Unban). Warn creates a violation.
+        Pardon writes to the <code className="text-zinc-400">pardons</code> table, clears active
+        violations, and restores the account to Active.
       </p>
     </ModalShell>
   );
@@ -842,46 +1090,103 @@ export function UserOverviewModal({
         </div>
       }
     >
-      <dl className="grid gap-4 text-sm sm:grid-cols-2">
+      {/* Identity header with avatar */}
+      <div className="flex flex-col gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 sm:flex-row sm:items-center">
+        <ProfileAvatar path={user.avatarPath} name={user.name} size="xl" />
+        <div className="min-w-0">
+          <p className="text-lg font-bold text-white">
+            {[user.profile?.firstName, user.profile?.middleName, user.profile?.lastName, user.profile?.suffix]
+              .filter(Boolean)
+              .join(' ') || user.name}
+          </p>
+          <p className="text-sm text-zinc-400">@{user.username}</p>
+          {user.tagline && <p className="mt-1 text-sm italic text-zinc-500">“{user.tagline}”</p>}
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">{user.status}</span>
+            <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">
+              {user.verificationStatus}
+            </span>
+            {user.profile?.subscriptionPlan && (
+              <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-sky-200">
+                {user.profile.subscriptionPlan}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {user.description && (
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">About</p>
+          <p className="mt-1 text-sm text-zinc-300">{user.description}</p>
+        </div>
+      )}
+
+      {/* Account */}
+      <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-zinc-600">Account</p>
+      <dl className="mt-2 grid gap-4 text-sm sm:grid-cols-2">
         <div>
           <dt className="text-zinc-500">Email</dt>
-          <dd className="text-white">{user.email}</dd>
+          <dd className="text-white">
+            {user.email}
+            {user.profile?.isEmailVerified ? (
+              <span className="ml-2 text-xs text-emerald-300">Verified</span>
+            ) : (
+              <span className="ml-2 text-xs text-amber-300">Unverified</span>
+            )}
+          </dd>
         </div>
         <div>
-          <dt className="text-zinc-500">Username</dt>
-          <dd className="text-white">@{user.username}</dd>
+          <dt className="text-zinc-500">Display name</dt>
+          <dd className="text-white">{user.displayName || '—'}</dd>
         </div>
         <div>
-          <dt className="text-zinc-500">Status</dt>
-          <dd className="text-white">{user.status}</dd>
+          <dt className="text-zinc-500">Joined</dt>
+          <dd className="text-zinc-300">{formatDateTime(user.joinedAt)}</dd>
         </div>
         <div>
-          <dt className="text-zinc-500">Verification</dt>
-          <dd className="text-white">{user.verificationStatus}</dd>
-        </div>
-        <div>
-          <dt className="text-zinc-500">Merit credits</dt>
-          <dd className="text-emerald-300">{user.meritCredits}</dd>
+          <dt className="text-zinc-500">Onboarding</dt>
+          <dd className="text-zinc-300">{user.profile?.completedOnboarding || 'Not completed'}</dd>
         </div>
         <div>
           <dt className="text-zinc-500">Payment profile</dt>
           <dd className="text-white">{user.hasPaymentProfile ? 'Linked' : 'Not linked'}</dd>
         </div>
         <div>
-          <dt className="text-zinc-500">Joined</dt>
-          <dd className="text-zinc-300">{formatDateTime(user.joinedAt)}</dd>
+          <dt className="text-zinc-500">Firebase account</dt>
+          <dd className="text-white">{user.hasFirebase ? 'Linked' : 'Not linked'}</dd>
         </div>
-        {user.tagline && (
-          <div className="sm:col-span-2">
-            <dt className="text-zinc-500">Tagline</dt>
-            <dd className="text-zinc-300">{user.tagline}</dd>
-          </div>
-        )}
       </dl>
-      <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
+
+      {/* Personal details */}
+      <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-zinc-600">Personal details</p>
+      <dl className="mt-2 grid gap-4 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="text-zinc-500">Birth date</dt>
+          <dd className="text-zinc-300">{formatDate(user.profile?.birthDate ?? null)}</dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Country</dt>
+          <dd className="text-zinc-300">{user.profile?.country || '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Address</dt>
+          <dd className="text-zinc-300">{user.profile?.address || '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Zip code</dt>
+          <dd className="text-zinc-300">{user.profile?.zipCode ?? '—'}</dd>
+        </div>
+      </dl>
+
+      {/* Credits & activity */}
+      <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-zinc-600">Credits & activity</p>
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {[
+          ['Merit', user.meritCredits.toLocaleString()],
+          ['Wallet', user.stats.totalCredits.toLocaleString()],
+          ['Frozen', (user.frozenBalance ?? 0).toLocaleString()],
           ['Assets', user.stats.totalAssets],
-          ['Credits', user.stats.totalCredits.toLocaleString()],
           ['Jobs', user.stats.totalJobs],
           ['Posts', user.stats.totalPosts],
         ].map(([l, v]) => (
