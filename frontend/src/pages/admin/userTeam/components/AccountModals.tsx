@@ -1,6 +1,19 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Download, X } from 'lucide-react';
-import type { CreditActivityItem, PlatformTeam, PlatformUserAccount, VerificationDetail } from '../userTeamTypes';
+import {
+  adjustAccountCredits,
+  freezeAccountCredits,
+  handleAccountActionError,
+  pardonAccount,
+  setAccountVerification,
+  warnAccount,
+} from '../accountActions';
+import type {
+  CreditActivityItem,
+  PlatformTeam,
+  PlatformUserAccount,
+  VerificationDetail,
+} from '../userTeamTypes';
 
 function formatDateTime(value: string | null) {
   if (!value) return '—';
@@ -11,6 +24,57 @@ function formatDateTime(value: string | null) {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+function formatDate(value: string | null) {
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString(undefined, {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function buildAvatarUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+  const cloudfrontUrl = import.meta.env.VITE_CLOUDFRONT_URL;
+  if (!cloudfrontUrl) return null;
+  const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+  return `${cloudfrontUrl}/${cleanPath}`;
+}
+
+function ProfileAvatar({
+  path,
+  name,
+  size = 'lg',
+}: {
+  path: string | null | undefined;
+  name: string;
+  size?: 'lg' | 'xl';
+}) {
+  const [failed, setFailed] = useState(false);
+  const url = buildAvatarUrl(path);
+  const dims = size === 'xl' ? 'h-24 w-24 text-3xl' : 'h-16 w-16 text-2xl';
+
+  if (url && !failed) {
+    return (
+      <img
+        src={url}
+        alt={`${name} avatar`}
+        onError={() => setFailed(true)}
+        className={`${dims} shrink-0 rounded-2xl border border-white/[0.1] object-cover`}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={`${dims} flex shrink-0 items-center justify-center rounded-2xl border border-white/[0.08] bg-rose-500/20 font-bold text-rose-100`}
+    >
+      {(name || '?').charAt(0).toUpperCase()}
+    </div>
+  );
 }
 
 function ModalShell({
@@ -46,42 +110,318 @@ function ModalShell({
   );
 }
 
-export function TeamOverviewModal({ team, onClose }: { team: PlatformTeam; onClose: () => void }) {
+export function ConfirmStatusModal({
+  entityName,
+  action,
+  onClose,
+  onConfirm,
+}: {
+  entityName: string;
+  action: 'ban' | 'suspend' | 'restore' | 'lock' | 'unban' | 'unsuspend' | 'unlock';
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const [saving, setSaving] = useState(false);
+  const labels = {
+    ban: { title: 'Ban account', verb: 'ban', result: 'Banned', tone: 'bg-rose-500/90 hover:bg-rose-500' },
+    suspend: {
+      title: 'Suspend account',
+      verb: 'suspend',
+      result: 'Suspended',
+      tone: 'bg-amber-500/90 hover:bg-amber-500',
+    },
+    restore: {
+      title: 'Restore account',
+      verb: 'restore',
+      result: 'Active',
+      tone: 'bg-emerald-500/90 hover:bg-emerald-500',
+    },
+    unban: {
+      title: 'Unban account',
+      verb: 'unban',
+      result: 'Active',
+      tone: 'bg-emerald-500/90 hover:bg-emerald-500',
+    },
+    unsuspend: {
+      title: 'Unsuspend account',
+      verb: 'unsuspend',
+      result: 'Active',
+      tone: 'bg-emerald-500/90 hover:bg-emerald-500',
+    },
+    unlock: {
+      title: 'Unlock account',
+      verb: 'unlock',
+      result: 'Active',
+      tone: 'bg-emerald-500/90 hover:bg-emerald-500',
+    },
+    lock: {
+      title: 'Lock account',
+      verb: 'lock',
+      result: 'Locked',
+      tone: 'bg-zinc-200 text-zinc-900 hover:bg-white',
+    },
+  }[action];
+
+  return (
+    <ModalShell
+      title={labels.title}
+      subtitle={`${entityName} will be set to ${labels.result}`}
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await onConfirm();
+                onClose();
+              } catch (err) {
+                handleAccountActionError(err);
+              } finally {
+                setSaving(false);
+              }
+            }}
+            className={`rounded-xl px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${labels.tone}`}
+          >
+            {saving ? 'Saving…' : `Confirm ${labels.verb}`}
+          </button>
+        </div>
+      }
+    >
+      <p className="text-sm text-zinc-300">
+        This updates the account status in the database immediately.
+        {['unban', 'unsuspend', 'unlock', 'restore'].includes(action)
+          ? ' The account will regain normal platform access.'
+          : ' Use Unban / Unsuspend / Unlock later to return them to Active.'}
+      </p>
+    </ModalShell>
+  );
+}
+
+export function PardonAccountModal({
+  entityName,
+  accountId,
+  onClose,
+  onChanged,
+}: {
+  entityName: string;
+  accountId: string;
+  onClose: () => void;
+  onChanged?: () => void;
+}) {
+  const [note, setNote] = useState('Administrative pardon');
+  const [saving, setSaving] = useState(false);
+
+  return (
+    <ModalShell
+      title="Pardon account"
+      subtitle={`${entityName} — clear active violations and restore access`}
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await pardonAccount(accountId, note);
+                onChanged?.();
+                onClose();
+              } catch (err) {
+                handleAccountActionError(err);
+              } finally {
+                setSaving(false);
+              }
+            }}
+            className="rounded-xl bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {saving ? 'Pardoning…' : 'Issue pardon'}
+          </button>
+        </div>
+      }
+    >
+      <p className="mb-4 text-sm text-zinc-300">
+        A <span className="text-white">pardon</span> records forgiveness in the{' '}
+        <code className="text-xs text-zinc-400">pardons</code> table, marks active violations as
+        pardoned, ends open restrictions, and sets the account back to Active.
+      </p>
+      <label className="block text-xs text-zinc-500">
+        Note (optional)
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          rows={3}
+          className="mt-1 w-full rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
+        />
+      </label>
+    </ModalShell>
+  );
+}
+
+export function BulkConfirmModal({
+  count,
+  actionLabel,
+  resultLabel,
+  tone = 'bg-rose-500/90 hover:bg-rose-500',
+  onClose,
+  onConfirm,
+}: {
+  count: number;
+  actionLabel: string;
+  resultLabel: string;
+  tone?: string;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  return (
+    <ModalShell
+      title={actionLabel}
+      subtitle={`${count} selected account${count === 1 ? '' : 's'} → ${resultLabel}`}
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await onConfirm();
+                onClose();
+              } catch (err) {
+                handleAccountActionError(err);
+              } finally {
+                setSaving(false);
+              }
+            }}
+            className={`rounded-xl px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${tone}`}
+          >
+            {saving ? 'Applying…' : `Apply to ${count}`}
+          </button>
+        </div>
+      }
+    >
+      <p className="text-sm text-zinc-300">
+        This runs the same action on every highlighted row. Accounts that fail individually will be
+        reported without blocking the rest.
+      </p>
+    </ModalShell>
+  );
+}
+
+export function TeamOverviewModal({
+  team,
+  onClose,
+  onOpenCredit,
+  onOpenVerification,
+  onOpenHistory,
+}: {
+  team: PlatformTeam;
+  onClose: () => void;
+  onOpenCredit?: () => void;
+  onOpenVerification?: () => void;
+  onOpenHistory?: () => void;
+}) {
   return (
     <ModalShell
       title={team.name}
       subtitle={`ID: ${team.id}`}
       onClose={onClose}
       footer={
-        <div className="flex gap-3">
-          <button type="button" className="rounded-xl border border-white/[0.1] px-5 py-2.5 text-sm text-white hover:bg-white/[0.05]">
-            Edit account
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onOpenCredit}
+            className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
+          >
+            Credits & wallet
           </button>
-          <button type="button" className="rounded-xl bg-rose-500/90 px-5 py-2.5 text-sm font-medium text-white hover:bg-rose-500">
-            View profile
+          <button
+            type="button"
+            onClick={onOpenVerification}
+            className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
+          >
+            Verification
+          </button>
+          <button
+            type="button"
+            onClick={onOpenHistory}
+            className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
+          >
+            Violations & disputes
           </button>
         </div>
       }
     >
+      {/* Identity header with team avatar */}
+      <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 sm:flex-row sm:items-center">
+        <ProfileAvatar path={team.avatarPath} name={team.name} size="xl" />
+        <div className="min-w-0">
+          <p className="text-lg font-bold text-white">{team.name}</p>
+          {team.handle && <p className="text-sm text-zinc-400">@{team.handle}</p>}
+          {team.tagline && <p className="mt-1 text-sm italic text-zinc-500">“{team.tagline}”</p>}
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">{team.status}</span>
+            <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">
+              {team.verificationStatus}
+            </span>
+            <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">
+              {team.memberCount} member{team.memberCount === 1 ? '' : 's'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {team.description && (
+        <div className="mb-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">About</p>
+          <p className="mt-1 text-sm text-zinc-300">{team.description}</p>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-500/30 text-2xl font-bold text-white">
-              {team.logoInitial}
-            </div>
-            <div>
-              <p className="text-sm text-zinc-500">Team leader</p>
-              <p className="font-semibold text-white">{team.leaderName}</p>
-            </div>
+          <div>
+            <p className="text-sm text-zinc-500">Team leader</p>
+            <p className="font-semibold text-white">{team.leaderName}</p>
+            {team.leaderEmail && <p className="text-xs text-zinc-500">{team.leaderEmail}</p>}
           </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Members</p>
             <ul className="mt-2 space-y-1 text-sm text-zinc-300">
               {team.members.map((m) => (
-                <li key={m.id}>
+                <li key={String(m.id)}>
                   {m.name} <span className="text-zinc-600">· {m.role}</span>
+                  {m.email && <span className="ml-1 text-xs text-zinc-600">({m.email})</span>}
                 </li>
               ))}
+              {team.members.length === 0 && <li className="text-zinc-500">No members linked yet.</li>}
             </ul>
           </div>
           <dl className="space-y-2 text-sm">
@@ -105,19 +445,23 @@ export function TeamOverviewModal({ team, onClose }: { team: PlatformTeam; onClo
               <dt className="text-zinc-500">Verification</dt>
               <dd className="text-white">{team.verificationStatus}</dd>
             </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-zinc-500">Merit score</dt>
+              <dd className="text-emerald-300">{(team.meritCredits ?? 0).toLocaleString()}</dd>
+            </div>
           </dl>
         </div>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-2 text-sm">
             {[
+              ['Wallet balance', (team.walletBalance ?? team.stats.totalCredits).toLocaleString()],
+              ['Frozen credits', (team.frozenBalance ?? 0).toLocaleString()],
               ['Total assets', team.stats.totalAssets],
-              ['Total credits', team.stats.totalCredits.toLocaleString()],
               ['Total jobs', team.stats.totalJobs],
               ['Job earnings', team.stats.totalJobEarnings.toLocaleString()],
               ['Total revenue', `₱${team.stats.totalRevenue.toLocaleString()}`],
               ['Total posts', team.stats.totalPosts.toLocaleString()],
               ['Reactions', team.stats.totalReactions.toLocaleString()],
-              ['Comments', team.stats.totalComments.toLocaleString()],
             ].map(([label, val]) => (
               <div key={String(label)} className="rounded-lg bg-white/[0.03] px-3 py-2">
                 <p className="text-[10px] uppercase text-zinc-600">{label}</p>
@@ -128,6 +472,9 @@ export function TeamOverviewModal({ team, onClose }: { team: PlatformTeam; onClo
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">Documents</p>
             <ul className="mt-2 space-y-2">
+              {team.documents.length === 0 && (
+                <li className="text-sm text-zinc-500">No verification documents on file.</li>
+              )}
               {team.documents.map((d) => (
                 <li
                   key={d.id}
@@ -149,48 +496,138 @@ export function TeamOverviewModal({ team, onClose }: { team: PlatformTeam; onClo
 
 export function CreditActivityModal({
   title,
+  accountId,
   activity,
   totalCredits,
+  frozenBalance = 0,
   totalRevenue,
   onClose,
+  onChanged,
 }: {
   title: string;
+  accountId: string;
   activity: CreditActivityItem[];
   totalCredits: number;
+  frozenBalance?: number;
   totalRevenue?: number;
   onClose: () => void;
+  onChanged?: () => void;
 }) {
+  const [amount, setAmount] = useState('100');
+  const [note, setNote] = useState('Admin credit adjustment');
+  const [saving, setSaving] = useState(false);
+  const isFrozen = frozenBalance > 0;
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setSaving(true);
+    try {
+      await fn();
+      onChanged?.();
+    } catch (err) {
+      handleAccountActionError(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <ModalShell
       title={`${title} — Credits`}
       onClose={onClose}
       footer={
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex gap-8 text-sm">
-            <div>
-              <p className="text-zinc-500">Total credits</p>
-              <p className="text-xl font-bold text-white">{totalCredits.toLocaleString()}</p>
-            </div>
-            {totalRevenue != null && (
-              <div>
-                <p className="text-zinc-500">Total revenue</p>
-                <p className="text-xl font-bold text-emerald-300">₱{totalRevenue.toLocaleString()}</p>
-              </div>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="text-xs text-zinc-500">
+              Amount
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="mt-1 block w-28 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
+              />
+            </label>
+            <label className="text-xs text-zinc-500">
+              Note
+              <input
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="mt-1 block w-56 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() =>
+                void run(() => adjustAccountCredits(accountId, Math.abs(Number(amount) || 0), note))
+              }
+              className="rounded-xl bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            >
+              Credit +
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() =>
+                void run(() => adjustAccountCredits(accountId, -Math.abs(Number(amount) || 0), note))
+              }
+              className="rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm text-rose-200 disabled:opacity-50"
+            >
+              Deduct −
+            </button>
+          </div>
+          <div className="flex gap-2">
+            {!isFrozen && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void run(() => freezeAccountCredits(accountId, true))}
+                className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-200 disabled:opacity-50"
+              >
+                Freeze credits
+              </button>
+            )}
+            {isFrozen && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void run(() => freezeAccountCredits(accountId, false))}
+                className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white disabled:opacity-50"
+              >
+                Unfreeze
+              </button>
             )}
           </div>
-          <button type="button" className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-5 py-2.5 text-sm text-amber-200">
-            Freeze credits
-          </button>
         </div>
       }
     >
+      <div className="mb-4 flex flex-wrap gap-8 text-sm">
+        <div>
+          <p className="text-zinc-500">Total credits</p>
+          <p className="text-xl font-bold text-white">{totalCredits.toLocaleString()}</p>
+        </div>
+        <div>
+          <p className="text-zinc-500">Frozen credits</p>
+          <p className={`text-xl font-bold ${isFrozen ? 'text-amber-300' : 'text-zinc-500'}`}>
+            {frozenBalance.toLocaleString()}
+          </p>
+        </div>
+        {totalRevenue != null && (
+          <div>
+            <p className="text-zinc-500">Total revenue</p>
+            <p className="text-xl font-bold text-emerald-300">₱{totalRevenue.toLocaleString()}</p>
+          </div>
+        )}
+      </div>
       <h3 className="mb-4 text-sm font-semibold text-zinc-400">Credits & economy activity feed</h3>
       <ul className="space-y-3">
+        {activity.length === 0 && <li className="text-sm text-zinc-500">No credit transactions yet.</li>}
         {activity.map((item) => (
           <li key={item.id} className="flex items-center justify-between rounded-xl bg-white/[0.03] px-4 py-3">
             <div>
               <p className="text-sm font-medium text-white">{item.type}</p>
-              <p className="text-xs text-zinc-500">{item.label} · {item.timeAgo}</p>
+              <p className="text-xs text-zinc-500">
+                {item.label} · {item.timeAgo}
+              </p>
             </div>
             <p className={`font-semibold tabular-nums ${item.positive ? 'text-emerald-400' : 'text-red-400'}`}>
               {item.positive ? '+' : ''}
@@ -203,57 +640,197 @@ export function CreditActivityModal({
   );
 }
 
+const VERIFICATION_DURATION_OPTIONS = [
+  { value: 30, label: '30 days' },
+  { value: 90, label: '90 days' },
+  { value: 180, label: '6 months' },
+  { value: 365, label: '1 year' },
+  { value: 730, label: '2 years' },
+] as const;
+
 export function VerificationModal({
   entityName,
+  accountId,
   verification,
   onClose,
+  onChanged,
 }: {
   entityName: string;
+  accountId: string;
   verification: VerificationDetail;
   onClose: () => void;
+  onChanged?: () => void;
 }) {
+  const [saving, setSaving] = useState(false);
+  const [validityDays, setValidityDays] = useState(365);
+  const [customDays, setCustomDays] = useState('');
+  const [useCustom, setUseCustom] = useState(false);
+
+  const resolvedDays = useCustom
+    ? Math.min(Math.max(Number(customDays) || 0, 1), 3650)
+    : validityDays;
+
+  const durationLabel = (() => {
+    if (resolvedDays === 365) return '1 year';
+    if (resolvedDays === 180) return '6 months';
+    if (resolvedDays === 730) return '2 years';
+    return `${resolvedDays} day${resolvedDays === 1 ? '' : 's'}`;
+  })();
+
+  const apply = async (action: string) => {
+    setSaving(true);
+    try {
+      await setAccountVerification(accountId, action, {
+        validityDays: action === 'approve' ? resolvedDays : undefined,
+      });
+      onChanged?.();
+    } catch (err) {
+      handleAccountActionError(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <ModalShell
       title={`${entityName} verification`}
       subtitle={
-        verification.reverificationDueDays
-          ? `Status: ${verification.status} · Reverification due in ${verification.reverificationDueDays} days`
-          : `Status: ${verification.status}`
+        verification.isExpired
+          ? 'Status: Reverification required — previous verification has expired'
+          : verification.expiresAt
+            ? `Status: ${verification.status} · Valid until ${formatDate(verification.expiresAt)}`
+            : `Status: ${verification.status}`
       }
       onClose={onClose}
       footer={
         <div className="flex flex-wrap gap-2">
-          {['Approve', 'Decline', 'Pending', 'Reverify'].map((label) => (
+          <button
+            type="button"
+            disabled={saving || (useCustom && (!customDays || Number(customDays) <= 0))}
+            onClick={() => void apply('approve')}
+            className="rounded-xl bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+          >
+            Approve for {durationLabel}
+          </button>
+          {[
+            { label: 'Decline', action: 'decline' },
+            { label: 'Pending', action: 'pending' },
+            { label: 'Require reverification now', action: 'reverify' },
+          ].map((item) => (
             <button
-              key={label}
+              key={item.action}
               type="button"
-              className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white hover:bg-white/[0.05]"
+              disabled={saving}
+              onClick={() => void apply(item.action)}
+              className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white hover:bg-white/[0.05] disabled:opacity-50"
             >
-              {label}
+              {item.label}
             </button>
           ))}
         </div>
       }
     >
       <div className="mb-6 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
-        <div className="flex items-start justify-between">
+        <div className="mb-4 grid gap-3 sm:grid-cols-3">
           <div>
-            <p className="font-medium text-white">{verification.document.name}</p>
-            <p className="mt-1 text-xs text-zinc-500">
-              By: {verification.document.uploadedBy} · Application ID: {verification.applicationId}
-            </p>
-            <p className="text-xs text-zinc-500">
-              {verification.document.pages} pages · {verification.document.sizeMb} MB · Uploaded{' '}
-              {formatDateTime(verification.document.uploadedAt)}
+            <p className="text-xs text-zinc-500">Current status</p>
+            <p className={verification.isExpired ? 'font-medium text-amber-300' : 'font-medium text-white'}>
+              {verification.status}
             </p>
           </div>
-          <button type="button" className="text-zinc-400 hover:text-white">
-            <Download className="h-5 w-5" />
-          </button>
+          <div>
+            <p className="text-xs text-zinc-500">Verification expires</p>
+            <p className="font-medium text-white">{formatDate(verification.expiresAt)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500">Default validity</p>
+            <p className="font-medium text-white">1 year</p>
+          </div>
         </div>
+
+        <div className="mb-4 rounded-xl border border-white/[0.06] bg-black/20 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Approval validity period
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {VERIFICATION_DURATION_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  setUseCustom(false);
+                  setValidityDays(opt.value);
+                }}
+                className={`rounded-lg border px-3 py-1.5 text-xs transition ${
+                  !useCustom && validityDays === opt.value
+                    ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'
+                    : 'border-white/[0.08] text-zinc-400 hover:text-white'
+                }`}
+              >
+                {opt.label}
+                {opt.value === 365 ? ' (default)' : ''}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setUseCustom(true)}
+              className={`rounded-lg border px-3 py-1.5 text-xs transition ${
+                useCustom
+                  ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'
+                  : 'border-white/[0.08] text-zinc-400 hover:text-white'
+              }`}
+            >
+              Custom
+            </button>
+          </div>
+          {useCustom && (
+            <label className="mt-3 block text-xs text-zinc-500">
+              Custom days (1–3650)
+              <input
+                type="number"
+                min={1}
+                max={3650}
+                value={customDays}
+                onChange={(e) => setCustomDays(e.target.value)}
+                placeholder="e.g. 400"
+                className="mt-1 w-36 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
+              />
+            </label>
+          )}
+          <p className="mt-2 text-xs text-zinc-500">
+            Approving will set expiry to {durationLabel} from now.
+          </p>
+        </div>
+
+        {verification.document ? (
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="font-medium text-white">{verification.document.name}</p>
+              <p className="mt-1 text-xs text-zinc-500">
+                By: {verification.document.uploadedBy} · Application ID: {verification.applicationId}
+              </p>
+              <p className="text-xs text-zinc-500">
+                {verification.document.pages} pages · {verification.document.sizeMb} MB · Uploaded{' '}
+                {formatDateTime(verification.document.uploadedAt)}
+              </p>
+            </div>
+            <button type="button" className="text-zinc-400 hover:text-white">
+              <Download className="h-5 w-5" />
+            </button>
+          </div>
+        ) : (
+          <div>
+            <p className="font-medium text-white">No uploaded business document</p>
+            <p className="mt-1 text-xs text-zinc-500">Application ID: {verification.applicationId}</p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Verification is tracked via account_verification. Choose a validity period, then approve.
+            </p>
+          </div>
+        )}
       </div>
       <h3 className="mb-3 text-sm font-semibold text-zinc-400">Verification process logs</h3>
       <ul className="space-y-4 border-l border-white/[0.08] pl-4">
+        {verification.logs.length === 0 && <li className="text-sm text-zinc-500">No verification logs yet.</li>}
         {verification.logs.map((log) => (
           <li key={log.id} className="relative">
             <span className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-rose-500" />
@@ -277,6 +854,13 @@ export function HistoryModal({
   history: PlatformTeam['history'];
   onClose: () => void;
 }) {
+  const activeDisputes =
+    history.activeDisputes?.length
+      ? history.activeDisputes
+      : history.activeDispute
+        ? [history.activeDispute]
+        : [];
+
   return (
     <ModalShell title={`${entityName} history`} subtitle={history.summaryLabel} onClose={onClose}>
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
@@ -289,24 +873,48 @@ export function HistoryModal({
           <p className="text-2xl font-bold text-white">{history.totalDisputes}</p>
         </div>
         <div className="rounded-xl bg-white/[0.03] p-4">
-          <p className="text-xs text-zinc-500">Open disputes</p>
-          <p className="text-2xl font-bold text-amber-300">{history.openDisputes}</p>
+          <p className="text-xs text-zinc-500">Active disputes</p>
+          <p className="text-2xl font-bold text-amber-300">{activeDisputes.length}</p>
         </div>
       </div>
 
-      {history.activeDispute && (
-        <div className="mb-6 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
-          <p className="text-sm font-semibold text-amber-200">{history.activeDispute.title}</p>
-          <p className="mt-2 text-xs text-zinc-400">
-            Handled by {history.activeDispute.handler} · Against {history.activeDispute.against}
-          </p>
-          <p className="mt-1 text-sm text-zinc-300">{history.activeDispute.reason}</p>
-          <p className="mt-2 text-xs text-amber-300/80">Status: {history.activeDispute.status}</p>
-          <button type="button" className="mt-3 text-xs text-rose-400 underline">
-            See more
-          </button>
+      <div className="mb-6">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-white">Active disputes</h3>
+          {activeDisputes.length > 0 && (
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+              Needs attention
+            </span>
+          )}
         </div>
-      )}
+        {activeDisputes.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-white/[0.08] px-4 py-5 text-center text-sm text-zinc-500">
+            No active disputes for this account.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {activeDisputes.map((d, index) => (
+              <li
+                key={d.id || `${d.title}-${index}`}
+                className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="text-sm font-semibold text-amber-100">{d.title}</p>
+                  <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-200">
+                    {d.status}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-zinc-300">{d.reason}</p>
+                <p className="mt-2 text-xs text-zinc-500">
+                  Handled by {d.handler || d.by || 'Staff'} · Against {d.against || '—'}
+                  {d.id ? ` · ${d.id}` : ''}
+                  {d.timeAgo ? ` · ${d.timeAgo}` : ''}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div>
@@ -327,17 +935,39 @@ export function HistoryModal({
           </ul>
         </div>
         <div>
-          <h3 className="mb-3 text-sm font-semibold text-white">Dispute history</h3>
+          <h3 className="mb-3 text-sm font-semibold text-white">All disputes</h3>
           <ul className="space-y-3">
-            {history.disputes.map((d) => (
-              <li key={d.id} className="rounded-lg bg-white/[0.03] p-3 text-sm">
-                <p className="font-medium text-white">{d.title}</p>
-                <p className="mt-1 text-zinc-500">{d.reason}</p>
-                <p className="mt-2 text-xs text-zinc-600">
-                  By: {d.by} · {d.status} · {d.id} · {d.timeAgo}
-                </p>
-              </li>
-            ))}
+            {history.disputes.length === 0 && (
+              <p className="text-sm text-zinc-500">No disputes on record.</p>
+            )}
+            {history.disputes.map((d) => {
+              const isActive = !String(d.status)
+                .toLowerCase()
+                .match(/resolv|closed|dismiss/);
+              return (
+                <li
+                  key={d.id}
+                  className={`rounded-lg p-3 text-sm ${
+                    isActive
+                      ? 'border border-amber-500/20 bg-amber-500/[0.06]'
+                      : 'bg-white/[0.03]'
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-medium text-white">{d.title}</p>
+                    {isActive && (
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-300">
+                        Active
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-zinc-500">{d.reason}</p>
+                  <p className="mt-2 text-xs text-zinc-600">
+                    By: {d.by} · {d.status} · {d.id} · {d.timeAgo}
+                  </p>
+                </li>
+              );
+            })}
           </ul>
         </div>
       </div>
@@ -345,63 +975,279 @@ export function HistoryModal({
   );
 }
 
-export function UserOverviewModal({ user, onClose }: { user: PlatformUserAccount; onClose: () => void }) {
+export function WarnAccountModal({
+  entityName,
+  accountId,
+  onClose,
+  onChanged,
+}: {
+  entityName: string;
+  accountId: string;
+  onClose: () => void;
+  onChanged?: () => void;
+}) {
+  const [title, setTitle] = useState('Account warning');
+  const [reason, setReason] = useState('Warning issued by administrator');
+  const [points, setPoints] = useState('1');
+  const [saving, setSaving] = useState(false);
+
+  return (
+    <ModalShell
+      title={`Warn ${entityName}`}
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true);
+              try {
+                await warnAccount(accountId, {
+                  title,
+                  reason,
+                  points: Number(points) || 1,
+                });
+                onChanged?.();
+                onClose();
+              } catch (err) {
+                handleAccountActionError(err);
+              } finally {
+                setSaving(false);
+              }
+            }}
+            className="rounded-xl bg-amber-500/90 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {saving ? 'Issuing…' : 'Issue warning'}
+          </button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <label className="block text-xs text-zinc-500">
+          Title
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
+          />
+        </label>
+        <label className="block text-xs text-zinc-500">
+          Reason
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+            className="mt-1 w-full rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
+          />
+        </label>
+        <label className="block text-xs text-zinc-500">
+          Points
+          <input
+            type="number"
+            min={1}
+            value={points}
+            onChange={(e) => setPoints(e.target.value)}
+            className="mt-1 w-28 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
+          />
+        </label>
+      </div>
+    </ModalShell>
+  );
+}
+
+export function UserOverviewModal({
+  user,
+  onClose,
+  onOpenCredit,
+  onOpenVerification,
+  onOpenHistory,
+}: {
+  user: PlatformUserAccount;
+  onClose: () => void;
+  onOpenCredit?: () => void;
+  onOpenVerification?: () => void;
+  onOpenHistory?: () => void;
+}) {
   return (
     <ModalShell
       title={user.name}
       subtitle={`ID: ${user.profileId}`}
       onClose={onClose}
       footer={
-        <div className="flex gap-3">
-          <button type="button" className="rounded-xl border border-white/[0.1] px-5 py-2.5 text-sm text-white">
-            Edit account
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onOpenCredit}
+            className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
+          >
+            Credits & wallet
           </button>
-          <button type="button" className="rounded-xl bg-rose-500/90 px-5 py-2.5 text-sm font-medium text-white">
-            View profile
+          <button
+            type="button"
+            onClick={onOpenVerification}
+            className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
+          >
+            Verification
+          </button>
+          <button
+            type="button"
+            onClick={onOpenHistory}
+            className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
+          >
+            Violations & disputes
           </button>
         </div>
       }
     >
-      <dl className="grid gap-4 sm:grid-cols-2 text-sm">
+      {/* Identity header with avatar */}
+      <div className="flex flex-col gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 sm:flex-row sm:items-center">
+        <ProfileAvatar path={user.avatarPath} name={user.name} size="xl" />
+        <div className="min-w-0">
+          <p className="text-lg font-bold text-white">
+            {[user.profile?.firstName, user.profile?.middleName, user.profile?.lastName, user.profile?.suffix]
+              .filter(Boolean)
+              .join(' ') || user.name}
+          </p>
+          <p className="text-sm text-zinc-400">@{user.username}</p>
+          {user.tagline && <p className="mt-1 text-sm italic text-zinc-500">“{user.tagline}”</p>}
+          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">{user.status}</span>
+            <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-300">
+              {user.verificationStatus}
+            </span>
+            {user.profile?.subscriptionPlan && (
+              <span className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-sky-200">
+                {user.profile.subscriptionPlan}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {user.description && (
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">About</p>
+          <p className="mt-1 text-sm text-zinc-300">{user.description}</p>
+        </div>
+      )}
+
+      {/* Account */}
+      <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-zinc-600">Account</p>
+      <dl className="mt-2 grid gap-4 text-sm sm:grid-cols-2">
         <div>
           <dt className="text-zinc-500">Email</dt>
-          <dd className="text-white">{user.email}</dd>
+          <dd className="text-white">
+            {user.email}
+            {user.profile?.isEmailVerified ? (
+              <span className="ml-2 text-xs text-emerald-300">Verified</span>
+            ) : (
+              <span className="ml-2 text-xs text-amber-300">Unverified</span>
+            )}
+          </dd>
         </div>
         <div>
-          <dt className="text-zinc-500">Username</dt>
-          <dd className="text-white">@{user.username}</dd>
+          <dt className="text-zinc-500">Display name</dt>
+          <dd className="text-white">{user.displayName || '—'}</dd>
         </div>
         <div>
-          <dt className="text-zinc-500">Status</dt>
-          <dd className="text-white">{user.status}</dd>
+          <dt className="text-zinc-500">Joined</dt>
+          <dd className="text-zinc-300">{formatDateTime(user.joinedAt)}</dd>
         </div>
         <div>
-          <dt className="text-zinc-500">Verification</dt>
-          <dd className="text-white">{user.verificationStatus}</dd>
-        </div>
-        <div>
-          <dt className="text-zinc-500">Merit credits</dt>
-          <dd className="text-emerald-300">{user.meritCredits}</dd>
+          <dt className="text-zinc-500">Onboarding</dt>
+          <dd className="text-zinc-300">{user.profile?.completedOnboarding || 'Not completed'}</dd>
         </div>
         <div>
           <dt className="text-zinc-500">Payment profile</dt>
           <dd className="text-white">{user.hasPaymentProfile ? 'Linked' : 'Not linked'}</dd>
         </div>
         <div>
-          <dt className="text-zinc-500">Joined</dt>
-          <dd className="text-zinc-300">{formatDateTime(user.joinedAt)}</dd>
+          <dt className="text-zinc-500">Firebase account</dt>
+          <dd className="text-white">{user.hasFirebase ? 'Linked' : 'Not linked'}</dd>
         </div>
-        {user.tagline && (
-          <div className="sm:col-span-2">
-            <dt className="text-zinc-500">Tagline</dt>
-            <dd className="text-zinc-300">{user.tagline}</dd>
-          </div>
-        )}
       </dl>
-      <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
+
+      {/* Personal details */}
+      <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-zinc-600">Personal details</p>
+      <dl className="mt-2 grid gap-4 text-sm sm:grid-cols-2">
+        <div>
+          <dt className="text-zinc-500">Birth date</dt>
+          <dd className="text-zinc-300">{formatDate(user.profile?.birthDate ?? null)}</dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Country</dt>
+          <dd className="text-zinc-300">{user.profile?.country || '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Address</dt>
+          <dd className="text-zinc-300">{user.profile?.address || '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Zip code</dt>
+          <dd className="text-zinc-300">{user.profile?.zipCode ?? '—'}</dd>
+        </div>
+      </dl>
+
+      {/* Team memberships */}
+      <div className="mt-6">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+            Team memberships
+          </p>
+          <span className="text-xs text-zinc-500">{user.teams?.length ?? 0} team(s)</span>
+        </div>
+        {user.teams?.length ? (
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {user.teams.map((team) => (
+              <div
+                key={team.teamId}
+                className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"
+              >
+                <ProfileAvatar path={team.avatarPath} name={team.name} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium text-white">{team.name}</p>
+                  {team.handle && <p className="text-xs text-zinc-500">@{team.handle}</p>}
+                  <div className="mt-1 flex flex-wrap gap-1.5 text-[10px]">
+                    <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-sky-200">
+                      {team.role}
+                    </span>
+                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-400">
+                      Membership: {team.membershipStatus}
+                    </span>
+                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-400">
+                      Team: {team.teamStatus}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[10px] text-zinc-600">
+                    Joined {formatDate(team.joinedAt)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 rounded-xl border border-dashed border-white/[0.08] px-4 py-5 text-center text-sm text-zinc-500">
+            This user is not part of any team.
+          </p>
+        )}
+      </div>
+
+      {/* Credits & activity */}
+      <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-zinc-600">Credits & activity</p>
+      <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {[
+          ['Merit', user.meritCredits.toLocaleString()],
+          ['Wallet', user.stats.totalCredits.toLocaleString()],
+          ['Frozen', (user.frozenBalance ?? 0).toLocaleString()],
           ['Assets', user.stats.totalAssets],
-          ['Credits', user.stats.totalCredits.toLocaleString()],
           ['Jobs', user.stats.totalJobs],
           ['Posts', user.stats.totalPosts],
         ].map(([l, v]) => (

@@ -23,6 +23,8 @@ import {
 } from '../analytics/components/AnalyticsCharts';
 import TicketDetailModal from './TicketDetailModal';
 import TicketFiltersPanel from './TicketFiltersPanel';
+import ModeratorDisputeDetailModal from '@/pages/moderator/shared/ModeratorDisputeDetailModal';
+import { ReportCaseDetailModal } from '../moderation/CaseDetailModals';
 import {
   DEFAULT_TICKET_FILTERS,
   filterTickets,
@@ -489,37 +491,7 @@ function TicketsTab({
 }
 
 function DisputesTab({ disputes, onUpdated }: { disputes: Dispute[]; onUpdated: () => void }) {
-  const [selected, setSelected] = useState<Dispute | null>(null);
-  const [status, setStatus] = useState('open');
-  const [notes, setNotes] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const toApiStatus = (value: string) =>
-    String(value || '')
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, '_');
-
-  const open = (d: Dispute) => {
-    setSelected(d);
-    setStatus(toApiStatus(d.status));
-    setNotes(d.resolutionNotes || '');
-  };
-
-  const save = async () => {
-    if (!selected) return;
-    setSaving(true);
-    try {
-      await api.patch(`/api/admin/disputes/${selected.id}`, { status, resolution_notes: notes });
-      showSuccessToast('Dispute updated');
-      setSelected(null);
-      onUpdated();
-    } catch {
-      showErrorToast('Failed to update dispute');
-    } finally {
-      setSaving(false);
-    }
-  };
+  const [selectedId, setSelectedId] = useState<string | number | null>(null);
 
   return (
     <div className="space-y-4">
@@ -536,137 +508,62 @@ function DisputesTab({ disputes, onUpdated }: { disputes: Dispute[]; onUpdated: 
             d.assignee?.name || '—',
             formatDateTime(d.openedAt),
           ],
-          onClick: () => open(d),
+          onClick: () => setSelectedId(d.id),
         }))}
       />
 
-      {selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0f1016] p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs text-rose-400">{selected.number}</p>
-                <h3 className="text-lg font-bold text-white">{selected.title}</h3>
-                <p className="mt-1 text-sm text-zinc-500">{selected.reason}</p>
-              </div>
-              <button type="button" onClick={() => setSelected(null)} className="text-zinc-500 hover:text-white">
-                ✕
-              </button>
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 text-sm">
-              <div>
-                <p className="text-zinc-500">Initiator</p>
-                <p className="text-white">{selected.initiator.name}</p>
-              </div>
-              <div>
-                <p className="text-zinc-500">Respondent</p>
-                <p className="text-white">{selected.respondent.name}</p>
-              </div>
-              <div>
-                <p className="text-zinc-500">Related</p>
-                <p className="text-white">
-                  {selected.relatedEntityType} {selected.relatedEntityId}
-                </p>
-              </div>
-              <div>
-                <p className="text-zinc-500">Credits involved</p>
-                <p className="text-white">{selected.creditAmount.toLocaleString()}</p>
-              </div>
-            </div>
-            <label className="mt-4 block text-xs text-zinc-500">
-              Status
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
-              >
-                {[
-                  { value: 'open', label: 'Open' },
-                  { value: 'under_review', label: 'Under Review' },
-                  { value: 'resolved', label: 'Resolved' },
-                  { value: 'escalated', label: 'Escalated' },
-                  { value: 'closed', label: 'Closed' },
-                ].map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="mt-3 block text-xs text-zinc-500">
-              Resolution notes
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-                className="mt-1 w-full rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() => void save()}
-              disabled={saving}
-              className="mt-4 rounded-xl bg-rose-500/90 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-            >
-              Save dispute
-            </button>
-          </div>
-        </div>
+      {selectedId != null && (
+        <ModeratorDisputeDetailModal
+          disputeId={selectedId}
+          endpointBase="/api/admin/disputes"
+          accent="rose"
+          onClose={() => setSelectedId(null)}
+          onUpdated={onUpdated}
+        />
       )}
     </div>
   );
 }
 
 function ReportsTab({ reports, onUpdated }: { reports: UserReport[]; onUpdated: () => void }) {
-  const triage = async (id: number, status: string) => {
-    try {
-      await api.patch(`/api/admin/reports/${id}`, { status });
-      showSuccessToast(`Report marked ${status}`);
-      onUpdated();
-    } catch {
-      showErrorToast('Failed to update report');
-    }
-  };
+  const [selectedId, setSelectedId] = useState<string | number | null>(null);
 
   return (
-    <DataTable
-      columns={['Report', 'Target', 'Reason', 'Reporter', 'Priority', 'Status', 'Created', 'Actions']}
-      rows={reports.map((r) => ({
-        key: r.id,
-        cells: [
-          r.number,
-          `${r.targetType}: ${r.targetLabel || r.targetId}`,
-          r.reason,
-          r.reporter.name,
-          formatStatusLabel(r.priority),
-          formatStatusLabel(r.status),
-          formatDateTime(r.createdAt),
-          'actions',
-        ],
-        actions: (
-          <div className="flex gap-1">
-            {r.status !== 'in_review' && (
-              <button
-                type="button"
-                onClick={() => void triage(r.id, 'in_review')}
-                className="rounded px-2 py-1 text-[10px] text-amber-300 hover:bg-amber-500/10"
-              >
-                Review
-              </button>
-            )}
-            {r.status !== 'resolved' && (
-              <button
-                type="button"
-                onClick={() => void triage(r.id, 'resolved')}
-                className="rounded px-2 py-1 text-[10px] text-emerald-300 hover:bg-emerald-500/10"
-              >
-                Resolve
-              </button>
-            )}
-          </div>
-        ),
-      }))}
-    />
+    <>
+      <DataTable
+        columns={['Report', 'Target', 'Reason', 'Reporter', 'Priority', 'Status', 'Created', 'Actions']}
+        rows={reports.map((r) => ({
+          key: r.id,
+          cells: [
+            r.number,
+            `${r.targetType}: ${r.targetLabel || r.targetId}`,
+            r.reason,
+            r.reporter.name,
+            formatStatusLabel(r.priority),
+            formatStatusLabel(r.status),
+            formatDateTime(r.createdAt),
+            'actions',
+          ],
+          onClick: () => setSelectedId(r.id),
+          actions: (
+            <button
+              type="button"
+              onClick={() => setSelectedId(r.id)}
+              className="rounded px-2 py-1 text-[10px] text-rose-300 hover:bg-rose-500/10"
+            >
+              View
+            </button>
+          ),
+        }))}
+      />
+      {selectedId != null && (
+        <ReportCaseDetailModal
+          reportId={selectedId}
+          onClose={() => setSelectedId(null)}
+          onUpdated={onUpdated}
+        />
+      )}
+    </>
   );
 }
 

@@ -1209,6 +1209,52 @@ async function updateReport(reportId, patch) {
   return list.find((r) => String(r.id) === String(reportId)) || null;
 }
 
+async function getReportDetail(reportId) {
+  const reportResult = await pool.query(
+    `
+    SELECT
+      r.*,
+      COALESCE(fa.display_name, fu.first_name || ' ' || fu.last_name, r.target_label) AS target_name,
+      fa.handle AS target_handle,
+      COALESCE(repa.display_name, repu.first_name || ' ' || repu.last_name) AS reporter_name,
+      repa.handle AS reporter_handle,
+      COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
+      st.role AS assignee_role
+    FROM reports r
+    LEFT JOIN accounts fa ON fa.account_id = r.for_account_id
+    LEFT JOIN users fu ON fu.account_id = fa.account_id
+    LEFT JOIN accounts repa ON repa.account_id = r.by_account_id
+    LEFT JOIN users repu ON repu.account_id = repa.account_id
+    LEFT JOIN staff st ON st.staff_id = r.assigned_staff_id
+    LEFT JOIN accounts sa ON sa.account_id = st.account_id
+    WHERE r.report_id = $1 AND r.deleted_at IS NULL
+    `,
+    [reportId]
+  );
+  if (!reportResult.rows.length) return null;
+
+  const staffResult = await pool.query(`
+    SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
+    FROM staff s INNER JOIN accounts a ON a.account_id = s.account_id
+    WHERE a.deleted_at IS NULL
+    ORDER BY s.role
+  `);
+
+  return {
+    report: mapReportRow({
+      ...reportResult.rows[0],
+      reporter_name: reportResult.rows[0].reporter_name,
+      reporter_handle: reportResult.rows[0].reporter_handle,
+      assignee_name: reportResult.rows[0].assignee_name,
+    }),
+    assignableStaff: staffResult.rows.map((s) => ({
+      staffId: s.staff_id,
+      name: s.name,
+      role: s.role,
+    })),
+  };
+}
+
 module.exports = {
   getTicketsOverview,
   getTicketDetail,
@@ -1220,4 +1266,5 @@ module.exports = {
   getDisputeDetail,
   addDisputeMessage,
   updateReport,
+  getReportDetail,
 };
