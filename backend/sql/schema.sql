@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
     user_id SERIAL PRIMARY KEY,
     account_id INTEGER REFERENCES accounts(account_id) ON DELETE CASCADE,
     firebase_user_uuid VARCHAR(50),
-    xendit_customer_id VARCHAR(50),
+    customer_id VARCHAR(255),
     first_name VARCHAR(50),
     last_name VARCHAR(50),
     email_address VARCHAR(50) UNIQUE NOT NULL,

@@ -27,7 +27,7 @@ function mapUserRow(row) {
     lastSeenAt: row.created_at,
     hasAvatar: Boolean(row.avatar_file_id),
     tagline: row.tagline || null,
-    hasPaymentProfile: Boolean(row.xendit_customer_id),
+    hasPaymentProfile: Boolean(row.customer_id),
     hasFirebase: Boolean(row.firebase_user_uuid),
   };
 }
@@ -44,8 +44,8 @@ function normalizeStatus(status) {
 
 function deriveUserVerification(row) {
   if (normalizeStatus(row.status) !== 'Active') return 'Pending Review';
-  if (row.xendit_customer_id && row.firebase_user_uuid) return 'Verified';
-  if (row.xendit_customer_id || row.firebase_user_uuid) return 'Partially Verified';
+  if (row.customer_id && row.firebase_user_uuid) return 'Verified';
+  if (row.customer_id || row.firebase_user_uuid) return 'Partially Verified';
   return 'Unverified';
 }
 
@@ -243,7 +243,7 @@ async function fetchAllUsers() {
       u.last_name,
       u.email_address,
       u.firebase_user_uuid,
-      u.xendit_customer_id,
+      u.customer_id,
       a.handle,
       a.display_name,
       a.status,
