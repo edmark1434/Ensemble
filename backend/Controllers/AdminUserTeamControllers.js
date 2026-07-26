@@ -66,8 +66,16 @@ async function patchAdminAccountVerification(req, res) {
     if (!accountId || !action) {
       return res.status(400).json({ success: false, message: 'accountId and action are required' });
     }
-    const data = await updateAccountVerification(accountId, action, staffIdFromSession(req.session));
-    res.status(200).json({ success: true, data, message: `Verification updated to ${data.verificationStatus}` });
+    const data = await updateAccountVerification(accountId, action, staffIdFromSession(req.session), {
+      validityDays: req.body?.validityDays ?? req.body?.validity_days,
+    });
+    const durationNote =
+      data.validityDays != null ? ` (valid for ${data.validityDays} day${data.validityDays === 1 ? '' : 's'})` : '';
+    res.status(200).json({
+      success: true,
+      data,
+      message: `Verification updated to ${data.verificationStatus}${durationNote}`,
+    });
   } catch (err) {
     console.error('Error updating verification:', err);
     res.status(400).json({ success: false, message: err.message || 'Failed to update verification' });

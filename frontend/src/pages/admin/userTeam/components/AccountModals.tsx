@@ -651,6 +651,14 @@ export function CreditActivityModal({
   );
 }
 
+const VERIFICATION_DURATION_OPTIONS = [
+  { value: 30, label: '30 days' },
+  { value: 90, label: '90 days' },
+  { value: 180, label: '6 months' },
+  { value: 365, label: '1 year' },
+  { value: 730, label: '2 years' },
+] as const;
+
 export function VerificationModal({
   entityName,
   accountId,
@@ -665,11 +673,27 @@ export function VerificationModal({
   onChanged?: () => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const [validityDays, setValidityDays] = useState(365);
+  const [customDays, setCustomDays] = useState('');
+  const [useCustom, setUseCustom] = useState(false);
+
+  const resolvedDays = useCustom
+    ? Math.min(Math.max(Number(customDays) || 0, 1), 3650)
+    : validityDays;
+
+  const durationLabel = (() => {
+    if (resolvedDays === 365) return '1 year';
+    if (resolvedDays === 180) return '6 months';
+    if (resolvedDays === 730) return '2 years';
+    return `${resolvedDays} day${resolvedDays === 1 ? '' : 's'}`;
+  })();
 
   const apply = async (action: string) => {
     setSaving(true);
     try {
-      await setAccountVerification(accountId, action);
+      await setAccountVerification(accountId, action, {
+        validityDays: action === 'approve' ? resolvedDays : undefined,
+      });
       onChanged?.();
     } catch (err) {
       handleAccountActionError(err);
@@ -682,18 +706,27 @@ export function VerificationModal({
     <ModalShell
       title={`${entityName} verification`}
       subtitle={
-        verification.reverificationDueDays
-          ? `Status: ${verification.status} · Reverification due in ${verification.reverificationDueDays} days`
-          : `Status: ${verification.status}`
+        verification.isExpired
+          ? 'Status: Reverification required — previous verification has expired'
+          : verification.expiresAt
+            ? `Status: ${verification.status} · Valid until ${formatDate(verification.expiresAt)}`
+            : `Status: ${verification.status}`
       }
       onClose={onClose}
       footer={
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={saving || (useCustom && (!customDays || Number(customDays) <= 0))}
+            onClick={() => void apply('approve')}
+            className="rounded-xl bg-emerald-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+          >
+            Approve for {durationLabel}
+          </button>
           {[
-            { label: 'Approve', action: 'approve' },
             { label: 'Decline', action: 'decline' },
             { label: 'Pending', action: 'pending' },
-            { label: 'Reverify', action: 'reverify' },
+            { label: 'Require reverification now', action: 'reverify' },
           ].map((item) => (
             <button
               key={item.action}
@@ -709,6 +742,77 @@ export function VerificationModal({
       }
     >
       <div className="mb-6 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+        <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          <div>
+            <p className="text-xs text-zinc-500">Current status</p>
+            <p className={verification.isExpired ? 'font-medium text-amber-300' : 'font-medium text-white'}>
+              {verification.status}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500">Verification expires</p>
+            <p className="font-medium text-white">{formatDate(verification.expiresAt)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500">Default validity</p>
+            <p className="font-medium text-white">1 year</p>
+          </div>
+        </div>
+
+        <div className="mb-4 rounded-xl border border-white/[0.06] bg-black/20 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            Approval validity period
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {VERIFICATION_DURATION_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  setUseCustom(false);
+                  setValidityDays(opt.value);
+                }}
+                className={`rounded-lg border px-3 py-1.5 text-xs transition ${
+                  !useCustom && validityDays === opt.value
+                    ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'
+                    : 'border-white/[0.08] text-zinc-400 hover:text-white'
+                }`}
+              >
+                {opt.label}
+                {opt.value === 365 ? ' (default)' : ''}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setUseCustom(true)}
+              className={`rounded-lg border px-3 py-1.5 text-xs transition ${
+                useCustom
+                  ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'
+                  : 'border-white/[0.08] text-zinc-400 hover:text-white'
+              }`}
+            >
+              Custom
+            </button>
+          </div>
+          {useCustom && (
+            <label className="mt-3 block text-xs text-zinc-500">
+              Custom days (1–3650)
+              <input
+                type="number"
+                min={1}
+                max={3650}
+                value={customDays}
+                onChange={(e) => setCustomDays(e.target.value)}
+                placeholder="e.g. 400"
+                className="mt-1 w-36 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm text-white"
+              />
+            </label>
+          )}
+          <p className="mt-2 text-xs text-zinc-500">
+            Approving will set expiry to {durationLabel} from now.
+          </p>
+        </div>
+
         {verification.document ? (
           <div className="flex items-start justify-between">
             <div>
@@ -730,7 +834,7 @@ export function VerificationModal({
             <p className="font-medium text-white">No uploaded business document</p>
             <p className="mt-1 text-xs text-zinc-500">Application ID: {verification.applicationId}</p>
             <p className="mt-1 text-xs text-zinc-500">
-              Verification is tracked via account_verification. Approve or decline using the actions below.
+              Verification is tracked via account_verification. Choose a validity period, then approve.
             </p>
           </div>
         )}
@@ -761,6 +865,13 @@ export function HistoryModal({
   history: PlatformTeam['history'];
   onClose: () => void;
 }) {
+  const activeDisputes =
+    history.activeDisputes?.length
+      ? history.activeDisputes
+      : history.activeDispute
+        ? [history.activeDispute]
+        : [];
+
   return (
     <ModalShell title={`${entityName} history`} subtitle={history.summaryLabel} onClose={onClose}>
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
@@ -773,21 +884,48 @@ export function HistoryModal({
           <p className="text-2xl font-bold text-white">{history.totalDisputes}</p>
         </div>
         <div className="rounded-xl bg-white/[0.03] p-4">
-          <p className="text-xs text-zinc-500">Open disputes</p>
-          <p className="text-2xl font-bold text-amber-300">{history.openDisputes}</p>
+          <p className="text-xs text-zinc-500">Active disputes</p>
+          <p className="text-2xl font-bold text-amber-300">{activeDisputes.length}</p>
         </div>
       </div>
 
-      {history.activeDispute && (
-        <div className="mb-6 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
-          <p className="text-sm font-semibold text-amber-200">{history.activeDispute.title}</p>
-          <p className="mt-2 text-xs text-zinc-400">
-            Handled by {history.activeDispute.handler} · Against {history.activeDispute.against}
-          </p>
-          <p className="mt-1 text-sm text-zinc-300">{history.activeDispute.reason}</p>
-          <p className="mt-2 text-xs text-amber-300/80">Status: {history.activeDispute.status}</p>
+      <div className="mb-6">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-white">Active disputes</h3>
+          {activeDisputes.length > 0 && (
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200">
+              Needs attention
+            </span>
+          )}
         </div>
-      )}
+        {activeDisputes.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-white/[0.08] px-4 py-5 text-center text-sm text-zinc-500">
+            No active disputes for this account.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {activeDisputes.map((d, index) => (
+              <li
+                key={d.id || `${d.title}-${index}`}
+                className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="text-sm font-semibold text-amber-100">{d.title}</p>
+                  <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-200">
+                    {d.status}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-zinc-300">{d.reason}</p>
+                <p className="mt-2 text-xs text-zinc-500">
+                  Handled by {d.handler || d.by || 'Staff'} · Against {d.against || '—'}
+                  {d.id ? ` · ${d.id}` : ''}
+                  {d.timeAgo ? ` · ${d.timeAgo}` : ''}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div>
@@ -808,18 +946,39 @@ export function HistoryModal({
           </ul>
         </div>
         <div>
-          <h3 className="mb-3 text-sm font-semibold text-white">Dispute history</h3>
+          <h3 className="mb-3 text-sm font-semibold text-white">All disputes</h3>
           <ul className="space-y-3">
-            {history.disputes.length === 0 && <p className="text-sm text-zinc-500">No disputes on record.</p>}
-            {history.disputes.map((d) => (
-              <li key={d.id} className="rounded-lg bg-white/[0.03] p-3 text-sm">
-                <p className="font-medium text-white">{d.title}</p>
-                <p className="mt-1 text-zinc-500">{d.reason}</p>
-                <p className="mt-2 text-xs text-zinc-600">
-                  By: {d.by} · {d.status} · {d.id} · {d.timeAgo}
-                </p>
-              </li>
-            ))}
+            {history.disputes.length === 0 && (
+              <p className="text-sm text-zinc-500">No disputes on record.</p>
+            )}
+            {history.disputes.map((d) => {
+              const isActive = !String(d.status)
+                .toLowerCase()
+                .match(/resolv|closed|dismiss/);
+              return (
+                <li
+                  key={d.id}
+                  className={`rounded-lg p-3 text-sm ${
+                    isActive
+                      ? 'border border-amber-500/20 bg-amber-500/[0.06]'
+                      : 'bg-white/[0.03]'
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-medium text-white">{d.title}</p>
+                    {isActive && (
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-300">
+                        Active
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-zinc-500">{d.reason}</p>
+                  <p className="mt-2 text-xs text-zinc-600">
+                    By: {d.by} · {d.status} · {d.id} · {d.timeAgo}
+                  </p>
+                </li>
+              );
+            })}
           </ul>
         </div>
       </div>
@@ -1178,6 +1337,50 @@ export function UserOverviewModal({
           <dd className="text-zinc-300">{user.profile?.zipCode ?? '—'}</dd>
         </div>
       </dl>
+
+      {/* Team memberships */}
+      <div className="mt-6">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+            Team memberships
+          </p>
+          <span className="text-xs text-zinc-500">{user.teams?.length ?? 0} team(s)</span>
+        </div>
+        {user.teams?.length ? (
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {user.teams.map((team) => (
+              <div
+                key={team.teamId}
+                className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3"
+              >
+                <ProfileAvatar path={team.avatarPath} name={team.name} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium text-white">{team.name}</p>
+                  {team.handle && <p className="text-xs text-zinc-500">@{team.handle}</p>}
+                  <div className="mt-1 flex flex-wrap gap-1.5 text-[10px]">
+                    <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-sky-200">
+                      {team.role}
+                    </span>
+                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-400">
+                      Membership: {team.membershipStatus}
+                    </span>
+                    <span className="rounded-full border border-white/10 px-2 py-0.5 text-zinc-400">
+                      Team: {team.teamStatus}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[10px] text-zinc-600">
+                    Joined {formatDate(team.joinedAt)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 rounded-xl border border-dashed border-white/[0.08] px-4 py-5 text-center text-sm text-zinc-500">
+            This user is not part of any team.
+          </p>
+        )}
+      </div>
 
       {/* Credits & activity */}
       <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-zinc-600">Credits & activity</p>

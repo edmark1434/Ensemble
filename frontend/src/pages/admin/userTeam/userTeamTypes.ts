@@ -63,6 +63,8 @@ export type CreditActivityItem = {
 export type VerificationDetail = {
   status: string;
   reverificationDueDays: number | null;
+  expiresAt: string | null;
+  isExpired: boolean;
   applicationId: string;
   document: {
     name: string;
@@ -74,18 +76,24 @@ export type VerificationDetail = {
   logs: { id: string; title: string; timeAgo: string; by: string; ref: string }[];
 };
 
+export type ActiveDispute = {
+  id?: string;
+  title: string;
+  handler?: string;
+  against?: string;
+  reason: string;
+  status: string;
+  by?: string;
+  timeAgo?: string;
+};
+
 export type TeamHistory = {
   summaryLabel: string;
   totalViolations: number;
   totalDisputes: number;
   openDisputes: number;
-  activeDispute: {
-    title: string;
-    handler: string;
-    against: string;
-    reason: string;
-    status: string;
-  } | null;
+  activeDispute: ActiveDispute | null;
+  activeDisputes: ActiveDispute[];
   violations: { id: string; title: string; reason: string; points: number; by: string; timeAgo: string }[];
   disputes: { id: string; title: string; reason: string; status: string; by: string; timeAgo: string }[];
 };
@@ -118,6 +126,18 @@ export type UserProfileDetails = {
   subscriptionPlan: string | null;
 };
 
+export type UserTeamMembership = {
+  teamId: string;
+  accountId: string;
+  name: string;
+  handle: string | null;
+  avatarPath: string | null;
+  role: string;
+  membershipStatus: string;
+  teamStatus: string;
+  joinedAt: string | null;
+};
+
 export type PlatformUserAccount = {
   id: string | number;
   accountId: string;
@@ -140,6 +160,7 @@ export type PlatformUserAccount = {
   walletBalance: number;
   frozenBalance: number;
   profile: UserProfileDetails;
+  teams: UserTeamMembership[];
   creditActivity: CreditActivityItem[];
   verification: VerificationDetail;
   history: TeamHistory;

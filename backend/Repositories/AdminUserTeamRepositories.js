@@ -12,6 +12,9 @@ function normalizeStatus(status) {
 
 function mapVerificationLabel(raw, { forTeam = false } = {}) {
   const s = String(raw || 'unverified').toLowerCase();
+  if (s === 'reverification_required' || s === 'expired') {
+    return 'Reverification Required';
+  }
   if (s === 'verified' || s === 'approved' || s === 'business verified') {
     return forTeam ? 'Business Verified' : 'Verified';
   }
@@ -222,10 +225,20 @@ function buildHistory(accountId, historyMap) {
   const data = historyMap.get(accountId) || { violations: [], disputes: [] };
   const openDisputes = data.disputes.filter((d) => {
     const s = String(d.status).toLowerCase();
-    return !s.includes('resolv') && !s.includes('closed');
+    return !s.includes('resolv') && !s.includes('closed') && !s.includes('dismiss');
   });
-  const active = openDisputes[0] || null;
-  const caution = data.violations.length > 0 || openDisputes.length > 0;
+  const activeDisputes = openDisputes.map((d) => ({
+    id: d.id,
+    title: d.title,
+    handler: d.handler || d.by || 'Staff',
+    against: d.against || '—',
+    reason: d.reason,
+    status: d.status,
+    by: d.by,
+    timeAgo: d.timeAgo,
+  }));
+  const active = activeDisputes[0] || null;
+  const caution = data.violations.length > 0 || activeDisputes.length > 0;
 
   return {
     summaryLabel: caution
@@ -233,16 +246,17 @@ function buildHistory(accountId, historyMap) {
       : 'Active — Good standing',
     totalViolations: data.violations.length,
     totalDisputes: data.disputes.length,
-    openDisputes: openDisputes.length,
+    openDisputes: activeDisputes.length,
     activeDispute: active
       ? {
           title: active.title,
-          handler: active.handler || active.by || 'Staff',
-          against: active.against || '—',
+          handler: active.handler,
+          against: active.against,
           reason: active.reason,
           status: active.status,
         }
       : null,
+    activeDisputes,
     violations: data.violations.slice(0, 10),
     disputes: data.disputes.slice(0, 10).map(({ against, handler, ...rest }) => rest),
   };
@@ -251,12 +265,22 @@ function buildHistory(accountId, historyMap) {
 function buildVerificationDetail(row) {
   const label = mapVerificationLabel(row.verification_status);
   const verified = label === 'Verified' || label === 'Business Verified';
+  const expiresAt = row.verification_expires_at || null;
+  const isExpired = Boolean(expiresAt && new Date(expiresAt).getTime() <= Date.now());
   return {
-    status: verified ? 'Verified' : label === 'Pending Review' ? 'Pending' : 'Unverified',
-    reverificationDueDays: row.verification_expires_at
+    status: isExpired
+      ? 'Reverification Required'
+      : verified
+        ? 'Verified'
+        : label === 'Pending Review'
+          ? 'Pending'
+          : label,
+    expiresAt,
+    isExpired,
+    reverificationDueDays: expiresAt
       ? Math.max(
           0,
-          Math.ceil((new Date(row.verification_expires_at) - Date.now()) / 86400000)
+          Math.ceil((new Date(expiresAt) - Date.now()) / 86400000)
         )
       : null,
     applicationId: row.account_verification_id || '—',
@@ -271,6 +295,18 @@ function buildVerificationDetail(row) {
       },
     ],
   };
+}
+
+async function markExpiredVerificationsForReverification() {
+  await pool.query(`
+    UPDATE account_verification
+    SET status = 'reverification_required',
+        updated_at = NOW()
+    WHERE LOWER(COALESCE(status, '')) = 'verified'
+      AND expires_at IS NOT NULL
+      AND expires_at <= NOW()
+      AND deleted_at IS NULL
+  `);
 }
 
 async function fetchAllUsers() {
@@ -302,7 +338,13 @@ async function fetchAllUsers() {
       f.path AS avatar_path,
       p.name AS subscription_plan,
       av.account_verification_id,
-      av.status AS verification_status,
+      CASE
+        WHEN LOWER(COALESCE(av.status, '')) = 'verified'
+          AND av.expires_at IS NOT NULL
+          AND av.expires_at <= NOW()
+        THEN 'reverification_required'
+        ELSE av.status
+      END AS verification_status,
       av.expires_at AS verification_expires_at,
       av.updated_at AS verification_updated_at,
       COALESCE(va.display_name, vs.first_name || ' ' || vs.last_name) AS verified_by_name,
@@ -343,6 +385,53 @@ async function fetchAllUsers() {
   return result.rows.map(mapUserRow);
 }
 
+async function fetchTeamMembershipsForUsers(userIds) {
+  if (!userIds.length) return new Map();
+
+  const result = await pool.query(
+    `
+    SELECT
+      tm.user_id,
+      tm.role,
+      tm.status AS membership_status,
+      tm.joined_at,
+      t.team_id,
+      t.account_id AS team_account_id,
+      a.display_name AS team_name,
+      a.handle AS team_handle,
+      a.status AS team_status,
+      f.path AS team_avatar_path
+    FROM team_members tm
+    INNER JOIN teams t ON t.team_id = tm.team_id
+    INNER JOIN accounts a ON a.account_id = t.account_id
+    LEFT JOIN files f ON f.file_id = a.avatar_file_id
+    WHERE tm.user_id = ANY($1::uuid[])
+      AND tm.deleted_at IS NULL
+      AND a.deleted_at IS NULL
+    ORDER BY tm.joined_at DESC
+    `,
+    [userIds]
+  );
+
+  const memberships = new Map();
+  for (const row of result.rows) {
+    const list = memberships.get(row.user_id) || [];
+    list.push({
+      teamId: row.team_id,
+      accountId: row.team_account_id,
+      name: row.team_name || row.team_handle || 'Unnamed team',
+      handle: row.team_handle || null,
+      avatarPath: row.team_avatar_path || null,
+      role: row.role || 'Member',
+      membershipStatus: row.membership_status || 'Active',
+      teamStatus: normalizeStatus(row.team_status),
+      joinedAt: row.joined_at,
+    });
+    memberships.set(row.user_id, list);
+  }
+  return memberships;
+}
+
 async function fetchTeamsFromDatabase() {
   const teamsResult = await pool.query(`
     SELECT
@@ -358,7 +447,13 @@ async function fetchTeamsFromDatabase() {
       a.description,
       f.path AS avatar_path,
       av.account_verification_id,
-      av.status AS verification_status,
+      CASE
+        WHEN LOWER(COALESCE(av.status, '')) = 'verified'
+          AND av.expires_at IS NOT NULL
+          AND av.expires_at <= NOW()
+        THEN 'reverification_required'
+        ELSE av.status
+      END AS verification_status,
       av.expires_at AS verification_expires_at,
       av.updated_at AS verification_updated_at,
       COALESCE(va.display_name, vs.first_name || ' ' || vs.last_name) AS verified_by_name,
@@ -520,7 +615,11 @@ function computeTeamStats(teams) {
   const active = teams.filter((t) => t.status === 'Active').length;
   const verified = teams.filter((t) => t.verificationStatus === 'Business Verified').length;
   const unverified = teams.filter((t) => t.verificationStatus === 'Unverified').length;
-  const pending = teams.filter((t) => t.verificationStatus === 'Pending Review').length;
+  const pending = teams.filter(
+    (t) =>
+      t.verificationStatus === 'Pending Review' ||
+      t.verificationStatus === 'Reverification Required'
+  ).length;
 
   return {
     totalSuspended: suspended,
@@ -538,7 +637,10 @@ function computeUserStats(users) {
   const banned = users.filter((u) => u.status === 'Banned').length;
   const active = users.filter((u) => u.status === 'Active').length;
   const pending = users.filter(
-    (u) => u.status === 'Pending' || u.verificationStatus === 'Pending Review'
+    (u) =>
+      u.status === 'Pending' ||
+      u.verificationStatus === 'Pending Review' ||
+      u.verificationStatus === 'Reverification Required'
   ).length;
   const verified = users.filter((u) => u.verificationStatus === 'Verified').length;
   const unverified = users.filter((u) => u.verificationStatus === 'Unverified').length;
@@ -555,6 +657,7 @@ function computeUserStats(users) {
 }
 
 async function getTeamsManagement() {
+  await markExpiredVerificationsForReverification();
   const teams = await fetchTeamsFromDatabase();
   return {
     stats: computeTeamStats(teams),
@@ -564,9 +667,11 @@ async function getTeamsManagement() {
 }
 
 async function getUsersManagement() {
+  await markExpiredVerificationsForReverification();
   const users = await fetchAllUsers();
   const accountIds = users.map((u) => u.accountId);
-  const [creditMap, historyMap, assetStats] = await Promise.all([
+  const userIds = users.map((u) => u.id);
+  const [creditMap, historyMap, assetStats, membershipsMap] = await Promise.all([
     fetchCreditActivityForAccounts(accountIds),
     fetchHistoryForAccounts(accountIds),
     accountIds.length
@@ -580,6 +685,7 @@ async function getUsersManagement() {
           [accountIds]
         ).catch(() => ({ rows: [] }))
       : { rows: [] },
+    fetchTeamMembershipsForUsers(userIds),
   ]);
   const assetsByAccount = new Map(assetStats.rows.map((r) => [r.account_id, r.listing_count]));
 
@@ -588,6 +694,7 @@ async function getUsersManagement() {
     return {
       ...rest,
       profileId: `USR-${String(u.id).slice(0, 8).toUpperCase()}`,
+      teams: membershipsMap.get(u.id) || [],
       creditActivity: creditMap.get(u.accountId) || [],
       verification: buildVerificationDetail(
         verificationMeta || {
@@ -768,7 +875,7 @@ async function updateAccountStatus(accountId, actionOrStatus) {
   return { accountId, status };
 }
 
-async function updateAccountVerification(accountId, action, staffId) {
+async function updateAccountVerification(accountId, action, staffId, options = {}) {
   await assertAccountExists(accountId);
   const key = String(action || '').toLowerCase();
   const statusMap = {
@@ -779,11 +886,16 @@ async function updateAccountVerification(accountId, action, staffId) {
     declined: 'declined',
     reject: 'declined',
     pending: 'pending',
-    reverify: 'pending',
+    reverify: 'reverification_required',
+    reverification_required: 'reverification_required',
     unverified: 'unverified',
   };
   const nextStatus = statusMap[key];
   if (!nextStatus) throw new Error(`Invalid verification action: ${action}`);
+
+  let validityDays = Number(options.validityDays);
+  if (!Number.isFinite(validityDays) || validityDays <= 0) validityDays = 365;
+  validityDays = Math.min(Math.max(Math.floor(validityDays), 1), 3650); // 1 day – 10 years
 
   const existing = await pool.query(
     `
@@ -803,22 +915,32 @@ async function updateAccountVerification(accountId, action, staffId) {
       SET status = $1,
           updated_at = NOW(),
           verified_by_staff_id = $2,
-          expires_at = CASE WHEN $1 = 'verified' THEN NOW() + INTERVAL '365 days' ELSE NULL END
+          expires_at = CASE
+            WHEN $1 = 'verified' THEN NOW() + ($4::int * INTERVAL '1 day')
+            ELSE NULL
+          END
       WHERE account_verification_id = $3
       `,
-      [nextStatus, staffId || null, existing.rows[0].account_verification_id]
+      [nextStatus, staffId || null, existing.rows[0].account_verification_id, validityDays]
     );
   } else {
     await pool.query(
       `
       INSERT INTO account_verification (account_id, status, created_at, updated_at, verified_by_staff_id, expires_at)
-      VALUES ($1, $2, NOW(), NOW(), $3, CASE WHEN $2 = 'verified' THEN NOW() + INTERVAL '365 days' ELSE NULL END)
+      VALUES (
+        $1, $2, NOW(), NOW(), $3,
+        CASE WHEN $2 = 'verified' THEN NOW() + ($4::int * INTERVAL '1 day') ELSE NULL END
+      )
       `,
-      [accountId, nextStatus, staffId || null]
+      [accountId, nextStatus, staffId || null, validityDays]
     );
   }
 
-  return { accountId, verificationStatus: mapVerificationLabel(nextStatus) };
+  return {
+    accountId,
+    verificationStatus: mapVerificationLabel(nextStatus),
+    validityDays: nextStatus === 'verified' ? validityDays : null,
+  };
 }
 
 async function adjustAccountCredits(accountId, amount, note, staffId) {

@@ -15,9 +15,12 @@ export async function setAccountStatus(accountId: string, action: string, option
 export async function setAccountVerification(
   accountId: string,
   action: string,
-  options?: ActionOptions
+  options?: ActionOptions & { validityDays?: number }
 ) {
-  const res = await api.patch(`/api/admin/accounts/${accountId}/verification`, { action });
+  const res = await api.patch(`/api/admin/accounts/${accountId}/verification`, {
+    action,
+    validityDays: options?.validityDays,
+  });
   if (!res.data?.success) throw new Error(res.data?.message || 'Verification update failed');
   if (!options?.silent) {
     showSuccessToast(res.data.message || 'Verification updated');
