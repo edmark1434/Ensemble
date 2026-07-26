@@ -18,7 +18,7 @@ Install these before running the project:
 
 - **Node.js** 18+ (20+ recommended)
 - **npm** (comes with Node)
-- **PostgreSQL** — database must already exist with the project schema (`accounts`, `users`, `staff`, and related tables). Schema/migration files are not included in this repo; use your team's database dump or setup docs.
+- **PostgreSQL** — create the database and apply migrations with the backend scripts below (`npm run db:create`, then `npm run migrate`)
 - **Redis** — used for sessions, login lockout, and caching
 - **Firebase project** — used for Google OAuth on the frontend
 
@@ -81,16 +81,18 @@ FRONTEND_URL=http://localhost:5173
 
 Generate JWT secrets with any long random string (e.g. `openssl rand -hex 32`).
 
-### 4. Create the database and tables
+### 4. Create the database and run migrations
 
-Your `DB_NAME` in `.env` must exist in PostgreSQL. If you see `database "ensemble" does not exist`, run:
+From `backend/`, create the Postgres database (if it does not exist yet), then apply all migrations:
 
 ```bash
 cd backend
-npm run db:setup
+npm run db:create
+npm run migrate
 ```
 
-This creates the database (if missing) and applies `backend/sql/schema.sql`.
+- `npm run db:create` — creates the database named in `DB_NAME` (skips if it already exists)
+- `npm run migrate` — runs `node-pg-migrate up` and applies schema from `backend/migrations/`
 
 ### 5. Seed the database (optional)
 
@@ -105,15 +107,15 @@ Default seeded passwords:
 - **Staff & admin accounts:** `staff123`
 - **Regular user accounts:** `user123`
 
-**Staff & admin test accounts** (fixed emails — same every seed):
+**Staff & admin test accounts** (fixed named accounts — same every seed):
 
-| Role | Email | Username (handle) | Portal |
-|------|-------|-------------------|--------|
-| Admin | `admin@ensemble.dev` | `admin` | http://localhost:5173/admin |
-| Support Moderator | `support@ensemble.dev` | `support_moderator` | http://localhost:5173/staff |
-| Marketplace Moderator | `marketplace@ensemble.dev` | `marketplace_moderator` | http://localhost:5173/staff |
-| Jobs N Gigs Moderator | `jobs@ensemble.dev` | `jobs_n_gigs_moderator` | http://localhost:5173/staff |
-| Forum Moderator | `forum@ensemble.dev` | `forum_moderator` | http://localhost:5173/staff |
+| Name | Role | Email | Username (handle) | Portal |
+|------|------|-------|-------------------|--------|
+| Admin | Admin | `admin@ensemble.dev` | `admin` | http://localhost:5173/admin |
+| Maya Reyes | Support Moderator | `maya.reyes@ensemble.dev` | `maya_reyes` | http://localhost:5173/staff |
+| Noah Patel | Marketplace Moderator | `noah.patel@ensemble.dev` | `noah_patel` | http://localhost:5173/staff |
+| Lena Brooks | Jobs N Gigs Moderator | `lena.brooks@ensemble.dev` | `lena_brooks` | http://localhost:5173/staff |
+| Owen Park | Forum Moderator | `owen.park@ensemble.dev` | `owen_park` | http://localhost:5173/staff |
 
 Sign in with **email or username** and password `staff123`.
 
@@ -202,9 +204,9 @@ Set `VITE_BASE_URL=http://localhost:4000` in `frontend/.env` (required for login
 | Portal | Example login |
 |--------|----------------|
 | Admin | `admin` or `admin@ensemble.dev` |
-| Staff | `support_moderator` or `support@ensemble.dev` (and other staff emails above) |
+| Staff | `maya.reyes@ensemble.dev` / `maya_reyes` (Support), `noah.patel@ensemble.dev`, `lena.brooks@ensemble.dev`, `owen.park@ensemble.dev` |
 
-Re-run `npm run seed` to reset data; staff emails stay the same.
+Re-run `npm run seed` to reset data; named staff accounts stay the same.
 
 **Terminal 3 — video editor (optional):**
 
@@ -222,7 +224,8 @@ Open http://localhost:3000
 | Command        | Description                          |
 |----------------|--------------------------------------|
 | `npm start`      | Start API with nodemon (port 4000)   |
-| `npm run db:setup` | Create DB + apply schema           |
+| `npm run db:create` | Create the Postgres database (`DB_NAME`) if missing |
+| `npm run migrate` | Apply pending database migrations  |
 | `npm run seed`   | Insert sample users and staff        |
 | `npm run clean`  | Truncate users, staff, and accounts  |
 
@@ -280,7 +283,8 @@ Postgres is running but the database named in `DB_NAME` was never created. Run:
 
 ```bash
 cd backend
-npm run db:setup
+npm run db:create
+npm run migrate
 npm run seed
 ```
 

@@ -92,7 +92,7 @@ function buildPendingCases(users, accounts, forum) {
   const cases = [];
 
   for (const u of users) {
-    const needsIdentity = !u.firebase_user_uuid || !u.xendit_customer_id;
+    const needsIdentity = !u.firebase_user_uuid || !u.customer_id;
     const status = normalizeStatus(u.status);
 
     if (status !== 'Active') {
@@ -116,7 +116,7 @@ function buildPendingCases(users, accounts, forum) {
         target: formatUserName(u),
         targetHandle: u.handle,
         targetType: 'User',
-        reason: !u.firebase_user_uuid && !u.xendit_customer_id
+        reason: !u.firebase_user_uuid && !u.customer_id
           ? 'No linked identity or payment profile'
           : !u.firebase_user_uuid
             ? 'Firebase identity not linked'
@@ -277,7 +277,7 @@ async function getModerationOverview() {
         u.last_name,
         u.email_address,
         u.firebase_user_uuid,
-        u.xendit_customer_id,
+        u.customer_id,
         a.handle,
         a.display_name,
         a.status,
@@ -359,7 +359,7 @@ async function getModerationOverview() {
       : 0;
 
   const identityReviewCount = users.filter(
-    (u) => !u.firebase_user_uuid || !u.xendit_customer_id
+    (u) => !u.firebase_user_uuid || !u.customer_id
   ).length;
 
   return {

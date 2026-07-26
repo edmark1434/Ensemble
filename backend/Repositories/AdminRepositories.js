@@ -37,7 +37,7 @@ async function getDashboardOverview() {
     pool
       .query(`
         SELECT
-          (SELECT COUNT(*)::int FROM support_tickets WHERE LOWER(status) NOT IN ('resolved', 'closed')) AS open_tickets,
+          (SELECT COUNT(*)::int FROM tickets WHERE deleted_at IS NULL AND status NOT IN ('Resolved', 'Closed')) AS open_tickets,
           (SELECT COUNT(*)::int FROM disputes WHERE LOWER(status) NOT IN ('resolved', 'closed')) AS open_disputes
       `)
       .catch(() => ({ rows: [{ open_tickets: 0, open_disputes: 0 }] })),

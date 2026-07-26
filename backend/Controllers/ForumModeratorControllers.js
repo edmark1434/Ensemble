@@ -59,7 +59,19 @@ async function patchTicket(req, res) {
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error updating ticket:', err);
-    res.status(500).json({ success: false, message: 'Failed to update ticket' });
+    const msg =
+      err?.message?.includes('not valid for') || err?.message?.includes('type is required') ||
+        err?.message?.includes('only be changed when escalating')
+        ? err.message
+        : 'Failed to update ticket';
+    res
+      .status(
+        err?.message?.includes('not valid for') || err?.message?.includes('type is required') ||
+        err?.message?.includes('only be changed when escalating')
+          ? 400
+          : 500
+      )
+      .json({ success: false, message: msg });
   }
 }
 
@@ -74,7 +86,8 @@ async function postTicketMessage(req, res) {
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error adding ticket message:', err);
-    res.status(500).json({ success: false, message: 'Failed to add message' });
+    const msg = err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
+    res.status(err?.message?.includes('MongoDB') ? 503 : 500).json({ success: false, message: msg });
   }
 }
 

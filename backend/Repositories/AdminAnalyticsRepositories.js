@@ -14,8 +14,8 @@ function normalizeStatus(status) {
 
 function deriveVerification(row) {
   if (normalizeStatus(row.status) !== 'Active') return 'Pending review';
-  if (row.firebase_user_uuid && row.xendit_customer_id) return 'Fully verified';
-  if (row.firebase_user_uuid || row.xendit_customer_id) return 'Partially verified';
+  if (row.firebase_user_uuid && row.customer_id) return 'Fully verified';
+  if (row.firebase_user_uuid || row.customer_id) return 'Partially verified';
   return 'Unverified';
 }
 
@@ -27,7 +27,7 @@ async function fetchPlatformMembers() {
       u.last_name,
       u.email_address,
       u.firebase_user_uuid,
-      u.xendit_customer_id,
+      u.customer_id,
       a.handle,
       a.display_name,
       a.status,
