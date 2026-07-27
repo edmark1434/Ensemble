@@ -207,7 +207,7 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
       )}>
         <div className="text-xs flex items-center gap-1 px-2">
         <span
-          className="font-medium text-zinc-200"
+          className="font-semibold text-zinc-200"
           id="video-current-time"
           data-current-time={currentFrame / fps}
         >

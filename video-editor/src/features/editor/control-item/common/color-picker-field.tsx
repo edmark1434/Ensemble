@@ -87,7 +87,7 @@ function DraggableColorPanel({
         style={{ touchAction: "none" }}
         {...dragHandleProps}
       >
-        <p className="text-sm font-medium">{title}</p>
+        <p className="text-sm font-semibold">{title}</p>
         <X
           className="h-4 w-4 cursor-pointer text-muted-foreground"
           onPointerDown={(e) => {
@@ -194,7 +194,7 @@ export function ColorPickerField({
         <div className="relative flex w-full">
           <ColorSwatch value={localValue} />
           <Button
-            className="flex w-full flex-1 items-center justify-between px-3 text-sm rounded-l-none"
+            className="flex w-full flex-1 items-center justify-between px-3 text-sm rounded-l-none font-normal"
             variant="outline"
             disabled={disabled}
           >

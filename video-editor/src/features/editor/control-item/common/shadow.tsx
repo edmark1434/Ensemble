@@ -30,7 +30,7 @@ function Shadow({
 
   return (
     <div className="flex flex-col gap-3">
-      <Label className="font-sans text-sm font-medium">{label}</Label>
+      <Label className="font-sans text-sm font-semibold">{label}</Label>
 
       <div className="flex gap-2">
         <div className="flex flex-col gap-2 flex-1">

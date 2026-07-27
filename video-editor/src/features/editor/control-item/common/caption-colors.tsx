@@ -86,7 +86,7 @@ const CaptionColors = ({
 
   return (
     <div className="flex flex-col gap-3">
-      <Label className="font-sans text-sm font-medium">Colors</Label>
+      <Label className="font-sans text-sm font-semibold">Colors</Label>
 
       <div className="grid grid-cols-2 gap-2">
         <div className="flex flex-col gap-2 flex-1">

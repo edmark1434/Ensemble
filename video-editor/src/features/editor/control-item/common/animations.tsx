@@ -29,7 +29,7 @@ export const Animations = ({
                            }: PresetTextProps) => {
   return (
     <div className="flex flex-col gap-3">
-      <Label className="font-sans text-sm font-medium">Animations</Label>
+      <Label className="font-sans text-sm font-semibold">Animations</Label>
       <SelectaAnimation trackItem={trackItem} disabled={disabled} showLoop={showLoop} />
     </div>
   );
@@ -121,7 +121,7 @@ const SelectaAnimation = ({ trackItem, disabled, showLoop }: {
               </div>
               <div className="relative w-full">
                 <Button
-                  className="flex w-full items-center justify-between text-sm"
+                  className="flex w-full items-center justify-between text-sm font-normal"
                   variant="outline"
                   onClick={() => openPicker("in")}
                 >
@@ -151,7 +151,7 @@ const SelectaAnimation = ({ trackItem, disabled, showLoop }: {
                 </div>
                 <div className="relative w-full">
                   <Button
-                    className="flex w-full items-center justify-between text-sm"
+                    className="flex w-full items-center justify-between text-sm font-normal"
                     variant="outline"
                     onClick={() => openPicker("loop")}
                   >
@@ -172,7 +172,7 @@ const SelectaAnimation = ({ trackItem, disabled, showLoop }: {
               </div>
               <div className="relative w-full">
                 <Button
-                  className="flex w-full items-center justify-between text-sm"
+                  className="flex w-full items-center justify-between text-sm font-normal"
                   variant="outline"
                   onClick={() => openPicker("out")}
                 >

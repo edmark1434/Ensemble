@@ -9,7 +9,7 @@ import {
   PopoverTrigger
 } from "@/components/ui/popover";
 import {
-  ArrowUpRight,
+  ArrowUpRight, Check,
   ChevronDown,
   Download,
   Keyboard,
@@ -191,7 +191,7 @@ export default function Navbar({
               value={title}
               onChange={handleTitleChange}
               width={200}
-              inputClassName="h-9 text-sm font-normal"
+              inputClassName="h-9 text-sm font-semibold"
             />
           </div>
         )}
@@ -274,19 +274,19 @@ const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
-          className="flex h-8 gap-2 hover:!bg-accent/30"
+          className="flex h-8 gap-2 hover:!bg-accent/30 font-semibold"
           variant="outline"
           size={isMediumScreen ? "sm" : "icon"}
         >
           <Download size={16} />{" "}
-          <span className="hidden md:block font-normal">Export</span>
+          <span className="hidden md:block">Export</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent
         align="end"
         className="bg-sidebar z-[250] flex w-60 flex-col gap-4"
       >
-        <Label>Export settings</Label>
+        <Label className="font-semibold">Export settings</Label>
 
         <Popover open={isExportTypeOpen} onOpenChange={setIsExportTypeOpen}>
           <PopoverTrigger asChild>
@@ -295,25 +295,25 @@ const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
               <ChevronDown width={16} />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="bg-background z-[251] w-[--radix-popover-trigger-width] px-2 py-2">
-            <div
-              className="flex h-7 items-center rounded-sm px-3 text-sm hover:cursor-pointer hover:bg-zinc-800"
-              onClick={() => {
-                actions.setExportType("mp4");
-                setIsExportTypeOpen(false);
-              }}
-            >
-              MP4
-            </div>
-            <div
-              className="flex h-7 items-center rounded-sm px-3 text-sm hover:cursor-pointer hover:bg-zinc-800"
-              onClick={() => {
-                actions.setExportType("json");
-                setIsExportTypeOpen(false);
-              }}
-            >
-              JSON
-            </div>
+          <PopoverContent
+            className="z-[251] p-0"
+            style={{ width: "var(--radix-popover-trigger-width)" }}
+          >
+            {(["mp4", "json"] as const).map((type) => (
+              <div
+                key={type}
+                onClick={() => {
+                  actions.setExportType(type);
+                  setIsExportTypeOpen(false);
+                }}
+                className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
+              >
+                {type.toUpperCase()}
+                {type === exportType && (
+                  <Check size={14} className="text-muted-foreground" />
+                )}
+              </div>
+            ))}
           </PopoverContent>
         </Popover>
 

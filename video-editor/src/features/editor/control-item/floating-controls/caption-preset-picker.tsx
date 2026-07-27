@@ -4474,7 +4474,7 @@ export default function CaptionPresetPicker({
   return (
     <div ref={floatingRef} className="w-xs bg-card border flex flex-col rounded-lg">
       <div className="handle flex cursor-grab items-center justify-between p-4">
-        <p className="text-sm font-medium">Presets</p>
+        <p className="text-sm font-semibold">Presets</p>
         <X
           className="h-4 w-4 cursor-pointer text-muted-foreground"
           onClick={() => setFloatingControl("")}

@@ -35,7 +35,7 @@ export const VoiceOver = () => {
     <div className="flex h-full flex-col">
       <ScrollArea>
         <div className="mb-8 flex flex-1 flex-col">
-          <div className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-medium">
+          <div className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-semibold">
             Generate AI voice over
           </div>
           <div className="flex flex-col gap-4 px-4">

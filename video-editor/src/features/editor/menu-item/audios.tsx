@@ -301,7 +301,7 @@ const AudioItem = ({
           onClick={() => onAdd(item)}
           className="flex flex-col min-w-0 flex-1 cursor-pointer"
         >
-          <span className="text-sm font-medium truncate mb-0.5 text-zinc-900 dark:text-zinc-300">
+          <span className="text-sm font-semibold truncate mb-0.5 text-zinc-900 dark:text-zinc-300">
             {item.name}
           </span>
           <span className="text-xs text-muted-foreground">

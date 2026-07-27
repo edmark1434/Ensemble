@@ -42,7 +42,7 @@ export default function Flip({
   };
   return (
     <div className="flex flex-col gap-2 py-4">
-      <Label className="font-sans text-xs font-medium">Flip</Label>
+      <Label className="font-sans text-xs font-semibold">Flip</Label>
       <div className="flex">
         <Button variant="outline" onClick={() => handleFlip("x")}>
           Flip X

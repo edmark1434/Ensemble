@@ -93,7 +93,7 @@ const ColorPickerControl = ({
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      ß<Label className="font-sans text-xs font-medium">Color</Label>
+      <Label className="font-sans text-xs font-semibold">Color</Label>
       <div className="flex items-center pb-4 justify-center">
         <ColorPicker
           value={localValue}
@@ -145,7 +145,7 @@ const StrokeColorPickerControl = ({
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      <Label className="font-sans text-xs font-medium">Stroke Color</Label>
+      <Label className="font-sans text-xs font-semibold">Stroke Color</Label>
 
       <div className="flex items-center pb-4 justify-center">
         <ColorPicker
@@ -201,7 +201,7 @@ const ShadowColorPickerControl = ({
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      <Label className="font-sans text-xs font-medium">Shadow Color</Label>
+      <Label className="font-sans text-xs font-semibold">Shadow Color</Label>
 
       <div className="flex items-center pb-4 justify-center">
         <ColorPicker
@@ -253,7 +253,7 @@ const BackgroundColorPickerControl = ({
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      <Label className="font-sans text-xs font-medium">
+      <Label className="font-sans text-xs font-semibold">
         Background Color
       </Label>
 
@@ -307,7 +307,7 @@ const CaptionAppearedColorPickerControl = ({
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      <Label className="font-sans text-xs font-medium">Appeared Color</Label>
+      <Label className="font-sans text-xs font-semibold">Appeared Color</Label>
 
       <div className="flex items-center pb-4 justify-center">
         <ColorPicker
@@ -359,7 +359,7 @@ const CaptionActiveColorPickerControl = ({
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      <Label className="font-sans text-xs font-medium">Active Color</Label>
+      <Label className="font-sans text-xs font-semibold">Active Color</Label>
 
       <div className="flex items-center pb-4 justify-center">
         <ColorPicker
@@ -412,7 +412,7 @@ const CaptionActiveFillColorPickerControl = ({
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      <Label className="font-sans text-xs font-medium">
+      <Label className="font-sans text-xs font-semibold">
         Active Fill Color
       </Label>
 
@@ -461,7 +461,7 @@ const CaptionEmphasizeColorPickerControl = ({
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      <Label className="font-sans text-xs font-medium">Emphasize Color</Label>
+      <Label className="font-sans text-xs font-semibold">Emphasize Color</Label>
 
       <div className="flex items-center pb-4 justify-center">
         <ColorPicker

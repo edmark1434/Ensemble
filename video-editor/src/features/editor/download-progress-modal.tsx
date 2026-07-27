@@ -56,7 +56,7 @@ const DownloadProgressModal = () => {
     >
       <DialogContent className="border bg-card px-2 py-8 gap-6 overflow-hidden sm:max-w-md">
         <DialogHeader className="px-6 -mt-0.75">
-          <DialogTitle className="text-md font-medium">Export</DialogTitle>
+          <DialogTitle className="text-md font-semibold">Export</DialogTitle>
         </DialogHeader>
 
         <div className="px-6">
@@ -64,7 +64,7 @@ const DownloadProgressModal = () => {
             <div className="flex flex-col items-center justify-center gap-4 py-4 text-center">
               <CircleCheckIcon size={32} className="text-primary" />
               <div className="space-y-1">
-                <div className="font-medium">Exported</div>
+                <div className="font-semibold">Exported</div>
                 <div className="text-muted-foreground text-sm">
                   You can download the video to your device.
                 </div>
@@ -75,7 +75,7 @@ const DownloadProgressModal = () => {
             <div className="flex flex-col items-center justify-center gap-4 py-4 text-center">
               <CircleXIcon size={32} className="text-destructive" />
               <div className="space-y-1">
-                <div className="font-medium">Export failed</div>
+                <div className="font-semibold">Export failed</div>
                 <div className="text-muted-foreground text-sm">{error}</div>
               </div>
               <Button
@@ -87,7 +87,7 @@ const DownloadProgressModal = () => {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center gap-4 text-center">
-              <div className="text-4xl font-medium">
+              <div className="text-4xl font-semibold">
                 {Math.floor(progress * 100)}%
               </div>
               <div className="text-muted-foreground text-sm">

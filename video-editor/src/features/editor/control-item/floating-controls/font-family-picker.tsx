@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { X, SearchIcon, Loader2, ChevronDown } from "lucide-react";
+import {X, SearchIcon, Loader2, ChevronDown, Check} from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -79,9 +79,11 @@ const CATEGORY_LABELS: Record<FontCategory, string> = {
 
 const FontPreviewRow = ({
   family,
+  isSelected,
   onClick,
 }: {
   family: string;
+  isSelected: boolean;
   onClick: () => void;
 }) => {
   const safeId = family.replace(/\s+/g, "-").toLowerCase();
@@ -92,14 +94,17 @@ const FontPreviewRow = ({
       <div
         id={safeId}
         onClick={onClick}
-        className="cursor-pointer px-3 py-2 rounded hover:bg-zinc-800/50 transition-colors"
+        className="flex cursor-pointer items-center justify-between h-10 px-3 py-2 rounded hover:bg-zinc-800/50 transition-colors"
       >
         <span
           style={{ fontFamily: `"${family}", sans-serif`, fontSize: "15px" }}
-          className="leading-none"
+          className="leading-none truncate"
         >
           {family}
         </span>
+        {isSelected && (
+          <Check size={14} className="text-muted-foreground shrink-0" />
+        )}
       </div>
     </>
   );
@@ -127,6 +132,11 @@ export default function FontFamilyPicker() {
     setCategory,
     availableCategories,
   } = useGoogleFonts();
+
+  const compactFonts = useDataState((state) => state.compactFonts);
+  const selectedFamily = compactFonts.find(
+    (f) => f.default.postScriptName === trackItem?.details?.fontFamily
+  )?.family;
 
   const handleSelectFont = async (family: string) => {
     if (!trackItem) return;
@@ -167,7 +177,7 @@ export default function FontFamilyPicker() {
     >
       {/* Header */}
       <div className="handle flex cursor-grab justify-between items-center p-4">
-        <p className="text-sm font-medium">Fonts</p>
+        <p className="text-sm font-semibold">Fonts</p>
         <X
           className="h-4 w-4 cursor-pointer text-muted-foreground"
           onClick={() => setFloatingControl("")}
@@ -211,9 +221,12 @@ export default function FontFamilyPicker() {
                   setCategory(null);
                   setCategoryOpen(false);
                 }}
-                className="flex cursor-pointer items-center px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
               >
                 All
+                {category === null && (
+                  <Check size={14} className="text-muted-foreground" />
+                )}
               </div>
 
               {availableCategories.map((cat) => (
@@ -223,9 +236,12 @@ export default function FontFamilyPicker() {
                     setCategory(cat);
                     setCategoryOpen(false);
                   }}
-                  className="flex cursor-pointer items-center px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
+                  className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
                 >
                   {CATEGORY_LABELS[cat] ?? cat}
+                  {cat === category && (
+                    <Check size={14} className="text-muted-foreground" />
+                  )}
                 </div>
               ))}
             </PopoverContent>
@@ -252,6 +268,7 @@ export default function FontFamilyPicker() {
               <FontPreviewRow
                 key={item.family}
                 family={item.family}
+                isSelected={item.family === selectedFamily}
                 onClick={() => handleSelectFont(item.family)}
               />
             ))}

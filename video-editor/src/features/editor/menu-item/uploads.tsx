@@ -121,7 +121,7 @@ export const Uploads = () => {
       {/* Uploads in Progress Section */}
       {(pendingUploads.length > 0 || activeUploads.length > 0) && (
         <div className="p-4">
-          <div className="font-medium text-sm mb-2 flex items-center gap-2">
+          <div className="font-semibold text-sm mb-2 flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
             Uploads in Progress
           </div>
@@ -158,7 +158,7 @@ export const Uploads = () => {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <VideoIcon className="w-4 h-4 text-muted-foreground" />
-              <span className="font-medium text-sm">Videos</span>
+              <span className="font-semibold text-sm">Videos</span>
             </div>
             <ScrollArea className="max-h-32">
               <div className="grid grid-cols-3 gap-2 max-w-full">
@@ -188,7 +188,7 @@ export const Uploads = () => {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <ImageIcon className="w-4 h-4 text-muted-foreground" />
-              <span className="font-medium text-sm">Images</span>
+              <span className="font-semibold text-sm">Images</span>
             </div>
             <ScrollArea className="max-h-32">
               <div className="grid grid-cols-3 gap-2 max-w-full">
@@ -218,7 +218,7 @@ export const Uploads = () => {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <Music className="w-4 h-4 text-muted-foreground" />
-              <span className="font-medium text-sm">Audios</span>
+              <span className="font-semibold text-sm">Audios</span>
             </div>
             <ScrollArea className="max-h-32">
               <div className="grid grid-cols-3 gap-2 max-w-full">

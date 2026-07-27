@@ -240,14 +240,14 @@ export const AiVoice = () => {
 
   return (
     <div className="flex flex-1 flex-col max-w-full">
-      <div className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-medium">
+      <div className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-semibold">
         AI Voice Generation
       </div>
 
       <div className="space-y-4 p-4">
         {/* Text Input */}
         <div className="space-y-2">
-          <Label className="font-sans text-xs font-medium">
+          <Label className="font-sans text-xs font-semibold">
             Enter your script
           </Label>
 
@@ -266,7 +266,7 @@ export const AiVoice = () => {
         {/* Voice Selection */}
         <div className="space-y-3">
           <div className="flex gap-2 min-w-0 flex-col">
-            <Label className="font-sans text-xs font-medium">
+            <Label className="font-sans text-xs font-semibold">
               Select voice
             </Label>
             <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>

@@ -114,7 +114,7 @@ const AnimationCaption = () => {
       className="w-xs bg-card border flex flex-col rounded-lg"
     >
       <div className="handle flex cursor-grab justify-between items-center p-4">
-        <p className="text-sm font-medium">Animations</p>
+        <p className="text-sm font-semibold">Animations</p>
         <X className="h-4 w-4 cursor-pointer text-muted-foreground" onClick={() => setFloatingControl("")} />
       </div>
 

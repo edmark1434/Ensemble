@@ -13,7 +13,7 @@ export const SECONDARY_FONT = "geist-regular";
 export const LARGER_FONT_SIZE = 30;
 export const LARGE_FONT_SIZE = 24;
 export const NORMAL_FONT_SIZE = 16;
-export const SMALL_FONT_SIZE = 12;
+export const SMALL_FONT_SIZE = 11;
 
 // Dynamic timeline offset values
 export const TIMELINE_OFFSET_X_SMALL = 8;

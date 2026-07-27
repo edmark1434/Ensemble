@@ -69,7 +69,7 @@ export const TextControls = ({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
-        <Label className="font-sans text-sm font-medium">Typography</Label>
+        <Label className="font-sans text-sm font-semibold">Typography</Label>
         <div className="flex flex-col gap-2">
           <FontFamily
             handleChangeFont={onChangeFontFamily}
@@ -107,7 +107,7 @@ export const TextControls = ({
       </div>
 
       <div className="flex flex-col gap-3">
-        <Label className="font-sans text-sm font-medium">Decoration</Label>
+        <Label className="font-sans text-sm font-semibold">Decoration</Label>
         <div className="flex flex-col gap-2">
           <TextDecorationLines
             value={properties.textDecorationLines}
@@ -123,7 +123,7 @@ export const TextControls = ({
 
       {showFill && handleColorChange && (
         <div className="flex flex-col gap-3">
-          <Label className="font-sans text-sm font-medium">Fill</Label>
+          <Label className="font-sans text-sm font-semibold">Fill</Label>
           <div className="flex flex-col gap-2">
             <FontColor
               value={properties.color}
@@ -146,10 +146,10 @@ export const TextControls = ({
 };
 
 const FontBackground = ({
-                          value,
-                          handleColorChange,
-                          disabled
-                        }: {
+  value,
+  handleColorChange,
+  disabled
+}: {
   value: string;
   handleColorChange: (color: string) => void;
   disabled: boolean;
@@ -172,10 +172,10 @@ const FontBackground = ({
 };
 
 const FontColor = ({
-                     value,
-                     handleColorChange,
-                     disabled
-                   }: {
+  value,
+  handleColorChange,
+  disabled
+}: {
   value: string;
   handleColorChange: (color: string) => void;
   disabled: boolean;
@@ -198,9 +198,9 @@ const FontColor = ({
 };
 
 const FontSize = ({
-                    value,
-                    onChange
-                  }: {
+  value,
+  onChange
+}: {
   value: number;
   onChange: (v: number) => void;
 }) => {
@@ -247,9 +247,9 @@ const FontSize = ({
 };
 
 const FontFamily = ({
-                      handleChangeFont,
-                      fontFamilyDisplay
-                    }: {
+  handleChangeFont,
+  fontFamilyDisplay
+}: {
   handleChangeFont: (font: ICompactFont) => void;
   fontFamilyDisplay: string;
 }) => {
@@ -271,7 +271,7 @@ const FontFamily = ({
       {isLargeScreen ? (
         <div className="relative w-full">
           <Button
-            className="flex w-full items-center justify-between text-sm"
+            className="flex w-full items-center justify-between text-sm font-normal"
             variant="outline"
             onClick={() =>
               setFloatingControl(
@@ -341,9 +341,9 @@ const FontFamily = ({
 };
 
 const FontStyle = ({
-                     selectedFont,
-                     handleChangeFontStyle
-                   }: {
+  selectedFont,
+  handleChangeFontStyle
+}: {
   selectedFont: ICompactFont;
   handleChangeFontStyle: (font: IFont) => void;
 }) => {
@@ -450,10 +450,10 @@ const TextDecorationLines = ({
 };
 
 const TextDecorationColor = ({
-                               value,
-                               onChange,
-                               disabled
-                             }: {
+  value,
+  onChange,
+  disabled
+}: {
   value: string;
   onChange: (v: string) => void;
   disabled: boolean;
@@ -473,9 +473,9 @@ const TextDecorationColor = ({
 };
 
 const Alignment = ({
-                     value,
-                     onChange
-                   }: {
+  value,
+  onChange
+}: {
   value: string;
   onChange: (v: string) => void;
 }) => {
@@ -581,11 +581,11 @@ const FontCase = ({ id, value: initialValue }: { id: string; value: string }) =>
 };
 
 const FontLineHeight = ({
-                          id,
-                          value,
-                          fontFamily,
-                          fontSize
-                        }: {
+  id,
+  value,
+  fontFamily,
+  fontSize
+}: {
   id: string;
   value: string | number;
   fontFamily?: string;

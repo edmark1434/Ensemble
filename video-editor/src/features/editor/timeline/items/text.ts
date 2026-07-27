@@ -10,7 +10,7 @@ interface TextProps extends ResizableProps {
 }
 
 const getUIFont = () =>
-  getComputedStyle(document.body).getPropertyValue("--font-outfit").trim() ||
+  getComputedStyle(document.body).getPropertyValue("--font-plus-jakarta-sans").trim() ||
   "sans-serif";
 
 class Text extends Resizable {

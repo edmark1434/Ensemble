@@ -63,12 +63,13 @@ const ActiveControlItem = ({ selection }: { selection: Selection }) => {
 export const ControlItem = () => {
   const { activeIds, trackItemsMap, transitionsMap } = useStore();
   const [selection, setSelection] = useState<Selection>({ type: "none" });
-  const { setTrackItem: setLayoutTrackItem } = useLayoutStore();
+  const { setTrackItem: setLayoutTrackItem, setFloatingControl } = useLayoutStore();
 
   useEffect(() => {
     if (activeIds.length === 0) {
       setSelection({ type: "none" });
       setLayoutTrackItem(null);
+      setFloatingControl("");
       return;
     }
 

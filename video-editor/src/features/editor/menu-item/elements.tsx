@@ -241,7 +241,7 @@ export const Elements = () => {
     <>
       {!activeAll?.type ? (
         <div className="flex flex-1 flex-col max-w-full">
-          <div className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-medium">
+          <div className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-semibold">
             Elements
           </div>
 
@@ -278,7 +278,7 @@ export const Elements = () => {
               </div>
 
               <div className="flex flex-col">
-                <div className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-medium justify-between">
+                <div className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-semibold justify-between">
                   <div>Stickers</div>
                   <div
                     className="text-xs text-muted-foreground flex cursor-pointer"
@@ -299,7 +299,7 @@ export const Elements = () => {
 
               {/* section shapes */}
               <div className="flex flex-col">
-                <div className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-medium justify-between">
+                <div className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-semibold justify-between">
                   <div>Shapes</div>
                   <div
                     className="text-xs text-muted-foreground flex cursor-pointer"
@@ -319,7 +319,7 @@ export const Elements = () => {
 
               {/* section visualizers */}
               <div className="flex flex-col">
-                <div className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-medium justify-between">
+                <div className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-semibold justify-between">
                   <div>Visualizers</div>
                   <div
                     className="text-xs text-muted-foreground flex cursor-pointer"
@@ -340,7 +340,7 @@ export const Elements = () => {
 
               {/* section visualizers */}
               <div className="flex flex-col">
-                <div className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-medium justify-between">
+                <div className="text-text-primary flex h-12 flex-none items-center px-4 text-sm font-semibold justify-between">
                   <div>Progress Bars</div>
                   <div
                     className="text-xs text-muted-foreground flex cursor-pointer"
@@ -528,7 +528,7 @@ const AllVisualizers = ({
           type.all === "all" ? "" : "border-b"
         }`}
       >
-        <div className="text-md text-text-primary flex h-12 items-center font-medium">
+        <div className="text-md text-text-primary flex h-12 items-center font-semibold">
           <div
             className="flex gap-2 cursor-pointer hover:bg-accent rounded-full mr-1"
             onClick={() => handleAllClick(null, null)}

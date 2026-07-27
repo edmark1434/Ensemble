@@ -27,7 +27,7 @@ const EMPTY_FILMSTRIP: Filmstrip = {
 };
 
 const getUIFont = () =>
-  getComputedStyle(document.body).getPropertyValue("--font-outfit").trim() ||
+  getComputedStyle(document.body).getPropertyValue("--font-plus-jakarta-sans").trim() ||
   "sans-serif";
 
 interface VideoProps extends TrimmableProps {

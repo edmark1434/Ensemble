@@ -8,20 +8,20 @@ export const seedDefaultFont = async (): Promise<IFont | null> => {
   if (cachedDefaultFont) return cachedDefaultFont;
 
   const items = await fetchAllFontItems();
-  const outfitItem = items.find((item) => item.family === "Outfit");
-  if (!outfitItem) return null;
+  const fontItem = items.find((item) => item.family === "Plus Jakarta Sans");
+  if (!fontItem) return null;
 
-  const styles = itemToFonts(outfitItem);
-  const defaultFont = getDefaultFont(outfitItem);
+  const styles = itemToFonts(fontItem);
+  const defaultFont = getDefaultFont(fontItem);
 
   const { setFonts, setCompactFonts, fonts, compactFonts } =
     useDataState.getState();
 
-  if (!compactFonts.some((f) => f.family === "Outfit")) {
+  if (!compactFonts.some((f) => f.family === "Plus Jakarta Sans")) {
     setFonts([...fonts, ...styles]);
     setCompactFonts([
       ...compactFonts,
-      { family: "Outfit", styles, default: defaultFont }
+      { family: "Plus Jakarta Sans", styles, default: defaultFont }
     ]);
   }
 

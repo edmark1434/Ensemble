@@ -77,7 +77,7 @@ export const TransitionControls = ({
 
   return (
     <div className="flex flex-col gap-3">
-      <Label className="font-sans text-sm font-medium">Transition</Label>
+      <Label className="font-sans text-sm font-semibold">Transition</Label>
       <div className="flex flex-col gap-2">
         <TransitionKindSelect
           selected={selectedPreset}

@@ -7,7 +7,7 @@ import {
 } from "@/components/store-initializer";
 import { QueryProvider } from "@/components/query-provider";
 import { Analytics } from "@vercel/analytics/react";
-import { Outfit } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -23,8 +23,8 @@ const geist = Geist({
   weight: ["300", "400", "500", "600", "700"],
 });
 
-const outfit = Outfit({
-  variable: "--font-outfit",
+const plusJakartaSans = Plus_Jakarta_Sans({
+  variable: "--font-plus-jakarta-sans",
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700"],
 });
@@ -46,7 +46,7 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistMono.variable} ${geist.variable} ${outfit.variable} antialiased font-sans bg-muted`}
+        className={`${geistMono.variable} ${geist.variable} ${plusJakartaSans.variable} antialiased font-sans bg-muted`}
       >
         <ThemeProvider
           attribute="class"

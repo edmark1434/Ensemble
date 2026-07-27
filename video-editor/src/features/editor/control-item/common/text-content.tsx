@@ -70,7 +70,7 @@ export const TextContent = ({ trackItem }: TextContentProps) => {
 
   return (
     <div className="flex flex-col gap-3">
-      <Label className="font-sans text-sm font-medium">Content</Label>
+      <Label className="font-sans text-sm font-semibold">Content</Label>
       <Textarea
         value={localValue}
         onChange={(e) => onChange(e.target.value)}

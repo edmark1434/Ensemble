@@ -25,7 +25,7 @@ interface AudioProps extends TrimmableProps {
 }
 
 const getUIFont = () =>
-  getComputedStyle(document.body).getPropertyValue("--font-outfit").trim() ||
+  getComputedStyle(document.body).getPropertyValue("--font-plus-jakarta-sans").trim() ||
   "sans-serif";
 
 class Audio extends Trimmable {

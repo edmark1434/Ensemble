@@ -26,11 +26,11 @@ const AnimationCaption = () => {
 
   return (
     <div className="flex flex-col gap-3">
-      <Label className="font-sans text-sm font-medium">Animation</Label>
+      <Label className="font-sans text-sm font-semibold">Animation</Label>
 
       <div className="flex flex-col gap-2 flex-1">
         <Button
-          className="flex w-full items-center justify-between text-sm"
+          className="flex w-full items-center justify-between text-sm font-normal"
           variant="outline"
           onClick={() => setFloatingControl("animation-caption")}
         >
