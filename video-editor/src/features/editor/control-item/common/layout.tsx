@@ -6,6 +6,7 @@ import { EDIT_OBJECT } from "@designcombo/state";
 import { ITrackItem } from "@designcombo/types";
 import { useEffect, useState } from "react";
 import {FlipHorizontal, FlipVertical, Link, RotateCw, Unlink} from "lucide-react";
+import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
 
 interface LayoutControlProps {
   trackItem: ITrackItem & any;
@@ -100,16 +101,26 @@ export const LayoutControls = ({ trackItem }: LayoutControlProps) => {
           <div className="flex flex-col gap-2 flex-1">
             <div className="flex flex-1 items-center text-xs text-muted-foreground"></div>
             <div className="flex gap-1 flex-1">
-              <Button
-                variant={isLinked ? "default" : "secondary"}
-                size={"icon"}
-                onClick={() => setIsLinked((prev) => !prev)}
-                aria-label={isLinked ? "Unlink dimensions" : "Link dimensions"}
-                aria-pressed={isLinked}
-                className={"flex-1"}
-              >
-                {isLinked ? <Link size={16} /> : <Unlink size={16} />}
-              </Button>
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={isLinked ? "default" : "secondary"}
+                    size={"icon"}
+                    onClick={() => setIsLinked((prev) => !prev)}
+                    aria-label={isLinked ? "Unlink dimensions" : "Link dimensions"}
+                    aria-pressed={isLinked}
+                    className={"flex-1"}
+                  >
+                    {isLinked ? <Link size={16} /> : <Unlink size={16} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side={"bottom"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
+                  {isLinked ? "Unlink dimensions" : "Link dimensions"}
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </div>
@@ -126,30 +137,60 @@ export const LayoutControls = ({ trackItem }: LayoutControlProps) => {
           <div className="flex flex-col gap-2 flex-1">
             <div className="flex flex-1 items-center text-xs text-muted-foreground"></div>
             <div className="flex gap-1 flex-1">
-              <Button
-                variant={"secondary"}
-                size={"icon"}
-                onClick={rotateBy90}
-                className={"flex-1"}
-              >
-                <RotateCw size={16} />
-              </Button>
-              <Button
-                variant={"secondary"}
-                size={"icon"}
-                onClick={flipHorizontal}
-                className={"flex-1"}
-              >
-                <FlipHorizontal size={16} />
-              </Button>
-              <Button
-                variant={"secondary"}
-                size={"icon"}
-                onClick={flipVertical}
-                className={"flex-1"}
-              >
-                <FlipVertical size={16} />
-              </Button>
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={"secondary"}
+                    size={"icon"}
+                    onClick={rotateBy90}
+                    className={"flex-1"}
+                  >
+                    <RotateCw size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side={"bottom"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
+                  Rotate 90 degrees
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={"secondary"}
+                    size={"icon"}
+                    onClick={flipHorizontal}
+                    className={"flex-1"}
+                  >
+                    <FlipHorizontal size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side={"bottom"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
+                  Flip horizontally
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={"secondary"}
+                    size={"icon"}
+                    onClick={flipVertical}
+                    className={"flex-1"}
+                  >
+                    <FlipVertical size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side={"bottom"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
+                  Flip vertically
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </div>

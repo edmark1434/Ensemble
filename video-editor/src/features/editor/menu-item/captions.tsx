@@ -338,19 +338,26 @@ const CaptionItem = ({
   };
   return (
     <div
-      className={`flex flex-col gap-2 rounded-lg px-3.5 py-2 hover:cursor-pointer hover:bg-accent/30 ${
+      className={`flex flex-col gap-2 rounded-lg px-1.5 py-2 hover:cursor-pointer hover:bg-accent/30 ${
         isActive
-          ? "bg-captions-background text-captions-text"
+          ? "bg-captions-background text-captions-text font-semibold"
           : "text-muted-foreground"
       }`}
       onClick={() => handleSeek(display.from)}
     >
-      <div className="flex flex-col gap-1">
-        <div className="text-xs font-normal text-muted-foreground">
-          {millisecondsToHHMMSS(display.from)} -{" "}
-          {millisecondsToHHMMSS(display.to)}
+      <div className="flex items-start gap-2">
+        <div className="w-16 flex items-center justify-center">
+          <div
+            className={`shrink-0 rounded-md px-2 py-0.5 w-fit text-xs ${
+              isActive
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted-foreground/15 text-muted-foreground"
+            }`}
+          >
+            {millisecondsToHHMMSS(display.from)}
+          </div>
         </div>
-        <div className="text-sm">{details.text}</div>
+        <div className="flex-1 text-sm">{details.text}</div>
       </div>
     </div>
   );

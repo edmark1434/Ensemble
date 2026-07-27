@@ -12,7 +12,7 @@ import {
   AlignCenter,
   AlignJustify,
   AlignLeft,
-  AlignRight, Check,
+  AlignRight, ArrowRightToLine, Check,
   ChevronDown, Loader2, Percent,
   Search,
   Strikethrough,
@@ -34,6 +34,8 @@ import { useResolvedLineHeight } from "../../hooks/use-resolved-line-height";
 import {Slider} from "@/components/ui/slider";
 import { formatColorDisplay } from "@/components/color-picker/helpers";
 import {ColorPickerField} from "@/features/editor/control-item/common/color-picker-field";
+import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
+import {Kbd, KbdGroup} from "@/components/ui/kbd";
 
 interface TextControlsProps {
   trackItem: ITrackItem & any;
@@ -393,9 +395,9 @@ const FontStyle = ({
 };
 
 const decorationOptions = [
-  { value: "underline", label: "Toggle underline", icon: Underline },
-  { value: "line-through", label: "Toggle strikethrough", icon: Strikethrough },
-  { value: "overline", label: "Toggle overline", icon: XLineTop }
+  { value: "underline", label: "Underline", icon: Underline },
+  { value: "line-through", label: "Strikethrough", icon: Strikethrough },
+  { value: "overline", label: "Overline", icon: XLineTop }
 ];
 
 const TextDecorationLines = ({
@@ -429,18 +431,27 @@ const TextDecorationLines = ({
           {decorationOptions.map(({ value: lineValue, label, icon: Icon }) => {
             const isActive = activeLines.includes(lineValue);
             return (
-              <Button
-                key={lineValue}
-                type="button"
-                size="icon"
-                variant={isActive ? "default" : "secondary"}
-                aria-label={label}
-                aria-pressed={isActive}
-                onClick={() => toggleLine(lineValue)}
-                className="h-full w-full"
-              >
-                <Icon size={16} />
-              </Button>
+              <Tooltip key={lineValue} delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant={isActive ? "default" : "secondary"}
+                    aria-label={label}
+                    aria-pressed={isActive}
+                    onClick={() => toggleLine(lineValue)}
+                    className="h-full w-full"
+                  >
+                    <Icon size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side={"bottom"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
+                  {label}
+                </TooltipContent>
+              </Tooltip>
             );
           })}
         </div>
@@ -484,25 +495,21 @@ const Alignment = ({
       <div className="flex flex-1 items-center text-xs text-muted-foreground">
         Align
       </div>
-      <div className="flex gap-2">
-        <div className="relative w-full">
-          <RadioGroup
-            value={value}
-            onValueChange={onChange}
-            className="grid grid-cols-3 w-full h-9"
-          >
-            <RadioGroupItem value="left" aria-label="Align left">
-              <AlignLeft size={16} />
-            </RadioGroupItem>
-            <RadioGroupItem value="center" aria-label="Align center">
-              <AlignCenter size={16} />
-            </RadioGroupItem>
-            <RadioGroupItem value="right" aria-label="Align right">
-              <AlignRight size={16} />
-            </RadioGroupItem>
-          </RadioGroup>
-        </div>
-      </div>
+      <RadioGroup
+        value={value}
+        onValueChange={onChange}
+        className="grid grid-cols-3 w-full h-9"
+      >
+        <RadioGroupItem value="left" aria-label="Align left">
+          <AlignLeft size={16} />
+        </RadioGroupItem>
+        <RadioGroupItem value="center" aria-label="Align center">
+          <AlignCenter size={16} />
+        </RadioGroupItem>
+        <RadioGroupItem value="right" aria-label="Align right">
+          <AlignRight size={16} />
+        </RadioGroupItem>
+      </RadioGroup>
     </div>
   );
 };

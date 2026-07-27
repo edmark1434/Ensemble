@@ -44,6 +44,7 @@ import {timeMsToUnits} from "@designcombo/timeline";
 import {useTimelineOffsetX} from "@/features/editor/hooks/use-timeline-offset";
 import {Kbd, KbdGroup} from "@/components/ui/kbd";
 import {seedDefaultFont} from "@/features/editor/utils/seed-default-font";
+import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -115,43 +116,15 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
   const prevMarker = [...sortedMarkers].reverse().find((m) => m.frame < currentFrame);
   const nextMarker = sortedMarkers.find((m) => m.frame > currentFrame);
 
-  const scrollTimelineToFrame = (frame: number, kind: "start" | "marker" | "end") => {
-    if (!timeline) return;
-
-    const timeMs = (frame / fps) * 1000;
-    const targetPx = timeMsToUnits(timeMs, scale.zoom);
-
-    const currentScrollLeft = timeline && (timeline as any).spacing
-      ? -(timeline as any).viewportTransform[4] + (timeline as any).spacing.left
-      : 0;
-    const viewportWidth = (timeline as any).width ?? 0;
-
-    const screenX = targetPx - currentScrollLeft;
-    const isOffScreen = screenX < 0 || screenX > viewportWidth;
-
-    if (!isOffScreen) return;
-
-    const newScrollLeft =
-      kind === "start"
-        ? 0
-        : kind === "end"
-          ? Math.max(0, targetPx - viewportWidth + 2 * offsetX)
-          : Math.max(0, targetPx - viewportWidth / 2 + offsetX);
-
-    Promise.resolve().then(() => {
-      timeline.scrollTo({ scrollLeft: newScrollLeft });
-    });
-  };
-
   const handleJumpToPrev = () => {
     const frame = prevMarker ? prevMarker.frame : 0;
     playerRef?.current?.seekTo(frame);
-    scrollTimelineToFrame(frame, prevMarker ? "marker" : "start");
+    scrollTimelineToFrame(frame, prevMarker ? "marker" : "start", timelineOffsetX);
   };
   const handleJumpToNext = () => {
     const frame = nextMarker ? nextMarker.frame : durationFrames;
     playerRef?.current?.seekTo(frame);
-    scrollTimelineToFrame(frame, nextMarker ? "marker" : "end");
+    scrollTimelineToFrame(frame, nextMarker ? "marker" : "end", timelineOffsetX);
   };
 
   useEffect(() => {

@@ -167,14 +167,23 @@ class Audio extends Trimmable {
   public drawTextIdentity(ctx: CanvasRenderingContext2D) {
     ctx.save();
     ctx.translate(-this.width / 2, -this.height / 2);
+
+    if (this.isLoading || this.volume === 0) {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+      ctx.fillRect(0, 0, this.width, this.height);
+    }
+
     ctx.font = `400 12px ${getUIFont()}`;
     ctx.fillStyle = "rgba(255, 255, 255,1)";
     ctx.textAlign = "left";
     ctx.clip();
 
     if (this.isLoading) {
+      ctx.save();
+      ctx.globalAlpha = 0.4;
       this.drawLoader(ctx);
       ctx.fillText(this.name, 36, 22);
+      ctx.restore();
     } else if (this.volume === 0) {
       ctx.save();
       ctx.translate(12, 10);

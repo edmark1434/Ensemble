@@ -7,6 +7,7 @@ import { ITrackItem } from "@designcombo/types";
 import { useEffect, useState } from "react";
 import {Crop, FlipHorizontal, FlipVertical, Link, RotateCw, Unlink} from "lucide-react";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
+import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
 
 interface LayoutMediaControlsProps {
   trackItem: ITrackItem & any;
@@ -118,24 +119,45 @@ export const LayoutMediaControls = ({ trackItem }: LayoutMediaControlsProps) => 
           <div className="flex flex-col gap-2 flex-1">
             <div className="flex flex-1 items-center text-xs text-muted-foreground"></div>
             <div className="flex gap-1 flex-1">
-              <Button
-                variant={isLinked ? "default" : "secondary"}
-                size={"icon"}
-                onClick={() => setIsLinked((prev) => !prev)}
-                aria-label={isLinked ? "Unlink dimensions" : "Link dimensions"}
-                aria-pressed={isLinked}
-                className={"flex-1"}
-              >
-                {isLinked ? <Link size={16} /> : <Unlink size={16} />}
-              </Button>
-              <Button
-                variant={"secondary"}
-                size={"icon"}
-                onClick={() => setCropTarget(trackItem)}
-                className={"flex-1"}
-              >
-                <Crop size={16} />
-              </Button>
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={isLinked ? "default" : "secondary"}
+                    size={"icon"}
+                    onClick={() => setIsLinked((prev) => !prev)}
+                    aria-label={isLinked ? "Unlink dimensions" : "Link dimensions"}
+                    aria-pressed={isLinked}
+                    className={"flex-1"}
+                  >
+                    {isLinked ? <Link size={16} /> : <Unlink size={16} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side={"bottom"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
+                  {isLinked ? "Unlink dimensions" : "Link dimensions"}
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={"secondary"}
+                    size={"icon"}
+                    onClick={() => setCropTarget(trackItem)}
+                    className={"flex-1"}
+                  >
+                    <Crop size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side={"bottom"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
+                  Crop
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </div>
@@ -166,30 +188,60 @@ export const LayoutMediaControls = ({ trackItem }: LayoutMediaControlsProps) => 
           <div className="flex flex-col gap-2 flex-1">
             <div className="flex flex-1 items-center text-xs text-muted-foreground"></div>
             <div className="flex gap-1 flex-1">
-              <Button
-                variant={"secondary"}
-                size={"icon"}
-                onClick={rotateBy90}
-                className={"flex-1"}
-              >
-                <RotateCw size={16} />
-              </Button>
-              <Button
-                variant={"secondary"}
-                size={"icon"}
-                onClick={flipHorizontal}
-                className={"flex-1"}
-              >
-                <FlipHorizontal size={16} />
-              </Button>
-              <Button
-                variant={"secondary"}
-                size={"icon"}
-                onClick={flipVertical}
-                className={"flex-1"}
-              >
-                <FlipVertical size={16} />
-              </Button>
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={"secondary"}
+                    size={"icon"}
+                    onClick={rotateBy90}
+                    className={"flex-1"}
+                  >
+                    <RotateCw size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side={"bottom"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
+                  Rotate 90 degrees
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={"secondary"}
+                    size={"icon"}
+                    onClick={flipHorizontal}
+                    className={"flex-1"}
+                  >
+                    <FlipHorizontal size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side={"bottom"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
+                  Flip horizontally
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip delayDuration={10}>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={"secondary"}
+                    size={"icon"}
+                    onClick={flipVertical}
+                    className={"flex-1"}
+                  >
+                    <FlipVertical size={16} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side={"bottom"} align="center" sideOffset={1}
+                  className={"flex gap-2 items-center"}
+                >
+                  Flip vertically
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </div>
@@ -204,13 +256,13 @@ export const LayoutMediaControls = ({ trackItem }: LayoutMediaControlsProps) => 
 // whatever the caller passes in — LayoutMediaControls now passes the
 // crop-aware size, so this component itself doesn't need to know crop exists.
 const MediaDimension = ({
-                          axis,
-                          label,
-                          baseValue,
-                          transform,
-                          isLinked,
-                          onCommit
-                        }: {
+  axis,
+  label,
+  baseValue,
+  transform,
+  isLinked,
+  onCommit
+}: {
   axis: "width" | "height";
   label: string;
   baseValue: number | undefined;
@@ -296,13 +348,13 @@ const MediaDimension = ({
 // `baseSize` is crop-aware (passed in from LayoutMediaControls), so the
 // offset math below is already correct whether or not a crop is active.
 const MediaPosition = ({
-                         id,
-                         axis,
-                         label,
-                         rawValue,
-                         baseSize,
-                         transform
-                       }: {
+  id,
+  axis,
+  label,
+  rawValue,
+  baseSize,
+  transform
+}: {
   id: string;
   axis: "left" | "top";
   label: string;
@@ -389,11 +441,11 @@ const parseNumeric = (v: number | string | undefined): number => {
 };
 
 const LayoutSkew = ({
-                      id,
-                      field,
-                      label,
-                      value
-                    }: {
+  id,
+  field,
+  label,
+  value
+}: {
   id: string;
   field: "skewX" | "skewY";
   label: string;
@@ -459,9 +511,9 @@ const parseRotate = (v: number | string | undefined): number => {
 };
 
 const LayoutRotation = ({
-                          id,
-                          value
-                        }: {
+  id,
+  value
+}: {
   id: string;
   value: number | string | undefined;
 }) => {

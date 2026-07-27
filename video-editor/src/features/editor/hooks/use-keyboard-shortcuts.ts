@@ -14,6 +14,7 @@ import {ITimelineScaleState} from "@designcombo/types";
 import {getFitZoomLevel, getNextZoomLevel, getPreviousZoomLevel} from "@/features/editor/utils/timeline";
 import {useTimelineOffsetX} from "@/features/editor/hooks/use-timeline-offset";
 import {TIMELINE_OFFSET_CANVAS_LEFT} from "@/features/editor/constants/constants";
+import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
 
 export function useKeyboardShortcuts(stateManager: StateManager) {
   const timelineOffsetX = useTimelineOffsetX();
@@ -40,36 +41,6 @@ export function useKeyboardShortcuts(stateManager: StateManager) {
 
     Promise.resolve().then(() => {
       timeline?.scrollTo({ scrollLeft: newScrollLeft });
-    });
-  };
-
-  const scrollTimelineToFrame = (frame: number, kind: "start" | "marker" | "end") => {
-    const { fps, scale, timeline } = useStore.getState();
-    if (!timeline) return;
-
-    const timeMs = (frame / fps) * 1000;
-    const targetPx = timeMsToUnits(timeMs, scale.zoom);
-
-    const currentScrollLeft = timeline && (timeline as any).spacing
-      ? -(timeline as any).viewportTransform[4] + (timeline as any).spacing.left
-      : 0;
-    const viewportWidth = (timeline as any).width ?? 0;
-    const offsetX = TIMELINE_OFFSET_CANVAS_LEFT + timelineOffsetXRef.current;
-
-    const screenX = targetPx - currentScrollLeft;
-    const isOffScreen = screenX < 0 || screenX > viewportWidth;
-
-    if (!isOffScreen) return;
-
-    const newScrollLeft =
-      kind === "start"
-        ? 0
-        : kind === "end"
-          ? Math.max(0, targetPx - viewportWidth + 2 * offsetX)
-          : Math.max(0, targetPx - viewportWidth / 2 + offsetX);
-
-    Promise.resolve().then(() => {
-      timeline.scrollTo({ scrollLeft: newScrollLeft });
     });
   };
 
@@ -355,7 +326,7 @@ export function useKeyboardShortcuts(stateManager: StateManager) {
 
         const targetFrame = prevMarker ? prevMarker.frame : 0;
         playerRef?.current?.seekTo(targetFrame);
-        scrollTimelineToFrame(targetFrame, prevMarker ? "marker" : "start");
+        scrollTimelineToFrame(targetFrame, prevMarker ? "marker" : "start", timelineOffsetXRef.current);
       }
 
       // next marker / jump to end
@@ -372,7 +343,7 @@ export function useKeyboardShortcuts(stateManager: StateManager) {
 
         const targetFrame = nextMarker ? nextMarker.frame : lastFrame;
         playerRef?.current?.seekTo(targetFrame);
-        scrollTimelineToFrame(targetFrame, nextMarker ? "marker" : "end");
+        scrollTimelineToFrame(targetFrame, nextMarker ? "marker" : "end", timelineOffsetXRef.current);
       }
 
       // jump to start
@@ -380,7 +351,7 @@ export function useKeyboardShortcuts(stateManager: StateManager) {
         e.preventDefault();
         const { playerRef } = useStore.getState();
         playerRef?.current?.seekTo(0);
-        scrollTimelineToFrame(0, "start");
+        scrollTimelineToFrame(0, "start", timelineOffsetXRef.current);
       }
 
       // jump to end
@@ -389,7 +360,7 @@ export function useKeyboardShortcuts(stateManager: StateManager) {
         const { playerRef, fps, duration } = useStore.getState();
         const lastFrame = Math.round((duration / 1000) * fps);
         playerRef?.current?.seekTo(lastFrame);
-        scrollTimelineToFrame(lastFrame, "end");
+        scrollTimelineToFrame(lastFrame, "end", timelineOffsetXRef.current);
       }
 
       // fullscreen

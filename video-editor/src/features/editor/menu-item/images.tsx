@@ -198,7 +198,7 @@ export const Images = () => {
             <div key={colIndex} className="flex flex-1 flex-col gap-2 min-w-0">
               {columnItems.map((image, i) => (
                 <ImageItem
-                  key={image.id || `${colIndex}-${i}`}
+                  key={`${image.id}-${colIndex}-${i}`}
                   image={image}
                   shouldDisplayPreview={!isDraggingOverTimeline}
                   handleAddImage={handleAddImage}

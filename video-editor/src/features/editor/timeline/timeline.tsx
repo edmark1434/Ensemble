@@ -27,6 +27,8 @@ import {useTimelineOffsetX} from "../hooks/use-timeline-offset";
 import {useStateManagerEvents} from "../hooks/use-state-manager-events";
 import {useResizbleTimeline} from "../hooks/use-resizable-timeline";
 import "./items/transition-render";
+import {patchTransitionGuideRender} from "@/features/editor/timeline/items/transition-guide-render";
+import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
 
 CanvasTimeline.registerItems({
   Text,
@@ -55,7 +57,11 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
   const { scale, playerRef, fps, duration, setState, timeline } = useStore();
   const currentFrame = useCurrentPlayerFrame(playerRef);
   const [canvasSize, setCanvasSize] = useState(EMPTY_SIZE);
+
   const timelineOffsetX = useTimelineOffsetX();
+  const timelineOffsetXRef = useRef(timelineOffsetX);
+  timelineOffsetXRef.current = timelineOffsetX;
+
   const {
     timelineContainerRef,
     timelineHeight,
@@ -119,6 +125,22 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
       width: payload.width,
       height: payload.height
     });
+  };
+
+  const seekToItemStartIfNeeded = (target: any) => {
+    const { scale, fps, playerRef } = useStore.getState();
+    const rect = target.getBoundingRect();
+    const fromMs = unitsToTimeMs(rect.left, scale.zoom);
+    const toMs = unitsToTimeMs(rect.left + rect.width, scale.zoom);
+
+    const currentFrame = playerRef?.current?.getCurrentFrame() ?? 0;
+    const currentMs = (currentFrame / fps) * 1000;
+
+    if (currentMs >= fromMs && currentMs <= toMs) return; // playhead already within the item
+
+    const targetFrame = Math.round((fromMs * fps) / 1000);
+    playerRef?.current?.seekTo(targetFrame);
+    scrollTimelineToFrame(targetFrame, "marker", timelineOffsetXRef.current);
   };
 
   useEffect(() => {
@@ -215,6 +237,8 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
 
     canvasRef.current = canvas;
 
+    patchTransitionGuideRender(canvas);
+
     setCanvasSize({ width: containerWidth, height: containerHeight });
     setTimeline(canvas);
 
@@ -310,7 +334,10 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     canvas.on('mouse:up', (e: any) => {
       if (isDragging) return;
 
-      if (e.target && e.target.type === "transition") return;
+      if (e.target && e.target.type === "transition") {
+        seekToItemStartIfNeeded(e.target);
+        return;
+      }
 
       const pointer = canvas.getScenePoint(e.e);
       const trackItems = canvas.getTrackItems() as any[];
@@ -339,6 +366,8 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
         { activeIds: [itemId] },
         { updateHistory: false, kind: 'layer:selection' }
       );
+
+      seekToItemStartIfNeeded(target);
 
       activeIdsBeforeClick = [itemId];
     });

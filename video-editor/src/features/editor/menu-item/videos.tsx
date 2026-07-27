@@ -195,7 +195,7 @@ export const Videos = () => {
             <div key={colIndex} className="flex flex-1 flex-col gap-2 min-w-0">
               {columnItems.map((video, i) => (
                 <VideoItem
-                  key={video.id || `${colIndex}-${i}`}
+                  key={`${video.id}-${colIndex}-${i}`}
                   video={video}
                   shouldDisplayPreview={!isDraggingOverTimeline}
                   handleAddVideo={handleAddVideo}

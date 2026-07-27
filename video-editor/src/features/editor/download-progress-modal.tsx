@@ -9,7 +9,7 @@ import {
 import { useDownloadState } from "./store/use-download-state";
 import useStore from "./store/use-store";
 import { Button } from "@/components/ui/button";
-import { CircleCheckIcon, CircleXIcon } from "lucide-react";
+import {CircleCheckIcon, CircleXIcon, Loader2} from "lucide-react";
 import { download } from "@/utils/download";
 import { useEffect, useState } from "react";
 import { millisecondsToHHMMSS } from "./utils/format";
@@ -94,7 +94,8 @@ const DownloadProgressModal = () => {
                 <div>Closing the browser will not cancel the export.</div>
                 <div>The video will be saved in your space.</div>
               </div>
-              <div className="text-muted-foreground text-sm">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                <Loader2 className="h-4 w-4 animate-spin" />
                 {millisecondsToHHMMSS(elapsedMs)}
               </div>
               <Button variant="outline" onClick={handleCancel}>

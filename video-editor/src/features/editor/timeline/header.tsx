@@ -285,6 +285,8 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
     existing ? removeMarker(existing.id) : addMarker(currentTimeMs);
   };
 
+  const isTransitionSelected = activeIds.length > 0 && activeItems.length === 0;
+
   return (
     <div
       id="timeline-header"
@@ -326,7 +328,7 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
               </Button>
             )}
 
-            {activeIds.length > 0 && (
+            {activeIds.length > 0 && !isTransitionSelected && (
               <Tooltip delayDuration={10}>
                 <TooltipTrigger asChild>
                   <Button
@@ -383,7 +385,7 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
               </Tooltip>
             )}
 
-            {activeIds.length > 0 && !isLocked && (
+            {activeIds.length > 0 && !isLocked && !isTransitionSelected && (
               <Tooltip delayDuration={10}>
                 <TooltipTrigger asChild>
                   <Button
@@ -410,7 +412,7 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
               </Tooltip>
             )}
 
-            {activeIds.length > 0 && (
+            {activeIds.length > 0 && !isTransitionSelected && (
               <Tooltip delayDuration={10}>
                 <TooltipTrigger asChild>
                   <Button
@@ -437,7 +439,7 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
               </Tooltip>
             )}
 
-            {activeIds.length > 0 && (
+            {activeIds.length > 0 && !isTransitionSelected && (
               <Tooltip delayDuration={10}>
                 <TooltipTrigger asChild>
                   <Button
@@ -464,7 +466,7 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
               </Tooltip>
             )}
 
-            {activeIds.length > 0 && !isLocked && (
+            {activeIds.length > 0 && !isLocked && !isTransitionSelected && (
               <Tooltip delayDuration={10}>
                 <TooltipTrigger asChild>
                   <Button

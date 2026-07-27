@@ -110,7 +110,7 @@ class Video extends Trimmable {
     this.trim = props.trim;
     this.duration = props.duration;
     this.prevDuration = props.duration;
-    this.fill = "#27272a";
+    this.fill = "#2E1D12";
     this.borderOpacityWhenMoving = 1;
     this.metadata = props.metadata;
 
@@ -440,6 +440,9 @@ class Video extends Trimmable {
     ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
     ctx.shadowBlur = 4;
 
+    if (this.isLoading) {
+      ctx.globalAlpha = 0.4;
+    }
     ctx.fillText(this.name, textX, 22);
 
     ctx.restore();
@@ -450,7 +453,7 @@ class Video extends Trimmable {
     const overlayColor = theme === "dark" ? "rgba(0,0,0,0.8)" : "rgba(255,255,255,0.6)";
     const iconColor = theme === "dark" ? "rgba(255,255,255,1)" : "rgba(0,0,0,0.8)";
 
-    if (this.hidden) {
+    if (this.hidden || this.isLoading) {
       ctx.save();
       ctx.fillStyle = overlayColor;
       ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
@@ -460,7 +463,10 @@ class Video extends Trimmable {
     let iconX = -this.width / 2 + 12;
 
     if (this.isLoading) {
+      ctx.save();
+      ctx.globalAlpha = 0.4;
       this.drawLoader(ctx, iconX);
+      ctx.restore();
       iconX += 24;
     }
 
