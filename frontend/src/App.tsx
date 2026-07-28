@@ -45,9 +45,12 @@ import JobEditPostPage from "@/pages/user/6_job_market/job_pages/job_editpost_pa
 
 // Job Proposals Imports
 import ProposalsMain from "@/pages/user/6_job_market/job_proposals/proposals_main.tsx";
+import ProposalsSelectJobPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_select_job_page.tsx";
 import ProposalsIncomingPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_incoming_page.tsx";
 import ProposalsSentPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_sent_page.tsx";
 import ProposalsCreatePage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_create_page.tsx";
+import ProposalsEditPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_edit_page.tsx";
+import ProposalsViewDetailsPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details.tsx";
 
 import GigMarketplace from "@/pages/user/7_gigs/Gig_Posting/main.tsx";
 import {CreateGigWizard} from "@/pages/user/7_gigs/Gig_Posting/CreateGigWizard.tsx";
@@ -204,15 +207,18 @@ function App() {
 
           {/* Proposals Layout & Sub-Routes */}
           <Route path='/jobs/proposals' element={<ProposalsMain />}>
-            <Route index element={<Navigate to="/jobs/proposals/incoming" replace />} />
-            <Route path='incoming' element={<ProposalsIncomingPage />} />
+            <Route index element={<ProposalsSelectJobPage />} />
+            <Route path='incoming/:jobPostId' element={<ProposalsIncomingPage />} />
             <Route path='sent' element={<ProposalsSentPage />} />
           </Route>
 
-          {/* Standalone Creation & Wizard Pages */}
+          {/* Standalone Creation, Edit & View Details Pages */}
           <Route path='/jobs/create' element={<JobCreatePostPage />} />
           <Route path='/jobs/edit/:id' element={<JobEditPostPage />} />
           <Route path='/jobs/:id/make-proposal' element={<ProposalsCreatePage />} />
+          <Route path='/jobs/proposals/edit/:proposalId' element={<ProposalsEditPage />} />
+          <Route path='/jobs/proposals/incoming/:jobPostId/:proposalId' element={<ProposalsViewDetailsPage />} />
+          <Route path='/jobs/proposals/sent/:jobPostId/:proposalId' element={<ProposalsViewDetailsPage />} />
 
           <Route path='/gigs'>
             <Route index element={<GigMarketplace />} />
