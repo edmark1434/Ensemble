@@ -39,14 +39,25 @@ const DownloadProgressModal = () => {
     return () => clearInterval(interval);
   }, [exporting, exportStartedAt]);
 
+  useEffect(() => {
+    if (output || error) {
+      actions.setDisplayProgressModal(true);
+    }
+  }, [output, error, actions]);
+
   const handleDownload = async () => {
     if (output?.url) {
       await download(output.url, `${sanitizeFilename(projectName)}`);
     }
+    actions.resetExport();
   };
 
   const handleCancel = () => {
     actions.cancelExport();
+  };
+
+  const handleCloseFailed = () => {
+    actions.resetExport();
   };
 
   return (
@@ -64,7 +75,7 @@ const DownloadProgressModal = () => {
             <div className="flex flex-col items-center justify-center gap-4 py-4 text-center">
               <CircleCheckIcon size={32} className="text-primary" />
               <div className="space-y-1">
-                <div className="font-semibold">Exported</div>
+                <div className="font-semibold">Export ready for download</div>
                 <div className="text-muted-foreground text-sm">
                   You can download the video to your device.
                 </div>
@@ -80,7 +91,7 @@ const DownloadProgressModal = () => {
               </div>
               <Button
                 variant="outline"
-                onClick={() => actions.setDisplayProgressModal(false)}
+                onClick={handleCloseFailed}
               >
                 Close
               </Button>

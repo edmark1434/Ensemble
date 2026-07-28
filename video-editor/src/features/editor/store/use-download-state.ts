@@ -26,6 +26,7 @@ interface DownloadState {
     setOutput: (output: Output) => void;
     startExport: () => void;
     cancelExport: () => void;
+    resetExport: () => void;
     setDisplayProgressModal: (displayProgressModal: boolean) => void;
   };
 }
@@ -153,6 +154,18 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
           console.error("Failed to cancel render job:", error);
         }
       }
+    },
+    resetExport: () => {
+      set({
+        jobId: null,
+        exporting: false,
+        progress: 0,
+        output: undefined,
+        error: null,
+        cancelled: false,
+        displayProgressModal: false,
+        exportStartedAt: null
+      });
     }
   }
 }));

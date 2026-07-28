@@ -31,7 +31,7 @@ import useLayoutStore from "./store/use-layout-store";
 import ControlItemHorizontal from "./control-item-horizontal";
 import { design } from "./mock";
 import { Separator } from "@/components/ui/separator";
-import {ArrowLeftToLine, ArrowRightToLine, Maximize, Minimize, Volume2, VolumeOff} from "lucide-react";
+import {ArrowLeftToLine, ArrowRightToLine, Loader2, Maximize, Minimize, Volume2, VolumeOff} from "lucide-react";
 import {frameToTimeString, timeToString} from "./utils/time";
 import {useCurrentPlayerFrame} from "@/features/editor/hooks/use-current-frame";
 import {Button} from "@/components/ui/button";
@@ -78,7 +78,7 @@ const IconPlayerPauseFilled = ({ size }: { size: number }) => (
     </svg>
 );
 
-const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
+const ScenePlayer = ({ sceneRef, playerRef, stateManager, isLargeScreen }: any) => {
   const { fps, duration, markers, timeline, scale, trackItemIds, muted, setMuted } = useStore();
   const currentFrame = useCurrentPlayerFrame(playerRef);
   const [playing, setPlaying] = useState(false);
@@ -165,12 +165,24 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
     <div
       ref={sceneContainerRef}
       data-scene-container=""
-      className="flex flex-col w-full h-full"
+      className="relative flex flex-col w-full h-full bg-card"
       onMouseMove={handleMouseMove}
     >
+      {!isLargeScreen && !isFullscreen && (
+        <div className=" top-0 left-0 right-0 z-500 bg-primary text-black text-xs font-medium text-center py-1.5 px-2">
+          Mobile view is only in preview mode for now
+        </div>
+      )}
+
       <div className="flex-1 relative overflow-hidden">
         <CropModal />
-        <Scene ref={sceneRef} stateManager={stateManager} />
+        {!isLargeScreen && trackItemIds.length === 0 ? (
+          <div className="w-full h-full flex items-center justify-center text-center px-6 text-sm text-muted-foreground">
+            The project is currently empty, no preview available
+          </div>
+        ) : (
+          <Scene ref={sceneRef} stateManager={stateManager} />
+        )}
       </div>
 
       <div className={cn(
@@ -198,7 +210,7 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
               <Button
                 className="hidden lg:inline-flex"
                 onClick={handleJumpToPrev}
-                disabled={currentFrame === 0}
+                disabled={trackItemIds.length === 0 || currentFrame === 0}
                 variant={"ghost"}
                 size={"icon"}>
                 <ArrowLeftToLine size={14} />
@@ -229,7 +241,11 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
 
           <Tooltip delayDuration={10}>
             <TooltipTrigger asChild>
-              <Button onClick={() => { playing ? handlePause() : handlePlay(); }} variant={"ghost"} size={"icon"}>
+              <Button
+                onClick={() => { playing ? handlePause() : handlePlay(); }}
+                disabled={trackItemIds.length === 0}
+                variant={"ghost"}
+                size={"icon"}>
                 {playing ? <IconPlayerPauseFilled size={14} /> : <IconPlayerPlayFilled size={14} />}
               </Button>
             </TooltipTrigger>
@@ -246,7 +262,7 @@ const ScenePlayer = ({ sceneRef, playerRef, stateManager }: any) => {
               <Button
                 className="hidden lg:inline-flex"
                 onClick={handleJumpToNext}
-                disabled={currentFrame >= durationFrames}
+                disabled={trackItemIds.length === 0 || currentFrame >= durationFrames}
                 variant={"ghost"}
                 size={"icon"}>
                 <ArrowRightToLine size={14} />
@@ -341,64 +357,72 @@ const Panels = ({
     }
   }, [showMenuItem]);
 
+  if (!isLargeScreen) {
+    return (
+      <div className="relative flex h-full w-full flex-col bg-background">
+        <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} />
+      </div>
+    );
+  }
+
   return (
     <div className="relative flex h-full w-full flex-col bg-background">
-        <div className="flex-1 relative overflow-hidden w-full h-full">
-          <div className="flex h-full flex-1">
-            <div className="flex w-[54px] h-full bg-card border-r border-border/80">
-              <MenuList />
-            </div>
-
-            <Separator orientation="vertical" />
-
-            <ResizablePanelGroup
-                direction="horizontal"
-                className="w-full h-full overflow-hidden"
-            >
-              <ResizablePanel
-                  ref={menuPanelRef}
-                  collapsible
-                  collapsedSize={0}
-                  defaultSize={0}
-                  minSize={30}
-                  maxSize={40}
-                  className={showMenuItem ? "" : "hidden"}
-              >
-                <MenuItem />
-              </ResizablePanel>
-              <ResizableHandle className={cn("bg-border/90", !showMenuItem && "hidden")} />
-
-              <ResizablePanel
-                  defaultSize={showMenuItem ? 45 : 75}
-                  minSize={showMenuItem ? 40 : 55}
-                  maxSize={showMenuItem ? 45 : 75}
-                  className="relative bg-card min-w-0"
-              >
-                <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} />
-              </ResizablePanel>
-
-              <ResizableHandle className="bg-border/90" />
-              <ResizablePanel
-                  defaultSize={25}
-                  minSize={25}
-                  maxSize={showMenuItem ? 35 : 45}
-                  className="relative bg-card min-w-0"
-              >
-                <Controls panelRef={controlsPanelRef} />
-              </ResizablePanel>
-
-              <FloatingControl anchorRef={controlsPanelRef} />
-            </ResizablePanelGroup>
+      <div className="flex-1 relative overflow-hidden w-full h-full">
+        <div className="flex h-full flex-1">
+          <div className="flex w-[54px] h-full bg-card border-r border-border/80">
+            <MenuList />
           </div>
-        </div>
 
-        <div className="w-full border-t border-border/80 bg-card">
-          {playerRef && <Timeline stateManager={stateManager} />}
-        </div>
+          <Separator orientation="vertical" />
 
-        {!isLargeScreen && !trackItem && loaded && <MenuListHorizontal />}
-        {!isLargeScreen && trackItem && <ControlItemHorizontal />}
+          <ResizablePanelGroup
+            direction="horizontal"
+            className="w-full h-full overflow-hidden"
+          >
+            <ResizablePanel
+              ref={menuPanelRef}
+              collapsible
+              collapsedSize={0}
+              defaultSize={0}
+              minSize={30}
+              maxSize={40}
+              className={showMenuItem ? "" : "hidden"}
+            >
+              <MenuItem />
+            </ResizablePanel>
+            <ResizableHandle className={cn("bg-border/90", !showMenuItem && "hidden")} />
+
+            <ResizablePanel
+              defaultSize={showMenuItem ? 45 : 75}
+              minSize={showMenuItem ? 40 : 55}
+              maxSize={showMenuItem ? 45 : 75}
+              className="relative bg-card min-w-0"
+            >
+              <ScenePlayer sceneRef={sceneRef} playerRef={playerRef} stateManager={stateManager} isLargeScreen={isLargeScreen} />
+            </ResizablePanel>
+
+            <ResizableHandle className="bg-border/90" />
+            <ResizablePanel
+              defaultSize={25}
+              minSize={25}
+              maxSize={showMenuItem ? 35 : 45}
+              className="relative bg-card min-w-0"
+            >
+              <Controls panelRef={controlsPanelRef} />
+            </ResizablePanel>
+
+            <FloatingControl anchorRef={controlsPanelRef} />
+          </ResizablePanelGroup>
+        </div>
       </div>
+
+      <div className="w-full border-t border-border/80 bg-card">
+        {playerRef && <Timeline stateManager={stateManager} />}
+      </div>
+
+      {!isLargeScreen && !trackItem && loaded && <MenuListHorizontal />}
+      {!isLargeScreen && trackItem && <ControlItemHorizontal />}
+    </div>
   );
 };
 
@@ -450,17 +474,16 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
   useTimelineEvents();
 
   const { setCompactFonts, setFonts } = useDataState();
-  // useEffect(() => {
-  //   dispatch(DESIGN_LOAD, { payload: design });
-  // }, []);
+
   useEffect(() => {
     setCompactFonts(getCompactFontData(FONTS));
     setFonts(FONTS);
+    seedDefaultFont().then(() => setLoaded(true));
   }, []);
 
-  useEffect(() => {
-    seedDefaultFont().then(r => {});
-  }, []);
+  // useEffect(() => {
+  //   dispatch(DESIGN_LOAD, { payload: design });
+  // }, []);
 
   const handleTimelineResize = () => {
     const timelineContainer = document.getElementById("timeline-container");
@@ -507,10 +530,6 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
     setTypeControlItem("");
   }, [isLargeScreen]);
 
-  useEffect(() => {
-    setLoaded(true);
-  }, []);
-
   useKeyboardShortcuts(stateManager);
 
   useEffect(() => {
@@ -518,6 +537,15 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
     window.addEventListener("scroll", lockWindowScroll);
     return () => window.removeEventListener("scroll", lockWindowScroll);
   }, []);
+
+  if (!loaded) {
+    return (
+      <div className="fixed top-0 left-0 z-50 flex h-screen w-screen flex-col items-center justify-center gap-4 bg-card">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-screen flex-col bg-background">
