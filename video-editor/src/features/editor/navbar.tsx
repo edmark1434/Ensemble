@@ -245,10 +245,20 @@ export default function Navbar({
 
 const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
   const isMediumScreen = useIsMediumScreen();
-  const { actions, exportType, exporting } = useDownloadState();
-  const { duration } = useStore();
+  const { actions, exportType, exporting, output, error } = useDownloadState();
+  const { duration, trackItemIds } = useStore();
+  const isEmpty = trackItemIds.length === 0;
   const [isExportTypeOpen, setIsExportTypeOpen] = useState(false);
   const [open, setOpen] = useState(false);
+
+  const isCompleted = !!output;
+  const isFailed = !!error;
+
+  const buttonLabel = isCompleted
+    ? "Export ready for download"
+    : isFailed
+      ? "Export failed"
+      : "Export";
 
   const handleExport = () => {
     const data: IDesign = {
@@ -263,24 +273,58 @@ const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen && (isCompleted || isFailed)) {
+      actions.setDisplayProgressModal(true);
+      return;
+    }
+
     if (nextOpen && exporting) {
       actions.setDisplayProgressModal(true);
       return;
     }
+
     setOpen(nextOpen);
   };
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button
-          className="flex h-8 gap-2 hover:!bg-accent/30 font-semibold"
-          variant="outline"
-          size={isMediumScreen ? "sm" : "icon"}
-        >
-          <Download size={16} />{" "}
-          <span className="hidden md:block">Export</span>
-        </Button>
+        {isEmpty && !isCompleted && !isFailed ? (
+          <Tooltip delayDuration={10}>
+            <TooltipTrigger asChild>
+              <span>
+                <Button
+                  className={cn(
+                    "flex h-8 gap-2 hover:!bg-accent/30 font-semibold",
+                    (isCompleted || isFailed) && "!border-primary text-primary hover:!border-primary/80 hover:text-primary/80"
+                  )}
+                  variant={"outline"}
+                  size={isMediumScreen ? "sm" : "icon"}
+                  disabled={isEmpty && !isCompleted && !isFailed}
+                >
+                  <Download size={16} />{" "}
+                  <span className="hidden md:block">{buttonLabel}</span>
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="center" sideOffset={1}>
+              Project is still empty
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <Button
+            className={cn(
+              "flex h-8 gap-2 hover:!bg-accent/30 font-semibold",
+              (isCompleted || isFailed) && "!border-primary text-primary hover:!border-primary/80 hover:text-primary/80"
+            )}
+            variant={"outline"}
+            size={isMediumScreen ? "sm" : "icon"}
+            disabled={isEmpty && !isCompleted && !isFailed}
+          >
+            <Download size={16} />{" "}
+            <span className="hidden md:block">{buttonLabel}</span>
+          </Button>
+        )}
       </PopoverTrigger>
       <PopoverContent
         align="end"
@@ -299,7 +343,7 @@ const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
             className="z-[251] p-0"
             style={{ width: "var(--radix-popover-trigger-width)" }}
           >
-            {(["mp4", "json"] as const).map((type) => (
+            {(["mp4"] as const).map((type) => (
               <div
                 key={type}
                 onClick={() => {
