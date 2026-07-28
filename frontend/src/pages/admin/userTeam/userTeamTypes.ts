@@ -45,6 +45,7 @@ export type PlatformTeam = {
     pages: number | null;
     sizeMb: number;
     uploadedAt: string | null;
+    path?: string | null;
   }[];
   creditActivity: CreditActivityItem[];
   verification: VerificationDetail;
@@ -60,19 +61,26 @@ export type CreditActivityItem = {
   positive: boolean;
 };
 
+export type VerificationDocument = {
+  fileId?: string;
+  name: string;
+  mimeType?: string | null;
+  path?: string | null;
+  uploadedBy: string;
+  pages: number;
+  sizeMb: number;
+  uploadedAt: string | null;
+  index?: number;
+};
+
 export type VerificationDetail = {
   status: string;
   reverificationDueDays: number | null;
   expiresAt: string | null;
   isExpired: boolean;
   applicationId: string;
-  document: {
-    name: string;
-    uploadedBy: string;
-    pages: number;
-    sizeMb: number;
-    uploadedAt: string | null;
-  } | null;
+  document: VerificationDocument | null;
+  documents?: VerificationDocument[];
   logs: { id: string; title: string; timeAgo: string; by: string; ref: string }[];
 };
 
