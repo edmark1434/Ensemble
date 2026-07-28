@@ -1,38 +1,71 @@
 import React from "react";
-import { NavLink, useLocation } from "react-router-dom";
 import { ClipboardList, Send } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { motion } from "framer-motion";
 
 export const ProposalsTabs: React.FC = () => {
+  const navigate = useNavigate();
   const location = useLocation();
 
-  const isIncoming = location.pathname.includes("/jobs/proposals/incoming");
-  const isSent = location.pathname.includes("/jobs/proposals/sent");
+  const isIncoming =
+    location.pathname === "/jobs/proposals" ||
+    location.pathname.startsWith("/jobs/proposals/incoming");
+
+  const isSent = location.pathname.startsWith("/jobs/proposals/sent");
 
   return (
-    <div className="flex items-center gap-2 border-b border-white/10 pb-3">
-      <NavLink
-        to="/jobs/proposals/incoming"
-        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-          isIncoming
-            ? "bg-blue-500/10 border border-blue-500/20 text-blue-400 shadow-md shadow-blue-500/5"
-            : "text-zinc-400 hover:text-white hover:bg-white/5"
+    <div className="flex gap-1 relative">
+      <button
+        onClick={() => navigate("/jobs/proposals")}
+        className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
+          isIncoming ? "text-blue-400 font-bold" : "text-zinc-400 hover:text-white"
         }`}
       >
-        <ClipboardList className="h-4 w-4" />
-        <span>Incoming Proposals</span>
-      </NavLink>
+        <span className="relative z-10 flex items-center gap-2">
+          <ClipboardList className="h-4 w-4" /> Incoming Proposals
+        </span>
 
-      <NavLink
-        to="/jobs/proposals/sent"
-        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-          isSent
-            ? "bg-blue-500/10 border border-blue-500/20 text-blue-400 shadow-md shadow-blue-500/5"
-            : "text-zinc-400 hover:text-white hover:bg-white/5"
+        {isIncoming && (
+          <>
+            <motion.div
+              layoutId="activeProposalTabGlow"
+              className="absolute inset-0 bg-blue-500/5 rounded-t-lg"
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            />
+            <motion.div
+              layoutId="activeProposalTabUnderline"
+              className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 z-10"
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            />
+          </>
+        )}
+      </button>
+
+      <button
+        onClick={() => navigate("/jobs/proposals/sent")}
+        className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
+          isSent ? "text-blue-400 font-bold" : "text-zinc-400 hover:text-white"
         }`}
       >
-        <Send className="h-4 w-4" />
-        <span>My Proposals</span>
-      </NavLink>
+        <span className="relative z-10 flex items-center gap-2">
+          <Send className="h-4 w-4" /> My Proposals
+        </span>
+
+        {isSent && (
+          <>
+            <motion.div
+              layoutId="activeProposalTabGlow"
+              className="absolute inset-0 bg-blue-500/5 rounded-t-lg"
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            />
+            <motion.div
+              layoutId="activeProposalTabUnderline"
+              className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 z-10"
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            />
+          </>
+        )}
+      </button>
     </div>
   );
 };
