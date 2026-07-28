@@ -180,6 +180,7 @@ async function getPersonalDetails(userId) {
 }
 
 async function getProfileByAccountId(accountId) { 
+    console.log(`Fetching profile for accountId: ${accountId}`);
     try {
         // 1. Get profile data
         const profileQuery = `
@@ -212,7 +213,7 @@ async function getProfileByAccountId(accountId) {
         `;
         
         const profileResult = await pool.query(profileQuery, [accountId]);
-        
+        console.log(`Profile query executed for accountId: ${accountId}, rows returned: ${profileResult.rows}`);
         if (profileResult.rows.length === 0) {
             return null;
         }
