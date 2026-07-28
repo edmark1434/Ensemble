@@ -200,9 +200,11 @@ async function getProfileByAccountId(accountId) {
                 A.DESCRIPTION as bio,
                 F.PATH AS avatar_preset_url,
                 P.NAME AS subscriptionType,
-                U.USER_ID as user_id
+                U.USER_ID as user_id,
+                V.IS_VERIFIED AS verification_status
             FROM ACCOUNTS A
             JOIN USERS U ON A.ACCOUNT_ID = U.ACCOUNT_ID
+            JOIN VERIFICATIONS V ON A.ACCOUNT_ID = V.ACCOUNT_ID
             LEFT JOIN FILES F ON A.AVATAR_FILE_ID = F.FILE_ID
             LEFT JOIN SUBSCRIPTIONS S ON U.USER_ID = S.USER_ID
             LEFT JOIN PLANS P ON S.PLAN_ID = P.PLAN_ID
@@ -329,6 +331,15 @@ async function getProfileCurrentAvatarByAccountId(accountId){
     }
 }
 
+async function getEmailAddressByAccountId(accountId) {
+    try {
+        const result = await pool.query('SELECT email_address FROM users WHERE account_id = $1', [accountId]);
+        return result.rows[0] || null;
+    } catch (err) {
+        console.error(`Error fetching email address for accountId ${accountId}:`, err);
+        throw err;
+    }
+}
 
 module.exports = {
     updateProfileAccountRepositories,
@@ -341,5 +352,6 @@ module.exports = {
     updateProfileSocialMediaRepositories,
     deleteProfileSocialMediaRepositories,
     getProfileAvatarsByAccountId,
-    getProfileCurrentAvatarByAccountId
+    getProfileCurrentAvatarByAccountId,
+    getEmailAddressByAccountId
 };

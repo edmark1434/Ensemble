@@ -15,9 +15,15 @@ const {
     getReusableAccountVerificationSessionByAccountId,
     createAccountVerificationSessionRepository,
     createAccountVerificationRepository,
-    getAccountVerificationByAccountId
+    getAccountVerificationByAccountId,
+    getAccountVerificationSessionsByAccountId,
+    updateAccountVerificationSessionStatus,
+    getAccountVerificationStatusByAccountId
 } = require("../Repositories/AccountVerificationRepositories");
 
+const {
+    getEmailAddressByAccountId
+} = require("../Repositories/ProfileRepositories");
 async function createAccountVerificationSession(userId) {
     try {
         // ============================================================
@@ -34,9 +40,10 @@ async function createAccountVerificationSession(userId) {
         // 2. Check reusable session in database
         // ============================================================
 
-        const [existingSession, existingVerification] = await Promise.all([
+        const [existingSession, existingVerification,existingSessionByAccountId] = await Promise.all([
             getReusableAccountVerificationSessionByAccountId(user.account_id),
-            getAccountVerificationByAccountId(user.account_id)
+            getAccountVerificationByAccountId(user.account_id),
+            getAccountVerificationSessionsByAccountId(user.account_id)
         ]);
         if (existingSession) {
             return existingSession;
@@ -154,14 +161,26 @@ async function createAccountVerificationSession(userId) {
         // ============================================================
         // 6. Save session
         // ============================================================
-
-        const verificationSession =
-            await createAccountVerificationSessionRepository({
-                account_id: user.account_id,
-                didit_session_id: didit.session_id,
-                verification_url: didit.url,
-                kyc_status: didit.status,
-            });
+        let verificationSession;
+        if (existingSessionByAccountId) {
+            verificationSession = await updateAccountVerificationSessionStatus(
+                existingSessionByAccountId.session_id,
+                {
+                    didit_session_id: didit.session_id,
+                    verification_url: didit.url,
+                    kyc_status: didit.status,
+                    verification_status: "Pending",
+                }
+            );
+        } else {
+            verificationSession =
+                await createAccountVerificationSessionRepository({
+                    account_id: user.account_id,
+                    didit_session_id: didit.session_id,
+                    verification_url: didit.url,
+                    kyc_status: didit.status,
+                });
+        }
 
         return verificationSession;
     } catch (error) {
@@ -173,6 +192,43 @@ async function createAccountVerificationSession(userId) {
     }
 }
 
+
+async function appyForResubmissionServices(sessionId,accountId) {
+    const emailResponse = await getEmailAddressByAccountId(accountId);
+    try{
+        const response = await axios.patch(
+            `https://verification.didit.me/v3/session/${sessionId}/update-status`,
+            {
+                new_status: "Resubmitted",
+                send_email: true,
+                email_address: emailResponse.email_address,
+            },
+            {
+                headers: {
+                    "x-api-key": process.env.DIDIT_API_KEY,
+                    "Content-Type": "application/json",
+                },
+            }
+        );
+        return response.data;
+    }catch(err){
+        console.error("Error applying for resubmission:", err);
+        throw err;
+    }
+}
+
+async function getAccountVerificationStatusServices(accountId) {
+    try {
+        const verificationSession = await getAccountVerificationStatusByAccountId(accountId);
+        return verificationSession;
+    } catch (error) {
+        console.error("Error fetching account verification status:", error);
+        throw error;
+    }
+}
+
 module.exports = {
     createAccountVerificationSession,
+    appyForResubmissionServices,
+    getAccountVerificationStatusServices,
 };

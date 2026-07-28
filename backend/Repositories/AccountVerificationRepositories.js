@@ -168,6 +168,61 @@ async function getAccountVerificationByAccountId(accountId) {
         throw err;
     }
 }
+async function getAccountVerificationStatusByAccountId(accountId) {
+    try {
+        const result = await pool.query(
+            `
+            SELECT
+                v.is_verified,
+                avs.expires_at
+            FROM verifications AS v
+            JOIN account_verification_sessions AS avs
+                ON v.verification_session_id = avs.verification_session_id
+            WHERE v.account_id = $1
+            LIMIT 1
+            `,
+            [accountId]
+        );
+
+        return result.rows[0] || null;
+    } catch (err) {
+        console.error("Error fetching account verification by accountId:", err);
+        throw err;
+    }
+}
+
+async function getAccountVerificationSessionsByAccountId(accountId) {
+    try {
+        const result = await pool.query(
+            `SELECT *
+             FROM account_verification_sessions
+             WHERE account_id = $1
+             ORDER BY created_at DESC
+             LIMIT 1`,
+            [accountId]
+        );
+
+        return result.rows[0] || null;
+    } catch (err) {
+        console.error("Error fetching account verification session:", err);
+        throw err;
+    }
+}
+
+async function getAccountVerificationSessionBySessionId(sessionId) {
+    try {
+        const result = await pool.query(
+            `SELECT *
+             FROM account_verification_sessions
+             WHERE didit_session_id = $1`,
+            [sessionId]
+        );
+        return result.rows[0] || null;
+    } catch (err) {
+        console.error("Error fetching account verification session by sessionId:", err);
+        throw err;
+    }
+}
 
 module.exports = {
     getReusableAccountVerificationSessionByAccountId,
@@ -175,5 +230,8 @@ module.exports = {
     updateAccountVerificationSessionStatus,
     updateAccountVerifications,
     createAccountVerificationRepository,
-    getAccountVerificationByAccountId
+    getAccountVerificationByAccountId,
+    getAccountVerificationSessionsByAccountId,
+    getAccountVerificationSessionBySessionId,
+    getAccountVerificationStatusByAccountId
 };

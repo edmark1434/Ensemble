@@ -18,7 +18,10 @@ import {
   Copy,
   X,
   Link,
-  Loader2
+  Loader2,
+  ShieldCheck,
+  BadgeCheck,
+  Calendar
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import QRCodeStyling from "qr-code-styling";
@@ -44,8 +47,31 @@ export const VerificationStatus: React.FC = () => {
   const [verificationUrl, setVerificationUrl] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isVerified, setIsVerified] = useState<boolean>(false);
+  const [verificationExpiryDate, setVerificationExpiryDate] = useState<string | null>(null);
 
   useEffect(() => {
+    const fetchVerificationStatus = async () => {
+      try {
+        const response = await api.get("/api/verification/status");
+        const verified = response.data.data?.is_verified || false;
+        setIsVerified(verified);
+        
+        // Set the expiry date from the response
+        setVerificationExpiryDate(response.data.data?.expires_at || null);
+        
+        // If user is verified, set state to pending_review or completed
+        if (verified) {
+          setVerificationState("pending_review");
+        }
+        
+        console.log("Verification status:", response.data.data);
+        console.log("Verification expiry date:", response.data.data?.expires_at);
+      } catch (err) {
+        console.error("Error fetching verification status:", err);
+      }
+    };
+
     // Check if device is mobile or PC
     const checkDevice = () => {
       const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
@@ -55,7 +81,8 @@ export const VerificationStatus: React.FC = () => {
       
       console.log(`Device detected: ${isMobileDevice ? 'Mobile' : 'PC'}`);
     };
-
+    
+    fetchVerificationStatus();
     checkDevice();
   }, []);
 
@@ -127,8 +154,8 @@ export const VerificationStatus: React.FC = () => {
 
   const handleStartVerification = async () => {
     // Prevent duplicate clicks
-    if (isProcessing || isLoading) {
-      console.log("Already processing verification request");
+    if (isProcessing || isLoading || isVerified) {
+      console.log("Already processing verification request or already verified");
       return;
     }
 
@@ -209,6 +236,27 @@ export const VerificationStatus: React.FC = () => {
     qrCodeInstance.current = null;
   };
 
+  // Format expiry date for display
+  const formatExpiryDate = (dateString: string | null) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // Check if verification is expired
+  const isVerificationExpired = () => {
+    if (!verificationExpiryDate) return false;
+    const expiryDate = new Date(verificationExpiryDate);
+    const now = new Date();
+    return expiryDate < now;
+  };
+
   const level2Checkpoints: Level2Step[] = [
     {
       id: 1,
@@ -236,10 +284,163 @@ export const VerificationStatus: React.FC = () => {
     },
   ];
 
+  // If verified, show the verified UI
+  if (isVerified) {
+    return (
+      <div className="min-h-screen bg-[#080a12] font-['Plus Jakarta Sans',sans-serif] text-white overflow-y-auto selection:bg-blue-500/30">
+        <div className="mx-auto max-w-4xl p-6 md:p-8 animate-[fadeIn_0.4s_ease-out]">
+          {/* Back Button */}
+          <div className="flex items-center justify-between mb-6">
+            <button
+              onClick={() => navigate(-1)}
+              className="flex items-center gap-2 text-xs font-bold text-zinc-500 hover:text-zinc-300 transition uppercase tracking-wider group animate-[slideIn_0.3s_ease-out]"
+            >
+              <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
+              Back to Profile Workspace
+            </button>
+          </div>
+
+          {/* Verified Status Card - Hero Style */}
+          <div className="relative mb-8 overflow-hidden rounded-2xl border border-green-500/20 bg-gradient-to-br from-green-500/10 via-emerald-500/5 to-transparent p-8 md:p-12 shadow-2xl backdrop-blur-xl animate-[slideIn_0.4s_ease-out_both] delay-75">
+            <div className="absolute inset-0 bg-gradient-to-br from-green-500/[0.05] via-emerald-500/[0.02] to-transparent" />
+            
+            <div className="relative z-10 flex flex-col items-center text-center">
+              {/* Animated Badge */}
+              <div className="relative mb-6">
+                <div className="absolute inset-0 animate-ping rounded-full bg-green-500/20" />
+                <div className="relative flex h-28 w-28 items-center justify-center rounded-full bg-gradient-to-br from-green-500/20 to-emerald-500/20 border-2 border-green-500/30 shadow-xl shadow-green-500/20">
+                  <BadgeCheck className="h-16 w-16 text-green-400" strokeWidth={1.5} />
+                </div>
+              </div>
+
+              <h1 className="text-3xl md:text-4xl font-black tracking-tight text-white mb-2">
+                Identity Verified
+              </h1>
+
+              <p className="text-base text-zinc-300 max-w-2xl leading-relaxed">
+                Your identity has been successfully verified. You now have full access to all verified features and elevated account privileges.
+              </p>
+
+              {/* Expiry Date Display */}
+              {verificationExpiryDate && (
+                <div className={`mt-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium border ${
+                  isVerificationExpired() 
+                    ? 'border-red-500/30 bg-red-500/10 text-red-400'
+                    : 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+                }`}>
+                  <Calendar className="h-4 w-4" />
+                  <span>
+                    {isVerificationExpired() ? 'Expired on: ' : 'Valid until: '}
+                    {formatExpiryDate(verificationExpiryDate)}
+                  </span>
+                  {isVerificationExpired() && (
+                    <span className="ml-1 text-xs font-bold uppercase">(Expired)</span>
+                  )}
+                </div>
+              )}
+
+              {/* Feature Highlights */}
+              <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-2xl">
+                <div className="flex items-center justify-center gap-2 rounded-lg border border-white/5 bg-white/[0.02] px-4 py-2.5">
+                  <CheckCircle2 className="h-4 w-4 text-green-400" />
+                  <span className="text-xs text-zinc-300">Full Account Access</span>
+                </div>
+                <div className="flex items-center justify-center gap-2 rounded-lg border border-white/5 bg-white/[0.02] px-4 py-2.5">
+                  <CheckCircle2 className="h-4 w-4 text-green-400" />
+                  <span className="text-xs text-zinc-300">Verified Badge</span>
+                </div>
+                <div className="flex items-center justify-center gap-2 rounded-lg border border-white/5 bg-white/[0.02] px-4 py-2.5">
+                  <CheckCircle2 className="h-4 w-4 text-green-400" />
+                  <span className="text-xs text-zinc-300">Priority Support</span>
+                </div>
+              </div>
+
+              {/* Re-verify Button if Expired */}
+              {isVerificationExpired() && (
+                <button
+                  onClick={() => {
+                    setIsVerified(false);
+                    setVerificationState("not_started");
+                  }}
+                  className="mt-6 flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg text-white text-sm font-bold transition-all hover:opacity-90 shadow-lg shadow-blue-500/20"
+                >
+                  <ArrowRight className="h-4 w-4" />
+                  Re-verify Identity
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Completed Level 2 Steps - All Checked */}
+          <div className="space-y-4 animate-[slideIn_0.5s_ease-out_both] delay-150">
+            <div className="flex items-center gap-2 px-1">
+              <img src="/icons/verification/lvl2_verified.png" alt="Lvl2 Icon" className="h-7 w-7 object-contain" />
+              <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Level 2 Completed</h2>
+            </div>
+
+            <div className="space-y-3">
+              {level2Checkpoints.map((step, index) => (
+                <div
+                  key={step.id}
+                  style={{ animationDelay: `${200 + index * 50}ms` }}
+                  className="relative flex items-start gap-4 p-4 rounded-xl border border-green-500/10 bg-green-500/[0.02] hover:border-green-500/20 transition-all duration-300 animate-[slideIn_0.4s_ease-out_both]"
+                >
+                  <div className="p-3.5 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 flex-shrink-0 mt-0.5">
+                    {step.icon}
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-bold tracking-tight text-white">
+                        Step {step.id}: {step.title}
+                      </h4>
+                      <span className="flex items-center gap-1.5 text-[10px] font-bold tracking-wide text-green-400 px-2 py-0.5 rounded bg-green-500/10 border border-green-500/20">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Completed
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">
+                      {step.description}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Crypto Disclaimer */}
+          <div className="mt-6 flex items-start gap-3 border border-white/5 bg-gradient-to-r from-blue-500/[0.02] to-transparent p-4 rounded-xl animate-[fadeIn_0.5s_ease-out_both] delay-[600ms]">
+            <Info className="h-4 w-4 text-zinc-600 flex-shrink-0 mt-0.5" />
+            <p className="text-[11px] text-zinc-500 leading-relaxed font-normal">
+              Zero-Knowledge Proof Compliant: All verification data is securely stored and encrypted. Your identity is protected with military-grade encryption standards.
+            </p>
+          </div>
+
+          <style>{`
+            @keyframes fadeIn {
+              from { opacity: 0; }
+              to { opacity: 1; }
+            }
+            @keyframes slideIn {
+              from {
+                opacity: 0;
+                transform: translateY(12px);
+              }
+              to {
+                opacity: 1;
+                transform: translateY(0);
+              }
+            }
+          `}</style>
+        </div>
+      </div>
+    );
+  }
+
+  // If not verified, show the verification UI
   return (
     <div className="min-h-screen bg-[#080a12] font-['Plus Jakarta Sans',sans-serif] text-white overflow-y-auto selection:bg-blue-500/30">
       <div className="mx-auto max-w-4xl p-6 md:p-8 animate-[fadeIn_0.4s_ease-out]">
-
         {/* Device Indicator */}
         <div className="flex items-center justify-between mb-4">
           <button
@@ -270,10 +471,8 @@ export const VerificationStatus: React.FC = () => {
           <div className="absolute inset-0 bg-gradient-to-r from-blue-500/[0.03] via-purple-500/[0.01] to-transparent" />
 
           <div className="relative z-10 flex flex-col gap-6">
-
             {/* Top Row */}
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 w-full">
-
               <div className="flex-shrink-0 h-32 w-32 rounded-full bg-white/[0.03] border border-white/10 flex items-center justify-center shadow-inner group transition duration-300 hover:border-emerald-500/30 hover:bg-emerald-500/[0.02]">
                 <img
                   src="/icons/verification/lvl1_verified.png"
@@ -311,7 +510,6 @@ export const VerificationStatus: React.FC = () => {
 
         {/* Master 2-Column Split Track Layout */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-[slideIn_0.5s_ease-out_both] delay-150">
-
           {/* COLUMN 1: LEVEL 1 */}
           <div className="space-y-4">
             <div className="flex items-center gap-2 px-1">
@@ -408,10 +606,9 @@ export const VerificationStatus: React.FC = () => {
               ))}
             </div>
           </div>
-
         </div>
 
-        {/* Unified CTA Button - Just "Start Verification" */}
+        {/* Unified CTA Button - Shows only when not verified */}
         <div className="pt-6 animate-[slideIn_0.4s_ease-out_both] delay-[500ms]">
           {verificationState === "not_started" ? (
             <button
@@ -541,7 +738,6 @@ export const VerificationStatus: React.FC = () => {
             Zero-Knowledge Proof Compliant: Extracted operational details are strictly cross-referenced inside verified sandboxes. Private identification documents undergo structural scrubbing post-review to guarantee complete asset account containment.
           </p>
         </div>
-
       </div>
 
       <style>{`
