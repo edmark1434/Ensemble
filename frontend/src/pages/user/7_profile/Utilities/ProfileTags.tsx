@@ -5,18 +5,15 @@ interface ProfileTagsProps {
     role_id: number;
     role_name: string;
   }[];
-  verificationLevel?: 1 | 2;
+  verificationLevel?: boolean;
   subscriptionType?: "Free" | "Premium" | "Business";
 }
 
 export const ProfileTags: React.FC<ProfileTagsProps> = ({
   role,
-  verificationLevel = 1,
+  verificationLevel = false,
   subscriptionType = "Free",
 }) => {
-  const getVerificationIcon = (level: number) => {
-    return level === 2 ? "/icons/verification/lvl2_verified.png" : "/icons/verification/lvl1_verified.png";
-  };
 
   const getSubscriptionStyles = (type: string) => {
     switch (type.toLowerCase()) {
@@ -32,9 +29,21 @@ export const ProfileTags: React.FC<ProfileTagsProps> = ({
   return (
     <div className="flex flex-wrap items-center gap-2 justify-center md:justify-start">
       {/* Verification Badge */}
-      <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded px-2 py-0.5" title={`Verification Level ${verificationLevel}`}>
-        <img src={getVerificationIcon(verificationLevel)} alt="Verification Icon" className="h-4 w-4 object-contain" />
-        <span className="text-[9px] font-bold text-zinc-300 tracking-wider uppercase">LVL {verificationLevel}</span>
+      <div
+        className={`flex items-center gap-1.5 rounded px-2 py-0.5 border ${
+          verificationLevel
+            ? "bg-green-500/10 border-green-500/20"
+            : "bg-red-500/10 border-red-500/20"
+        }`}
+        title={verificationLevel ? "Verified" : "Unverified"}
+      >
+        <span
+          className={`text-[9px] font-bold tracking-wider uppercase ${
+            verificationLevel ? "text-green-400" : "text-red-400"
+          }`}
+        >
+          {verificationLevel ? "Verified" : "Unverified"}
+        </span>
       </div>
 
       {/* Subscription Badge (Text Tag Only - Inner Icon Removed) */}

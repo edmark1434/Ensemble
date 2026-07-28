@@ -238,6 +238,10 @@ async function reconcileCancelledSubscriptions() {
     }
 }
 
+async function updateForResubmission(sessionId){
+    
+}
+
 /**
  * Separate locks
  */

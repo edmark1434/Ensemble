@@ -22,7 +22,7 @@ interface TopSectionProps {
   bio?: string;
   avatarUrl?: string;
   isOwner?: boolean;
-  verificationLevel?: 1 | 2;
+  verificationLevel?: boolean;
   subscriptionType?: "Free" | "Premium" | "Business";
   onEditAvatar?: () => void;
   onEditProfile?: () => void;
@@ -47,7 +47,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
   bio,
   avatarUrl,
   isOwner,
-  verificationLevel = 2,
+  verificationLevel = false,
   subscriptionType = "Free",
   onEditAvatar,
   onEditProfile,
@@ -204,7 +204,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
           >
             <MessageCircle className="h-4 w-4" />
           </button>
-
+          {!verificationLevel && (
           <button
             onClick={onVerificationClick}
             className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-emerald-500 hover:text-emerald-400 hover:bg-white/10 hover:border-emerald-500/20 transition shadow-sm"
@@ -212,7 +212,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
           >
             <ShieldCheck className="h-4 w-4" />
           </button>
-
+          )}
           <button
             className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-400 hover:text-white hover:bg-white/10 hover:border-white/20 transition"
             title="Share Profile Workspace"

@@ -291,7 +291,7 @@ export default function PersonalDetails() {
         } else {
           // No changes detected
           console.log("📊 No changes detected, skipping update");
-          toast.info("No changes to save.");
+          toast("No changes to save.");
           navigate("/setup/upload-image");
         }
       }
@@ -431,18 +431,17 @@ export default function PersonalDetails() {
 
             <div style={{ display: "flex", gap: 12 }}>
               <div className="input-group">
-                <span className="input-label">Middle Name</span>
+                <span className="input-label">Middle Name (Optional)</span>
                 <input type="text" value={form.middleName} onChange={handleChange("middleName")} className="form-input" placeholder="Optional" />
               </div>
               <div className="input-group" style={{ flex: 1 }}>
-                <span className="input-label">Suffix</span>
+                <span className="input-label">Suffix (Optional)</span>
                 <select
                   value={form.suffix}
                   onChange={handleChange("suffix")}
                   className="form-input"
                 >
-                  <option disabled value="">Select Suffix</option>
-                  <option value="">N/A</option>
+                  <option value="">Select Suffix</option>
                   <option value="Jr.">Jr.</option>
                   <option value="Sr.">Sr.</option>
                   <option value="II">II</option>

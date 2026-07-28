@@ -129,7 +129,7 @@ async function getProfileRepositories(accountId) {
                 A.AVATAR_FILE_ID,
                 U.COUNTRY AS LOCATION,
                 U.USER_ID,
-                V.STATUS AS VERIFICATION_STATUS,
+                V.IS_VERIFIED AS VERIFICATION_STATUS,
                 -- Aggregates all matching ACCOUNT_LINK rows into a JSON array
                 COALESCE(
                     (
@@ -144,7 +144,7 @@ async function getProfileRepositories(accountId) {
                 ) AS SOCIAL_LINKS
             FROM ACCOUNTS A
             LEFT JOIN USERS U ON A.ACCOUNT_ID = U.ACCOUNT_ID
-            LEFT JOIN ACCOUNT_VERIFICATION V ON V.ACCOUNT_ID = A.ACCOUNT_ID
+            LEFT JOIN VERIFICATIONS V ON V.ACCOUNT_ID = A.ACCOUNT_ID
             WHERE A.ACCOUNT_ID = $1
             LIMIT 1;
         `;
