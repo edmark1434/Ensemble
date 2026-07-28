@@ -475,17 +475,32 @@ export function TeamOverviewModal({
               {team.documents.length === 0 && (
                 <li className="text-sm text-zinc-500">No verification documents on file.</li>
               )}
-              {team.documents.map((d) => (
-                <li
-                  key={d.id}
-                  className="flex items-center justify-between rounded-lg border border-white/[0.06] px-3 py-2 text-sm"
-                >
-                  <span className="text-zinc-300">{d.name}</span>
-                  <button type="button" className="text-zinc-500 hover:text-white">
-                    <Download className="h-4 w-4" />
-                  </button>
-                </li>
-              ))}
+              {team.documents.map((d) => {
+                const url = buildAvatarUrl(d.path);
+                return (
+                  <li
+                    key={d.id}
+                    className="flex items-center justify-between rounded-lg border border-white/[0.06] px-3 py-2 text-sm"
+                  >
+                    <span className="text-zinc-300">{d.name}</span>
+                    {url ? (
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-zinc-500 hover:text-white"
+                        aria-label={`Download ${d.name}`}
+                      >
+                        <Download className="h-4 w-4" />
+                      </a>
+                    ) : (
+                      <span className="text-zinc-700">
+                        <Download className="h-4 w-4" />
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </div>
@@ -803,27 +818,48 @@ export function VerificationModal({
         </div>
 
         {verification.document ? (
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="font-medium text-white">{verification.document.name}</p>
-              <p className="mt-1 text-xs text-zinc-500">
-                By: {verification.document.uploadedBy} · Application ID: {verification.applicationId}
-              </p>
-              <p className="text-xs text-zinc-500">
-                {verification.document.pages} pages · {verification.document.sizeMb} MB · Uploaded{' '}
-                {formatDateTime(verification.document.uploadedAt)}
-              </p>
-            </div>
-            <button type="button" className="text-zinc-400 hover:text-white">
-              <Download className="h-5 w-5" />
-            </button>
+          <div className="space-y-3">
+            {(verification.documents?.length ? verification.documents : [verification.document]).map(
+              (doc, idx) => {
+                const url = buildAvatarUrl(doc.path);
+                return (
+                  <div key={doc.fileId || `${doc.name}-${idx}`} className="flex items-start justify-between">
+                    <div>
+                      <p className="font-medium text-white">{doc.name}</p>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        By: {doc.uploadedBy} · Application ID: {verification.applicationId}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        {doc.pages} pages · {doc.sizeMb} MB · Uploaded {formatDateTime(doc.uploadedAt)}
+                      </p>
+                    </div>
+                    {url ? (
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-zinc-400 hover:text-white"
+                        aria-label={`Download ${doc.name}`}
+                      >
+                        <Download className="h-5 w-5" />
+                      </a>
+                    ) : (
+                      <span className="text-zinc-700">
+                        <Download className="h-5 w-5" />
+                      </span>
+                    )}
+                  </div>
+                );
+              }
+            )}
           </div>
         ) : (
           <div>
-            <p className="font-medium text-white">No uploaded business document</p>
+            <p className="font-medium text-white">No uploaded verification document</p>
             <p className="mt-1 text-xs text-zinc-500">Application ID: {verification.applicationId}</p>
             <p className="mt-1 text-xs text-zinc-500">
-              Verification is tracked via account_verification. Choose a validity period, then approve.
+              ID / business docs are stored in verification_attachments once a user submits them.
+              Staff can still update status without a document.
             </p>
           </div>
         )}

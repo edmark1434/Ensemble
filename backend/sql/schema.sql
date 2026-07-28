@@ -3,7 +3,7 @@
 -- This file documents the tables the admin console reads/writes.
 
 -- Auth / identity
--- accounts, users, staff, account_verification
+-- accounts, users, staff, account_verification, verification_attachments
 
 -- Teams
 -- teams(team_id uuid PK, account_id uuid FK -> accounts)
@@ -64,6 +64,16 @@ CREATE TABLE IF NOT EXISTS account_verification (
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     deleted_at TIMESTAMPTZ,
     verified_by_staff_id UUID REFERENCES staff(staff_id)
+);
+
+CREATE TABLE IF NOT EXISTS verification_attachments (
+    -- ID / KYC proof files linked to an account_verification application.
+    -- Same join pattern as job_attachments / gig_attachments: parent + file + display order.
+    account_verification_id UUID NOT NULL REFERENCES account_verification(account_verification_id),
+    file_id UUID NOT NULL,
+    index INTEGER NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (account_verification_id, file_id)
 );
 
 CREATE TABLE IF NOT EXISTS teams (
@@ -195,3 +205,4 @@ CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
 CREATE INDEX IF NOT EXISTS idx_marketplace_listings_status ON marketplace_listings(status);
 CREATE INDEX IF NOT EXISTS idx_disputes_status ON disputes(status);
 CREATE INDEX IF NOT EXISTS idx_account_verification_account ON account_verification(account_id);
+CREATE INDEX IF NOT EXISTS idx_verification_attachments_verification ON verification_attachments(account_verification_id);
