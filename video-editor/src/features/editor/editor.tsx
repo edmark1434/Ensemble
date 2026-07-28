@@ -31,7 +31,7 @@ import useLayoutStore from "./store/use-layout-store";
 import ControlItemHorizontal from "./control-item-horizontal";
 import { design } from "./mock";
 import { Separator } from "@/components/ui/separator";
-import {ArrowLeftToLine, ArrowRightToLine, Maximize, Minimize, Volume2, VolumeOff} from "lucide-react";
+import {ArrowLeftToLine, ArrowRightToLine, Loader2, Maximize, Minimize, Volume2, VolumeOff} from "lucide-react";
 import {frameToTimeString, timeToString} from "./utils/time";
 import {useCurrentPlayerFrame} from "@/features/editor/hooks/use-current-frame";
 import {Button} from "@/components/ui/button";
@@ -474,17 +474,16 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
   useTimelineEvents();
 
   const { setCompactFonts, setFonts } = useDataState();
-  // useEffect(() => {
-  //   dispatch(DESIGN_LOAD, { payload: design });
-  // }, []);
+
   useEffect(() => {
     setCompactFonts(getCompactFontData(FONTS));
     setFonts(FONTS);
+    seedDefaultFont().then(() => setLoaded(true));
   }, []);
 
-  useEffect(() => {
-    seedDefaultFont().then(r => {});
-  }, []);
+  // useEffect(() => {
+  //   dispatch(DESIGN_LOAD, { payload: design });
+  // }, []);
 
   const handleTimelineResize = () => {
     const timelineContainer = document.getElementById("timeline-container");
@@ -531,10 +530,6 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
     setTypeControlItem("");
   }, [isLargeScreen]);
 
-  useEffect(() => {
-    setLoaded(true);
-  }, []);
-
   useKeyboardShortcuts(stateManager);
 
   useEffect(() => {
@@ -542,6 +537,15 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
     window.addEventListener("scroll", lockWindowScroll);
     return () => window.removeEventListener("scroll", lockWindowScroll);
   }, []);
+
+  if (!loaded) {
+    return (
+      <div className="fixed top-0 left-0 z-50 flex h-screen w-screen flex-col items-center justify-center gap-4 bg-card">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-screen flex-col bg-background">
