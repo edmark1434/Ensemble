@@ -193,13 +193,15 @@ export function SceneInteractions({
         const target = e.inputEvent.target as HTMLDivElement;
         dragStartEnd = false;
 
-        if (targets.includes(target)) {
+        if (targetsRef.current.includes(target)) {
           e.stop();
         }
         if (
+          targetsRef.current.length > 0 &&
           target &&
           moveableRef?.current?.moveable.isMoveableElement(target)
         ) {
+          console.warn("[dragStart] blocked by stale moveable element", target);
           e.stop();
         }
       })
@@ -299,6 +301,11 @@ export function SceneInteractions({
     const match = transform.match(/scale\(\s*([-\d.]+)\s*,\s*([-\d.]+)/);
     rawScaleRef.current = match ? [parseFloat(match[1]), parseFloat(match[2])] : [1, 1];
   }, [targets, trackItemsMap]);
+
+  const targetsRef = useRef<HTMLDivElement[]>([]);
+  useEffect(() => {
+    targetsRef.current = targets;
+  }, [targets]);
 
   return (
     <Moveable
