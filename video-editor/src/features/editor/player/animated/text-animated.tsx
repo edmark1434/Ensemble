@@ -109,6 +109,7 @@ export const TextAnimated: React.FC<{
   durationInFrames: number;
   animationFonts: { fontFamily: string; url: string }[];
   textColorStyle: React.CSSProperties;
+  id: string;
 }> = ({
   text,
   fps,
@@ -122,6 +123,7 @@ export const TextAnimated: React.FC<{
   durationInFrames,
   animationFonts,
   textColorStyle,
+  id
 }) => {
   const frame = useCurrentFrame();
   const animInFrom = animationTextInFrames;
@@ -134,6 +136,7 @@ export const TextAnimated: React.FC<{
     if (isGradient) {
       return (
         <div
+          data-text-anim-id={id}
           style={{
             position: "relative",
             width: details.width,
@@ -186,6 +189,7 @@ export const TextAnimated: React.FC<{
 
     return (
       <div
+        data-text-anim-id={id}
         style={{
           ...textColorStyle,
           whiteSpace: "pre-line",
@@ -253,6 +257,7 @@ export const TextAnimated: React.FC<{
 
     return (
       <div
+        data-text-anim-id={id}
         style={{
           width: details.width,
             height: details.height,
@@ -285,6 +290,7 @@ export const TextAnimated: React.FC<{
 
   return (
     <div
+      data-text-anim-id={id}
       style={{
         width: details.width,
         height: details.height,

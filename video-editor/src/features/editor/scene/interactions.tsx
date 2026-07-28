@@ -527,6 +527,14 @@ export function SceneInteractions({
 
             if (trackItemsMap[id].type === "text") {
               scaleDiv(`[data-text-id="${id}"]`, scale, currentWidth, currentHeight);
+
+              const textAnimatedDiv = target.querySelector(
+                `[data-text-anim-id="${id}"]`
+              ) as HTMLDivElement | null;
+              if (textAnimatedDiv) {
+                textAnimatedDiv.style.width = `${currentWidth * scale}px`;
+                textAnimatedDiv.style.height = `${currentHeight * scale}px`;
+              }
             } else if (trackItemsMap[id].type === "caption") {
               scaleDiv(`#caption-${id}`, scale, currentWidth, currentHeight);
             }
