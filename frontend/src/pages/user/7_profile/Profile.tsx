@@ -56,7 +56,7 @@ interface UserDetail {
   email_address: string;
   location: string;
   joinedDate: string;
-  verification_status: 'unverified' | 'pending' | 'verified';
+  verification_status: boolean;
   bio: string;
   tagline: string;
   merit_score: number;
@@ -613,7 +613,7 @@ export default function Profile() {
           avatarUrl={userDetails?.avatar_preset_url}
           isOwner={isOwner}
           birthdate={userDetails?.birthdate}
-          verificationLevel={userDetails?.verification_status === 'verified' ? 2 : 1}
+          verificationLevel={userDetails?.verification_status}
           subscriptionType={userDetails?.subscriptionType || "Free"}
           onEditAvatar={() => setIsAvatarModalOpen(true)}
           onEditProfile={() => setIsProfileModalOpen(true)}

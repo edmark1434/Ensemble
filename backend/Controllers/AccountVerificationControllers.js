@@ -1,9 +1,12 @@
 const {
-    createAccountVerificationSession 
+    createAccountVerificationSession,
+    appyForResubmissionServices,
+    getAccountVerificationStatusServices
 } = require('../Services/AccountVerificationServices');
 const {
     updateAccountVerificationSessionStatus,
-    updateAccountVerifications
+    updateAccountVerifications,
+    getAccountVerificationSessionBySessionId
 } = require('../Repositories/AccountVerificationRepositories');
 
 const {
@@ -49,7 +52,12 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
             case "In Review": {
                 payload.verification_status = status;
                 if(status === "Approved"){
-                    await updateAccountVerifications(req.body.metadata?.account_id, { is_verified: true, verified_at: new Date() ,verification_session_id: sessionId});
+                    const expiresAt = new Date();
+                    expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+                    payload.expires_at = expiresAt;
+                    const session = await getAccountVerificationSessionBySessionId(sessionId);
+                    console.log("Updating account verification status to verified for account:", session.verification_session_id);
+                    await updateAccountVerifications(req.body.metadata?.account_id, { is_verified: true, verified_at: new Date(),verification_session_id: session?.verification_session_id || null });
                 }
                 
                 const verification =
@@ -93,6 +101,10 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
             }
 
             case "Declined":
+                await updateAccountVerifications(req.body.metadata?.account_id, { is_verified: false, verified_at: null });
+                const data = await applyForResubmission(sessionId,req.body.metadata?.account_id);
+                payload.verification_status = "Pending";
+                break;
             case "Expired":
             case "Abandoned":
                 payload.verification_status = "Rejected";
@@ -102,6 +114,9 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
             case "In Progress":
             case "Awaiting User":
             case "Resubmitted":
+                if(status === "Resubmitted"){
+                    await updateAccountVerifications(req.body.metadata?.account_id, { is_verified: false, verified_at: null });
+                }
                 payload.verification_status = "Pending";
                 break;
 
@@ -124,10 +139,35 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
     }
 }
 
+async function applyForResubmission(sessionId, accountId) {
+    try{
+        const response = await appyForResubmissionServices(sessionId, accountId);
+        return response;
+    }catch(err){
+        console.error("Error applying for resubmission:", err);
+        throw err;
+    }
+}
 
+async function getAccountVerificationStatusController(req, res) {
+    try{
+        const {account_id} = req.session;
+        const verificationStatus = await getAccountVerificationStatusServices(account_id);
+        return res.status(200).json({
+            success: true,
+            data: verificationStatus
+        });
+    }catch(err){
+        console.error("Error fetching account verification status:", err);
+        return res.status(500).json({
+            success: false,
+            message: 'An error occurred while fetching the account verification status. Please try again.'
+        });
+    }
+}
 
 module.exports = {
     createAccountVerificationController,
     handleVerificationWebhookStatusUpdated,
-
+    getAccountVerificationStatusController
 };
