@@ -90,6 +90,7 @@ const TextLayer: React.FC<{
         durationInFrames={durationInFrames}
         animationFonts={animationFonts}
         textColorStyle={getTextColorStyle(details.color)}
+        id={id}
       />
     </div>
   );
