@@ -262,76 +262,11 @@ function buildHistory(accountId, historyMap) {
   };
 }
 
-function mapAttachmentDocument(file, uploadedBy = 'Account holder') {
-  const sizeBytes = Number(file.size_bytes || 0);
-  return {
-    fileId: file.file_id,
-    name: file.name || 'Verification document',
-    mimeType: file.mime_type || null,
-    path: file.path || null,
-    uploadedBy,
-    pages: 1,
-    sizeMb: Math.max(0.01, Math.round((sizeBytes / (1024 * 1024)) * 100) / 100),
-    uploadedAt: file.created_at || null,
-    index: file.index ?? 0,
-  };
-}
-
-function mapTeamDocuments(attachments = []) {
-  return attachments.map((file) => {
-    const sizeBytes = Number(file.size_bytes || 0);
-    return {
-      id: file.file_id,
-      name: file.name || 'Verification document',
-      type: file.mime_type || 'file',
-      pages: null,
-      sizeMb: Math.max(0.01, Math.round((sizeBytes / (1024 * 1024)) * 100) / 100),
-      uploadedAt: file.created_at || null,
-      path: file.path || null,
-    };
-  });
-}
-
-async function fetchVerificationAttachmentsByVerificationIds(verificationIds) {
-  const ids = [...new Set((verificationIds || []).filter(Boolean))];
-  if (!ids.length) return new Map();
-
-  const result = await pool.query(
-    `
-    SELECT
-      va.account_verification_id,
-      va.index,
-      va.created_at,
-      f.file_id,
-      f.name,
-      f.mime_type,
-      f.size_bytes,
-      f.path
-    FROM verification_attachments va
-    INNER JOIN files f ON f.file_id = va.file_id
-    WHERE va.account_verification_id = ANY($1::uuid[])
-    ORDER BY va.account_verification_id, va.index ASC, va.created_at ASC
-    `,
-    [ids]
-  );
-
-  const byVerification = new Map();
-  for (const row of result.rows) {
-    const list = byVerification.get(row.account_verification_id) || [];
-    list.push(row);
-    byVerification.set(row.account_verification_id, list);
-  }
-  return byVerification;
-}
-
-function buildVerificationDetail(row, attachments = []) {
+function buildVerificationDetail(row) {
   const label = mapVerificationLabel(row.verification_status);
   const verified = label === 'Verified' || label === 'Business Verified';
   const expiresAt = row.verification_expires_at || null;
   const isExpired = Boolean(expiresAt && new Date(expiresAt).getTime() <= Date.now());
-  const documents = attachments.map((file) =>
-    mapAttachmentDocument(file, row.display_name || row.verified_by_name || 'Account holder')
-  );
   return {
     status: isExpired
       ? 'Reverification Required'
@@ -349,8 +284,7 @@ function buildVerificationDetail(row, attachments = []) {
         )
       : null,
     applicationId: row.account_verification_id || '—',
-    document: documents[0] || null,
-    documents,
+    document: null,
     logs: [
       {
         id: `vl-${row.account_id}`,
@@ -602,8 +536,7 @@ async function fetchTeamsFromDatabase() {
   }
 
   const accountIds = teamsResult.rows.map((r) => r.account_id);
-  const verificationIds = teamsResult.rows.map((r) => r.account_verification_id).filter(Boolean);
-  const [creditMap, historyMap, assetStats, attachmentsByVerification] = await Promise.all([
+  const [creditMap, historyMap, assetStats] = await Promise.all([
     fetchCreditActivityForAccounts(accountIds),
     fetchHistoryForAccounts(accountIds),
     pool.query(
@@ -617,7 +550,6 @@ async function fetchTeamsFromDatabase() {
       `,
       [accountIds]
     ).catch(() => ({ rows: [] })),
-    fetchVerificationAttachmentsByVerificationIds(verificationIds),
   ]);
 
   const assetsByAccount = new Map(
@@ -636,7 +568,6 @@ async function fetchTeamsFromDatabase() {
     const teamName = row.display_name || row.handle || 'Unnamed team';
     const assets = assetsByAccount.get(row.account_id) || { listing_count: 0, listing_value: 0 };
     const balance = Number(row.balance_credits || 0);
-    const attachments = attachmentsByVerification.get(row.account_verification_id) || [];
 
     return {
       id: row.team_id,
@@ -670,9 +601,9 @@ async function fetchTeamsFromDatabase() {
         totalReactions: 0,
         totalComments: 0,
       },
-      documents: mapTeamDocuments(attachments),
+      documents: [],
       creditActivity: creditMap.get(row.account_id) || [],
-      verification: buildVerificationDetail(row, attachments),
+      verification: buildVerificationDetail(row),
       history: buildHistory(row.account_id, historyMap),
     };
   });
@@ -740,47 +671,37 @@ async function getUsersManagement() {
   const users = await fetchAllUsers();
   const accountIds = users.map((u) => u.accountId);
   const userIds = users.map((u) => u.id);
-  const verificationIds = users
-    .map((u) => u.verificationMeta?.account_verification_id)
-    .filter(Boolean);
-  const [creditMap, historyMap, assetStats, membershipsMap, attachmentsByVerification] =
-    await Promise.all([
-      fetchCreditActivityForAccounts(accountIds),
-      fetchHistoryForAccounts(accountIds),
-      accountIds.length
-        ? pool.query(
-            `
+  const [creditMap, historyMap, assetStats, membershipsMap] = await Promise.all([
+    fetchCreditActivityForAccounts(accountIds),
+    fetchHistoryForAccounts(accountIds),
+    accountIds.length
+      ? pool.query(
+          `
           SELECT submitted_by_account_id AS account_id, COUNT(*)::int AS listing_count
           FROM marketplace_listings
           WHERE submitted_by_account_id = ANY($1::uuid[])
           GROUP BY submitted_by_account_id
           `,
-            [accountIds]
-          ).catch(() => ({ rows: [] }))
-        : { rows: [] },
-      fetchTeamMembershipsForUsers(userIds),
-      fetchVerificationAttachmentsByVerificationIds(verificationIds),
-    ]);
+          [accountIds]
+        ).catch(() => ({ rows: [] }))
+      : { rows: [] },
+    fetchTeamMembershipsForUsers(userIds),
+  ]);
   const assetsByAccount = new Map(assetStats.rows.map((r) => [r.account_id, r.listing_count]));
 
   const enriched = users.map((u) => {
     const { verificationMeta, walletBalance, ...rest } = u;
-    const meta =
-      verificationMeta || {
-        account_id: u.accountId,
-        verification_status: u.verificationStatus,
-        created_at: u.joinedAt,
-      };
-    const attachments =
-      attachmentsByVerification.get(meta.account_verification_id) || [];
     return {
       ...rest,
       profileId: `USR-${String(u.id).slice(0, 8).toUpperCase()}`,
       teams: membershipsMap.get(u.id) || [],
       creditActivity: creditMap.get(u.accountId) || [],
       verification: buildVerificationDetail(
-        { ...meta, display_name: u.displayName || u.name },
-        attachments
+        verificationMeta || {
+          account_id: u.accountId,
+          verification_status: u.verificationStatus,
+          created_at: u.joinedAt,
+        }
       ),
       history: buildHistory(u.accountId, historyMap),
       stats: {
