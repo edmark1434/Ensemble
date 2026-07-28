@@ -39,7 +39,7 @@ let primaryNavInitial: NavItem[] = [
 
 let jobsItemsInitial: NavItem[] = [
     { label: "Job Posting", icon: Briefcase, to: "/jobs" },
-    { label: "Proposals", icon: ClipboardList, to: "/jobs/proposals/incoming" },
+    { label: "Proposals", icon: ClipboardList, to: "/jobs/proposals" },
 ];
 
 let gigsItemsInitial: NavItem[] = [
@@ -95,8 +95,8 @@ const UserNav: React.FC<UserNavProps> = () => {
                 !location.pathname.startsWith("/jobs/proposals")
             );
         }
-        if (to === "/jobs/proposals/incoming") {
-            // Active for any proposals sub-route (/jobs/proposals/incoming or /jobs/proposals/sent)
+        if (to === "/jobs/proposals") {
+            // Active for any proposals route (/jobs/proposals, /jobs/proposals/incoming/*, /jobs/proposals/sent)
             return location.pathname.startsWith("/jobs/proposals");
         }
         return location.pathname === to;
