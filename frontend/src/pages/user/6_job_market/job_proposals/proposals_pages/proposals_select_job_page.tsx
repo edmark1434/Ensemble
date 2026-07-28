@@ -1,13 +1,43 @@
 import React from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ClipboardList, ChevronRight, Calendar, CircleDollarSign, Layers } from "lucide-react";
+import { ClipboardList, ChevronRight, Calendar, CircleDollarSign } from "lucide-react";
 import { sampleJobs } from "../../job_datasets";
 import type { ProposalsMainContext } from "../proposals_main";
 
+export const SelectJobCardSkeleton: React.FC = () => (
+  <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/40 overflow-hidden animate-pulse space-y-4 flex flex-col justify-between">
+    {/* Skeleton Thumbnail */}
+    <div className="h-36 w-full bg-white/5" />
+
+    <div className="p-5 space-y-4">
+      {/* Category Pills & Title */}
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <div className="h-4 w-16 rounded bg-white/10" />
+          <div className="h-4 w-16 rounded bg-white/5" />
+        </div>
+        <div className="h-5 w-3/4 rounded bg-white/10" />
+      </div>
+
+      {/* Budget & Applicants Grid */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="h-12 rounded-xl bg-white/5" />
+        <div className="h-12 rounded-xl bg-white/5" />
+      </div>
+
+      {/* Footer */}
+      <div className="pt-3 border-t border-white/5 flex items-center justify-between">
+        <div className="h-3 w-28 rounded bg-white/5" />
+        <div className="h-3 w-20 rounded bg-white/10" />
+      </div>
+    </div>
+  </div>
+);
+
 export const ProposalsSelectJobPage: React.FC = () => {
   const navigate = useNavigate();
-  const { searchQuery } = useOutletContext<ProposalsMainContext>();
+  const { searchQuery, loading = false } = useOutletContext<ProposalsMainContext>();
 
   // Filter only the user's own active job posts
   const myJobPosts = sampleJobs.filter(
@@ -27,11 +57,17 @@ export const ProposalsSelectJobPage: React.FC = () => {
           </p>
         </div>
         <span className="text-xs font-semibold text-zinc-400 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 self-start sm:self-auto">
-          {myJobPosts.length} Active Listings
+          {loading ? "Loading..." : `${myJobPosts.length} Active Listings`}
         </span>
       </div>
 
-      {myJobPosts.length === 0 ? (
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {[1, 2, 3, 4].map((i) => (
+            <SelectJobCardSkeleton key={i} />
+          ))}
+        </div>
+      ) : myJobPosts.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-12 text-center">
           <p className="text-sm text-zinc-400 font-medium">No job postings found matching your search.</p>
         </div>
@@ -43,7 +79,7 @@ export const ProposalsSelectJobPage: React.FC = () => {
               whileHover={{ y: -3 }}
               transition={{ duration: 0.2 }}
               onClick={() => navigate(`/jobs/proposals/incoming/${job.id}`)}
-              className="group rounded-2xl border border-white/10 bg-[#0d0f1a]/80 overflow-hidden backdrop-blur-sm shadow-xl hover:border-blue-500/50 cursor-pointer transition flex flex-col justify-between"
+              className="group rounded-2xl border border-white/10 bg-[#0d0f1a]/80 overflow-hidden backdrop-blur-sm shadow-xl hover:border-white/20 cursor-pointer transition flex flex-col justify-between"
             >
               {/* Thumbnail Image Header */}
               <div className="relative h-36 w-full bg-zinc-950 overflow-hidden border-b border-white/5">

@@ -46,14 +46,74 @@ export interface ProposalItemData {
 
 interface ProposalsListProps {
   proposals: ProposalItemData[];
+  loading?: boolean;
   viewType?: ViewType;
 }
 
+export const ProposalCardSkeleton: React.FC<{ viewType?: ViewType }> = ({
+  viewType = "list",
+}) => {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/40 p-5 animate-pulse space-y-4">
+      {/* Header Skeleton */}
+      <div className="flex items-center justify-between pb-3 border-b border-white/5">
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-full bg-white/10" />
+          <div className="space-y-1.5">
+            <div className="h-4 w-28 rounded bg-white/10" />
+            <div className="h-3 w-40 rounded bg-white/5" />
+          </div>
+        </div>
+        <div className="h-6 w-16 rounded-full bg-white/10" />
+      </div>
+
+      {/* Bid Banner Skeleton */}
+      <div className="h-11 w-full rounded-xl bg-white/5" />
+
+      {/* Pitch Skeleton */}
+      <div className="space-y-1.5">
+        <div className="h-3.5 w-full rounded bg-white/5" />
+        <div className="h-3.5 w-4/5 rounded bg-white/5" />
+      </div>
+
+      {/* Pills Skeleton */}
+      <div className="flex gap-2 pt-1">
+        <div className="h-6 w-24 rounded-md bg-white/5" />
+        <div className="h-6 w-24 rounded-md bg-white/5" />
+        <div className="h-6 w-24 rounded-md bg-white/5" />
+      </div>
+
+      {/* Footer Skeleton */}
+      <div className="pt-3 border-t border-white/5 flex items-center justify-between">
+        <div className="h-3 w-36 rounded bg-white/5" />
+        <div className="h-3 w-16 rounded bg-white/10" />
+      </div>
+    </div>
+  );
+};
+
 export const ProposalsList: React.FC<ProposalsListProps> = ({
   proposals,
+  loading = false,
   viewType = "list",
 }) => {
   const navigate = useNavigate();
+
+  if (loading) {
+    return (
+      <div
+        className={
+          viewType === "grid"
+            ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+            : "space-y-3.5"
+        }
+      >
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <ProposalCardSkeleton key={i} viewType={viewType} />
+        ))}
+      </div>
+    );
+  }
 
   if (proposals.length === 0) {
     return (

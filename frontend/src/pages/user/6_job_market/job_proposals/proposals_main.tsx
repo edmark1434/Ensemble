@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import UserHeader from "@/components/nav/user_header";
 
@@ -26,7 +26,28 @@ export interface ProposalsMainContext {
   revisionRateSort: "inc" | "dec" | null;
   dateSort: "inc" | "dec" | null;
   viewType: ViewType;
+  loading: boolean;
 }
+
+const ProposalSidebarSkeleton = () => (
+  <div className="space-y-6">
+    <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-5 backdrop-blur-sm space-y-3">
+      <div className="h-3 w-28 animate-pulse rounded bg-white/10" />
+      <div className="space-y-2">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="h-8 w-full animate-pulse rounded-xl bg-white/5" />
+        ))}
+      </div>
+    </div>
+    <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-5 backdrop-blur-sm space-y-4">
+      <div className="h-3 w-24 animate-pulse rounded bg-white/10" />
+      <div className="space-y-3">
+        <div className="h-8 flex-1 animate-pulse rounded-lg bg-white/5" />
+        <div className="h-8 flex-1 animate-pulse rounded-lg bg-white/5" />
+      </div>
+    </div>
+  </div>
+);
 
 export const ProposalsMain: React.FC = () => {
   const location = useLocation();
@@ -35,6 +56,7 @@ export const ProposalsMain: React.FC = () => {
   const isJobSelectionPage = location.pathname === "/jobs/proposals";
   const isSentPage = location.pathname.startsWith("/jobs/proposals/sent");
 
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeStatus, setActiveStatus] = useState<"All" | ProposalStatus>("All");
 
@@ -50,6 +72,12 @@ export const ProposalsMain: React.FC = () => {
   const [dateSort, setDateSort] = useState<"inc" | "dec" | null>(null);
 
   const [viewType, setViewType] = useState<ViewType>("list");
+
+  // Simulated initial loading timer
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Dynamically calculate status counts depending on active route context
   const statusCounts: StatusFilterItem[] = useMemo(() => {
@@ -116,33 +144,39 @@ export const ProposalsMain: React.FC = () => {
           {/* Sidebar */}
           {!isJobSelectionPage && (
             <div className="space-y-6 sticky top-24">
-              <ProposalsStatuses
-                statuses={statusCounts}
-                activeStatus={activeStatus}
-                onStatusChange={setActiveStatus}
-              />
+              {loading ? (
+                <ProposalSidebarSkeleton />
+              ) : (
+                <>
+                  <ProposalsStatuses
+                    statuses={statusCounts}
+                    activeStatus={activeStatus}
+                    onStatusChange={setActiveStatus}
+                  />
 
-              <ProposalsFilters
-                filters={{
-                  minPrice,
-                  maxPrice,
-                  priceSort,
-                  milestonesValue,
-                  milestonesSort,
-                  revisionRateSort,
-                  dateSort,
-                }}
-                setters={{
-                  setMinPrice,
-                  setMaxPrice,
-                  setPriceSort,
-                  setMilestonesValue,
-                  setMilestonesSort,
-                  setRevisionRateSort,
-                  setDateSort,
-                }}
-                onClear={handleClearFilters}
-              />
+                  <ProposalsFilters
+                    filters={{
+                      minPrice,
+                      maxPrice,
+                      priceSort,
+                      milestonesValue,
+                      milestonesSort,
+                      revisionRateSort,
+                      dateSort,
+                    }}
+                    setters={{
+                      setMinPrice,
+                      setMaxPrice,
+                      setPriceSort,
+                      setMilestonesValue,
+                      setMilestonesSort,
+                      setRevisionRateSort,
+                      setDateSort,
+                    }}
+                    onClear={handleClearFilters}
+                  />
+                </>
+              )}
             </div>
           )}
 
@@ -161,6 +195,7 @@ export const ProposalsMain: React.FC = () => {
                   revisionRateSort,
                   dateSort,
                   viewType,
+                  loading,
                 } satisfies ProposalsMainContext
               }
             />
