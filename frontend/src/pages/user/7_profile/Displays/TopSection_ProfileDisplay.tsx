@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { MapPin, Mail, Calendar, ChevronDown, ChevronUp, Edit2, MessageCircle, Share2, Clock, Cake, HelpCircle, ShieldCheck } from "lucide-react";
+import { MapPin, Mail, Calendar, ChevronDown, Edit2, MessageCircle, Share2, Cake, HelpCircle, ShieldCheck } from "lucide-react";
 import { ProfileTags } from "../Utilities/ProfileTags.tsx";
 
 interface TopSectionProps {
@@ -55,9 +55,9 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
   onVerificationClick
 }) => {
   const [isMetadataOpen, setIsMetadataOpen] = useState(false);
-  const [isBioExpanded, setIsBioExpanded] = useState(true);
+  const [isBioExpanded, setIsBioExpanded] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  console.log("Subscription Type:", subscriptionType);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -144,7 +144,6 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
                   <div className="absolute -top-1 left-1/2 md:left-4 transform -translate-x-1/2 md:translate-x-0 w-2 h-2 bg-[#0b0e17] border-t border-l border-white/15 rotate-45" />
                   <div className="flex items-start gap-2">
                     <MapPin className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0 mt-0.5" />
-                    {/* Explicit layout routing string output */}
                     <span className="leading-normal text-zinc-300">{`${location}, ${country} ${zipCode}`}</span>
                   </div>
                   <div className="flex items-center gap-2"><Cake className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" /> <span>Born: {birthdate ? new Date(birthdate).toLocaleDateString() : "Not Specified"}</span></div>
@@ -154,7 +153,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             </div>
           </div>
 
-          {/* Row 3: Email Address + Ecosystem Username + Interactive Geographic Location Chips */}
+          {/* Row 3: Email Address + Ecosystem Username + Geographic Location Chips */}
           <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-2 gap-y-1 text-xs text-zinc-400">
             <div className="flex items-center gap-1.5">
               <Mail className="h-3.5 w-3.5 text-zinc-500" />
@@ -164,7 +163,6 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             <span className="text-zinc-500 font-medium tracking-wide bg-white/5 px-1.5 py-0.5 rounded text-[11px]">@{username}</span>
             <span className="text-zinc-600 hidden sm:inline select-none">|</span>
 
-            {/* Styled side-by-side regional identifier row layout */}
             <div className="flex items-center gap-1 text-zinc-400 font-medium tracking-wide bg-blue-500/5 border border-blue-500/10 px-2 py-0.5 rounded text-[11px]">
               <MapPin className="h-3 w-3 text-blue-400 flex-shrink-0" />
               <span>Cebu City | Cebu | Philippines</span>
@@ -205,13 +203,13 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             <MessageCircle className="h-4 w-4" />
           </button>
           {!verificationLevel && (
-          <button
-            onClick={onVerificationClick}
-            className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-emerald-500 hover:text-emerald-400 hover:bg-white/10 hover:border-emerald-500/20 transition shadow-sm"
-            title="Account Verification Status"
-          >
-            <ShieldCheck className="h-4 w-4" />
-          </button>
+            <button
+              onClick={onVerificationClick}
+              className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-emerald-500 hover:text-emerald-400 hover:bg-white/10 hover:border-emerald-500/20 transition shadow-sm"
+              title="Account Verification Status"
+            >
+              <ShieldCheck className="h-4 w-4" />
+            </button>
           )}
           <button
             className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-400 hover:text-white hover:bg-white/10 hover:border-white/20 transition"
@@ -223,22 +221,46 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
 
       </div>
 
-      {/* Introduction Accordion Dropdown Block */}
+      {/* Introduction Accordion Block */}
       <div className="mt-5 border-t border-white/5 pt-3">
         <button
           onClick={() => setIsBioExpanded(!isBioExpanded)}
-          className="flex items-center justify-between w-full text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5 hover:text-zinc-300 transition"
+          className="group flex items-center justify-between w-full text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5 hover:text-zinc-300 transition-colors duration-200"
         >
           <span>Introduction</span>
-          {isBioExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+
+          {/* Click Indicator Badge & Animated Arrow */}
+          <div className="flex items-center gap-1.5 text-zinc-500 group-hover:text-blue-400 transition-colors">
+            <span className="text-[9px] lowercase font-mono opacity-80 group-hover:opacity-100">
+              {isBioExpanded ? "(click to collapse)" : "(click to expand)"}
+            </span>
+            <div
+              className="transition-transform duration-300 ease-in-out"
+              style={{ transform: isBioExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
+            >
+              <ChevronDown className="h-3 w-3" />
+            </div>
+          </div>
         </button>
 
-        <div className={`grid transition-all duration-300 ease-in-out ${isBioExpanded ? "grid-rows-[1fr] opacity-100 mt-2" : "grid-rows-[0fr] opacity-0"}`}>
-          <div className="overflow-hidden">
-            <p className="text-xs text-zinc-300 leading-relaxed font-normal bg-white/[0.01] border border-white/5 p-3 rounded-xl whitespace-pre-wrap">
+        <div
+          onClick={() => setIsBioExpanded(!isBioExpanded)}
+          className="relative bg-white/[0.01] border border-white/5 p-3 rounded-xl cursor-pointer hover:border-white/10 transition-colors"
+        >
+          <div
+            className={`overflow-hidden transition-all duration-500 ease-in-out ${
+              !isBioExpanded ? "max-h-[7.2rem]" : "max-h-[1000px]"
+            }`}
+          >
+            <p className="text-xs text-zinc-300 leading-relaxed font-normal whitespace-pre-wrap">
               {bio || "This person seems shy on introducing itself..."}
             </p>
           </div>
+
+          {/* Fade-out Gradient when Collapsed */}
+          {!isBioExpanded && (
+            <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-[#080a12]/90 to-transparent rounded-b-xl pointer-events-none" />
+          )}
         </div>
       </div>
 
