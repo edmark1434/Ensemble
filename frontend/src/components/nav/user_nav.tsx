@@ -8,7 +8,6 @@ import {
     Megaphone,
     MessageSquare,
     Palette,
-    Send,
     Shield,
     Users,
     Wallet,
@@ -19,7 +18,7 @@ import {
     MicVocal,
 } from "lucide-react";
 import type { ComponentType } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { motion, LayoutGroup } from "framer-motion";
 import useGlobalState from "@/lib/global_state";
@@ -40,8 +39,7 @@ let primaryNavInitial: NavItem[] = [
 
 let jobsItemsInitial: NavItem[] = [
     { label: "Job Posting", icon: Briefcase, to: "/jobs" },
-    { label: "Incoming Proposals", icon: ClipboardList, to: "/jobs/proposals" },
-    { label: "My Proposals", icon: Send, to: "/jobs/proposals/sent" },
+    { label: "Proposals", icon: ClipboardList, to: "/jobs/proposals/incoming" },
 ];
 
 let gigsItemsInitial: NavItem[] = [
@@ -64,6 +62,7 @@ interface UserNavProps {
 
 const UserNav: React.FC<UserNavProps> = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [isJobsOpen, setIsJobsOpen] = useState(false);
     const [isGigsOpen, setIsGigsOpen] = useState(false);
@@ -86,6 +85,22 @@ const UserNav: React.FC<UserNavProps> = () => {
        `flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 text-zinc-400 hover:text-white hover:bg-white/5 ${
           isCollapsed ? "justify-center px-2" : ""
        }`;
+
+    // Helper to determine active state for Jobs sub-navigation
+    const isJobItemActive = (to: string) => {
+        if (to === "/jobs") {
+            // Active if on /jobs, /jobs/postings, /jobs/saved-posts, or /jobs/my-job-post, but NOT /jobs/proposals
+            return (
+                location.pathname.startsWith("/jobs") &&
+                !location.pathname.startsWith("/jobs/proposals")
+            );
+        }
+        if (to === "/jobs/proposals/incoming") {
+            // Active for any proposals sub-route (/jobs/proposals/incoming or /jobs/proposals/sent)
+            return location.pathname.startsWith("/jobs/proposals");
+        }
+        return location.pathname === to;
+    };
 
     return (
        <>
@@ -207,10 +222,11 @@ const UserNav: React.FC<UserNavProps> = () => {
 
                             <div className={`grid transition-all duration-300 ease-in-out ${isJobsOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
                                <ul className="ml-6 overflow-hidden space-y-1 border-l border-white/10 pl-2">
-                                  {jobsState.map(({ label, icon: Icon, to }) => (
-                                     <li key={label}>
-                                        <NavLink to={to} end={to === "/jobs"}>
-                                           {({ isActive }) => (
+                                  {jobsState.map(({ label, icon: Icon, to }) => {
+                                     const isActive = isJobItemActive(to);
+                                     return (
+                                        <li key={label}>
+                                           <NavLink to={to}>
                                               <div
                                                  className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors duration-200 ${
                                                     isActive ? "text-blue-400 font-medium" : "text-zinc-400 hover:text-white hover:bg-white/5"
@@ -226,10 +242,10 @@ const UserNav: React.FC<UserNavProps> = () => {
                                                  <Icon className="relative z-10 h-3.5 w-3.5 shrink-0" />
                                                  <span className="relative z-10 text-xs">{label}</span>
                                               </div>
-                                           )}
-                                        </NavLink>
-                                     </li>
-                                  ))}
+                                           </NavLink>
+                                        </li>
+                                     );
+                                  })}
                                </ul>
                             </div>
                          </div>
@@ -244,14 +260,17 @@ const UserNav: React.FC<UserNavProps> = () => {
                                <div className="rounded-xl border border-white/10 bg-[#0d0f1a] p-1.5 shadow-2xl animate-fade-in">
                                   <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 border-b border-white/5 mb-1">Jobs</p>
                                   <ul className="space-y-0.5">
-                                     {jobsState.map(({ label, icon: Icon, to }) => (
-                                        <li key={label}>
-                                           <NavLink to={to} end={to === "/jobs"} className={({ isActive }) => `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-blue-500/10 text-blue-400 font-medium" : "text-zinc-400 hover:text-white hover:bg-white/5"}`}>
-                                              <Icon className="h-3.5 w-3.5 shrink-0" />
-                                              <span>{label}</span>
-                                           </NavLink>
-                                        </li>
-                                     ))}
+                                     {jobsState.map(({ label, icon: Icon, to }) => {
+                                        const isActive = isJobItemActive(to);
+                                        return (
+                                           <li key={label}>
+                                              <NavLink to={to} className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-blue-500/10 text-blue-400 font-medium" : "text-zinc-400 hover:text-white hover:bg-white/5"}`}>
+                                                 <Icon className="h-3.5 w-3.5 shrink-0" />
+                                                 <span>{label}</span>
+                                              </NavLink>
+                                           </li>
+                                        );
+                                     })}
                                   </ul>
                                </div>
                             </div>

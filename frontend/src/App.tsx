@@ -35,7 +35,7 @@ import Inbox from "@/pages/user/10_inbox/Main.tsx";
 
 import SectionPlaceholder from '@/pages/user/0_misc/SectionPlaceholder.tsx'
 
-// Updated Job Market Sub-Routes & Create/Edit Page Imports
+// Job Market Core Imports
 import JobMain from "@/pages/user/6_job_market/job_main.tsx";
 import JobPostingPage from "@/pages/user/6_job_market/job_pages/job_posting_page.tsx";
 import JobSavesPage from "@/pages/user/6_job_market/job_pages/job_saves_page.tsx";
@@ -44,8 +44,10 @@ import JobCreatePostPage from "@/pages/user/6_job_market/job_pages/job_createpos
 import JobEditPostPage from "@/pages/user/6_job_market/job_pages/job_editpost_page.tsx";
 
 // Job Proposals Imports
-import ProposalsIncomingPage from "@/pages/user/6_job_market/job_proposals/proposals_incoming.tsx";
-import ProposalsSentPage from "@/pages/user/6_job_market/job_proposals/proposals_sent.tsx";
+import ProposalsMain from "@/pages/user/6_job_market/job_proposals/proposals_main.tsx";
+import ProposalsIncomingPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_incoming_page.tsx";
+import ProposalsSentPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_sent_page.tsx";
+import ProposalsCreatePage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_create_page.tsx";
 
 import GigMarketplace from "@/pages/user/7_gigs/Gig_Posting/main.tsx";
 import {CreateGigWizard} from "@/pages/user/7_gigs/Gig_Posting/CreateGigWizard.tsx";
@@ -189,7 +191,7 @@ function App() {
 
           <Route path='/assets' element={<SectionPlaceholder title='ASSET LIBRARY' />} />
 
-          {/* Reworked Job Market Nested Sub-Routes */}
+          {/* Reworked Job Market Sub-Routes */}
           <Route path='/jobs' element={<JobMain />}>
             <Route index element={<Navigate to="/jobs/postings" replace />} />
             <Route path='postings' element={<JobPostingPage />} />
@@ -198,15 +200,19 @@ function App() {
             <Route path='saved-posts/:id' element={<JobSavesPage />} />
             <Route path='my-job-post' element={<JobMyPostPage />} />
             <Route path='my-job-post/:id' element={<JobMyPostPage />} />
-
-            {/* Job Proposal Routes */}
-            <Route path='proposals' element={<ProposalsIncomingPage />} />
-            <Route path='proposals/sent' element={<ProposalsSentPage />} />
           </Route>
 
-          {/* Modularized Job Creation & Edit Pages */}
+          {/* Proposals Layout & Sub-Routes */}
+          <Route path='/jobs/proposals' element={<ProposalsMain />}>
+            <Route index element={<Navigate to="/jobs/proposals/incoming" replace />} />
+            <Route path='incoming' element={<ProposalsIncomingPage />} />
+            <Route path='sent' element={<ProposalsSentPage />} />
+          </Route>
+
+          {/* Standalone Creation & Wizard Pages */}
           <Route path='/jobs/create' element={<JobCreatePostPage />} />
           <Route path='/jobs/edit/:id' element={<JobEditPostPage />} />
+          <Route path='/jobs/:id/make-proposal' element={<ProposalsCreatePage />} />
 
           <Route path='/gigs'>
             <Route index element={<GigMarketplace />} />
