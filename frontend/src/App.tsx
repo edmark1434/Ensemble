@@ -7,21 +7,21 @@ import StaffLoginPage from './pages/auth/StaffLoginPage'
 import SignupPage from './pages/auth/Signuppage'
 import EmailVerification from './pages/EmailVerification'
 
-import NotFound from "@/pages/user/0_config/NotFound.tsx";
+import NotFound from "@/pages/user/0_misc/NotFound.tsx";
 
 import ResetPasswordPage from "@/pages/auth/ResetPasswordPage.tsx";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage.tsx";
 
-import CreditShop from "@/pages/user/0_config/CreditsShop.tsx";
+import CreditShop from "@/pages/user/13_creditsshop/CreditsShop.tsx";
 import Checkout from "@/pages/payment/checkout.tsx";
 import Profile from "@/pages/user/7_profile/Profile.tsx";
 import UserSettings from "@/components/nav/Settings/user_settings.tsx";
 
 import Layout from './components/ui/Layout.tsx'
 
-import Home from './pages/user/1_home/Home.tsx'
+import Home from '@/pages/user/1_home/Home.tsx'
 
-import Projects from "./pages/user/2_projects/Projects.tsx"
+import Projects from "@/pages/user/2_projects/Projects.tsx"
 import Projects_Selection from "@/pages/user/2_projects/Projects_Selection.tsx";
 
 import Teams from "@/pages/user/3_teams/Teams.tsx";
@@ -33,7 +33,7 @@ import ExpandDiscussion from "@/pages/user/4_forums/ExpandDiscussion.tsx";
 
 import Inbox from "@/pages/user/10_inbox/Main.tsx";
 
-import SectionPlaceholder from './pages/user/0_config/SectionPlaceholder.tsx'
+import SectionPlaceholder from '@/pages/user/0_misc/SectionPlaceholder.tsx'
 
 // Updated Job Market Sub-Routes & Create/Edit Page Imports
 import JobMain from "@/pages/user/6_job_market/job_main.tsx";

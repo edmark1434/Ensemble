@@ -9,9 +9,9 @@ import {
   Minus,
   ChevronDown,
 } from "lucide-react";
-import UserHeader from "@/components/nav/user_header";
+import UserHeader from "@/components/nav/user_header.tsx";
 import { useNavigate, useLocation } from "react-router-dom";
-import api from "@/lib/axios";
+import api from "@/lib/axios.ts";
 
 // ---- Data models ----
 interface CreditPack {
