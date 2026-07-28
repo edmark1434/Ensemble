@@ -21,6 +21,7 @@ import {
 import type { ComponentType } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { motion, LayoutGroup } from "framer-motion";
 import useGlobalState from "@/lib/global_state";
 
 type NavItem = {
@@ -81,13 +82,6 @@ const UserNav: React.FC<UserNavProps> = () => {
        navigate("/");
     };
 
-    const linkClassName = ({ isActive }: { isActive: boolean }) =>
-       `flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all duration-200 ${
-          isActive
-             ? "bg-blue-500/10 text-blue-400 border-l-2 border-blue-500"
-             : "text-zinc-400 hover:text-white hover:bg-white/5"
-       } ${isCollapsed ? "justify-center px-2 border-l-0" : ""}`;
-
     const sectionHeaderClassName = () =>
        `flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 text-zinc-400 hover:text-white hover:bg-white/5 ${
           isCollapsed ? "justify-center px-2" : ""
@@ -122,188 +116,280 @@ const UserNav: React.FC<UserNavProps> = () => {
                 )}
              </button>
 
-             {/* Navigation - Dynamic overflow to allow flyouts when sidebar is collapsed */}
-             <nav className={`flex-1 px-3 py-5 scrollbar-thin ${isCollapsed ? "overflow-y-visible overflow-x-visible" : "overflow-y-auto"}`}>
-                {/* 1. Main Menu */}
-                <div>
-                   {!isCollapsed && (
-                      <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-                         Main Menu
-                      </p>
-                   )}
-                   <ul className="space-y-1">
-                      {primaryNavState.map(({ label, icon: Icon, to }) => (
-                         <li key={label}>
-                            {!isCollapsed ? (
-                               <NavLink to={to} className={linkClassName}>
-                                  <Icon className="h-4 w-4 shrink-0" />
-                                  <span className="text-sm font-medium">{label}</span>
-                               </NavLink>
-                            ) : (
-                               /* Collapsed Floating Display for Primary Items */
-                               <div className="group relative w-full flex justify-center hover:z-50">
-                                  <NavLink to={to} className={linkClassName}>
-                                     <Icon className="h-4 w-4 shrink-0" />
-                                  </NavLink>
+             {/* Navigation Layout Group */}
+             <LayoutGroup>
+                <nav className={`flex-1 px-3 py-5 scrollbar-thin ${isCollapsed ? "overflow-y-visible overflow-x-visible" : "overflow-y-auto"}`}>
 
-                                  {/* Floating Title Display */}
-                                  <div className="absolute left-full pl-2 hidden group-hover:block z-50 pointer-events-none">
-                                     <div className="rounded-lg border border-white/10 bg-[#0d0f1a] px-3 py-2 shadow-2xl animate-fade-in whitespace-nowrap">
-                                        <span className="text-xs font-medium text-zinc-200">{label}</span>
+                   {/* 1. Main Menu */}
+                   <div>
+                      {!isCollapsed && (
+                         <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                            Main Menu
+                         </p>
+                      )}
+                      <ul className="space-y-1">
+                         {primaryNavState.map(({ label, icon: Icon, to }) => (
+                            <li key={label}>
+                               {!isCollapsed ? (
+                                  <NavLink to={to}>
+                                     {({ isActive }) => (
+                                        <div
+                                           className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200 ${
+                                              isActive ? "text-blue-400 font-medium" : "text-zinc-400 hover:text-white hover:bg-white/5"
+                                           }`}
+                                        >
+                                           {isActive && (
+                                              <motion.div
+                                                 layoutId="activeNavBackground"
+                                                 className="absolute inset-0 rounded-lg bg-blue-500/10 border-l-2 border-blue-500"
+                                                 transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                                              />
+                                           )}
+                                           <Icon className="relative z-10 h-4 w-4 shrink-0" />
+                                           <span className="relative z-10 text-sm">{label}</span>
+                                        </div>
+                                     )}
+                                  </NavLink>
+                               ) : (
+                                  /* Collapsed Floating Display for Primary Items */
+                                  <div className="group relative w-full flex justify-center hover:z-50">
+                                     <NavLink to={to}>
+                                        {({ isActive }) => (
+                                           <div
+                                              className={`relative flex items-center justify-center rounded-lg p-2 text-sm transition-colors duration-200 ${
+                                                 isActive ? "text-blue-400" : "text-zinc-400 hover:text-white hover:bg-white/5"
+                                              }`}
+                                           >
+                                              {isActive && (
+                                                 <motion.div
+                                                    layoutId="activeNavBackgroundCollapsed"
+                                                    className="absolute inset-0 rounded-lg bg-blue-500/10 border-l-2 border-blue-500"
+                                                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                                                 />
+                                              )}
+                                              <Icon className="relative z-10 h-4 w-4 shrink-0" />
+                                           </div>
+                                        )}
+                                     </NavLink>
+
+                                     {/* Floating Title Display */}
+                                     <div className="absolute left-full pl-2 hidden group-hover:block z-50 pointer-events-none">
+                                        <div className="rounded-lg border border-white/10 bg-[#0d0f1a] px-3 py-2 shadow-2xl animate-fade-in whitespace-nowrap">
+                                           <span className="text-xs font-medium text-zinc-200">{label}</span>
+                                        </div>
                                      </div>
                                   </div>
-                               </div>
-                            )}
-                         </li>
-                      ))}
-                   </ul>
-                </div>
+                               )}
+                            </li>
+                         ))}
+                      </ul>
+                   </div>
 
-                {/* Section Separator Line */}
-                {isCollapsed && <div className="my-4 border-t border-white/10 mx-2" />}
+                   {/* Section Separator Line */}
+                   {isCollapsed && <div className="my-4 border-t border-white/10 mx-2" />}
 
-                {/* 2. Marketplace Section */}
-                <div className={isCollapsed ? "mt-0 space-y-3" : "mt-6"}>
-                   {!isCollapsed && (
-                      <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-                         Marketplace
-                      </p>
-                   )}
+                   {/* 2. Marketplace Section */}
+                   <div className={isCollapsed ? "mt-0 space-y-3" : "mt-6"}>
+                      {!isCollapsed && (
+                         <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                            Marketplace
+                         </p>
+                      )}
 
-                   {/* Jobs Section */}
-                   {!isCollapsed ? (
-                      <div className="mb-2">
-                         <button onClick={() => setIsJobsOpen(!isJobsOpen)} className={sectionHeaderClassName()}>
-                            <BriefcaseBusiness className="h-4 w-4 shrink-0" />
-                            <span className="flex-1 text-left text-sm font-medium">Jobs</span>
-                            <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-300 ${isJobsOpen ? "rotate-180" : ""}`} />
-                         </button>
+                      {/* Jobs Section */}
+                      {!isCollapsed ? (
+                         <div className="mb-2">
+                            <button onClick={() => setIsJobsOpen(!isJobsOpen)} className={sectionHeaderClassName()}>
+                               <BriefcaseBusiness className="h-4 w-4 shrink-0" />
+                               <span className="flex-1 text-left text-sm font-medium">Jobs</span>
+                               <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-300 ${isJobsOpen ? "rotate-180" : ""}`} />
+                            </button>
 
-                         <div className={`grid transition-all duration-300 ease-in-out ${isJobsOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
-                            <ul className="ml-6 overflow-hidden space-y-1 border-l border-white/10 pl-2">
-                               {jobsState.map(({ label, icon: Icon, to }) => (
-                                  <li key={label}>
-                                     <NavLink to={to} className={({ isActive }) => `flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-all duration-200 ${isActive ? "bg-blue-500/10 text-blue-400" : "text-zinc-400 hover:text-white hover:bg-white/5"}`}>
-                                        <Icon className="h-3.5 w-3.5 shrink-0" />
-                                        <span className="text-xs font-medium">{label}</span>
-                                     </NavLink>
-                                  </li>
-                               ))}
-                            </ul>
-                         </div>
-                      </div>
-                   ) : (
-                      /* Collapsed Menu Flyout Item for Jobs (With Children) */
-                      <div className="group relative w-full flex justify-center hover:z-50">
-                         <div className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors group-hover:bg-white/5 group-hover:text-white cursor-pointer">
-                            <BriefcaseBusiness className="h-4 w-4" />
-                         </div>
-
-                         {/* Absolute left-full positions it safely right past the parent boundaries */}
-                         <div className="absolute left-full pl-2 hidden w-52 group-hover:block z-50">
-                            <div className="rounded-xl border border-white/10 bg-[#0d0f1a] p-1.5 shadow-2xl animate-fade-in">
-                               <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 border-b border-white/5 mb-1">Jobs</p>
-                               <ul className="space-y-0.5">
+                            <div className={`grid transition-all duration-300 ease-in-out ${isJobsOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+                               <ul className="ml-6 overflow-hidden space-y-1 border-l border-white/10 pl-2">
                                   {jobsState.map(({ label, icon: Icon, to }) => (
                                      <li key={label}>
-                                        <NavLink to={to} className={({ isActive }) => `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-blue-500/10 text-blue-400" : "text-zinc-400 hover:text-white hover:bg-white/5"}`}>
-                                           <Icon className="h-3.5 w-3.5 shrink-0" />
-                                           <span>{label}</span>
+                                        <NavLink to={to}>
+                                           {({ isActive }) => (
+                                              <div
+                                                 className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors duration-200 ${
+                                                    isActive ? "text-blue-400 font-medium" : "text-zinc-400 hover:text-white hover:bg-white/5"
+                                                 }`}
+                                              >
+                                                 {isActive && (
+                                                    <motion.div
+                                                       layoutId="activeNavBackground"
+                                                       className="absolute inset-0 rounded-lg bg-blue-500/10 border-l-2 border-blue-500"
+                                                       transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                                                    />
+                                                 )}
+                                                 <Icon className="relative z-10 h-3.5 w-3.5 shrink-0" />
+                                                 <span className="relative z-10 text-xs">{label}</span>
+                                              </div>
+                                           )}
                                         </NavLink>
                                      </li>
                                   ))}
                                </ul>
                             </div>
                          </div>
-                      </div>
-                   )}
+                      ) : (
+                         /* Collapsed Menu Flyout Item for Jobs */
+                         <div className="group relative w-full flex justify-center hover:z-50">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors group-hover:bg-white/5 group-hover:text-white cursor-pointer">
+                               <BriefcaseBusiness className="h-4 w-4" />
+                            </div>
 
-                   {/* Gigs Section */}
-                   {!isCollapsed ? (
-                      <div className="mb-2">
-                         <button onClick={() => setIsGigsOpen(!isGigsOpen)} className={sectionHeaderClassName()}>
-                            <MicVocal className="h-4 w-4 shrink-0" />
-                            <span className="flex-1 text-left text-sm font-medium">Gigs</span>
-                            <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-300 ${isGigsOpen ? "rotate-180" : ""}`} />
-                         </button>
-
-                         <div className={`grid transition-all duration-300 ease-in-out ${isGigsOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
-                            <ul className="ml-6 overflow-hidden space-y-1 border-l border-white/10 pl-2">
-                               {gigsState.map(({ label, icon: Icon, to }) => (
-                                  <li key={label}>
-                                     <NavLink to={to} className={({ isActive }) => `flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-all duration-200 ${isActive ? "bg-blue-500/10 text-blue-400" : "text-zinc-400 hover:text-white hover:bg-white/5"}`}>
-                                        <Icon className="h-3.5 w-3.5 shrink-0" />
-                                        <span className="text-xs font-medium">{label}</span>
-                                     </NavLink>
-                                  </li>
-                               ))}
-                            </ul>
+                            <div className="absolute left-full pl-2 hidden w-52 group-hover:block z-50">
+                               <div className="rounded-xl border border-white/10 bg-[#0d0f1a] p-1.5 shadow-2xl animate-fade-in">
+                                  <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 border-b border-white/5 mb-1">Jobs</p>
+                                  <ul className="space-y-0.5">
+                                     {jobsState.map(({ label, icon: Icon, to }) => (
+                                        <li key={label}>
+                                           <NavLink to={to} className={({ isActive }) => `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-blue-500/10 text-blue-400 font-medium" : "text-zinc-400 hover:text-white hover:bg-white/5"}`}>
+                                              <Icon className="h-3.5 w-3.5 shrink-0" />
+                                              <span>{label}</span>
+                                           </NavLink>
+                                        </li>
+                                     ))}
+                                  </ul>
+                               </div>
+                            </div>
                          </div>
-                      </div>
-                   ) : (
-                      /* Collapsed Menu Flyout Item for Gigs (With Children) */
-                      <div className="group relative w-full flex justify-center hover:z-50">
-                         <div className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors group-hover:bg-white/5 group-hover:text-white cursor-pointer">
-                            <MicVocal className="h-4 w-4" />
-                         </div>
+                      )}
 
-                         <div className="absolute left-full pl-2 hidden w-52 group-hover:block z-50">
-                            <div className="rounded-xl border border-white/10 bg-[#0d0f1a] p-1.5 shadow-2xl animate-fade-in">
-                               <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 border-b border-white/5 mb-1">Gigs</p>
-                               <ul className="space-y-0.5">
+                      {/* Gigs Section */}
+                      {!isCollapsed ? (
+                         <div className="mb-2">
+                            <button onClick={() => setIsGigsOpen(!isGigsOpen)} className={sectionHeaderClassName()}>
+                               <MicVocal className="h-4 w-4 shrink-0" />
+                               <span className="flex-1 text-left text-sm font-medium">Gigs</span>
+                               <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-300 ${isGigsOpen ? "rotate-180" : ""}`} />
+                            </button>
+
+                            <div className={`grid transition-all duration-300 ease-in-out ${isGigsOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+                               <ul className="ml-6 overflow-hidden space-y-1 border-l border-white/10 pl-2">
                                   {gigsState.map(({ label, icon: Icon, to }) => (
                                      <li key={label}>
-                                        <NavLink to={to} className={({ isActive }) => `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-blue-500/10 text-blue-400" : "text-zinc-400 hover:text-white hover:bg-white/5"}`}>
-                                           <Icon className="h-3.5 w-3.5 shrink-0" />
-                                           <span>{label}</span>
+                                        <NavLink to={to}>
+                                           {({ isActive }) => (
+                                              <div
+                                                 className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors duration-200 ${
+                                                    isActive ? "text-blue-400 font-medium" : "text-zinc-400 hover:text-white hover:bg-white/5"
+                                                 }`}
+                                              >
+                                                 {isActive && (
+                                                    <motion.div
+                                                       layoutId="activeNavBackground"
+                                                       className="absolute inset-0 rounded-lg bg-blue-500/10 border-l-2 border-blue-500"
+                                                       transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                                                    />
+                                                 )}
+                                                 <Icon className="relative z-10 h-3.5 w-3.5 shrink-0" />
+                                                 <span className="relative z-10 text-xs">{label}</span>
+                                              </div>
+                                           )}
                                         </NavLink>
                                      </li>
                                   ))}
                                </ul>
                             </div>
                          </div>
-                      </div>
-                   )}
-                </div>
+                      ) : (
+                         /* Collapsed Menu Flyout Item for Gigs */
+                         <div className="group relative w-full flex justify-center hover:z-50">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors group-hover:bg-white/5 group-hover:text-white cursor-pointer">
+                               <MicVocal className="h-4 w-4" />
+                            </div>
 
-                {/* Section Separator Line */}
-                {isCollapsed && <div className="my-4 border-t border-white/10 mx-2" />}
+                            <div className="absolute left-full pl-2 hidden w-52 group-hover:block z-50">
+                               <div className="rounded-xl border border-white/10 bg-[#0d0f1a] p-1.5 shadow-2xl animate-fade-in">
+                                  <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 border-b border-white/5 mb-1">Gigs</p>
+                                  <ul className="space-y-0.5">
+                                     {gigsState.map(({ label, icon: Icon, to }) => (
+                                        <li key={label}>
+                                           <NavLink to={to} className={({ isActive }) => `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-blue-500/10 text-blue-400 font-medium" : "text-zinc-400 hover:text-white hover:bg-white/5"}`}>
+                                              <Icon className="h-3.5 w-3.5 shrink-0" />
+                                              <span>{label}</span>
+                                           </NavLink>
+                                        </li>
+                                     ))}
+                                  </ul>
+                               </div>
+                            </div>
+                         </div>
+                      )}
+                   </div>
 
-                {/* 3. Activity & Records Section */}
-                <div className={isCollapsed ? "mt-0 space-y-1" : "mt-6"}>
-                   {!isCollapsed && (
-                      <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-                         Activity & Records
-                      </p>
-                   )}
-                   <ul className="space-y-1">
-                      {activityState.map(({ label, icon: Icon, to }) => (
-                         <li key={label} className="w-full">
-                            {!isCollapsed ? (
-                               <NavLink to={to} className={linkClassName}>
-                                  <Icon className="h-4 w-4 shrink-0" />
-                                  <span className="text-sm font-medium">{label}</span>
-                               </NavLink>
-                            ) : (
-                               /* Collapsed Floating Display for Activity Items */
-                               <div className="group relative w-full flex justify-center hover:z-50">
-                                  <NavLink to={to} className={linkClassName}>
-                                     <Icon className="h-4 w-4 shrink-0" />
+                   {/* Section Separator Line */}
+                   {isCollapsed && <div className="my-4 border-t border-white/10 mx-2" />}
+
+                   {/* 3. Activity & Records Section */}
+                   <div className={isCollapsed ? "mt-0 space-y-1" : "mt-6"}>
+                      {!isCollapsed && (
+                         <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                            Activity & Records
+                         </p>
+                      )}
+                      <ul className="space-y-1">
+                         {activityState.map(({ label, icon: Icon, to }) => (
+                            <li key={label} className="w-full">
+                               {!isCollapsed ? (
+                                  <NavLink to={to}>
+                                     {({ isActive }) => (
+                                        <div
+                                           className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200 ${
+                                              isActive ? "text-blue-400 font-medium" : "text-zinc-400 hover:text-white hover:bg-white/5"
+                                           }`}
+                                        >
+                                           {isActive && (
+                                              <motion.div
+                                                 layoutId="activeNavBackground"
+                                                 className="absolute inset-0 rounded-lg bg-blue-500/10 border-l-2 border-blue-500"
+                                                 transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                                              />
+                                           )}
+                                           <Icon className="relative z-10 h-4 w-4 shrink-0" />
+                                           <span className="relative z-10 text-sm">{label}</span>
+                                        </div>
+                                     )}
                                   </NavLink>
+                               ) : (
+                                  /* Collapsed Floating Display for Activity Items */
+                                  <div className="group relative w-full flex justify-center hover:z-50">
+                                     <NavLink to={to}>
+                                        {({ isActive }) => (
+                                           <div
+                                              className={`relative flex items-center justify-center rounded-lg p-2 text-sm transition-colors duration-200 ${
+                                                 isActive ? "text-blue-400" : "text-zinc-400 hover:text-white hover:bg-white/5"
+                                              }`}
+                                           >
+                                              {isActive && (
+                                                 <motion.div
+                                                    layoutId="activeNavBackgroundCollapsed"
+                                                    className="absolute inset-0 rounded-lg bg-blue-500/10 border-l-2 border-blue-500"
+                                                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                                                 />
+                                              )}
+                                              <Icon className="relative z-10 h-4 w-4 shrink-0" />
+                                           </div>
+                                        )}
+                                     </NavLink>
 
-                                  {/* Floating Title Display */}
-                                  <div className="absolute left-full pl-2 hidden group-hover:block z-50 pointer-events-none">
-                                     <div className="rounded-lg border border-white/10 bg-[#0d0f1a] px-3 py-2 shadow-2xl animate-fade-in whitespace-nowrap">
-                                        <span className="text-xs font-medium text-zinc-200">{label}</span>
+                                     {/* Floating Title Display */}
+                                     <div className="absolute left-full pl-2 hidden group-hover:block z-50 pointer-events-none">
+                                        <div className="rounded-lg border border-white/10 bg-[#0d0f1a] px-3 py-2 shadow-2xl animate-fade-in whitespace-nowrap">
+                                           <span className="text-xs font-medium text-zinc-200">{label}</span>
+                                        </div>
                                      </div>
                                   </div>
-                               </div>
-                            )}
-                         </li>
-                      ))}
-                   </ul>
-                </div>
-             </nav>
+                               )}
+                            </li>
+                         ))}
+                      </ul>
+                   </div>
+                </nav>
+             </LayoutGroup>
 
              {/* Collapse Button */}
              <div className="border-t border-white/10 p-3">
