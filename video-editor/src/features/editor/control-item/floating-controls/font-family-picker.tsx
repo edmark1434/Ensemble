@@ -202,7 +202,7 @@ export default function FontFamilyPicker() {
             <PopoverTrigger asChild>
               <Button
                 className="flex w-full items-center justify-between text-sm"
-                variant="secondary"
+                variant="outline"
               >
                 <div className="w-full overflow-hidden text-left">
                   <p className="truncate">{selectedCategoryLabel}</p>

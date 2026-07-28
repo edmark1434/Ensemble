@@ -524,6 +524,12 @@ const CaptionWords = ({
     applyPreset(preset, captionItemIds, captionsData);
   };
 
+  const [showObjectOpen, setShowObjectOpen] = useState(false);
+  const [linesPerCaptionOpen, setLinesPerCaptionOpen] = useState(false);
+  const [wordsPerLineOpen, setWordsPerLineOpen] = useState(false);
+  const [positionOpen, setPositionOpen] = useState(false);
+  // const [transitionOpen, setTransitionOpen] = useState(false);
+
   return (
     <div className="flex flex-col gap-3">
       <Label className="font-sans text-sm font-semibold">Captions</Label>
@@ -534,7 +540,7 @@ const CaptionWords = ({
             <div className="flex flex-1 items-center text-xs text-muted-foreground">
               Show object
             </div>
-            <Popover>
+            <Popover open={showObjectOpen} onOpenChange={setShowObjectOpen}>
               <PopoverTrigger asChild>
                 <Button
                   className="flex w-full items-center justify-between text-sm"
@@ -560,9 +566,10 @@ const CaptionWords = ({
                 {OPTIONS_WORDS_IN_LINE.map((option, index) => (
                   <div
                     key={index}
-                    onClick={() =>
-                      onChange({ type: "showObject", value: option.value })
-                    }
+                    onClick={() => {
+                      onChange({ type: "showObject", value: option.value });
+                      setShowObjectOpen(false);
+                    }}
                     className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
                   >
                     {option.label}
@@ -571,6 +578,67 @@ const CaptionWords = ({
                     )}
                   </div>
                 ))}
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <div className="flex flex-col gap-2 flex-1">
+            <div className="flex flex-1 items-center text-xs text-muted-foreground">
+              Position
+            </div>
+            <Popover open={positionOpen} onOpenChange={setPositionOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  className="flex w-full items-center justify-between text-sm"
+                  variant="outline"
+                >
+                  <div className="w-full overflow-hidden text-left">
+                    <p className="truncate">{getPositionLabel()}</p>
+                  </div>
+                  <ChevronDown className="text-muted-foreground" size={14} />
+                </Button>
+              </PopoverTrigger>
+
+              <PopoverContent
+                className="z-[300] p-0"
+                style={{ width: "var(--radix-popover-trigger-width)" }}
+              >
+                <div
+                  onClick={() => {
+                    handlePresetPosition("up");
+                    setPositionOpen(false);
+                  }}
+                  className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
+                >
+                  Top
+                  {getPositionLabel() === "Top" && (
+                    <Check size={14} className="text-muted-foreground" />
+                  )}
+                </div>
+                <div
+                  onClick={() => {
+                    handlePresetPosition("middle");
+                    setPositionOpen(false);
+                  }}
+                  className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
+                >
+                  Middle
+                  {getPositionLabel() === "Middle" && (
+                    <Check size={14} className="text-muted-foreground" />
+                  )}
+                </div>
+                <div
+                  onClick={() => {
+                    handlePresetPosition("down");
+                    setPositionOpen(false);
+                  }}
+                  className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
+                >
+                  Bottom
+                  {getPositionLabel() === "Bottom" && (
+                    <Check size={14} className="text-muted-foreground" />
+                  )}
+                </div>
               </PopoverContent>
             </Popover>
           </div>
@@ -605,7 +673,7 @@ const CaptionWords = ({
             <div className="flex flex-1 items-center text-xs text-muted-foreground">
               Lines per caption
             </div>
-            <Popover>
+            <Popover open={linesPerCaptionOpen} onOpenChange={setLinesPerCaptionOpen}>
               <PopoverTrigger asChild>
                 <Button
                   className="flex w-full items-center justify-between text-sm"
@@ -631,9 +699,10 @@ const CaptionWords = ({
                 {OPTIONS_LINES_PER_PAGE.map((option, index) => (
                   <div
                     key={index}
-                    onClick={() =>
-                      onChange({ type: "linesPerCaption", value: option.value })
-                    }
+                    onClick={() => {
+                      onChange({ type: "linesPerCaption", value: option.value });
+                      setLinesPerCaptionOpen(false);
+                    }}
                     className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
                   >
                     {option.label}
@@ -650,7 +719,7 @@ const CaptionWords = ({
             <div className="flex flex-1 items-center text-xs text-muted-foreground">
               Words per line
             </div>
-            <Popover>
+            <Popover open={wordsPerLineOpen} onOpenChange={setWordsPerLineOpen}>
               <PopoverTrigger asChild>
                 <Button
                   className="flex w-full items-center justify-between text-sm"
@@ -676,9 +745,10 @@ const CaptionWords = ({
                 {OPTIONS_WORDS_PER_LINE.map((option, index) => (
                   <div
                     key={index}
-                    onClick={() =>
-                      onChange({ type: "wordsPerLine", value: option.value })
-                    }
+                    onClick={() => {
+                      onChange({ type: "wordsPerLine", value: option.value });
+                      setWordsPerLineOpen(false);
+                    }}
                     className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
                   >
                     {option.label}
@@ -693,101 +763,49 @@ const CaptionWords = ({
         </div>
 
         <div className="flex gap-2">
-          <div className="flex flex-col gap-2 flex-1">
-            <div className="flex flex-1 items-center text-xs text-muted-foreground">
-              Position
-            </div>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  className="flex w-full items-center justify-between text-sm"
-                  variant="outline"
-                >
-                  <div className="w-full overflow-hidden text-left">
-                    <p className="truncate">{getPositionLabel()}</p>
-                  </div>
-                  <ChevronDown className="text-muted-foreground" size={14} />
-                </Button>
-              </PopoverTrigger>
+          {/*<div className="flex flex-col gap-2 flex-1">*/}
+          {/*  <div className="flex flex-1 items-center text-xs text-muted-foreground">*/}
+          {/*    Transition*/}
+          {/*  </div>*/}
+          {/*  <Popover>*/}
+          {/*    <PopoverTrigger asChild>*/}
+          {/*      <Button*/}
+          {/*        className="flex w-full items-center justify-between text-sm"*/}
+          {/*        variant="outline"*/}
+          {/*      >*/}
+          {/*        <div className="w-full overflow-hidden text-left">*/}
+          {/*          <p className="truncate">*/}
+          {/*            {selectedOptions.length === 0*/}
+          {/*              ? "None"*/}
+          {/*              : animationOptions.find(*/}
+          {/*              (opt) => opt.key === selectedOptions[0]*/}
+          {/*            )?.label || "None"}*/}
+          {/*          </p>*/}
+          {/*        </div>*/}
+          {/*        <ChevronDown className="text-muted-foreground" size={14} />*/}
+          {/*      </Button>*/}
+          {/*    </PopoverTrigger>*/}
 
-              <PopoverContent
-                className="z-[300] p-0"
-                style={{ width: "var(--radix-popover-trigger-width)" }}
-              >
-                <div
-                  onClick={() => handlePresetPosition("up")}
-                  className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
-                >
-                  Top
-                  {getPositionLabel() === "Top" && (
-                    <Check size={14} className="text-muted-foreground" />
-                  )}
-                </div>
-                <div
-                  onClick={() => handlePresetPosition("middle")}
-                  className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
-                >
-                  Middle
-                  {getPositionLabel() === "Middle" && (
-                    <Check size={14} className="text-muted-foreground" />
-                  )}
-                </div>
-                <div
-                  onClick={() => handlePresetPosition("down")}
-                  className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
-                >
-                  Bottom
-                  {getPositionLabel() === "Bottom" && (
-                    <Check size={14} className="text-muted-foreground" />
-                  )}
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-
-          <div className="flex flex-col gap-2 flex-1">
-            <div className="flex flex-1 items-center text-xs text-muted-foreground">
-              Transition
-            </div>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  className="flex w-full items-center justify-between text-sm"
-                  variant="outline"
-                >
-                  <div className="w-full overflow-hidden text-left">
-                    <p className="truncate">
-                      {selectedOptions.length === 0
-                        ? "None"
-                        : animationOptions.find(
-                        (opt) => opt.key === selectedOptions[0]
-                      )?.label || "None"}
-                    </p>
-                  </div>
-                  <ChevronDown className="text-muted-foreground" size={14} />
-                </Button>
-              </PopoverTrigger>
-
-              <PopoverContent
-                className="z-[300] p-0"
-                style={{ width: "var(--radix-popover-trigger-width)" }}
-              >
-                {animationOptions.map((opt) => (
-                  <div
-                    key={opt.key}
-                    onClick={() => toggleOption(opt.key)}
-                    className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
-                  >
-                    {opt.label}
-                    {(selectedOptions.includes(opt.key) ||
-                      selectedOptions.length === 0 && opt.label === "None") && (
-                      <Check size={14} className="text-muted-foreground" />
-                    )}
-                  </div>
-                ))}
-              </PopoverContent>
-            </Popover>
-          </div>
+          {/*    <PopoverContent*/}
+          {/*      className="z-[300] p-0"*/}
+          {/*      style={{ width: "var(--radix-popover-trigger-width)" }}*/}
+          {/*    >*/}
+          {/*      {animationOptions.map((opt) => (*/}
+          {/*        <div*/}
+          {/*          key={opt.key}*/}
+          {/*          onClick={() => toggleOption(opt.key)}*/}
+          {/*          className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"*/}
+          {/*        >*/}
+          {/*          {opt.label}*/}
+          {/*          {(selectedOptions.includes(opt.key) ||*/}
+          {/*            selectedOptions.length === 0 && opt.label === "None") && (*/}
+          {/*            <Check size={14} className="text-muted-foreground" />*/}
+          {/*          )}*/}
+          {/*        </div>*/}
+          {/*      ))}*/}
+          {/*    </PopoverContent>*/}
+          {/*  </Popover>*/}
+          {/*</div>*/}
         </div>
       </div>
     </div>
