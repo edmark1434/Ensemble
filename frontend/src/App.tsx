@@ -43,6 +43,10 @@ import JobMyPostPage from "@/pages/user/6_job_market/job_pages/job_mypost_page.t
 import JobCreatePostPage from "@/pages/user/6_job_market/job_pages/job_createpost_page.tsx";
 import JobEditPostPage from "@/pages/user/6_job_market/job_pages/job_editpost_page.tsx";
 
+// Job Proposals Imports
+import ProposalsIncomingPage from "@/pages/user/6_job_market/job_proposals/proposals_incoming.tsx";
+import ProposalsSentPage from "@/pages/user/6_job_market/job_proposals/proposals_sent.tsx";
+
 import GigMarketplace from "@/pages/user/7_gigs/Gig_Posting/main.tsx";
 import {CreateGigWizard} from "@/pages/user/7_gigs/Gig_Posting/CreateGigWizard.tsx";
 
@@ -194,6 +198,10 @@ function App() {
             <Route path='saved-posts/:id' element={<JobSavesPage />} />
             <Route path='my-job-post' element={<JobMyPostPage />} />
             <Route path='my-job-post/:id' element={<JobMyPostPage />} />
+
+            {/* Job Proposal Routes */}
+            <Route path='proposals' element={<ProposalsIncomingPage />} />
+            <Route path='proposals/sent' element={<ProposalsSentPage />} />
           </Route>
 
           {/* Modularized Job Creation & Edit Pages */}
@@ -206,12 +214,9 @@ function App() {
             <Route path=':id' element={<GigMarketplace />} />
           </Route>
           <Route path='/verification' element={<Verification />} />
-          <Route path='/proposals' element={<SectionPlaceholder title='INCOMING PROPOSALS' />} />
-          <Route path='/my-proposals' element={<SectionPlaceholder title='MY PROPOSALS' />} />
           <Route path='/requests' element={<SectionPlaceholder title='INCOMING REQUESTS' />} />
           <Route path='/my-requests' element={<SectionPlaceholder title='MY REQUESTS' />} />
           <Route path='/contracts' element={<SectionPlaceholder title='MY CONTRACTS' />} />
-          <Route path='/inbox' element={<Inbox />} />
           <Route path='/transactions' element={<TransactionHistoryMain />} />
         </Route>
       </Route>

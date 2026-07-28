@@ -40,8 +40,8 @@ let primaryNavInitial: NavItem[] = [
 
 let jobsItemsInitial: NavItem[] = [
     { label: "Job Posting", icon: Briefcase, to: "/jobs" },
-    { label: "Incoming Proposals", icon: ClipboardList, to: "/proposals" },
-    { label: "My Proposals", icon: Send, to: "/my-proposals" },
+    { label: "Incoming Proposals", icon: ClipboardList, to: "/jobs/proposals" },
+    { label: "My Proposals", icon: Send, to: "/jobs/proposals/sent" },
 ];
 
 let gigsItemsInitial: NavItem[] = [
@@ -209,7 +209,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                <ul className="ml-6 overflow-hidden space-y-1 border-l border-white/10 pl-2">
                                   {jobsState.map(({ label, icon: Icon, to }) => (
                                      <li key={label}>
-                                        <NavLink to={to}>
+                                        <NavLink to={to} end={to === "/jobs"}>
                                            {({ isActive }) => (
                                               <div
                                                  className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors duration-200 ${
@@ -246,7 +246,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                   <ul className="space-y-0.5">
                                      {jobsState.map(({ label, icon: Icon, to }) => (
                                         <li key={label}>
-                                           <NavLink to={to} className={({ isActive }) => `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-blue-500/10 text-blue-400 font-medium" : "text-zinc-400 hover:text-white hover:bg-white/5"}`}>
+                                           <NavLink to={to} end={to === "/jobs"} className={({ isActive }) => `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-blue-500/10 text-blue-400 font-medium" : "text-zinc-400 hover:text-white hover:bg-white/5"}`}>
                                               <Icon className="h-3.5 w-3.5 shrink-0" />
                                               <span>{label}</span>
                                            </NavLink>
