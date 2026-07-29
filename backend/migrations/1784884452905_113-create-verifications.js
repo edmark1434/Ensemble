@@ -1,5 +1,11 @@
-// migrations/108-create-verifications.js
+/**
+ * @type {import('node-pg-migrate').ColumnDefinitions | undefined}
+ */
+exports.shorthands = undefined;
 
+/**
+ * @param pgm {import('node-pg-migrate').MigrationBuilder}
+ */
 exports.up = (pgm) => {
   // ============================================
   // CREATE VERIFICATIONS TABLE
