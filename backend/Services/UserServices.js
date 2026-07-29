@@ -460,6 +460,8 @@ async function checkVerificationCode(email, code) {
 }
 
 
+
+
 async function sendVerificationEmailServices(email, firstName, lastName) {
     try {
         if(!await redisClient.get(`verificationCode:${email}`)){
@@ -628,6 +630,25 @@ style="padding:20px;background:#fafafa;border-top:1px solid #eeeeee;font-size:12
 `;
 }
 
+
+async function isUsernameUnique(username) {
+    if (!username) {
+        throw new ServiceError('Username is required', 400);
+    }
+    if (username.length < 8 || username.length > 20) {
+        throw new ServiceError('Username must be between 8 and 20 characters', 400);
+    }
+    try {
+        const result = await getAccountByHandle(username);
+        if (result) {
+            return false; // Username is not unique
+        }
+        return true; // Username is unique
+    }catch (err) {
+        console.error(`Error checking username uniqueness for ${username}:`, err);
+        throw new ServiceError('Error checking username uniqueness', 500);
+    }
+}
 module.exports = {
     ServiceError,
     fetchAllUsers,
@@ -644,5 +665,7 @@ module.exports = {
     signUpSaveSession,
     checkVerificationCode,
     sendVerificationEmailServices,
-    updatePersonalDetails
+    updatePersonalDetails,
+    isUsernameUnique,
+    sendVerificationEmail
 };

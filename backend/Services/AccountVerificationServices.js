@@ -24,6 +24,14 @@ const {
 const {
     getEmailAddressByAccountId
 } = require("../Repositories/ProfileRepositories");
+
+
+const {
+    sendVerificationEmail
+} = require('../Services/UserServices')
+
+const redisClient = require('../lib/redis');
+
 async function createAccountVerificationSession(userId) {
     try {
         // ============================================================
@@ -227,8 +235,21 @@ async function getAccountVerificationStatusServices(accountId) {
     }
 }
 
+
+async function sendVerificationServices(email, first_name, last_name) {
+    try {
+        const sixDigits = await sendVerificationEmail(email, first_name, last_name);
+        redisClient.set(`verification_code:${email}`, sixDigits, 'EX', 600); // Store for 10 minutes
+        return sixDigits;
+    }catch(err){
+        console.error("Error sending verification email:", err);
+        throw err;
+    }
+}
+
 module.exports = {
     createAccountVerificationSession,
     appyForResubmissionServices,
     getAccountVerificationStatusServices,
+    sendVerificationServices
 };

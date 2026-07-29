@@ -4,6 +4,7 @@ const { createNewAccount, fetchAllAccounts, getAccountByHandleService,
     getDisplayNameByAccountIdService,
     updateAndInsertAccountProfileServices,
     updateAccountProfileServices,
+    settingAccountInfoUpdate,
 } = require("../services/AccountServices");
 const { getUserOnboardingStep,
      updateUserDetails
@@ -193,6 +194,21 @@ async function updateUserOnboardingStep(userId) {
     ]);
 }
 
+async function settingAccountInfoUpdateController(req, res) { 
+    const { account_id } = req.session;
+    const payload = req.body;
+    try {
+        await settingAccountInfoUpdate(account_id, payload);
+        return res.status(200).json({ success: true, message: 'Account info updated successfully' });
+    } catch (err) {
+        console.error(`Error updating account info for accountId ${account_id}:`, err);
+        return res.status(500).json({
+            success: false,
+            message: err.message,
+        });
+    }
+}
+
 module.exports = {
     createAccount,
     getAccountByHandle,
@@ -201,6 +217,7 @@ module.exports = {
     getAccountLinkByAccountIdController,
     checkUserAccountIdController,
     getDisplayNameByAccountIdController,
+    settingAccountInfoUpdateController,
     updateAndInsertAccountProfileController,
     updateAccountProfileIdController,
 };

@@ -18,7 +18,8 @@ const {
     checkVerificationCodeController,
     sendVerificationEmailController,
     updatePersonalDetailsController,
-    getUserSession
+    getUserSession,
+    checkUsernameUniqueness
 } = require('../controllers/UserControllers');
 const {
     createPublicTicket,
@@ -48,13 +49,13 @@ router.post('/tickets', [optionalSession], createPublicTicket);
 router.get('/tickets', [checkSession, requireAuth], listMyTickets);
 router.get('/tickets/:id', [checkSession, requireAuth], getMyTicket);
 router.post('/tickets/:id/messages', [checkSession, requireAuth], postMyTicketMessage);
+router.get('/check-username', [checkSession, requireAuth], checkUsernameUniqueness);
 
 router.get('/:email', [checkSession, requireAuth], getUserByEmail);
 
 router.post('/list-of-details',[checkSession, requireAuth], getUsersByListOfIdsController);
 
 router.get('/name/:userId', [checkSession, requireAuth], getNameByUserIdController);
-
 router.post('/signup-save-session', signUpSaveSessionController);
 router.post('/verify-email', checkVerificationCodeController);
 router.post('/resend-verification-email', sendVerificationEmailController);

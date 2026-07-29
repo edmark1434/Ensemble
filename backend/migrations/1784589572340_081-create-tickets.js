@@ -17,8 +17,10 @@ exports.up = (pgm) => {
       default: pgm.func('gen_random_uuid()') 
     },
     type: { type: 'varchar(50)', notNull: true },
-    reason: { type: 'varchar(50)', notNull: true },
+    description: { type: 'text', notNull: true },
+    subject: { type: 'text', notNull: true },
     status: { type: 'varchar(50)', notNull: true },
+    ticket_chat_id: { type: 'uuid', notNull: true },
     created_at: {
       type: 'timestamp without time zone',
       notNull: true,

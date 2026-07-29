@@ -1,7 +1,8 @@
 const {
     createAccountVerificationSession,
     appyForResubmissionServices,
-    getAccountVerificationStatusServices
+    getAccountVerificationStatusServices,
+    sendVerificationServices
 } = require('../Services/AccountVerificationServices');
 const {
     updateAccountVerificationSessionStatus,
@@ -14,6 +15,8 @@ const {
 } = require('../Repositories/UserRepositories');
 
 const {getIo} = require('../lib/websocket');
+
+const redisClient = require('../lib/redis');
 
 async function createAccountVerificationController(req,res){
     try{
@@ -166,8 +169,59 @@ async function getAccountVerificationStatusController(req, res) {
     }
 }
 
+async function sendVerificationController(req, res) { 
+    const { email, first_name, last_name } = req.body;
+    try {
+        const sixDigits = await sendVerificationServices(email, first_name, last_name);
+        return res.status(200).json({
+            success: true,
+            message: 'Verification email sent successfully',
+        });
+    } catch (err) {
+        console.error("Error sending verification email:", err);
+        return res.status(500).json({
+            success: false,
+            message: 'An error occurred while sending the verification email. Please try again.'
+        });
+    }
+}
+
+async function verifyCode(req, res) { 
+    const { email, code } = req.body;
+    try {
+        const storedCode = await redisClient.get(`verification_code:${email}`);
+        if (!storedCode) {
+            return res.status(400).json({
+                success: false,
+                message: 'Verification code has expired or does not exist',
+            });
+        }
+        if (storedCode !== code) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid verification code',
+            });
+        }
+        res.status(200).json({
+            success: true,
+            message: 'Verification code is valid',
+        });
+    } catch (err) {
+        console.error('Error verifying code:', err);
+        if (err instanceof ServiceError) {
+            return res.status(err.statusCode).json({
+                success: false,
+                message: err.message,
+                details: err.details || null,
+            });
+        }
+    }
+}
+
 module.exports = {
     createAccountVerificationController,
     handleVerificationWebhookStatusUpdated,
-    getAccountVerificationStatusController
+    getAccountVerificationStatusController,
+    sendVerificationController,
+    verifyCode
 };

@@ -10,17 +10,21 @@ export const shorthands = undefined;
  */
 exports.up = (pgm) => {
   pgm.createTable('ticket_chats', {
-    ticket_id: { type: 'uuid', primaryKey: true, notNull: true },
-    chat_id: { type: 'uuid', notNull: true },
-    created_at: {
+    ticket_chat_id: { 
+      type: 'uuid', 
+      primaryKey: true, 
+      notNull: true, 
+      default: pgm.func('gen_random_uuid()') 
+    },    created_at: {
       type: 'timestamp without time zone',
       notNull: true,
       default: pgm.func('CURRENT_TIMESTAMP')
+    },last_message_at: {
+      type: 'timestamp without time zone'
     },
     deleted_at: { type: 'timestamp without time zone' },
   });
 
-  pgm.addConstraint('ticket_chats', 'ticket_chats_ticket_id_fkey', 'FOREIGN KEY (ticket_id) REFERENCES tickets(ticket_id)');
 };
 
 
