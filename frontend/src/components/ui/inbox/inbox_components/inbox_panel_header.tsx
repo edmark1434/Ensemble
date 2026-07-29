@@ -1,3 +1,4 @@
+// src/components/ui/inbox/inbox_components/inbox_panel_header.tsx
 import React from "react";
 import { Share2, Video, MoreVertical } from "lucide-react";
 import type { Inbox } from "../inbox_dataset";
@@ -6,12 +7,14 @@ interface InboxPanelHeaderProps {
   selectedConversation: Inbox;
   getConversationName: (inbox: Inbox) => string;
   getAvatar: (inbox: Inbox) => string;
+  onToggleDetails?: () => void;
 }
 
 export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
   selectedConversation,
   getConversationName,
   getAvatar,
+  onToggleDetails,
 }) => {
   const name = getConversationName(selectedConversation);
   const avatar = getAvatar(selectedConversation);
@@ -42,9 +45,10 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
             className="text-xs text-zinc-500"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
-            {selectedConversation.conversation_type === "direct"
+            {selectedConversation.conversation_type === "direct" ||
+            !selectedConversation.is_group
               ? "Active now"
-              : `${selectedConversation.members.length} members`}
+              : `${selectedConversation.members?.length || 0} members`}
           </p>
         </div>
       </div>
@@ -56,7 +60,11 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
         <button className="rounded-lg p-2 text-zinc-400 hover:bg-white/10 hover:text-white transition">
           <Video className="h-5 w-5" />
         </button>
-        <button className="rounded-lg p-2 text-zinc-400 hover:bg-white/10 hover:text-white transition">
+        <button
+          onClick={onToggleDetails}
+          title="Chat Details"
+          className="rounded-lg p-2 text-zinc-400 hover:bg-white/10 hover:text-white transition"
+        >
           <MoreVertical className="h-5 w-5" />
         </button>
       </div>
