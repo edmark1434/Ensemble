@@ -3,9 +3,9 @@ import React, { useEffect } from "react";
 import { Send, Reply, Pencil, X } from "lucide-react";
 import type { Message } from "../inbox_dataset";
 import {
-  InboxUploadImageButton,
-  InboxUploadImagePreview,
-  type UploadedImage,
+  InboxUploadMediaButton,
+  InboxUploadMediaPreview,
+  type UploadedMedia,
 } from "../inbox_functions/inbox_upload_image";
 
 interface InboxPanelChatboxProps {
@@ -15,12 +15,12 @@ interface InboxPanelChatboxProps {
   replyToMessage: Message | null;
   editingMessage: Message | null;
   cancelReply: () => void;
-  image: UploadedImage | null;
+  mediaList: UploadedMedia[];
   fileInputRef: React.RefObject<HTMLInputElement>;
   openFilePicker: () => void;
   handleFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  clearImage: () => void;
-  textareaRef: React.RefObject<HTMLTextAreaElement>; // Added textareaRef
+  removeMedia: (id: string) => void;
+  textareaRef: React.RefObject<HTMLTextAreaElement>;
 }
 
 export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
@@ -30,21 +30,21 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
   replyToMessage,
   editingMessage,
   cancelReply,
-  image,
+  mediaList = [],
   fileInputRef,
   openFilePicker,
   handleFileChange,
-  clearImage,
+  removeMedia,
   textareaRef,
 }) => {
-  const canSend = messageInput.trim().length > 0 || !!image;
+  const canSend = messageInput.trim().length > 0 || mediaList.length > 0;
 
   // Auto-grow textarea up to ~12 lines before scrolling
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 288)}px`; // ~288px max (~12 lines)
+    el.style.height = `${Math.min(el.scrollHeight, 288)}px`;
   }, [messageInput, textareaRef]);
 
   return (
@@ -78,7 +78,8 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
         </div>
       )}
 
-      {image && <InboxUploadImagePreview image={image} onRemove={clearImage} />}
+      {/* Renders horizontal preview row for up to 3 attachments */}
+      <InboxUploadMediaPreview mediaList={mediaList} onRemove={removeMedia} />
 
       <div className="p-4 flex items-end gap-2">
         <div className="flex-1 relative">
@@ -105,10 +106,11 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
           />
         </div>
 
-        <InboxUploadImageButton
+        <InboxUploadMediaButton
           fileInputRef={fileInputRef}
           onFileChange={handleFileChange}
           onClick={openFilePicker}
+          disabled={mediaList.length >= 3}
         />
 
         <button

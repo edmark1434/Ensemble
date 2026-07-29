@@ -21,15 +21,15 @@ export const InboxPanelPage = ({
   replyToMessage,
   editingMessage,
   cancelReply,
-  image,
+  mediaList, // Updated from 'image'
   fileInputRef,
   openFilePicker,
   handleFileChange,
-  clearImage,
+  removeMedia, // Updated from 'clearImage'
   pinnedMessages,
   onUnpin,
   onJumpToPinned,
-  textareaRef, // Added
+  textareaRef,
 }: any) => {
   if (!selectedConversation) {
     return (
@@ -71,11 +71,11 @@ export const InboxPanelPage = ({
           replyToMessage={replyToMessage}
           editingMessage={editingMessage}
           cancelReply={cancelReply}
-          image={image}
+          mediaList={mediaList}
           fileInputRef={fileInputRef}
           openFilePicker={openFilePicker}
           handleFileChange={handleFileChange}
-          clearImage={clearImage}
+          removeMedia={removeMedia}
           textareaRef={textareaRef}
         />
       </div>

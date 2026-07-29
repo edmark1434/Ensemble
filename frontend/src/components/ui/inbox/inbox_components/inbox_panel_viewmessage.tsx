@@ -34,7 +34,6 @@ export const InboxPanelViewMessage: React.FC<InboxPanelViewMessageProps> = ({
           No messages yet. Say hello!
         </div>
       ) : (
-        /* mt-auto pushes content to bottom when few messages, but allows full top scrolling when overflowing */
         <div className="flex flex-col mt-auto w-full">
           {messages.map((message, index) => renderMessage(message, index))}
           <div ref={endRef} />

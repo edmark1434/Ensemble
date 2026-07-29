@@ -10,6 +10,7 @@ import {
   Pin,
   PinOff,
   Flag,
+  X,
 } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import useGlobalState from "@/lib/global_state";
@@ -24,7 +25,7 @@ import { InboxMarketplace } from "./inbox_pages/inbox_marketplace";
 import { InboxPanelPage } from "./inbox_pages/inbox_panel_page";
 
 import { InboxEmojiPicker, InboxReactionBadges } from "./inbox_functions/inbox_emoji_picker";
-import { useInboxUploadImage } from "./inbox_functions/inbox_upload_image";
+import { useInboxUploadMedia } from "./inbox_functions/inbox_upload_image";
 import { useInboxPinMessage } from "./inbox_functions/inbox_pin_message";
 import {
   useInboxUnsendMessage,
@@ -59,6 +60,9 @@ const InboxMain = () => {
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
 
+  // Expanded Image Modal State
+  const [expandedMedia, setExpandedMedia] = useState<{ url: string; type: string } | null>(null);
+
   // Active Menu / Picker / Modal States
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [activeEmojiPickerId, setActiveEmojiPickerId] = useState<string | null>(null);
@@ -69,8 +73,15 @@ const InboxMain = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Custom Hooks
-  const { image, fileInputRef, openFilePicker, handleFileChange, clearImage } =
-    useInboxUploadImage();
+  const {
+    mediaList,
+    fileInputRef,
+    openFilePicker,
+    handleFileChange,
+    removeMedia,
+    clearMedia,
+  } = useInboxUploadMedia(3);
+
   const { pinnedMessages, isPinned, togglePin, unpin } = useInboxPinMessage();
   const { unsendMessage } = useInboxUnsendMessage(setMessages);
   const { updateEditedMessage } = useInboxEditMessage(setMessages);
@@ -110,7 +121,6 @@ const InboxMain = () => {
     setMessages(mockMessages);
     setMessageLoading(false);
 
-    // Auto-scroll to bottom once when changing conversation
     setTimeout(() => {
       endRef.current?.scrollIntoView({ behavior: "auto" });
     }, 50);
@@ -123,7 +133,7 @@ const InboxMain = () => {
   }, [inboxList, searchQuery, getConversationName]);
 
   const handleSendMessage = () => {
-    if (!messageInput.trim() && !image) return;
+    if (!messageInput.trim() && mediaList.length === 0) return;
 
     if (editingMessage) {
       updateEditedMessage(editingMessage._id, messageInput);
@@ -132,21 +142,17 @@ const InboxMain = () => {
       return;
     }
 
-    const attachments: Attachment[] = image
-      ? [
-          {
-            attachment_id: `att-${Date.now()}`,
-            attachment_type: "image",
-            attachment_url: image.previewUrl,
-          },
-        ]
-      : [];
+    const attachments: Attachment[] = mediaList.map((m) => ({
+      attachment_id: `att-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      attachment_type: m.type,
+      attachment_url: m.previewUrl,
+    }));
 
     const newMessage: Message = {
       _id: `msg-${Date.now()}`,
       conversation_id: selectedConversation?._id || "",
       sender_id: currentUserId,
-      message_type: image ? "image" : "text",
+      message_type: mediaList.length > 0 ? mediaList[0].type : "text",
       message_content: messageInput,
       message_id_reply: replyToMessage?._id || "",
       attachments,
@@ -162,15 +168,13 @@ const InboxMain = () => {
     setMessages((prev) => [...prev, newMessage]);
     setMessageInput("");
     setReplyToMessage(null);
-    clearImage();
+    clearMedia();
 
-    // Scroll to bottom ONLY when sending a new message
     setTimeout(() => {
       endRef.current?.scrollIntoView({ behavior: "smooth" });
     }, 50);
   };
 
-  // Action Handlers
   const handleToggleReaction = (messageId: string, emoji: string) => {
     setMessages((prev) =>
       prev.map((msg) => {
@@ -228,11 +232,9 @@ const InboxMain = () => {
     const isPickerOpen = activeEmojiPickerId === message._id;
     const pinned = isPinned(message._id);
     const isUnsent = message.is_unsent;
-    const imageAttachments = (message.attachments || []).filter(
-      (a) => a.attachment_type === "image"
-    );
+    const attachments = message.attachments || [];
+    const hasText = Boolean(message.message_content && message.message_content.trim());
 
-    // Calculate time gap relative to previous message (display only if >= 1 min)
     const previousMessage = index > 0 ? messages[index - 1] : undefined;
     const showTime = shouldDisplayTimestamp(
       message.created_at,
@@ -263,9 +265,11 @@ const InboxMain = () => {
                 </div>
               )}
 
-              {/* 1. Message Bubble Container (Relative for Reaction Docking) */}
+              {/* Message Content Bubble */}
               <div
-                className={`relative rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
+                className={`relative rounded-2xl shadow-sm ${
+                  hasText ? "px-4 py-2.5" : "p-1.5"
+                } ${
                   isSender
                     ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-none"
                     : "bg-white/10 text-white rounded-bl-none border border-white/5"
@@ -281,26 +285,49 @@ const InboxMain = () => {
                   />
                 )}
 
-                {imageAttachments.length > 0 && (
-                  <div className="mb-1 space-y-1">
-                    {imageAttachments.map((a) => (
-                      <img
+                {/* Media Attachments Grid */}
+                {attachments.length > 0 && (
+                  <div
+                    className={`gap-1.5 grid ${
+                      hasText ? "mb-2" : ""
+                    } ${
+                      attachments.length === 1
+                        ? "grid-cols-1 w-64 md:w-72"
+                        : attachments.length === 2
+                        ? "grid-cols-2 w-72 md:w-80"
+                        : "grid-cols-3 w-80 md:w-96"
+                    }`}
+                  >
+                    {attachments.map((a) => (
+                      <div
                         key={a.attachment_id}
-                        src={a.attachment_url}
-                        alt="attachment"
-                        className="max-w-full max-h-64 rounded-xl object-cover"
-                      />
+                        onClick={() => setExpandedMedia({ url: a.attachment_url, type: a.attachment_type })}
+                        className="relative aspect-square w-full rounded-xl overflow-hidden bg-black/40 border border-white/10 flex items-center justify-center cursor-pointer hover:opacity-90 transition"
+                      >
+                        {a.attachment_type === "video" ? (
+                          <video
+                            src={a.attachment_url}
+                            controls
+                            className="w-full h-full object-cover rounded-xl"
+                          />
+                        ) : (
+                          <img
+                            src={a.attachment_url}
+                            alt="Uploaded attachment"
+                            className="w-full h-full object-cover rounded-xl block"
+                          />
+                        )}
+                      </div>
                     ))}
                   </div>
                 )}
 
-                {message.message_content && (
-                  <span className="whitespace-pre-wrap break-words block">
+                {hasText && (
+                  <span className="whitespace-pre-wrap break-words block text-sm">
                     {message.message_content}
                   </span>
                 )}
 
-                {/* Reaction Badge pinned directly to the bubble corner */}
                 <InboxReactionBadges
                   reactions={message.message_react}
                   currentUserId={currentUserId}
@@ -309,7 +336,7 @@ const InboxMain = () => {
                 />
               </div>
 
-              {/* 2. Time & Edited Row (Sits under bubble) */}
+              {/* Time & Edited Row */}
               {(showTime || message.is_edited) && (
                 <div
                   className={`flex items-center gap-1.5 mt-2 px-1 ${
@@ -333,7 +360,6 @@ const InboxMain = () => {
                 isSender ? "flex-row-reverse" : "flex-row"
               }`}
             >
-              {/* Emoji Picker Action */}
               <div className="relative">
                 <button
                   onClick={() => {
@@ -354,7 +380,6 @@ const InboxMain = () => {
                 )}
               </div>
 
-              {/* Reply Action */}
               <button
                 onClick={() => handleReply(message)}
                 title="Reply"
@@ -363,7 +388,6 @@ const InboxMain = () => {
                 <Reply className="h-4 w-4" />
               </button>
 
-              {/* 3-Dot Dropdown Menu Action */}
               <div className="relative">
                 <button
                   onClick={() => {
@@ -513,11 +537,11 @@ const InboxMain = () => {
               setReplyToMessage(null);
               setEditingMessage(null);
             }}
-            image={image}
+            mediaList={mediaList}
             fileInputRef={fileInputRef}
             openFilePicker={openFilePicker}
             handleFileChange={handleFileChange}
-            clearImage={clearImage}
+            removeMedia={removeMedia}
             pinnedMessages={pinnedMessages}
             onUnpin={unpin}
             onJumpToPinned={handleJumpToMessage}
@@ -526,7 +550,29 @@ const InboxMain = () => {
         </div>
       </div>
 
-      {/* Render Report Modal */}
+      {/* Expanded Image / Video Lightbox Modal */}
+      {expandedMedia && (
+        <div
+          onClick={() => setExpandedMedia(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+        >
+          <div className="relative max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl bg-[#12141f] border border-white/10 shadow-2xl flex items-center justify-center">
+            <button
+              onClick={() => setExpandedMedia(null)}
+              className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/50 text-white hover:bg-red-500/80 transition"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            {expandedMedia.type === "video" ? (
+              <video src={expandedMedia.url} controls autoPlay className="max-w-full max-h-[85vh] object-contain rounded-xl" />
+            ) : (
+              <img src={expandedMedia.url} alt="Expanded Preview" className="max-w-full max-h-[85vh] object-contain rounded-xl" />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Report Modal */}
       {reportModalMessage && (
         <InboxReportModal
           messageToReport={reportModalMessage}
