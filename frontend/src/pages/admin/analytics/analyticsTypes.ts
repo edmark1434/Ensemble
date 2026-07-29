@@ -15,6 +15,11 @@ export type PlatformKpis = {
   avgMemberMerit: number;
   moderationTeamSize: number;
   pendingVerifications: number;
+  openTickets?: number;
+  openReports?: number;
+  openDisputes?: number;
+  teams?: number;
+  marketplaceListings?: number;
 };
 
 export type PlatformAlert = {
@@ -31,7 +36,7 @@ export type SignupWeek = {
 };
 
 export type MemberDirectoryEntry = {
-  id: number;
+  id: string | number;
   name: string;
   username: string;
   status: string;
@@ -60,10 +65,19 @@ export type PlatformAnalytics = {
       estimatedWau: number;
       estimatedMau: number;
     }[];
+    activityTrend?: {
+      label: string;
+      weekStart: string;
+      signups: number;
+      tickets: number;
+      reports: number;
+      creditTransactions: number;
+      listings: number;
+    }[];
     weekOverWeekChange: number;
     trendLabel: string;
     newestMembers: {
-      id: number;
+      id: string | number;
       name: string;
       username: string;
       joinedAt: string | null;
@@ -80,6 +94,8 @@ export type PlatformAnalytics = {
     meritTierBars: { label: string; value: number }[];
     creditBuckets: { label: string; count: number }[];
     groupSizeDistribution: { label: string; count: number }[];
+    platformActivity?: ChartSegment[];
+    listingStatusMix?: ChartSegment[];
   };
   memberDirectory: MemberDirectoryEntry[];
   audience: {
@@ -131,16 +147,40 @@ export type PlatformAnalytics = {
     meritLeaders: { name: string; username: string; merit: number; credits: number }[];
     distribution: { tier: string; range: string; count: number }[];
     creditBuckets: { label: string; count: number }[];
+    creditTransactions?: number;
   };
   operations: {
     moderationTeam: { role: string; count: number; active: number }[];
     activeModerators: number;
     pendingVerifications: number;
     suspendedAccounts: number;
+    bannedAccounts?: number;
     nonActiveAccounts: number;
     platformHealthScore: number;
+    openTickets?: number;
+    openReports?: number;
+    openDisputes?: number;
+    activeViolations?: number;
+    pendingListings?: number;
   };
   insights: { id: string; title: string; detail: string; type: string }[];
+  liveModules?: {
+    teams: number;
+    marketplaceListings: number;
+    pendingListings: number;
+    approvedListings: number;
+    jobs: number;
+    projects: number;
+    creditTransactions: number;
+    reports: number;
+    openReports: number;
+    disputes: number;
+    openDisputes: number;
+    tickets: number;
+    openTickets: number;
+    violations: number;
+    activeViolations: number;
+  };
   comingSoon: {
     title: string;
     modules: { name: string; metrics: string }[];

@@ -5,7 +5,8 @@ const {
     updateInboxServices,
     getConversationByConvoIdServices,
     getInboxByAccountIdServices,
-    checkInboxByTwoAccountIdsServices
+    checkInboxByTwoAccountIdsServices,
+    getInboxByTwoAccountIdsServices
 } = require("../Services/InboxServices");
 
 async function createInboxController(req, res) {
@@ -88,6 +89,23 @@ async function checkInboxByTwoAccountIdsController(req, res) {
     }
 }
 
+async function getInboxByTwoAccountIdsController(req, res) { 
+    try {
+        const { account_id } = req.session;
+        const recepientId = req.params.accountId;
+        const response = await getInboxByTwoAccountIdsServices(account_id, recepientId, 'direct');
+        if (!response) {
+            return res.status(404).json({ error: 'Inbox not found' });
+        }
+        res.status(200).json({
+            message: 'Inbox retrieved successfully',
+            inbox: response
+        });
+    }catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+}
+
 module.exports = {
     createInboxController,
     createMessageController,
@@ -95,5 +113,6 @@ module.exports = {
     updateInboxController,
     getConversationByConvoIdController,
     getInboxByAccountIdController,
-    checkInboxByTwoAccountIdsController
+    checkInboxByTwoAccountIdsController,   
+    getInboxByTwoAccountIdsController
 }

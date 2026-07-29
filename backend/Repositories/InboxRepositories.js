@@ -24,17 +24,24 @@ async function createMessageRepositories(messagePayload = {}) {
     }
 }
 
-async function updateMessageRepositories(messageId, updateFields = {}) {
-    try{
-        const result = await MessageCollection.updateOne(
-            { _id: new ObjectId(messageId) },
-            updateFields
-        );
-        return result.modifiedCount > 0;
-    }catch(err){
-        console.error('Error updating message:', err);
-        throw err;
-    }
+async function updateMessageRepositories(messageId, action, payload) {
+  try {
+    const updatedMessage = await MessageCollection.findOneAndUpdate(
+      { _id: new ObjectId(messageId) },
+      {
+        [`$${action}`]: payload,
+      },
+      {
+        returnDocument: "after", // MongoDB Node Driver v4+
+        // returnOriginal: false, // if using an older driver
+      }
+    );
+
+    return updatedMessage;
+  } catch (err) {
+    console.error("Error updating message:", err);
+    throw err;
+  }
 }
 
 async function updateInboxRepositories(inboxId, updateFields = {}) {

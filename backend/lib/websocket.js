@@ -9,7 +9,8 @@ let io;
 
 async function initSocket(httpServer) {
   const {
-  createMessageServices
+    createMessageServices,
+    updateMessageServices,
 } = require('../Services/InboxServices');
   console.log("Socket.IO WebSocket server initialized");
   if (!io) {
@@ -73,9 +74,35 @@ async function initSocket(httpServer) {
         }
       });
 
-      socket.on("updateMessage", (messagePayload) => {
+      socket.on("updateMessage", async (messagePayload) => {
+        try {
+        console.log(`Client ${socket.id} requested message update:`, messagePayload);
+        const { message_id, conversation_id, action, payload } = messagePayload;
 
-      });
+        const result = await updateMessageServices(
+          message_id,
+          action,
+          payload
+        );
+
+          if (result) {
+            if (action === "set") { 
+              result.is_edited = true;
+            }
+          io.to(conversation_id).emit("messageUpdated", result);
+        } else {
+          io.to(conversation_id).emit("messageUpdateFailed", {
+            message: "Message not found.",
+          });
+        }
+      } catch (error) {
+        console.error("Error updating message:", error);
+
+        io.to(messagePayload.conversation_id).emit("messageUpdateFailed", {
+          message: "Failed to update message.",
+        });
+      }
+    });
 
       socket.on("deleteMessage", (messageId) => {});
 
