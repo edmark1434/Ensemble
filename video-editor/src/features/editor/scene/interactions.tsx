@@ -15,11 +15,19 @@ import { getCurrentTime } from "../utils/time";
 import { getMinTextDimensions } from "../utils/text";
 import {getMoveableTransform} from "@/features/editor/player/styles";
 import {getMinCaptionDimensions} from "@/features/editor/utils/captions";
+import {foldSkewYIntoScale} from "@/features/editor/utils/matrix-fold";
 
 let holdGroupPosition: Record<string, any> | null = null;
 let groupTextScaleStart: Record<string, { width: number; height: number; fontSize: number; relLeft: number; relTop: number }> | null = null;
 let groupScaleAnchor: { x: number; y: number } | null = null;
+let groupRotateStart: Record<string, {
+  rotate: number; skewX: number; scaleX: number; scaleY: number;
+  centerX: number; centerY: number; width: number; height: number;
+}> | null = null;
+let groupRotatePivot: { x: number; y: number } | null = null;
 let dragStartEnd = false;
+
+const toRad = (deg: number) => (deg * Math.PI) / 180;
 
 interface SceneInteractionsProps {
   stateManager: StateManager;
@@ -879,30 +887,139 @@ export function SceneInteractions({
         }
       }}
       onRotateGroup={({ events }) => {
+        const currentTrackItemsMap = useStore.getState().trackItemsMap;
+        if (!groupRotateStart) groupRotateStart = {};
+
+        if (!groupRotatePivot) {
+          // Frozen once per gesture: every item swings around this same fixed
+          // point instead of drifting toward a live-recomputed bounding box.
+          const rect = moveableRef.current?.moveable.getRect();
+          groupRotatePivot = {
+            x: (rect?.left ?? 0) + (rect?.width ?? 0) / 2,
+            y: (rect?.top ?? 0) + (rect?.height ?? 0) / 2
+          };
+        }
+
         for (const event of events) {
+          const id = getIdFromClassName(event.target.className);
           const target = event.target as HTMLDivElement;
-          target.style.transform = event.transform;
-          target.style.left = `${parseFloat(target.style.left) + event.drag.beforeDist[0]}px`;
-          target.style.top = `${parseFloat(target.style.top) + event.drag.beforeDist[1]}px`;
+          const item = currentTrackItemsMap[id];
+          if (!item?.details) continue;
+          const details = item.details;
+
+          if (!groupRotateStart[id]) {
+            // Parse this item's current rotate/skewX/skewY/scale — possibly all
+            // independently nonzero — and fold skewY away. rotate * skewX *
+            // scale(sx,sy) already spans every invertible 2x2 matrix, so skewY
+            // is a redundant, alternate parameterization of the same family.
+            // Folding it in gives a clean base where an additional external
+            // rotation just adds to the angle term, nothing else.
+            const rotate = parseFloat(details.rotate as unknown as string) || 0;
+            const skewX = Number(details.skewX) || 0;
+            const skewY = Number(details.skewY) || 0;
+            const scaleMatch = (details.transform || "").match(/scale\(\s*([-\d.]+)\s*,\s*([-\d.]+)/);
+            const scaleX = scaleMatch ? parseFloat(scaleMatch[1]) : 1;
+            const scaleY = scaleMatch ? parseFloat(scaleMatch[2]) : 1;
+
+            const folded = foldSkewYIntoScale(rotate, skewX, skewY, scaleX, scaleY);
+
+            // clientWidth/clientHeight are pre-transform box dimensions (CSS
+            // transform doesn't affect layout size), and left/top position that
+            // same pre-transform box — so left+width/2 gives the item's true
+            // rendered center regardless of any existing scale, since scaling
+            // around transform-origin:center never moves the center itself.
+            const left = parseFloat(target.style.left) || 0;
+            const top = parseFloat(target.style.top) || 0;
+            const width = target.clientWidth;
+            const height = target.clientHeight;
+
+            groupRotateStart[id] = {
+              rotate: folded.rotate,
+              skewX: folded.skewX,
+              scaleX: folded.scaleX,
+              scaleY: folded.scaleY,
+              centerX: left + width / 2,
+              centerY: top + height / 2,
+              width,
+              height
+            };
+          }
+
+          const start = groupRotateStart[id];
+          const theta = event.beforeDist; // cumulative deg from gesture start, shared by every item since one handle drives the group
+          const newRotate = start.rotate + theta;
+
+          // Swing this item's center around the frozen pivot by theta. Standard
+          // rotation matrix applied directly in CSS px coords (y-down) matches
+          // rotate()'s clockwise-positive convention with no sign flip needed.
+          const rad = toRad(theta);
+          const cos = Math.cos(rad);
+          const sin = Math.sin(rad);
+          const dx = start.centerX - groupRotatePivot.x;
+          const dy = start.centerY - groupRotatePivot.y;
+          const newCenterX = groupRotatePivot.x + (dx * cos - dy * sin);
+          const newCenterY = groupRotatePivot.y + (dx * sin + dy * cos);
+          const newLeft = newCenterX - start.width / 2;
+          const newTop = newCenterY - start.height / 2;
+
+          const composedDetails = {
+            ...details,
+            rotate: `${newRotate}deg`,
+            skewX: start.skewX,
+            skewY: 0,
+            transform: `scale(${start.scaleX}, ${start.scaleY})`
+          };
+          target.style.transform = getMoveableTransform(composedDetails, {});
+          target.style.left = `${newLeft}px`;
+          target.style.top = `${newTop}px`;
+
+          target.dataset.liveRotate = String(newRotate);
+          target.dataset.liveSkewX = String(start.skewX);
+          target.dataset.liveScaleX = String(start.scaleX);
+          target.dataset.liveScaleY = String(start.scaleY);
+          target.dataset.liveLeft = String(newLeft);
+          target.dataset.liveTop = String(newTop);
         }
       }}
       onRotateGroupEnd={() => {
-        const currentTrackItemsMap = useStore.getState().trackItemsMap;
-        const payload: Record<string, any> = {};
-        for (const target of targets) {
-          const id = getIdFromClassName(target.className);
-          const currentItem = currentTrackItemsMap[id];
-          if (!currentItem || currentItem.details?.locked) continue;
-          payload[id] = {
-            details: {
-              transform: (target as HTMLDivElement).style.transform,
-              left: parseFloat((target as HTMLDivElement).style.left),
-              top: parseFloat((target as HTMLDivElement).style.top),
-            }
-          };
-        }
-        if (Object.keys(payload).length > 0) {
-          dispatch(EDIT_OBJECT, { payload });
+        if (groupRotateStart) {
+          const currentTrackItemsMap = useStore.getState().trackItemsMap;
+          const payload: Record<string, any> = {};
+
+          for (const id of Object.keys(groupRotateStart)) {
+            const currentItem = currentTrackItemsMap[id];
+            if (!currentItem || currentItem.details?.locked) continue;
+
+            const target = getTargetById(id) as HTMLDivElement | null;
+            if (!target || target.dataset.liveRotate === undefined) continue;
+
+            // Commit the decomposed fields individually — not the opaque
+            // matrix — so a later single-item rotate/skew/scale reads a
+            // correct baseline instead of a stale 0.
+            payload[id] = {
+              details: {
+                rotate: `${target.dataset.liveRotate}deg`,
+                skewX: Number(target.dataset.liveSkewX),
+                skewY: 0,
+                transform: `scale(${target.dataset.liveScaleX}, ${target.dataset.liveScaleY})`,
+                left: Number(target.dataset.liveLeft),
+                top: Number(target.dataset.liveTop)
+              }
+            };
+
+            delete target.dataset.liveRotate;
+            delete target.dataset.liveSkewX;
+            delete target.dataset.liveScaleX;
+            delete target.dataset.liveScaleY;
+            delete target.dataset.liveLeft;
+            delete target.dataset.liveTop;
+          }
+
+          if (Object.keys(payload).length > 0) {
+            dispatch(EDIT_OBJECT, { payload });
+          }
+          groupRotateStart = null;
+          groupRotatePivot = null;
         }
       }}
     />
