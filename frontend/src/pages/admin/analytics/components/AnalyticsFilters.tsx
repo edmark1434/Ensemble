@@ -156,12 +156,16 @@ export function filterMembersByState<T extends { joinedAt: string | null; status
 
 export function filterSignupWeeks<T extends { weekStart: string }>(weeks: T[], timeRange: TimeRange): T[] {
   if (timeRange === 'all') return weeks;
+  if (!weeks.length) return weeks;
+
   const now = Date.now();
   const ms: Record<Exclude<TimeRange, 'all'>, number> = {
     '7d': 7 * 86400000,
     '30d': 30 * 86400000,
     '90d': 90 * 86400000,
   };
-  const cutoff = now - ms[timeRange];
-  return weeks.filter((w) => new Date(w.weekStart).getTime() >= cutoff);
+  // Include any week that overlaps the window (week ends up to 7 days after start).
+  const cutoff = now - ms[timeRange] - 7 * 86400000;
+  const filtered = weeks.filter((w) => new Date(w.weekStart).getTime() >= cutoff);
+  return filtered.length ? filtered : weeks.slice(-Math.min(weeks.length, timeRange === '7d' ? 2 : 4));
 }

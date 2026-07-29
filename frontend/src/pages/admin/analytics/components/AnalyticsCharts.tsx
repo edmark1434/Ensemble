@@ -4,6 +4,17 @@ type ChartPoint = { label: string; value: number };
 
 type LineSeries = { label: string; color: string; values: number[] };
 
+function EmptyChart({ title, message = 'No data in the selected range' }: { title?: string; message?: string }) {
+  return (
+    <div>
+      {title && <p className="mb-3 text-sm font-semibold text-white">{title}</p>}
+      <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] text-sm text-zinc-500">
+        {message}
+      </div>
+    </div>
+  );
+}
+
 export function LineChart({
   labels,
   series,
@@ -15,14 +26,19 @@ export function LineChart({
   height?: number;
   title?: string;
 }) {
+  if (!labels.length || !series.some((s) => s.values.length > 0)) {
+    return <EmptyChart title={title} />;
+  }
+
   const width = 100;
   const pad = 8;
   const allValues = series.flatMap((s) => s.values);
   const max = Math.max(...allValues, 1);
   const min = 0;
   const range = max - min || 1;
+  const n = Math.max(labels.length, 1);
 
-  const toX = (i: number) => pad + (i / Math.max(labels.length - 1, 1)) * (width - pad * 2);
+  const toX = (i: number) => (n === 1 ? width / 2 : pad + (i / (n - 1)) * (width - pad * 2));
   const toY = (v: number) => height - pad - ((v - min) / range) * (height - pad * 2);
 
   return (
@@ -44,13 +60,15 @@ export function LineChart({
           const points = s.values.map((v, i) => `${toX(i)},${toY(v)}`).join(' ');
           return (
             <g key={s.label}>
-              <polyline
-                fill="none"
-                stroke={s.color}
-                strokeWidth="1.2"
-                strokeLinejoin="round"
-                points={points}
-              />
+              {s.values.length > 1 && (
+                <polyline
+                  fill="none"
+                  stroke={s.color}
+                  strokeWidth="1.2"
+                  strokeLinejoin="round"
+                  points={points}
+                />
+              )}
               {s.values.map((v, i) => (
                 <circle key={i} cx={toX(i)} cy={toY(v)} r="1.2" fill={s.color} />
               ))}
@@ -67,9 +85,11 @@ export function LineChart({
         ))}
       </div>
       <div className="mt-1 flex justify-between text-[9px] text-zinc-600">
-        {labels.filter((_, i) => i === 0 || i === labels.length - 1 || i % Math.ceil(labels.length / 4) === 0).map((l) => (
-          <span key={l}>{l}</span>
-        ))}
+        {labels
+          .filter((_, i) => i === 0 || i === labels.length - 1 || i % Math.ceil(labels.length / 4) === 0)
+          .map((l, idx) => (
+            <span key={`${l}-${idx}`}>{l}</span>
+          ))}
       </div>
     </div>
   );
@@ -84,13 +104,15 @@ export function VerticalBarChart({
   title?: string;
   color?: string;
 }) {
+  if (!data.length) return <EmptyChart title={title} />;
+
   const max = Math.max(...data.map((d) => d.value), 1);
   return (
     <div>
       {title && <p className="mb-3 text-sm font-semibold text-white">{title}</p>}
-      <div className="flex h-48 items-end justify-between gap-2">
-        {data.map((d) => (
-          <div key={d.label} className="flex min-w-0 flex-1 flex-col items-center gap-1">
+      <div className="flex h-48 items-end justify-between gap-1.5 overflow-x-auto">
+        {data.map((d, idx) => (
+          <div key={`${d.label}-${idx}`} className="flex min-w-[28px] flex-1 flex-col items-center gap-1">
             <span className="text-[10px] tabular-nums text-zinc-400">{d.value}</span>
             <div
               className="w-full max-w-[40px] rounded-t-md transition-all"
@@ -116,7 +138,10 @@ export function DonutChart({
   title?: string;
   size?: number;
 }) {
-  const total = segments.reduce((s, x) => s + x.value, 0) || 1;
+  const usable = segments.filter((s) => s.value > 0);
+  if (!usable.length) return <EmptyChart title={title} />;
+
+  const total = usable.reduce((s, x) => s + x.value, 0) || 1;
   let offset = 0;
   const r = 40;
   const c = 2 * Math.PI * r;
@@ -127,7 +152,7 @@ export function DonutChart({
       <div className="flex flex-wrap items-center gap-6">
         <svg width={size} height={size} viewBox="0 0 100 100" className="shrink-0">
           <circle cx="50" cy="50" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="12" />
-          {segments.map((seg) => {
+          {usable.map((seg) => {
             const pct = seg.value / total;
             const dash = pct * c;
             const circle = (
@@ -156,7 +181,7 @@ export function DonutChart({
           </text>
         </svg>
         <ul className="min-w-0 flex-1 space-y-2">
-          {segments.map((seg) => (
+          {usable.map((seg) => (
             <li key={seg.label} className="flex items-center justify-between gap-2 text-xs">
               <span className="flex items-center gap-2 text-zinc-400">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: seg.color }} />
@@ -182,22 +207,32 @@ export function AreaChart({
   title?: string;
   color?: string;
 }) {
+  if (!data.length) return <EmptyChart title={title} />;
+
   const height = 120;
   const width = 100;
   const pad = 4;
   const max = Math.max(...data.map((d) => d.value), 1);
-  const toX = (i: number) => pad + (i / Math.max(data.length - 1, 1)) * (width - pad * 2);
+  const n = Math.max(data.length, 1);
+  const toX = (i: number) => (n === 1 ? width / 2 : pad + (i / (n - 1)) * (width - pad * 2));
   const toY = (v: number) => height - pad - (v / max) * (height - pad * 2);
 
   const line = data.map((d, i) => `${toX(i)},${toY(d.value)}`).join(' ');
-  const area = `${toX(0)},${height - pad} ${line} ${toX(data.length - 1)},${height - pad}`;
+  const area =
+    n === 1
+      ? `${toX(0) - 4},${height - pad} ${toX(0) - 4},${toY(data[0].value)} ${toX(0) + 4},${toY(data[0].value)} ${toX(0) + 4},${height - pad}`
+      : `${toX(0)},${height - pad} ${line} ${toX(data.length - 1)},${height - pad}`;
 
   return (
     <div>
       {title && <p className="mb-3 text-sm font-semibold text-white">{title}</p>}
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full" preserveAspectRatio="none">
         <polygon points={area} fill={`${color}33`} />
-        <polyline fill="none" stroke={color} strokeWidth="1" points={line} />
+        {n > 1 ? (
+          <polyline fill="none" stroke={color} strokeWidth="1" points={line} />
+        ) : (
+          <circle cx={toX(0)} cy={toY(data[0].value)} r="2" fill={color} />
+        )}
       </svg>
       <div className="mt-1 flex justify-between text-[9px] text-zinc-600">
         <span>{data[0]?.label}</span>
@@ -214,13 +249,15 @@ export function HorizontalBarChart({
   data: ChartPoint[];
   title?: string;
 }) {
+  if (!data.length) return <EmptyChart title={title} />;
+
   const max = Math.max(...data.map((d) => d.value), 1);
   return (
     <div>
       {title && <p className="mb-3 text-sm font-semibold text-white">{title}</p>}
       <div className="space-y-2">
-        {data.map((d) => (
-          <div key={d.label}>
+        {data.map((d, idx) => (
+          <div key={`${d.label}-${idx}`}>
             <div className="mb-0.5 flex justify-between text-xs">
               <span className="text-zinc-400">{d.label}</span>
               <span className="text-white">{d.value}</span>
@@ -228,7 +265,7 @@ export function HorizontalBarChart({
             <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-violet-500 to-rose-500"
-                style={{ width: `${(d.value / max) * 100}%` }}
+                style={{ width: `${Math.max(d.value > 0 ? 4 : 0, (d.value / max) * 100)}%` }}
               />
             </div>
           </div>

@@ -195,9 +195,9 @@ export default function AnalyticsPage() {
     return filterSignupWeeks(data.growth.signupsByWeek, filters.timeRange);
   }, [data, filters.timeRange]);
 
-  const filteredEngagement = useMemo(() => {
-    if (!data) return [];
-    return filterSignupWeeks(data.growth.engagementTrend, filters.timeRange);
+  const filteredActivity = useMemo(() => {
+    if (!data?.growth.activityTrend) return [];
+    return filterSignupWeeks(data.growth.activityTrend, filters.timeRange);
   }, [data, filters.timeRange]);
 
   if (loading) {
@@ -309,7 +309,7 @@ export default function AnalyticsPage() {
             data={data}
             filteredMembers={filteredMembers}
             filteredWeeks={filteredWeeks}
-            filteredEngagement={filteredEngagement}
+            filteredActivity={filteredActivity}
             filterActive={filterActive}
           />
         )}
@@ -328,13 +328,13 @@ function OverviewTab({
   data,
   filteredMembers,
   filteredWeeks,
-  filteredEngagement,
+  filteredActivity,
   filterActive,
 }: {
   data: PlatformAnalytics;
   filteredMembers: PlatformAnalytics['memberDirectory'];
   filteredWeeks: PlatformAnalytics['growth']['signupsByWeek'];
-  filteredEngagement: PlatformAnalytics['growth']['engagementTrend'];
+  filteredActivity: NonNullable<PlatformAnalytics['growth']['activityTrend']>;
   filterActive: boolean;
 }) {
   const { kpis, growth, charts, insights, community } = data;
@@ -343,6 +343,10 @@ function OverviewTab({
     label: w.week,
     value: w.cumulativeMembers,
   }));
+
+  const activitySeries = filteredActivity.length
+    ? filteredActivity
+    : (data.growth.activityTrend || []).map((a) => a);
 
   return (
     <>
@@ -407,15 +411,58 @@ function OverviewTab({
         />
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+        <KpiCard
+          label="Open tickets"
+          value={kpis.openTickets ?? data.liveModules?.openTickets ?? 0}
+          sub={`${data.liveModules?.tickets ?? 0} total`}
+          icon={AlertTriangle}
+        />
+        <KpiCard
+          label="Open reports"
+          value={kpis.openReports ?? data.liveModules?.openReports ?? 0}
+          sub={`${data.liveModules?.reports ?? 0} total`}
+          icon={AlertTriangle}
+        />
+        <KpiCard
+          label="Open disputes"
+          value={kpis.openDisputes ?? data.liveModules?.openDisputes ?? 0}
+          sub={`${data.liveModules?.disputes ?? 0} total`}
+          icon={Shield}
+        />
+        <KpiCard
+          label="Teams"
+          value={kpis.teams ?? data.liveModules?.teams ?? 0}
+          icon={Users}
+        />
+        <KpiCard
+          label="Marketplace listings"
+          value={kpis.marketplaceListings ?? data.liveModules?.marketplaceListings ?? 0}
+          sub={`${data.liveModules?.pendingListings ?? 0} pending review`}
+          icon={LayoutGrid}
+        />
+        <KpiCard
+          label="Credit transactions"
+          value={data.liveModules?.creditTransactions ?? data.economy.creditTransactions ?? 0}
+          icon={Coins}
+        />
+      </div>
+
       <div className="grid gap-6 xl:grid-cols-2">
         <ChartCard>
           <LineChart
-            title="Estimated active users over time"
-            labels={filteredEngagement.map((e) => e.label)}
+            title="Database activity by week"
+            labels={activitySeries.map((e) => e.label)}
             series={[
-              { label: 'Est. DAU', color: '#fb7185', values: filteredEngagement.map((e) => e.estimatedDau) },
-              { label: 'Est. WAU', color: '#a78bfa', values: filteredEngagement.map((e) => e.estimatedWau) },
-              { label: 'Est. MAU', color: '#34d399', values: filteredEngagement.map((e) => e.estimatedMau) },
+              { label: 'Signups', color: '#34d399', values: activitySeries.map((e) => e.signups) },
+              { label: 'Tickets', color: '#60a5fa', values: activitySeries.map((e) => e.tickets) },
+              { label: 'Reports', color: '#fbbf24', values: activitySeries.map((e) => e.reports) },
+              {
+                label: 'Credit tx',
+                color: '#f472b6',
+                values: activitySeries.map((e) => e.creditTransactions),
+              },
+              { label: 'Listings', color: '#a78bfa', values: activitySeries.map((e) => e.listings) },
             ]}
           />
         </ChartCard>
@@ -446,8 +493,26 @@ function OverviewTab({
         <ChartCard>
           <VerticalBarChart
             title="Monthly signups"
-            data={data.growth.signupsByMonth.map((m) => ({ label: m.label.split(' ')[0], value: m.value }))}
+            data={data.growth.signupsByMonth.map((m) => ({
+              label: m.label.split(' ')[0],
+              value: m.value,
+            }))}
             color="#a78bfa"
+          />
+        </ChartCard>
+        <ChartCard>
+          <HorizontalBarChart
+            title="Live module counts (database)"
+            data={(charts.platformActivity || []).map((p) => ({ label: p.label, value: p.value }))}
+          />
+        </ChartCard>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <ChartCard>
+          <DonutChart
+            title="Marketplace listing status"
+            segments={charts.listingStatusMix || []}
           />
         </ChartCard>
         <ChartCard>
@@ -700,11 +765,16 @@ function EconomyTab({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard label="Credits in circulation" value={economy.totalCreditsInCirculation.toLocaleString()} icon={Coins} />
         <KpiCard label="Total merit" value={economy.totalMerit.toLocaleString()} icon={BarChart3} />
         <KpiCard label="Avg credits / member" value={economy.avgCreditsPerMember.toLocaleString()} icon={Users} />
         <KpiCard label="Avg merit / member" value={economy.avgMeritPerMember} icon={TrendingUp} />
+        <KpiCard
+          label="Credit transactions"
+          value={economy.creditTransactions ?? data.liveModules?.creditTransactions ?? 0}
+          icon={Activity}
+        />
       </div>
 
       {filteredMembers.length !== data.memberDirectory.length && (
@@ -764,9 +834,26 @@ function HealthTab({
   data: PlatformAnalytics;
   filteredMembers: PlatformAnalytics['memberDirectory'];
 }) {
-  const { operations, audience, kpis, comingSoon } = data;
+  const { operations, audience, kpis, comingSoon, liveModules } = data;
   const ph = audience.profileHealth;
   const score = operations.platformHealthScore;
+  const modules = liveModules || {
+    teams: 0,
+    marketplaceListings: 0,
+    pendingListings: 0,
+    approvedListings: 0,
+    jobs: 0,
+    projects: 0,
+    creditTransactions: 0,
+    reports: 0,
+    openReports: 0,
+    disputes: 0,
+    openDisputes: 0,
+    tickets: 0,
+    openTickets: 0,
+    violations: 0,
+    activeViolations: 0,
+  };
 
   return (
     <div className="space-y-6">
@@ -805,11 +892,15 @@ function HealthTab({
           ['Active moderators', operations.activeModerators],
           ['Pending verifications', operations.pendingVerifications],
           ['Suspended accounts', operations.suspendedAccounts],
+          ['Banned accounts', operations.bannedAccounts ?? 0],
           ['Non-active accounts', operations.nonActiveAccounts],
+          ['Open tickets', operations.openTickets ?? modules.openTickets],
+          ['Open reports', operations.openReports ?? modules.openReports],
+          ['Open disputes', operations.openDisputes ?? modules.openDisputes],
+          ['Active violations', operations.activeViolations ?? modules.activeViolations],
+          ['Pending listings', operations.pendingListings ?? modules.pendingListings],
           ['Complete profiles', ph.completeProfiles],
           ['Avatar rate', `${ph.avatarRate}%`],
-          ['Tagline rate', `${ph.taglineRate}%`],
-          ['Filtered members', filteredMembers.length],
         ].map(([l, v]) => (
           <div key={String(l)} className="rounded-xl border border-white/[0.06] bg-[#14151c] px-4 py-3">
             <p className="text-[10px] uppercase text-zinc-600">{l}</p>
@@ -817,6 +908,32 @@ function HealthTab({
           </div>
         ))}
       </div>
+
+      <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
+        <h2 className="font-semibold text-white">Live database modules</h2>
+        <p className="mt-1 text-xs text-zinc-500">Counts scanned directly from PostgreSQL</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            ['Teams', modules.teams],
+            ['Jobs', modules.jobs],
+            ['Projects', modules.projects],
+            ['Listings', modules.marketplaceListings],
+            ['Approved listings', modules.approvedListings],
+            ['Credit transactions', modules.creditTransactions],
+            ['Reports', modules.reports],
+            ['Disputes', modules.disputes],
+            ['Tickets', modules.tickets],
+            ['Violations', modules.violations],
+            ['Tagline rate', `${ph.taglineRate}%`],
+            ['Filtered members', filteredMembers.length],
+          ].map(([l, v]) => (
+            <div key={String(l)} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+              <p className="text-[10px] uppercase text-zinc-600">{l}</p>
+              <p className="text-lg font-bold text-white">{v}</p>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <ChartCard>
         <DonutChart
