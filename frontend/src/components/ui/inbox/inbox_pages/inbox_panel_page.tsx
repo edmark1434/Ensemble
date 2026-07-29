@@ -95,8 +95,10 @@ export const InboxPanelPage = ({
         getConversationName={getConversationName}
         getAvatar={getAvatar}
         messages={messages}
+        pinnedMessages={pinnedMessages}
         onClose={() => setShowDetails(false)}
         onUpdateGroupName={onUpdateGroupName}
+        onJumpToMessage={onJumpToPinned}
       />
     </div>
   );

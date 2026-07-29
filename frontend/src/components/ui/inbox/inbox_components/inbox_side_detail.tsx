@@ -10,6 +10,9 @@ import {
   Check,
   Crown,
   Users,
+  Pin,
+  Link as LinkIcon,
+  ExternalLink,
 } from "lucide-react";
 import type { Inbox, Message } from "../inbox_dataset";
 
@@ -18,8 +21,10 @@ interface InboxSideDetailsProps {
   getConversationName: (inbox: Inbox) => string;
   getAvatar: (inbox: Inbox) => string;
   messages: Message[];
+  pinnedMessages?: string[]; // Array of pinned message IDs
   onClose: () => void;
   onUpdateGroupName?: (newGroupTitle: string) => void;
+  onJumpToMessage?: (messageId: string) => void;
   currentUserId?: string;
   isOpen: boolean;
 }
@@ -29,8 +34,10 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   getConversationName,
   getAvatar,
   messages,
+  pinnedMessages = [],
   onClose,
   onUpdateGroupName,
+  onJumpToMessage,
   currentUserId = "user1",
   isOpen,
 }) => {
@@ -44,13 +51,29 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   // Accordion Expand States
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(true);
   const [isMembersOpen, setIsMembersOpen] = useState(true);
+  const [isPinnedOpen, setIsPinnedOpen] = useState(true);
+  const [isLinksOpen, setIsLinksOpen] = useState(true);
   const [isAttachmentsOpen, setIsAttachmentsOpen] = useState(true);
 
   // Group Name Edit States
   const [isEditingName, setIsEditingName] = useState(false);
   const [customNameInput, setCustomNameInput] = useState(name);
 
-  // Collect all media and file attachments from messages
+  // 1. Collect Pinned Messages
+  const pinnedList = messages.filter((m) => pinnedMessages.includes(m._id));
+
+  // 2. Extract Shared Links (from message text regex and links array)
+  const extractedLinks = messages.flatMap((m) => {
+    const textLinks =
+      m.message_content?.match(/https?:\/\/[^\s]+/g) || [];
+    const directLinks = m.links || [];
+    return Array.from(new Set([...textLinks, ...directLinks])).map((url) => ({
+      messageId: m._id,
+      url,
+    }));
+  });
+
+  // 3. Collect all media and file attachments
   const attachments = messages.flatMap((m) => m.attachments || []);
 
   const creatorId = selectedConversation.creator_id || currentUserId;
@@ -68,7 +91,9 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   return (
     <div
       className={`h-full bg-[#0d0f1a] border-l border-white/10 flex flex-col flex-shrink-0 overflow-y-auto inbox-scroll-thin text-white transition-all duration-300 ease-in-out ${
-        isOpen ? "w-72 md:w-80 opacity-100" : "w-0 opacity-0 overflow-hidden border-l-0"
+        isOpen
+          ? "w-72 md:w-80 opacity-100"
+          : "w-0 opacity-0 overflow-hidden border-l-0"
       }`}
       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
     >
@@ -121,9 +146,9 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           )}
         </div>
 
-        {/* Collapsible Sections */}
+        {/* Collapsible Sections Container */}
         <div className="p-2 space-y-2 flex-1">
-          {/* 1. Customize Chat */}
+          {/* 1. Customize Chat (Group Rename) */}
           {isGroup && (
             <div className="rounded-xl overflow-hidden bg-white/5 border border-white/5">
               <button
@@ -178,7 +203,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
             </div>
           )}
 
-          {/* 2. Group Members List */}
+          {/* 2. Group Members Section */}
           {isGroup && (
             <div className="rounded-xl overflow-hidden bg-white/5 border border-white/5">
               <button
@@ -233,7 +258,93 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
             </div>
           )}
 
-          {/* 3. Attachments Section */}
+          {/* 3. Pinned Messages Section */}
+          <div className="rounded-xl overflow-hidden bg-white/5 border border-white/5">
+            <button
+              onClick={() => setIsPinnedOpen((prev) => !prev)}
+              className="w-full flex items-center justify-between p-3 text-xs font-semibold text-zinc-300 hover:text-white hover:bg-white/5 transition"
+            >
+              <div className="flex items-center gap-2">
+                <Pin className="h-4 w-4 text-yellow-400" />
+                <span>Pinned Messages ({pinnedList.length})</span>
+              </div>
+              {isPinnedOpen ? (
+                <ChevronUp className="h-4 w-4 text-zinc-400" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-zinc-400" />
+              )}
+            </button>
+
+            {isPinnedOpen && (
+              <div className="p-2 border-t border-white/5 space-y-1.5 max-h-48 overflow-y-auto inbox-scroll-thin">
+                {pinnedList.length === 0 ? (
+                  <p className="text-xs text-zinc-500 text-center py-2">
+                    No pinned messages
+                  </p>
+                ) : (
+                  pinnedList.map((msg) => (
+                    <div
+                      key={msg._id}
+                      onClick={() => onJumpToMessage?.(msg._id)}
+                      className="p-2 rounded-lg bg-black/20 border border-white/5 hover:bg-white/5 transition cursor-pointer text-xs"
+                    >
+                      <p className="text-zinc-200 line-clamp-2">
+                        {msg.message_content || "[Attachment]"}
+                      </p>
+                      <span className="text-[10px] text-yellow-400/80 mt-1 block">
+                        Click to jump
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 4. Shared Links Section */}
+          <div className="rounded-xl overflow-hidden bg-white/5 border border-white/5">
+            <button
+              onClick={() => setIsLinksOpen((prev) => !prev)}
+              className="w-full flex items-center justify-between p-3 text-xs font-semibold text-zinc-300 hover:text-white hover:bg-white/5 transition"
+            >
+              <div className="flex items-center gap-2">
+                <LinkIcon className="h-4 w-4 text-emerald-400" />
+                <span>Shared Links ({extractedLinks.length})</span>
+              </div>
+              {isLinksOpen ? (
+                <ChevronUp className="h-4 w-4 text-zinc-400" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-zinc-400" />
+              )}
+            </button>
+
+            {isLinksOpen && (
+              <div className="p-2 border-t border-white/5 space-y-1.5 max-h-48 overflow-y-auto inbox-scroll-thin">
+                {extractedLinks.length === 0 ? (
+                  <p className="text-xs text-zinc-500 text-center py-2">
+                    No links shared yet
+                  </p>
+                ) : (
+                  extractedLinks.map((item, idx) => (
+                    <a
+                      key={idx}
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-2 rounded-lg bg-black/20 border border-white/5 hover:bg-white/5 transition text-xs group"
+                    >
+                      <span className="text-blue-400 group-hover:underline truncate max-w-[85%]">
+                        {item.url}
+                      </span>
+                      <ExternalLink className="h-3.5 w-3.5 text-zinc-500 group-hover:text-white flex-shrink-0" />
+                    </a>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 5. Attachments Section */}
           <div className="rounded-xl overflow-hidden bg-white/5 border border-white/5">
             <button
               onClick={() => setIsAttachmentsOpen((prev) => !prev)}
