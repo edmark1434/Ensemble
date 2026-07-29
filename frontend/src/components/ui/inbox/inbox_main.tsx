@@ -158,7 +158,7 @@ const InboxMain = () => {
       attachments,
       links: [],
       message_react: [],
-      read_by: [],
+      read_by: [], // Newly sent message starts with empty read array (Status: Sent)
       is_edited: false,
       deleted_at: new Date(),
       created_at: new Date(),
@@ -240,6 +240,14 @@ const InboxMain = () => {
       message.created_at,
       previousMessage?.created_at
     );
+
+    // Read / Sent Status Logic
+    const isLastMessage = index === messages.length - 1;
+    const isSeen = (message.read_by || []).length > 0;
+    const messageStatus: "sent" | "seen" = isSeen ? "seen" : "sent";
+    const recipientAvatar = selectedConversation
+      ? getAvatar(selectedConversation)
+      : undefined;
 
     return (
       <div
@@ -336,20 +344,24 @@ const InboxMain = () => {
                 />
               </div>
 
-              {/* Time & Edited Row */}
-              {(showTime || message.is_edited) && (
+              {/* Time & Sent/Seen Status Row */}
+              {(showTime || message.is_edited || isSender) && (
                 <div
                   className={`flex items-center gap-1.5 mt-2 px-1 ${
                     isSender ? "justify-end" : "justify-start"
                   }`}
                 >
                   <InboxEditedBadge isEdited={message.is_edited} />
-                  {showTime && (
-                    <InboxTimeOfMessage
-                      timestamp={message.created_at}
-                      isSender={isSender}
-                    />
-                  )}
+                  <InboxTimeOfMessage
+                    timestamp={message.created_at}
+                    isSender={isSender}
+                    status={isSender ? messageStatus : undefined}
+                    recipientAvatar={
+                      isSender && isLastMessage && isSeen
+                        ? recipientAvatar
+                        : undefined
+                    }
+                  />
                 </div>
               )}
             </div>
