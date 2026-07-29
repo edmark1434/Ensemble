@@ -89,7 +89,7 @@ export type SettingsOverview = {
     notifications: SettingsSection<NotificationSettings>;
     security: SettingsSection<SecuritySettings>;
   };
-  staffEditors: { staffId: number; name: string; role: string }[];
+  staffEditors: { staffId: string | number; name: string; role: string }[];
   changeHistory: { id: string; section: string; updatedAt: string; updatedBy: string }[];
   alerts: { id: string; message: string; severity: string }[];
   dataSources: { persisted: string[]; tables: string[] };
