@@ -95,9 +95,16 @@ export type ModerationOverview = {
     forumGroupsActive: number;
     forumDiscussions: number;
     disputeQueueCount: number;
+    openReports?: number;
+    pendingListings?: number;
+    activeViolations?: number;
   };
   currentStaffId?: string | number | null;
   pendingCases: ModerationCase[];
+  /** Full dispute desk list (Pending cases → Disputes) */
+  disputes?: import('../ticketManagement/ticketTypes').Dispute[];
+  /** Full user reports list (Pending cases → Reports) */
+  reports?: import('../ticketManagement/ticketTypes').UserReport[];
   recentActivity: ModerationActivity[];
   moderatorRoster: ModeratorProfile[];
   accountStatusBreakdown: { status: string; count: number }[];

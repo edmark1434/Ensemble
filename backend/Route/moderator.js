@@ -51,6 +51,7 @@ router.get('/support/disputes', [checkSession, supportModerator], SupportModerat
 router.get('/support/disputes/:id', [checkSession, supportModerator], SupportModerator.getDispute);
 router.patch('/support/disputes/:id', [checkSession, supportModerator], SupportModerator.patchDispute);
 router.post('/support/disputes/:id/messages', [checkSession, supportModerator], SupportModerator.postDisputeMessage);
+router.patch('/support/disputes/:id/messages/:messageId', [checkSession, supportModerator], SupportModerator.patchDisputeMessage);
 router.get('/support/restrictions', [checkSession, supportModerator], SupportModerator.getRestrictions);
 router.post('/support/restrictions/violations', [checkSession, supportModerator], SupportModerator.postViolation);
 router.patch('/support/restrictions/accounts/:id', [checkSession, supportModerator], SupportModerator.patchRestriction);

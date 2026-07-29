@@ -104,7 +104,8 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     fee_transaction_id UUID REFERENCES credit_transactions(credit_transaction_id),
     source_wallet_id UUID NOT NULL REFERENCES wallets(wallet_id),
-    destination_wallet_id UUID NOT NULL REFERENCES wallets(wallet_id)
+    destination_wallet_id UUID NOT NULL REFERENCES wallets(wallet_id),
+    related_dispute_id UUID
 );
 
 CREATE TABLE IF NOT EXISTS platform_settings (
@@ -145,16 +146,38 @@ CREATE TABLE IF NOT EXISTS disputes (
     reason TEXT,
     status VARCHAR(50) NOT NULL DEFAULT 'open',
     priority VARCHAR(20) NOT NULL DEFAULT 'high',
+    visibility VARCHAR(20) NOT NULL DEFAULT 'pending',
     initiator_account_id UUID REFERENCES accounts(account_id),
     respondent_account_id UUID REFERENCES accounts(account_id),
     related_entity_type VARCHAR(50),
     related_entity_id VARCHAR(100),
     assigned_staff_id UUID REFERENCES staff(staff_id),
+    approved_at TIMESTAMPTZ,
+    approved_by_staff_id UUID REFERENCES staff(staff_id),
+    outcome VARCHAR(50),
+    sanction_type VARCHAR(50),
+    sanction_notes TEXT,
+    related_credit_transaction_id UUID REFERENCES credit_transactions(credit_transaction_id),
+    takeover_requested_by_staff_id UUID REFERENCES staff(staff_id),
+    takeover_requested_at TIMESTAMPTZ,
+    takeover_request_note TEXT,
     credit_amount_involved INTEGER NOT NULL DEFAULT 0,
     opened_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
     resolved_at TIMESTAMPTZ,
     resolution_notes TEXT
+);
+
+-- Live DBs also add: credit_transactions.related_dispute_id → disputes(dispute_id)
+-- (circular FK applied in migration 112 after both columns exist)
+
+-- Link only: dispute_id → MongoDB inbox ObjectId (text). Message bodies live in Mongo
+-- collections `inbox` + `messages` (conversation_type = 'dispute'). No Postgres messages table.
+CREATE TABLE IF NOT EXISTS dispute_chats (
+    dispute_id UUID PRIMARY KEY REFERENCES disputes(dispute_id),
+    chat_id TEXT NOT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITHOUT TIME ZONE
 );
 
 CREATE TABLE IF NOT EXISTS violations (

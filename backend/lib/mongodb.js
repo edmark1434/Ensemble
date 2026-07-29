@@ -9,7 +9,7 @@ let isConnected = false;
 
 async function connectMongoDB() {
   if (!uri) {
-    console.warn('MONGODB_URI is not set — MongoDB features (forums) are disabled.');
+    console.warn('MONGODB_URI is not set — MongoDB features (forums, dispute/ticket chats) are disabled.');
     return null;
   }
 

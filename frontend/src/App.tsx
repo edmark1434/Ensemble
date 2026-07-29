@@ -31,7 +31,8 @@ import Forums from './pages/user/4_forums/Forums.tsx'
 import SelectedGroup from "@/pages/user/4_forums/SelectedGroup.tsx";
 import ExpandDiscussion from "@/pages/user/4_forums/ExpandDiscussion.tsx";
 
-import Inbox from "@/pages/user/10_inbox/Main.tsx";
+// Updated Inbox Root Import
+import InboxMain from "@/components/ui/inbox/inbox_main.tsx";
 
 import SectionPlaceholder from '@/pages/user/0_misc/SectionPlaceholder.tsx'
 
@@ -185,7 +186,8 @@ function App() {
             <Route path='discussion/:postId' element={<ExpandDiscussion />} />
           </Route>
 
-          <Route path='/inbox' element={<Inbox />} />
+          {/* Wildcard path ensures /inbox/direct and /inbox/marketplace match */}
+          <Route path='/inbox/*' element={<InboxMain />} />
 
           <Route path='/teams'>
             <Route index element={<Teams />} />
