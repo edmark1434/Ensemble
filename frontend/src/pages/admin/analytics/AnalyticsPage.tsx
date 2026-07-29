@@ -29,8 +29,10 @@ import {
   VerticalBarChart,
 } from './components/AnalyticsCharts';
 import AnalyticsFilters, {
+  DEFAULT_ANALYTICS_FILTERS,
+  filterByDateWindow,
   filterMembersByState,
-  filterSignupWeeks,
+  isFilterActive,
   type AnalyticsFilterState,
 } from './components/AnalyticsFilters';
 
@@ -44,12 +46,7 @@ const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'health', label: 'Platform health', icon: Shield },
 ];
 
-const DEFAULT_FILTERS: AnalyticsFilterState = {
-  timeRange: 'all',
-  status: 'all',
-  verification: 'all',
-  meritTier: 'all',
-};
+const DEFAULT_FILTERS: AnalyticsFilterState = DEFAULT_ANALYTICS_FILTERS;
 
 function formatDate(value: string | null) {
   if (!value) return '—';
@@ -68,14 +65,16 @@ function KpiCard({
   icon: typeof Users;
 }) {
   return (
-    <div className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
-      <div className="flex items-start justify-between">
-        <div>
+    <div className="rounded-2xl border border-white/[0.07] bg-[#12131a] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
-          <p className="mt-2 text-3xl font-bold tabular-nums text-white">{value}</p>
-          {sub && <p className="mt-1 text-xs text-zinc-500">{sub}</p>}
+          <p className="mt-1.5 truncate text-2xl font-semibold tabular-nums tracking-tight text-white">{value}</p>
+          {sub && <p className="mt-1 truncate text-xs text-zinc-500">{sub}</p>}
         </div>
-        <Icon className="h-5 w-5 shrink-0 text-rose-400" />
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-rose-500/10">
+          <Icon className="h-4 w-4 text-rose-400" />
+        </div>
       </div>
     </div>
   );
@@ -91,16 +90,16 @@ function DataTable({
   rows: string[][];
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
+    <section className="overflow-hidden rounded-2xl border border-white/[0.07] bg-[#12131a]">
       <div className="border-b border-white/[0.06] px-4 py-3">
         <h3 className="text-sm font-semibold text-white">{title}</h3>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-white/[0.06] bg-[#0f1016] text-[10px] uppercase text-zinc-600">
+            <tr className="border-b border-white/[0.06] bg-[#0c0d12] text-[10px] uppercase tracking-wide text-zinc-600">
               {columns.map((c) => (
-                <th key={c} className="px-4 py-3">
+                <th key={c} className="px-4 py-3 font-medium">
                   {c}
                 </th>
               ))}
@@ -108,7 +107,7 @@ function DataTable({
           </thead>
           <tbody>
             {rows.map((row, i) => (
-              <tr key={i} className="border-b border-white/[0.04] text-zinc-300">
+              <tr key={i} className="border-b border-white/[0.04] text-zinc-300 last:border-0">
                 {row.map((cell, j) => (
                   <td key={j} className="px-4 py-2.5">
                     {cell}
@@ -192,13 +191,30 @@ export default function AnalyticsPage() {
 
   const filteredWeeks = useMemo(() => {
     if (!data) return [];
-    return filterSignupWeeks(data.growth.signupsByWeek, filters.timeRange);
-  }, [data, filters.timeRange]);
+    return filterByDateWindow(data.growth.signupsByWeek, filters, 'weekStart');
+  }, [data, filters]);
+
+  const filteredMonths = useMemo(() => {
+    if (!data) return [];
+    return filterByDateWindow(data.growth.signupsByMonth, filters, 'monthStart');
+  }, [data, filters]);
 
   const filteredActivity = useMemo(() => {
     if (!data?.growth.activityTrend) return [];
-    return filterSignupWeeks(data.growth.activityTrend, filters.timeRange);
-  }, [data, filters.timeRange]);
+    return filterByDateWindow(data.growth.activityTrend, filters, 'weekStart');
+  }, [data, filters]);
+
+  const availableYears = useMemo(() => {
+    if (!data) return [new Date().getFullYear()];
+    const years = new Set<number>([new Date().getFullYear()]);
+    for (const m of data.memberDirectory) {
+      if (m.joinedAt) years.add(new Date(m.joinedAt).getFullYear());
+    }
+    for (const w of data.growth.signupsByWeek) {
+      if (w.weekStart) years.add(new Date(w.weekStart).getFullYear());
+    }
+    return [...years].sort((a, b) => b - a);
+  }, [data]);
 
   if (loading) {
     return (
@@ -222,11 +238,7 @@ export default function AnalyticsPage() {
   }
 
   const { kpis, alerts } = data;
-  const filterActive =
-    filters.timeRange !== 'all' ||
-    filters.status !== 'all' ||
-    filters.verification !== 'all' ||
-    filters.meritTier !== 'all';
+  const filterActive = isFilterActive(filters);
 
   return (
     <main className="min-h-screen md:pl-[260px]">
@@ -246,15 +258,15 @@ export default function AnalyticsPage() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search members, metrics…"
-                className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
+                placeholder="Search members…"
+                className="w-full rounded-xl border border-white/10 bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
               />
             </div>
             <button
               type="button"
               onClick={() => void load(true)}
               disabled={refreshing}
-              className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-4 py-2 text-sm text-zinc-300 hover:text-white"
+              className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:text-white"
             >
               <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
@@ -284,6 +296,7 @@ export default function AnalyticsPage() {
           onChange={setFilters}
           resultCount={filteredMembers.length}
           totalCount={data.memberDirectory.length}
+          availableYears={availableYears}
         />
 
         <div className="flex flex-wrap gap-2">
@@ -309,12 +322,19 @@ export default function AnalyticsPage() {
             data={data}
             filteredMembers={filteredMembers}
             filteredWeeks={filteredWeeks}
+            filteredMonths={filteredMonths}
             filteredActivity={filteredActivity}
             filterActive={filterActive}
+            granularity={filters.granularity}
           />
         )}
         {tab === 'growth' && (
-          <GrowthTab data={data} filteredMembers={filteredMembers} filteredWeeks={filteredWeeks} />
+          <GrowthTab
+            data={data}
+            filteredMembers={filteredMembers}
+            filteredWeeks={filteredWeeks}
+            filteredMonths={filteredMonths}
+          />
         )}
         {tab === 'community' && <CommunityTab data={data} />}
         {tab === 'economy' && <EconomyTab data={data} filteredMembers={filteredMembers} />}
@@ -328,14 +348,18 @@ function OverviewTab({
   data,
   filteredMembers,
   filteredWeeks,
+  filteredMonths,
   filteredActivity,
   filterActive,
+  granularity,
 }: {
   data: PlatformAnalytics;
   filteredMembers: PlatformAnalytics['memberDirectory'];
   filteredWeeks: PlatformAnalytics['growth']['signupsByWeek'];
+  filteredMonths: PlatformAnalytics['growth']['signupsByMonth'];
   filteredActivity: NonNullable<PlatformAnalytics['growth']['activityTrend']>;
   filterActive: boolean;
+  granularity: AnalyticsFilterState['granularity'];
 }) {
   const { kpis, growth, charts, insights, community } = data;
 
@@ -346,11 +370,19 @@ function OverviewTab({
 
   const activitySeries = filteredActivity.length
     ? filteredActivity
-    : (data.growth.activityTrend || []).map((a) => a);
+    : data.growth.activityTrend || [];
+
+  const signupChartData =
+    granularity === 'month' || granularity === 'year'
+      ? filteredMonths.map((m) => ({
+          label: granularity === 'year' ? m.label.split(' ')[1] || m.label : m.label.split(' ')[0],
+          value: m.value,
+        }))
+      : filteredWeeks.map((w) => ({ label: w.week, value: w.newMembers }));
 
   return (
-    <>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+    <div className="space-y-6">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <KpiCard
           label="Total members"
           value={filterActive ? filteredMembers.length : kpis.totalMembers}
@@ -384,33 +416,6 @@ function OverviewTab({
         />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard
-          label="Est. monthly active"
-          value={kpis.estimatedMau.toLocaleString()}
-          sub={`DAU ~${kpis.estimatedDau} · WAU ~${kpis.estimatedWau}`}
-          icon={BarChart3}
-        />
-        <KpiCard
-          label="Forum groups"
-          value={kpis.forumGroups ?? '—'}
-          sub={kpis.forumDiscussions != null ? `${kpis.forumDiscussions} discussions` : 'Community unavailable'}
-          icon={MessageSquare}
-        />
-        <KpiCard
-          label="Moderation team"
-          value={kpis.moderationTeamSize}
-          sub={`${kpis.pendingVerifications} pending verifications`}
-          icon={Shield}
-        />
-        <KpiCard
-          label="Growth trend"
-          value={growth.trendLabel}
-          sub={`${growth.weekOverWeekChange}% week over week`}
-          icon={TrendingUp}
-        />
-      </div>
-
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
         <KpiCard
           label="Open tickets"
@@ -430,11 +435,7 @@ function OverviewTab({
           sub={`${data.liveModules?.disputes ?? 0} total`}
           icon={Shield}
         />
-        <KpiCard
-          label="Teams"
-          value={kpis.teams ?? data.liveModules?.teams ?? 0}
-          icon={Users}
-        />
+        <KpiCard label="Teams" value={kpis.teams ?? data.liveModules?.teams ?? 0} icon={Users} />
         <KpiCard
           label="Marketplace listings"
           value={kpis.marketplaceListings ?? data.liveModules?.marketplaceListings ?? 0}
@@ -448,10 +449,11 @@ function OverviewTab({
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid gap-5 xl:grid-cols-2">
         <ChartCard>
           <LineChart
-            title="Database activity by week"
+            title="Platform activity"
+            subtitle="Signups, tickets, reports, listings & credit transactions from the database"
             labels={activitySeries.map((e) => e.label)}
             series={[
               { label: 'Signups', color: '#34d399', values: activitySeries.map((e) => e.signups) },
@@ -468,70 +470,47 @@ function OverviewTab({
         </ChartCard>
         <ChartCard>
           <VerticalBarChart
-            title="Weekly new member signups"
-            data={filteredWeeks.map((w) => ({ label: w.week, value: w.newMembers }))}
+            title={granularity === 'month' || granularity === 'year' ? 'Signups by period' : 'Weekly signups'}
+            subtitle="Filtered by the selected date range"
+            data={signupChartData}
+            color="#fb7185"
           />
         </ChartCard>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-5 lg:grid-cols-3">
         <ChartCard>
           <DonutChart title="Verification mix" segments={charts.verificationMix} />
         </ChartCard>
         <ChartCard>
-          <DonutChart title="Member status mix" segments={charts.statusMix} />
+          <DonutChart title="Member status" segments={charts.statusMix} />
         </ChartCard>
         <ChartCard>
           <AreaChart
-            title="Cumulative member growth"
+            title="Cumulative growth"
+            subtitle="Members over time"
             data={cumulativeArea.length ? cumulativeArea : [{ label: '—', value: 0 }]}
+            color="#34d399"
           />
         </ChartCard>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <ChartCard>
-          <VerticalBarChart
-            title="Monthly signups"
-            data={data.growth.signupsByMonth.map((m) => ({
-              label: m.label.split(' ')[0],
-              value: m.value,
-            }))}
-            color="#a78bfa"
-          />
-        </ChartCard>
+      <div className="grid gap-5 xl:grid-cols-2">
         <ChartCard>
           <HorizontalBarChart
-            title="Live module counts (database)"
+            title="Live module counts"
+            subtitle="Direct PostgreSQL totals"
             data={(charts.platformActivity || []).map((p) => ({ label: p.label, value: p.value }))}
-          />
-        </ChartCard>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-2">
-        <ChartCard>
-          <DonutChart
-            title="Marketplace listing status"
-            segments={charts.listingStatusMix || []}
+            colorFrom="#60a5fa"
+            colorTo="#fb7185"
           />
         </ChartCard>
         <ChartCard>
-          <div className="flex items-center gap-2">
-            <Lightbulb className="h-4 w-4 text-amber-400" />
-            <p className="text-sm font-semibold text-white">Admin insights</p>
-          </div>
-          <ul className="mt-4 space-y-3">
-            {insights.map((i) => (
-              <li key={i.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-sm">
-                <p className="font-medium text-white">{i.title}</p>
-                <p className="mt-1 text-xs text-zinc-500">{i.detail}</p>
-              </li>
-            ))}
-          </ul>
+          <DonutChart title="Marketplace listings" segments={charts.listingStatusMix || []} />
         </ChartCard>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-5 xl:grid-cols-2">
         <ChartCard>
           <VerticalBarChart
             title="Members by status"
@@ -541,45 +520,55 @@ function OverviewTab({
         </ChartCard>
         <ChartCard>
           <HorizontalBarChart
-            title="Merit tier breakdown"
+            title="Merit tiers"
             data={data.audience.meritTiers.map((t) => ({ label: t.tier, value: t.count }))}
           />
         </ChartCard>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <DataTable
-          title="Top members by merit"
-          columns={['Rank', 'Member', 'Merit', 'Credits', 'Status']}
-          rows={data.audience.topMembers.slice(0, 8).map((m) => [
-            String(m.rank),
-            m.name,
-            String(m.merit),
-            m.credits.toLocaleString(),
-            m.status,
-          ])}
-        />
-        <DataTable
-          title="Newest members"
-          columns={['Member', 'Username', 'Status', 'Verification', 'Joined']}
-          rows={growth.newestMembers.map((m) => [
-            m.name,
-            `@${m.username}`,
-            m.status,
-            m.verification,
-            formatDate(m.joinedAt),
-          ])}
-        />
+      <div className="grid gap-5 xl:grid-cols-2">
+        <ChartCard>
+          <div className="mb-4 flex items-center gap-2">
+            <Lightbulb className="h-4 w-4 text-amber-400" />
+            <p className="text-sm font-semibold text-white">Insights</p>
+          </div>
+          <ul className="space-y-3">
+            {insights.map((i) => (
+              <li key={i.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-sm">
+                <p className="font-medium text-white">{i.title}</p>
+                <p className="mt-1 text-xs text-zinc-500">{i.detail}</p>
+              </li>
+            ))}
+          </ul>
+        </ChartCard>
+        <div className="grid gap-5">
+          <DataTable
+            title="Top members by merit"
+            columns={['Rank', 'Member', 'Merit', 'Credits', 'Status']}
+            rows={data.audience.topMembers.slice(0, 6).map((m) => [
+              String(m.rank),
+              m.name,
+              String(m.merit),
+              m.credits.toLocaleString(),
+              m.status,
+            ])}
+          />
+          <DataTable
+            title="Newest members"
+            columns={['Member', 'Status', 'Joined']}
+            rows={growth.newestMembers.slice(0, 5).map((m) => [m.name, m.status, formatDate(m.joinedAt)])}
+          />
+        </div>
       </div>
 
-      {community.available && community.topGroups && (
+      {community.available && community.topGroups && community.topGroups.length > 0 && (
         <DataTable
           title="Largest community groups"
           columns={['Group', 'Members', 'Status']}
           rows={community.topGroups.map((g) => [g.name, String(g.members), g.status])}
         />
       )}
-    </>
+    </div>
   );
 }
 
@@ -587,10 +576,12 @@ function GrowthTab({
   data,
   filteredMembers,
   filteredWeeks,
+  filteredMonths,
 }: {
   data: PlatformAnalytics;
   filteredMembers: PlatformAnalytics['memberDirectory'];
   filteredWeeks: PlatformAnalytics['growth']['signupsByWeek'];
+  filteredMonths: PlatformAnalytics['growth']['signupsByMonth'];
 }) {
   const { growth, charts, audience } = data;
 
@@ -603,17 +594,18 @@ function GrowthTab({
           ['Avg signups/week', growth.avgSignupsPerWeek],
           ['Retention est.', `${growth.retentionEstimate}%`],
         ].map(([l, v]) => (
-          <div key={String(l)} className="rounded-xl border border-white/[0.06] bg-[#14151c] px-4 py-3">
+          <div key={String(l)} className="rounded-xl border border-white/[0.06] bg-[#12131a] px-4 py-3">
             <p className="text-[10px] uppercase text-zinc-600">{l}</p>
             <p className="text-xl font-bold text-white">{v}</p>
           </div>
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2">
         <ChartCard>
           <AreaChart
-            title="Signup momentum (weekly)"
+            title="Signup momentum"
+            subtitle="Weekly new members in selected range"
             data={filteredWeeks.map((w) => ({ label: w.week, value: w.newMembers }))}
           />
         </ChartCard>
@@ -625,7 +617,7 @@ function GrowthTab({
         </ChartCard>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2">
         <ChartCard>
           <DonutChart title="Verification breakdown" segments={data.charts.verificationMix} />
         </ChartCard>
@@ -638,7 +630,7 @@ function GrowthTab({
         </ChartCard>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-5 lg:grid-cols-2">
         <ChartCard>
           <VerticalBarChart
             title="Members by status"
@@ -649,7 +641,7 @@ function GrowthTab({
         <ChartCard>
           <VerticalBarChart
             title="Monthly signups"
-            data={data.growth.signupsByMonth.map((m) => ({ label: m.label.split(' ')[0], value: m.value }))}
+            data={filteredMonths.map((m) => ({ label: m.label.split(' ')[0], value: m.value }))}
             color="#34d399"
           />
         </ChartCard>
