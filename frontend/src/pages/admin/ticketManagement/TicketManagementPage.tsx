@@ -118,7 +118,9 @@ export default function TicketManagementPage() {
     if (!action?.tab) return;
     if (action.tab === 'disputes' || action.tab === 'reports') {
       window.location.assign(
-        action.tab === 'reports' ? '/admin/moderation?tab=reports' : '/admin/moderation?tab=disputes'
+        action.tab === 'reports'
+          ? '/admin/moderation?tab=cases&queue=reports'
+          : '/admin/moderation?tab=cases&queue=disputes'
       );
       return;
     }
@@ -324,7 +326,7 @@ function OverviewTab({
           label="Open disputes"
           value={summary.openDisputes}
           sub={
-            <Link to="/admin/moderation?tab=disputes" className="text-rose-300 hover:underline">
+            <Link to="/admin/moderation?tab=cases&queue=disputes" className="text-rose-300 hover:underline">
               Managed in Moderation
             </Link>
           }
@@ -333,7 +335,7 @@ function OverviewTab({
           label="Open reports"
           value={summary.openReports}
           sub={
-            <Link to="/admin/moderation?tab=reports" className="text-rose-300 hover:underline">
+            <Link to="/admin/moderation?tab=cases&queue=reports" className="text-rose-300 hover:underline">
               Managed in Moderation
             </Link>
           }
@@ -361,13 +363,13 @@ function OverviewTab({
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link
-              to="/admin/moderation?tab=disputes"
+              to="/admin/moderation?tab=cases&queue=disputes"
               className="inline-flex w-fit items-center rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-medium text-rose-100 hover:bg-rose-500/20"
             >
               Disputes
             </Link>
             <Link
-              to="/admin/moderation?tab=reports"
+              to="/admin/moderation?tab=cases&queue=reports"
               className="inline-flex w-fit items-center rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-100 hover:bg-amber-500/20"
             >
               Reports

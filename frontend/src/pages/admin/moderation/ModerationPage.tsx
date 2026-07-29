@@ -54,16 +54,17 @@ const STAFF_ROLE_OPTIONS = [
 
 const STAFF_STATUS_OPTIONS = ['Active', 'Suspended', 'Locked', 'Banned', 'Inactive'] as const;
 
-type TabId = 'overview' | 'activity' | 'cases' | 'disputes' | 'reports' | 'management';
+type TabId = 'overview' | 'activity' | 'cases' | 'management';
+type CaseQueue = 'mine' | 'disputes' | 'reports' | 'listings' | 'identity';
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
   { id: 'activity', label: 'Activity log', icon: ScrollText },
   { id: 'cases', label: 'Pending cases', icon: Gavel },
-  { id: 'disputes', label: 'Disputes', icon: Scale },
-  { id: 'reports', label: 'Reports', icon: FileWarning },
   { id: 'management', label: 'Management', icon: Settings2 },
 ];
+
+const CASE_QUEUES: CaseQueue[] = ['mine', 'disputes', 'reports', 'listings', 'identity'];
 
 type ManagementSection = 'automated' | 'moderators' | 'video' | 'forum';
 
@@ -114,18 +115,31 @@ function statusClass(status: string) {
 export default function ModerationPage() {
   const { user } = useGlobalState();
   const [searchParams, setSearchParams] = useSearchParams();
-  const paramTab = searchParams.get('tab') as TabId | null;
+  const rawTab = searchParams.get('tab');
   const paramSection = searchParams.get('section') as ManagementSection | null;
-  const validTabs: TabId[] = ['overview', 'activity', 'cases', 'disputes', 'reports', 'management'];
+  const paramQueue = searchParams.get('queue') as CaseQueue | null;
+  const validTabs: TabId[] = ['overview', 'activity', 'cases', 'management'];
   const validSections = MANAGEMENT_SECTIONS.map((s) => s.id);
-  const initialTab = paramTab && validTabs.includes(paramTab) ? paramTab : 'overview';
+  // Legacy ?tab=disputes|reports → Pending cases sub-queues
+  const legacyQueue =
+    rawTab === 'disputes' || rawTab === 'reports' ? (rawTab as CaseQueue) : null;
+  const initialTab: TabId =
+    legacyQueue || (rawTab === 'cases' && paramQueue && CASE_QUEUES.includes(paramQueue))
+      ? 'cases'
+      : rawTab && validTabs.includes(rawTab as TabId)
+        ? (rawTab as TabId)
+        : 'overview';
   const initialSection =
     paramSection && validSections.includes(paramSection) ? paramSection : 'automated';
+  const initialCaseQueue: CaseQueue =
+    legacyQueue ||
+    (paramQueue && CASE_QUEUES.includes(paramQueue) ? paramQueue : 'mine');
 
   const [data, setData] = useState<ModerationOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<TabId>(initialTab);
+  const [caseQueue, setCaseQueue] = useState<CaseQueue>(initialCaseQueue);
   const [mgmtSection, setMgmtSection] = useState<ManagementSection>(initialSection);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<ModerationActivity | null>(null);
@@ -151,12 +165,19 @@ export default function ModerationPage() {
   }, []);
 
   useEffect(() => {
-    if (paramTab && validTabs.includes(paramTab)) setTab(paramTab);
-    else if (!paramTab) setTab('overview');
+    if (rawTab === 'disputes' || rawTab === 'reports') {
+      setTab('cases');
+      setCaseQueue(rawTab);
+      setSearchParams({ tab: 'cases', queue: rawTab }, { replace: true });
+      return;
+    }
+    if (rawTab && validTabs.includes(rawTab as TabId)) setTab(rawTab as TabId);
+    else if (!rawTab) setTab('overview');
+    if (paramQueue && CASE_QUEUES.includes(paramQueue)) setCaseQueue(paramQueue);
     if (paramSection && validSections.includes(paramSection)) setMgmtSection(paramSection);
-  }, [paramTab, paramSection]);
+  }, [rawTab, paramSection, paramQueue]);
 
-  const switchTab = (id: TabId, section?: ManagementSection) => {
+  const switchTab = (id: TabId, section?: ManagementSection, queue?: CaseQueue) => {
     setTab(id);
     if (id === 'management') {
       const nextSection = section || mgmtSection;
@@ -164,7 +185,24 @@ export default function ModerationPage() {
       setSearchParams({ tab: id, section: nextSection }, { replace: true });
       return;
     }
+    if (id === 'cases') {
+      const nextQueue = queue || caseQueue || 'mine';
+      setCaseQueue(nextQueue);
+      setSearchParams(
+        nextQueue === 'mine' ? { tab: id } : { tab: id, queue: nextQueue },
+        { replace: true }
+      );
+      return;
+    }
     setSearchParams(id === 'overview' ? {} : { tab: id }, { replace: true });
+  };
+
+  const switchCaseQueue = (queue: CaseQueue) => {
+    setCaseQueue(queue);
+    setSearchParams(
+      queue === 'mine' ? { tab: 'cases' } : { tab: 'cases', queue },
+      { replace: true }
+    );
   };
 
   const switchMgmtSection = (section: ManagementSection) => {
@@ -238,19 +276,14 @@ export default function ModerationPage() {
             >
               <Icon className="h-4 w-4" />
               {label}
-              {id === 'cases' && summary.yourPendingCases > 0 && (
+              {id === 'cases' &&
+                (summary.yourPendingCases > 0 ||
+                  summary.disputeQueueCount > 0 ||
+                  (summary.openReports ?? 0) > 0) && (
                 <span className="rounded-full bg-amber-500/20 px-1.5 text-[10px] font-bold text-amber-200">
-                  {summary.yourPendingCases}
-                </span>
-              )}
-              {id === 'disputes' && summary.disputeQueueCount > 0 && (
-                <span className="rounded-full bg-rose-500/20 px-1.5 text-[10px] font-bold text-rose-200">
-                  {summary.disputeQueueCount}
-                </span>
-              )}
-              {id === 'reports' && (summary.openReports ?? 0) > 0 && (
-                <span className="rounded-full bg-amber-500/20 px-1.5 text-[10px] font-bold text-amber-200">
-                  {summary.openReports}
+                  {summary.yourPendingCases +
+                    summary.disputeQueueCount +
+                    (summary.openReports ?? 0)}
                 </span>
               )}
             </button>
@@ -294,20 +327,12 @@ export default function ModerationPage() {
         {tab === 'cases' && (
           <CasesTab
             cases={data.pendingCases}
-            staffId={data.currentStaffId ?? user?.staffId ?? user?.staff_id ?? null}
-            onRefresh={() => void load(true)}
-          />
-        )}
-        {tab === 'disputes' && (
-          <DisputesTab
             disputes={(data.disputes || []) as Dispute[]}
-            onUpdated={() => void load(true)}
-          />
-        )}
-        {tab === 'reports' && (
-          <ReportsTab
             reports={(data.reports || []) as UserReport[]}
-            onUpdated={() => void load(true)}
+            staffId={data.currentStaffId ?? user?.staffId ?? user?.staff_id ?? null}
+            queue={caseQueue}
+            onQueueChange={switchCaseQueue}
+            onRefresh={() => void load(true)}
           />
         )}
         {tab === 'management' && (
@@ -334,7 +359,7 @@ function OverviewTab({
 }: {
   data: ModerationOverview;
   onViewActivity: (a: ModerationActivity) => void;
-  onGoTab: (t: TabId, section?: ManagementSection) => void;
+  onGoTab: (t: TabId, section?: ManagementSection, queue?: CaseQueue) => void;
 }) {
   const s = data.summary;
 
@@ -365,20 +390,22 @@ function OverviewTab({
 
         <div className="grid gap-3 sm:grid-cols-4">
           {[
-            ['Forum groups', s.forumGroupsActive, null as TabId | null],
-            ['Discussions', s.forumDiscussions, null],
-            ['Disputes', s.disputeQueueCount, 'disputes' as TabId],
-            ['Reports', s.openReports ?? 0, 'reports' as TabId],
-          ].map(([label, val, go]) => (
+            ['Forum groups', s.forumGroupsActive, null as TabId | null, undefined as CaseQueue | undefined],
+            ['Discussions', s.forumDiscussions, null, undefined],
+            ['Disputes', s.disputeQueueCount, 'cases' as TabId, 'disputes' as CaseQueue],
+            ['Reports', s.openReports ?? 0, 'cases' as TabId, 'reports' as CaseQueue],
+          ].map(([label, val, go, queue]) => (
             <div
               key={String(label)}
               role={go ? 'button' : undefined}
               tabIndex={go ? 0 : undefined}
-              onClick={go ? () => onGoTab(go as TabId) : undefined}
+              onClick={go ? () => onGoTab(go as TabId, undefined, queue as CaseQueue | undefined) : undefined}
               onKeyDown={
                 go
                   ? (e) => {
-                      if (e.key === 'Enter' || e.key === ' ') onGoTab(go as TabId);
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        onGoTab(go as TabId, undefined, queue as CaseQueue | undefined);
+                      }
                     }
                   : undefined
               }
@@ -557,8 +584,7 @@ function CasesPreview({
         <div>
           <h2 className="text-sm font-semibold text-white">Pending cases</h2>
           <p className="text-xs text-zinc-500">
-            {moderation.length} report · {listings.length} listing · {identity.length}{' '}
-            identity
+            Reports, disputes, listings, and identity — open from Pending cases
           </p>
         </div>
         <button type="button" onClick={onViewAll} className="text-xs text-rose-400 hover:underline">
@@ -704,16 +730,22 @@ function ActivityTab({
 
 function CasesTab({
   cases,
+  disputes,
+  reports,
   staffId,
+  queue,
+  onQueueChange,
   onRefresh,
 }: {
   cases: ModerationCase[];
+  disputes: Dispute[];
+  reports: UserReport[];
   staffId?: string | number | null;
+  queue: CaseQueue;
+  onQueueChange: (queue: CaseQueue) => void;
   onRefresh: () => void;
 }) {
-  type CaseQueue = 'mine' | 'moderation' | 'listings' | 'identity';
   type MineCategory = 'all' | 'report' | 'listing' | 'identity';
-  const [queue, setQueue] = useState<CaseQueue>('mine');
   const [mineCategory, setMineCategory] = useState<MineCategory>('all');
   const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('all');
@@ -754,10 +786,6 @@ function CasesTab({
     }),
     [myCases]
   );
-  const moderationCases = useMemo(
-    () => cases.filter((c) => c.source === 'report'),
-    [cases]
-  );
   const listingCases = useMemo(
     () => cases.filter((c) => c.source === 'listing'),
     [cases]
@@ -766,6 +794,23 @@ function CasesTab({
     () => cases.filter((c) => c.source === 'identity'),
     [cases]
   );
+  const openDisputeCount = useMemo(
+    () =>
+      disputes.filter(
+        (d) =>
+          !['resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn'].includes(
+            String(d.status).toLowerCase()
+          )
+      ).length,
+    [disputes]
+  );
+  const openReportCount = useMemo(
+    () =>
+      reports.filter(
+        (r) => !['resolved', 'closed', 'dismissed'].includes(String(r.status).toLowerCase())
+      ).length,
+    [reports]
+  );
   const scopedCases =
     queue === 'mine'
       ? myCasesByCategory
@@ -773,11 +818,11 @@ function CasesTab({
         ? listingCases
         : queue === 'identity'
           ? identityCases
-          : moderationCases;
+          : [];
 
   const switchQueue = (next: CaseQueue) => {
     if (next === queue) return;
-    setQueue(next);
+    onQueueChange(next);
     setMineCategory('all');
     setSearch('');
     setPriorityFilter('all');
@@ -798,7 +843,6 @@ function CasesTab({
     if (queue === 'mine' && mineCategory === 'all') {
       return uniqueOptions([
         'Report',
-        'Dispute',
         'Listing review',
         'Identity verification',
         ...scopedCases.map((c) => c.type),
@@ -962,9 +1006,15 @@ function CasesTab({
               icon: UserCog,
             },
             {
-              id: 'moderation' as const,
+              id: 'disputes' as const,
+              label: 'Disputes',
+              count: openDisputeCount,
+              icon: Scale,
+            },
+            {
+              id: 'reports' as const,
               label: 'Reports',
-              count: moderationCases.length,
+              count: openReportCount,
               icon: FileWarning,
             },
             {
@@ -1004,6 +1054,11 @@ function CasesTab({
         ))}
       </div>
 
+      {queue === 'disputes' && <DisputesTab disputes={disputes} onUpdated={onRefresh} />}
+      {queue === 'reports' && <ReportsTab reports={reports} onUpdated={onRefresh} />}
+
+      {queue !== 'disputes' && queue !== 'reports' && (
+      <>
       {queue === 'mine' && (
         <div className="flex flex-wrap gap-1.5">
           {(
@@ -1050,7 +1105,7 @@ function CasesTab({
                     ? 'Search name / username…'
                     : queue === 'mine'
                       ? 'Search my reports, listings, identity…'
-                      : 'Search report / target…'
+                      : 'Search case / target…'
               }
               className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
             />
@@ -1076,7 +1131,7 @@ function CasesTab({
                 value: priorityFilter,
                 options: priorityOptions,
               },
-              ...(queue === 'moderation' || queue === 'mine'
+              ...(queue === 'mine'
                 ? [
                     {
                       id: 'type',
@@ -1104,7 +1159,7 @@ function CasesTab({
                 { value: 'newest', label: 'Newest first' },
                 { value: 'oldest', label: 'Oldest first' },
                 { value: 'priority', label: 'Priority (High first)' },
-                ...(queue === 'mine' || queue === 'moderation'
+                ...(queue === 'mine'
                   ? [{ value: 'type', label: 'Type A–Z' }]
                   : []),
                 { value: 'target', label: 'Target A–Z' },
@@ -1200,6 +1255,8 @@ function CasesTab({
           onClose={closeModal}
           onConfirm={() => void handleDelete()}
         />
+      )}
+      </>
       )}
     </div>
   );

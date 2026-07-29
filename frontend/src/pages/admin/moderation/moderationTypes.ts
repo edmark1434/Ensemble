@@ -101,9 +101,9 @@ export type ModerationOverview = {
   };
   currentStaffId?: string | number | null;
   pendingCases: ModerationCase[];
-  /** Full dispute desk list (Admin Disputes tab) */
+  /** Full dispute desk list (Pending cases → Disputes) */
   disputes?: import('../ticketManagement/ticketTypes').Dispute[];
-  /** Full user reports list (Admin Reports tab) */
+  /** Full user reports list (Pending cases → Reports) */
   reports?: import('../ticketManagement/ticketTypes').UserReport[];
   recentActivity: ModerationActivity[];
   moderatorRoster: ModeratorProfile[];
