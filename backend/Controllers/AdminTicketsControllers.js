@@ -7,6 +7,7 @@ const {
   updateDispute,
   getDisputeDetail,
   addDisputeMessage,
+  setDisputeMessageAudience,
   updateReport,
   getReportDetail,
 } = require('../Repositories/AdminTicketsRepositories');
@@ -121,13 +122,16 @@ async function patchAdminDispute(req, res) {
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error updating dispute:', err);
-    res.status(500).json({ success: false, message: 'Failed to update dispute' });
+    const msg = err.message || 'Failed to update dispute';
+    const isClient =
+      /assign yourself|view only|cannot|only admin|only the requester|not found|invalid/i.test(msg);
+    res.status(isClient ? 400 : 500).json({ success: false, message: msg });
   }
 }
 
 async function getAdminDisputeDetail(req, res) {
   try {
-    const data = await getDisputeDetail(req.params.id);
+    const data = await getDisputeDetail(req.params.id, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -138,17 +142,54 @@ async function getAdminDisputeDetail(req, res) {
 
 async function postAdminDisputeMessage(req, res) {
   try {
-    const { body, isInternal } = req.body;
+    const { body, isInternal, audience, visibleToParties, visibleToPublic } = req.body;
     if (!body?.trim()) {
       return res.status(400).json({ success: false, message: 'Message body is required' });
     }
-    const data = await addDisputeMessage(req.params.id, body.trim(), req.session, Boolean(isInternal));
+    const data = await addDisputeMessage(req.params.id, body.trim(), req.session, {
+      isInternal: Boolean(isInternal),
+      audience,
+      visibleToParties: Boolean(visibleToParties),
+      visibleToPublic: Boolean(visibleToPublic),
+    });
     if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error adding dispute message:', err);
-    const msg = err?.message?.includes('MongoDB') ? err.message : 'Failed to add message';
-    res.status(err?.message?.includes('MongoDB') ? 503 : 500).json({ success: false, message: msg });
+    const msg = err?.message || 'Failed to add message';
+    if (msg.includes('MongoDB')) {
+      return res.status(503).json({ success: false, message: msg });
+    }
+    const isClient = /assign yourself|view only|could not match/i.test(msg);
+    res.status(isClient ? 400 : 500).json({ success: false, message: msg });
+  }
+}
+
+async function patchAdminDisputeMessage(req, res) {
+  try {
+    const { audience, publish } = req.body;
+    let nextAudience = audience;
+    if (publish === true) nextAudience = 'parties';
+    if (publish === false) nextAudience = audience || 'author_and_staff';
+    if (!nextAudience) {
+      return res.status(400).json({ success: false, message: 'audience or publish is required' });
+    }
+    const data = await setDisputeMessageAudience(
+      req.params.id,
+      req.params.messageId,
+      nextAudience,
+      req.session
+    );
+    if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error updating dispute message:', err);
+    const msg = err?.message || 'Failed to update message';
+    if (msg.includes('MongoDB')) {
+      return res.status(503).json({ success: false, message: msg });
+    }
+    const isClient = /assign yourself|invalid|not found/i.test(msg);
+    res.status(isClient ? 400 : 500).json({ success: false, message: msg });
   }
 }
 
@@ -339,6 +380,7 @@ module.exports = {
   getAdminDisputeDetail,
   patchAdminDispute,
   postAdminDisputeMessage,
+  patchAdminDisputeMessage,
   getAdminReportDetail,
   patchAdminReport,
   createPublicTicket,

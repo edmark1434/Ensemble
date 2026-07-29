@@ -437,9 +437,9 @@ async function getSupportOverview() {
       tables: [
         'tickets',
         'ticket_chats',
-        'inbox/messages (mongo)',
+        'inbox/messages (mongo — tickets + disputes)',
         'disputes',
-        'dispute_chats',
+        'dispute_chats → mongo ObjectId',
         'reports',
         'violations',
         'restrictions',

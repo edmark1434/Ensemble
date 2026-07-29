@@ -15,6 +15,7 @@ export type DisputeDetail = {
   messages: TicketMessage[];
   chatId?: string | null;
   chatAvailable?: boolean;
+  permissions?: import("@/pages/admin/ticketManagement/ticketTypes").DisputePermissions;
   assignableStaff: { staffId: number | string; name: string; role: string }[];
 };
 
