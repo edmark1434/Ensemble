@@ -13,9 +13,9 @@ function normalizeStatus(status) {
 function deriveVerification(row) {
   const v = String(row.verification_status || '').toLowerCase();
   if (v === 'verified' || v === 'approved' || v === 'business verified') return 'Fully verified';
+  if (v.includes('reverification') || v === 'expired') return 'Pending review';
   if (v.includes('pending') || v.includes('review')) return 'Pending review';
   if (v.includes('partial')) return 'Partially verified';
-  if (normalizeStatus(row.status) !== 'Active') return 'Pending review';
   if (row.firebase_user_uuid && row.customer_id) return 'Partially verified';
   return 'Unverified';
 }
@@ -98,44 +98,148 @@ async function fetchStaffSummary() {
 
 async function fetchSignupTrend() {
   const result = await pool.query(`
+    WITH bounds AS (
+      SELECT DATE_TRUNC('week', CURRENT_TIMESTAMP) AS current_week
+    ),
+    week_spine AS (
+      SELECT gs AS week_start
+      FROM bounds,
+        generate_series(
+          bounds.current_week - INTERVAL '11 weeks',
+          bounds.current_week,
+          INTERVAL '1 week'
+        ) AS gs
+    ),
+    counted AS (
+      SELECT
+        DATE_TRUNC('week', created_at) AS week_start,
+        COUNT(*)::int AS signups
+      FROM accounts
+      WHERE deleted_at IS NULL AND type = 'User'
+      GROUP BY DATE_TRUNC('week', created_at)
+    ),
+    filled AS (
+      SELECT
+        w.week_start,
+        COALESCE(c.signups, 0)::int AS signups
+      FROM week_spine w
+      LEFT JOIN counted c ON c.week_start = w.week_start
+    )
     SELECT
-      TO_CHAR(DATE_TRUNC('week', created_at), 'Mon DD') AS week_label,
-      DATE_TRUNC('week', created_at) AS week_start,
-      COUNT(*)::int AS signups
-    FROM accounts
-    WHERE deleted_at IS NULL AND type = 'User'
-    GROUP BY DATE_TRUNC('week', created_at)
-    ORDER BY week_start ASC
-    LIMIT 24
+      TO_CHAR(f.week_start, 'Mon DD') AS week_label,
+      f.week_start,
+      f.signups,
+      (
+        SELECT COALESCE(SUM(x.signups), 0)::int
+        FROM counted x
+        WHERE x.week_start <= f.week_start
+      ) AS cumulative
+    FROM filled f
+    ORDER BY f.week_start ASC
   `);
-  let cumulative = 0;
-  return result.rows.map((r) => {
-    cumulative += r.signups;
-    return {
-      week: r.week_label,
-      weekStart: r.week_start,
-      newMembers: r.signups,
-      cumulativeMembers: cumulative,
-    };
-  });
+  return result.rows.map((r) => ({
+    week: r.week_label,
+    weekStart: r.week_start,
+    newMembers: Number(r.signups || 0),
+    cumulativeMembers: Number(r.cumulative || 0),
+  }));
 }
 
 async function fetchSignupByMonth() {
   const result = await pool.query(`
+    WITH bounds AS (
+      SELECT DATE_TRUNC('month', CURRENT_TIMESTAMP) AS current_month
+    ),
+    month_spine AS (
+      SELECT gs AS month_start
+      FROM bounds,
+        generate_series(
+          bounds.current_month - INTERVAL '11 months',
+          bounds.current_month,
+          INTERVAL '1 month'
+        ) AS gs
+    ),
+    counted AS (
+      SELECT
+        DATE_TRUNC('month', created_at) AS month_start,
+        COUNT(*)::int AS signups
+      FROM accounts
+      WHERE deleted_at IS NULL AND type = 'User'
+      GROUP BY DATE_TRUNC('month', created_at)
+    )
     SELECT
-      TO_CHAR(DATE_TRUNC('month', created_at), 'Mon YYYY') AS month_label,
-      DATE_TRUNC('month', created_at) AS month_start,
-      COUNT(*)::int AS signups
-    FROM accounts
-    WHERE deleted_at IS NULL AND type = 'User'
-    GROUP BY DATE_TRUNC('month', created_at)
-    ORDER BY month_start ASC
-    LIMIT 12
+      TO_CHAR(m.month_start, 'Mon YYYY') AS month_label,
+      m.month_start,
+      COALESCE(c.signups, 0)::int AS signups
+    FROM month_spine m
+    LEFT JOIN counted c ON c.month_start = m.month_start
+    ORDER BY m.month_start ASC
   `);
   return result.rows.map((r) => ({
     label: r.month_label,
     monthStart: r.month_start,
-    value: r.signups,
+    value: Number(r.signups || 0),
+  }));
+}
+
+async function fetchActivityTrend() {
+  const result = await pool
+    .query(
+      `
+    WITH bounds AS (
+      SELECT DATE_TRUNC('week', CURRENT_TIMESTAMP) AS current_week
+    ),
+    week_spine AS (
+      SELECT gs AS week_start
+      FROM bounds,
+        generate_series(
+          bounds.current_week - INTERVAL '11 weeks',
+          bounds.current_week,
+          INTERVAL '1 week'
+        ) AS gs
+    )
+    SELECT
+      TO_CHAR(w.week_start, 'Mon DD') AS week_label,
+      w.week_start,
+      (
+        SELECT COUNT(*)::int FROM accounts a
+        WHERE a.deleted_at IS NULL AND a.type = 'User'
+          AND DATE_TRUNC('week', a.created_at) = w.week_start
+      ) AS signups,
+      (
+        SELECT COUNT(*)::int FROM tickets t
+        WHERE DATE_TRUNC('week', t.created_at) = w.week_start
+      ) AS tickets,
+      (
+        SELECT COUNT(*)::int FROM reports r
+        WHERE r.deleted_at IS NULL
+          AND DATE_TRUNC('week', r.created_at) = w.week_start
+      ) AS reports,
+      (
+        SELECT COUNT(*)::int FROM credit_transactions ct
+        WHERE DATE_TRUNC('week', ct.created_at) = w.week_start
+      ) AS credit_tx,
+      (
+        SELECT COUNT(*)::int FROM marketplace_listings ml
+        WHERE DATE_TRUNC('week', ml.created_at) = w.week_start
+      ) AS listings
+    FROM week_spine w
+    ORDER BY w.week_start ASC
+  `
+    )
+    .catch((err) => {
+      console.error('fetchActivityTrend error:', err.message);
+      return { rows: [] };
+    });
+
+  return result.rows.map((r) => ({
+    label: r.week_label,
+    weekStart: r.week_start,
+    signups: Number(r.signups || 0),
+    tickets: Number(r.tickets || 0),
+    reports: Number(r.reports || 0),
+    creditTransactions: Number(r.credit_tx || 0),
+    listings: Number(r.listings || 0),
   }));
 }
 
@@ -153,13 +257,13 @@ function buildCreditBuckets(members) {
 }
 
 function buildEngagementTrend(signupTrend, totalMembers) {
-  return signupTrend.map((w, i) => ({
+  return signupTrend.map((w) => ({
     label: w.week,
     weekStart: w.weekStart,
     signups: w.newMembers,
-    estimatedDau: Math.max(1, Math.round((w.cumulativeMembers || totalMembers) * 0.11)),
-    estimatedWau: Math.max(1, Math.round((w.cumulativeMembers || totalMembers) * 0.27)),
-    estimatedMau: Math.max(1, Math.round((w.cumulativeMembers || totalMembers) * 0.62)),
+    estimatedDau: Math.max(0, Math.round((w.cumulativeMembers || totalMembers) * 0.11)),
+    estimatedWau: Math.max(0, Math.round((w.cumulativeMembers || totalMembers) * 0.27)),
+    estimatedMau: Math.max(0, Math.round((w.cumulativeMembers || totalMembers) * 0.62)),
   }));
 }
 
@@ -188,12 +292,15 @@ async function fetchForumPlatformStats() {
     const groupsCol = db.collection('forum_groups');
     const discussionsCol = db.collection('forum_discussions');
 
-    const [groups, discussions, activeCount, inactiveCount] = await Promise.all([
-      groupsCol.find({}).sort({ created_at: -1 }).limit(30).toArray(),
-      discussionsCol.find({}).sort({ created_at: -1 }).limit(20).toArray(),
-      groupsCol.countDocuments({ status: 'active' }),
-      groupsCol.countDocuments({ status: { $ne: 'active' } }),
-    ]);
+    const [groups, discussions, totalGroups, activeCount, inactiveCount, totalDiscussions] =
+      await Promise.all([
+        groupsCol.find({}).sort({ created_at: -1 }).limit(30).toArray(),
+        discussionsCol.find({}).sort({ created_at: -1 }).limit(20).toArray(),
+        groupsCol.countDocuments({}),
+        groupsCol.countDocuments({ status: 'active' }),
+        groupsCol.countDocuments({ status: { $ne: 'active' } }),
+        discussionsCol.countDocuments({}),
+      ]);
 
     const memberTotal = groups.reduce((s, g) => s + (g.members?.length || 0), 0);
     const tagMap = new Map();
@@ -206,16 +313,20 @@ async function fetchForumPlatformStats() {
     return {
       available: true,
       groups: {
-        total: groups.length,
+        total: totalGroups,
         active: activeCount,
         inactive: inactiveCount,
         totalMembers: memberTotal,
-        avgMembersPerGroup: groups.length ? Math.round((memberTotal / groups.length) * 10) / 10 : 0,
+        avgMembersPerGroup: groups.length
+          ? Math.round((memberTotal / groups.length) * 10) / 10
+          : 0,
       },
       discussions: {
-        total: await discussionsCol.countDocuments(),
+        total: totalDiscussions,
         sampledComments: commentTotal,
-        avgComments: discussions.length ? Math.round((commentTotal / discussions.length) * 10) / 10 : 0,
+        avgComments: discussions.length
+          ? Math.round((commentTotal / discussions.length) * 10) / 10
+          : 0,
       },
       allGroupsMemberCounts: groups.map((g) => ({
         members: g.members?.length || 0,
@@ -260,7 +371,7 @@ function buildMeritTiers(members) {
   }));
 }
 
-function buildPlatformAlerts(members, forum, pendingCount, suspendedCount) {
+function buildPlatformAlerts(members, forum, pendingCount, suspendedCount, liveModules = {}) {
   const alerts = [];
   const unverified = members.filter((m) => m.verification === 'Unverified').length;
 
@@ -275,6 +386,20 @@ function buildPlatformAlerts(members, forum, pendingCount, suspendedCount) {
     alerts.push({
       id: 'suspended',
       message: `${suspendedCount} suspended member account(s) on the platform.`,
+      severity: 'warning',
+    });
+  }
+  if ((liveModules.openTickets || 0) > 0) {
+    alerts.push({
+      id: 'tickets',
+      message: `${liveModules.openTickets} open support ticket(s) need attention.`,
+      severity: 'warning',
+    });
+  }
+  if ((liveModules.openReports || 0) + (liveModules.openDisputes || 0) > 0) {
+    alerts.push({
+      id: 'moderation',
+      message: `${liveModules.openReports || 0} open report(s) and ${liveModules.openDisputes || 0} open dispute(s).`,
       severity: 'warning',
     });
   }
@@ -319,27 +444,68 @@ function computeEngagementScore(members, forum, profileRate) {
 }
 
 async function getAnalyticsOverview() {
-  const [members, staffRoles, signupTrend, accountCounts, forum] = await Promise.all([
-    fetchPlatformMembers(),
-    fetchStaffSummary(),
-    fetchSignupTrend(),
-    pool.query(`
+  const [
+    members,
+    staffRoles,
+    signupTrend,
+    accountCounts,
+    forum,
+    liveModules,
+    creditTotals,
+    pendingVerify,
+    activityTrend,
+  ] = await Promise.all([
+      fetchPlatformMembers(),
+      fetchStaffSummary(),
+      fetchSignupTrend(),
+      pool.query(`
       SELECT
         COUNT(*) FILTER (WHERE type = 'User' AND deleted_at IS NULL)::int AS users,
         COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) = 'active' AND type = 'User' AND deleted_at IS NULL)::int AS active_users,
         COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) != 'active' AND type = 'User' AND deleted_at IS NULL)::int AS non_active_users,
-        COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) LIKE '%suspend%' AND type = 'User')::int AS suspended_users
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) LIKE '%suspend%' AND type = 'User' AND deleted_at IS NULL)::int AS suspended_users,
+        COUNT(*) FILTER (WHERE LOWER(COALESCE(status, '')) LIKE '%ban%' AND type = 'User' AND deleted_at IS NULL)::int AS banned_users
       FROM accounts
     `),
-    fetchForumPlatformStats(),
-  ]);
+      fetchForumPlatformStats(),
+      fetchLiveModuleCounts(),
+      pool
+        .query(
+          `
+        SELECT COALESCE(SUM(w.balance_credits), 0)::bigint AS credits
+        FROM wallets w
+        WHERE w.type = 'account wallets'
+      `
+        )
+        .catch(() => ({ rows: [{ credits: 0 }] })),
+      pool
+        .query(
+          `
+        SELECT COUNT(*)::int AS c
+        FROM (
+          SELECT DISTINCT ON (account_id) status
+          FROM account_verification
+          WHERE deleted_at IS NULL
+          ORDER BY account_id, created_at DESC
+        ) latest
+        WHERE LOWER(COALESCE(status, 'unverified')) IN (
+          'pending', 'pending review', 'reverification_required'
+        )
+      `
+        )
+        .catch(() => ({ rows: [{ c: 0 }] })),
+      fetchActivityTrend(),
+    ]);
 
   const counts = accountCounts.rows[0];
   const totalMembers = members.length;
   const activeMembers = members.filter((m) => m.status === 'Active').length;
   const verifiedMembers = members.filter((m) => m.verification === 'Fully verified').length;
-  const pendingMembers = members.filter((m) => m.verification === 'Pending review' || m.status !== 'Active').length;
+  const pendingMembers = Number(pendingVerify.rows[0]?.c || 0);
+  const pendingFromDirectory = members.filter((m) => m.verification === 'Pending review').length;
+  const pendingVerifications = Math.max(pendingMembers, pendingFromDirectory);
   const suspendedMembers = Number(counts.suspended_users);
+  const bannedMembers = Number(counts.banned_users || 0);
 
   const withAvatar = members.filter((m) => m.hasAvatar).length;
   const withTagline = members.filter((m) => m.hasTagline).length;
@@ -348,7 +514,8 @@ async function getAnalyticsOverview() {
     : 0;
 
   const totalMerit = members.reduce((s, m) => s + m.merit, 0);
-  const totalCredits = members.reduce((s, m) => s + m.credits, 0);
+  const memberCredits = members.reduce((s, m) => s + m.credits, 0);
+  const totalCredits = Math.max(Number(creditTotals.rows[0]?.credits || 0), memberCredits);
 
   const lastWeek = signupTrend.length ? signupTrend[signupTrend.length - 1].newMembers : 0;
   const prevWeek = signupTrend.length > 1 ? signupTrend[signupTrend.length - 2].newMembers : lastWeek;
@@ -357,9 +524,9 @@ async function getAnalyticsOverview() {
 
   const engagementScore = computeEngagementScore(members, forum, profileCompleteRate);
 
-  const estimatedMau = Math.max(1, Math.round(totalMembers * 0.62));
-  const estimatedWau = Math.max(1, Math.round(totalMembers * 0.27));
-  const estimatedDau = Math.max(1, Math.round(totalMembers * 0.11));
+  const estimatedMau = Math.max(0, Math.round(totalMembers * 0.62));
+  const estimatedWau = Math.max(0, Math.round(totalMembers * 0.27));
+  const estimatedDau = Math.max(0, Math.round(totalMembers * 0.11));
 
   const participationRate =
     forum.available && totalMembers > 0
@@ -373,6 +540,30 @@ async function getAnalyticsOverview() {
     ? buildGroupSizeDistribution(forum.allGroupsMemberCounts || [])
     : [];
 
+  const platformActivity = [
+    { label: 'Tickets', value: liveModules.tickets, color: '#60a5fa' },
+    { label: 'Open tickets', value: liveModules.openTickets, color: '#fb7185' },
+    { label: 'Reports', value: liveModules.reports, color: '#fbbf24' },
+    { label: 'Disputes', value: liveModules.disputes, color: '#a78bfa' },
+    { label: 'Listings', value: liveModules.marketplaceListings, color: '#34d399' },
+    { label: 'Credit tx', value: liveModules.creditTransactions, color: '#f472b6' },
+    { label: 'Teams', value: liveModules.teams, color: '#38bdf8' },
+    { label: 'Violations', value: liveModules.violations, color: '#f87171' },
+  ].filter((x) => x.value > 0);
+
+  const listingStatusMix = [
+    { label: 'Pending', value: liveModules.pendingListings, color: '#fbbf24' },
+    { label: 'Approved', value: liveModules.approvedListings, color: '#34d399' },
+    {
+      label: 'Other',
+      value: Math.max(
+        0,
+        liveModules.marketplaceListings - liveModules.pendingListings - liveModules.approvedListings
+      ),
+      color: '#71717a',
+    },
+  ].filter((x) => x.value > 0);
+
   const verificationChart = [
     { label: 'Fully verified', value: members.filter((m) => m.verification === 'Fully verified').length, color: '#34d399' },
     { label: 'Partial', value: members.filter((m) => m.verification === 'Partially verified').length, color: '#fbbf24' },
@@ -383,7 +574,8 @@ async function getAnalyticsOverview() {
   const statusChart = [
     { label: 'Active', value: activeMembers, color: '#34d399' },
     { label: 'Suspended', value: suspendedMembers, color: '#fbbf24' },
-    { label: 'Other', value: totalMembers - activeMembers - suspendedMembers, color: '#a1a1aa' },
+    { label: 'Banned', value: bannedMembers, color: '#f87171' },
+    { label: 'Other', value: Math.max(0, totalMembers - activeMembers - suspendedMembers - bannedMembers), color: '#a1a1aa' },
   ].filter((x) => x.value > 0);
 
   return {
@@ -404,13 +596,19 @@ async function getAnalyticsOverview() {
       totalCreditsInCirculation: totalCredits,
       avgMemberMerit: totalMembers ? Math.round((totalMerit / totalMembers) * 10) / 10 : 0,
       moderationTeamSize: staffRoles.reduce((s, r) => s + r.count, 0),
-      pendingVerifications: pendingMembers,
+      pendingVerifications,
+      openTickets: liveModules.openTickets,
+      openReports: liveModules.openReports,
+      openDisputes: liveModules.openDisputes,
+      teams: liveModules.teams,
+      marketplaceListings: liveModules.marketplaceListings,
     },
-    alerts: buildPlatformAlerts(members, forum, pendingMembers, suspendedMembers),
+    alerts: buildPlatformAlerts(members, forum, pendingVerifications, suspendedMembers, liveModules),
     growth: {
       signupsByWeek: signupTrend,
       signupsByMonth,
       engagementTrend,
+      activityTrend,
       weekOverWeekChange: growthPercent,
       trendLabel:
         growthPercent > 10 ? 'Growing' : growthPercent < -5 ? 'Declining' : 'Stable',
@@ -435,6 +633,8 @@ async function getAnalyticsOverview() {
       meritTierBars: buildMeritTiers(members).map((t) => ({ label: t.tier, value: t.count })),
       creditBuckets,
       groupSizeDistribution,
+      platformActivity,
+      listingStatusMix,
     },
     memberDirectory: members.map((m) => ({
       id: m.id,
@@ -513,17 +713,24 @@ async function getAnalyticsOverview() {
         .map((m) => ({ name: m.name, username: m.username, merit: m.merit, credits: m.credits })),
       distribution: buildMeritTiers(members),
       creditBuckets,
+      creditTransactions: liveModules.creditTransactions,
     },
     operations: {
       moderationTeam: staffRoles,
       activeModerators: staffRoles.reduce((s, r) => s + r.active, 0),
-      pendingVerifications: pendingMembers,
+      pendingVerifications,
       suspendedAccounts: suspendedMembers,
+      bannedAccounts: bannedMembers,
       nonActiveAccounts: Number(counts.non_active_users),
       platformHealthScore: engagementScore,
+      openTickets: liveModules.openTickets,
+      openReports: liveModules.openReports,
+      openDisputes: liveModules.openDisputes,
+      activeViolations: liveModules.activeViolations,
+      pendingListings: liveModules.pendingListings,
     },
-    insights: buildInsights(members, forum, growthPercent, engagementScore),
-    liveModules: await fetchLiveModuleCounts(),
+    insights: buildInsights(members, forum, growthPercent, engagementScore, liveModules),
+    liveModules,
     comingSoon: {
       title: 'Metrics still estimated or awaiting session instrumentation',
       modules: [
@@ -534,18 +741,72 @@ async function getAnalyticsOverview() {
 }
 
 async function fetchLiveModuleCounts() {
-  const [teams, listings, jobs, projects, tx] = await Promise.all([
-    pool.query(`SELECT COUNT(*)::int AS c FROM teams`).catch(() => ({ rows: [{ c: 0 }] })),
-    pool.query(`
+  const [teams, listings, jobs, projects, tx, reports, disputes, tickets, violations] =
+    await Promise.all([
+      pool.query(`SELECT COUNT(*)::int AS c FROM teams`).catch(() => ({ rows: [{ c: 0 }] })),
+      pool
+        .query(
+          `
       SELECT COUNT(*)::int AS total,
         COUNT(*) FILTER (WHERE LOWER(status) = 'pending')::int AS pending,
         COUNT(*) FILTER (WHERE LOWER(status) = 'approved')::int AS approved
       FROM marketplace_listings
-    `).catch(() => ({ rows: [{ total: 0, pending: 0, approved: 0 }] })),
-    pool.query(`SELECT COUNT(*)::int AS c FROM jobs`).catch(() => ({ rows: [{ c: 0 }] })),
-    pool.query(`SELECT COUNT(*)::int AS c FROM projects`).catch(() => ({ rows: [{ c: 0 }] })),
-    pool.query(`SELECT COUNT(*)::int AS c FROM credit_transactions`).catch(() => ({ rows: [{ c: 0 }] })),
-  ]);
+    `
+        )
+        .catch(() => ({ rows: [{ total: 0, pending: 0, approved: 0 }] })),
+      pool.query(`SELECT COUNT(*)::int AS c FROM jobs`).catch(() => ({ rows: [{ c: 0 }] })),
+      pool.query(`SELECT COUNT(*)::int AS c FROM projects`).catch(() => ({ rows: [{ c: 0 }] })),
+      pool
+        .query(`SELECT COUNT(*)::int AS c FROM credit_transactions`)
+        .catch(() => ({ rows: [{ c: 0 }] })),
+      pool
+        .query(
+          `
+        SELECT COUNT(*)::int AS total,
+          COUNT(*) FILTER (
+            WHERE deleted_at IS NULL
+              AND LOWER(COALESCE(status, 'open')) NOT IN ('resolved', 'closed', 'dismissed')
+          )::int AS open_count
+        FROM reports
+      `
+        )
+        .catch(() => ({ rows: [{ total: 0, open_count: 0 }] })),
+      pool
+        .query(
+          `
+        SELECT COUNT(*)::int AS total,
+          COUNT(*) FILTER (
+            WHERE LOWER(COALESCE(status, 'open')) NOT IN ('resolved', 'closed')
+          )::int AS open_count
+        FROM disputes
+      `
+        )
+        .catch(() => ({ rows: [{ total: 0, open_count: 0 }] })),
+      pool
+        .query(
+          `
+        SELECT COUNT(*)::int AS total,
+          COUNT(*) FILTER (
+            WHERE deleted_at IS NULL
+              AND LOWER(COALESCE(status, 'open')) NOT IN ('resolved', 'closed')
+          )::int AS open_count
+        FROM tickets
+      `
+        )
+        .catch(() => ({ rows: [{ total: 0, open_count: 0 }] })),
+      pool
+        .query(
+          `
+        SELECT COUNT(*)::int AS total,
+          COUNT(*) FILTER (
+            WHERE deleted_at IS NULL
+              AND LOWER(COALESCE(status, 'active')) IN ('active', 'open')
+          )::int AS active_count
+        FROM violations
+      `
+        )
+        .catch(() => ({ rows: [{ total: 0, active_count: 0 }] })),
+    ]);
 
   return {
     teams: Number(teams.rows[0].c),
@@ -555,10 +816,18 @@ async function fetchLiveModuleCounts() {
     jobs: Number(jobs.rows[0].c),
     projects: Number(projects.rows[0].c),
     creditTransactions: Number(tx.rows[0].c),
+    reports: Number(reports.rows[0].total),
+    openReports: Number(reports.rows[0].open_count),
+    disputes: Number(disputes.rows[0].total),
+    openDisputes: Number(disputes.rows[0].open_count),
+    tickets: Number(tickets.rows[0].total),
+    openTickets: Number(tickets.rows[0].open_count),
+    violations: Number(violations.rows[0].total),
+    activeViolations: Number(violations.rows[0].active_count),
   };
 }
 
-function buildInsights(members, forum, growth, engagement) {
+function buildInsights(members, forum, growth, engagement, liveModules = {}) {
   const insights = [];
 
   if (growth > 15) {
@@ -596,6 +865,24 @@ function buildInsights(members, forum, growth, engagement) {
     });
   }
 
+  if ((liveModules.openTickets || 0) > 5) {
+    insights.push({
+      id: 'tickets',
+      title: 'Support backlog',
+      detail: `${liveModules.openTickets} open tickets and ${liveModules.openDisputes || 0} open disputes are in the queue.`,
+      type: 'warning',
+    });
+  }
+
+  if ((liveModules.pendingListings || 0) > 0) {
+    insights.push({
+      id: 'listings',
+      title: 'Marketplace review queue',
+      detail: `${liveModules.pendingListings} marketplace listing(s) awaiting approval.`,
+      type: 'info',
+    });
+  }
+
   if (engagement >= 70) {
     insights.push({
       id: 'engage',
@@ -605,7 +892,7 @@ function buildInsights(members, forum, growth, engagement) {
     });
   }
 
-  return insights;
+  return insights.slice(0, 6);
 }
 
 module.exports = { getAnalyticsOverview };

@@ -17,6 +17,8 @@ import {getMoveableTransform} from "@/features/editor/player/styles";
 import {getMinCaptionDimensions} from "@/features/editor/utils/captions";
 
 let holdGroupPosition: Record<string, any> | null = null;
+let groupTextScaleStart: Record<string, { width: number; height: number; fontSize: number; relLeft: number; relTop: number }> | null = null;
+let groupScaleAnchor: { x: number; y: number } | null = null;
 let dragStartEnd = false;
 
 interface SceneInteractionsProps {
@@ -191,13 +193,15 @@ export function SceneInteractions({
         const target = e.inputEvent.target as HTMLDivElement;
         dragStartEnd = false;
 
-        if (targets.includes(target)) {
+        if (targetsRef.current.includes(target)) {
           e.stop();
         }
         if (
+          targetsRef.current.length > 0 &&
           target &&
           moveableRef?.current?.moveable.isMoveableElement(target)
         ) {
+          console.warn("[dragStart] blocked by stale moveable element", target);
           e.stop();
         }
       })
@@ -298,6 +302,11 @@ export function SceneInteractions({
     rawScaleRef.current = match ? [parseFloat(match[1]), parseFloat(match[2])] : [1, 1];
   }, [targets, trackItemsMap]);
 
+  const targetsRef = useRef<HTMLDivElement[]>([]);
+  useEffect(() => {
+    targetsRef.current = targets;
+  }, [targets]);
+
   return (
     <Moveable
       ref={moveableRef}
@@ -324,7 +333,8 @@ export function SceneInteractions({
       onDragEnd={({ target, isDrag }) => {
         if (!isDrag) return;
         const targetId = getIdFromClassName(target.className) as string;
-        if (trackItemsMap[targetId]?.details?.locked) return;
+        const currentItem = useStore.getState().trackItemsMap[targetId];
+        if (!currentItem || currentItem.details?.locked) return;
 
         dispatch(EDIT_OBJECT, {
           payload: {
@@ -383,7 +393,9 @@ export function SceneInteractions({
       }}
       onScaleEnd={({ target }) => {
         const targetId = getIdFromClassName(target.className) as string;
-        if (trackItemsMap[targetId]?.details?.locked) return;
+        const currentItem = useStore.getState().trackItemsMap[targetId];
+        if (!currentItem || currentItem.details?.locked) return;
+
         const finalScaleX = target.dataset.liveScaleX;
         const finalScaleY = target.dataset.liveScaleY;
         if (finalScaleX === undefined || finalScaleY === undefined) return;
@@ -419,7 +431,9 @@ export function SceneInteractions({
       }}
       onRotateEnd={({ target }) => {
         const targetId = getIdFromClassName(target.className) as string;
-        if (trackItemsMap[targetId]?.details?.locked) return;
+        const currentItem = useStore.getState().trackItemsMap[targetId];
+        if (!currentItem || currentItem.details?.locked) return;
+
         const finalRotate = target.dataset.liveRotate;
         if (finalRotate === undefined) return;
 
@@ -429,14 +443,17 @@ export function SceneInteractions({
         delete target.dataset.liveRotate;
       }}
       onResize={({
-                   target,
-                   width: nextWidth,
-                   height: nextHeight,
-                   direction
-                 }) => {
+        target,
+        width: nextWidth,
+        height: nextHeight,
+        direction
+      }) => {
         const id = getIdFromClassName(target.className);
+        const currentItem = useStore.getState().trackItemsMap[id];
+        if (!currentItem) return;
+
         if (direction[1] === 1 || direction[1] === -1) {
-          if (trackItemsMap[id].type === "progressSquare") {
+          if (currentItem.type === "progressSquare") {
             const diffWidth = nextHeight - parseFloat(target.style.height);
             const updateData: any = {
               width: nextWidth,
@@ -527,6 +544,14 @@ export function SceneInteractions({
 
             if (trackItemsMap[id].type === "text") {
               scaleDiv(`[data-text-id="${id}"]`, scale, currentWidth, currentHeight);
+
+              const textAnimatedDiv = target.querySelector(
+                `[data-text-anim-id="${id}"]`
+              ) as HTMLDivElement | null;
+              if (textAnimatedDiv) {
+                textAnimatedDiv.style.width = `${currentWidth * scale}px`;
+                textAnimatedDiv.style.height = `${currentHeight * scale}px`;
+              }
             } else if (trackItemsMap[id].type === "caption") {
               scaleDiv(`#caption-${id}`, scale, currentWidth, currentHeight);
             }
@@ -678,9 +703,11 @@ export function SceneInteractions({
       }}
       onDragGroupEnd={() => {
         if (holdGroupPosition) {
+          const currentTrackItemsMap = useStore.getState().trackItemsMap;
           const payload: Record<string, Partial<any>> = {};
           for (const id of Object.keys(holdGroupPosition)) {
-            if (trackItemsMap[id]?.details?.locked) continue;
+            const currentItem = currentTrackItemsMap[id];
+            if (!currentItem || currentItem.details?.locked) continue;
 
             const left = holdGroupPosition[id].left;
             const top = holdGroupPosition[id].top;
@@ -691,42 +718,164 @@ export function SceneInteractions({
               }
             };
           }
-          dispatch(EDIT_OBJECT, {
-            payload: payload
-          });
+          if (Object.keys(payload).length > 0) {
+            dispatch(EDIT_OBJECT, { payload });
+          }
           holdGroupPosition = null;
         }
       }}
       onScaleGroup={({ events }) => {
-        holdGroupPosition = {};
+        const currentTrackItemsMap = useStore.getState().trackItemsMap;
+        if (!holdGroupPosition) holdGroupPosition = {};
+        if (!groupTextScaleStart) groupTextScaleStart = {};
+
+        if (!groupScaleAnchor) {
+          // one handle drives the whole group, so direction is shared across events
+          const [xControl, yControl] = events[0]?.direction ?? [1, 1];
+          const rect = moveableRef.current?.moveable.getRect();
+          const groupLeft = rect?.left ?? 0;
+          const groupTop = rect?.top ?? 0;
+          const groupWidth = rect?.width ?? 0;
+          const groupHeight = rect?.height ?? 0;
+
+          // dragging the -1 side means the +1 side is the fixed anchor, and vice versa
+          groupScaleAnchor = {
+            x: xControl === 1 ? groupLeft : groupLeft + groupWidth,
+            y: yControl === 1 ? groupTop : groupTop + groupHeight,
+          };
+        }
+
         for (const event of events) {
           const id = getIdFromClassName(event.target.className);
           const target = event.target as HTMLDivElement;
-          target.style.transform = event.transform;
-          target.style.left = `${parseFloat(target.style.left) + event.drag.beforeTranslate[0]}px`;
-          target.style.top = `${parseFloat(target.style.top) + event.drag.beforeTranslate[1]}px`;
-          holdGroupPosition[id] = {
-            transform: target.style.transform,
-            left: parseFloat(target.style.left),
-            top: parseFloat(target.style.top),
-          };
+          const item = currentTrackItemsMap[id];
+
+          if (item?.type === "text" || item?.type === "caption") {
+            const selector = item.type === "text" ? `[data-text-id="${id}"]` : `#caption-${id}`;
+
+            if (!groupTextScaleStart[id]) {
+              const innerDiv = document.querySelector(selector) as HTMLDivElement | null;
+              groupTextScaleStart[id] = {
+                width: target.clientWidth,
+                height: target.clientHeight,
+                fontSize: innerDiv ? parseFloat(getComputedStyle(innerDiv).fontSize) : 0,
+                relLeft: parseFloat(item.details.left as string) - groupScaleAnchor.x,
+                relTop: parseFloat(item.details.top as string) - groupScaleAnchor.y,
+              };
+            }
+
+            const start = groupTextScaleStart[id];
+            const magnitude = Math.abs(event.scale[0]);
+            const newWidth = start.width * magnitude;
+            const newHeight = start.height * magnitude;
+            const newFontSize = start.fontSize * magnitude;
+
+            // anchor is fixed for the whole gesture: position = anchor + scaled offset
+            const newLeft = groupScaleAnchor.x + magnitude * start.relLeft;
+            const newTop = groupScaleAnchor.y + magnitude * start.relTop;
+
+            target.style.width = `${newWidth}px`;
+            target.style.height = `${newHeight}px`;
+            target.style.left = `${newLeft}px`;
+            target.style.top = `${newTop}px`;
+
+            const animationDiv = target.firstElementChild?.firstElementChild as HTMLDivElement | null;
+            if (animationDiv) {
+              animationDiv.style.width = `${newWidth}px`;
+              animationDiv.style.height = `${newHeight}px`;
+            }
+
+            const innerDiv = document.querySelector(selector) as HTMLDivElement | null;
+            if (innerDiv) {
+              innerDiv.style.width = `${newWidth}px`;
+              innerDiv.style.height = `${newHeight}px`;
+              innerDiv.style.fontSize = `${newFontSize}px`;
+            }
+
+            if (item.type === "text") {
+              const textAnimatedDiv = target.querySelector(
+                `[data-text-anim-id="${id}"]`
+              ) as HTMLDivElement | null;
+              if (textAnimatedDiv) {
+                textAnimatedDiv.style.width = `${newWidth}px`;
+                textAnimatedDiv.style.height = `${newHeight}px`;
+              }
+            }
+
+            holdGroupPosition[id] = {
+              isTextLike: true,
+              width: newWidth,
+              height: newHeight,
+              fontSize: newFontSize,
+              left: newLeft,
+              top: newTop,
+            };
+          } else {
+            // UNCHANGED
+            target.style.transform = event.transform;
+            target.style.left = `${parseFloat(target.style.left) + event.drag.beforeTranslate[0]}px`;
+            target.style.top = `${parseFloat(target.style.top) + event.drag.beforeTranslate[1]}px`;
+            holdGroupPosition[id] = {
+              transform: target.style.transform,
+              left: parseFloat(target.style.left),
+              top: parseFloat(target.style.top),
+            };
+          }
         }
       }}
       onScaleGroupEnd={() => {
         if (holdGroupPosition) {
+          const currentTrackItemsMap = useStore.getState().trackItemsMap;
           const payload: Record<string, any> = {};
+
           for (const id of Object.keys(holdGroupPosition)) {
-            if (trackItemsMap[id]?.details?.locked) continue;
-            payload[id] = {
-              details: {
-                transform: holdGroupPosition[id].transform,
-                left: holdGroupPosition[id].left,
-                top: holdGroupPosition[id].top,
+            const currentItem = currentTrackItemsMap[id];
+            if (!currentItem || currentItem.details?.locked) continue;
+
+            const entry = holdGroupPosition[id];
+
+            if (entry.isTextLike) {
+              payload[id] = {
+                details: {
+                  width: entry.width,
+                  height: entry.height,
+                  fontSize: entry.fontSize,
+                  left: entry.left,
+                  top: entry.top,
+                }
+              };
+
+              // Reset inline px overrides so re-render (driven by committed state)
+              // takes over cleanly — mirrors onResizeEnd's reset for text/caption.
+              const target = getTargetById(id) as HTMLDivElement | null;
+              const selector = currentItem.type === "text" ? `[data-text-id="${id}"]` : `#caption-${id}`;
+              const innerDiv = document.querySelector(selector) as HTMLDivElement | null;
+              if (innerDiv && currentItem.type === "text") {
+                innerDiv.style.width = "100%";
+                innerDiv.style.height = "100%";
               }
-            };
+              const animationDiv = target?.firstElementChild?.firstElementChild as HTMLDivElement | null;
+              if (animationDiv) {
+                animationDiv.style.height = "100%";
+                animationDiv.style.width = currentItem.type === "caption" ? "100%" : "";
+              }
+            } else {
+              payload[id] = {
+                details: {
+                  transform: entry.transform,
+                  left: entry.left,
+                  top: entry.top,
+                }
+              };
+            }
           }
-          dispatch(EDIT_OBJECT, { payload });
+
+          if (Object.keys(payload).length > 0) {
+            dispatch(EDIT_OBJECT, { payload });
+          }
           holdGroupPosition = null;
+          groupTextScaleStart = null;
+          groupScaleAnchor = null;
         }
       }}
       onRotateGroup={({ events }) => {
@@ -738,10 +887,12 @@ export function SceneInteractions({
         }
       }}
       onRotateGroupEnd={() => {
+        const currentTrackItemsMap = useStore.getState().trackItemsMap;
         const payload: Record<string, any> = {};
         for (const target of targets) {
           const id = getIdFromClassName(target.className);
-          if (trackItemsMap[id]?.details?.locked) continue;
+          const currentItem = currentTrackItemsMap[id];
+          if (!currentItem || currentItem.details?.locked) continue;
           payload[id] = {
             details: {
               transform: (target as HTMLDivElement).style.transform,
@@ -750,7 +901,9 @@ export function SceneInteractions({
             }
           };
         }
-        dispatch(EDIT_OBJECT, { payload });
+        if (Object.keys(payload).length > 0) {
+          dispatch(EDIT_OBJECT, { payload });
+        }
       }}
     />
   );

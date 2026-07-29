@@ -349,10 +349,12 @@ const FontStyle = ({
   selectedFont: ICompactFont;
   handleChangeFontStyle: (font: IFont) => void;
 }) => {
+  const [open, setOpen] = useState(false);
+
   return (
     <div className="flex gap-2 flex-1">
       <div className="relative w-full">
-        <Popover>
+        <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button
               className="flex w-full items-center justify-between text-sm"
@@ -378,7 +380,10 @@ const FontStyle = ({
                 <div
                   className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
                   key={index}
-                  onClick={() => handleChangeFontStyle(style)}
+                  onClick={() => {
+                    handleChangeFontStyle(style)
+                    setOpen(false);
+                  }}
                 >
                   {styleName}
                   {styleName === selectedFont.name && (
@@ -523,6 +528,7 @@ const fontCaseOptions = [
 
 const FontCase = ({ id, value: initialValue }: { id: string; value: string }) => {
   const [value, setValue] = useState(initialValue ?? "none");
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     setValue(initialValue ?? "none");
@@ -547,7 +553,7 @@ const FontCase = ({ id, value: initialValue }: { id: string; value: string }) =>
         Case
       </div>
       <div className="relative w-full">
-        <Popover>
+        <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button
               className="flex w-full items-center justify-between text-sm"
@@ -569,7 +575,10 @@ const FontCase = ({ id, value: initialValue }: { id: string; value: string }) =>
             {fontCaseOptions.map((option, index) => {
               return (
                 <div
-                  onClick={() => onChangeFontCase(option.value)}
+                  onClick={() => {
+                    onChangeFontCase(option.value);
+                    setOpen(false);
+                  }}
                   className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
                   key={index}
                 >
@@ -699,6 +708,7 @@ const wordBreakOptions = [
 
 const FontWordBreak = ({ id, value }: { id: string; value: string }) => {
   const [localValue, setLocalValue] = useState<string>(value);
+  const [open, setOpen] = useState(false);
 
   const onChange = (v: string) => {
     setLocalValue(v);
@@ -724,7 +734,7 @@ const FontWordBreak = ({ id, value }: { id: string; value: string }) => {
       </div>
       <div className="flex gap-2">
         <div className="relative w-full">
-          <Popover>
+          <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
               <Button
                 className="flex w-full items-center justify-between text-sm"
@@ -746,7 +756,10 @@ const FontWordBreak = ({ id, value }: { id: string; value: string }) => {
               {wordBreakOptions.map((option, index) => {
                 return (
                   <div
-                    onClick={() => onChange(option.value)}
+                    onClick={() => {
+                      onChange(option.value);
+                      setOpen(false);
+                    }}
                     className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
                     key={index}
                   >

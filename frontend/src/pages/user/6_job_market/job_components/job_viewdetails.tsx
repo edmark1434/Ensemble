@@ -219,10 +219,10 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                     <Edit2 className="h-3.5 w-3.5" /> Edit Job Post
                   </button>
                   <button
-                    onClick={() => navigate(`/jobs/manage/${selectedJob.id}`)}
+                    onClick={() => navigate(`/jobs/proposals/incoming/${selectedJob.id}`)}
                     className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-zinc-800 border border-white/10 py-3 text-xs font-bold text-white hover:bg-zinc-700 transition"
                   >
-                    Manage Applicants
+                    <Users className="h-3.5 w-3.5 text-blue-400" /> Manage Applicants
                   </button>
                 </div>
               )}

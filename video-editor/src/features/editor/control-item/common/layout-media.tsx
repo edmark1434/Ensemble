@@ -21,7 +21,7 @@ const getScaleXY = (transform?: string): [number, number] => {
 export const LayoutMediaControls = ({ trackItem }: LayoutMediaControlsProps) => {
   const id = trackItem?.id;
   const details = trackItem?.details ?? {};
-  const [isLinked, setIsLinked] = useState(false);
+  const [isLinked, setIsLinked] = useState(true);
   const { setCropTarget } = useLayoutStore();
 
   const crop = details.crop;

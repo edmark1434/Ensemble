@@ -7,21 +7,21 @@ import StaffLoginPage from './pages/auth/StaffLoginPage'
 import SignupPage from './pages/auth/Signuppage'
 import EmailVerification from './pages/EmailVerification'
 
-import NotFound from "@/pages/user/0_config/NotFound.tsx";
+import NotFound from "@/pages/user/0_misc/NotFound.tsx";
 
 import ResetPasswordPage from "@/pages/auth/ResetPasswordPage.tsx";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage.tsx";
 
-import CreditShop from "@/pages/user/0_config/CreditsShop.tsx";
+import CreditShop from "@/pages/user/13_creditsshop/CreditsShop.tsx";
 import Checkout from "@/pages/payment/checkout.tsx";
 import Profile from "@/pages/user/7_profile/Profile.tsx";
 import UserSettings from "@/components/nav/Settings/user_settings.tsx";
 
 import Layout from './components/ui/Layout.tsx'
 
-import Home from './pages/user/1_home/Home.tsx'
+import Home from '@/pages/user/1_home/Home.tsx'
 
-import Projects from "./pages/user/2_projects/Projects.tsx"
+import Projects from "@/pages/user/2_projects/Projects.tsx"
 import Projects_Selection from "@/pages/user/2_projects/Projects_Selection.tsx";
 
 import Teams from "@/pages/user/3_teams/Teams.tsx";
@@ -33,15 +33,24 @@ import ExpandDiscussion from "@/pages/user/4_forums/ExpandDiscussion.tsx";
 
 import Inbox from "@/pages/user/10_inbox/Main.tsx";
 
-import SectionPlaceholder from './pages/user/0_config/SectionPlaceholder.tsx'
+import SectionPlaceholder from '@/pages/user/0_misc/SectionPlaceholder.tsx'
 
-// Updated Job Market Sub-Routes & Create/Edit Page Imports
+// Job Market Core Imports
 import JobMain from "@/pages/user/6_job_market/job_main.tsx";
 import JobPostingPage from "@/pages/user/6_job_market/job_pages/job_posting_page.tsx";
 import JobSavesPage from "@/pages/user/6_job_market/job_pages/job_saves_page.tsx";
 import JobMyPostPage from "@/pages/user/6_job_market/job_pages/job_mypost_page.tsx";
 import JobCreatePostPage from "@/pages/user/6_job_market/job_pages/job_createpost_page.tsx";
 import JobEditPostPage from "@/pages/user/6_job_market/job_pages/job_editpost_page.tsx";
+
+// Job Proposals Imports
+import ProposalsMain from "@/pages/user/6_job_market/job_proposals/proposals_main.tsx";
+import ProposalsSelectJobPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_select_job_page.tsx";
+import ProposalsIncomingPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_incoming_page.tsx";
+import ProposalsSentPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_sent_page.tsx";
+import ProposalsCreatePage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_create_page.tsx";
+import ProposalsEditPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_edit_page.tsx";
+import ProposalsViewDetailsPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details.tsx";
 
 import GigMarketplace from "@/pages/user/7_gigs/Gig_Posting/main.tsx";
 import {CreateGigWizard} from "@/pages/user/7_gigs/Gig_Posting/CreateGigWizard.tsx";
@@ -185,7 +194,7 @@ function App() {
 
           <Route path='/assets' element={<SectionPlaceholder title='ASSET LIBRARY' />} />
 
-          {/* Reworked Job Market Nested Sub-Routes */}
+          {/* Reworked Job Market Sub-Routes */}
           <Route path='/jobs' element={<JobMain />}>
             <Route index element={<Navigate to="/jobs/postings" replace />} />
             <Route path='postings' element={<JobPostingPage />} />
@@ -196,9 +205,20 @@ function App() {
             <Route path='my-job-post/:id' element={<JobMyPostPage />} />
           </Route>
 
-          {/* Modularized Job Creation & Edit Pages */}
+          {/* Proposals Layout & Sub-Routes */}
+          <Route path='/jobs/proposals' element={<ProposalsMain />}>
+            <Route index element={<ProposalsSelectJobPage />} />
+            <Route path='incoming/:jobPostId' element={<ProposalsIncomingPage />} />
+            <Route path='sent' element={<ProposalsSentPage />} />
+          </Route>
+
+          {/* Standalone Creation, Edit & View Details Pages */}
           <Route path='/jobs/create' element={<JobCreatePostPage />} />
           <Route path='/jobs/edit/:id' element={<JobEditPostPage />} />
+          <Route path='/jobs/:id/make-proposal' element={<ProposalsCreatePage />} />
+          <Route path='/jobs/proposals/edit/:proposalId' element={<ProposalsEditPage />} />
+          <Route path='/jobs/proposals/incoming/:jobPostId/:proposalId' element={<ProposalsViewDetailsPage />} />
+          <Route path='/jobs/proposals/sent/:jobPostId/:proposalId' element={<ProposalsViewDetailsPage />} />
 
           <Route path='/gigs'>
             <Route index element={<GigMarketplace />} />
@@ -206,12 +226,9 @@ function App() {
             <Route path=':id' element={<GigMarketplace />} />
           </Route>
           <Route path='/verification' element={<Verification />} />
-          <Route path='/proposals' element={<SectionPlaceholder title='INCOMING PROPOSALS' />} />
-          <Route path='/my-proposals' element={<SectionPlaceholder title='MY PROPOSALS' />} />
           <Route path='/requests' element={<SectionPlaceholder title='INCOMING REQUESTS' />} />
           <Route path='/my-requests' element={<SectionPlaceholder title='MY REQUESTS' />} />
           <Route path='/contracts' element={<SectionPlaceholder title='MY CONTRACTS' />} />
-          <Route path='/inbox' element={<Inbox />} />
           <Route path='/transactions' element={<TransactionHistoryMain />} />
         </Route>
       </Route>

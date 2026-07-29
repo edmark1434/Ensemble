@@ -1,12 +1,15 @@
 import { dispatch } from "@designcombo/events";
-import { ADD_AUDIO, ADD_IMAGE, ADD_VIDEO } from "@designcombo/state";
+import {ADD_AUDIO, ADD_IMAGE, ADD_TEXT, ADD_VIDEO} from "@designcombo/state";
 import { generateId } from "@designcombo/timeline";
 import React, { useCallback, useState } from "react";
+import {ITrackItem} from "@designcombo/types";
+import {getCurrentTime} from "@/features/editor/utils/time";
 
 enum AcceptedDropTypes {
   IMAGE = "image",
   VIDEO = "video",
-  AUDIO = "audio"
+  AUDIO = "audio",
+  TEXT = "text",
 }
 
 interface DraggedData {
@@ -27,16 +30,39 @@ const useDragAndDrop = (onDragStateChange?: (isDragging: boolean) => void) => {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
   const handleDrop = useCallback((draggedData: DraggedData) => {
-    const payload = { ...draggedData, id: generateId() };
+    const payload = { ...draggedData, id: generateId() } as ITrackItem;
+    const options = {};
+
+    const time = getCurrentTime();
+
+    let clipDuration;
     switch (draggedData.type) {
       case AcceptedDropTypes.IMAGE:
-        dispatch(ADD_IMAGE, { payload });
+        const DEFAULT_IMAGE_DURATION_MS = 5000;
+        clipDuration = DEFAULT_IMAGE_DURATION_MS;
         break;
       case AcceptedDropTypes.VIDEO:
-        dispatch(ADD_VIDEO, { payload });
+      case AcceptedDropTypes.AUDIO:
+        clipDuration = ((payload.details as any)?.duration ?? 5) * 1000;
+        break;
+      case AcceptedDropTypes.TEXT:
+        clipDuration = payload.display.to - payload.display.from;
+        break;
+    }
+    payload.display = { from: time, to: time + clipDuration };
+
+    switch (draggedData.type) {
+      case AcceptedDropTypes.IMAGE:
+        dispatch(ADD_IMAGE, { payload, options });
+        break;
+      case AcceptedDropTypes.VIDEO:
+        dispatch(ADD_VIDEO, { payload, options });
         break;
       case AcceptedDropTypes.AUDIO:
-        dispatch(ADD_AUDIO, { payload });
+        dispatch(ADD_AUDIO, { payload, options });
+        break;
+      case AcceptedDropTypes.TEXT:
+        dispatch(ADD_TEXT, { payload, options });
         break;
     }
   }, []);
