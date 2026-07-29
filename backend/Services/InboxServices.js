@@ -160,9 +160,8 @@ async function createMessageServices(messagePayload){
     return await createMessageRepositories(messagePayload);
 }
 
-async function updateMessageServices(messageId, updateFields){
-    dataValidation(updateFields);
-    return await updateMessageRepositories(messageId, updateFields);
+async function updateMessageServices(messageId,action, updateFields){
+    return await updateMessageRepositories(messageId,action, updateFields);
 }
 
 async function updateInboxServices(inboxId, updateFields){
