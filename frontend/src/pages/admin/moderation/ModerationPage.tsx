@@ -24,6 +24,7 @@ import {
   Users,
   Video,
   X,
+  Hand,
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
@@ -1417,7 +1418,7 @@ function CasesTableBody({
                         {busyId === c.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          <UserPlus className="h-4 w-4" />
+                          <Hand className="h-4 w-4" />
                         )}
                       </button>
                     )}

@@ -1450,7 +1450,13 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
   const isInternal = Boolean(options.isInternal);
   const audience =
     options.audience ||
-    (isInternal ? 'staff' : options.visibleToParties ? 'parties' : 'staff');
+    (isInternal
+      ? 'staff'
+      : options.visibleToPublic
+        ? 'public'
+        : options.visibleToParties
+          ? 'parties'
+          : 'staff');
 
   const chatId = await ensureDisputeChat(disputeId, row);
   await createDisputeMessage({

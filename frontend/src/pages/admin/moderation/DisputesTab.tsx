@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Hand, Loader2, Scale, Search, UserPlus } from 'lucide-react';
+import { Hand, Loader2, Scale, Search } from 'lucide-react';
 import ModeratorDisputeDetailModal from '@/pages/moderator/shared/ModeratorDisputeDetailModal';
 import type { Dispute } from '../ticketManagement/ticketTypes';
 
@@ -248,7 +248,7 @@ export default function DisputesTab({
                       </>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-amber-200/90">
-                        <UserPlus className="h-3.5 w-3.5" />
+                        <Hand className="h-3.5 w-3.5" />
                         Unassigned
                       </span>
                     )}
@@ -257,7 +257,7 @@ export default function DisputesTab({
                   <td className="px-5 py-3.5 text-right">
                     {d.takeoverRequestedByStaffId ? (
                       <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-100">
-                        <Hand className="h-3 w-3" />
+                        <Hand className="h-3.5 w-3.5" />
                         Takeover
                       </span>
                     ) : (

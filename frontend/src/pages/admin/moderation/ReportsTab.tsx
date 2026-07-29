@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FileWarning, Search, UserPlus } from 'lucide-react';
+import { FileWarning, Hand, Search } from 'lucide-react';
 import { ReportCaseDetailModal } from './CaseDetailModals';
 import type { UserReport } from '../ticketManagement/ticketTypes';
 
@@ -219,7 +219,7 @@ export default function ReportsTab({
                       r.assignee.name
                     ) : (
                       <span className="inline-flex items-center gap-1 text-amber-200/90">
-                        <UserPlus className="h-3.5 w-3.5" />
+                        <Hand className="h-3.5 w-3.5" />
                         Unassigned
                       </span>
                     )}

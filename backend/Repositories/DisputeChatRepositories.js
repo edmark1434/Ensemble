@@ -96,6 +96,12 @@ function mapMongoDisputeMessage(m) {
   };
 }
 
+const DISPUTE_MESSAGE_AUDIENCES = ['staff', 'author_and_staff', 'parties', 'public'];
+
+function isPublishedAudience(audience) {
+  return audience === 'parties' || audience === 'public';
+}
+
 /** Load all messages for a dispute chat from the Mongo `messages` collection. */
 async function listDisputeMessages(chatId) {
   if (!chatId || !isMongoReady()) return [];
@@ -174,7 +180,7 @@ async function createDisputeMessage({
     author_name: authorName || 'Staff',
     author_role: authorRole,
     audience,
-    published_at: audience === 'parties' ? now : null,
+    published_at: isPublishedAudience(audience) ? now : null,
     created_at: now,
     updated_at: now,
   });
@@ -189,8 +195,8 @@ async function updateDisputeMessageAudience(chatId, messageId, audience) {
   }
 
   const nextAudience = String(audience || '').toLowerCase();
-  if (!['staff', 'author_and_staff', 'parties'].includes(nextAudience)) {
-    throw new Error('Invalid audience. Use staff, author_and_staff, or parties.');
+  if (!DISPUTE_MESSAGE_AUDIENCES.includes(nextAudience)) {
+    throw new Error('Invalid audience. Use staff, author_and_staff, parties, or public.');
   }
 
   const db = mongoDb();
@@ -206,7 +212,7 @@ async function updateDisputeMessageAudience(chatId, messageId, audience) {
       $set: {
         audience: nextAudience,
         is_internal: nextAudience === 'staff',
-        published_at: nextAudience === 'parties' ? now : null,
+        published_at: isPublishedAudience(nextAudience) ? now : null,
         updated_at: now,
       },
     }
@@ -218,6 +224,7 @@ async function updateDisputeMessageAudience(chatId, messageId, audience) {
 
 module.exports = {
   CONVERSATION_TYPE,
+  DISPUTE_MESSAGE_AUDIENCES,
   isMongoReady,
   getDisputeChatId,
   ensureDisputeChat,

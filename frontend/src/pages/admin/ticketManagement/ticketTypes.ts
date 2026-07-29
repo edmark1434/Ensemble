@@ -48,7 +48,7 @@ export type TicketMessage = {
   authorRole?: string | null;
   body: string;
   isInternal: boolean;
-  audience?: 'staff' | 'author_and_staff' | 'parties' | string;
+  audience?: 'staff' | 'author_and_staff' | 'parties' | 'public' | string;
   publishedAt?: string | null;
   createdAt: string;
 };
