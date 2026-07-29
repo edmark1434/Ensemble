@@ -1,0 +1,116 @@
+import React from "react";
+import { MessageCircle } from "lucide-react";
+import type { Inbox } from "../inbox_dataset";
+
+interface InboxListProps {
+  conversations: Inbox[];
+  selectedConversation: Inbox | null;
+  onSelectConversation: (inbox: Inbox) => void;
+  loading: boolean;
+  searchQuery: string;
+  getConversationName: (inbox: Inbox) => string;
+  getAvatar: (inbox: Inbox) => string;
+  formatTime: (dateString?: string | Date) => string;
+}
+
+export const InboxList: React.FC<InboxListProps> = ({
+  conversations,
+  selectedConversation,
+  onSelectConversation,
+  loading,
+  searchQuery,
+  getConversationName,
+  getAvatar,
+  formatTime,
+}) => {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500" />
+      </div>
+    );
+  }
+
+  if (conversations.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center p-8">
+        <MessageCircle className="h-12 w-12 text-zinc-600 mb-3" />
+        <p className="text-zinc-400" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+          {searchQuery ? "No conversations found" : "No messages yet"}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto bg-[#0d0f1a]">
+      {conversations.map((inbox) => {
+        const isActive = selectedConversation?._id === inbox._id;
+        const name = getConversationName(inbox);
+        const avatar = getAvatar(inbox);
+        const lastMessage = inbox.last_message || "No messages yet";
+        const time = formatTime(inbox.last_message_time || inbox.updated_at);
+        const unreadCount = inbox.unread_count || 0;
+
+        return (
+          <button
+            key={inbox._id}
+            onClick={() => onSelectConversation(inbox)}
+            className={`w-full p-4 flex items-center gap-3 hover:bg-white/5 transition-all duration-200 ${
+              isActive
+                ? "bg-gradient-to-r from-blue-500/20 to-transparent border-l-2 border-blue-500"
+                : ""
+            }`}
+          >
+            <div className="relative flex-shrink-0">
+              <img
+                src={avatar}
+                alt={name}
+                className="h-12 w-12 rounded-full object-cover"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.src = `https://ui-avatars.com/api/?name=${name.substring(
+                    0,
+                    2
+                  )}&background=6366f1&color=fff&bold=true`;
+                }}
+              />
+              {inbox.conversation_type === "direct" && (
+                <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 ring-2 ring-[#0d0f1a]" />
+              )}
+            </div>
+
+            <div className="flex-1 text-left min-w-0">
+              <p
+                className="font-medium text-white truncate text-sm"
+                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                {name}
+              </p>
+              <p
+                className="text-xs text-zinc-500 truncate"
+                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                {lastMessage}
+              </p>
+            </div>
+
+            <div className="text-right flex-shrink-0">
+              <p
+                className="text-[10px] text-zinc-500"
+                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              >
+                {time}
+              </p>
+              {unreadCount > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-blue-500 text-[10px] font-medium text-white px-1 mt-1">
+                  {unreadCount}
+                </span>
+              )}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+};
