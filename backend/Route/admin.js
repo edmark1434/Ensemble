@@ -33,6 +33,7 @@ const {
   getAdminDisputeDetail,
   patchAdminDispute,
   postAdminDisputeMessage,
+  patchAdminDisputeMessage,
   getAdminReportDetail,
   patchAdminReport,
 } = require('../Controllers/AdminTicketsControllers');
@@ -72,6 +73,7 @@ router.patch('/tickets/:id', [checkSession, requireAdmin], patchAdminTicket);
 router.post('/tickets/:id/messages', [checkSession, requireAdmin], postAdminTicketMessage);
 router.get('/disputes/:id', [checkSession, requireAdmin], getAdminDisputeDetail);
 router.post('/disputes/:id/messages', [checkSession, requireAdmin], postAdminDisputeMessage);
+router.patch('/disputes/:id/messages/:messageId', [checkSession, requireAdmin], patchAdminDisputeMessage);
 router.patch('/disputes/:id', [checkSession, requireAdmin], patchAdminDispute);
 router.get('/reports/:id', [checkSession, requireAdmin], getAdminReportDetail);
 router.patch('/reports/:id', [checkSession, requireAdmin], patchAdminReport);

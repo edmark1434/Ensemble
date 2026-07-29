@@ -7,6 +7,14 @@ const {
   getConversationByConvoId,
 } = require('./InboxRepositories');
 const {
+  isMongoReady,
+  getDisputeChatId,
+  ensureDisputeChat,
+  listDisputeMessages,
+  createDisputeMessage,
+  updateDisputeMessageAudience,
+} = require('./DisputeChatRepositories');
+const {
   ROLE_TO_TICKET_TYPES,
   TICKET_TYPES,
   TICKET_STATUSES,
@@ -213,6 +221,7 @@ async function createSupportTicket(input, session = null) {
 }
 
 function mapDisputeRow(row) {
+  const closedStatuses = ['resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn'];
   return {
     id: row.dispute_id,
     number: row.dispute_number,
@@ -221,6 +230,7 @@ function mapDisputeRow(row) {
     // Keep status/priority as DB snake_case for filters/forms; format in UI.
     status: String(row.status || 'open').toLowerCase(),
     priority: String(row.priority || 'medium').toLowerCase(),
+    visibility: String(row.visibility || 'pending').toLowerCase(),
     initiator: {
       accountId: row.initiator_account_id,
       name: row.initiator_name || 'Unknown',
@@ -237,10 +247,37 @@ function mapDisputeRow(row) {
       ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Unassigned', role: row.assignee_role }
       : null,
     creditAmount: Number(row.credit_amount_involved || 0),
+    approvedAt: row.approved_at || null,
+    approvedByStaffId: row.approved_by_staff_id || null,
+    outcome: row.outcome || null,
+    sanctionType: row.sanction_type || null,
+    sanctionNotes: row.sanction_notes || null,
+    relatedCreditTransactionId: row.related_credit_transaction_id || null,
+    creditHold: row.hold_status
+      ? {
+          transactionId: row.related_credit_transaction_id,
+          status: row.hold_status,
+          amount: Number(row.hold_amount ?? row.credit_amount_involved ?? 0),
+          type: row.hold_type || 'Dispute Hold',
+        }
+      : null,
+    takeoverRequestedByStaffId: row.takeover_requested_by_staff_id || null,
+    takeoverRequestedAt: row.takeover_requested_at || null,
+    takeoverRequestNote: row.takeover_request_note || null,
+    takeoverRequester: row.takeover_requester_staff_id
+      ? {
+          staffId: row.takeover_requester_staff_id,
+          name: row.takeover_requester_name || 'Staff',
+          role: row.takeover_requester_role || null,
+        }
+      : row.takeover_requested_by_staff_id
+        ? { staffId: row.takeover_requested_by_staff_id, name: 'Staff', role: null }
+        : null,
     openedAt: row.opened_at,
     updatedAt: row.updated_at,
     resolvedAt: row.resolved_at,
     resolutionNotes: row.resolution_notes,
+    isClosed: closedStatuses.includes(String(row.status || '').toLowerCase()),
   };
 }
 
@@ -321,11 +358,20 @@ async function getTicketsOverview() {
     pool.query(`
       SELECT
         COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'open')::int AS open_count,
+        COUNT(*) FILTER (WHERE LOWER(status) = 'pending_review')::int AS pending_review,
+        COUNT(*) FILTER (WHERE LOWER(status) = 'open')::int AS open_only,
+        COUNT(*) FILTER (WHERE LOWER(status) = 'awaiting_response')::int AS awaiting_response,
         COUNT(*) FILTER (WHERE LOWER(status) = 'under_review')::int AS under_review,
-        COUNT(*) FILTER (WHERE LOWER(status) IN ('resolved', 'closed'))::int AS resolved,
+        COUNT(*) FILTER (WHERE LOWER(status) = 'sanctioned')::int AS sanctioned,
+        COUNT(*) FILTER (WHERE LOWER(status) = 'dismissed')::int AS dismissed,
+        COUNT(*) FILTER (WHERE LOWER(status) IN ('resolved', 'closed', 'withdrawn'))::int AS resolved,
+        COUNT(*) FILTER (
+          WHERE LOWER(status) IN ('pending_review', 'open', 'awaiting_response', 'under_review')
+        )::int AS open_count,
         COALESCE(
-          SUM(credit_amount_involved) FILTER (WHERE LOWER(status) IN ('open', 'under_review')),
+          SUM(credit_amount_involved) FILTER (
+            WHERE LOWER(status) IN ('pending_review', 'open', 'awaiting_response', 'under_review')
+          ),
           0
         )::int AS credits_at_risk
       FROM disputes
@@ -423,9 +469,13 @@ async function getTicketsOverview() {
       ticketTypes: typeChart,
       openByPriority: priorityChart,
       disputeStatusMix: [
-        { label: 'Open', value: Number(dc.open_count), color: '#f87171' },
+        { label: 'Pending Review', value: Number(dc.pending_review || 0), color: '#fb7185' },
+        { label: 'Open', value: Number(dc.open_count) - Number(dc.pending_review || 0) - Number(dc.awaiting_response || 0), color: '#f87171' },
+        { label: 'Awaiting Response', value: Number(dc.awaiting_response || 0), color: '#f59e0b' },
         { label: 'Under Review', value: Number(dc.under_review), color: '#fbbf24' },
-        { label: 'Resolved', value: Number(dc.resolved), color: '#34d399' },
+        { label: 'Sanctioned', value: Number(dc.sanctioned || 0), color: '#a78bfa' },
+        { label: 'Dismissed', value: Number(dc.dismissed || 0), color: '#94a3b8' },
+        { label: 'Resolved', value: Number(dc.resolved) - Number(dc.sanctioned || 0) - Number(dc.dismissed || 0), color: '#34d399' },
       ].filter((x) => x.value > 0),
     },
     types,
@@ -496,17 +546,17 @@ function buildTicketAlerts(tc, dc, rc) {
   if (openDisputes > 0) {
     alerts.push({
       id: 'open-disputes',
-      message: `${openDisputes} open dispute(s) — ${Number(dc.credits_at_risk).toLocaleString()} credits at risk.`,
+      message: `${openDisputes} open dispute(s) — ${Number(dc.credits_at_risk).toLocaleString()} credits at risk. Open Moderation → Disputes.`,
       severity: 'warning',
-      action: { tab: 'disputes' },
+      action: null,
     });
   }
   if (openReports > 0) {
     alerts.push({
       id: 'open-reports',
-      message: `${openReports} user report(s) awaiting triage.`,
+      message: `${openReports} user report(s) awaiting triage — open Moderation → Reports.`,
       severity: 'info',
-      action: { tab: 'reports' },
+      action: null,
     });
   }
   if (!alerts.length) {
@@ -558,7 +608,13 @@ async function fetchDisputesList() {
       COALESCE(ra.display_name, ru.first_name || ' ' || ru.last_name) AS respondent_name,
       ra.handle AS respondent_handle,
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
-      st.role AS assignee_role
+      st.role AS assignee_role,
+      ct.status AS hold_status,
+      ct.amount_credits AS hold_amount,
+      ct.type AS hold_type,
+      tr.staff_id AS takeover_requester_staff_id,
+      COALESCE(tra.display_name, tr.first_name || ' ' || tr.last_name) AS takeover_requester_name,
+      tr.role AS takeover_requester_role
     FROM disputes d
     LEFT JOIN accounts ia ON ia.account_id = d.initiator_account_id
     LEFT JOIN users iu ON iu.account_id = ia.account_id
@@ -566,8 +622,11 @@ async function fetchDisputesList() {
     LEFT JOIN users ru ON ru.account_id = ra.account_id
     LEFT JOIN staff st ON st.staff_id = d.assigned_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
+    LEFT JOIN credit_transactions ct ON ct.credit_transaction_id = d.related_credit_transaction_id
+    LEFT JOIN staff tr ON tr.staff_id = d.takeover_requested_by_staff_id
+    LEFT JOIN accounts tra ON tra.account_id = tr.account_id
     ORDER BY d.opened_at DESC
-    LIMIT 40
+    LIMIT 80
   `);
   return result.rows.map(mapDisputeRow);
 }
@@ -587,7 +646,7 @@ async function fetchReportsList() {
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
     WHERE r.deleted_at IS NULL
     ORDER BY r.created_at DESC
-    LIMIT 40
+    LIMIT 80
   `);
   return result.rows.map(mapReportRow);
 }
@@ -603,7 +662,8 @@ async function fetchStaffWorkload() {
           AND t.deleted_at IS NULL
           AND t.status NOT IN ('Resolved', 'Closed')) AS open_tickets,
       (SELECT COUNT(*)::int FROM disputes d
-        WHERE d.assigned_staff_id = s.staff_id AND LOWER(d.status) NOT IN ('resolved', 'closed')) AS open_disputes,
+        WHERE d.assigned_staff_id = s.staff_id
+          AND LOWER(d.status) NOT IN ('resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn')) AS open_disputes,
       (SELECT COUNT(*)::int FROM reports r
         WHERE r.assigned_staff_id = s.staff_id AND LOWER(r.status) = 'open' AND r.deleted_at IS NULL) AS open_reports
     FROM staff s
@@ -968,8 +1028,304 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
   return getTicketDetail(ticketId);
 }
 
+async function resolveDisputeStaffId(session) {
+  const direct = sessionStaffId(session);
+  if (direct) {
+    const existing = await pool.query(`SELECT staff_id, role FROM staff WHERE staff_id::text = $1 LIMIT 1`, [
+      String(direct),
+    ]);
+    if (existing.rows.length) return existing.rows[0];
+  }
+  const accountId = sessionAccountId(session);
+  if (accountId) {
+    const byAccount = await pool.query(
+      `SELECT staff_id, role FROM staff WHERE account_id::text = $1 LIMIT 1`,
+      [String(accountId)]
+    );
+    if (byAccount.rows.length) return byAccount.rows[0];
+  }
+  return null;
+}
+
+function isAdminRole(role) {
+  const r = String(role || '').toLowerCase();
+  return r === 'admin' || r === 'administrator';
+}
+
+function isSupportRole(role) {
+  return String(role || '').toLowerCase() === 'support moderator';
+}
+
+function isDesignatedHandlerRole(role) {
+  return isAdminRole(role) || isSupportRole(role);
+}
+
+const DISPUTE_CLOSED = ['resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn'];
+
+async function loadDisputeRow(disputeId) {
+  const result = await pool.query(
+    `
+    SELECT
+      d.*,
+      COALESCE(ia.display_name, iu.first_name || ' ' || iu.last_name) AS initiator_name,
+      ia.handle AS initiator_handle,
+      COALESCE(ra.display_name, ru.first_name || ' ' || ru.last_name) AS respondent_name,
+      ra.handle AS respondent_handle,
+      COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
+      st.role AS assignee_role,
+      ct.status AS hold_status,
+      ct.amount_credits AS hold_amount,
+      ct.type AS hold_type,
+      tr.staff_id AS takeover_requester_staff_id,
+      COALESCE(tra.display_name, tr.first_name || ' ' || tr.last_name) AS takeover_requester_name,
+      tr.role AS takeover_requester_role
+    FROM disputes d
+    LEFT JOIN accounts ia ON ia.account_id = d.initiator_account_id
+    LEFT JOIN users iu ON iu.account_id = ia.account_id
+    LEFT JOIN accounts ra ON ra.account_id = d.respondent_account_id
+    LEFT JOIN users ru ON ru.account_id = ra.account_id
+    LEFT JOIN staff st ON st.staff_id = d.assigned_staff_id
+    LEFT JOIN accounts sa ON sa.account_id = st.account_id
+    LEFT JOIN credit_transactions ct ON ct.credit_transaction_id = d.related_credit_transaction_id
+    LEFT JOIN staff tr ON tr.staff_id = d.takeover_requested_by_staff_id
+    LEFT JOIN accounts tra ON tra.account_id = tr.account_id
+    WHERE d.dispute_id = $1
+    `,
+    [disputeId]
+  );
+  return result.rows[0] || null;
+}
+
+function buildDisputePermissions(row, staff) {
+  const staffId = staff?.staff_id ? String(staff.staff_id) : null;
+  const role = staff?.role || null;
+  const assigneeId = row?.assigned_staff_id ? String(row.assigned_staff_id) : null;
+  const requesterId = row?.takeover_requested_by_staff_id
+    ? String(row.takeover_requested_by_staff_id)
+    : null;
+  const isAssignee = Boolean(staffId && assigneeId && staffId === assigneeId);
+  const isAdmin = isAdminRole(role);
+  const unassigned = !assigneeId;
+
+  return {
+    staffId,
+    role,
+    isAssignee,
+    isAdmin,
+    canView: true,
+    /** Handle approve / status / outcome / messages / publish */
+    canAct: isAssignee,
+    /** Admin may assign Support Moderators without being the handler */
+    canAssignOthers: isAdmin,
+    /** Claim an unassigned dispute */
+    canSelfAssign: Boolean(staffId && unassigned && isDesignatedHandlerRole(role)),
+    /** Ask to take over when someone else owns it */
+    canRequestTakeover: Boolean(staffId && assigneeId && !isAssignee && isDesignatedHandlerRole(role)),
+    /** Admin force-claim, or current assignee accepting a pending request by transferring */
+    canForceTakeover: Boolean(staffId && isAdmin && assigneeId && !isAssignee),
+    /** Current assignee (or admin) can grant a pending takeover request */
+    canAcceptTakeover: Boolean(
+      staffId &&
+        requesterId &&
+        ((isAssignee && requesterId !== staffId) || (isAdmin && requesterId !== assigneeId))
+    ),
+    canCancelTakeoverRequest: Boolean(staffId && requesterId && staffId === requesterId),
+  };
+}
+
 async function updateDispute(disputeId, patch, staffSession) {
-  const allowed = ['status', 'priority', 'assigned_staff_id', 'resolution_notes'];
+  const staff = await resolveDisputeStaffId(staffSession);
+  if (!staff) {
+    throw new Error('Could not match your login to a staff profile.');
+  }
+
+  const row = await loadDisputeRow(disputeId);
+  if (!row) return null;
+
+  const perms = buildDisputePermissions(row, staff);
+  const action = String(patch.action || '').toLowerCase().trim();
+
+  // --- Assignment / takeover actions (allowed without canAct) ---
+  if (action === 'self_assign') {
+    if (!perms.canSelfAssign) {
+      throw new Error('You can only claim an unassigned dispute as Admin or Support Moderator.');
+    }
+    await pool.query(
+      `UPDATE disputes
+       SET assigned_staff_id = $1,
+           takeover_requested_by_staff_id = NULL,
+           takeover_requested_at = NULL,
+           takeover_request_note = NULL,
+           updated_at = NOW()
+       WHERE dispute_id = $2`,
+      [staff.staff_id, disputeId]
+    );
+    return getDisputeDetail(disputeId, staffSession);
+  }
+
+  if (action === 'request_takeover') {
+    if (!perms.canRequestTakeover) {
+      throw new Error('You cannot request takeover for this dispute.');
+    }
+    await pool.query(
+      `UPDATE disputes
+       SET takeover_requested_by_staff_id = $1,
+           takeover_requested_at = NOW(),
+           takeover_request_note = $2,
+           updated_at = NOW()
+       WHERE dispute_id = $3`,
+      [staff.staff_id, patch.takeover_request_note || patch.note || null, disputeId]
+    );
+    return getDisputeDetail(disputeId, staffSession);
+  }
+
+  if (action === 'cancel_takeover_request') {
+    if (!perms.canCancelTakeoverRequest) {
+      throw new Error('Only the requester can cancel this takeover request.');
+    }
+    await pool.query(
+      `UPDATE disputes
+       SET takeover_requested_by_staff_id = NULL,
+           takeover_requested_at = NULL,
+           takeover_request_note = NULL,
+           updated_at = NOW()
+       WHERE dispute_id = $1`,
+      [disputeId]
+    );
+    return getDisputeDetail(disputeId, staffSession);
+  }
+
+  if (action === 'takeover') {
+    // Admin force-takeover onto self
+    if (!perms.canForceTakeover && !(perms.isAdmin && !row.assigned_staff_id)) {
+      if (perms.canSelfAssign) {
+        // fall through handled above; if assigned to other, must be admin
+      }
+      if (!perms.isAdmin) {
+        throw new Error('Only Admin can force-takeover a dispute. Request takeover instead.');
+      }
+      if (perms.isAssignee) {
+        throw new Error('You already own this dispute.');
+      }
+    }
+    await pool.query(
+      `UPDATE disputes
+       SET assigned_staff_id = $1,
+           handled_by_staff_id = COALESCE(handled_by_staff_id, $1),
+           takeover_requested_by_staff_id = NULL,
+           takeover_requested_at = NULL,
+           takeover_request_note = NULL,
+           updated_at = NOW()
+       WHERE dispute_id = $2`,
+      [staff.staff_id, disputeId]
+    );
+    return getDisputeDetail(disputeId, staffSession);
+  }
+
+  if (action === 'accept_takeover') {
+    if (!perms.canAcceptTakeover) {
+      throw new Error('You cannot accept this takeover request.');
+    }
+    const toStaffId = row.takeover_requested_by_staff_id;
+    await pool.query(
+      `UPDATE disputes
+       SET assigned_staff_id = $1,
+           handled_by_staff_id = COALESCE(handled_by_staff_id, $1),
+           takeover_requested_by_staff_id = NULL,
+           takeover_requested_at = NULL,
+           takeover_request_note = NULL,
+           updated_at = NOW()
+       WHERE dispute_id = $2`,
+      [toStaffId, disputeId]
+    );
+    return getDisputeDetail(disputeId, staffSession);
+  }
+
+  // Admin assigns a Support Moderator (allowed without being assignee)
+  if (patch.assigned_staff_id !== undefined && !action) {
+    if (!perms.canAssignOthers && !perms.canAct) {
+      throw new Error('Only Admin can assign disputes to Support Moderators, or the assignee can update assignment.');
+    }
+    const nextAssignee = patch.assigned_staff_id;
+    if (nextAssignee) {
+      const target = await pool.query(`SELECT staff_id, role FROM staff WHERE staff_id::text = $1`, [
+        String(nextAssignee),
+      ]);
+      if (!target.rows.length) throw new Error('Assignee staff not found.');
+      if (!isDesignatedHandlerRole(target.rows[0].role)) {
+        throw new Error('Disputes can only be assigned to Support Moderators or Admin.');
+      }
+    }
+    await pool.query(
+      `UPDATE disputes
+       SET assigned_staff_id = $1,
+           takeover_requested_by_staff_id = NULL,
+           takeover_requested_at = NULL,
+           takeover_request_note = NULL,
+           updated_at = NOW()
+       WHERE dispute_id = $2`,
+      [nextAssignee || null, disputeId]
+    );
+    // If only assigning, return early unless other fields present
+    const otherKeys = Object.keys(patch).filter(
+      (k) => !['assigned_staff_id', 'action'].includes(k)
+    );
+    if (!otherKeys.length) {
+      return getDisputeDetail(disputeId, staffSession);
+    }
+  }
+
+  // --- Handling actions require being the assigned staff ---
+  const refreshed = await loadDisputeRow(disputeId);
+  const actPerms = buildDisputePermissions(refreshed, staff);
+
+  if (action === 'approve') {
+    if (!actPerms.canAct) throw new Error('Assign yourself to this dispute before approving.');
+    await pool.query(
+      `UPDATE disputes
+       SET status = 'open',
+           visibility = 'public',
+           approved_at = COALESCE(approved_at, NOW()),
+           approved_by_staff_id = COALESCE(approved_by_staff_id, $1),
+           updated_at = NOW()
+       WHERE dispute_id = $2`,
+      [staff.staff_id, disputeId]
+    );
+    return getDisputeDetail(disputeId, staffSession);
+  }
+
+  if (action === 'dismiss') {
+    if (!actPerms.canAct) throw new Error('Assign yourself to this dispute before dismissing.');
+    await pool.query(
+      `UPDATE disputes
+       SET status = 'dismissed',
+           outcome = 'dismissed',
+           visibility = COALESCE(NULLIF(visibility, 'pending'), 'public'),
+           approved_at = COALESCE(approved_at, NOW()),
+           approved_by_staff_id = COALESCE(approved_by_staff_id, $1),
+           resolution_notes = COALESCE($2, resolution_notes),
+           resolved_at = NOW(),
+           updated_at = NOW()
+       WHERE dispute_id = $3`,
+      [staff.staff_id, patch.resolution_notes || null, disputeId]
+    );
+    return getDisputeDetail(disputeId, staffSession);
+  }
+
+  // Generic field updates
+  if (!actPerms.canAct) {
+    throw new Error('View only — assign yourself to this dispute to make changes.');
+  }
+
+  const allowed = [
+    'status',
+    'priority',
+    'resolution_notes',
+    'outcome',
+    'sanction_type',
+    'sanction_notes',
+    'visibility',
+  ];
   const sets = [];
   const values = [];
   let idx = 1;
@@ -982,129 +1338,76 @@ async function updateDispute(disputeId, patch, staffSession) {
     }
   }
 
-  if (!sets.length) {
-    const list = await fetchDisputesList();
-    return list.find((d) => String(d.id) === String(disputeId)) || null;
+  if (patch.assigned_staff_id !== undefined && actPerms.canAct) {
+    // Assignee can leave unassigned only if admin; otherwise keep
+    if (actPerms.isAdmin || patch.assigned_staff_id) {
+      sets.push(`assigned_staff_id = $${idx}`);
+      values.push(patch.assigned_staff_id || null);
+      idx += 1;
+    }
   }
 
-  if (patch.status && ['resolved', 'closed'].includes(String(patch.status).toLowerCase())) {
-    sets.push(`resolved_at = NOW()`);
+  if (patch.status) {
+    const status = String(patch.status).toLowerCase();
+    if (status === 'open' && String(refreshed.visibility || '') === 'pending') {
+      sets.push(`visibility = 'public'`);
+      sets.push(`approved_at = COALESCE(approved_at, NOW())`);
+      sets.push(`approved_by_staff_id = COALESCE(approved_by_staff_id, $${idx})`);
+      values.push(staff.staff_id);
+      idx += 1;
+    }
+    if (DISPUTE_CLOSED.includes(status)) {
+      sets.push(`resolved_at = NOW()`);
+      if (patch.outcome === undefined && !refreshed.outcome) {
+        sets.push(`outcome = $${idx}`);
+        values.push(status === 'closed' ? 'resolved' : status);
+        idx += 1;
+      }
+    }
+  }
+
+  if (patch.outcome) {
+    const outcome = String(patch.outcome).toLowerCase();
+    if (DISPUTE_CLOSED.includes(outcome) && patch.status === undefined) {
+      sets.push(`status = $${idx}`);
+      values.push(outcome);
+      idx += 1;
+      sets.push(`resolved_at = NOW()`);
+    }
+  }
+
+  if (!sets.length) {
+    return getDisputeDetail(disputeId, staffSession);
   }
 
   sets.push(`updated_at = NOW()`);
   values.push(disputeId);
-
   await pool.query(`UPDATE disputes SET ${sets.join(', ')} WHERE dispute_id = $${idx}`, values);
-
-  const list = await fetchDisputesList();
-  return list.find((d) => String(d.id) === String(disputeId)) || null;
+  return getDisputeDetail(disputeId, staffSession);
 }
 
-async function getDisputeChatId(disputeId) {
-  const result = await pool.query(
-    `SELECT chat_id FROM dispute_chats WHERE dispute_id = $1 AND deleted_at IS NULL`,
-    [disputeId]
-  );
-  return result.rows[0]?.chat_id || null;
-}
+async function getDisputeDetail(disputeId, staffSession = null) {
+  const row = await loadDisputeRow(disputeId);
+  if (!row) return null;
 
-/** Create (or reuse) the Mongo inbox for a dispute and link it via dispute_chats. */
-async function ensureDisputeChat(disputeId, disputeRow) {
-  const existing = await getDisputeChatId(disputeId);
-  if (existing) return existing;
-
-  if (!getMongoClient()) {
-    throw new Error('MongoDB is not connected — dispute chats require MONGODB_URI');
-  }
-
-  const members = [];
-  const seen = new Set();
-  const addMember = (accountId, role) => {
-    if (!accountId || seen.has(String(accountId))) return;
-    seen.add(String(accountId));
-    members.push({ account_id: String(accountId), role, joined_at: new Date() });
-  };
-
-  addMember(disputeRow.initiator_account_id || disputeRow.by_account_id, 'member');
-  addMember(disputeRow.respondent_account_id || disputeRow.for_account_id, 'member');
-  // Staff participant is added when they first post; starter members are the parties.
-
-  const insertResult = await createInboxRepositories({
-    conversation_name: disputeRow.dispute_number
-      ? `Dispute ${disputeRow.dispute_number}`
-      : `Dispute ${disputeId}`,
-    conversation_type: 'group',
-    dispute_id: String(disputeId),
-    members,
-    pinned_messages: [],
-    created_at: new Date(),
-    updated_at: new Date(),
-  });
-
-  const chatId = String(insertResult.insertedId);
-  await pool.query(
-    `INSERT INTO dispute_chats (dispute_id, chat_id)
-     VALUES ($1, $2)
-     ON CONFLICT (dispute_id) DO UPDATE
-       SET chat_id = EXCLUDED.chat_id, deleted_at = NULL, created_at = CURRENT_TIMESTAMP`,
-    [disputeId, chatId]
-  );
-  return chatId;
-}
-
-function mapMongoDisputeMessage(m) {
-  return {
-    id: String(m._id),
-    authorType: m.author_type || (m.is_internal ? 'staff' : 'user'),
-    authorName: m.author_name || 'Unknown',
-    body: m.message_content || m.body || '',
-    isInternal: Boolean(m.is_internal),
-    createdAt: m.created_at || m.createdAt || null,
-  };
-}
-
-async function getDisputeDetail(disputeId) {
-  const disputeResult = await pool.query(
-    `
-    SELECT
-      d.*,
-      COALESCE(ia.display_name, iu.first_name || ' ' || iu.last_name) AS initiator_name,
-      ia.handle AS initiator_handle,
-      COALESCE(ra.display_name, ru.first_name || ' ' || ru.last_name) AS respondent_name,
-      ra.handle AS respondent_handle,
-      COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
-      st.role AS assignee_role
-    FROM disputes d
-    LEFT JOIN accounts ia ON ia.account_id = d.initiator_account_id
-    LEFT JOIN users iu ON iu.account_id = ia.account_id
-    LEFT JOIN accounts ra ON ra.account_id = d.respondent_account_id
-    LEFT JOIN users ru ON ru.account_id = ra.account_id
-    LEFT JOIN staff st ON st.staff_id = d.assigned_staff_id
-    LEFT JOIN accounts sa ON sa.account_id = st.account_id
-    WHERE d.dispute_id = $1
-    `,
-    [disputeId]
-  );
-  if (!disputeResult.rows.length) return null;
+  const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
+  const permissions = buildDisputePermissions(row, staff);
 
   const staffResult = await pool.query(`
     SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
     FROM staff s INNER JOIN accounts a ON a.account_id = s.account_id
-    ORDER BY s.role
+    WHERE LOWER(s.role) IN ('support moderator', 'admin', 'administrator')
+    ORDER BY s.role, name
   `);
 
   let messages = [];
   let chatId = null;
-  let chatAvailable = Boolean(getMongoClient());
+  let chatAvailable = isMongoReady();
 
   try {
     chatId = await getDisputeChatId(disputeId);
     if (chatId && chatAvailable) {
-      const { Messages } = await getConversationByConvoId(chatId);
-      messages = (Messages || [])
-        .filter((m) => !m.is_deleted && !m.deleted_at)
-        .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))
-        .map(mapMongoDisputeMessage);
+      messages = await listDisputeMessages(chatId);
     }
   } catch (err) {
     console.error('Error loading dispute chat from MongoDB:', err.message);
@@ -1112,10 +1415,11 @@ async function getDisputeDetail(disputeId) {
   }
 
   return {
-    dispute: mapDisputeRow(disputeResult.rows[0]),
+    dispute: mapDisputeRow(row),
     messages,
     chatId,
     chatAvailable,
+    permissions,
     assignableStaff: staffResult.rows.map((s) => ({
       staffId: s.staff_id,
       name: s.name,
@@ -1124,63 +1428,68 @@ async function getDisputeDetail(disputeId) {
   };
 }
 
-async function addDisputeMessage(disputeId, body, staffSession, isInternal = false) {
-  if (!getMongoClient()) {
+async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
+  if (typeof options === 'boolean') {
+    options = { isInternal: options };
+  }
+  if (!isMongoReady()) {
     throw new Error('MongoDB is not connected — cannot send dispute chat messages');
   }
 
-  const disputeResult = await pool.query(`SELECT * FROM disputes WHERE dispute_id = $1`, [disputeId]);
-  if (!disputeResult.rows.length) return null;
+  const staff = await resolveDisputeStaffId(staffSession);
+  if (!staff) throw new Error('Could not match your login to a staff profile.');
 
-  const chatId = await ensureDisputeChat(disputeId, disputeResult.rows[0]);
-  const now = new Date();
-  const accountId = sessionAccountId(staffSession);
+  const row = await loadDisputeRow(disputeId);
+  if (!row) return null;
 
-  // Keep staff on the conversation member list when they post.
-  if (accountId && ObjectId.isValid(chatId)) {
-    const db = mongoDb();
-    if (db) {
-      await db.collection('inbox').updateOne(
-        { _id: new ObjectId(chatId), 'members.account_id': { $ne: accountId } },
-        {
-          $push: { members: { account_id: accountId, role: 'admin', joined_at: now } },
-          $set: { updated_at: now },
-        }
-      );
-    }
+  const perms = buildDisputePermissions(row, staff);
+  if (!perms.canAct) {
+    throw new Error('Assign yourself to this dispute before posting messages.');
   }
 
-  await createMessageRepositories({
-    conversation_id: String(chatId),
-    sender_id: accountId,
-    message_type: 'text',
-    message_content: body,
-    message_id_reply: null,
-    attachments: [],
-    links: [],
-    message_react: [],
-    read_by: accountId ? [{ account_id: accountId, read_at: now }] : [],
-    is_edited: false,
-    is_deleted: false,
-    is_internal: Boolean(isInternal),
-    author_type: 'staff',
-    author_name: sessionDisplayName(staffSession) || 'Staff',
-    created_at: now,
-    updated_at: now,
+  const isInternal = Boolean(options.isInternal);
+  const audience =
+    options.audience ||
+    (isInternal ? 'staff' : options.visibleToParties ? 'parties' : 'staff');
+
+  const chatId = await ensureDisputeChat(disputeId, row);
+  await createDisputeMessage({
+    chatId,
+    body,
+    senderId: sessionAccountId(staffSession),
+    authorName: sessionDisplayName(staffSession) || 'Staff',
+    authorType: 'staff',
+    authorRole: 'staff',
+    audience,
+    isInternal,
   });
 
   await pool.query(`UPDATE disputes SET updated_at = NOW() WHERE dispute_id = $1`, [disputeId]);
-  if (ObjectId.isValid(chatId)) {
-    const db = mongoDb();
-    if (db) {
-      await db.collection('inbox').updateOne(
-        { _id: new ObjectId(chatId) },
-        { $set: { updated_at: now, last_message: body, last_message_time: now } }
-      );
-    }
+  return getDisputeDetail(disputeId, staffSession);
+}
+
+async function setDisputeMessageAudience(disputeId, messageId, audience, staffSession) {
+  if (!isMongoReady()) {
+    throw new Error('MongoDB is not connected — cannot update dispute messages');
   }
 
-  return getDisputeDetail(disputeId);
+  const staff = await resolveDisputeStaffId(staffSession);
+  if (!staff) throw new Error('Could not match your login to a staff profile.');
+
+  const row = await loadDisputeRow(disputeId);
+  if (!row) return null;
+
+  const perms = buildDisputePermissions(row, staff);
+  if (!perms.canAct) {
+    throw new Error('Assign yourself to this dispute before publishing messages.');
+  }
+
+  const chatId = await getDisputeChatId(disputeId);
+  if (!chatId) throw new Error('Dispute chat not found.');
+
+  await updateDisputeMessageAudience(chatId, messageId, audience);
+  await pool.query(`UPDATE disputes SET updated_at = NOW() WHERE dispute_id = $1`, [disputeId]);
+  return getDisputeDetail(disputeId, staffSession);
 }
 
 async function updateReport(reportId, patch) {
@@ -1265,6 +1574,9 @@ module.exports = {
   updateDispute,
   getDisputeDetail,
   addDisputeMessage,
+  setDisputeMessageAudience,
+  fetchDisputesList,
+  fetchReportsList,
   updateReport,
   getReportDetail,
 };

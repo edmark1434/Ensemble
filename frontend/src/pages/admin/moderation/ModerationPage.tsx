@@ -32,7 +32,6 @@ import useGlobalState from '@/lib/global_state';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import TableFilterBar, { uniqueOptions } from '../userTeam/components/TableFilterBar';
 import { ListingCaseDetailModal, ReportCaseDetailModal } from './CaseDetailModals';
-import ModeratorDisputeDetailModal from '@/pages/moderator/shared/ModeratorDisputeDetailModal';
 import { VerificationModal } from '../userTeam/components/AccountModals';
 import type { PlatformUserAccount } from '../userTeam/userTeamTypes';
 import type {
@@ -41,6 +40,9 @@ import type {
   ModeratorProfile,
   ModerationOverview,
 } from './moderationTypes';
+import type { Dispute, UserReport } from '../ticketManagement/ticketTypes';
+import DisputesTab from './DisputesTab';
+import ReportsTab from './ReportsTab';
 
 const STAFF_ROLE_OPTIONS = [
   { value: 'Support Moderator', label: 'Support Moderator' },
@@ -52,12 +54,14 @@ const STAFF_ROLE_OPTIONS = [
 
 const STAFF_STATUS_OPTIONS = ['Active', 'Suspended', 'Locked', 'Banned', 'Inactive'] as const;
 
-type TabId = 'overview' | 'activity' | 'cases' | 'management';
+type TabId = 'overview' | 'activity' | 'cases' | 'disputes' | 'reports' | 'management';
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
   { id: 'activity', label: 'Activity log', icon: ScrollText },
-  { id: 'cases', label: 'Pending cases', icon: FileWarning },
+  { id: 'cases', label: 'Pending cases', icon: Gavel },
+  { id: 'disputes', label: 'Disputes', icon: Scale },
+  { id: 'reports', label: 'Reports', icon: FileWarning },
   { id: 'management', label: 'Management', icon: Settings2 },
 ];
 
@@ -112,7 +116,7 @@ export default function ModerationPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab') as TabId | null;
   const paramSection = searchParams.get('section') as ManagementSection | null;
-  const validTabs: TabId[] = ['overview', 'activity', 'cases', 'management'];
+  const validTabs: TabId[] = ['overview', 'activity', 'cases', 'disputes', 'reports', 'management'];
   const validSections = MANAGEMENT_SECTIONS.map((s) => s.id);
   const initialTab = paramTab && validTabs.includes(paramTab) ? paramTab : 'overview';
   const initialSection =
@@ -239,6 +243,16 @@ export default function ModerationPage() {
                   {summary.yourPendingCases}
                 </span>
               )}
+              {id === 'disputes' && summary.disputeQueueCount > 0 && (
+                <span className="rounded-full bg-rose-500/20 px-1.5 text-[10px] font-bold text-rose-200">
+                  {summary.disputeQueueCount}
+                </span>
+              )}
+              {id === 'reports' && (summary.openReports ?? 0) > 0 && (
+                <span className="rounded-full bg-amber-500/20 px-1.5 text-[10px] font-bold text-amber-200">
+                  {summary.openReports}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -284,6 +298,18 @@ export default function ModerationPage() {
             onRefresh={() => void load(true)}
           />
         )}
+        {tab === 'disputes' && (
+          <DisputesTab
+            disputes={(data.disputes || []) as Dispute[]}
+            onUpdated={() => void load(true)}
+          />
+        )}
+        {tab === 'reports' && (
+          <ReportsTab
+            reports={(data.reports || []) as UserReport[]}
+            onUpdated={() => void load(true)}
+          />
+        )}
         {tab === 'management' && (
           <ManagementTab
             data={data}
@@ -319,8 +345,8 @@ function OverviewTab({
           <StatCard
             label="Your pending cases"
             value={s.yourPendingCases}
-            sub={`${s.disputeQueueCount} open disputes · open My cases`}
-            icon={FileWarning}
+            sub={`${s.openReports ?? 0} open reports · ${s.disputeQueueCount} disputes`}
+            icon={Gavel}
             onClick={() => onGoTab('cases')}
           />
           <StatCard
@@ -339,14 +365,26 @@ function OverviewTab({
 
         <div className="grid gap-3 sm:grid-cols-4">
           {[
-            ['Forum groups', s.forumGroupsActive],
-            ['Discussions', s.forumDiscussions],
-            ['Disputes', s.disputeQueueCount],
-            ['Soft-deleted', s.softDeletedAccounts],
-          ].map(([label, val]) => (
+            ['Forum groups', s.forumGroupsActive, null as TabId | null],
+            ['Discussions', s.forumDiscussions, null],
+            ['Disputes', s.disputeQueueCount, 'disputes' as TabId],
+            ['Reports', s.openReports ?? 0, 'reports' as TabId],
+          ].map(([label, val, go]) => (
             <div
               key={String(label)}
-              className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3"
+              role={go ? 'button' : undefined}
+              tabIndex={go ? 0 : undefined}
+              onClick={go ? () => onGoTab(go as TabId) : undefined}
+              onKeyDown={
+                go
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') onGoTab(go as TabId);
+                    }
+                  : undefined
+              }
+              className={`rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 ${
+                go ? 'cursor-pointer transition hover:border-rose-500/30 hover:bg-rose-500/5' : ''
+              }`}
             >
               <p className="text-[10px] uppercase text-zinc-600">{label}</p>
               <p className="text-xl font-bold text-white">{val}</p>
@@ -505,7 +543,7 @@ function CasesPreview({
   cases: ModerationCase[];
   onViewAll: () => void;
 }) {
-  const moderation = cases.filter((c) => c.source === 'report' || c.source === 'dispute');
+  const moderation = cases.filter((c) => c.source === 'report');
   const listings = cases.filter((c) => c.source === 'listing');
   const identity = cases.filter((c) => c.source === 'identity');
   const preview = (moderation.length ? moderation : identity.length ? identity : listings).slice(
@@ -519,7 +557,7 @@ function CasesPreview({
         <div>
           <h2 className="text-sm font-semibold text-white">Pending cases</h2>
           <p className="text-xs text-zinc-500">
-            {moderation.length} report/dispute · {listings.length} listing · {identity.length}{' '}
+            {moderation.length} report · {listings.length} listing · {identity.length}{' '}
             identity
           </p>
         </div>
@@ -529,7 +567,7 @@ function CasesPreview({
       </div>
       <CasesTableBody
         cases={preview}
-        emptyLabel="No open reports, disputes, or listing reviews."
+        emptyLabel="No open reports, listing reviews, or identity checks."
       />
     </section>
   );
@@ -674,7 +712,7 @@ function CasesTab({
   onRefresh: () => void;
 }) {
   type CaseQueue = 'mine' | 'moderation' | 'listings' | 'identity';
-  type MineCategory = 'all' | 'report' | 'dispute' | 'listing' | 'identity';
+  type MineCategory = 'all' | 'report' | 'listing' | 'identity';
   const [queue, setQueue] = useState<CaseQueue>('mine');
   const [mineCategory, setMineCategory] = useState<MineCategory>('all');
   const [search, setSearch] = useState('');
@@ -698,10 +736,7 @@ function CasesTab({
             (c) =>
               c.assignedStaffId != null &&
               String(c.assignedStaffId) === myStaffId &&
-              (c.source === 'report' ||
-                c.source === 'dispute' ||
-                c.source === 'listing' ||
-                c.source === 'identity')
+              (c.source === 'report' || c.source === 'listing' || c.source === 'identity')
           )
         : [],
     [cases, myStaffId]
@@ -714,14 +749,13 @@ function CasesTab({
     () => ({
       all: myCases.length,
       report: myCases.filter((c) => c.source === 'report').length,
-      dispute: myCases.filter((c) => c.source === 'dispute').length,
       listing: myCases.filter((c) => c.source === 'listing').length,
       identity: myCases.filter((c) => c.source === 'identity').length,
     }),
     [myCases]
   );
   const moderationCases = useMemo(
-    () => cases.filter((c) => c.source === 'report' || c.source === 'dispute'),
+    () => cases.filter((c) => c.source === 'report'),
     [cases]
   );
   const listingCases = useMemo(
@@ -929,9 +963,9 @@ function CasesTab({
             },
             {
               id: 'moderation' as const,
-              label: 'Reports & disputes',
+              label: 'Reports',
               count: moderationCases.length,
-              icon: Scale,
+              icon: FileWarning,
             },
             {
               id: 'listings' as const,
@@ -976,7 +1010,6 @@ function CasesTab({
             [
               { id: 'all' as const, label: 'All assigned' },
               { id: 'report' as const, label: 'Reports' },
-              { id: 'dispute' as const, label: 'Disputes' },
               { id: 'listing' as const, label: 'Listing approvals' },
               { id: 'identity' as const, label: 'Identity verification' },
             ] as const
@@ -1016,8 +1049,8 @@ function CasesTab({
                   : queue === 'identity'
                     ? 'Search name / username…'
                     : queue === 'mine'
-                      ? 'Search my reports, disputes, listings, identity…'
-                      : 'Search report / dispute / target…'
+                      ? 'Search my reports, listings, identity…'
+                      : 'Search report / target…'
               }
               className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
             />
@@ -1098,9 +1131,9 @@ function CasesTab({
                   ? myStaffId
                     ? hasFilters
                       ? 'No assigned cases match your filters.'
-                      : 'No cases are assigned to you yet. Take over a report, dispute, listing, or identity review to see it here.'
+                      : 'No cases are assigned to you yet. Take over a report, listing, or identity review to see it here.'
                     : 'Staff session required to show your assigned cases.'
-                  : 'No open reports or disputes match your filters.'
+                  : 'No open reports match your filters.'
           }
           busyId={busyId || (identityLoading ? selected?.id : null)}
           currentStaffId={myStaffId}
@@ -1124,16 +1157,6 @@ function CasesTab({
           onTakeOver={handleTakeOver}
         />
       </section>
-
-      {selected && mode === 'view' && selected.source === 'dispute' && (
-        <ModeratorDisputeDetailModal
-          disputeId={selected.id}
-          endpointBase="/api/admin/disputes"
-          accent="rose"
-          onClose={closeModal}
-          onUpdated={onRefresh}
-        />
-      )}
 
       {selected && mode === 'view' && selected.source === 'report' && (
         <ReportCaseDetailModal
