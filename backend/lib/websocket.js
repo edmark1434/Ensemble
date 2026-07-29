@@ -85,12 +85,11 @@ async function initSocket(httpServer) {
           payload
         );
 
-        if (result) {
-          io.to(conversation_id).emit("messageUpdated", {
-            _id: message_id,
-            action,
-            payload,
-          });
+          if (result) {
+            if (action === "set") { 
+              result.is_edited = true;
+            }
+          io.to(conversation_id).emit("messageUpdated", result);
         } else {
           io.to(conversation_id).emit("messageUpdateFailed", {
             message: "Message not found.",

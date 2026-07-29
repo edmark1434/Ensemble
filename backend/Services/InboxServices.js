@@ -161,7 +161,6 @@ async function createMessageServices(messagePayload){
 }
 
 async function updateMessageServices(messageId,action, updateFields){
-    dataValidation(updateFields);
     return await updateMessageRepositories(messageId,action, updateFields);
 }
 
