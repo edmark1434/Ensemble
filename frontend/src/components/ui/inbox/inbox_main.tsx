@@ -60,6 +60,9 @@ const InboxMain = () => {
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
 
+  // Left Sidebar Compact Collapse State (Switches to icon-only w-20 strip)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
   // Expanded Image Modal State
   const [expandedMedia, setExpandedMedia] = useState<{ url: string; type: string } | null>(null);
 
@@ -132,6 +135,45 @@ const InboxMain = () => {
     );
   }, [inboxList, searchQuery, getConversationName]);
 
+  // Group creation handler
+  const handleCreateGroup = ({
+    name,
+    members,
+  }: {
+    name: string;
+    members: Array<{ account_id: string; name: string; avatar: string }>;
+  }) => {
+    const newGroupInbox: Inbox = {
+      _id: `group-${Date.now()}`,
+      conversation_name: name,
+      is_group: true,
+      creator_id: currentUserId,
+      members: [currentUserId, ...members.map((m) => m.account_id)],
+      last_message: "Group created",
+      updated_at: new Date(),
+    };
+
+    setInboxList((prev) => [newGroupInbox, ...prev]);
+    setSelectedConversation(newGroupInbox);
+  };
+
+  // Group title update handler
+  const handleUpdateGroupName = (newGroupTitle: string) => {
+    if (!selectedConversation) return;
+
+    const updatedInbox = {
+      ...selectedConversation,
+      conversation_name: newGroupTitle,
+    };
+
+    setSelectedConversation(updatedInbox);
+    setInboxList((prev) =>
+      prev.map((item) =>
+        item._id === selectedConversation._id ? updatedInbox : item
+      )
+    );
+  };
+
   const handleSendMessage = () => {
     if (!messageInput.trim() && mediaList.length === 0) return;
 
@@ -158,7 +200,7 @@ const InboxMain = () => {
       attachments,
       links: [],
       message_react: [],
-      read_by: [], // Newly sent message starts with empty read array (Status: Sent)
+      read_by: [],
       is_edited: false,
       deleted_at: new Date(),
       created_at: new Date(),
@@ -166,6 +208,17 @@ const InboxMain = () => {
     };
 
     setMessages((prev) => [...prev, newMessage]);
+
+    if (selectedConversation) {
+      setInboxList((prev) =>
+        prev.map((inbox) =>
+          inbox._id === selectedConversation._id
+            ? { ...inbox, last_message: messageInput || "Sent media", updated_at: new Date() }
+            : inbox
+        )
+      );
+    }
+
     setMessageInput("");
     setReplyToMessage(null);
     clearMedia();
@@ -241,7 +294,6 @@ const InboxMain = () => {
       previousMessage?.created_at
     );
 
-    // Read / Sent Status Logic
     const isLastMessage = index === messages.length - 1;
     const isSeen = (message.read_by || []).length > 0;
     const messageStatus: "sent" | "seen" = isSeen ? "seen" : "sent";
@@ -273,7 +325,6 @@ const InboxMain = () => {
                 </div>
               )}
 
-              {/* Message Content Bubble */}
               <div
                 className={`relative rounded-2xl shadow-sm ${
                   hasText ? "px-4 py-2.5" : "p-1.5"
@@ -293,7 +344,6 @@ const InboxMain = () => {
                   />
                 )}
 
-                {/* Media Attachments Grid */}
                 {attachments.length > 0 && (
                   <div
                     className={`gap-1.5 grid ${
@@ -344,7 +394,6 @@ const InboxMain = () => {
                 />
               </div>
 
-              {/* Time & Sent/Seen Status Row */}
               {(showTime || message.is_edited || isSender) && (
                 <div
                   className={`flex items-center gap-1.5 mt-2 px-1 ${
@@ -366,7 +415,6 @@ const InboxMain = () => {
               )}
             </div>
 
-            {/* Action Bar */}
             <div
               className={`flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${
                 isSender ? "flex-row-reverse" : "flex-row"
@@ -484,13 +532,23 @@ const InboxMain = () => {
     <div className="w-full h-screen bg-[#080a12] flex flex-col overflow-hidden">
       <UserHeader pageTitle="Inbox" credits={1250} />
 
-      <div className="w-full flex-1 min-h-0 overflow-hidden flex border-t border-white/10">
-        <div className="w-80 md:w-96 flex-shrink-0 flex flex-col border-r border-white/10 bg-[#0d0f1a]">
-          <InboxTab />
+      <div className="w-full flex-1 min-h-0 overflow-hidden flex border-t border-white/10 relative">
+        {/* Animated Left Conversation Sidebar (Transitions smoothly between w-80/w-96 and compact w-20) */}
+        <div
+          className={`flex-shrink-0 flex flex-col border-r border-white/10 bg-[#0d0f1a] transition-all duration-300 ease-in-out ${
+            isSidebarCollapsed ? "w-20" : "w-80 md:w-96"
+          }`}
+        >
+          <InboxTab
+            onCreateGroup={handleCreateGroup}
+            isCollapsed={isSidebarCollapsed}
+          />
           <InboxSearch
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             activeTab="direct"
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
           />
           <div className="inbox-scroll-thin flex-1 overflow-y-auto">
             <Routes>
@@ -507,6 +565,7 @@ const InboxMain = () => {
                     getConversationName={getConversationName}
                     getAvatar={getAvatar}
                     formatTime={formatTime}
+                    isCollapsed={isSidebarCollapsed}
                   />
                 }
               />
@@ -522,6 +581,7 @@ const InboxMain = () => {
                     getConversationName={getConversationName}
                     getAvatar={getAvatar}
                     formatTime={formatTime}
+                    isCollapsed={isSidebarCollapsed}
                   />
                 }
               />
@@ -529,7 +589,8 @@ const InboxMain = () => {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
+        {/* Main Panel Page */}
+        <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden relative">
           <InboxPanelPage
             selectedConversation={selectedConversation}
             getConversationName={getConversationName}
@@ -558,11 +619,11 @@ const InboxMain = () => {
             onUnpin={unpin}
             onJumpToPinned={handleJumpToMessage}
             textareaRef={textareaRef}
+            onUpdateGroupName={handleUpdateGroupName}
           />
         </div>
       </div>
 
-      {/* Expanded Image / Video Lightbox Modal */}
       {expandedMedia && (
         <div
           onClick={() => setExpandedMedia(null)}
@@ -584,7 +645,6 @@ const InboxMain = () => {
         </div>
       )}
 
-      {/* Report Modal */}
       {reportModalMessage && (
         <InboxReportModal
           messageToReport={reportModalMessage}

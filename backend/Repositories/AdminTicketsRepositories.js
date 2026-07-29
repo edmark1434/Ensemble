@@ -1044,6 +1044,10 @@ async function resolveDisputeStaffId(session) {
     );
     if (byAccount.rows.length) return byAccount.rows[0];
   }
+  // Session fallback so Admin/Support can still claim when Redis payload has staffId/role
+  if (direct && session?.role) {
+    return { staff_id: direct, role: session.role };
+  }
   return null;
 }
 
@@ -1096,9 +1100,10 @@ async function loadDisputeRow(disputeId) {
   return result.rows[0] || null;
 }
 
-function buildDisputePermissions(row, staff) {
-  const staffId = staff?.staff_id ? String(staff.staff_id) : null;
-  const role = staff?.role || null;
+function buildDisputePermissions(row, staff, session = null) {
+  const staffId =
+    (staff?.staff_id ? String(staff.staff_id) : null) || sessionStaffId(session) || null;
+  const role = staff?.role || session?.role || null;
   const assigneeId = row?.assigned_staff_id ? String(row.assigned_staff_id) : null;
   const requesterId = row?.takeover_requested_by_staff_id
     ? String(row.takeover_requested_by_staff_id)
@@ -1106,6 +1111,7 @@ function buildDisputePermissions(row, staff) {
   const isAssignee = Boolean(staffId && assigneeId && staffId === assigneeId);
   const isAdmin = isAdminRole(role);
   const unassigned = !assigneeId;
+  const designated = isDesignatedHandlerRole(role);
 
   return {
     staffId,
@@ -1118,10 +1124,16 @@ function buildDisputePermissions(row, staff) {
     /** Admin may assign Support Moderators without being the handler */
     canAssignOthers: isAdmin,
     /** Claim an unassigned dispute */
-    canSelfAssign: Boolean(staffId && unassigned && isDesignatedHandlerRole(role)),
+    canSelfAssign: Boolean(staffId && unassigned && designated),
+    /**
+     * Assign myself: claim if unassigned, or Admin force-takeover if someone else owns it.
+     */
+    canAssignMyself: Boolean(
+      staffId && designated && !isAssignee && (unassigned || isAdmin)
+    ),
     /** Ask to take over when someone else owns it */
-    canRequestTakeover: Boolean(staffId && assigneeId && !isAssignee && isDesignatedHandlerRole(role)),
-    /** Admin force-claim, or current assignee accepting a pending request by transferring */
+    canRequestTakeover: Boolean(staffId && assigneeId && !isAssignee && designated),
+    /** Admin force-claim when someone else owns it */
     canForceTakeover: Boolean(staffId && isAdmin && assigneeId && !isAssignee),
     /** Current assignee (or admin) can grant a pending takeover request */
     canAcceptTakeover: Boolean(
@@ -1142,13 +1154,28 @@ async function updateDispute(disputeId, patch, staffSession) {
   const row = await loadDisputeRow(disputeId);
   if (!row) return null;
 
-  const perms = buildDisputePermissions(row, staff);
+  const perms = buildDisputePermissions(row, staff, staffSession);
   const action = String(patch.action || '').toLowerCase().trim();
 
   // --- Assignment / takeover actions (allowed without canAct) ---
   if (action === 'self_assign') {
-    if (!perms.canSelfAssign) {
+    if (!perms.canSelfAssign && !(perms.canAssignMyself && perms.canForceTakeover)) {
       throw new Error('You can only claim an unassigned dispute as Admin or Support Moderator.');
+    }
+    // Admin "Assign myself" on an already-assigned dispute = force takeover
+    if (!perms.canSelfAssign && perms.canForceTakeover) {
+      await pool.query(
+        `UPDATE disputes
+         SET assigned_staff_id = $1,
+             handled_by_staff_id = COALESCE(handled_by_staff_id, $1),
+             takeover_requested_by_staff_id = NULL,
+             takeover_requested_at = NULL,
+             takeover_request_note = NULL,
+             updated_at = NOW()
+         WHERE dispute_id = $2`,
+        [staff.staff_id, disputeId]
+      );
+      return getDisputeDetail(disputeId, staffSession);
     }
     await pool.query(
       `UPDATE disputes
@@ -1277,7 +1304,7 @@ async function updateDispute(disputeId, patch, staffSession) {
 
   // --- Handling actions require being the assigned staff ---
   const refreshed = await loadDisputeRow(disputeId);
-  const actPerms = buildDisputePermissions(refreshed, staff);
+  const actPerms = buildDisputePermissions(refreshed, staff, staffSession);
 
   if (action === 'approve') {
     if (!actPerms.canAct) throw new Error('Assign yourself to this dispute before approving.');
@@ -1391,7 +1418,7 @@ async function getDisputeDetail(disputeId, staffSession = null) {
   if (!row) return null;
 
   const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
-  const permissions = buildDisputePermissions(row, staff);
+  const permissions = buildDisputePermissions(row, staff, staffSession);
 
   const staffResult = await pool.query(`
     SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
@@ -1442,7 +1469,7 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
   const row = await loadDisputeRow(disputeId);
   if (!row) return null;
 
-  const perms = buildDisputePermissions(row, staff);
+  const perms = buildDisputePermissions(row, staff, staffSession);
   if (!perms.canAct) {
     throw new Error('Assign yourself to this dispute before posting messages.');
   }
@@ -1459,6 +1486,9 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
           : 'staff');
 
   const chatId = await ensureDisputeChat(disputeId, row);
+  const audiences = Array.isArray(options.audiences)
+    ? options.audiences.map((a) => String(a).toLowerCase())
+    : null;
   await createDisputeMessage({
     chatId,
     body,
@@ -1467,6 +1497,7 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
     authorType: 'staff',
     authorRole: 'staff',
     audience,
+    audiences,
     isInternal,
   });
 
@@ -1485,7 +1516,7 @@ async function setDisputeMessageAudience(disputeId, messageId, audience, staffSe
   const row = await loadDisputeRow(disputeId);
   if (!row) return null;
 
-  const perms = buildDisputePermissions(row, staff);
+  const perms = buildDisputePermissions(row, staff, staffSession);
   if (!perms.canAct) {
     throw new Error('Assign yourself to this dispute before publishing messages.');
   }
