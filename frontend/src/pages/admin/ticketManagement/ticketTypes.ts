@@ -69,6 +69,7 @@ export type DisputePermissions = {
   canAct?: boolean;
   canAssignOthers?: boolean;
   canSelfAssign?: boolean;
+  canAssignMyself?: boolean;
   canRequestTakeover?: boolean;
   canForceTakeover?: boolean;
   canAcceptTakeover?: boolean;
