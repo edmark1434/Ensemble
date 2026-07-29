@@ -178,20 +178,13 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
 
         {/* Action Controls Row */}
         <div className="flex flex-row gap-2 flex-shrink-0">
-          {isOwner ? (
+          {isOwner && (
             <button
               onClick={onEditProfile}
               className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-300 hover:text-white hover:bg-white/10 hover:border-white/20 transition shadow-sm"
               title="Modify Properties"
             >
               <Edit2 className="h-4 w-4" />
-            </button>
-          ) : (
-            <button
-              className="p-2.5 rounded-xl bg-blue-500 text-white hover:bg-blue-600 transition shadow-md shadow-blue-500/10"
-              title="Initiate Workspace Sync"
-            >
-              <MessageCircle className="h-4 w-4" />
             </button>
           )}
 
@@ -202,14 +195,14 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
           >
             <MessageCircle className="h-4 w-4" />
           </button>
-          {!verificationLevel && (
-            <button
-              onClick={onVerificationClick}
-              className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-emerald-500 hover:text-emerald-400 hover:bg-white/10 hover:border-emerald-500/20 transition shadow-sm"
-              title="Account Verification Status"
-            >
-              <ShieldCheck className="h-4 w-4" />
-            </button>
+          {!verificationLevel && isOwner && (
+          <button
+            onClick={onVerificationClick}
+            className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-emerald-500 hover:text-emerald-400 hover:bg-white/10 hover:border-emerald-500/20 transition shadow-sm"
+            title="Account Verification Status"
+          >
+            <ShieldCheck className="h-4 w-4" />
+          </button>
           )}
           <button
             className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-400 hover:text-white hover:bg-white/10 hover:border-white/20 transition"

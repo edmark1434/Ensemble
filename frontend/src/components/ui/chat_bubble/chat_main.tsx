@@ -11,6 +11,13 @@ interface ChatMainProps {
   activeUser: ChatTarget | null;
   recentChats: ChatTarget[];
   onSelectChat: (target: ChatTarget) => void;
+  messages?: any[];
+  isLoading?: boolean;
+  onNewMessage?: (message: any) => void;
+  onRemoveChat?: (chatId: string) => void; // Add this prop
+  avatarPayload?: {
+    [accountId: string]: string; // Mapping of account IDs to avatar URLs
+  }; // Add this prop
 }
 
 export const ChatMain: React.FC<ChatMainProps> = ({
@@ -19,11 +26,13 @@ export const ChatMain: React.FC<ChatMainProps> = ({
   activeUser,
   recentChats,
   onSelectChat,
+  messages = [],
+  avatarPayload = {},
+  isLoading = false,
+  onNewMessage,
+  onRemoveChat, // Add this
 }) => {
-  // Collapsed by default
   const [isStackExpanded, setIsStackExpanded] = useState(false);
-
-  // Filter out the active chat user so their bubble disappears while window is open
   const visibleBubbles =
     isOpen && activeUser
       ? recentChats.filter((chat) => chat.name !== activeUser.name)
@@ -33,6 +42,13 @@ export const ChatMain: React.FC<ChatMainProps> = ({
     setIsStackExpanded((prev) => !prev);
   };
 
+  const handleRemoveChat = (e: React.MouseEvent, chatId: string) => {
+    e.stopPropagation(); // Prevent opening the chat
+    if (onRemoveChat) {
+      onRemoveChat(chatId);
+    }
+  };
+  
   return (
     <div className="fixed bottom-5 right-6 z-50 flex items-end gap-4 font-['Plus_Jakarta_Sans',sans-serif]">
       {/* Active Chat Window on the LEFT */}
@@ -44,7 +60,14 @@ export const ChatMain: React.FC<ChatMainProps> = ({
             exit={{ opacity: 0, scale: 0.9, x: 20 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
           >
-            <ChatWindow onClose={onClose} activeUser={activeUser} />
+            <ChatWindow 
+              onClose={onClose} 
+              activeUser={activeUser}
+              messages={messages}
+              isLoading={isLoading}
+              onNewMessage={onNewMessage}
+              avatarPayload={avatarPayload}
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -62,7 +85,7 @@ export const ChatMain: React.FC<ChatMainProps> = ({
                 .toUpperCase();
 
               return (
-                <motion.button
+                <motion.div
                   key={chat.id || chat.name}
                   initial={{ opacity: 0, y: 15, scale: 0.8 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -71,32 +94,52 @@ export const ChatMain: React.FC<ChatMainProps> = ({
                     duration: 0.2,
                     delay: index * 0.05,
                   }}
-                  onClick={() => onSelectChat(chat)}
-                  className="relative group transition-transform active:scale-95 focus:outline-none"
-                  title={chat.name}
+                  className="relative group"
                 >
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 p-[2px] shadow-xl hover:shadow-2xl">
-                    <div className="w-full h-full rounded-full bg-[#080a12] flex items-center justify-center font-bold text-white text-xs overflow-hidden border border-white/10">
-                      {chat.avatarUrl ? (
-                        <img
-                          src={chat.avatarUrl}
-                          alt={chat.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        initials
-                      )}
+                  <button
+                    onClick={() => onSelectChat(chat)}
+                    className="relative transition-transform active:scale-95 focus:outline-none"
+                    title={chat.name}
+                  >
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 p-[2px] shadow-xl hover:shadow-2xl">
+                      <div className="w-full h-full rounded-full bg-[#080a12] flex items-center justify-center font-bold text-white text-xs overflow-hidden border border-white/10">
+                        {chat.avatarUrl ? (
+                          <img
+                            src={chat.avatarUrl}
+                            alt={chat.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          initials
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-[#080a12]" />
+                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-[#080a12]" />
 
-                  {/* Name Tooltip on Hover */}
-                  <div className="absolute right-14 top-1/2 -translate-y-1/2 hidden group-hover:block pointer-events-none">
-                    <div className="bg-[#080a12] text-zinc-200 border border-white/15 px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap shadow-xl backdrop-blur-md">
-                      {chat.name}
+                    {/* Unread count badge */}
+                    {chat.unreadCount && chat.unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center border-2 border-[#080a12] font-medium">
+                        {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
+                      </span>
+                    )}
+
+                    {/* Name Tooltip on Hover */}
+                    <div className="absolute right-14 top-1/2 -translate-y-1/2 hidden group-hover:block pointer-events-none">
+                      <div className="bg-[#080a12] text-zinc-200 border border-white/15 px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap shadow-xl backdrop-blur-md">
+                        {chat.name}
+                      </div>
                     </div>
-                  </div>
-                </motion.button>
+                  </button>
+
+                  {/* X Button to remove chat - appears on hover */}
+                  <button
+                    onClick={(e) => handleRemoveChat(e, chat.id)}
+                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 border-2 border-[#080a12] shadow-lg z-10"
+                    title="Remove chat"
+                  >
+                    <X size={10} />
+                  </button>
+                </motion.div>
               );
             })}
         </AnimatePresence>

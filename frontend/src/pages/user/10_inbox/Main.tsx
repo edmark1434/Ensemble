@@ -82,6 +82,16 @@ interface Message {
   updated_at: Date;
 }
 
+interface Profile {
+  account_id: string;
+  user_id?: string;
+  name: string;
+  email: string;
+  avatar_preset_url?: string;
+  avatar_file_id?: string;
+  username?: string;
+  [key: string]: any;
+}
 
 const Inbox = () => {
   const navigate = useNavigate();
@@ -96,18 +106,71 @@ const Inbox = () => {
   const { user } = useGlobalState();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // State for user profile
+  const [userProfile, setUserProfile] = useState<Profile | null>(null);
+  // State for other users' profiles
+  const [profiles, setProfiles] = useState<{ [key: string]: Profile }>({});
+
+  // Get CloudFront URL for avatar
+  const getAvatarUrl = (avatarPath?: string): string | null => {
+    if (!avatarPath) return null;
+    if (avatarPath.startsWith("/")) {
+      return `${import.meta.env.VITE_CLOUDFRONT_URL}${avatarPath}`;
+    } else {
+      return `${import.meta.env.VITE_CLOUDFRONT_URL}/${avatarPath}`;
+    }
+  };
+
+  // Fetch user profile when component mounts
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user?.account_id) return;
+      try {
+        const response = await api.get(`/api/accounts/profile/${user.account_id}`);
+        console.log('📱 User profile fetched - Full response:', response.data);
+        console.log('📱 User profile data:', response.data.data);
+        console.log('📱 User avatar_preset_url:', response.data.data?.avatar_preset_url);
+        console.log('📱 User avatar full URL:', getAvatarUrl(response.data.data?.avatar_preset_url));
+        setUserProfile(response.data.data);
+      } catch (error) {
+        console.error('❌ Error fetching user profile:', error);
+      }
+    };
+    fetchUserProfile();
+  }, [user?.account_id]);
+
+  // Fetch profile for a specific account ID
+  const fetchProfile = async (accountId: string) => {
+    if (!accountId) return null;
+    if (profiles[accountId]) return profiles[accountId];
+    
+    try {
+      const response = await api.get(`/api/accounts/profile/${accountId}`);
+      const profile = response.data.data;
+      console.log(`👤 Profile fetched for ${accountId}:`, profile);
+      console.log(`👤 Avatar URL for ${accountId}:`, profile?.avatar_preset_url);
+      setProfiles(prev => ({ ...prev, [accountId]: profile }));
+      return profile;
+    } catch (error) {
+      console.error(`❌ Error fetching profile for ${accountId}:`, error);
+      return null;
+    }
+  };
 
   const checkMessageSender = (message: Message): boolean => {
     return message.sender_id === user?.account_id || message.sender_id === "user1";
   }
 
+  // src/pages/user/inbox/Inbox.tsx - Fix the handleSendMessage and socket listeners
+
+  // src/pages/user/inbox/Inbox.tsx - Only change this function
+
   const handleSendMessage = () => {
     const trimmed = messageInput.trim();
     if (!trimmed) return;
     console.log("Sending message:", trimmed);
-    setMessageInput("");
-
-    console.log("Selected conversation:", selectedConversation);
+    
+    // Create the message payload
     const messagePayload: Message = {
       _id: `${Date.now()}-${Math.random()}`, // Temporary ID for optimistic UI
       conversation_id: selectedConversation?._id || "",
@@ -124,10 +187,17 @@ const Inbox = () => {
       created_at: new Date(),
       updated_at: new Date()
     };
-    socket.emit("sendMessage", messagePayload);
-  };
 
-  // Socket connection
+    // Clear input immediately
+    setMessageInput("");
+
+    // Emit via socket - the server will return the message via newMessage event
+    socket.emit("sendMessage", messagePayload);
+    
+    // DON'T add optimistically - wait for server response
+    // The server will emit newMessage which will add the message
+  };
+  // Socket connection - fix the newMessage handler to prevent duplicates
   useEffect(() => {
     socket.connect();
     socket.on("connect", () => {
@@ -136,14 +206,32 @@ const Inbox = () => {
     
     socket.on("newMessage", (message: any) => {
       console.log("Received new message:", message);
+      
+      // Check if message is valid
+      if (!message || !message._id) {
+        console.warn("Invalid message received:", message);
+        return;
+      }
 
       setMessages(prev => {
+        // Check if message already exists (prevent duplicates)
         const exists = prev.some(m => m._id === message._id);
-
         if (exists) {
+          console.log("Message already exists, skipping duplicate");
           return prev;
         }
-
+        
+        // Check if we have an optimistic message with this ID
+        // If the server returns a message with the same ID, replace it
+        const optimisticIndex = prev.findIndex(m => m._id === message._id);
+        if (optimisticIndex !== -1) {
+          console.log("Replacing optimistic message with server response");
+          const newMessages = [...prev];
+          newMessages[optimisticIndex] = message;
+          return newMessages;
+        }
+        
+        console.log("Adding new message to state");
         return [...prev, message];
       });
     });
@@ -155,6 +243,7 @@ const Inbox = () => {
     return () => {
       socket.off("connect");
       socket.off("disconnect");
+      socket.off("newMessage");
       socket.disconnect();
     };
   }, []);
@@ -165,33 +254,59 @@ const Inbox = () => {
       setLoading(true);
       try {
         const response = await api.get(`api/inbox/${activeTab}`);
-        console.log('Fetched inbox:', response.data);
-        const recepientsNames = response.data.map((inbox: Inbox) => {
-          return inbox.members.map(member => member.account_id).filter(id => id !== user?.account_id);
-        });
-        const namesResponse = await api.post('api/accounts/display-names', { accountIds: recepientsNames.flat() });
-        const displayNameMap = Object.fromEntries(
-          namesResponse.data.displayNames.map((item: any) => [
-            item.account_id,
-            item.display_name,
-          ])
+        console.log('📨 Fetched inbox:', response.data);
+        
+        // Get all member IDs to fetch profiles
+        const memberIds = response.data.flatMap((inbox: Inbox) => 
+          inbox.members.map(member => member.account_id)
         );
+        console.log('👥 Member IDs to fetch:', memberIds);
+        
+        // Fetch profiles for all members
+        const uniqueIds = [...new Set(memberIds)];
+        console.log('🔄 Unique member IDs:', uniqueIds);
+        
+        const profilePromises = uniqueIds.map(id => 
+          api.get(`/api/accounts/profile/${id}`).catch(() => null)
+        );
+        const profileResponses = await Promise.all(profilePromises);
+        
+        const profileMap: { [key: string]: Profile } = {};
+        profileResponses.forEach((res, index) => {
+          if (res?.data?.data) {
+            const profile = res.data.data;
+            console.log(`✅ Profile loaded for ${uniqueIds[index]}:`, profile);
+            console.log(`🖼️ Avatar preset URL for ${uniqueIds[index]}:`, profile.avatar_preset_url);
+            profileMap[uniqueIds[index]] = profile;
+          }
+        });
+        setProfiles(profileMap);
+        console.log('📚 All profiles loaded:', profileMap);
+        
+        // Build inbox list with names
         const inboxWithNames = response.data.map((inbox: Inbox) => {
           const recipient = inbox.members.find(
             member => member.account_id !== user?.account_id
           );
-
+          
+          let conversationName = inbox.conversation_name;
+          if (recipient && profileMap[recipient.account_id]) {
+            // Use the profile name instead of UUID
+            conversationName = profileMap[recipient.account_id].name || `User ${recipient.account_id}`;
+          } else if (recipient) {
+            conversationName = `User ${recipient.account_id}`;
+          }
+          
           return {
             ...inbox,
-            conversation_name: displayNameMap[recipient?.account_id] || inbox.conversation_name,
+            conversation_name: conversationName,
           };
         });
 
         setInboxList(activeTab === 'direct' ? inboxWithNames : response.data);
         
-        // FIX: Update selected conversation with the new data
+        // Update selected conversation
         if (inboxWithNames.length > 0) {
-          // If there's a currently selected conversation, find it in the updated list
           if (selectedConversation) {
             const updatedSelected = inboxWithNames.find(
               (inbox: Inbox) => inbox._id === selectedConversation._id
@@ -199,24 +314,22 @@ const Inbox = () => {
             if (updatedSelected) {
               setSelectedConversation(updatedSelected);
             } else {
-              // If the selected conversation is no longer in the list, select the first one
               setSelectedConversation(inboxWithNames[0]);
             }
           } else {
-            // If no conversation is selected, select the first one
             setSelectedConversation(inboxWithNames[0]);
           }
         } else {
           setSelectedConversation(null);
-        }                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+        }
       } catch (error) {
-        console.error('Error fetching inbox:', error);
+        console.error('❌ Error fetching inbox:', error);
       } finally {
         setLoading(false);
       }
     };
     fetchInbox();
-  }, [activeTab]); // Removed selectedConversation from dependencies to avoid infinite loop
+  }, [activeTab]);
 
   useEffect(() => {
     if (!selectedConversation) return;
@@ -226,11 +339,10 @@ const Inbox = () => {
       try {
         setMessageLoading(true);
         const response = await api.get(`api/inbox/conversation/${selectedConversation._id}`);
-        console.log('Fetched messages:', response.data);
+        console.log('📩 Fetched messages:', response.data);
         setMessages(response.data.Messages);  
       } catch (err) {
-        console.error('Error fetching messages:', err);
-        // Use sample messages for static display
+        console.error('❌ Error fetching messages:', err);
         setMessages([]);
       } finally {
         setMessageLoading(false);
@@ -246,24 +358,126 @@ const Inbox = () => {
 
   const getConversationName = (inbox: Inbox): string => {
     if (inbox.conversation_name) return inbox.conversation_name;
-    if (inbox.conversation_type === 'direct') {
-      const otherMember = inbox.members.find(m => m.account_id !== user?.account_id);
-      return otherMember ? `User ${otherMember.account_id}` : 'Unknown User';
+
+    if (inbox.conversation_type === "direct") {
+      const otherMember = inbox.members.find(
+        (m) => m.account_id !== user?.account_id
+      );
+
+      if (otherMember && profiles[otherMember.account_id]) {
+        return profiles[otherMember.account_id].name;
+      }
+
+      return otherMember
+        ? `User ${otherMember.account_id}`
+        : userProfile?.name || "Unknown User";
     }
-    return 'Group Chat';
+
+    return "Group Chat";
   };
 
   const getAvatar = (inbox: Inbox): string => {
+    console.log('🎨 Getting avatar for inbox:', inbox._id, 'type:', inbox.conversation_type);
+    
+    if (inbox.conversation_type === "direct") {
+      // Find the other member (not the current user)
+      const otherMember = inbox.members.find(
+        (m) => m.account_id !== user?.account_id
+      );
+      console.log('👤 Other member found:', otherMember);
+
+      // If other member exists and has a profile with avatar
+      if (otherMember && profiles[otherMember.account_id]) {
+        const profile = profiles[otherMember.account_id];
+        console.log('📋 Profile for other member:', profile);
+        console.log('🖼️ Avatar preset URL from profile:', profile.avatar_preset_url);
+        
+        // If profile has an avatar URL, use it
+        if (profile.avatar_preset_url) {
+          const fullUrl = getAvatarUrl(profile.avatar_preset_url);
+          console.log('✅ Using full avatar URL:', fullUrl);
+          return fullUrl || `https://ui-avatars.com/api/?name=${profile.name.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
+        }
+        // Otherwise generate avatar from name
+        const name = profile.name || `User ${otherMember.account_id}`;
+        const generatedUrl = `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
+        console.log('🆕 Generated avatar URL:', generatedUrl);
+        return generatedUrl;
+      }
+
+      // If it's the current user's own chat (no other member)
+      if (!otherMember && userProfile) {
+        console.log('👤 This is the current user\'s own chat');
+        console.log('📋 User profile:', userProfile);
+        console.log('🖼️ User avatar_preset_url:', userProfile.avatar_preset_url);
+        
+        if (userProfile.avatar_preset_url) {
+          const fullUrl = getAvatarUrl(userProfile.avatar_preset_url);
+          console.log('✅ Using user avatar URL:', fullUrl);
+          return fullUrl || `https://ui-avatars.com/api/?name=${userProfile.name.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
+        }
+        const name = userProfile.name || "You";
+        const generatedUrl = `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
+        console.log('🆕 Generated user avatar URL:', generatedUrl);
+        return generatedUrl;
+      }
+
+      // Fallback for other member without profile
+      if (otherMember) {
+        const generatedUrl = `https://ui-avatars.com/api/?name=${otherMember.account_id.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
+        console.log('🆕 Fallback avatar URL:', generatedUrl);
+        return generatedUrl;
+      }
+    }
+
+    // For group chats
     const name = getConversationName(inbox);
-    const bgColor = inbox.conversation_type === 'direct' ? '6366f1' : '10b981';
-    return `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=${bgColor}&color=fff&bold=true`;
+    const generatedUrl = `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=10b981&color=fff&bold=true`;
+    console.log('👥 Group chat avatar URL:', generatedUrl);
+    return generatedUrl;
   };
 
   const getSenderAvatar = (message: Message): string => {
     const isSender = checkMessageSender(message);
-    const name = isSender ? 'You' : 'Other';
-    const bgColor = isSender ? '6366f1' : '8b5cf6';
-    return `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=${bgColor}&color=fff&bold=true`;
+    console.log('🎨 Getting sender avatar for message:', message._id, 'isSender:', isSender);
+    
+    if (isSender) {
+      // Return current user's avatar
+      console.log('👤 This is the sender (current user)');
+      console.log('📋 User profile:', userProfile);
+      console.log('🖼️ User avatar_preset_url:', userProfile?.avatar_preset_url);
+      
+      if (userProfile?.avatar_preset_url) {
+        const fullUrl = getAvatarUrl(userProfile.avatar_preset_url);
+        console.log('✅ Using sender avatar URL:', fullUrl);
+        return fullUrl || `https://ui-avatars.com/api/?name=${userProfile.name.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
+      }
+      const name = userProfile?.name || 'You';
+      const generatedUrl = `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
+      console.log('🆕 Generated sender avatar URL:', generatedUrl);
+      return generatedUrl;
+    }
+    
+    // For other users, try to get from profiles cache
+    const senderId = typeof message.sender_id === 'string' ? message.sender_id : String(message.sender_id);
+    console.log('👤 Other sender ID:', senderId);
+    console.log('📚 Profiles cache:', profiles);
+    
+    if (profiles[senderId]?.avatar_preset_url) {
+      const fullUrl = getAvatarUrl(profiles[senderId].avatar_preset_url);
+      console.log('✅ Using other sender avatar URL:', fullUrl);
+      return fullUrl || `https://ui-avatars.com/api/?name=${profiles[senderId].name.substring(0, 2)}&background=8b5cf6&color=fff&bold=true`;
+    }
+    if (profiles[senderId]?.name) {
+      const name = profiles[senderId].name || 'Other';
+      const generatedUrl = `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=8b5cf6&color=fff&bold=true`;
+      console.log('🆕 Generated other sender avatar URL:', generatedUrl);
+      return generatedUrl;
+    }
+    
+    // Fallback
+    console.log('🆕 Fallback avatar URL for unknown sender');
+    return `https://ui-avatars.com/api/?name=OT&background=8b5cf6&color=fff&bold=true`;
   };
 
   const formatTime = (dateString?: string | Date): string => {
@@ -316,6 +530,12 @@ const Inbox = () => {
             src={getSenderAvatar(message)}
             alt="avatar"
             className="h-8 w-8 rounded-full object-cover"
+            onError={(e) => {
+              // Fallback to generated avatar if image fails to load
+              const target = e.target as HTMLImageElement;
+              const name = isSender ? (userProfile?.name || 'You') : 'Other';
+              target.src = `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=${isSender ? '6366f1' : '8b5cf6'}&color=fff&bold=true`;
+            }}
           />
         </div>
 
@@ -536,6 +756,11 @@ const Inbox = () => {
                           src={avatar}
                           alt={name}
                           className="h-12 w-12 rounded-full object-cover"
+                          onError={(e) => {
+                            // Fallback to generated avatar if image fails to load
+                            const target = e.target as HTMLImageElement;
+                            target.src = `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
+                          }}
                         />
                         {inbox.conversation_type === 'direct' && (
                           <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 ring-2 ring-[#0d0f1a]"></span>
@@ -573,6 +798,11 @@ const Inbox = () => {
                       src={getAvatar(selectedConversation)}
                       alt={getConversationName(selectedConversation)}
                       className="h-10 w-10 rounded-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        const name = getConversationName(selectedConversation);
+                        target.src = `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
+                      }}
                     />
                     <div>
                       <h2 className="font-semibold text-white">

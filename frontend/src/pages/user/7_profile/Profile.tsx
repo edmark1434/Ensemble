@@ -123,9 +123,12 @@ export default function Profile() {
   const isOwner = id == user?.account_id;
 
   // Open Chat Trigger Handler
-  const handleOpenChat = () => {
+  const handleOpenChat = async() => {
     if (!userDetails) return;
-
+    await api.post(`/api/inbox/two-accounts`, {
+      recipientId: id,
+      conversation_type : "direct"
+    });
     const fullName = [userDetails.name, userDetails.middleName, userDetails.suffix]
       .filter(Boolean)
       .join(" ");
@@ -133,6 +136,7 @@ export default function Profile() {
     openChatWithUser({
       name: fullName || userDetails.username,
       avatarUrl: userDetails.avatar_preset_url,
+      account_id: id
     });
   };
 
