@@ -14,6 +14,42 @@ import type { DisputeDetail } from "./moderatorTypes";
 import type { Accent } from "./ui";
 import { accentSpinner } from "./ui";
 
+const VISIBILITY_CACHE_KEY = "ensemble.disputeComposerVisibility";
+
+type VisibilityPrefs = {
+  parties: boolean;
+  public: boolean;
+};
+
+function loadVisibilityPrefs(): VisibilityPrefs {
+  try {
+    const raw = localStorage.getItem(VISIBILITY_CACHE_KEY);
+    if (!raw) return { parties: false, public: false };
+    const parsed = JSON.parse(raw) as Partial<VisibilityPrefs>;
+    return {
+      parties: Boolean(parsed.parties),
+      public: Boolean(parsed.public),
+    };
+  } catch {
+    return { parties: false, public: false };
+  }
+}
+
+function saveVisibilityPrefs(prefs: VisibilityPrefs) {
+  try {
+    localStorage.setItem(VISIBILITY_CACHE_KEY, JSON.stringify(prefs));
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function audienceFromPrefs(prefs: VisibilityPrefs, internalNote: boolean): "staff" | "parties" | "public" {
+  if (internalNote) return "staff";
+  if (prefs.public) return "public";
+  if (prefs.parties) return "parties";
+  return "staff";
+}
+
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
   return new Date(value).toLocaleString();
@@ -109,7 +145,7 @@ export default function ModeratorDisputeDetailModal({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [internalNote, setInternalNote] = useState(false);
-  const [messageAudience, setMessageAudienceChoice] = useState<"staff" | "parties" | "public">("staff");
+  const [visibilityPrefs, setVisibilityPrefs] = useState<VisibilityPrefs>(() => loadVisibilityPrefs());
   const [status, setStatus] = useState("");
   const [priority, setPriority] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
@@ -150,10 +186,22 @@ export default function ModeratorDisputeDetailModal({
   const canAct = adminMode ? Boolean(perms?.canAct) : true;
   const canAssignOthers = adminMode ? Boolean(perms?.canAssignOthers) : true;
   const canSelfAssign = adminMode ? Boolean(perms?.canSelfAssign) : false;
+  const canAssignMyself = adminMode
+    ? Boolean(perms?.canAssignMyself || perms?.canSelfAssign || perms?.canForceTakeover)
+    : false;
   const myStaffId = perms?.staffId != null ? String(perms.staffId) : "";
   const viewOnly = adminMode && !canAct;
-  /** Handler dropdown: assignee, Admin assigning others, or claiming an unassigned case */
-  const canEditHandler = !adminMode || canAssignOthers || canAct || canSelfAssign;
+  /** Handler dropdown: assignee, Admin assigning others, or claiming / taking over */
+  const canEditHandler =
+    !adminMode || canAssignOthers || canAct || canSelfAssign || canAssignMyself;
+
+  const updateVisibilityPref = (key: keyof VisibilityPrefs, checked: boolean) => {
+    setVisibilityPrefs((prev) => {
+      const next = { ...prev, [key]: checked };
+      saveVisibilityPrefs(next);
+      return next;
+    });
+  };
 
   const runAction = async (body: Record<string, unknown>, successMsg: string) => {
     setSaving(true);
@@ -177,7 +225,7 @@ export default function ModeratorDisputeDetailModal({
     if (!adminMode) return;
 
     // Claim unassigned dispute by picking yourself
-    if (canSelfAssign && next && myStaffId && next === myStaffId && !canAct) {
+    if ((canSelfAssign || canAssignMyself) && next && myStaffId && next === myStaffId && !canAct) {
       await runAction({ action: "self_assign" }, "You are now assigned");
       return;
     }
@@ -192,7 +240,7 @@ export default function ModeratorDisputeDetailModal({
   };
 
   const saveChanges = async (overrideStatus?: string) => {
-    if (adminMode && viewOnly && canSelfAssign && assigneeId && assigneeId === myStaffId) {
+    if (adminMode && viewOnly && (canSelfAssign || canAssignMyself) && assigneeId && assigneeId === myStaffId) {
       await runAction({ action: "self_assign" }, "You are now assigned");
       return;
     }
@@ -225,13 +273,18 @@ export default function ModeratorDisputeDetailModal({
     if (!message.trim()) return;
     setSaving(true);
     try {
-      const audience = internalNote ? "staff" : messageAudience;
+      const audience = audienceFromPrefs(visibilityPrefs, internalNote);
       await api.post(`${endpointBase}/${disputeId}/messages`, {
         body: message.trim(),
         isInternal: internalNote || audience === "staff",
-        visibleToParties: audience === "parties",
+        visibleToParties: audience === "parties" || audience === "public",
         visibleToPublic: audience === "public",
         audience,
+        audiences: [
+          ...(internalNote || audience === "staff" ? (["staff"] as const) : []),
+          ...(visibilityPrefs.parties || visibilityPrefs.public ? (["parties"] as const) : []),
+          ...(visibilityPrefs.public ? (["public"] as const) : []),
+        ],
       });
       setMessage("");
       showSuccessToast(
@@ -336,8 +389,8 @@ export default function ModeratorDisputeDetailModal({
                   <p className="text-xs text-sky-200/80">
                     {!perms?.staffId
                       ? "Your login isn’t linked to a staff profile, so assignment is blocked. Re-login as Admin or Support Moderator."
-                      : canSelfAssign
-                        ? "This dispute is unassigned. Click Assign myself, or choose yourself in Designated handler."
+                      : canAssignMyself || canSelfAssign
+                        ? "This dispute needs a handler. Click Assign myself, or choose yourself in Designated handler."
                         : canAssignOthers
                           ? "You’re not the handler yet. Pick a Support Moderator in Designated handler, or Assign myself."
                           : "Assign yourself (if unassigned) or request takeover to unlock handling actions."}
@@ -363,7 +416,7 @@ export default function ModeratorDisputeDetailModal({
 
             {adminMode && (
               <div className="flex flex-wrap gap-2">
-                {canSelfAssign && (
+                {canAssignMyself && (
                   <button
                     type="button"
                     disabled={saving}
@@ -497,7 +550,7 @@ export default function ModeratorDisputeDetailModal({
                   className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <option value="">Unassigned</option>
-                  {(canSelfAssign && !canAssignOthers && !canAct
+                  {(canAssignMyself && !canAssignOthers && !canAct
                     ? detail.assignableStaff.filter((s) => String(s.staffId) === myStaffId)
                     : detail.assignableStaff
                   ).map((s) => (
@@ -509,14 +562,16 @@ export default function ModeratorDisputeDetailModal({
                 </select>
                 {!canEditHandler && (
                   <span className="text-[11px] text-amber-200/80">
-                    {perms?.canRequestTakeover
-                      ? "Someone else is handling this — request takeover above, or ask an Admin to reassign."
-                      : "You can’t change the handler on this dispute."}
+                    {!perms?.staffId
+                      ? "Your session isn’t linked to a staff profile — re-login as Admin or Support Moderator."
+                      : perms?.canRequestTakeover
+                        ? "Someone else is handling this — use Request takeover above, or ask an Admin to reassign."
+                        : "You can’t change the handler on this dispute."}
                   </span>
                 )}
-                {canSelfAssign && !canAct && (
+                {canAssignMyself && !canAct && (
                   <span className="text-[11px] text-sky-200/70">
-                    Pick yourself here (or click Assign myself) to become the handler.
+                    Click Assign myself, or pick yourself in this list to become the handler.
                   </span>
                 )}
               </label>
@@ -586,14 +641,17 @@ export default function ModeratorDisputeDetailModal({
             </label>
 
             <div className="flex flex-wrap gap-2">
-              {(canAct || canAssignOthers || (canSelfAssign && assigneeId === myStaffId)) && (
+              {(canAct || canAssignOthers || (canAssignMyself && assigneeId === myStaffId)) && (
                 <button
                   type="button"
                   onClick={() => void saveChanges()}
-                  disabled={saving || (viewOnly && !canAssignOthers && !(canSelfAssign && assigneeId === myStaffId))}
+                  disabled={
+                    saving ||
+                    (viewOnly && !canAssignOthers && !(canAssignMyself && assigneeId === myStaffId))
+                  }
                   className={`rounded-xl px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${ACCENT_BTN[accent]}`}
                 >
-                  {viewOnly && canSelfAssign && assigneeId === myStaffId && !canAssignOthers
+                  {viewOnly && canAssignMyself && assigneeId === myStaffId && !canAssignOthers
                     ? "Confirm assign myself"
                     : viewOnly && canAssignOthers
                       ? "Save assignment"
@@ -715,30 +773,32 @@ export default function ModeratorDisputeDetailModal({
                     <input
                       type="checkbox"
                       checked={internalNote}
-                      onChange={(e) => {
-                        setInternalNote(e.target.checked);
-                        if (e.target.checked) setMessageAudienceChoice("staff");
-                      }}
+                      onChange={(e) => setInternalNote(e.target.checked)}
                       disabled={detail.chatAvailable === false || viewOnly}
                     />
                     Internal note (staff only)
                   </label>
-                  {adminMode && !internalNote && (
-                    <label className="flex items-center gap-2">
-                      <span className="text-zinc-500">Visibility</span>
-                      <select
-                        value={messageAudience}
-                        onChange={(e) =>
-                          setMessageAudienceChoice(e.target.value as "staff" | "parties" | "public")
-                        }
-                        disabled={detail.chatAvailable === false || viewOnly}
-                        className="rounded-lg border border-white/10 bg-[#0f1016] px-2 py-1 text-xs text-white outline-none disabled:opacity-50"
-                      >
-                        <option value="staff">Staff only</option>
-                        <option value="parties">Visible to parties</option>
-                        <option value="public">Visible to the public</option>
-                      </select>
-                    </label>
+                  {adminMode && (
+                    <>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={visibilityPrefs.parties}
+                          onChange={(e) => updateVisibilityPref("parties", e.target.checked)}
+                          disabled={detail.chatAvailable === false || viewOnly || internalNote}
+                        />
+                        Visible to parties
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={visibilityPrefs.public}
+                          onChange={(e) => updateVisibilityPref("public", e.target.checked)}
+                          disabled={detail.chatAvailable === false || viewOnly || internalNote}
+                        />
+                        Visible to the public
+                      </label>
+                    </>
                   )}
                 </div>
                 <button

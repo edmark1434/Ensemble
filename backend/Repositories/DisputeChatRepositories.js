@@ -153,6 +153,7 @@ async function createDisputeMessage({
   authorType = 'staff',
   authorRole = 'staff',
   audience = 'staff',
+  audiences = null,
   isInternal = false,
 }) {
   if (!isMongoReady()) {
@@ -162,6 +163,11 @@ async function createDisputeMessage({
   const now = new Date();
   const accountId = senderId ? String(senderId) : null;
   await ensureStaffMemberOnChat(chatId, accountId, now);
+
+  const audienceList =
+    Array.isArray(audiences) && audiences.length
+      ? [...new Set(audiences.map((a) => String(a).toLowerCase()))]
+      : [audience];
 
   const insertedId = await createMessageRepositories({
     conversation_id: String(chatId),
@@ -180,6 +186,7 @@ async function createDisputeMessage({
     author_name: authorName || 'Staff',
     author_role: authorRole,
     audience,
+    audiences: audienceList,
     published_at: isPublishedAudience(audience) ? now : null,
     created_at: now,
     updated_at: now,
