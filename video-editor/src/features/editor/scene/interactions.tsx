@@ -18,7 +18,11 @@ import {getMinCaptionDimensions} from "@/features/editor/utils/captions";
 import {foldSkewYIntoScale} from "@/features/editor/utils/matrix-fold";
 
 let holdGroupPosition: Record<string, any> | null = null;
-let groupTextScaleStart: Record<string, { width: number; height: number; fontSize: number; relLeft: number; relTop: number }> | null = null;
+let groupTextScaleStart: Record<string, {
+  width: number; height: number; fontSize: number;
+  relLeft: number; relTop: number;
+  foldedScaleXAtStart: number;
+}> | null = null;
 let groupScaleAnchor: { x: number; y: number } | null = null;
 let groupRotateStart: Record<string, {
   rotate: number; skewX: number; scaleX: number; scaleY: number;
@@ -757,23 +761,41 @@ export function SceneInteractions({
           const id = getIdFromClassName(event.target.className);
           const target = event.target as HTMLDivElement;
           const item = currentTrackItemsMap[id];
+          if (!item?.details) continue;
+          const details = item.details;
 
           if (item?.type === "text" || item?.type === "caption") {
             const selector = item.type === "text" ? `[data-text-id="${id}"]` : `#caption-${id}`;
 
             if (!groupTextScaleStart[id]) {
               const innerDiv = document.querySelector(selector) as HTMLDivElement | null;
+
+              // details.transform can say scale(1,1) while the CSS transform Moveable
+              // actually measures has a nontrivial scale baked in by the skewY fold
+              // (secθ on x, cosθ on y — secθ is always >= 1). Freeze that contamination
+              // now so we can divide it back out of event.scale below; otherwise this
+              // item's magnitude comes back inflated by a constant factor regardless
+              // of drag direction.
+              const rotate = parseFloat(details.rotate as unknown as string) || 0;
+              const skewX = Number(details.skewX) || 0;
+              const skewY = Number(details.skewY) || 0;
+              const scaleMatch = (details.transform || "").match(/scale\(\s*([-\d.]+)\s*,\s*([-\d.]+)/);
+              const baseScaleX = scaleMatch ? parseFloat(scaleMatch[1]) : 1;
+              const baseScaleY = scaleMatch ? parseFloat(scaleMatch[2]) : 1;
+              const folded = foldSkewYIntoScale(rotate, skewX, skewY, baseScaleX, baseScaleY);
+
               groupTextScaleStart[id] = {
                 width: target.clientWidth,
                 height: target.clientHeight,
                 fontSize: innerDiv ? parseFloat(getComputedStyle(innerDiv).fontSize) : 0,
                 relLeft: parseFloat(item.details.left as string) - groupScaleAnchor.x,
                 relTop: parseFloat(item.details.top as string) - groupScaleAnchor.y,
+                foldedScaleXAtStart: folded.scaleX || 1,
               };
             }
 
             const start = groupTextScaleStart[id];
-            const magnitude = Math.abs(event.scale[0]);
+            const magnitude = Math.abs(event.scale[0]) / (start.foldedScaleXAtStart || 1); // CHANGED
             const newWidth = start.width * magnitude;
             const newHeight = start.height * magnitude;
             const newFontSize = start.fontSize * magnitude;

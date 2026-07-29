@@ -179,10 +179,10 @@ export const LayoutMediaControls = ({ trackItem }: LayoutMediaControlsProps) => 
             transform={details.transform}
           />
         </div>
-        <div className="flex gap-2">
-          <LayoutSkew id={id} field="skewX" label="Skew X" value={details.skewX} />
-          <LayoutSkew id={id} field="skewY" label="Skew Y" value={details.skewY} />
-        </div>
+        {/*<div className="flex gap-2">*/}
+        {/*  <LayoutSkew id={id} field="skewX" label="Skew X" value={details.skewX} />*/}
+        {/*  <LayoutSkew id={id} field="skewY" label="Skew Y" value={details.skewY} />*/}
+        {/*</div>*/}
         <div className="flex gap-2">
           <LayoutRotation id={id} value={details.rotate} />
           <div className="flex flex-col gap-2 flex-1">
