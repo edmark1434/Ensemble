@@ -24,15 +24,18 @@ async function createMessageRepositories(messagePayload = {}) {
     }
 }
 
-async function updateMessageRepositories(messageId, updateFields = {}) {
-    try{
+async function updateMessageRepositories(messageId, action, payload) {
+    try {
         const result = await MessageCollection.updateOne(
             { _id: new ObjectId(messageId) },
-            updateFields
+            {
+                [`$${action}`]: payload
+            }
         );
+
         return result.modifiedCount > 0;
-    }catch(err){
-        console.error('Error updating message:', err);
+    } catch (err) {
+        console.error("Error updating message:", err);
         throw err;
     }
 }

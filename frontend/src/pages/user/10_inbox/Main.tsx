@@ -1,5 +1,6 @@
 // src/pages/user/inbox/Inbox.tsx
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   MessageCircle,
@@ -15,7 +16,14 @@ import {
   Users,
   Briefcase,
   Image,
-  FileText
+  FileText,
+  MoreHorizontal,
+  Reply,
+  Pin,
+  Smile,
+  Pencil,
+  Trash2,
+  X
 } from "lucide-react";
 import socket from "@/lib/socket";
 import api from "@/lib/axios";
@@ -82,6 +90,16 @@ interface Message {
   updated_at: Date;
 }
 
+
+interface MessageUpdatedEvent {
+  _id: string;
+  action: string;
+  payload: {
+    message_content: string;
+    updated_at: string;
+  };
+}
+
 interface Profile {
   account_id: string;
   user_id?: string;
@@ -93,6 +111,263 @@ interface Profile {
   [key: string]: any;
 }
 
+const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+
+/* ------------------------------------------------------------------ */
+/*  MessageContextMenu                                                 */
+/*  A portal-rendered, viewport-aware floating menu. It is anchored to */
+/*  whatever button ref is passed in, never affects document layout,   */
+/*  auto-flips to stay inside the viewport, and animates in/out.       */
+/* ------------------------------------------------------------------ */
+interface MenuPosition {
+  top: number;
+  left: number;
+  placement: "top" | "bottom";
+}
+
+interface MessageContextMenuProps {
+  anchorRef: React.RefObject<HTMLButtonElement>;
+  isSender: boolean;
+  isPinned: boolean;
+  onClose: () => void;
+  onReply: () => void;
+  onPin: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  onReact: (emoji: string) => void;
+}
+
+const MENU_WIDTH = 216;
+const MENU_MARGIN = 8;
+
+const MessageContextMenu = ({
+  anchorRef,
+  isSender,
+  isPinned,
+  onClose,
+  onReply,
+  onPin,
+  onEdit,
+  onDelete,
+  onReact
+}: MessageContextMenuProps) => {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<MenuPosition | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  // Compute (and recompute on scroll/resize) the anchored position.
+  useEffect(() => {
+    const calculatePosition = () => {
+      const anchor = anchorRef.current;
+      if (!anchor) return;
+
+      const anchorRect = anchor.getBoundingClientRect();
+      const menuHeight = menuRef.current?.offsetHeight || 260;
+      const viewportW = window.innerWidth;
+      const viewportH = window.innerHeight;
+
+      // Vertical: default to opening below the button, flip above if
+      // there isn't enough room so it never overflows the window.
+      let placement: "top" | "bottom" = "bottom";
+      let top = anchorRect.bottom + MENU_MARGIN;
+      if (top + menuHeight > viewportH - MENU_MARGIN) {
+        placement = "top";
+        top = anchorRect.top - menuHeight - MENU_MARGIN;
+      }
+      top = Math.max(MENU_MARGIN, top);
+
+      // Horizontal: anchor to the same side as the button (sender menu
+      // hugs the left of the bubble, receiver menu hugs the right),
+      // then clamp so it never spills outside the viewport.
+      let left = isSender ? anchorRect.left : anchorRect.right - MENU_WIDTH;
+      left = Math.min(Math.max(left, MENU_MARGIN), viewportW - MENU_WIDTH - MENU_MARGIN);
+
+      setPosition({ top, left, placement });
+    };
+
+    calculatePosition();
+    // Recalculate after first paint once we know the real menu height.
+    const raf = requestAnimationFrame(calculatePosition);
+
+    window.addEventListener("resize", calculatePosition);
+    window.addEventListener("scroll", calculatePosition, true);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", calculatePosition);
+      window.removeEventListener("scroll", calculatePosition, true);
+    };
+  }, [anchorRef, isSender]);
+
+  // Animate in on mount.
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setVisible(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // Close on outside click / Escape.
+  useEffect(() => {
+    const handlePointerDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(target) &&
+        anchorRef.current &&
+        !anchorRef.current.contains(target)
+      ) {
+        onClose();
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [anchorRef, onClose]);
+
+  if (!position) return null;
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      role="menu"
+      style={{
+        position: "fixed",
+        top: position.top,
+        left: position.left,
+        width: MENU_WIDTH,
+        zIndex: 9999,
+        transformOrigin: position.placement === "bottom" ? "top center" : "bottom center"
+      }}
+      className={`rounded-2xl border border-white/10 bg-[#12141f]/95 backdrop-blur-sm py-1.5 shadow-2xl shadow-black/60 transition-all duration-150 ease-out ${
+        visible ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"
+      }`}
+    >
+      <button
+        role="menuitem"
+        onClick={onReply}
+        className="mx-1.5 flex w-[calc(100%-12px)] items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-zinc-200 transition hover:bg-white/10"
+      >
+        <Reply className="h-4 w-4 text-blue-400" />
+        Reply
+      </button>
+      <button
+        role="menuitem"
+        onClick={onPin}
+        className="mx-1.5 flex w-[calc(100%-12px)] items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-zinc-200 transition hover:bg-white/10"
+      >
+        <Pin className="h-4 w-4 text-yellow-400" />
+        {isPinned ? "Unpin" : "Pin"}
+      </button>
+
+      {isSender && onEdit && (
+        <button
+          role="menuitem"
+          onClick={onEdit}
+          className="mx-1.5 flex w-[calc(100%-12px)] items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-zinc-200 transition hover:bg-white/10"
+        >
+          <Pencil className="h-4 w-4 text-emerald-400" />
+          Edit
+        </button>
+      )}
+
+      {isSender && onDelete && (
+        <button
+          role="menuitem"
+          onClick={onDelete}
+          className="mx-1.5 flex w-[calc(100%-12px)] items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-red-400 transition hover:bg-red-500/10"
+        >
+          <Trash2 className="h-4 w-4" />
+          Delete
+        </button>
+      )}
+
+      <div className="mx-3 my-1.5 border-t border-white/10" />
+
+      <div className="flex items-center justify-between px-2.5 py-1">
+        {REACTION_EMOJIS.map((emoji) => (
+          <button
+            key={emoji}
+            role="menuitem"
+            onClick={() => onReact(emoji)}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-base transition hover:scale-110 hover:bg-white/10"
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/*  MessageActions                                                     */
+/*  The hover-revealed trigger button that sits beside the bubble and  */
+/*  owns opening/closing of the MessageContextMenu.                    */
+/* ------------------------------------------------------------------ */
+interface MessageActionsProps {
+  isSender: boolean;
+  isPinned: boolean;
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onReply: () => void;
+  onPin: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  onReact: (emoji: string) => void;
+}
+
+const MessageActions = ({
+  isSender,
+  isPinned,
+  isOpen,
+  onToggle,
+  onClose,
+  onReply,
+  onPin,
+  onEdit,
+  onDelete,
+  onReact
+}: MessageActionsProps) => {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  return (
+    <div className="relative flex-shrink-0 self-center">
+      <button
+        ref={buttonRef}
+        onClick={onToggle}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        className={`rounded-full border border-white/5 p-1.5 text-zinc-400 transition-opacity hover:bg-white/10 hover:text-white ${
+          isOpen ? "bg-white/10 text-white opacity-100" : "opacity-0 group-hover:opacity-100"
+        }`}
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </button>
+
+      {isOpen && (
+        <MessageContextMenu
+          anchorRef={buttonRef}
+          isSender={isSender}
+          isPinned={isPinned}
+          onClose={onClose}
+          onReply={onReply}
+          onPin={onPin}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onReact={onReact}
+        />
+      )}
+    </div>
+  );
+};
+
 const Inbox = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
@@ -103,8 +378,15 @@ const Inbox = () => {
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [messageLoading, setMessageLoading] = useState(false);
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+
   const { user } = useGlobalState();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // State for reply
+  const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
+  // State for message menu
+  const [activeMenuMessageId, setActiveMenuMessageId] = useState<string | null>(null);
 
   // State for user profile
   const [userProfile, setUserProfile] = useState<Profile | null>(null);
@@ -127,10 +409,7 @@ const Inbox = () => {
       if (!user?.account_id) return;
       try {
         const response = await api.get(`/api/accounts/profile/${user.account_id}`);
-        console.log('📱 User profile fetched - Full response:', response.data);
-        console.log('📱 User profile data:', response.data.data);
-        console.log('📱 User avatar_preset_url:', response.data.data?.avatar_preset_url);
-        console.log('📱 User avatar full URL:', getAvatarUrl(response.data.data?.avatar_preset_url));
+        console.log('📱 User profile fetched:', response.data.data);
         setUserProfile(response.data.data);
       } catch (error) {
         console.error('❌ Error fetching user profile:', error);
@@ -147,8 +426,6 @@ const Inbox = () => {
     try {
       const response = await api.get(`/api/accounts/profile/${accountId}`);
       const profile = response.data.data;
-      console.log(`👤 Profile fetched for ${accountId}:`, profile);
-      console.log(`👤 Avatar URL for ${accountId}:`, profile?.avatar_preset_url);
       setProfiles(prev => ({ ...prev, [accountId]: profile }));
       return profile;
     } catch (error) {
@@ -161,23 +438,29 @@ const Inbox = () => {
     return message.sender_id === user?.account_id || message.sender_id === "user1";
   }
 
-  // src/pages/user/inbox/Inbox.tsx - Fix the handleSendMessage and socket listeners
-
-  // src/pages/user/inbox/Inbox.tsx - Only change this function
-
   const handleSendMessage = () => {
     const trimmed = messageInput.trim();
     if (!trimmed) return;
     console.log("Sending message:", trimmed);
     
+    if (editingMessage) { 
+      socket.emit("updateMessage", {
+        conversation_id: selectedConversation?._id, message_id: editingMessage._id, action: 'set', payload: {
+        message_content: trimmed,
+        updated_at: new Date()
+      } });
+      setEditingMessage(null);
+      setMessageInput("");
+      return;
+    }
     // Create the message payload
     const messagePayload: Message = {
-      _id: `${Date.now()}-${Math.random()}`, // Temporary ID for optimistic UI
+      _id: `${Date.now()}-${Math.random()}`,
       conversation_id: selectedConversation?._id || "",
       sender_id: user?.account_id || "",
       message_type: "text",
       message_content: trimmed,
-      message_id_reply: "",
+      message_id_reply: replyToMessage?._id || "",
       attachments: [],
       links: [],
       message_react: [],
@@ -188,16 +471,15 @@ const Inbox = () => {
       updated_at: new Date()
     };
 
-    // Clear input immediately
+    // Clear input and reply state
     setMessageInput("");
+    setReplyToMessage(null);
 
-    // Emit via socket - the server will return the message via newMessage event
+    // Emit via socket
     socket.emit("sendMessage", messagePayload);
-    
-    // DON'T add optimistically - wait for server response
-    // The server will emit newMessage which will add the message
   };
-  // Socket connection - fix the newMessage handler to prevent duplicates
+
+  // Socket connection
   useEffect(() => {
     socket.connect();
     socket.on("connect", () => {
@@ -207,35 +489,42 @@ const Inbox = () => {
     socket.on("newMessage", (message: any) => {
       console.log("Received new message:", message);
       
-      // Check if message is valid
       if (!message || !message._id) {
         console.warn("Invalid message received:", message);
         return;
       }
 
       setMessages(prev => {
-        // Check if message already exists (prevent duplicates)
         const exists = prev.some(m => m._id === message._id);
         if (exists) {
-          console.log("Message already exists, skipping duplicate");
           return prev;
         }
         
-        // Check if we have an optimistic message with this ID
-        // If the server returns a message with the same ID, replace it
         const optimisticIndex = prev.findIndex(m => m._id === message._id);
         if (optimisticIndex !== -1) {
-          console.log("Replacing optimistic message with server response");
           const newMessages = [...prev];
           newMessages[optimisticIndex] = message;
           return newMessages;
         }
         
-        console.log("Adding new message to state");
         return [...prev, message];
       });
     });
-
+ socket.on("messageUpdated", (updatedMessage: MessageUpdatedEvent) => {
+  setMessages(prev =>
+    prev.map(msg =>
+      msg._id === updatedMessage._id
+        ? {
+            ...msg,
+            message_content: updatedMessage.payload.message_content,
+            updated_at: new Date(updatedMessage.payload.updated_at),
+            is_edited: true,
+          }
+        : msg
+    )
+  );
+});
+    
     socket.on("disconnect", () => {
       console.log("Disconnected");
     });
@@ -256,16 +545,11 @@ const Inbox = () => {
         const response = await api.get(`api/inbox/${activeTab}`);
         console.log('📨 Fetched inbox:', response.data);
         
-        // Get all member IDs to fetch profiles
         const memberIds = response.data.flatMap((inbox: Inbox) => 
           inbox.members.map(member => member.account_id)
         );
-        console.log('👥 Member IDs to fetch:', memberIds);
         
-        // Fetch profiles for all members
         const uniqueIds = [...new Set(memberIds)];
-        console.log('🔄 Unique member IDs:', uniqueIds);
-        
         const profilePromises = uniqueIds.map(id => 
           api.get(`/api/accounts/profile/${id}`).catch(() => null)
         );
@@ -274,16 +558,11 @@ const Inbox = () => {
         const profileMap: { [key: string]: Profile } = {};
         profileResponses.forEach((res, index) => {
           if (res?.data?.data) {
-            const profile = res.data.data;
-            console.log(`✅ Profile loaded for ${uniqueIds[index]}:`, profile);
-            console.log(`🖼️ Avatar preset URL for ${uniqueIds[index]}:`, profile.avatar_preset_url);
-            profileMap[uniqueIds[index]] = profile;
+            profileMap[uniqueIds[index]] = res.data.data;
           }
         });
         setProfiles(profileMap);
-        console.log('📚 All profiles loaded:', profileMap);
         
-        // Build inbox list with names
         const inboxWithNames = response.data.map((inbox: Inbox) => {
           const recipient = inbox.members.find(
             member => member.account_id !== user?.account_id
@@ -291,7 +570,6 @@ const Inbox = () => {
           
           let conversationName = inbox.conversation_name;
           if (recipient && profileMap[recipient.account_id]) {
-            // Use the profile name instead of UUID
             conversationName = profileMap[recipient.account_id].name || `User ${recipient.account_id}`;
           } else if (recipient) {
             conversationName = `User ${recipient.account_id}`;
@@ -305,7 +583,6 @@ const Inbox = () => {
 
         setInboxList(activeTab === 'direct' ? inboxWithNames : response.data);
         
-        // Update selected conversation
         if (inboxWithNames.length > 0) {
           if (selectedConversation) {
             const updatedSelected = inboxWithNames.find(
@@ -340,7 +617,7 @@ const Inbox = () => {
         setMessageLoading(true);
         const response = await api.get(`api/inbox/conversation/${selectedConversation._id}`);
         console.log('📩 Fetched messages:', response.data);
-        setMessages(response.data.Messages);  
+        setMessages(response.data.Messages || []);  
       } catch (err) {
         console.error('❌ Error fetching messages:', err);
         setMessages([]);
@@ -377,106 +654,61 @@ const Inbox = () => {
   };
 
   const getAvatar = (inbox: Inbox): string => {
-    console.log('🎨 Getting avatar for inbox:', inbox._id, 'type:', inbox.conversation_type);
-    
     if (inbox.conversation_type === "direct") {
-      // Find the other member (not the current user)
       const otherMember = inbox.members.find(
         (m) => m.account_id !== user?.account_id
       );
-      console.log('👤 Other member found:', otherMember);
 
-      // If other member exists and has a profile with avatar
       if (otherMember && profiles[otherMember.account_id]) {
         const profile = profiles[otherMember.account_id];
-        console.log('📋 Profile for other member:', profile);
-        console.log('🖼️ Avatar preset URL from profile:', profile.avatar_preset_url);
-        
-        // If profile has an avatar URL, use it
         if (profile.avatar_preset_url) {
           const fullUrl = getAvatarUrl(profile.avatar_preset_url);
-          console.log('✅ Using full avatar URL:', fullUrl);
           return fullUrl || `https://ui-avatars.com/api/?name=${profile.name.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
         }
-        // Otherwise generate avatar from name
         const name = profile.name || `User ${otherMember.account_id}`;
-        const generatedUrl = `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
-        console.log('🆕 Generated avatar URL:', generatedUrl);
-        return generatedUrl;
+        return `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
       }
 
-      // If it's the current user's own chat (no other member)
       if (!otherMember && userProfile) {
-        console.log('👤 This is the current user\'s own chat');
-        console.log('📋 User profile:', userProfile);
-        console.log('🖼️ User avatar_preset_url:', userProfile.avatar_preset_url);
-        
         if (userProfile.avatar_preset_url) {
           const fullUrl = getAvatarUrl(userProfile.avatar_preset_url);
-          console.log('✅ Using user avatar URL:', fullUrl);
           return fullUrl || `https://ui-avatars.com/api/?name=${userProfile.name.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
         }
         const name = userProfile.name || "You";
-        const generatedUrl = `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
-        console.log('🆕 Generated user avatar URL:', generatedUrl);
-        return generatedUrl;
+        return `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
       }
 
-      // Fallback for other member without profile
       if (otherMember) {
-        const generatedUrl = `https://ui-avatars.com/api/?name=${otherMember.account_id.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
-        console.log('🆕 Fallback avatar URL:', generatedUrl);
-        return generatedUrl;
+        return `https://ui-avatars.com/api/?name=${otherMember.account_id.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
       }
     }
 
-    // For group chats
     const name = getConversationName(inbox);
-    const generatedUrl = `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=10b981&color=fff&bold=true`;
-    console.log('👥 Group chat avatar URL:', generatedUrl);
-    return generatedUrl;
+    return `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=10b981&color=fff&bold=true`;
   };
 
   const getSenderAvatar = (message: Message): string => {
     const isSender = checkMessageSender(message);
-    console.log('🎨 Getting sender avatar for message:', message._id, 'isSender:', isSender);
     
     if (isSender) {
-      // Return current user's avatar
-      console.log('👤 This is the sender (current user)');
-      console.log('📋 User profile:', userProfile);
-      console.log('🖼️ User avatar_preset_url:', userProfile?.avatar_preset_url);
-      
       if (userProfile?.avatar_preset_url) {
         const fullUrl = getAvatarUrl(userProfile.avatar_preset_url);
-        console.log('✅ Using sender avatar URL:', fullUrl);
         return fullUrl || `https://ui-avatars.com/api/?name=${userProfile.name.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
       }
       const name = userProfile?.name || 'You';
-      const generatedUrl = `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
-      console.log('🆕 Generated sender avatar URL:', generatedUrl);
-      return generatedUrl;
+      return `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
     }
     
-    // For other users, try to get from profiles cache
     const senderId = typeof message.sender_id === 'string' ? message.sender_id : String(message.sender_id);
-    console.log('👤 Other sender ID:', senderId);
-    console.log('📚 Profiles cache:', profiles);
-    
     if (profiles[senderId]?.avatar_preset_url) {
       const fullUrl = getAvatarUrl(profiles[senderId].avatar_preset_url);
-      console.log('✅ Using other sender avatar URL:', fullUrl);
       return fullUrl || `https://ui-avatars.com/api/?name=${profiles[senderId].name.substring(0, 2)}&background=8b5cf6&color=fff&bold=true`;
     }
     if (profiles[senderId]?.name) {
       const name = profiles[senderId].name || 'Other';
-      const generatedUrl = `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=8b5cf6&color=fff&bold=true`;
-      console.log('🆕 Generated other sender avatar URL:', generatedUrl);
-      return generatedUrl;
+      return `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=8b5cf6&color=fff&bold=true`;
     }
     
-    // Fallback
-    console.log('🆕 Fallback avatar URL for unknown sender');
     return `https://ui-avatars.com/api/?name=OT&background=8b5cf6&color=fff&bold=true`;
   };
 
@@ -511,6 +743,80 @@ const Inbox = () => {
     getConversationName(inbox).toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Handle reply
+  const handleReply = (message: Message) => {
+    setReplyToMessage(message);
+    setActiveMenuMessageId(null);
+    // Focus on input
+    const inputElement = document.querySelector('textarea');
+    if (inputElement) {
+      inputElement.focus();
+    }
+  };
+
+  // Handle pin
+  const handlePin = async (message: Message) => {
+    try {
+      await api.post(`api/inbox/conversation/${selectedConversation?._id}/pin`, { 
+        message_id: message._id 
+      });
+      console.log('Message pinned:', message._id);
+      setActiveMenuMessageId(null);
+      // Refresh messages to show pin status
+      const response = await api.get(`api/inbox/conversation/${selectedConversation?._id}`);
+      setMessages(response.data.Messages || []);
+    } catch (error) {
+      console.error('Error pinning message:', error);
+    }
+  };
+
+  // Handle react
+  const handleReact = async (message: Message, emoji: string) => {
+    try {
+      // await api.post(`api/inbox/message/${message._id}/react`, { 
+      //   react_type: emoji 
+      // });
+      console.log('Message reacted:', message._id, emoji);
+      setActiveMenuMessageId(null);
+      // Refresh messages to show reaction
+      const response = await api.get(`api/inbox/conversation/${selectedConversation?._id}`);
+      setMessages(response.data.Messages || []);
+    } catch (error) {
+      console.error('Error reacting to message:', error);
+    }
+  };
+
+  // Handle edit (sender only)
+  const handleEdit = (message: Message) => {
+    setActiveMenuMessageId(null);
+    setMessageInput(message.message_content);
+    setReplyToMessage(null);
+    setEditingMessage(message);
+    console.log('Editing message:', message._id);
+    const inputElement = document.querySelector('textarea');
+    if (inputElement) {
+      inputElement.focus();
+    }
+  };
+
+  // Handle delete (sender only)
+  const handleDelete = async (message: Message) => {
+    try {
+      await api.delete(`api/inbox/message/${message._id}`);
+      console.log('Message deleted:', message._id);
+      setActiveMenuMessageId(null);
+      setMessages(prev => prev.filter(m => m._id !== message._id));
+    } catch (error) {
+      console.error('Error deleting message:', error);
+    }
+  };
+
+  // Cancel reply
+  const cancelReply = () => {
+    setReplyToMessage(null);
+    setEditingMessage(null);
+  };
+
   // Render message bubble
   const renderMessageBubble = (message: Message) => {
     const isSender = checkMessageSender(message);
@@ -518,20 +824,26 @@ const Inbox = () => {
     const hasAttachment = message.attachments && message.attachments.length > 0;
     const hasReaction = message.message_react && message.message_react.length > 0;
     const isRead = message.read_by && message.read_by.length > 0;
+    const isReply = message.message_id_reply && message.message_id_reply !== "";
+    const isPinned = selectedConversation?.pinned_messages?.some(
+      pm => pm.message_id === message._id
+    );
+
+    // Find the replied message
+    const repliedMessage = isReply ? messages.find(m => m._id === message.message_id_reply) : null;
 
     return (
       <div
         key={message._id}
-        className={`flex gap-3 ${isSender ? 'flex-row-reverse' : ''}`}
+        className={`flex items-center gap-2 ${isSender ? 'flex-row-reverse' : ''} group relative w-full`}
       >
         {/* Avatar */}
-        <div className="flex-shrink-0">
+        <div className="flex-shrink-0 self-start mt-1">
           <img
             src={getSenderAvatar(message)}
             alt="avatar"
             className="h-8 w-8 rounded-full object-cover"
             onError={(e) => {
-              // Fallback to generated avatar if image fails to load
               const target = e.target as HTMLImageElement;
               const name = isSender ? (userProfile?.name || 'You') : 'Other';
               target.src = `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=${isSender ? '6366f1' : '8b5cf6'}&color=fff&bold=true`;
@@ -541,6 +853,14 @@ const Inbox = () => {
 
         {/* Message Content */}
         <div className={`flex flex-col ${isSender ? 'items-end' : 'items-start'} max-w-[70%]`}>
+          {/* Pin indicator */}
+          {isPinned && (
+            <div className="flex items-center gap-1 text-xs text-yellow-500 mb-1">
+              <Pin className="h-3 w-3" />
+              <span>Pinned</span>
+            </div>
+          )}
+          
           <div
             className={`rounded-2xl px-4 py-2.5 ${
               isSender
@@ -548,6 +868,14 @@ const Inbox = () => {
                 : 'bg-white/10 text-white'
             }`}
           >
+            {/* Reply indicator */}
+            {isReply && repliedMessage && (
+              <div className={`mb-1 text-xs ${isSender ? 'text-blue-200' : 'text-zinc-400'} border-l-2 border-blue-400 pl-2`}>
+                <span className="font-medium">Replying to: </span>
+                <span className="opacity-80">{repliedMessage.message_content.substring(0, 50)}...</span>
+              </div>
+            )}
+
             {/* Image Attachment */}
             {isImage && hasAttachment && (
               <div className="mb-2">
@@ -578,7 +906,7 @@ const Inbox = () => {
 
             {/* Reactions */}
             {hasReaction && (
-              <div className="mt-1 flex gap-1">
+              <div className="mt-1 flex gap-1 flex-wrap">
                 {message.message_react.map((react, index) => (
                   <span
                     key={index}
@@ -608,6 +936,22 @@ const Inbox = () => {
             )}
           </div>
         </div>
+
+        {/* Actions trigger - sits beside the bubble, opens a portaled floating menu */}
+        <MessageActions
+          isSender={isSender}
+          isPinned={!!isPinned}
+          isOpen={activeMenuMessageId === message._id}
+          onToggle={() =>
+            setActiveMenuMessageId(activeMenuMessageId === message._id ? null : message._id)
+          }
+          onClose={() => setActiveMenuMessageId(null)}
+          onReply={() => handleReply(message)}
+          onPin={() => handlePin(message)}
+          onEdit={isSender ? () => handleEdit(message) : undefined}
+          onDelete={isSender ? () => handleDelete(message) : undefined}
+          onReact={(emoji) => handleReact(message, emoji)}
+        />
       </div>
     );
   };
@@ -645,7 +989,6 @@ const Inbox = () => {
     }
   };
 
-  // Use sample messages if no messages exist
   const displayMessages = messages.length > 0 ? messages : [];
   const groupedMessages = groupMessagesByDate(displayMessages);
 
@@ -757,7 +1100,6 @@ const Inbox = () => {
                           alt={name}
                           className="h-12 w-12 rounded-full object-cover"
                           onError={(e) => {
-                            // Fallback to generated avatar if image fails to load
                             const target = e.target as HTMLImageElement;
                             target.src = `https://ui-avatars.com/api/?name=${name.substring(0, 2)}&background=6366f1&color=fff&bold=true`;
                           }}
@@ -859,12 +1201,28 @@ const Inbox = () => {
                   )}
                 </div>
 
+                {/* Reply indicator */}
+                {replyToMessage && (
+                  <div className="px-4 py-2 bg-[#0d0f1a] border-t border-white/10 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-sm text-zinc-400">
+                      <Reply className="h-4 w-4 text-blue-400" />
+                      <span>Replying to: <span className="text-white">{replyToMessage.message_content.substring(0, 50)}...</span></span>
+                    </div>
+                    <button
+                      onClick={cancelReply}
+                      className="p-1 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+
                 {/* Message Input */}
                 <div className="border-t border-white/10 bg-[#0d0f1a] p-4 flex-shrink-0">
                   <div className="flex items-end gap-2">
                     <div className="flex-1 relative">
                       <textarea
-                        placeholder="Type a message..."
+                        placeholder={replyToMessage ? "Write a reply..." : "Type a message..."}
                         rows={1}
                         className="w-full rounded-2xl border border-white/15 bg-white/5 px-4 py-2.5 pr-12 text-sm text-white outline-none resize-none placeholder:text-zinc-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
                         value={messageInput}
