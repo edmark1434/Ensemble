@@ -5,6 +5,9 @@ export interface Message {
   text: string;
   sender: "me" | "them";
   time: string;
+  createdAt?: string; // Optional timestamp for when the message was created
+  isRead?: boolean; // Optional flag to indicate if the message has been read
+  isEdited?: boolean; // Optional flag to indicate if the message has been edited
 }
 
 // Dataset updated with 4 chat mates

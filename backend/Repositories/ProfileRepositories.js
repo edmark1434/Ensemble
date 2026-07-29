@@ -319,6 +319,7 @@ async function getProfileAvatarsByAccountId(accountId) {
     }
 }
 
+
 async function getProfileCurrentAvatarByAccountId(accountId){
     try{
         const queryText = `SELECT f.file_id,f.name, f.path from accounts a

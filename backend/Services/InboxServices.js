@@ -9,13 +9,16 @@ const {
     getInboxByTwoAccountIds
 } = require("../Repositories/InboxRepositories");
 const {
-    checkAccountIdService
+    checkAccountIdService,
+    
 } = require("../services/AccountServices");
 
-
+const {
+    getProfileCurrentAvatarByAccountIdService
+} = require('../Services/ProfileServices');
 function dataValidation(payload = {}) {
     const ErrorMessages = [];
-
+    console.log("Validating payload:", payload);
     // Conversation Validation
     if (
         payload.conversation_name !== undefined &&
@@ -68,12 +71,6 @@ function dataValidation(payload = {}) {
         ErrorMessages.push("conversation_id must be a string");
     }
 
-    if (
-        payload.sender_id !== undefined &&
-        typeof payload.sender_id !== "number"
-    ) {
-        ErrorMessages.push("sender_id must be a number");
-    }
 
     if (
         payload.message_content !== undefined &&
@@ -190,14 +187,14 @@ async function getInboxByAccountIdServices(accountId, conversation_type){
     return await getInboxByAccountId(accountId, conversation_type);
 }
 
-async function checkInboxByTwoAccountIdsServices(messagePayload,account_id){
+async function checkInboxByTwoAccountIdsServices(messagePayload, account_id) {
+    console.log("Checking inbox for accounts:", account_id, messagePayload.recipientId);
     if(!checkAccountIdService(account_id) || !checkAccountIdService(messagePayload.recipientId)){
         throw new Error('Invalid account ID(s)');
     }
      try{
         const { recipientId, conversation_type } = messagePayload;
         let inbox = await getInboxByTwoAccountIds(account_id, recipientId, conversation_type);
-        console.log(`Inbox found for accounts ${account_id} and ${recipientId}:`, inbox);
         if(!inbox){
             inbox = await createInboxServices({
                 conversation_name: "",
@@ -218,6 +215,27 @@ async function checkInboxByTwoAccountIdsServices(messagePayload,account_id){
     }
 }
 
+async function getInboxByTwoAccountIdsServices(accountId1, accountId2, conversation_type) { 
+    try {
+        if (!checkAccountIdService(accountId1) || !checkAccountIdService(accountId2)) {
+            throw new Error('Invalid account ID(s)');
+        }
+        const inbox = await getInboxByTwoAccountIds(accountId1, accountId2, conversation_type);
+        if (!inbox) {
+            throw new Error('Inbox not found for the given account IDs');
+        }
+        const avatarPayload = {};
+        for (const member of inbox.members) {
+            const avatar = await getProfileCurrentAvatarByAccountIdService(member.account_id);
+            avatarPayload[member.account_id] = avatar ? avatar.path : null;
+        }
+        return { ...inbox, avatarPayload };
+    }catch (err) {
+        console.error("Error checking inbox by two account IDs:", err);
+        throw err;
+    }
+}
+
 
 
 
@@ -228,6 +246,7 @@ module.exports = {
     updateInboxServices,
     getConversationByConvoIdServices,
     getInboxByAccountIdServices,
-    checkInboxByTwoAccountIdsServices
+    checkInboxByTwoAccountIdsServices,
+    getInboxByTwoAccountIdsServices
 };
 

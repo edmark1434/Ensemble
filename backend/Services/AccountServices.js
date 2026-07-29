@@ -65,7 +65,7 @@ async function getAccountWalletService(accountId, type) {
 
 async function checkAccountIdService(accountId) { 
     if(!accountId){
-        throw new Error('Account ID is required to fetch wallet information');
+        throw new Error('Account ID is required');
     }
     try {
         return isExist = await checkAccountId(accountId);
