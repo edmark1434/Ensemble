@@ -289,6 +289,18 @@ async function updateSubscriptionInvoiceAmountRepositories(xenditPlanId, amount_
     }
 }
 
+async function getSubscriptionBySubscriptionIdRepositories(subscriptionId) {
+    try{
+        const query = `SELECT * FROM subscriptions WHERE subscription_id = $1 limit 1`;
+        const result = await pool.query(query, [subscriptionId]);
+        return result.rows[0];
+    }
+    catch(err){
+        console.error("Error fetching subscription by subscription id:", err);
+        throw err;
+    }
+}
+
 module.exports = {
     getAllPlanRepositories,
     getSubcriptionByUserIdRepositories,
@@ -302,5 +314,6 @@ module.exports = {
     getFreePlanRepositories,
     getCancelledSubscriptionRepositories,
     getSubscriptionByXenditPlanIdRepositories,
-    updateSubscriptionInvoiceAmountRepositories
+    updateSubscriptionInvoiceAmountRepositories,
+    getSubscriptionBySubscriptionIdRepositories
 };

@@ -178,10 +178,12 @@ async function updateWalletFromTopUp(userId, credits) {
                 SELECT account_id
                 FROM users
                 WHERE user_id = $1
-            );
+            )
+            returning w.wallet_id;
         `;
         const values = [userId, credits];
-        await pool.query(query, values);
+        const result = await pool.query(query, values);
+        return result.rows[0];
     } catch (err) {
         console.error("Error updating wallet balance:", err);
         throw err;
@@ -439,6 +441,59 @@ async function updatePaymentMethodStatus(paymentTokenId, status) {
     }
 }
 
+async function updatePlatformWalletBalance(credits,action = 'add') {
+    try {
+        if (action === 'subtract') {
+            credits = -credits;
+        }
+        const query = `
+            UPDATE wallets
+            SET balance_credits = balance_credits + $1
+            WHERE type = 'platform wallets'
+        `;
+        await pool.query(query, [credits]);
+    } catch (err) {
+        console.error("Error updating platform wallet balance:", err);
+        throw err;
+    }
+}
+
+async function getPlatformWallet() {
+    try {
+        const query = `
+            SELECT balance_credits, wallet_id
+            FROM wallets
+            WHERE type = 'platform wallets'
+        `;
+        const result = await pool.query(query);
+        return result.rows[0];
+    } catch (err) {
+        console.error("Error fetching platform wallet balance:", err);
+        throw err;
+    }
+}
+
+async function createCreditTransaction(data) {
+    try {
+        const result = await pool.query(`
+            INSERT INTO credit_transactions (
+                type,
+                amount_credits,
+                status,
+                source_wallet_id,
+                destination_wallet_id,
+                fee_transaction_id,
+                reference_table,
+                reference_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             RETURNING *;
+        `, [data.type, data.amount_credits, data.status, data.source_wallet_id, data.destination_wallet_id, data.fee_transaction_id, data.reference_table, data.reference_id]);
+        return result.rows[0];
+    }catch (err) {
+        console.error("Error creating credit transaction:", err);
+        throw err;
+    }
+}
 
 
 module.exports = {
@@ -459,4 +514,7 @@ module.exports = {
     getActivePaymentSessions,
     getAllPaymentMethodsByUserId,
     updatePaymentMethodStatus,
+    getPlatformWallet,
+    updatePlatformWalletBalance,
+    createCreditTransaction,
 };

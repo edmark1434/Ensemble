@@ -38,6 +38,8 @@ function dataValidation(groupData, action = 'create') {
     return true;
 }
 async function createGroup(groupData){
+    groupData.imageUrl = groupData.imageKey;
+    delete groupData.imageKey;
     dataValidation(groupData);
     return await createForumGroup(groupData);
 }

@@ -90,7 +90,7 @@ type Post = {
   forum_group_id: number;
   user_id: number;
   title: string;
-  description: string;
+  content: string;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -98,6 +98,7 @@ type Post = {
   attachments: {
     file_path: string;
   }[];
+  imageKeys?: string[];
   likes: {
     user_id: number;
   }[];
@@ -270,22 +271,43 @@ const getDepthClass = (depth: number = 0): string => {
   return "ml-32";
 };
 
-const ImageGallery = ({ attachments }: { attachments?: { file_path: string }[] }) => {
+const ImageGallery = ({ attachments, imageKeys }: { attachments?: { file_path: string }[]; imageKeys?: string[] }) => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  if (!attachments || attachments.length === 0) return null;
+  const allImages = useMemo(() => {
+    const images: string[] = [];
+    
+    if (attachments && attachments.length > 0) {
+      attachments.forEach(attachment => {
+        if (attachment.file_path) images.push(attachment.file_path);
+      });
+    }
+    
+    if (imageKeys && imageKeys.length > 0) {
+      images.push(...imageKeys);
+    }
+    
+    return images;
+  }, [attachments, imageKeys]);
+
+  if (allImages.length === 0) return null;
+
+  const getImageUrl = (filePath: string) => {
+    if (filePath.startsWith('http')) return filePath;
+    return `${import.meta.env.VITE_CLOUDFRONT_URL}/${filePath}`;
+  };
 
   return (
     <>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-        {attachments.map((attachment, idx) => (
+        {allImages.map((filePath, idx) => (
           <button
             key={idx}
-            onClick={() => setSelectedImage(attachment.file_path)}
+            onClick={() => setSelectedImage(getImageUrl(filePath))}
             className="group relative overflow-hidden rounded-lg border border-white/10 bg-white/5 transition-all hover:scale-105 hover:border-white/20"
           >
             <img
-              src={attachment.file_path}
+              src={getImageUrl(filePath)}
               alt={`Post image ${idx + 1}`}
               className="h-32 w-full object-cover transition-all group-hover:scale-110"
               onError={(e) => {
@@ -623,7 +645,6 @@ const CommentItem = ({
               )}
             </div>
             
-            {/* Comment actions menu - only for author */}
             {isAuthor && !comment.deleted_at && (
               <div className="relative">
                 <button
@@ -657,7 +678,6 @@ const CommentItem = ({
             )}
           </div>
           
-          {/* Edit mode or display mode */}
           {isEditing ? (
             <div className="mt-2">
               <textarea
@@ -861,7 +881,7 @@ const SelectedGroup = () => {
           if (details) {
             details.name = `${details.first_name} ${details.last_name}`;
             details.role = member.role;
-            details.avatar = details.avatar_file_id ? `api/files/${details.avatar_file_id}` : `https://i.pravatar.cc/150?u=${details.user_id}`;
+            details.avatar = `${import.meta.env.VITE_CLOUDFRONT_URL}${details.path}`;
             details.joinedAt = member.joined_at;
             details.userId = details.user_id;
             delete details.first_name;
@@ -892,16 +912,14 @@ const SelectedGroup = () => {
     { value: "most-commented", label: "Most Commented", icon: <MessageCircle className="h-3 w-3" /> },
   ];
 
-  // Filter and sort posts
   const filteredAndSortedPosts = useMemo(() => {
     let filtered = [...posts];
 
-    // Search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       filtered = filtered.filter((post) => {
         const matchesTitle = post.title.toLowerCase().includes(query);
-        const matchesContent = post.description.toLowerCase().includes(query);
+        const matchesContent = post.content.toLowerCase().includes(query);
         const matchesAuthor = getMemberDetails(post.user_id).name.toLowerCase().includes(query);
         const matchesTags = post.tags?.some(tag => 
           tag.tag_name?.toLowerCase().includes(query)
@@ -910,7 +928,6 @@ const SelectedGroup = () => {
       });
     }
 
-    // Sort
     if (sortBy === "latest") {
       filtered = filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     } else if (sortBy === "most-liked") {
@@ -933,8 +950,8 @@ const SelectedGroup = () => {
       _id: post._id,
       author: authorDetails.name,
       authorAvatar: authorDetails.avatar,
-      excerpt: post.description,
-      content: post.description, // Add this for the JSX to display content
+      excerpt: post.content,
+      content: post.content,
       ago: getTimeAgo(post.created_at),
       tagsList: post.tags || [],
       likeCount: post.likes?.length || 0,
@@ -942,6 +959,7 @@ const SelectedGroup = () => {
       isLiked: isLikedByCurrentUser,
       isSaved: isSavedByCurrentUser,
       commentTree: buildCommentTree(post.comments || []),
+      imageKeys: post.imageKeys || [],
     };
   });
 
@@ -1331,7 +1349,7 @@ const SelectedGroup = () => {
     content: string;
     groupId: number;
     tags: { tag_id: number; tag_name: string }[];
-    images?: ImageAttachment[];
+    imageKeys?: string[];
   }) => {
     const forum_group_id = postData.groupId;
     delete postData.groupId;
@@ -1345,87 +1363,87 @@ const SelectedGroup = () => {
       if (response.status !== 201) {
         showErrorToast("Failed to create post. Please try again.");
         return;
-      }else {
+      } else {
         const newPost: Post = {
-        _id: response.data._id || response.data,
-        forum_group_id: Number(id),
-        user_id: currentUserId,
-        title: postData.title,
-        description: postData.content,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        deleted_at: null,
-        tags: postData.tags || [],
-        attachments: postData.images?.map(img => ({ file_path: img.preview })) || [],
-        likes: [],
-        saves: [],
-        comments: [],
-      };
-      setPosts([newPost, ...posts]);
+          _id: response.data._id || response.data,
+          forum_group_id: Number(id),
+          user_id: currentUserId,
+          title: postData.title,
+          content: postData.content,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          deleted_at: null,
+          tags: postData.tags || [],
+          attachments: [],
+          imageKeys: postData.imageKeys || [],
+          likes: [],
+          saves: [],
+          comments: [],
+        };
+        setPosts([newPost, ...posts]);
         showSuccessToast(`"${postData.title}" posted successfully!`);
       }
     }catch(error) {
+      console.error("Error creating post:", error);
       showErrorToast("Failed to create post. Please try again.");
       return;
     }
   };
 
-  // Updated handleEditPost with proper sync
-  const handleEditPost = async (postId: string, updatedData: { title: string; content: string; tags: { tag_id: number; tag_name: string }[]; images?: ImageAttachment[] }) => {
-    try {
-      // Find the current post using the _id string
-      const currentPost = posts.find(post => post._id === postId);
-      if (!currentPost) {
-        showErrorToast("Post not found");
-        return;
-      }
-
-      // Find the index of the post for updating the local state
-      const postIndex = posts.findIndex(post => post._id === postId);
-
-      // Prepare payload - backend expects 'description' not 'content'
-      const payload = {
-        title: updatedData.title,
-        description: updatedData.content,
-        tags: updatedData.tags || [],
-      };
-
-      console.log("Updating post with _id:", postId);
-      console.log("Payload:", payload);
-
-      // Use the _id for the API call
-      const response = await api.patch(`api/forum/discussions/${postId}`, payload);
-      
-      if (response.status === 200) {
-        // Update local state using the index
-        setPosts(prev => prev.map((post, idx) =>
-          idx === postIndex
-            ? {
-                ...post,
-                title: updatedData.title,
-                description: updatedData.content, // This is what the backend expects
-                tags: updatedData.tags || [],
-                attachments: updatedData.images?.map(img => ({ file_path: img.preview })) || post.attachments,
-                updated_at: new Date().toISOString(),
-              }
-            : post
-        ));
-        
-        // Force a re-render by updating a state that triggers useMemo
-        // The posts state update above should already trigger this
-        
-        showSuccessToast("Post updated successfully!");
-        setEditingPost(null);
-        setPostMenuOpen(null);
-      } else {
-        showErrorToast(response.data?.error || "Failed to update post");
-      }
-    } catch (error: any) {
-      console.error("Error updating post:", error);
-      const errorMessage = error.response?.data?.error || error.message || "Failed to update post. Please try again.";
-      showErrorToast(errorMessage);
+  const handleEditPost = async (postId: string, updatedData: { 
+  title: string; 
+  content: string; 
+  tags: { tag_id: number; tag_name: string }[]; 
+  images?: ImageAttachment[];
+  imageKeys?: string[];
+}) => {
+  try {
+    const currentPost = posts.find(post => post._id === postId);
+    if (!currentPost) {
+      showErrorToast("Post not found");
+      return;
     }
-  };
+
+    const postIndex = posts.findIndex(post => post._id === postId);
+
+    const payload = {
+      title: updatedData.title,
+      content: updatedData.content,
+      tags: updatedData.tags || [],
+      imageKeys: updatedData.imageKeys || [], // 👈 Add imageKeys to payload
+    };
+
+    console.log("Updating post with _id:", postId);
+    console.log("Payload:", payload);
+
+    const response = await api.patch(`api/forum/discussions/${postId}`, payload);
+    
+    if (response.status === 200) {
+      setPosts(prev => prev.map((post, idx) =>
+        idx === postIndex
+          ? {
+              ...post,
+              title: updatedData.title,
+              content: updatedData.content,
+              tags: updatedData.tags || [],
+              imageKeys: updatedData.imageKeys || [], // 👈 Update imageKeys
+              updated_at: new Date().toISOString(),
+            }
+          : post
+      ));
+      
+      showSuccessToast("Post updated successfully!");
+      setEditingPost(null);
+      setPostMenuOpen(null);
+    } else {
+      showErrorToast(response.data?.error || "Failed to update post");
+    }
+  } catch (error: any) {
+    console.error("Error updating post:", error);
+    const errorMessage = error.response?.data?.error || error.message || "Failed to update post. Please try again.";
+    showErrorToast(errorMessage);
+  }
+};
 
   const handleDeletePost = async() => {
     console.log("Deleting post:", deletingPost);
@@ -1978,7 +1996,7 @@ const SelectedGroup = () => {
                               </ReactMarkdown>
                             </div>
 
-                            <ImageGallery attachments={post.attachments} />
+                            <ImageGallery attachments={post.attachments} imageKeys={post.imageKeys} />
 
                             <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
                               <button
@@ -2189,7 +2207,7 @@ const SelectedGroup = () => {
       <EditGroupModal
         isOpen={showEditGroupModal}
         onClose={() => setShowEditGroupModal(false)}
-        group={{ id: group._id, name: group.group_name, description: group.description, tags: group.tags, gradient: "from-purple-600 via-pink-600 to-red-600" }}
+        group={{ id: group._id, name: group.group_name, description: group.description, tags: group.tags, gradient: "from-purple-600 via-pink-600 to-red-600", }}
         onSave={handleEditGroup}
       />
 
@@ -2254,7 +2272,8 @@ const SelectedGroup = () => {
             : [],
           images: Array.isArray(editingPost.attachments) 
             ? editingPost.attachments.map(a => ({ id: a.file_path, preview: a.file_path })) 
-            : []
+            : [],
+          imageKeys: editingPost.imageKeys || [] // 👈 ADD THIS LINE
         } : null}
         availableTags={group?.tags?.map(t => ({ tag_id: t.tag_id, tag_name: t.tag })) || []}
       />

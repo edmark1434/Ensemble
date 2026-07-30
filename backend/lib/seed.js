@@ -977,12 +977,12 @@ async function seed() {
         ]
       );
     }
-
+    await pool.query(`INSERT INTO wallets (type, balance_credits) VALUES ('platform wallets', 1000000)`);
     await ensureDefaultSettings();
     await seedTicketsAndDisputes(userAccountIds, staffByRole);
     await seedMarketplaceListings(userAccountIds, staffByRole);
     await seedTeams(userAccountIds);
-
+  
     console.log('');
     console.log('🔑 Staff login (password: staff123):');
     for (const staff of STAFF_SEED) {

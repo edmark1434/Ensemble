@@ -85,7 +85,7 @@ type Post = {
 };
 
 type Group = {
-  _id: string;
+  id: string;
   image_url: string;
   group_name: string;
   content: string;
@@ -101,6 +101,7 @@ type Group = {
   }[];
   gradient?: string;
   status?: string;
+  joined?: boolean;
 };
 
 type MemberWithDetails = {
@@ -1134,7 +1135,7 @@ const Forums = () => {
   // ==================== EFFECTS ====================
   useEffect(() => {
     if (joinedGroups.length > 0 && selectedGroupIds.length === 0) {
-      setSelectedGroupIds(joinedGroups.map((group) => group.id));
+      setSelectedGroupIds(joinedGroups.map((group : any) => group.id));
     }
   }, [joinedGroups]);
 
@@ -1145,16 +1146,16 @@ const Forums = () => {
     const loadForumData = async () => {
       setLoading(true);
       try {
-        const groupsResponse = await api.get<Group[]>("/api/forum/groups");
-        let normalizedGroups = (groupsResponse.data ?? []).map((group, index) => ({
+        const groupsResponse = await api.get("/api/forum/groups");
+        let normalizedGroups = (groupsResponse.data ?? []).map((group : any, index : any ) => ({
           ...group,
           id: group._id,
           gradient: gradientOptions[index % gradientOptions.length],
-          joined: group.members?.some((member) => member.userId === currentUserId) || false,
+          joined: group.members?.some((member :any) => member.userId === currentUserId) || false,
         }));
-        normalizedGroups = normalizedGroups.filter((group) => group.status === "active");
-        const userJoinedGroups = normalizedGroups.filter((group) => 
-          group.members?.some((member) => member.userId === currentUserId)
+        normalizedGroups = normalizedGroups.filter((group : any) => group.status === "active");
+        const userJoinedGroups = normalizedGroups.filter((group : any) => 
+          group.members?.some((member : any) => member.userId === currentUserId)
         );
         
         if (cancelled) return;
@@ -1163,7 +1164,7 @@ const Forums = () => {
         
         // Collect all user IDs from all discussions
         const allDiscussionResponses = await Promise.all(
-          normalizedGroups.map(async (group) => {
+          normalizedGroups.map(async (group : any) => {
             try {
               const response = await api.get<Post[]>(`/api/forum/discussions/group/${group.id}`);
               return response.data || [];
@@ -1314,7 +1315,7 @@ const Forums = () => {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       posts = posts.filter((post) => {
-        const group = groupsList.find((g) => String(g._id) === String(post.forum_group_id));
+        const group = groupsList.find((g) => String(g.id) === String(post.forum_group_id));
         const matchesGroup = group?.group_name.toLowerCase().includes(query) ?? false;
         const matchesTitle = post.title.toLowerCase().includes(query);
         const matchesContent = post.content.toLowerCase().includes(query);
@@ -1368,7 +1369,7 @@ const Forums = () => {
 
   const visibleGroups = useMemo(() => {
     let groups = activeTab === "my-groups" ? joinedGroups : groupsList;
-    
+    console.log("group data",groups);
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       groups = groups.filter((group) => 
@@ -1901,10 +1902,10 @@ const Forums = () => {
             <div className="flex flex-wrap gap-2">
               {availableFilterGroups.map((group) => (
                 <button
-                  key={group._id}
-                  onClick={() => toggleGroupFilter(group._id)}
+                  key={group.id}
+                  onClick={() => toggleGroupFilter(group.id)}
                   className={`rounded-full px-3 py-1 text-xs transition-all duration-200 ${
-                    selectedGroupIds.includes(group._id)
+                    selectedGroupIds.includes(group.id)
                       ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
                       : "border border-white/15 bg-white/5 text-zinc-400 hover:border-white/30 hover:text-white"
                   }`}
@@ -1944,7 +1945,7 @@ const Forums = () => {
   );
 
   const renderPostCard = (post: any, showGroupName: boolean = true) => {
-    const group = groupsList.find((item) => String(item._id) === String(post.forum_group_id));
+    const group = groupsList.find((item) => String(item.id) === String(post.forum_group_id));
     const isExpanded = expandedPostId === post.id;
     const isLiked = post.isLiked;
     const isSaved = post.isSaved;
@@ -2119,12 +2120,12 @@ const Forums = () => {
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {visibleGroups.map((group) => (
         <div
-          key={group._id}
-          onClick={() => navigate(`/forums/group/${group._id}`)}
+          key={group.id}
+          onClick={() => navigate(`/forums/group/${group.id}`)}
           className="group relative cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-linear-to-br from-white/5 to-transparent transition-all duration-300 hover:scale-[1.02] hover:border-white/20 hover:bg-white/10"
         >
           {group.image_url ? (
-            <img src={group.image_url} alt={group.group_name} className="h-24 w-full object-cover" />
+            <img src={`${import.meta.env.VITE_CLOUDFRONT_URL}/${group.image_url}`} alt={group.group_name} className="h-24 w-full object-cover" />
           ) : (
             <div className={`h-24 bg-linear-to-r ${group.gradient}`} />
           )}
@@ -2139,11 +2140,11 @@ const Forums = () => {
                   className="flex items-center gap-1 rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] text-blue-400 transition hover:bg-blue-500/30 hover:scale-105 disabled:opacity-50"
                   onClick={(e) => {
                     e.stopPropagation();
-                    joinGroup(group._id);
+                    joinGroup(group.id);
                   }}
-                  disabled={joiningGroupId === group._id}
+                  disabled={joiningGroupId === group.id}
                 >
-                  {joiningGroupId === group._id ? (
+                  {joiningGroupId === group.id ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
                   ) : (
                     <UserPlus className="h-3 w-3" />

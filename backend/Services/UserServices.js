@@ -94,8 +94,8 @@ async function findUserByEmail(email) {
 }
 
 async function getUsersByListOfIdsServices(userIds) { 
-    if (!Array.isArray(userIds) || userIds.some(id => typeof id !== 'number')) {
-        throw new ServiceError('Invalid user IDs format. Expected an array of numbers.', 400);
+    if (!Array.isArray(userIds) || userIds.some(id => typeof id !== 'string')) {
+        throw new ServiceError('Invalid user IDs format. Expected an array of strings.', 400);
     }
     return await getUserByListofIdsRepositories(userIds);
 }

@@ -14,6 +14,7 @@ const surveyRoutes = require('./survey');
 const fileRoutes = require('./file');
 const verificationRoutes = require('./verification');
 const ticketRoutes = require('./ticket');
+const notificationRoutes = require('./notification');
 const { getAllCountriesController,
     getAllPlacesController
 } = require('../Controllers/SystemControllers')
@@ -32,6 +33,7 @@ router.use('/files', fileRoutes);
 router.use('/surveys', surveyRoutes);
 router.use('/verification', verificationRoutes);
 router.use('/tickets', ticketRoutes);
+router.use('/notifications', notificationRoutes);
 
 router.get('/countries', getAllCountriesController);
 router.get('/places', getAllPlacesController);

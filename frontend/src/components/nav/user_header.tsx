@@ -8,6 +8,7 @@ import { auth } from "@/pages/firebase";
 
 import UserNotificationModal from "./user_notification_modal";
 import UserLogoutModal from "./user_logout_modal";
+import socket from "@/lib/socket";
 
 interface UserHeaderProps {
   pageTitle: string;
@@ -15,6 +16,18 @@ interface UserHeaderProps {
   userName?: string;
   userAvatar?: string;
   onTopUp?: () => void;
+}
+interface Notification {
+  notification_id: string;
+  message: string;
+  is_read: boolean;
+  reference_table: string;
+  reference_prefix: string;
+  reference_path: string;
+  reference_id: string;
+  account_id: string;
+  created_at: string;
+  deleted_at: string | null;
 }
 
 const UserHeader: React.FC<UserHeaderProps> = ({
@@ -43,18 +56,106 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const [userCredits, setCredits] = useState(0);
   const [userAvatarState, setUserAvatarState] = useState('');
   const [userSubscriptionPlan, setUserSubscriptionPlan] = useState<"Free" | "Premium" | "Business">("Free");
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsProfileOpen(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+
+ useEffect(() => {
+  setHasUnreadNotifications(
+    notifications.some((notification) => !notification.is_read)
+  );
+}, [notifications]);
+
+
+useEffect(() => {
+  if (!userInfo?.account_id) return;
+
+  if (!socket.connected) {
+    socket.connect();
+  }
+
+  socket.emit("joinRoom", userInfo.account_id);
+
+  const handleNotificationRead = ({
+    notificationId,
+    is_read,
+  }: {
+    notificationId: string;
+    is_read: boolean;
+  }) => {
+    setNotifications((prev) =>
+      prev.map((notification) =>
+        notification.notification_id === notificationId
+          ? { ...notification, is_read }
+          : notification
+      )
+    );
+  };
+
+  const handleAllNotificationsRead = (
+    updatedNotifications: Notification[]
+  ) => {
+    setNotifications(updatedNotifications);
+  };
+
+  const handleNewNotification = (notification: Notification) => {
+    setNotifications((prev) => {
+      const exists = prev.some(
+        (item) =>
+          item.notification_id === notification.notification_id
+      );
+
+      if (exists) {
+        return prev;
       }
-      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
-        setIsNotificationsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+
+      return [notification, ...prev];
+    });
+  };
+
+  socket.on("notificationRead", handleNotificationRead);
+  socket.on("allNotificationsRead", handleAllNotificationsRead);
+  socket.on("notification", handleNewNotification);
+
+  return () => {
+    socket.off("notificationRead", handleNotificationRead);
+    socket.off("allNotificationsRead", handleAllNotificationsRead);
+    socket.off("notification", handleNewNotification);
+  };
+}, [userInfo?.account_id]);
+  
+useEffect(() => {
+  const fetchNotifications = async () => {
+    try {
+      const { data } = await api.get("/api/notifications/");
+
+      const fetchedNotifications: Notification[] =
+        data.notifications ?? [];
+
+      // Remove duplicates just in case
+      const uniqueNotifications = Array.from(
+        new Map(
+          fetchedNotifications.map((n) => [
+            n.notification_id,
+            n,
+          ])
+        ).values()
+      );
+
+      setNotifications(uniqueNotifications);
+    } catch (err) {
+      console.error("Failed to fetch notifications", err);
+    }
+  };
+
+  fetchNotifications();
+}, []);
+
+useEffect(() => {
+  console.log(
+    "Notifications:",
+    notifications.map((n) => n.notification_id)
+  );
+}, [notifications]);
 
   useEffect(() => {
     const checkRole = async () => {
@@ -192,9 +293,13 @@ const UserHeader: React.FC<UserHeaderProps> = ({
                 }`}
               >
                 <Bell className="h-5 w-5" />
-                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-[#080a12]" />
+                {hasUnreadNotifications && (
+                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-[#080a12]" />
+                )}
               </button>
-              <UserNotificationModal isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} />
+              <UserNotificationModal isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} notificationsData={notifications} 
+                setNotifications={setNotifications}
+              />
             </div>
 
             {/* Profile */}

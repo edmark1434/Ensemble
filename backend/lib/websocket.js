@@ -12,6 +12,11 @@ async function initSocket(httpServer) {
     createMessageServices,
     updateMessageServices,
 } = require('../Services/InboxServices');
+const {
+  markNotificationAsReadServices,
+  markAllNotificationsAsReadServices,
+  getNotificationsByAccountIdServices
+} = require('../Services/NotificationServices');
   console.log("Socket.IO WebSocket server initialized");
   if (!io) {
     io = new Server(httpServer, {
@@ -103,6 +108,19 @@ async function initSocket(httpServer) {
         });
       }
     });
+
+    socket.on("markMessageAsRead", async (notificationId) => {
+      await markNotificationAsReadServices(notificationId);
+      console.log(`Client ${socket.id} marked notification ${notificationId} as read.`);
+      io.to(socket.user.account_id).emit("notificationRead",{notificationId: notificationId, is_read: true});
+    })
+
+    socket.on("markAllNotificationsAsRead", async () => {
+      await markAllNotificationsAsReadServices(socket.user.account_id);
+      const notifications = await getNotificationsByAccountIdServices(socket.user.account_id);
+      console.log(`Client ${socket.id} marked all notifications as read.`);
+      io.to(socket.user.account_id).emit("allNotificationsRead", notifications);
+    })
 
       socket.on("deleteMessage", (messageId) => {});
 
