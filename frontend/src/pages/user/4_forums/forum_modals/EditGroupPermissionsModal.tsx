@@ -14,7 +14,7 @@ interface EditGroupPermissionsModalProps {
   isOpen: boolean;
   onClose: () => void;
   members: Member[];
-  onSave: (members: Member[]) => void;
+  onSave: (members: Member[]) => void | Promise<void>;
 }
 
 // Predefined roles with their permissions
@@ -93,8 +93,8 @@ const EditGroupPermissionsModal: React.FC<EditGroupPermissionsModalProps> = ({
     setHasChanges(true);
   };
 
-  const handleSave = () => {
-    onSave(members);
+  const handleSave = async () => {
+    await onSave(members);
     setHasChanges(false);
     onClose();
   };

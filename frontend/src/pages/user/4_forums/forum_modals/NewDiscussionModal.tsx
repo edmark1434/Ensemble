@@ -55,8 +55,9 @@ interface NewDiscussionModalProps {
     groupId: string;
     tags: { tag_id: number; tag_name: string }[];
     imageKeys?: string[]; // Changed to array of S3 keys
-  }) => void;
+  }) => Promise<void>;
   availableGroups: Group[];
+  loadJoinedGroups?: boolean;
 }
 
 // Custom markdown components for preview styling
@@ -300,6 +301,7 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
   onClose,
   onCreatePost,
   availableGroups = [],
+  loadJoinedGroups = false,
 }) => {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -309,14 +311,86 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
   const [errors, setErrors] = useState<{ title?: string; content?: string; tags?: string }>({});
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [modalGroups, setModalGroups] = useState<Group[]>(availableGroups);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>("");
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [groupsError, setGroupsError] = useState("");
+  const [groupTags, setGroupTags] = useState<Group["tags"]>([]);
+  const [loadingTags, setLoadingTags] = useState(false);
+  const [tagsError, setTagsError] = useState("");
+  const availableGroupsKey = availableGroups.map((group) => group.id).join(",");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const tagDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Get the first available group as default
-  const defaultGroup = availableGroups.length > 0 ? availableGroups[0] : null;
-  const selectedGroupId = defaultGroup?.id || null;
-  const availableTags = defaultGroup?.tags || [];
+  const selectedGroup = modalGroups.find((group) => group.id === selectedGroupId) || null;
+  const availableTags = groupTags;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    const loadGroups = async () => {
+      setGroupsError("");
+      if (!loadJoinedGroups) {
+        setModalGroups(availableGroups);
+        setSelectedGroupId(availableGroups[0]?.id || "");
+        return;
+      }
+      setLoadingGroups(true);
+      try {
+        const response = await api.get("/api/forum/groups/joined");
+        const groups = (response.data || [])
+          .filter((group: any) => group.status === "active" && !group.deleted_at)
+          .map((group: any) => ({
+            id: String(group._id),
+            name: group.group_name,
+            tags: Array.isArray(group.tags) ? group.tags : [],
+          }));
+        if (!cancelled) {
+          setModalGroups(groups);
+          setSelectedGroupId("");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setModalGroups([]);
+          setGroupsError("Failed to load your joined groups.");
+        }
+      } finally {
+        if (!cancelled) setLoadingGroups(false);
+      }
+    };
+    void loadGroups();
+    return () => { cancelled = true; };
+  // The key keeps parent array recreation from restarting this request on every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, loadJoinedGroups, availableGroupsKey]);
+
+  useEffect(() => {
+    setSelectedTags([]);
+    setIsTagDropdownOpen(false);
+    setTagsError("");
+    if (!selectedGroupId) {
+      setGroupTags([]);
+      return;
+    }
+    let cancelled = false;
+    const loadTags = async () => {
+      setLoadingTags(true);
+      try {
+        const response = await api.get(`/api/forum/groups/${selectedGroupId}`);
+        if (!cancelled) setGroupTags(Array.isArray(response.data?.tags) ? response.data.tags : []);
+      } catch (_error) {
+        if (!cancelled) {
+          setGroupTags([]);
+          setTagsError("Failed to load this group's tags.");
+        }
+      } finally {
+        if (!cancelled) setLoadingTags(false);
+      }
+    };
+    void loadTags();
+    return () => { cancelled = true; };
+  }, [selectedGroupId]);
 
   // Upload file to AWS S3
   const uploadFileToS3 = async (file: File): Promise<string> => {
@@ -568,7 +642,7 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
     if (!content.trim()) newErrors.content = "Content is required";
     else if (content.length < 20) newErrors.content = "Content must be at least 20 characters";
     if (!selectedGroupId) newErrors.content = "No groups available to post in";
-    if (selectedTags.length === 0) newErrors.tags = "Please select at least one tag";
+    if (availableTags.length > 0 && selectedTags.length === 0) newErrors.tags = "Please select at least one tag";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -639,7 +713,7 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
       console.log("Content:", postData.content);
       console.log("Content Length:", postData.content.length);
       console.log("Group ID:", postData.groupId);
-      console.log("Selected Group:", defaultGroup?.name);
+      console.log("Selected Group:", selectedGroup?.name);
       console.log("Tags:", postData.tags);
       console.log("Number of Tags:", postData.tags.length);
       console.log("Image Keys:", postData.imageKeys);
@@ -647,8 +721,7 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
       console.log("=================================");
       
       // Call the onCreatePost callback with the data
-      onCreatePost(postData);
-      showSuccessToast("Discussion Posted Successfully!");
+      await onCreatePost(postData);
       
       // Reset form
       setTitle("");
@@ -700,9 +773,9 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
               <PlusCircle className="h-4 w-4 text-blue-400" />
             </div>
             <h3 className="text-lg font-semibold text-white">Create New Discussion</h3>
-            {defaultGroup && (
+            {selectedGroup && (
               <span className="ml-2 rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] text-cyan-400">
-                {defaultGroup.name}
+                {selectedGroup.name}
               </span>
             )}
           </div>
@@ -713,19 +786,31 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
 
         <div className="p-6">
           {/* Hidden Group Selection - showing which group is being used */}
-          {availableGroups.length === 0 ? (
+          {loadingGroups ? (
+            <div className="mb-4 flex items-center justify-center gap-2 rounded-lg border border-white/10 p-3 text-sm text-zinc-400">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading joined groups
+            </div>
+          ) : groupsError ? (
+            <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-center text-xs text-red-400">
+              {groupsError}
+            </div>
+          ) : modalGroups.length === 0 ? (
             <div className="mb-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-center">
               <p className="text-xs text-yellow-400">You haven't joined any groups yet. Please join a group first.</p>
             </div>
           ) : (
-            <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-zinc-500" />
-                  <span className="text-sm text-zinc-400">Posting in:</span>
-                  <span className="text-sm font-medium text-white">{defaultGroup?.name}</span>
-                </div>
-                <span className="text-[10px] text-zinc-500">Default group</span>
+            <div className="mb-4">
+              <label className="mb-2 block text-xs font-semibold uppercase text-zinc-500">Post in *</label>
+              <div className="relative">
+                <Users className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <select
+                  value={selectedGroupId}
+                  onChange={(event) => setSelectedGroupId(event.target.value)}
+                  className="w-full rounded-lg border border-white/15 bg-[#151826] py-2.5 pl-10 pr-4 text-sm text-white"
+                >
+                  <option value="">Select a group</option>
+                  {modalGroups.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
               </div>
             </div>
           )}
@@ -739,14 +824,16 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
               <button
                 onClick={() => availableTags.length > 0 && setIsTagDropdownOpen(!isTagDropdownOpen)}
                 className={`flex w-full items-center justify-between rounded-lg border ${errors.tags ? "border-red-500/50" : "border-white/15"} bg-white/5 px-4 py-2.5 text-sm text-white transition hover:bg-white/10 ${availableTags.length === 0 ? "opacity-50 cursor-not-allowed" : ""}`}
-                disabled={availableTags.length === 0}
+                disabled={loadingTags || !selectedGroupId || availableTags.length === 0}
               >
                 <div className="flex items-center gap-2">
                   <Tag className="h-4 w-4 text-zinc-500" />
                   <span>
-                    {selectedTags.length > 0 
+                    {loadingTags
+                      ? "Loading tags..."
+                      : selectedTags.length > 0
                       ? `${selectedTags.length} tag${selectedTags.length > 1 ? 's' : ''} selected` 
-                      : (availableTags.length === 0 ? "No tags available" : "Select tags")}
+                      : (!selectedGroupId ? "Select a group first" : availableTags.length === 0 ? "No tags available" : "Select tags")}
                   </span>
                 </div>
                 <ChevronDown className={`h-4 w-4 transition-transform ${isTagDropdownOpen ? "rotate-180" : ""}`} />
@@ -777,6 +864,7 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
                 </div>
               )}
             </div>
+            {tagsError && <p className="mt-2 text-xs text-red-400">{tagsError}</p>}
             
             {/* Selected Tags Display */}
             {selectedTags.length > 0 && (
@@ -894,7 +982,7 @@ Formatting examples:
           <div className="flex gap-3 mt-6">
             <button
               onClick={handleSubmit}
-              disabled={isCreating || availableGroups.length === 0}
+              disabled={isCreating || loadingGroups || loadingTags || !selectedGroupId || Boolean(tagsError)}
               className="flex-1 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:scale-105 hover:shadow-lg hover:shadow-blue-500/25 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
             >
               {isCreating ? (

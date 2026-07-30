@@ -2,10 +2,14 @@ const {
     createGroup,
     listForumGroups,
     listForumGroupsByMemberId,
+    listJoinedForumGroups,
     getForumGroup,
     updateForumGroupServices,
     updateForumGroupMembersServices,
     deleteForumGroupServices,
+    setForumGroupMemberRoleServices,
+    setForumGroupMemberBanServices,
+    removeForumGroupMemberServices,
 } = require('../Services/ForumGroupServices');
 
 async function createForumGroup(req, res) {
@@ -62,7 +66,7 @@ async function getForumGroupByIdController(req, res) {
 
 async function updateForumGroupController(req, res) {
     try {
-        const result = await updateForumGroupServices(req.params.groupId, req.body);
+        const result = await updateForumGroupServices(req.params.groupId, req.body, req.session);
         res.status(200).json({ message: 'Forum group updated successfully', result });
     } catch (err) {
         console.error('Error updating forum group:', err);
@@ -85,7 +89,7 @@ async function updateForumGroupMembersController(req, res){
 
 async function deleteForumGroupController(req, res) {
     try {
-        const result = await deleteForumGroupServices(req.params.groupId);
+        const result = await deleteForumGroupServices(req.params.groupId, req.session);
         res.status(200).json({ message: 'Forum group deleted successfully', result });
     } catch (err) {
         console.error('Error deleting forum group:', err);
@@ -93,12 +97,42 @@ async function deleteForumGroupController(req, res) {
     }
 }
 
+async function updateForumGroupMemberRoleController(req, res) {
+    try {
+        res.status(200).json(await setForumGroupMemberRoleServices(req.params.groupId, req.params.memberId, req.body.role, req.session));
+    } catch (err) { res.status(400).json({ error: err.message }); }
+}
+
+async function getJoinedForumGroupsController(req, res) {
+    try {
+        res.status(200).json(await listJoinedForumGroups(req.session));
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+}
+
+async function updateForumGroupMemberBanController(req, res) {
+    try {
+        res.status(200).json(await setForumGroupMemberBanServices(req.params.groupId, req.params.memberId, req.body.isBanned, req.session));
+    } catch (err) { res.status(400).json({ error: err.message }); }
+}
+
+async function removeForumGroupMemberController(req, res) {
+    try {
+        res.status(200).json(await removeForumGroupMemberServices(req.params.groupId, req.params.memberId, req.session));
+    } catch (err) { res.status(400).json({ error: err.message }); }
+}
+
 module.exports = {
     createForumGroup,
     getAllForumGroupsController,
     getForumGroupsByMemberIdController,
+    getJoinedForumGroupsController,
     getForumGroupByIdController,
     updateForumGroupController,
     updateForumGroupMembersController,
     deleteForumGroupController,
+    updateForumGroupMemberRoleController,
+    updateForumGroupMemberBanController,
+    removeForumGroupMemberController,
 }

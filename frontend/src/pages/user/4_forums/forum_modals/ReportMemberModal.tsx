@@ -6,7 +6,7 @@ interface ReportMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
   memberName: string;
-  onSubmit: (reason: string, description: string) => void;
+  onSubmit: (reason: string, description: string) => Promise<void>;
 }
 
 const reportReasons = [
@@ -40,15 +40,21 @@ const ReportMemberModal: React.FC<ReportMemberModalProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) return;
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      onSubmit(reason, description);
-      setIsSubmitting(false);
+    try {
+      await onSubmit(reason, description);
+      setReason("");
+      setDescription("");
+      setErrors({});
       onClose();
-    }, 500);
+    } catch {
+      // The parent displays the API error and the modal stays open for retry.
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

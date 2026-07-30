@@ -354,6 +354,54 @@ async function scopedReportCounts({ targetTypesIn } = {}) {
   return result.rows[0];
 }
 
+async function createReport({
+  reportNumber,
+  reporterAccountId,
+  targetAccountId,
+  targetType,
+  targetId,
+  targetLabel,
+  reason,
+  description,
+  referenceTable,
+}) {
+  const result = await pool.query(
+    `
+    INSERT INTO reports (
+      report_number,
+      by_account_id,
+      for_account_id,
+      target_type,
+      target_id,
+      target_label,
+      reason,
+      description,
+      priority,
+      type,
+      reference_table,
+      reference_prefix,
+      reference_id,
+      status,
+      is_created_by_bot
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'medium', $4, $9, 'forum', $5, 'open', false)
+    RETURNING *
+    `,
+    [
+      reportNumber,
+      reporterAccountId,
+      targetAccountId,
+      targetType,
+      targetId,
+      targetLabel,
+      reason,
+      description,
+      referenceTable,
+    ]
+  );
+  return mapReportRow(result.rows[0]);
+}
+
 // Scoped disputes list. Filter by related entity types and status.
 async function fetchScopedDisputes({ entityTypesIn, status } = {}) {
   const where = [];
@@ -447,6 +495,7 @@ module.exports = {
   scopedTicketTypeBreakdown,
   fetchScopedReports,
   scopedReportCounts,
+  createReport,
   fetchScopedDisputes,
   scopedDisputeCounts,
   toCategoryChart,

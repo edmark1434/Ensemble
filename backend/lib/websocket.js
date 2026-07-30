@@ -66,6 +66,26 @@ const {
       
       });
 
+      socket.on("joinForumRooms", ({ groupId, discussionId } = {}) => {
+        const rooms = groupId || discussionId
+          ? [
+              groupId && `forum:group:${groupId}`,
+              discussionId && `forum:discussion:${discussionId}`,
+            ].filter(Boolean)
+          : ['forum'];
+        socket.join(rooms);
+      });
+
+      socket.on("leaveForumRooms", ({ groupId, discussionId } = {}) => {
+        const rooms = groupId || discussionId
+          ? [
+              groupId && `forum:group:${groupId}`,
+              discussionId && `forum:discussion:${discussionId}`,
+            ].filter(Boolean)
+          : ['forum'];
+        rooms.forEach((room) => socket.leave(room));
+      });
+
       socket.on("sendMessage", async(messagePayload) => {
         delete messagePayload._id; // Remove _id if present
         console.log(`Client ${socket.id} sent message:`, messagePayload);
@@ -149,8 +169,22 @@ function getIo(){
   return io;
 }
 
+function emitForumEvent(type, payload = {}) {
+  const rooms = [
+    'forum',
+    payload.groupId && `forum:group:${payload.groupId}`,
+    payload.discussionId && `forum:discussion:${payload.discussionId}`,
+  ].filter(Boolean);
+  getIo().to(rooms).emit('forum:event', {
+    type,
+    ...payload,
+    emittedAt: new Date().toISOString(),
+  });
+}
+
 
 module.exports = {
   initSocket,
-  getIo
+  getIo,
+  emitForumEvent,
 };
