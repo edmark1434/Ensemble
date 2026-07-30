@@ -408,6 +408,23 @@ async function requireActiveGroupMember(groupId, actorId) {
     return group;
 }
 
+async function requireActiveGroupInteraction(groupId, actorId) {
+    if (!ObjectId.isValid(groupId)) {
+        throw new Error('forum_group_id must be a valid MongoDB ObjectId');
+    }
+    const group = await getForumGroupById(groupId);
+    if (!group || group.deleted_at || group.status !== 'active') {
+        throw new Error('Forum group not found or inactive');
+    }
+    const membership = group.members?.find(
+        (member) => String(member.userId) === String(actorId)
+    );
+    if (membership?.is_banned) {
+        throw new Error('You are banned from interacting in this group');
+    }
+    return group;
+}
+
 async function requireDiscussionManager(discussion, session) {
     const actorId = getActorId(session);
     if (!actorId) {
@@ -599,11 +616,15 @@ async function updateForumDiscussionServices(discussionId, payload = {}, session
     const pullFields = {};
     const addToSetFields = {};
     const actorId = getActorId(session);
+    if (!actorId) throw new Error('Authenticated user is required');
     const contentFields = ['title', 'content', 'description', 'tags', 'images', 'imageKeys'];
     const changesContent = Object.keys(payload).some((field) => contentFields.includes(field));
 
     if (changesContent) {
         await requireDiscussionManager(discussion, session);
+    }
+    if (payload.likes || payload.saves) {
+        await requireActiveGroupInteraction(discussion.forum_group_id, actorId);
     }
 
     if (payload.title != null && (
@@ -943,7 +964,7 @@ async function updateForumDiscussionCommentsServices(payload = {}, session = {})
     const discussion = await getForumDiscussionByIdRepository(discussionId);
     if (!discussion) throw new Error('Discussion not found');
     if (payload.likes) {
-        await requireActiveGroupMember(discussion.forum_group_id, actorId);
+        await requireActiveGroupInteraction(discussion.forum_group_id, actorId);
     }
 
     const commentToUpdate = discussion.comments?.find(
@@ -1064,7 +1085,7 @@ async function addForumDiscussionCommentServices(discussionId, payload = {}, ses
 
     const discussion = await getForumDiscussionByIdRepository(discussionId);
     if (!discussion) throw new Error('Discussion not found');
-    await requireActiveGroupMember(discussion.forum_group_id, actorId);
+    await requireActiveGroupInteraction(discussion.forum_group_id, actorId);
     if (discussion.is_locked) {
         try {
             await requireDiscussionManager(discussion, session);

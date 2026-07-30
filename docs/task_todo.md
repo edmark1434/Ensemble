@@ -242,6 +242,7 @@ Status legend:
 - [x] Real forum identities
   - The signed-in user's forum avatar uses the same current-avatar endpoint as the navigation header.
   - Discussion and comment authors resolve display names and stored avatar paths through the existing user-details/profile infrastructure instead of UUID labels.
+  - Group pages resolve identities for non-member participants separately from membership data, including newly received realtime comments.
 - [x] Collapsible threaded replies
   - Replies start collapsed behind a reply-count preview and expand beneath their parent along the existing connector line.
   - Fixed the group-page collapsed state so every parent with children exposes a working View/Hide replies control at every nesting depth.
@@ -250,5 +251,6 @@ Status legend:
   - The selected-group discussion list also exposes the report action beside every discussion owned by another user.
 - [x] Group posting membership UX
   - The selected-group page hides the New Discussion action and modal for non-members and banned members; the create handler retains a membership guard in addition to backend enforcement.
+  - Authenticated non-members may still comment, reply, like, save, and react in active groups. Group bans continue to block those interactions.
 - [x] Reaction notifications
   - New discussion likes, saves, and comment/reply likes create persisted notifications, while self-actions, removals, and duplicate reactions do not.
