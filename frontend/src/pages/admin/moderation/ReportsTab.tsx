@@ -130,7 +130,7 @@ export default function ReportsTab({
           <div>
             <div className="flex items-center gap-2">
               <FileWarning className="h-4 w-4 text-rose-300" />
-              <h2 className="text-sm font-semibold text-white">User reports</h2>
+              <h2 className="text-sm font-semibold text-white">Report desk</h2>
             </div>
             <p className="mt-1 text-xs text-zinc-500">
               Triage harassment, spam, scam, and other member reports. Assign staff, update priority, and

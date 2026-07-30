@@ -44,6 +44,8 @@ import type {
 import type { Dispute, UserReport } from '../ticketManagement/ticketTypes';
 import DisputesTab from './DisputesTab';
 import ReportsTab from './ReportsTab';
+import ListingApprovalsTab from './ListingApprovalsTab';
+import IdentityVerificationTab from './IdentityVerificationTab';
 
 const STAFF_ROLE_OPTIONS = [
   { value: 'Support Moderator', label: 'Support Moderator' },
@@ -751,7 +753,6 @@ function CasesTab({
   const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
-  const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [selected, setSelected] = useState<ModerationCase | null>(null);
@@ -812,14 +813,7 @@ function CasesTab({
       ).length,
     [reports]
   );
-  const scopedCases =
-    queue === 'mine'
-      ? myCasesByCategory
-      : queue === 'listings'
-        ? listingCases
-        : queue === 'identity'
-          ? identityCases
-          : [];
+  const scopedCases = myCasesByCategory;
 
   const switchQueue = (next: CaseQueue) => {
     if (next === queue) return;
@@ -828,7 +822,6 @@ function CasesTab({
     setSearch('');
     setPriorityFilter('all');
     setTypeFilter('all');
-    setRoleFilter('all');
     setStatusFilter('all');
     setSortBy('newest');
     setSelected(null);
@@ -841,7 +834,7 @@ function CasesTab({
     [scopedCases]
   );
   const typeOptions = useMemo(() => {
-    if (queue === 'mine' && mineCategory === 'all') {
+    if (mineCategory === 'all') {
       return uniqueOptions([
         'Report',
         'Listing review',
@@ -850,11 +843,7 @@ function CasesTab({
       ]);
     }
     return uniqueOptions(scopedCases.map((c) => c.type));
-  }, [scopedCases, queue, mineCategory]);
-  const roleOptions = useMemo(
-    () => uniqueOptions(scopedCases.map((c) => c.assignedRole).filter(Boolean) as string[]),
-    [scopedCases]
-  );
+  }, [scopedCases, mineCategory]);
   const statusOptions = useMemo(
     () => uniqueOptions(scopedCases.map((c) => c.status)),
     [scopedCases]
@@ -865,7 +854,6 @@ function CasesTab({
     let list = scopedCases.filter((c) => {
       if (priorityFilter !== 'all' && c.priority.toLowerCase() !== priorityFilter) return false;
       if (typeFilter !== 'all' && c.type.toLowerCase() !== typeFilter) return false;
-      if (roleFilter !== 'all' && (c.assignedRole || '').toLowerCase() !== roleFilter) return false;
       if (statusFilter !== 'all' && c.status.toLowerCase() !== statusFilter) return false;
       if (!q) return true;
       return (
@@ -899,15 +887,14 @@ function CasesTab({
     });
 
     return list;
-  }, [scopedCases, search, priorityFilter, typeFilter, roleFilter, statusFilter, sortBy]);
+  }, [scopedCases, search, priorityFilter, typeFilter, statusFilter, sortBy]);
 
   const q = search.trim();
   const hasFilters =
     q ||
-    (queue === 'mine' && mineCategory !== 'all') ||
+    mineCategory !== 'all' ||
     priorityFilter !== 'all' ||
     typeFilter !== 'all' ||
-    roleFilter !== 'all' ||
     statusFilter !== 'all';
 
   const closeModal = () => {
@@ -990,7 +977,6 @@ function CasesTab({
     setSearch('');
     setPriorityFilter('all');
     setTypeFilter('all');
-    setRoleFilter('all');
     setStatusFilter('all');
     setSortBy('newest');
   };
@@ -1057,10 +1043,23 @@ function CasesTab({
 
       {queue === 'disputes' && <DisputesTab disputes={disputes} onUpdated={onRefresh} />}
       {queue === 'reports' && <ReportsTab reports={reports} onUpdated={onRefresh} />}
+      {queue === 'listings' && (
+        <ListingApprovalsTab
+          cases={listingCases}
+          currentStaffId={myStaffId}
+          onUpdated={onRefresh}
+        />
+      )}
+      {queue === 'identity' && (
+        <IdentityVerificationTab
+          cases={identityCases}
+          currentStaffId={myStaffId}
+          onUpdated={onRefresh}
+        />
+      )}
 
-      {queue !== 'disputes' && queue !== 'reports' && (
-      <>
       {queue === 'mine' && (
+      <>
         <div className="flex flex-wrap gap-1.5">
           {(
             [
@@ -1090,7 +1089,6 @@ function CasesTab({
             </button>
           ))}
         </div>
-      )}
 
       <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
         <div className="flex flex-col gap-3 border-b border-white/[0.06] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -1099,28 +1097,12 @@ function CasesTab({
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={
-                queue === 'listings'
-                  ? 'Search listing / submitter…'
-                  : queue === 'identity'
-                    ? 'Search name / username…'
-                    : queue === 'mine'
-                      ? 'Search my reports, listings, identity…'
-                      : 'Search case / target…'
-              }
+              placeholder="Search my reports, listings, identity…"
               className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
             />
           </div>
           <p className="text-xs text-zinc-500 sm:order-last sm:w-full lg:order-none lg:w-auto">
-            {filtered.length}{' '}
-            {queue === 'listings'
-              ? 'listing'
-              : queue === 'identity'
-                ? 'review'
-                : queue === 'mine'
-                  ? 'assigned case'
-                  : 'case'}
-            {filtered.length === 1 ? '' : 's'}
+            {filtered.length} assigned case{filtered.length === 1 ? '' : 's'}
             {hasFilters ? ` matching filters (of ${scopedCases.length})` : ''}
           </p>
           <div className="hidden flex-1 lg:block" />
@@ -1132,26 +1114,12 @@ function CasesTab({
                 value: priorityFilter,
                 options: priorityOptions,
               },
-              ...(queue === 'mine'
-                ? [
-                    {
-                      id: 'type',
-                      label: 'Type',
-                      value: typeFilter,
-                      options: typeOptions,
-                    },
-                  ]
-                : []),
-              ...(queue !== 'mine'
-                ? [
-                    {
-                      id: 'role',
-                      label: 'Assigned title',
-                      value: roleFilter,
-                      options: roleOptions,
-                    },
-                  ]
-                : []),
+              {
+                id: 'type',
+                label: 'Type',
+                value: typeFilter,
+                options: typeOptions,
+              },
               { id: 'status', label: 'Status', value: statusFilter, options: statusOptions },
             ]}
             sort={{
@@ -1160,16 +1128,13 @@ function CasesTab({
                 { value: 'newest', label: 'Newest first' },
                 { value: 'oldest', label: 'Oldest first' },
                 { value: 'priority', label: 'Priority (High first)' },
-                ...(queue === 'mine'
-                  ? [{ value: 'type', label: 'Type A–Z' }]
-                  : []),
+                { value: 'type', label: 'Type A–Z' },
                 { value: 'target', label: 'Target A–Z' },
               ],
             }}
             onFilterChange={(id, value) => {
               if (id === 'priority') setPriorityFilter(value);
               if (id === 'type') setTypeFilter(value);
-              if (id === 'role') setRoleFilter(value);
               if (id === 'status') setStatusFilter(value);
             }}
             onSortChange={setSortBy}
@@ -1179,17 +1144,11 @@ function CasesTab({
         <CasesTableBody
           cases={filtered}
           emptyLabel={
-            queue === 'listings'
-              ? 'No marketplace listings awaiting approval.'
-              : queue === 'identity'
-                ? 'No identity verification reviews pending.'
-                : queue === 'mine'
-                  ? myStaffId
-                    ? hasFilters
-                      ? 'No assigned cases match your filters.'
-                      : 'No cases are assigned to you yet. Take over a report, listing, or identity review to see it here.'
-                    : 'Staff session required to show your assigned cases.'
-                  : 'No open reports match your filters.'
+            myStaffId
+              ? hasFilters
+                ? 'No assigned cases match your filters.'
+                : 'No cases are assigned to you yet. Take over a report, listing, or identity review to see it here.'
+              : 'Staff session required to show your assigned cases.'
           }
           busyId={busyId || (identityLoading ? selected?.id : null)}
           currentStaffId={myStaffId}
@@ -1201,15 +1160,11 @@ function CasesTab({
             setSelected(c);
             setMode('view');
           }}
-          onDelete={
-            queue === 'identity'
-              ? undefined
-              : (c) => {
-                  if (c.source === 'identity') return;
-                  setSelected(c);
-                  setMode('delete');
-                }
-          }
+          onDelete={(c) => {
+            if (c.source === 'identity') return;
+            setSelected(c);
+            setMode('delete');
+          }}
           onTakeOver={handleTakeOver}
         />
       </section>
