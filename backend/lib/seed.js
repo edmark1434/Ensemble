@@ -8,6 +8,7 @@ const {
   createMessageRepositories,
 } = require('../Repositories/InboxRepositories');
 const { CONVERSATION_TYPE: DISPUTE_CHAT_TYPE } = require('../Repositories/DisputeChatRepositories');
+const { seedDomainExamples } = require('./seed-domains');
 
 function cap(value, max) {
   if (value == null) return value;
@@ -41,7 +42,8 @@ async function ensurePasswordHashColumnCapacity() {
 }
 
 async function resetSeedTables() {
-  // Prefer clearing portal + auth tables. CASCADE handles FKs; UUID tables ignore RESTART IDENTITY.
+  // Prefer clearing portal + auth + demo domain tables. CASCADE handles FKs.
+  // Keep migration catalogs (plans, tags, surveys, ticket_*_catalog, files/system_files).
   try {
     await pool.query(`
       TRUNCATE TABLE
@@ -54,12 +56,71 @@ async function resetSeedTables() {
         platform_settings,
         disputes,
         violations,
+        restrictions,
+        pardons,
+        notifications,
+        cashouts,
+        topups,
+        payment_methods,
+        payments,
+        subscription_invoices,
+        market_project_assets,
+        market_media_assets,
+        market_asset_tags,
+        asset_replies,
+        asset_comments,
+        market_assets,
+        media_assets,
+        escrow_wallets,
+        gig_response_attachments,
+        gig_responses,
+        gig_request_addons,
+        gig_requests,
+        gig_requirement_choices,
+        gig_requirements,
+        gig_tier_features,
+        gig_tiers,
+        gig_features,
+        gig_addons,
+        gig_milestones,
+        gig_attachments,
+        gig_tags,
+        gig_contracts,
+        gigs,
+        submit_replies,
+        submit_comments,
+        submit_attachments,
+        milestone_submits,
+        contract_milestones,
+        job_contracts,
+        ratings,
+        interview_messages,
+        interviews,
+        proposal_milestones,
+        proposals,
+        job_attachments,
+        job_tags,
+        jobs,
+        contracts,
+        project_members,
+        blocks,
+        projects,
+        account_badges,
+        badges,
+        badge_categories,
+        account_link,
+        account_profile_files,
+        user_tags,
+        user_platform_purpose,
+        user_survey_responses,
+        account_verification_sessions,
         staff,
         users,
         accounts
       CASCADE
     `);
-  } catch {
+  } catch (err) {
+    console.warn('ℹ️ Full truncate failed, falling back to accounts cascade:', err.message);
     await pool.query('TRUNCATE TABLE staff, users, accounts CASCADE');
   }
 }
@@ -748,7 +809,94 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   }
 
   // Ticket chat threads live in MongoDB (inbox + messages), linked via ticket_chats.
-  // Seed does not require Mongo — chats are created when a moderator/user first replies.
+  try {
+    await connectMongoDB();
+    if (getMongoClient() && ticketIds.length) {
+      const sampleTicketIndexes = [0, 2, 11];
+      for (const idx of sampleTicketIndexes) {
+        const ticketId = ticketIds[idx];
+        if (!ticketId) continue;
+        const ticketMeta = tickets[idx];
+        const requesterAccountId = ticketMeta[6];
+        const handledByStaffId = ticketMeta[7];
+        let staffAccountId = supportAccountId;
+        if (handledByStaffId) {
+          const sa = await pool.query(`SELECT account_id FROM staff WHERE staff_id = $1`, [handledByStaffId]);
+          staffAccountId = sa.rows[0]?.account_id || supportAccountId;
+        }
+
+        const members = [];
+        const seen = new Set();
+        const addMember = (accountId, role) => {
+          if (!accountId || seen.has(String(accountId))) return;
+          seen.add(String(accountId));
+          members.push({ account_id: String(accountId), role, joined_at: new Date() });
+        };
+        addMember(requesterAccountId, 'member');
+        addMember(staffAccountId, 'admin');
+
+        const insertResult = await createInboxRepositories({
+          conversation_name: `Ticket ${ticketMeta[0]}`,
+          conversation_type: 'group',
+          ticket_id: String(ticketId),
+          support_ticket_id: String(ticketId),
+          members,
+          pinned_messages: [],
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+        const chatId = String(insertResult.insertedId);
+        await pool.query(
+          `INSERT INTO ticket_chats (ticket_id, chat_id)
+           VALUES ($1, $2)
+           ON CONFLICT (ticket_id) DO UPDATE
+             SET chat_id = EXCLUDED.chat_id, deleted_at = NULL, created_at = CURRENT_TIMESTAMP`,
+          [ticketId, chatId]
+        );
+        await createMessageRepositories({
+          conversation_id: chatId,
+          sender_id: requesterAccountId,
+          message_type: 'text',
+          message_content: `Hi, I need help with: ${ticketMeta[1]}`,
+          message_id_reply: null,
+          attachments: [],
+          links: [],
+          message_react: [],
+          read_by: [],
+          is_edited: false,
+          is_deleted: false,
+          is_internal: false,
+          author_type: 'user',
+          author_name: 'Requester',
+          created_at: new Date(Date.now() - 60 * 60 * 1000),
+          updated_at: new Date(Date.now() - 60 * 60 * 1000),
+        });
+        if (staffAccountId) {
+          await createMessageRepositories({
+            conversation_id: chatId,
+            sender_id: staffAccountId,
+            message_type: 'text',
+            message_content: 'Thanks for reaching out — looking into this now.',
+            message_id_reply: null,
+            attachments: [],
+            links: [],
+            message_react: [],
+            read_by: [],
+            is_edited: false,
+            is_deleted: false,
+            is_internal: false,
+            author_type: 'staff',
+            author_name: 'Support',
+            created_at: new Date(Date.now() - 30 * 60 * 1000),
+            updated_at: new Date(Date.now() - 30 * 60 * 1000),
+          });
+        }
+      }
+      console.log('✅ Seeded sample ticket chat threads in MongoDB');
+    }
+  } catch (err) {
+    console.warn('ℹ️ Ticket chat seed skipped:', err.message);
+  }
 
   const violations = [
     ['VIO-21034', userAccountIds[3], 'Spam posting', 'Automated flag: duplicate promo links.', 2, adminStaffId],
@@ -982,13 +1130,14 @@ async function seed() {
     await seedTicketsAndDisputes(userAccountIds, staffByRole);
     await seedMarketplaceListings(userAccountIds, staffByRole);
     await seedTeams(userAccountIds);
+    await seedDomainExamples(userAccountIds, staffByRole);
 
     console.log('');
     console.log('🔑 Staff login (password: staff123):');
     for (const staff of STAFF_SEED) {
       console.log(`   ${staff.role.padEnd(24)} ${staff.email}  /  @${staff.handle}  (${staff.displayName})`);
     }
-    console.log(`✨ Seeding complete! ${userAccountIds.length} users, ${STAFF_SEED.length} staff, tickets & settings loaded.`);
+    console.log(`✨ Seeding complete! ${userAccountIds.length} users, ${STAFF_SEED.length} staff, portal + domain examples loaded.`);
   } catch (err) {
     console.error("❌ Seeding Error:", err);
   } finally {
