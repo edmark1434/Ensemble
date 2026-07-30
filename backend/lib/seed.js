@@ -1125,7 +1125,7 @@ async function seed() {
         ]
       );
     }
-
+    await pool.query(`INSERT INTO wallets (type, balance_credits) VALUES ('platform wallets', 1000000)`);
     await ensureDefaultSettings();
     await seedTicketsAndDisputes(userAccountIds, staffByRole);
     await seedMarketplaceListings(userAccountIds, staffByRole);

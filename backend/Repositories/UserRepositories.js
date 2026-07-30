@@ -34,7 +34,10 @@ async function getNameByUserId(userId) {
 
 async function getUserByListofIdsRepositories(userIds) { 
     try {
-        const {rows} = await pool.query('SELECT json_agg(user_data) as users_list FROM (SELECT user_id,first_name, last_name,a.avatar_file_id FROM users inner join accounts as a on users.account_id = a.account_id WHERE user_id = ANY($1)) as user_data', [userIds]);
+        const {rows} = await pool.query(`SELECT json_agg(user_data) as users_list FROM (SELECT user_id,first_name, last_name,f.path FROM users
+            inner join accounts as a on users.account_id = a.account_id
+            inner join files as f on a.avatar_file_id = f.file_id
+            WHERE user_id = ANY($1)) as user_data`, [userIds]);
         return rows[0].users_list || [];
     }catch (err) {
         console.error(`Error fetching users with ids ${userIds}:`, err);

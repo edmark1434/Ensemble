@@ -6,7 +6,8 @@ interface ReportGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
   groupName: string;
-  onSubmit: (reason: string, description: string) => void;
+  onSubmit: (reason: string, description: string) => Promise<void>;
+  subjectLabel?: string;
 }
 
 const reportReasons = [
@@ -23,6 +24,7 @@ const ReportGroupModal: React.FC<ReportGroupModalProps> = ({
   onClose,
   groupName,
   onSubmit,
+  subjectLabel = "Group",
 }) => {
   const [reason, setReason] = useState("");
   const [description, setDescription] = useState("");
@@ -41,15 +43,21 @@ const ReportGroupModal: React.FC<ReportGroupModalProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) return;
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      onSubmit(reason, description);
-      setIsSubmitting(false);
+    try {
+      await onSubmit(reason, description);
+      setReason("");
+      setDescription("");
+      setErrors({});
       onClose();
-    }, 500);
+    } catch {
+      // The parent displays the API error and the modal stays open for retry.
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -59,7 +67,7 @@ const ReportGroupModal: React.FC<ReportGroupModalProps> = ({
           <div className="flex items-center gap-2">
             <Flag className="h-5 w-5 text-red-400" />
             <h3 className="text-xl font-semibold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-              Report Group
+              Report {subjectLabel}
             </h3>
           </div>
           <button

@@ -17,7 +17,7 @@ exports.up = (pgm) => {
       default: pgm.func('gen_random_uuid()') 
     },
     type: { type: 'varchar(50)', notNull: true },
-    status: { type: 'varchar(50)', notNull: true },
+    status: { type: 'varchar(50)', notNull: true, default: 'active' },
     balance_credits: { type: 'integer', notNull: true, default: 0 },
     frozen_balance_credits: { type: 'integer', notNull: true, default: 0 },
     created_at: {

@@ -16,10 +16,11 @@ exports.up = (pgm) => {
       notNull: true, 
       default: pgm.func('gen_random_uuid()') 
     },
-    message: { type: 'varchar(50)', notNull: true },
+    message: { type: 'text', notNull: true },
     is_read: { type: 'boolean', notNull: true, default: false },
     reference_table: { type: 'varchar(50)', notNull: true },
     reference_prefix: { type: 'varchar(50)', notNull: true },
+    reference_path: { type: 'text' },
     reference_id: { type: 'uuid', notNull: true },
     created_at: {
       type: 'timestamp without time zone',

@@ -107,6 +107,7 @@ export type ForumGroupModeration = {
   imageUrl: string | null;
   status: string;
   memberCount: number;
+  members: { userId: string | number; role: string; isBanned: boolean }[];
   discussionCount: number;
   tags: { tag_id?: string | number; tag_name?: string }[];
   createdAt: string | null;
@@ -123,6 +124,8 @@ export type ForumDiscussionModeration = {
   commentCount: number;
   likeCount: number;
   status: string;
+  isLocked: boolean;
+  isSticky: boolean;
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -134,6 +137,8 @@ export type ForumDiscussionDetail = {
   groupId: string | null;
   author: { userId: string | number | null; handle: string | null; name: string | null };
   status: string;
+  isLocked: boolean;
+  isSticky: boolean;
   createdAt: string | null;
   comments: {
     commentId: string | number;

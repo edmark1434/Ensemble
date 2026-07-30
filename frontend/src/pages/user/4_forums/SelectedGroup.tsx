@@ -48,6 +48,12 @@ import EditPostModal from "@/pages/user/4_forums/forum_modals/EditPostModal.tsx"
 import DeletePostModal from "@/pages/user/4_forums/forum_modals/DeletePostModal.tsx";
 import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
 import useGlobalState from "@/lib/global_state";
+import {
+  buildForumCommentTree,
+  uploadForumCommentImage,
+} from "@/pages/user/4_forums/forumCommentUtils";
+import { reconcileForumDiscussions, useForumRealtime } from "@/pages/user/4_forums/forumRealtime";
+import { identityFromDetails, loadCurrentForumAvatar } from "@/pages/user/4_forums/forumIdentity";
 
 type Tab = "posts" | "members" | "about";
 
@@ -90,7 +96,7 @@ type Post = {
   forum_group_id: number;
   user_id: number;
   title: string;
-  description: string;
+  content: string;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -98,6 +104,7 @@ type Post = {
   attachments: {
     file_path: string;
   }[];
+  imageKeys?: string[];
   likes: {
     user_id: number;
   }[];
@@ -105,6 +112,14 @@ type Post = {
     user_id: number;
   }[];
   comments: Comment[];
+};
+
+type FeedResponse = {
+  discussions: Post[];
+  pagination: {
+    nextCursor: string | null;
+    hasMore: boolean;
+  };
 };
 
 type Group = {
@@ -117,6 +132,7 @@ type Group = {
     joined_at: string;
     role: string;
     userId: number;
+    is_banned?: boolean;
   }[];
   tags: {
     tag_id: number;
@@ -213,48 +229,6 @@ const getTimeAgo = (dateString: string): string => {
   return date.toLocaleDateString();
 };
 
-const buildCommentTree = (comments: Comment[]): Comment[] => {
-  if (!comments || comments.length === 0) return [];
-  
-  const commentMap = new Map<string, Comment>();
-  const rootComments: Comment[] = [];
-  
-  comments.forEach(comment => {
-    commentMap.set(comment.comment_id, { ...comment, children: [] });
-  });
-  
-  comments.forEach(comment => {
-    const commentWithChildren = commentMap.get(comment.comment_id)!;
-    if (comment.comment_reference_id && commentMap.has(comment.comment_reference_id)) {
-      const parent = commentMap.get(comment.comment_reference_id)!;
-      if (!parent.children) parent.children = [];
-      parent.children.push(commentWithChildren);
-    } else {
-      rootComments.push(commentWithChildren);
-    }
-  });
-  
-  rootComments.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  
-  const sortChildren = (comment: Comment) => {
-    if (comment.children && comment.children.length > 0) {
-      comment.children.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-      comment.children.forEach(sortChildren);
-    }
-  };
-  rootComments.forEach(sortChildren);
-  
-  const calculateDepth = (comment: Comment, depth: number = 0) => {
-    comment.depth = depth;
-    if (comment.children) {
-      comment.children.forEach(child => calculateDepth(child, depth + 1));
-    }
-  };
-  rootComments.forEach(comment => calculateDepth(comment, 0));
-  
-  return rootComments;
-};
-
 const getDepthClass = (depth: number = 0): string => {
   const maxDepth = 8;
   const effectiveDepth = Math.min(depth, maxDepth);
@@ -270,22 +244,43 @@ const getDepthClass = (depth: number = 0): string => {
   return "ml-32";
 };
 
-const ImageGallery = ({ attachments }: { attachments?: { file_path: string }[] }) => {
+const ImageGallery = ({ attachments, imageKeys }: { attachments?: { file_path: string }[]; imageKeys?: string[] }) => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  if (!attachments || attachments.length === 0) return null;
+  const allImages = useMemo(() => {
+    const images: string[] = [];
+    
+    if (attachments && attachments.length > 0) {
+      attachments.forEach(attachment => {
+        if (attachment.file_path) images.push(attachment.file_path);
+      });
+    }
+    
+    if (imageKeys && imageKeys.length > 0) {
+      images.push(...imageKeys);
+    }
+    
+    return images;
+  }, [attachments, imageKeys]);
+
+  if (allImages.length === 0) return null;
+
+  const getImageUrl = (filePath: string) => {
+    if (filePath.startsWith('http')) return filePath;
+    return `${import.meta.env.VITE_CLOUDFRONT_URL}/${filePath}`;
+  };
 
   return (
     <>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-        {attachments.map((attachment, idx) => (
+        {allImages.map((filePath, idx) => (
           <button
             key={idx}
-            onClick={() => setSelectedImage(attachment.file_path)}
+            onClick={() => setSelectedImage(getImageUrl(filePath))}
             className="group relative overflow-hidden rounded-lg border border-white/10 bg-white/5 transition-all hover:scale-105 hover:border-white/20"
           >
             <img
-              src={attachment.file_path}
+              src={getImageUrl(filePath)}
               alt={`Post image ${idx + 1}`}
               className="h-32 w-full object-cover transition-all group-hover:scale-110"
               onError={(e) => {
@@ -555,17 +550,17 @@ const CommentItem = ({
   isLastInThread = false
 }: { 
   comment: Comment;
-  postId: number;
+  postId: string;
   membersDetails: Record<number, { name: string; avatar: string }>;
-  onLike: (postId: number, commentId: string) => void;
-  onReply: (postId: number, commentId: string, authorName: string, authorId: number) => void;
-  onEditComment: (postId: number, commentId: string, newText: string) => void;
-  onDeleteComment: (postId: number, commentId: string) => void;
+  onLike: (postId: string, commentId: string) => void;
+  onReply: (postId: string, commentId: string, authorName: string, authorId: number) => void;
+  onEditComment: (postId: string, commentId: string, newText: string) => void;
+  onDeleteComment: (postId: string, commentId: string) => void;
   replyingTo: { commentId: string; authorName: string; authorId: number } | null;
   setReplyingTo: (value: { commentId: string; authorName: string; authorId: number } | null) => void;
   replyText: string;
   setReplyText: (text: string) => void;
-  onSendReply: (postId: number, commentId: string) => void;
+  onSendReply: (postId: string, commentId: string) => void;
   replyImages: ImageAttachment[];
   onReplyImageUpload: (files: FileList | null) => void;
   onRemoveReplyImage: (imageId: string) => void;
@@ -574,7 +569,7 @@ const CommentItem = ({
   currentUserAvatar: string;
   isLastInThread?: boolean;
 }) => {
-  const [showChildren, setShowChildren] = useState(true);
+  const [showChildren, setShowChildren] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.comment);
   const [showCommentMenu, setShowCommentMenu] = useState(false);
@@ -586,7 +581,6 @@ const CommentItem = ({
   const childCount = comment.children?.length || 0;
   const depth = comment.depth || 0;
   
-  const showContinueThread = depth >= 3 && childCount > 0;
   const depthClass = getDepthClass(depth);
 
   const handleEditSubmit = () => {
@@ -623,7 +617,6 @@ const CommentItem = ({
               )}
             </div>
             
-            {/* Comment actions menu - only for author */}
             {isAuthor && !comment.deleted_at && (
               <div className="relative">
                 <button
@@ -657,7 +650,6 @@ const CommentItem = ({
             )}
           </div>
           
-          {/* Edit mode or display mode */}
           {isEditing ? (
             <div className="mt-2">
               <textarea
@@ -711,6 +703,15 @@ const CommentItem = ({
                 <Reply className="h-3 w-3" />
                 <span>Reply</span>
               </button>
+              {hasChildren && (
+                <button
+                  onClick={() => setShowChildren((visible) => !visible)}
+                  className="inline-flex items-center gap-1 text-xs text-zinc-500 transition hover:text-white"
+                >
+                  {showChildren ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  <span>{showChildren ? "Hide" : "View"} {childCount} {childCount === 1 ? "reply" : "replies"}</span>
+                </button>
+              )}
             </div>
           )}
 
@@ -739,7 +740,7 @@ const CommentItem = ({
             </div>
           )}
 
-          {hasChildren && showChildren && !showContinueThread && (
+          {hasChildren && showChildren && (
             <div className="mt-3">
               {comment.children!.map((child, index) => (
                 <CommentItem
@@ -768,18 +769,6 @@ const CommentItem = ({
             </div>
           )}
 
-          {showContinueThread && (
-            <button
-              onClick={() => setShowChildren(!showChildren)}
-              className="mt-2 flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition"
-            >
-              {showChildren ? (
-                <>Hide {childCount} replies</>
-              ) : (
-                <>Continue this thread ({childCount} replies)</>
-              )}
-            </button>
-          )}
         </div>
       </div>
     </div>
@@ -794,6 +783,10 @@ const SelectedGroup = () => {
   const [membersWithDetails, setMembersWithDetails] = useState<MemberWithDetails[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const feedSentinelRef = useRef<HTMLDivElement | null>(null);
   const [expandedPostId, setExpandedPostId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState<{ [key: string]: string }>({});
   const [replyCommentText, setReplyCommentText] = useState<string>("");
@@ -815,6 +808,7 @@ const SelectedGroup = () => {
   const [postMenuOpen, setPostMenuOpen] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [deletingPost, setDeletingPost] = useState<Post | null>(null);
+  const [reportingPost, setReportingPost] = useState<Post | null>(null);
 
   const [replyImages, setReplyImages] = useState<{ [key: string]: ImageAttachment[] }>({});
   const [replyUploading, setReplyUploading] = useState<{ [key: string]: boolean }>({});
@@ -825,7 +819,10 @@ const SelectedGroup = () => {
   
   const user = useGlobalState((state) => state.user);
   const currentUserId = user?.user_id || user?.userId || 1;
-  const currentUserAvatar = user?.avatar || "https://i.pravatar.cc/150?u=default";
+  const [currentUserAvatar, setCurrentUserAvatar] = useState(user?.avatar || "");
+  useEffect(() => {
+    void loadCurrentForumAvatar(user?.avatar).then(setCurrentUserAvatar);
+  }, [user?.avatar]);
   
   const getMemberDetails = (userId: number) => {
     const member = membersWithDetails.find(m => m.userId === userId);
@@ -839,6 +836,7 @@ const SelectedGroup = () => {
     acc[member.userId] = { name: member.name, avatar: member.avatar };
     return acc;
   }, {} as Record<number, { name: string; avatar: string }>);
+  useForumRealtime((event) => setPosts((current) => reconcileForumDiscussions(current, event)), { groupId: id });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -846,7 +844,9 @@ const SelectedGroup = () => {
       try {
         const [result, result2] = await Promise.all([
           api.get(`api/forum/groups/${id}`),
-          api.get(`api/forum/discussions/group/${id}`)
+          api.get<FeedResponse>(`api/forum/discussions/group/${id}`, {
+            params: { type: sortBy, limit: 10 },
+          })
         ]);
         if (!result.data) {
           showErrorToast("Group not found");
@@ -859,9 +859,10 @@ const SelectedGroup = () => {
         for(const member of mockGroup.members) { 
           const details = memberDetailsList.find((details: any) => details.user_id === member.userId);
           if (details) {
-            details.name = `${details.first_name} ${details.last_name}`;
+            const identity = identityFromDetails(details);
+            details.name = identity.name;
             details.role = member.role;
-            details.avatar = details.avatar_file_id ? `api/files/${details.avatar_file_id}` : `https://i.pravatar.cc/150?u=${details.user_id}`;
+            details.avatar = identity.avatar;
             details.joinedAt = member.joined_at;
             details.userId = details.user_id;
             delete details.first_name;
@@ -871,9 +872,11 @@ const SelectedGroup = () => {
           }
         }
         console.log("Member details with roles:", memberDetailsList);
-        console.log("Group discussion:", result2.data);
+        console.log("Group discussion:", result2.data.discussions);
         setGroup(mockGroup);
-        setPosts(result2.data);
+        setPosts(result2.data.discussions);
+        setNextCursor(result2.data.pagination.nextCursor);
+        setHasMore(result2.data.pagination.hasMore);
         setMembersWithDetails(memberDetailsList);
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -884,24 +887,50 @@ const SelectedGroup = () => {
     };
 
     fetchData();
-  }, [id]);
+  }, [id, sortBy]);
+
+  const loadMorePosts = async () => {
+    if (!id || !nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const response = await api.get<FeedResponse>(`api/forum/discussions/group/${id}`, {
+        params: { type: sortBy, limit: 10, cursor: nextCursor },
+      });
+      setPosts((current) => [...current, ...response.data.discussions]);
+      setNextCursor(response.data.pagination.nextCursor);
+      setHasMore(response.data.pagination.hasMore);
+    } catch (error) {
+      console.error("Error loading more group discussions:", error);
+      showErrorToast("Failed to load more discussions");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    const sentinel = feedSentinelRef.current;
+    if (!sentinel || !hasMore || loadingMore || !nextCursor) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) void loadMorePosts();
+    }, { rootMargin: "300px" });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, nextCursor, id, sortBy]);
 
   const sortOptions = [
     { value: "latest", label: "Latest", icon: <Clock className="h-3 w-3" /> },
-    { value: "most-liked", label: "Most Liked", icon: <ThumbsUp className="h-3 w-3" /> },
-    { value: "most-commented", label: "Most Commented", icon: <MessageCircle className="h-3 w-3" /> },
+    { value: "trending", label: "Trending", icon: <ThumbsUp className="h-3 w-3" /> },
+    { value: "hot", label: "Hot", icon: <MessageCircle className="h-3 w-3" /> },
   ];
 
-  // Filter and sort posts
   const filteredAndSortedPosts = useMemo(() => {
     let filtered = [...posts];
 
-    // Search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       filtered = filtered.filter((post) => {
         const matchesTitle = post.title.toLowerCase().includes(query);
-        const matchesContent = post.description.toLowerCase().includes(query);
+        const matchesContent = post.content.toLowerCase().includes(query);
         const matchesAuthor = getMemberDetails(post.user_id).name.toLowerCase().includes(query);
         const matchesTags = post.tags?.some(tag => 
           tag.tag_name?.toLowerCase().includes(query)
@@ -910,17 +939,8 @@ const SelectedGroup = () => {
       });
     }
 
-    // Sort
-    if (sortBy === "latest") {
-      filtered = filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    } else if (sortBy === "most-liked") {
-      filtered = filtered.sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0));
-    } else if (sortBy === "most-commented") {
-      filtered = filtered.sort((a, b) => (b.comments?.length || 0) - (a.comments?.length || 0));
-    }
-
     return filtered;
-  }, [posts, searchQuery, sortBy]);
+  }, [posts, searchQuery]);
 
   const displayPosts = filteredAndSortedPosts.map((post, index) => {
     const authorDetails = getMemberDetails(post.user_id);
@@ -933,15 +953,16 @@ const SelectedGroup = () => {
       _id: post._id,
       author: authorDetails.name,
       authorAvatar: authorDetails.avatar,
-      excerpt: post.description,
-      content: post.description, // Add this for the JSX to display content
+      excerpt: post.content,
+      content: post.content,
       ago: getTimeAgo(post.created_at),
       tagsList: post.tags || [],
       likeCount: post.likes?.length || 0,
       commentCount: post.comments?.length || 0,
       isLiked: isLikedByCurrentUser,
       isSaved: isSavedByCurrentUser,
-      commentTree: buildCommentTree(post.comments || []),
+      commentTree: buildForumCommentTree(post.comments || []),
+      imageKeys: post.imageKeys || [],
     };
   });
 
@@ -986,13 +1007,22 @@ const SelectedGroup = () => {
     setReplyUploading(prev => ({ ...prev, [postId]: true }));
 
     for (const image of newImages) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setReplyImages(prev => ({
-        ...prev,
-        [postId]: prev[postId].map(img =>
-          img.id === image.id ? { ...img, uploading: false, url: img.preview } : img
-        )
-      }));
+      try {
+        const key = await uploadForumCommentImage(image.file!);
+        setReplyImages(prev => ({
+          ...prev,
+          [postId]: prev[postId].map(img =>
+            img.id === image.id ? { ...img, uploading: false, url: key } : img
+          )
+        }));
+      } catch (error) {
+        console.error("Error uploading comment image:", error);
+        setReplyImages(prev => ({
+          ...prev,
+          [postId]: prev[postId].filter(img => img.id !== image.id),
+        }));
+        showErrorToast(`Failed to upload ${image.file?.name || "image"}`);
+      }
     }
     setReplyUploading(prev => ({ ...prev, [postId]: false }));
   };
@@ -1008,14 +1038,13 @@ const SelectedGroup = () => {
     }));
   };
 
-  const handleReply = async (postArrayIndex: number) => {
-    const replyContent = replyText[postArrayIndex]?.trim();
-    const replyImageList = replyImages[postArrayIndex] || [];
+  const handleReply = async (postId: string) => {
+    const replyContent = replyText[postId]?.trim();
+    const replyImageList = replyImages[postId] || [];
 
     if (!replyContent && replyImageList.length === 0) return;
 
-    const updatedPosts = [...posts];
-    const currentPost = updatedPosts[postArrayIndex];
+    const currentPost = posts.find((post) => String(post._id) === postId);
     
     if (!currentPost) {
       showErrorToast("Post not found");
@@ -1023,16 +1052,10 @@ const SelectedGroup = () => {
     }
 
     const newComment: Comment = {
-      user_id: currentUserId,
       comment: replyContent || "",
-      comment_id: `cmt_${Date.now()}_${Math.random()}`,
       comment_reference_id: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      deleted_at: null,
       attachments: replyImageList.map(img => ({ file_path: img.url || img.preview })),
-      likes: []
-    };
+    } as Comment;
 
     try {
       const response = await api.post(`api/forum/discussions/${currentPost._id}/comments`, newComment);
@@ -1045,29 +1068,33 @@ const SelectedGroup = () => {
       const savedComment = response.data;
       console.log("Saved comment:", savedComment);
       
-      if (postArrayIndex !== -1) {
-        updatedPosts[postArrayIndex].comments.push(savedComment || newComment);
-        setPosts(updatedPosts);
-        showSuccessToast("Reply posted successfully!");
-      }
+      setPosts((currentPosts) => currentPosts.map((post) =>
+        String(post._id) === postId
+          ? {
+              ...post,
+              comments: post.comments.some((comment) => comment.comment_id === savedComment.comment_id)
+                ? post.comments
+                : [...post.comments, savedComment],
+            }
+          : post
+      ));
+      setReplyText((current) => ({ ...current, [postId]: "" }));
+      setReplyImages(prev => ({ ...prev, [postId]: [] }));
+      showSuccessToast("Reply posted successfully!");
     } catch (error) {
       console.error("Error posting reply:", error);
       showErrorToast("Failed to post reply. Please try again.");
       return;
-    } finally {
-      setReplyText({ ...replyText, [postArrayIndex]: "" });
-      setReplyImages(prev => ({ ...prev, [postArrayIndex]: [] }));
     }
   };
 
-  const handleCommentReply = async (postArrayIndex: number, parentCommentId: string) => {
+  const handleCommentReply = async (postId: string, parentCommentId: string) => {
     const replyContent = replyCommentText.trim();
     const replyImageList = commentReplyImages;
 
     if (!replyContent && replyImageList.length === 0) return;
 
-    const updatedPosts = [...posts];
-    const currentPost = updatedPosts[postArrayIndex];
+    const currentPost = posts.find((post) => String(post._id) === postId);
     
     if (!currentPost) {
       showErrorToast("Post not found");
@@ -1075,16 +1102,10 @@ const SelectedGroup = () => {
     }
 
     const newComment: Comment = {
-      user_id: currentUserId,
       comment: replyContent || "",
-      comment_id: `cmt_${Date.now()}_${Math.random()}`,
       comment_reference_id: parentCommentId,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      deleted_at: null,
       attachments: replyImageList.map(img => ({ file_path: img.url || img.preview })),
-      likes: []
-    };
+    } as Comment;
 
     try {
       const response = await api.post(`api/forum/discussions/${currentPost._id}/comments`, newComment);
@@ -1097,22 +1118,29 @@ const SelectedGroup = () => {
       const savedComment = response.data;
       console.log("Saved comment reply:", savedComment);
       
-      updatedPosts[postArrayIndex].comments.push(savedComment || newComment);
-      setPosts(updatedPosts);
+      setPosts((currentPosts) => currentPosts.map((post) =>
+        String(post._id) === postId
+          ? {
+              ...post,
+              comments: post.comments.some((comment) => comment.comment_id === savedComment.comment_id)
+                ? post.comments
+                : [...post.comments, savedComment],
+            }
+          : post
+      ));
+      setReplyCommentText("");
+      setCommentReplyImages([]);
+      setReplyingTo(null);
       showSuccessToast("Reply posted successfully!");
     } catch (error) {
       console.error("Error posting reply:", error);
       showErrorToast("Failed to post reply. Please try again.");
       return;
-    } finally {
-      setReplyCommentText("");
-      setCommentReplyImages([]);
-      setReplyingTo(null);
     }
   };
 
-  const updateReplyText = (postId: number, text: string) => {
-    setReplyText({ ...replyText, [postId]: text });
+  const updateReplyText = (postId: string, text: string) => {
+    setReplyText((current) => ({ ...current, [postId]: text }));
   };
 
   const handleCommentReplyImageUpload = async (files: FileList | null) => {
@@ -1149,12 +1177,18 @@ const SelectedGroup = () => {
     setCommentReplyUploading(true);
 
     for (const image of newImages) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setCommentReplyImages(prev =>
-        prev.map(img =>
-          img.id === image.id ? { ...img, uploading: false, url: img.preview } : img
-        )
-      );
+      try {
+        const key = await uploadForumCommentImage(image.file!);
+        setCommentReplyImages(prev =>
+          prev.map(img =>
+            img.id === image.id ? { ...img, uploading: false, url: key } : img
+          )
+        );
+      } catch (error) {
+        console.error("Error uploading reply image:", error);
+        setCommentReplyImages(prev => prev.filter(img => img.id !== image.id));
+        showErrorToast(`Failed to upload ${image.file?.name || "image"}`);
+      }
     }
     setCommentReplyUploading(false);
   };
@@ -1167,17 +1201,17 @@ const SelectedGroup = () => {
     setCommentReplyImages(prev => prev.filter(img => img.id !== imageId));
   };
 
-  const handleLikeComment = async (postId: number, commentId: string) => {
+  const handleLikeComment = async (postId: string, commentId: string) => {
     console.log(`Toggling like for comment ${commentId} in post ${postId}`);
-    const currentPost = posts[postId];
+    const currentPost = posts.find((post) => String(post._id) === postId);
     const currentComment = currentPost?.comments?.find(c => c.comment_id === commentId);
     if (!currentComment) return;
     
     const isCurrentlyLiked = currentComment.likes?.some(like => like.user_id === currentUserId) || false;
     
     setPosts(prevPosts =>
-      prevPosts.map((post, idx) => {
-        if (idx === postId) {
+      prevPosts.map((post) => {
+        if (String(post._id) === postId) {
           const updatedComments = post.comments.map(comment => {
             if (comment.comment_id === commentId) {
               if (isCurrentlyLiked) {
@@ -1202,15 +1236,15 @@ const SelectedGroup = () => {
     
     try {
       const payload = isCurrentlyLiked
-        ? { likes: { action: 'remove', user_id: currentUserId } }
-        : { likes: { user_id: currentUserId } };
+        ? { likes: { action: 'remove' } }
+        : { likes: {} };
       
       await api.patch(`api/forum/discussions/${currentPost._id}/comments/${commentId}`, payload);
     } catch (error) {
       console.error("Error liking comment:", error);
       setPosts(prevPosts =>
-        prevPosts.map((post, idx) => {
-          if (idx === postId) {
+        prevPosts.map((post) => {
+          if (String(post._id) === postId) {
             const revertedComments = post.comments.map(comment => {
               if (comment.comment_id === commentId) {
                 if (isCurrentlyLiked) {
@@ -1236,14 +1270,14 @@ const SelectedGroup = () => {
     }
   };
 
-  const handleEditComment = async (postId: number, commentId: string, newCommentText: string) => {
-    const currentPost = posts[postId];
+  const handleEditComment = async (postId: string, commentId: string, newCommentText: string) => {
+    const currentPost = posts.find((post) => String(post._id) === postId);
     const currentComment = currentPost?.comments?.find(c => c.comment_id === commentId);
     if (!currentComment) return;
     
     setPosts(prevPosts =>
-      prevPosts.map((post, idx) => {
-        if (idx === postId) {
+      prevPosts.map((post) => {
+        if (String(post._id) === postId) {
           const updatedComments = post.comments.map(comment => {
             if (comment.comment_id === commentId) {
               return {
@@ -1269,8 +1303,8 @@ const SelectedGroup = () => {
     } catch (error) {
       console.error("Error editing comment:", error);
       setPosts(prevPosts =>
-        prevPosts.map((post, idx) => {
-          if (idx === postId) {
+        prevPosts.map((post) => {
+          if (String(post._id) === postId) {
             const revertedComments = post.comments.map(comment => {
               if (comment.comment_id === commentId) {
                 return currentComment;
@@ -1286,15 +1320,24 @@ const SelectedGroup = () => {
     }
   };
 
-  const handleDeleteComment = async (postId: number, commentId: string) => {
-    const currentPost = posts[postId];
+  const handleDeleteComment = async (postId: string, commentId: string) => {
+    const currentPost = posts.find((post) => String(post._id) === postId);
     const currentComment = currentPost?.comments?.find(c => c.comment_id === commentId);
     if (!currentComment) return;
     
     setPosts(prevPosts =>
-      prevPosts.map((post, idx) => {
-        if (idx === postId) {
-          const updatedComments = post.comments.filter(comment => comment.comment_id !== commentId);
+      prevPosts.map((post) => {
+        if (String(post._id) === postId) {
+          const updatedComments = post.comments.map(comment =>
+            comment.comment_id === commentId
+              ? {
+                  ...comment,
+                  comment: "[deleted]",
+                  attachments: [],
+                  deleted_at: new Date().toISOString(),
+                }
+              : comment
+          );
           return { ...post, comments: updatedComments };
         }
         return post;
@@ -1303,15 +1346,20 @@ const SelectedGroup = () => {
     
     try {
       await api.patch(`api/forum/discussions/${currentPost._id}/comments/${commentId}`, {
-        remove: true
+        softDelete: true
       });
       showSuccessToast("Comment deleted successfully");
     } catch (error) {
       console.error("Error deleting comment:", error);
       setPosts(prevPosts =>
-        prevPosts.map((post, idx) => {
-          if (idx === postId) {
-            return { ...post, comments: [...post.comments, currentComment] };
+        prevPosts.map((post) => {
+          if (String(post._id) === postId) {
+            return {
+              ...post,
+              comments: post.comments.map((comment) =>
+                comment.comment_id === commentId ? currentComment : comment
+              ),
+            };
           }
           return post;
         })
@@ -1320,7 +1368,7 @@ const SelectedGroup = () => {
     }
   };
 
-  const handleReplyClick = (postId: number, commentId: string, authorName: string, authorId: number) => {
+  const handleReplyClick = (postId: string, commentId: string, authorName: string, authorId: number) => {
     setReplyingTo({ commentId, authorName, authorId });
     setReplyCommentText("");
     setCommentReplyImages([]);
@@ -1329,103 +1377,88 @@ const SelectedGroup = () => {
   const handleCreatePost = async(postData: {
     title: string;
     content: string;
-    groupId: number;
+    groupId: string;
     tags: { tag_id: number; tag_name: string }[];
-    images?: ImageAttachment[];
+    imageKeys?: string[];
   }) => {
+    if (!group?.members.some((member) =>
+      String(member.userId) === String(currentUserId) && !member.is_banned
+    )) {
+      showErrorToast("Join this group before starting a discussion.");
+      throw new Error("Active group membership is required");
+    }
     const forum_group_id = postData.groupId;
-    delete postData.groupId;
     try{
       const response = await api.post(`api/forum/discussions`, {
-        ...postData,
+        title: postData.title,
+        content: postData.content,
+        tags: postData.tags,
+        imageKeys: postData.imageKeys || [],
         forum_group_id,
-        user_id: currentUserId,
       });
       console.log("Create post response:", response);
       if (response.status !== 201) {
         showErrorToast("Failed to create post. Please try again.");
         return;
-      }else {
-        const newPost: Post = {
-        _id: response.data._id || response.data,
-        forum_group_id: Number(id),
-        user_id: currentUserId,
-        title: postData.title,
-        description: postData.content,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        deleted_at: null,
-        tags: postData.tags || [],
-        attachments: postData.images?.map(img => ({ file_path: img.preview })) || [],
-        likes: [],
-        saves: [],
-        comments: [],
-      };
-      setPosts([newPost, ...posts]);
+      } else {
+        const newPost = response.data as Post;
+        setPosts((existingPosts) =>
+          existingPosts.some((post) => String(post._id) === String(newPost._id))
+            ? existingPosts
+            : [newPost, ...existingPosts]
+        );
         showSuccessToast(`"${postData.title}" posted successfully!`);
       }
     }catch(error) {
+      console.error("Error creating post:", error);
       showErrorToast("Failed to create post. Please try again.");
+      throw error;
+    }
+  };
+
+  const handleEditPost = async (postId: string, updatedData: { 
+  title: string; 
+  content: string; 
+  tags: { tag_id: number; tag_name: string }[]; 
+  images?: ImageAttachment[];
+  imageKeys?: string[];
+}) => {
+  try {
+    const currentPost = posts.find(post => post._id === postId);
+    if (!currentPost) {
+      showErrorToast("Post not found");
       return;
     }
-  };
 
-  // Updated handleEditPost with proper sync
-  const handleEditPost = async (postId: string, updatedData: { title: string; content: string; tags: { tag_id: number; tag_name: string }[]; images?: ImageAttachment[] }) => {
-    try {
-      // Find the current post using the _id string
-      const currentPost = posts.find(post => post._id === postId);
-      if (!currentPost) {
-        showErrorToast("Post not found");
-        return;
-      }
+    const payload = {
+      title: updatedData.title,
+      content: updatedData.content,
+      tags: updatedData.tags || [],
+      imageKeys: updatedData.imageKeys || [], // 👈 Add imageKeys to payload
+    };
 
-      // Find the index of the post for updating the local state
-      const postIndex = posts.findIndex(post => post._id === postId);
+    console.log("Updating post with _id:", postId);
+    console.log("Payload:", payload);
 
-      // Prepare payload - backend expects 'description' not 'content'
-      const payload = {
-        title: updatedData.title,
-        description: updatedData.content,
-        tags: updatedData.tags || [],
-      };
-
-      console.log("Updating post with _id:", postId);
-      console.log("Payload:", payload);
-
-      // Use the _id for the API call
-      const response = await api.patch(`api/forum/discussions/${postId}`, payload);
+    const response = await api.patch(`api/forum/discussions/${postId}`, payload);
+    
+    if (response.status === 200) {
+      setPosts(prev => prev.map((post) =>
+        String(post._id) === postId ? response.data as Post : post
+      ));
       
-      if (response.status === 200) {
-        // Update local state using the index
-        setPosts(prev => prev.map((post, idx) =>
-          idx === postIndex
-            ? {
-                ...post,
-                title: updatedData.title,
-                description: updatedData.content, // This is what the backend expects
-                tags: updatedData.tags || [],
-                attachments: updatedData.images?.map(img => ({ file_path: img.preview })) || post.attachments,
-                updated_at: new Date().toISOString(),
-              }
-            : post
-        ));
-        
-        // Force a re-render by updating a state that triggers useMemo
-        // The posts state update above should already trigger this
-        
-        showSuccessToast("Post updated successfully!");
-        setEditingPost(null);
-        setPostMenuOpen(null);
-      } else {
-        showErrorToast(response.data?.error || "Failed to update post");
-      }
-    } catch (error: any) {
-      console.error("Error updating post:", error);
-      const errorMessage = error.response?.data?.error || error.message || "Failed to update post. Please try again.";
-      showErrorToast(errorMessage);
+      showSuccessToast("Post updated successfully!");
+      setEditingPost(null);
+      setPostMenuOpen(null);
+    } else {
+      showErrorToast(response.data?.error || "Failed to update post");
     }
-  };
+  } catch (error: any) {
+    console.error("Error updating post:", error);
+    const errorMessage = error.response?.data?.error || error.message || "Failed to update post. Please try again.";
+    showErrorToast(errorMessage);
+  }
+};
 
   const handleDeletePost = async() => {
     console.log("Deleting post:", deletingPost);
@@ -1433,12 +1466,9 @@ const SelectedGroup = () => {
       const response = await api.delete(`api/forum/discussions/${deletingPost?._id}`);
       if (response.status === 200) {
         if (deletingPost) {
-          const postIndex = posts.findIndex((_, idx) => idx === deletingPost.arrayIndex);
-          if (postIndex !== -1) {
-            const updatedPosts = [...posts];
-            updatedPosts.splice(postIndex, 1);
-            setPosts(updatedPosts);
-          }
+          setPosts((existingPosts) =>
+            existingPosts.filter((post) => String(post._id) !== String(deletingPost._id))
+          );
           showSuccessToast(`"${deletingPost.title}" has been deleted`);
           setDeletingPost(null);
           if (expandedPostId === deletingPost.id) {
@@ -1457,11 +1487,10 @@ const SelectedGroup = () => {
     if (!currentPost) return;
     
     const isCurrentlyLiked = currentPost.isLiked;
-    const postIndex = displayPosts.findIndex(p => p.id === postId);
     
     setPosts(prevPosts =>
-      prevPosts.map((post, idx) => {
-        if (idx === postIndex) {
+      prevPosts.map((post) => {
+        if (String(post._id) === postId) {
           const updatedLikes = isCurrentlyLiked
             ? post.likes.filter(like => like.user_id !== currentUserId)
             : [...post.likes, { user_id: currentUserId }];
@@ -1473,15 +1502,15 @@ const SelectedGroup = () => {
     
     try {
       const payload = isCurrentlyLiked 
-        ? { likes: { action: 'remove', user_id: currentUserId } }
-        : { likes: { user_id: currentUserId } };
+        ? { likes: { action: 'remove' } }
+        : { likes: {} };
       
       const response = await api.patch(`api/forum/discussions/${currentPost._id}`, payload);
       
       if (response.status !== 200) {
         setPosts(prevPosts =>
-          prevPosts.map((post, idx) => {
-            if (idx === postIndex) {
+          prevPosts.map((post) => {
+            if (String(post._id) === postId) {
               const revertedLikes = isCurrentlyLiked
                 ? [...post.likes, { user_id: currentUserId }]
                 : post.likes.filter(like => like.user_id !== currentUserId);
@@ -1497,8 +1526,8 @@ const SelectedGroup = () => {
     } catch (error) {
       console.error("Error liking post:", error);
       setPosts(prevPosts =>
-        prevPosts.map((post, idx) => {
-          if (idx === postIndex) {
+        prevPosts.map((post) => {
+          if (String(post._id) === postId) {
             const revertedLikes = isCurrentlyLiked
               ? [...post.likes, { user_id: currentUserId }]
               : post.likes.filter(like => like.user_id !== currentUserId);
@@ -1516,11 +1545,10 @@ const SelectedGroup = () => {
     if (!currentPost) return;
     
     const isCurrentlySaved = currentPost.isSaved;
-    const postIndex = displayPosts.findIndex(p => p.id === postId);
     
     setPosts(prevPosts =>
-      prevPosts.map((post, idx) => {
-        if (idx === postIndex) {
+      prevPosts.map((post) => {
+        if (String(post._id) === postId) {
           const updatedSaves = isCurrentlySaved
             ? post.saves.filter(save => save.user_id !== currentUserId)
             : [...post.saves, { user_id: currentUserId }];
@@ -1532,15 +1560,15 @@ const SelectedGroup = () => {
     
     try {
       const payload = isCurrentlySaved 
-        ? { saves: { action: 'remove', user_id: currentUserId } }
-        : { saves: { user_id: currentUserId } };
+        ? { saves: { action: 'remove' } }
+        : { saves: {} };
       
       const response = await api.patch(`api/forum/discussions/${currentPost._id}`, payload);
       
       if (response.status !== 200) {
         setPosts(prevPosts =>
-          prevPosts.map((post, idx) => {
-            if (idx === postIndex) {
+          prevPosts.map((post) => {
+            if (String(post._id) === postId) {
               const revertedSaves = isCurrentlySaved
                 ? [...post.saves, { user_id: currentUserId }]
                 : post.saves.filter(save => save.user_id !== currentUserId);
@@ -1556,8 +1584,8 @@ const SelectedGroup = () => {
     } catch (error) {
       console.error("Error saving post:", error);
       setPosts(prevPosts =>
-        prevPosts.map((post, idx) => {
-          if (idx === postIndex) {
+        prevPosts.map((post) => {
+          if (String(post._id) === postId) {
             const revertedSaves = isCurrentlySaved
               ? [...post.saves, { user_id: currentUserId }]
               : post.saves.filter(save => save.user_id !== currentUserId);
@@ -1593,14 +1621,38 @@ const SelectedGroup = () => {
     }
   };
 
-  const handleEditPermissions = (updatedMembers: MemberWithDetails[]) => {
-    setMembersWithDetails(updatedMembers);
-    showSuccessToast("Permissions updated successfully!");
+  const handleEditPermissions = async (updatedMembers: { id: number; name: string; role: string; avatar: string }[]) => {
+    if (!group) return;
+    try {
+      const changed = updatedMembers.filter((updated) => {
+        const current = membersWithDetails.find((member) => member.userId === updated.id);
+        const normalizedRole = updated.role.toLowerCase() === "owner" ? "Admin" : updated.role;
+        return current && current.role !== normalizedRole;
+      });
+      await Promise.all(changed.map((member) =>
+        api.patch(`api/forum/groups/${group._id}/members/${member.id}/role`, {
+          role: member.role.toLowerCase() === "owner" ? "Admin" : member.role,
+        })
+      ));
+      setMembersWithDetails((current) => current.map((member) => {
+        const updated = updatedMembers.find((item) => item.id === member.userId);
+        return updated ? { ...member, role: updated.role.toLowerCase() === "owner" ? "Admin" : updated.role } : member;
+      }));
+      showSuccessToast("Permissions updated successfully!");
+    } catch (error) {
+      showErrorToast("Failed to update permissions.");
+      throw error;
+    }
   };
 
-  const handleReportGroup = (reason: string, description: string) => {
-    console.log("Reporting group:", { reason, description });
-    showSuccessToast("Group reported successfully. Our team will review it.");
+  const handleReportGroup = async (reason: string, description: string) => {
+    try {
+      await api.post(`api/forum/reports/groups/${group._id}`, { reason, description });
+      showSuccessToast("Group reported successfully. Our team will review it.");
+    } catch (error) {
+      showErrorToast("Failed to submit the report. Please try again.");
+      throw error;
+    }
   };
 
   const handleLeaveGroup = () => {
@@ -1611,7 +1663,7 @@ const SelectedGroup = () => {
 
   const handleDeleteGroup = async() => {
     try {
-      const response = await api.delete(`api/forum/groups/delete/${group?._id}`);
+      const response = await api.delete(`api/forum/groups/${group?._id}`);
       if (response.status === 200) {
         showSuccessToast(`Group "${group?.group_name}" has been deleted`);
         navigate("/forums");
@@ -1625,14 +1677,29 @@ const SelectedGroup = () => {
     }
   };
 
-  const handleReportMember = (reason: string, description: string) => {
-    console.log("Reporting member:", selectedMember?.name, { reason, description });
-    showSuccessToast(`Report submitted for ${selectedMember?.name}`);
-    setSelectedMember(null);
+  const handleReportMember = async (reason: string, description: string) => {
+    if (!selectedMember) {
+      showErrorToast("Select a member to report.");
+      throw new Error("No member selected");
+    }
+
+    try {
+      await api.post(
+        `api/forum/reports/groups/${group._id}/members/${selectedMember.userId}`,
+        { reason, description }
+      );
+      showSuccessToast(`Report submitted for ${selectedMember.name}`);
+      setSelectedMember(null);
+    } catch (error) {
+      showErrorToast("Failed to submit the report. Please try again.");
+      throw error;
+    }
   };
 
-  const handleRemoveMember = () => {
+  const handleRemoveMember = async () => {
     if (selectedMember && group) {
+      try {
+        await api.delete(`api/forum/groups/${group._id}/members/${selectedMember.userId}`);
       setMembersWithDetails(membersWithDetails.filter(m => m.userId !== selectedMember.userId));
       setGroup({
         ...group,
@@ -1640,10 +1707,16 @@ const SelectedGroup = () => {
       });
       showSuccessToast(`${selectedMember.name} has been removed from the group`);
       setSelectedMember(null);
+      } catch {
+        showErrorToast("Failed to remove member.");
+      }
     }
   };
 
   const isOwner = group?.members.some(m => m.userId === currentUserId && m.role === "Admin") || false;
+  const isActiveMember = group?.members.some(
+    (member) => String(member.userId) === String(currentUserId) && !member.is_banned
+  ) || false;
   const canEditGroup = isOwner;
   const canEditPermissions = isOwner;
   const canRemoveMembers = isOwner;
@@ -1844,7 +1917,7 @@ const SelectedGroup = () => {
         <div className="mt-6">
           {activeTab === "posts" && (
             <>
-              <div className="mb-6 flex justify-end">
+              {isActiveMember && <div className="mb-6 flex justify-end">
                 <button
                   onClick={() => setIsNewDiscussionOpen(true)}
                   className="group flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-black shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl"
@@ -1852,7 +1925,7 @@ const SelectedGroup = () => {
                   <PlusCircle className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
                   New Discussion
                 </button>
-              </div>
+              </div>}
 
               <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 sm:w-64">
@@ -1934,7 +2007,7 @@ const SelectedGroup = () => {
                                 )}
                               </div>
 
-                              {isAuthor && (
+                              {isAuthor ? (
                                 <div className="relative">
                                   <button
                                     onClick={() => setPostMenuOpen(postMenuOpen === post.id ? null : post.id)}
@@ -1967,6 +2040,14 @@ const SelectedGroup = () => {
                                     </div>
                                   )}
                                 </div>
+                              ) : (
+                                <button
+                                  onClick={() => setReportingPost(post)}
+                                  className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-red-400"
+                                >
+                                  <Flag className="h-3.5 w-3.5" />
+                                  Report
+                                </button>
                               )}
                             </div>
 
@@ -1978,7 +2059,7 @@ const SelectedGroup = () => {
                               </ReactMarkdown>
                             </div>
 
-                            <ImageGallery attachments={post.attachments} />
+                            <ImageGallery attachments={post.attachments} imageKeys={post.imageKeys} />
 
                             <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
                               <button
@@ -2029,7 +2110,7 @@ const SelectedGroup = () => {
                                       <CommentItem
                                         key={comment.comment_id}
                                         comment={comment}
-                                        postId={idx}
+                                        postId={post.id}
                                         membersDetails={membersDetailsMap}
                                         onLike={handleLikeComment}
                                         onReply={handleReplyClick}
@@ -2056,13 +2137,13 @@ const SelectedGroup = () => {
 
                                 <div className="mt-4 pt-4 border-t border-white/10">
                                   <ReplyInput
-                                    replyText={replyText[idx] || ""}
-                                    updateReplyText={(text) => updateReplyText(idx, text)}
-                                    handleReply={() => handleReply(idx)}
-                                    uploadImages={(files) => handleReplyImageUpload(String(idx), files)}
-                                    images={replyImages[idx] || []}
-                                    removeImage={(imageId) => removeReplyImage(String(idx), imageId)}
-                                    isUploading={replyUploading[idx] || false}
+                                    replyText={replyText[post.id] || ""}
+                                    updateReplyText={(text) => updateReplyText(post.id, text)}
+                                    handleReply={() => handleReply(post.id)}
+                                    uploadImages={(files) => handleReplyImageUpload(post.id, files)}
+                                    images={replyImages[post.id] || []}
+                                    removeImage={(imageId) => removeReplyImage(post.id, imageId)}
+                                    isUploading={replyUploading[post.id] || false}
                                     currentUserAvatar={currentUserAvatar}
                                     placeholder="Write a comment..."
                                   />
@@ -2075,6 +2156,9 @@ const SelectedGroup = () => {
                     );
                   })
                 )}
+                <div ref={feedSentinelRef} className="flex min-h-12 items-center justify-center py-4 text-sm text-zinc-500">
+                  {loadingMore ? <Loader2 className="h-5 w-5 animate-spin" /> : hasMore ? "Scroll for more" : ""}
+                </div>
               </div>
             </>
           )}
@@ -2180,7 +2264,7 @@ const SelectedGroup = () => {
       </div>
 
       <NewDiscussionModal
-        isOpen={isNewDiscussionOpen}
+        isOpen={isActiveMember && isNewDiscussionOpen}
         onClose={() => setIsNewDiscussionOpen(false)}
         onCreatePost={handleCreatePost}
         availableGroups={[{ id: group._id, name: group.group_name, tags: group.tags }]}
@@ -2189,7 +2273,7 @@ const SelectedGroup = () => {
       <EditGroupModal
         isOpen={showEditGroupModal}
         onClose={() => setShowEditGroupModal(false)}
-        group={{ id: group._id, name: group.group_name, description: group.description, tags: group.tags, gradient: "from-purple-600 via-pink-600 to-red-600" }}
+        group={{ id: group._id, name: group.group_name, description: group.description, tags: group.tags, gradient: "from-purple-600 via-pink-600 to-red-600", }}
         onSave={handleEditGroup}
       />
 
@@ -2254,7 +2338,8 @@ const SelectedGroup = () => {
             : [],
           images: Array.isArray(editingPost.attachments) 
             ? editingPost.attachments.map(a => ({ id: a.file_path, preview: a.file_path })) 
-            : []
+            : [],
+          imageKeys: editingPost.imageKeys || [] // 👈 ADD THIS LINE
         } : null}
         availableTags={group?.tags?.map(t => ({ tag_id: t.tag_id, tag_name: t.tag })) || []}
       />
@@ -2264,6 +2349,18 @@ const SelectedGroup = () => {
         onClose={() => setDeletingPost(null)}
         onConfirm={handleDeletePost}
         postTitle={deletingPost?.title || ""}
+      />
+      <ReportGroupModal
+        isOpen={Boolean(reportingPost)}
+        onClose={() => setReportingPost(null)}
+        groupName={reportingPost?.title || "Discussion"}
+        subjectLabel="Discussion"
+        onSubmit={async (reason, description) => {
+          if (!reportingPost?._id) return;
+          await api.post(`/api/forum/reports/discussions/${reportingPost._id}`, { reason, description });
+          setReportingPost(null);
+          showSuccessToast("Discussion reported");
+        }}
       />
     </div>
   );

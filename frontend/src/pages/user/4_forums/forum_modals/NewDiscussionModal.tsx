@@ -25,6 +25,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
+import api from "@/lib/axios";
 
 interface Group {
   id: string;
@@ -41,7 +42,8 @@ interface ImageAttachment {
   preview: string;
   uploading: boolean;
   uploadProgress?: number;
-  url?: string;
+  s3Key?: string;
+  uploadError?: string;
 }
 
 interface NewDiscussionModalProps {
@@ -51,10 +53,11 @@ interface NewDiscussionModalProps {
     title: string;
     content: string;
     groupId: string;
-    tags: { tag_id: number; tag_name: string }[]; // Changed from single tag to array of tags
-    images?: ImageAttachment[];
-  }) => void;
+    tags: { tag_id: number; tag_name: string }[];
+    imageKeys?: string[]; // Changed to array of S3 keys
+  }) => Promise<void>;
   availableGroups: Group[];
+  loadJoinedGroups?: boolean;
 }
 
 // Custom markdown components for preview styling
@@ -260,6 +263,12 @@ const ImagePreview = ({ image, onRemove }: { image: ImageAttachment; onRemove: (
           <span className="mt-1 text-[10px] text-white font-medium">{image.uploadProgress}%</span>
         </div>
       )}
+      {image.uploadError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-900/70 backdrop-blur-sm">
+          <XCircle className="h-5 w-5 text-red-400" />
+          <span className="mt-1 text-[10px] text-red-300 text-center px-2">{image.uploadError}</span>
+        </div>
+      )}
       <button
         onClick={onRemove}
         className="absolute top-1 right-1 rounded-full bg-black/70 p-1 text-white opacity-0 transition-all duration-200 group-hover:opacity-100 hover:bg-red-500 hover:scale-110 active:scale-95"
@@ -292,21 +301,194 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
   onClose,
   onCreatePost,
   availableGroups = [],
+  loadJoinedGroups = false,
 }) => {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedTags, setSelectedTags] = useState<{ tag_id: number; tag_name: string }[]>([]);
   const [isCreating, setIsCreating] = useState(false);
-  const [isGroupDropdownOpen, setIsGroupDropdownOpen] = useState(false);
   const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false);
-  const [errors, setErrors] = useState<{ title?: string; content?: string; group?: string; tags?: string }>({});
+  const [errors, setErrors] = useState<{ title?: string; content?: string; tags?: string }>({});
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [showPreview, setShowPreview] = useState(false);
+  const [modalGroups, setModalGroups] = useState<Group[]>(availableGroups);
+  const [selectedGroupId, setSelectedGroupId] = useState<string>("");
+  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [groupsError, setGroupsError] = useState("");
+  const [groupTags, setGroupTags] = useState<Group["tags"]>([]);
+  const [loadingTags, setLoadingTags] = useState(false);
+  const [tagsError, setTagsError] = useState("");
+  const availableGroupsKey = availableGroups.map((group) => group.id).join(",");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const groupDropdownRef = useRef<HTMLDivElement>(null);
   const tagDropdownRef = useRef<HTMLDivElement>(null);
+
+  const selectedGroup = modalGroups.find((group) => group.id === selectedGroupId) || null;
+  const availableTags = groupTags;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    const loadGroups = async () => {
+      setGroupsError("");
+      if (!loadJoinedGroups) {
+        setModalGroups(availableGroups);
+        setSelectedGroupId(availableGroups[0]?.id || "");
+        return;
+      }
+      setLoadingGroups(true);
+      try {
+        const response = await api.get("/api/forum/groups/joined");
+        const groups = (response.data || [])
+          .filter((group: any) => group.status === "active" && !group.deleted_at)
+          .map((group: any) => ({
+            id: String(group._id),
+            name: group.group_name,
+            tags: Array.isArray(group.tags) ? group.tags : [],
+          }));
+        if (!cancelled) {
+          setModalGroups(groups);
+          setSelectedGroupId("");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setModalGroups([]);
+          setGroupsError("Failed to load your joined groups.");
+        }
+      } finally {
+        if (!cancelled) setLoadingGroups(false);
+      }
+    };
+    void loadGroups();
+    return () => { cancelled = true; };
+  // The key keeps parent array recreation from restarting this request on every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, loadJoinedGroups, availableGroupsKey]);
+
+  useEffect(() => {
+    setSelectedTags([]);
+    setIsTagDropdownOpen(false);
+    setTagsError("");
+    if (!selectedGroupId) {
+      setGroupTags([]);
+      return;
+    }
+    let cancelled = false;
+    const loadTags = async () => {
+      setLoadingTags(true);
+      try {
+        const response = await api.get(`/api/forum/groups/${selectedGroupId}`);
+        if (!cancelled) setGroupTags(Array.isArray(response.data?.tags) ? response.data.tags : []);
+      } catch (_error) {
+        if (!cancelled) {
+          setGroupTags([]);
+          setTagsError("Failed to load this group's tags.");
+        }
+      } finally {
+        if (!cancelled) setLoadingTags(false);
+      }
+    };
+    void loadTags();
+    return () => { cancelled = true; };
+  }, [selectedGroupId]);
+
+  // Upload file to AWS S3
+  const uploadFileToS3 = async (file: File): Promise<string> => {
+    try {
+      const response = await api.post("/api/files/upload-url", {
+        folder: "forum-discussions",
+        filename: file.name,
+        contentType: file.type,
+      });
+
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to get upload URL');
+      }
+
+      let { uploadUrl, key, expiresIn, maxFileSize } = response.data;
+      
+      console.log('📤 Upload URL received:', {
+        key,
+        expiresIn: `${expiresIn} seconds`,
+        maxFileSize: `${maxFileSize / 1024 / 1024}MB`
+      });
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+      let uploadResponse = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": file.type,
+        },
+        body: file,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (uploadResponse.status === 403) {
+        console.log("⚠️ Upload URL expired, requesting new one...");
+        
+        const newResponse = await api.post("/api/files/upload-url", {
+          folder: "forum-discussions",
+          filename: file.name,
+          contentType: file.type,
+        });
+
+        if (!newResponse.data.success) {
+          throw new Error(newResponse.data.message || 'Failed to get new upload URL');
+        }
+
+        const { uploadUrl: newUploadUrl, key: newKey } = newResponse.data;
+
+        uploadResponse = await fetch(newUploadUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": file.type,
+            "x-amz-server-side-encryption": "AES256",
+          },
+          body: file,
+        });
+
+        key = newKey;
+      }
+
+      if (!uploadResponse.ok) {
+        if (uploadResponse.status === 403) {
+          throw new Error('Permission denied. Please check your S3 bucket permissions.');
+        }
+        if (uploadResponse.status === 413) {
+          throw new Error('File is too large. Maximum size is 5MB.');
+        }
+        if (uploadResponse.status === 415) {
+          throw new Error('File type not supported.');
+        }
+        throw new Error(`Upload failed with status ${uploadResponse.status}`);
+      }
+
+      console.log('✅ File uploaded successfully:', key);
+      return key;
+
+    } catch (error: any) {
+      console.error('❌ Upload error:', error);
+      
+      if (error.name === 'AbortError') {
+        throw new Error('Upload timed out. Please try again.');
+      }
+      if (error.response?.status === 401) {
+        throw new Error('Please log in to upload files.');
+      }
+      if (error.response?.status === 429) {
+        throw new Error('Too many upload attempts. Please try again later.');
+      }
+      if (error.response?.status === 400) {
+        throw new Error(error.response?.data?.message || 'Invalid file or folder.');
+      }
+      
+      throw new Error(error.message || 'Failed to upload image. Please try again.');
+    }
+  };
 
   // Helper: Apply text formatting
   const applyFormatting = (format: string, value?: string) => {
@@ -365,8 +547,8 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
     }, 0);
   };
 
-  // Handle image upload
-  const handleImageUpload = async (files: FileList | null) => {
+  // Handle image selection (just add to state, don't upload yet)
+  const handleImageSelect = (files: FileList | null) => {
     if (!files) return;
 
     const newImages: ImageAttachment[] = [];
@@ -391,33 +573,19 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
         id: imageId,
         file,
         preview,
-        uploading: true,
+        uploading: false, // Not uploading yet
         uploadProgress: 0,
       });
     }
 
     setImages(prev => [...prev, ...newImages]);
-
-    for (const image of newImages) {
-      await simulateUpload(image.id);
-    }
-  };
-
-  const simulateUpload = async (imageId: string) => {
-    for (let progress = 0; progress <= 100; progress += 10) {
-      await new Promise(resolve => setTimeout(resolve, 80));
-      setImages(prev =>
-        prev.map(img => (img.id === imageId ? { ...img, uploadProgress: progress } : img))
-      );
-    }
-    setImages(prev =>
-      prev.map(img => (img.id === imageId ? { ...img, uploading: false, url: img.preview } : img))
-    );
   };
 
   const removeImage = (imageId: string) => {
     const image = images.find(img => img.id === imageId);
-    if (image) URL.revokeObjectURL(image.preview);
+    if (image && image.preview.startsWith('blob:')) {
+      URL.revokeObjectURL(image.preview);
+    }
     setImages(prev => prev.filter(img => img.id !== imageId));
   };
 
@@ -436,12 +604,9 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
     setSelectedTags(prev => prev.filter(t => t.tag_id !== tagId));
   };
 
-  // Close dropdowns when clicking outside
+  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (groupDropdownRef.current && !groupDropdownRef.current.contains(event.target as Node)) {
-        setIsGroupDropdownOpen(false);
-      }
       if (tagDropdownRef.current && !tagDropdownRef.current.contains(event.target as Node)) {
         setIsTagDropdownOpen(false);
       }
@@ -450,91 +615,131 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Initialize selected group
+  // Reset tags when modal opens
   useEffect(() => {
-    if (isOpen && availableGroups.length > 0) {
-      const firstGroup = availableGroups[0];
-      setSelectedGroupId(firstGroup.id);
+    if (isOpen) {
       setSelectedTags([]);
+      setErrors({});
+      setImages([]);
     }
-  }, [isOpen, availableGroups]);
-
-  // Reset tags when group changes
-  useEffect(() => {
-    setSelectedTags([]);
-    if (errors.tags) setErrors({ ...errors, tags: undefined });
-  }, [selectedGroupId]);
+  }, [isOpen]);
 
   // Cleanup preview URLs
   useEffect(() => {
-    return () => images.forEach(image => URL.revokeObjectURL(image.preview));
+    return () => images.forEach(image => {
+      if (image.preview.startsWith('blob:')) {
+        URL.revokeObjectURL(image.preview);
+      }
+    });
   }, []);
 
   if (!isOpen) return null;
 
-  const selectedGroup = availableGroups.find(g => g.id === selectedGroupId);
-  const availableTags = selectedGroup?.tags || [];
-
   const validate = (): boolean => {
-    const newErrors: { title?: string; content?: string; group?: string; tags?: string } = {};
+    const newErrors: { title?: string; content?: string; tags?: string } = {};
     if (!title.trim()) newErrors.title = "Title is required";
     else if (title.length < 5) newErrors.title = "Title must be at least 5 characters";
     if (!content.trim()) newErrors.content = "Content is required";
     else if (content.length < 20) newErrors.content = "Content must be at least 20 characters";
-    if (!selectedGroupId) newErrors.group = "Please select a group";
-    if (selectedTags.length === 0) newErrors.tags = "Please select at least one tag";
+    if (!selectedGroupId) newErrors.content = "No groups available to post in";
+    if (availableTags.length > 0 && selectedTags.length === 0) newErrors.tags = "Please select at least one tag";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate() || !selectedGroupId) return;
 
-    const uploadingImages = images.filter(img => img.uploading);
-    if (uploadingImages.length > 0) {
-      showErrorToast("Please wait for images to finish uploading");
-      return;
-    }
-
     setIsCreating(true);
-    
-    // Prepare the post data with multiple tags
-    const postData = { 
-      title: title.trim(), 
-      content: content.trim(), 
-      groupId: selectedGroupId, 
-      tags: selectedTags, // Array of tags with tag_id and tag_name
-      images 
-    };
-    
-    // Console log all the data being submitted
-    console.log("=== NEW DISCUSSION SUBMISSION ===");
-    console.log("Title:", postData.title);
-    console.log("Content:", postData.content);
-    console.log("Content Length:", postData.content.length);
-    console.log("Group ID:", postData.groupId);
-    console.log("Selected Group:", selectedGroup?.name);
-    console.log("Tags:", postData.tags);
-    console.log("Number of Tags:", postData.tags.length);
-    console.log("Images:", postData.images.map(img => ({ id: img.id, url: img.url, uploading: img.uploading })));
-    console.log("Number of Images:", postData.images.length);
-    console.log("Full Post Data:", JSON.stringify(postData, null, 2));
-    console.log("=================================");
-    
-    setTimeout(() => {
-      onCreatePost(postData);
-      showSuccessToast("Discussion Posted Successfully!");
+
+    try {
+      const uploadedImageKeys: string[] = [];
+      
+      // Upload images to S3 one by one
+      for (const image of images) {
+        try {
+          // Update status to uploading
+          setImages(prev =>
+            prev.map(img =>
+              img.id === image.id ? { ...img, uploading: true, uploadProgress: 0 } : img
+            )
+          );
+
+          // Upload to S3
+          const s3Key = await uploadFileToS3(image.file);
+          
+          // Update with success
+          setImages(prev =>
+            prev.map(img =>
+              img.id === image.id 
+                ? { ...img, uploading: false, uploadProgress: 100, s3Key } 
+                : img
+            )
+          );
+
+          uploadedImageKeys.push(s3Key);
+
+          console.log(`✅ Image uploaded successfully with key: ${s3Key}`);
+        } catch (error: any) {
+          console.error(`❌ Failed to upload image:`, error);
+          
+          // Update with error
+          setImages(prev =>
+            prev.map(img =>
+              img.id === image.id 
+                ? { ...img, uploading: false, uploadError: error.message } 
+                : img
+            )
+          );
+          
+          showErrorToast(`Failed to upload ${image.file.name}: ${error.message}`);
+          setIsCreating(false);
+          return;
+        }
+      }
+
+      // Prepare the post data with ONLY the S3 keys
+      const postData = { 
+        title: title.trim(), 
+        content: content.trim(), 
+        groupId: selectedGroupId, 
+        tags: selectedTags,
+        imageKeys: uploadedImageKeys // Send ONLY the S3 keys
+      };
+      
+      // Console log all the data being submitted
+      console.log("=== NEW DISCUSSION SUBMISSION ===");
+      console.log("Title:", postData.title);
+      console.log("Content:", postData.content);
+      console.log("Content Length:", postData.content.length);
+      console.log("Group ID:", postData.groupId);
+      console.log("Selected Group:", selectedGroup?.name);
+      console.log("Tags:", postData.tags);
+      console.log("Number of Tags:", postData.tags.length);
+      console.log("Image Keys:", postData.imageKeys);
+      console.log("Number of Images:", postData.imageKeys.length);
+      console.log("=================================");
+      
+      // Call the onCreatePost callback with the data
+      await onCreatePost(postData);
+      
+      // Reset form
       setTitle("");
       setContent("");
-      images.forEach(image => URL.revokeObjectURL(image.preview));
+      images.forEach(image => {
+        if (image.preview.startsWith('blob:')) {
+          URL.revokeObjectURL(image.preview);
+        }
+      });
       setImages([]);
       setSelectedTags([]);
-      if (availableGroups.length > 0) {
-        setSelectedGroupId(availableGroups[0].id);
-      }
-      setIsCreating(false);
       onClose();
-    }, 500);
+    } catch (error: any) {
+      console.error("Error creating post:", error);
+      showErrorToast(error.message || "Failed to create post. Please try again.");
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const handleClose = () => {
@@ -543,14 +748,14 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
     }
     setTitle("");
     setContent("");
-    images.forEach(image => URL.revokeObjectURL(image.preview));
+    images.forEach(image => {
+      if (image.preview.startsWith('blob:')) {
+        URL.revokeObjectURL(image.preview);
+      }
+    });
     setImages([]);
     setSelectedTags([]);
-    if (availableGroups.length > 0) {
-      setSelectedGroupId(availableGroups[0].id);
-    }
     setErrors({});
-    setIsGroupDropdownOpen(false);
     setIsTagDropdownOpen(false);
     setShowPreview(false);
     onClose();
@@ -568,6 +773,11 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
               <PlusCircle className="h-4 w-4 text-blue-400" />
             </div>
             <h3 className="text-lg font-semibold text-white">Create New Discussion</h3>
+            {selectedGroup && (
+              <span className="ml-2 rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] text-cyan-400">
+                {selectedGroup.name}
+              </span>
+            )}
           </div>
           <button onClick={handleClose} className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-white/10 hover:text-white">
             <X className="h-5 w-5" />
@@ -575,47 +785,35 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
         </div>
 
         <div className="p-6">
-          {/* Group Selection */}
-          <div className="mb-4">
-            <label className="mb-2 block text-xs font-semibold uppercase text-zinc-500">Group *</label>
-            {availableGroups.length === 0 ? (
-              <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-center">
-                <p className="text-xs text-yellow-400">You haven't joined any groups yet.</p>
-              </div>
-            ) : (
-              <div className="relative" ref={groupDropdownRef}>
-                <button
-                  onClick={() => setIsGroupDropdownOpen(!isGroupDropdownOpen)}
-                  className={`flex w-full items-center justify-between rounded-lg border ${errors.group ? "border-red-500/50" : "border-white/15"} bg-white/5 px-4 py-2.5 text-sm text-white transition hover:bg-white/10`}
+          {/* Hidden Group Selection - showing which group is being used */}
+          {loadingGroups ? (
+            <div className="mb-4 flex items-center justify-center gap-2 rounded-lg border border-white/10 p-3 text-sm text-zinc-400">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading joined groups
+            </div>
+          ) : groupsError ? (
+            <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-center text-xs text-red-400">
+              {groupsError}
+            </div>
+          ) : modalGroups.length === 0 ? (
+            <div className="mb-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-center">
+              <p className="text-xs text-yellow-400">You haven't joined any groups yet. Please join a group first.</p>
+            </div>
+          ) : (
+            <div className="mb-4">
+              <label className="mb-2 block text-xs font-semibold uppercase text-zinc-500">Post in *</label>
+              <div className="relative">
+                <Users className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                <select
+                  value={selectedGroupId}
+                  onChange={(event) => setSelectedGroupId(event.target.value)}
+                  className="w-full rounded-lg border border-white/15 bg-[#151826] py-2.5 pl-10 pr-4 text-sm text-white"
                 >
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-zinc-500" />
-                    <span>{selectedGroup?.name || "Select a group"}</span>
-                  </div>
-                  <ChevronDown className={`h-4 w-4 transition-transform ${isGroupDropdownOpen ? "rotate-180" : ""}`} />
-                </button>
-                {isGroupDropdownOpen && (
-                  <div className="absolute left-0 right-0 top-full mt-1 z-10 max-h-48 overflow-y-auto rounded-lg border border-white/15 bg-[#0d0f1a] shadow-xl">
-                    {availableGroups.map(group => (
-                      <button
-                        key={group.id}
-                        onClick={() => {
-                          setSelectedGroupId(group.id);
-                          setIsGroupDropdownOpen(false);
-                          setErrors({ ...errors, group: undefined });
-                        }}
-                        className="flex w-full items-center gap-2 px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/10 hover:text-white"
-                      >
-                        <Users className="h-3.5 w-3.5" />
-                        {group.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                  <option value="">Select a group</option>
+                  {modalGroups.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
               </div>
-            )}
-            {errors.group && <p className="mt-1 text-xs text-red-400">{errors.group}</p>}
-          </div>
+            </div>
+          )}
 
           {/* Categories/Tags Selection - Multi-select */}
           <div className="mb-4">
@@ -626,14 +824,16 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
               <button
                 onClick={() => availableTags.length > 0 && setIsTagDropdownOpen(!isTagDropdownOpen)}
                 className={`flex w-full items-center justify-between rounded-lg border ${errors.tags ? "border-red-500/50" : "border-white/15"} bg-white/5 px-4 py-2.5 text-sm text-white transition hover:bg-white/10 ${availableTags.length === 0 ? "opacity-50 cursor-not-allowed" : ""}`}
-                disabled={availableTags.length === 0}
+                disabled={loadingTags || !selectedGroupId || availableTags.length === 0}
               >
                 <div className="flex items-center gap-2">
                   <Tag className="h-4 w-4 text-zinc-500" />
                   <span>
-                    {selectedTags.length > 0 
+                    {loadingTags
+                      ? "Loading tags..."
+                      : selectedTags.length > 0
                       ? `${selectedTags.length} tag${selectedTags.length > 1 ? 's' : ''} selected` 
-                      : (availableTags.length === 0 ? "No tags available" : "Select tags")}
+                      : (!selectedGroupId ? "Select a group first" : availableTags.length === 0 ? "No tags available" : "Select tags")}
                   </span>
                 </div>
                 <ChevronDown className={`h-4 w-4 transition-transform ${isTagDropdownOpen ? "rotate-180" : ""}`} />
@@ -664,6 +864,7 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
                 </div>
               )}
             </div>
+            {tagsError && <p className="mt-2 text-xs text-red-400">{tagsError}</p>}
             
             {/* Selected Tags Display */}
             {selectedTags.length > 0 && (
@@ -767,8 +968,11 @@ Formatting examples:
                 ))}
               </div>
             )}
-            <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => handleImageUpload(e.target.files)} />
+            <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => handleImageSelect(e.target.files)} />
             <p className="mt-1 text-[10px] text-zinc-500">Supported: JPG, PNG, GIF, WebP (max 5MB per image)</p>
+            {images.some(img => img.uploadError) && (
+              <p className="mt-1 text-xs text-red-400">Some images failed to upload. Please remove and try again.</p>
+            )}
           </div>
 
           {errors.content && <p className="mt-1 text-xs text-red-400">{errors.content}</p>}
@@ -778,13 +982,13 @@ Formatting examples:
           <div className="flex gap-3 mt-6">
             <button
               onClick={handleSubmit}
-              disabled={isCreating || availableGroups.length === 0}
+              disabled={isCreating || loadingGroups || loadingTags || !selectedGroupId || Boolean(tagsError)}
               className="flex-1 rounded-full bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:scale-105 hover:shadow-lg hover:shadow-blue-500/25 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
             >
               {isCreating ? (
                 <div className="flex items-center justify-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Creating...
+                  Uploading & Creating...
                 </div>
               ) : (
                 <div className="flex items-center justify-center gap-2">
@@ -795,7 +999,8 @@ Formatting examples:
             </button>
             <button
               onClick={handleClose}
-              className="flex-1 rounded-full border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-medium text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              disabled={isCreating}
+              className="flex-1 rounded-full border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-medium text-zinc-400 transition hover:bg-white/10 hover:text-white disabled:opacity-50"
             >
               Cancel
             </button>

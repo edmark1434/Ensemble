@@ -3,7 +3,9 @@ import { useState } from "react";
 import { X, Users, AlertCircle, Image as ImageIcon, Tag, Plus, Trash2 } from "lucide-react";
 import { showSuccessToast, showErrorToast } from "@/components/utility/toast.ts";
 import axios from "@/lib/axios.ts";
-import {gradientOptions} from "@/pages/user/4_forums/forum_modals/EditGroupModal.tsx";
+import { gradientOptions } from "@/pages/user/4_forums/forum_modals/EditGroupModal.tsx";
+import api from "@/lib/axios"; // Import your API client
+
 interface CreateGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -21,11 +23,17 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; description?: string; tags?: string }>({});
+  
   if (!isOpen) return null;
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Validate file size (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        showErrorToast("File size must be less than 5MB");
+        return;
+      }
       setCoverImage(file);
       const previewUrl = URL.createObjectURL(file);
       setCoverPreview(previewUrl);
@@ -62,29 +70,104 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
       handleAddTag();
     }
   };
-  async function uploadToCloudinary(coverImage:File):Promise<string|null>{
-    try{
-      const form = new FormData();
-      form.append('file', coverImage);
-      form.append('upload_preset', 'Ensemble');
 
-      const resp = await fetch('https://api.cloudinary.com/v1_1/drsansen5/image/upload', {
-        method: 'POST',
-        body: form,
+  const uploadFile = async (file: File): Promise<string> => {
+    try {
+      const response = await api.post("/api/files/upload-url", {
+        folder: "forum-group", // Changed from "profile" to "forum-covers" for organization
+        filename: file.name,
+        contentType: file.type,
       });
 
-      const imageObject = await resp.json();
-      if (!resp.ok) {
-        console.error('Cloudinary upload failed:', imageObject);
-        throw new Error(imageObject?.error?.message || 'Cloudinary upload failed');
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to get upload URL');
       }
 
-      return imageObject.secure_url || null;
-    }catch(err){
-        console.error('Error uploading image to Cloudinary:', err);
-        throw new Error('Failed to upload cover image');
+      let { uploadUrl, key, expiresIn, maxFileSize } = response.data;
+      
+      console.log('📤 Upload URL received:', {
+        key,
+        expiresIn: `${expiresIn} seconds`,
+        maxFileSize: `${maxFileSize / 1024 / 1024}MB`
+      });
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+      let uploadResponse = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": file.type,
+        },
+        body: file,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (uploadResponse.status === 403) {
+        console.log("⚠️ Upload URL expired, requesting new one...");
+        
+        const newResponse = await api.post("/api/files/upload-url", {
+          folder: "forum-covers",
+          filename: file.name,
+          contentType: file.type,
+        });
+
+        if (!newResponse.data.success) {
+          throw new Error(newResponse.data.message || 'Failed to get new upload URL');
+        }
+
+        const { uploadUrl: newUploadUrl, key: newKey } = newResponse.data;
+
+        uploadResponse = await fetch(newUploadUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": file.type,
+            "x-amz-server-side-encryption": "AES256",
+          },
+          body: file,
+        });
+
+        key = newKey;
+      }
+
+      if (!uploadResponse.ok) {
+        if (uploadResponse.status === 403) {
+          throw new Error('Permission denied. Please check your S3 bucket permissions.');
+        }
+        if (uploadResponse.status === 413) {
+          throw new Error('File is too large. Maximum size is 5MB.');
+        }
+        if (uploadResponse.status === 415) {
+          throw new Error('File type not supported.');
+        }
+        throw new Error(`Upload failed with status ${uploadResponse.status}`);
+      }
+
+      console.log('✅ File uploaded successfully:', key);
+      return key;
+
+    } catch (error: any) {
+      console.error('❌ Upload error:', error);
+      
+      if (error.name === 'AbortError') {
+        throw new Error('Upload timed out. Please try again.');
+      }
+      if (error.response?.status === 401) {
+        throw new Error('Please log in to upload files.');
+      }
+      if (error.response?.status === 429) {
+        throw new Error('Too many upload attempts. Please try again later.');
+      }
+      if (error.response?.status === 400) {
+        throw new Error(error.response?.data?.message || 'Invalid file or folder.');
+      }
+      
+      throw new Error(error.message || 'Failed to upload image. Please try again.');
     }
-}
+  };
+
   const validate = (): boolean => {
     const newErrors: { name?: string; description?: string; tags?: string } = {};
     if (!name.trim()) newErrors.name = "Group name is required";
@@ -125,7 +208,7 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
     return false;
   };
 
-  const resetForm = ()=>{
+  const resetForm = () => {
     setName("");
     setDescription("");
     setTags([]);
@@ -133,22 +216,28 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
     setCoverImage(null);
     setCoverPreview(null);
     onClose();
-  }
-  const handleSubmit = async() => {
+  };
+
+  const handleSubmit = async () => {
     if (!validate()) return;
     if (isCreating) return; // prevent double submit
 
     setIsCreating(true);
 
     try {
-      const imageUrl = coverImage ? await uploadToCloudinary(coverImage) : null;
+      let imageKey: string | null = null;
+      
+      // Upload cover image if provided
+      if (coverImage) {
+        imageKey = await uploadFile(coverImage);
+      }
 
       const response = await axios.post("/api/forum/create-group", {
         groupName: name.trim(),
         description: description.trim(),
         tags,
-        imageUrl,
-        gradient: gradientOptions[Math.floor(Math.random() * gradientOptions.length)].value, // Randomly assign a gradient from options
+        imageKey, // Send the S3 key instead of cloudinary URL
+        gradient: gradientOptions[Math.floor(Math.random() * gradientOptions.length)].value,
       });
 
       if (response.status === 201) {

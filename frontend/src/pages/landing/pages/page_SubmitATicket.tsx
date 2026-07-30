@@ -10,7 +10,6 @@ const PageSubmitATicket: React.FC = () => {
   const [ticketNumber, setTicketNumber] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [email, setEmail] = useState("");
   const [subject, setSubject] = useState("");
   const [ticketType, setTicketType] = useState<string>("Other");
   const [description, setDescription] = useState("");
@@ -20,20 +19,18 @@ const PageSubmitATicket: React.FC = () => {
     setError(null);
     setSubmitting(true);
     try {
-      const res = await api.post("/api/users/tickets", {
-        email: email.trim(),
-        subject: subject.trim(),
-        type: ticketType,
-        description: description.trim(),
-        channel: "web",
-        priority: "Medium",
-      });
-      if (res.data?.success) {
-        setTicketNumber(res.data.data?.ticketNumber || null);
-        setSubmitted(true);
-      } else {
-        setError(res.data?.message || "Failed to submit ticket");
-      }
+      // console.log("Submitting ticket:", { subject, ticketType, description });
+      // const res = await api.post("/api/tickets/", {
+      //   subject: subject.trim(),
+      //   ticketType,
+      //   description: description.trim(),
+      // });
+      // if (res.data?.success && res.status === 200) {
+      //   setTicketNumber(res.data.data?.ticketNumber || null);
+      //   setSubmitted(true);
+      // } else {
+      //   setError(res.data?.message || "Failed to submit ticket");
+      // }
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
@@ -92,26 +89,6 @@ const PageSubmitATicket: React.FC = () => {
           </div>
         ) : (
           <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#7a8499", marginBottom: 8 }}>
-                Email Address
-              </label>
-              <input
-                required
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                style={{
-                  width: "100%",
-                  background: "#0d0f1a",
-                  border: "1px solid #1e2130",
-                  borderRadius: 10,
-                  padding: "14px",
-                  color: "#fff",
-                  outline: "none",
-                }}
-              />
-            </div>
             <div>
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#7a8499", marginBottom: 8 }}>
                 Ticket Type

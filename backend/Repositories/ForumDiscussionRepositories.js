@@ -8,6 +8,118 @@ const db = new Proxy({}, {
         return typeof value === 'function' ? value.bind(realDb) : value;
     }
 });
+
+function activeDiscussionFilter(filter = {}) {
+    return {
+        ...filter,
+        deleted_at: null,
+        $or: [
+            { status: { $exists: false } },
+            { status: 'active' },
+        ],
+    };
+}
+
+function feedScoreExpression(type) {
+    const likes = { $size: { $ifNull: ['$likes', []] } };
+    const comments = { $size: { $ifNull: ['$comments', []] } };
+    const saves = { $size: { $ifNull: ['$saves', []] } };
+    const engagement = {
+        $add: [
+            { $multiply: [likes, 3] },
+            { $multiply: [comments, 2] },
+            saves,
+        ],
+    };
+
+    if (type === 'trending') return engagement;
+    if (type === 'hot') {
+        return {
+            $add: [
+                { $log10: { $max: [engagement, 1] } },
+                { $divide: [{ $toLong: '$created_at' }, 45000000] },
+            ],
+        };
+    }
+    return { $toLong: '$created_at' };
+}
+
+async function getPaginatedForumDiscussions({
+    filter = {},
+    type = 'latest',
+    cursor = null,
+    limit = 10,
+} = {}) {
+    try {
+        const forumDiscussionsCollection = db.collection('forum_discussions');
+        const pipeline = [
+            {
+                $match: {
+                    $and: [
+                        filter,
+                        { deleted_at: null },
+                        {
+                            $or: [
+                                { status: { $exists: false } },
+                                { status: 'active' },
+                            ],
+                        },
+                    ],
+                },
+            },
+            {
+                $lookup: {
+                    from: 'forum_groups',
+                    let: { groupId: '$forum_group_id' },
+                    pipeline: [
+                        { $match: { $expr: { $eq: [{ $toString: '$_id' }, { $toString: '$$groupId' }] } } },
+                        { $match: { status: 'active', deleted_at: null } },
+                    ],
+                    as: '_activeGroup',
+                },
+            },
+            { $match: { '_activeGroup.0': { $exists: true } } },
+            {
+                $addFields: {
+                    _feedSticky: { $cond: [{ $eq: ['$is_sticky', true] }, 1, 0] },
+                    _feedSort: feedScoreExpression(type),
+                },
+            },
+        ];
+
+        if (cursor) {
+            pipeline.push({
+                $match: {
+                    $or: [
+                        { _feedSticky: { $lt: cursor.sticky } },
+                        { _feedSticky: cursor.sticky, _feedSort: { $lt: cursor.value } },
+                        {
+                            _feedSticky: cursor.sticky,
+                            _feedSort: cursor.value,
+                            _id: { $lt: new ObjectId(cursor.id) },
+                        },
+                    ],
+                },
+            });
+        }
+
+        pipeline.push(
+            { $sort: { _feedSticky: -1, _feedSort: -1, _id: -1 } },
+            { $limit: limit + 1 }
+        );
+
+        const rows = await forumDiscussionsCollection.aggregate(pipeline).toArray();
+        const hasMore = rows.length > limit;
+        return {
+            discussions: hasMore ? rows.slice(0, limit) : rows,
+            hasMore,
+        };
+    } catch (err) {
+        console.error('Error fetching paginated forum discussions:', err);
+        throw err;
+    }
+}
+
 async function createForumDiscussionRepositories(discussionPayload = {}) {
     try {
         const forumDiscussionsCollection = db.collection('forum_discussions');
@@ -22,7 +134,10 @@ async function createForumDiscussionRepositories(discussionPayload = {}) {
 async function getForumDiscussionByGroupId(groupId) {
     try {
         const forumDiscussionsCollection = db.collection('forum_discussions');
-        return await forumDiscussionsCollection.find({ forum_group_id: groupId }).sort({ created_at: -1 }).toArray();
+        return await forumDiscussionsCollection
+            .find(activeDiscussionFilter({ forum_group_id: groupId }))
+            .sort({ created_at: -1 })
+            .toArray();
     } catch (err) {
         console.error('Error fetching forum discussion by group ID:', err);
         throw err;
@@ -32,7 +147,9 @@ async function getForumDiscussionByGroupId(groupId) {
 async function getForumDiscussionById(discussionId) {
     try {
         const forumDiscussionsCollection = db.collection('forum_discussions');
-        return await forumDiscussionsCollection.findOne({ _id: new ObjectId(discussionId) });
+        return await forumDiscussionsCollection.findOne(
+            activeDiscussionFilter({ _id: new ObjectId(discussionId) })
+        );
     } catch (err) {
         console.error('Error fetching forum discussion by ID:', err);
         throw err;
@@ -42,7 +159,10 @@ async function getForumDiscussionById(discussionId) {
 async function getForumDiscussionsByUserId(userId) {
     try {
         const forumDiscussionsCollection = db.collection('forum_discussions');
-        return await forumDiscussionsCollection.find({ user_id: userId }).sort({ created_at: -1 }).toArray();
+        return await forumDiscussionsCollection
+            .find(activeDiscussionFilter({ user_id: userId }))
+            .sort({ created_at: -1 })
+            .toArray();
     } catch (err) {
         console.error('Error fetching forum discussions by user ID:', err);
         throw err;
@@ -53,10 +173,13 @@ async function updateForumDiscussion(discussionId, updateFields = {}) {
     try {
         const forumDiscussionsCollection = db.collection('forum_discussions');
         const result = await forumDiscussionsCollection.updateOne(
-            { _id: new ObjectId(discussionId) },
+            activeDiscussionFilter({ _id: new ObjectId(discussionId) }),
             updateFields
         );
-        return result.modifiedCount > 0;
+        if (result.matchedCount === 0) {
+            return null;
+        }
+        return await getForumDiscussionById(discussionId);
     } catch (err) {
         console.error('Error updating forum discussion:', err);
         throw err;
@@ -67,10 +190,16 @@ async function updateForumDiscussionComments({ discussionId, commentId, updateFi
     try {
         const forumDiscussionsCollection = db.collection('forum_discussions');
         const result = await forumDiscussionsCollection.updateOne(
-            { _id: new ObjectId(discussionId), 'comments.comment_id': commentId,},
+            activeDiscussionFilter({
+                _id: new ObjectId(discussionId),
+                'comments.comment_id': commentId,
+            }),
             updateFields
         );
-        return result.modifiedCount > 0;
+        if (result.matchedCount === 0) {
+            return null;
+        }
+        return await getForumDiscussionById(discussionId);
     } catch (err) {
         console.error('Error updating forum discussion comments:', err);
         throw err;
@@ -81,7 +210,7 @@ async function addForumDiscussionCommentRepository(discussionId, commentPayload 
     try {
         const forumDiscussionsCollection = db.collection('forum_discussions');
         const result = await forumDiscussionsCollection.updateOne(
-            { _id: new ObjectId(discussionId) },
+            activeDiscussionFilter({ _id: new ObjectId(discussionId) }),
             {
                 $push: { comments: commentPayload },
                 $set: { updated_at: new Date() },
@@ -91,6 +220,31 @@ async function addForumDiscussionCommentRepository(discussionId, commentPayload 
         return result.modifiedCount > 0 ? commentPayload : null;
     } catch (err) {
         console.error('Error adding forum discussion comment:', err);
+        throw err;
+    }
+}
+
+async function softDeleteForumDiscussionComment(discussionId, commentId) {
+    try {
+        const forumDiscussionsCollection = db.collection('forum_discussions');
+        const result = await forumDiscussionsCollection.updateOne(
+            activeDiscussionFilter({
+                _id: new ObjectId(discussionId),
+                'comments.comment_id': commentId,
+            }),
+            {
+                $set: {
+                    'comments.$.comment': '[deleted]',
+                    'comments.$.attachments': [],
+                    'comments.$.deleted_at': new Date(),
+                    'comments.$.updated_at': new Date(),
+                    updated_at: new Date(),
+                },
+            }
+        );
+        return result.modifiedCount > 0;
+    } catch (err) {
+        console.error('Error soft deleting forum discussion comment:', err);
         throw err;
     }
 }
@@ -111,7 +265,10 @@ async function getForumDiscussionByDiscussionIdAndCommentId(discussionId, commen
 async function getForumDiscussionSavedByUserId(userId) {
     try{
         const forumDiscussionsCollection = db.collection('forum_discussions');
-        const result = await forumDiscussionsCollection.find({ 'saves.user_id': userId }).sort({created_at: -1}).toArray();
+        const result = await forumDiscussionsCollection
+            .find(activeDiscussionFilter({ 'saves.user_id': userId }))
+            .sort({created_at: -1})
+            .toArray();
         return result;
     }catch(err){
         console.error('Error fetching forum discussions saved by user ID:', err);
@@ -122,8 +279,16 @@ async function getForumDiscussionSavedByUserId(userId) {
 async function deleteForumDiscussion(discussionId) {
     try {
         const forumDiscussionsCollection = db.collection('forum_discussions');
-        const result = await forumDiscussionsCollection.deleteOne({ _id: new ObjectId(discussionId) });
-        return result.deletedCount > 0;
+        const result = await forumDiscussionsCollection.updateOne(
+            activeDiscussionFilter({ _id: new ObjectId(discussionId) }),
+            {
+                $set: {
+                    deleted_at: new Date(),
+                    updated_at: new Date(),
+                },
+            }
+        );
+        return result.modifiedCount > 0;
     } catch (err) {
         console.error('Error deleting forum discussion:', err);
         throw err;
@@ -132,12 +297,14 @@ async function deleteForumDiscussion(discussionId) {
 
 module.exports = {
     createForumDiscussionRepositories,
+    getPaginatedForumDiscussions,
     getForumDiscussionByGroupId,
     getForumDiscussionById,
     getForumDiscussionsByUserId,
     updateForumDiscussion,
     updateForumDiscussionComments,
     addForumDiscussionCommentRepository,
+    softDeleteForumDiscussionComment,
     getForumDiscussionByDiscussionIdAndCommentId,
     getForumDiscussionSavedByUserId,
     deleteForumDiscussion,

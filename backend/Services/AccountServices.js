@@ -5,7 +5,15 @@ const { getAllAccounts, createAccount, getAccountByHandle, getAccountWalletRepos
     updateAndInsertAccountProfile,
     updateAccountProfile
 } = require("../Repositories/AccountRepositories");
+const {
+    updateUserDetailsByAccountId,
+    updateUserDetails
+} = require('../Repositories/UserRepositories');
+const {
+    updateProfileAccountRepositories
+} = require('../Repositories/ProfileRepositories');
 const redisClient = require('../lib/redis');
+const bcrypt = require('bcrypt');
 
 async function fetchAllAccounts() {
     try {
@@ -155,6 +163,42 @@ async function updateAccountProfileServices(accountId, fileId) {
     }
 }
 
+async function settingAccountInfoUpdate(accountId, payload) {
+    if (!checkAccountIdService(accountId)) {
+        throw new Error('Invalid account ID');
+    }
+    try {
+        if (payload.isEmailVerified !== undefined && !payload.isEmailVerified) {
+            throw new Error('Email must be verified to update account information');
+        }
+        if(payload.isUernameUnique !== undefined && !payload.isUsernameUnique) {
+            throw new Error('Username must be unique to update account information');
+        }
+        if (payload.password) {
+            const saltRounds = 10;
+            const hashedPassword = await bcrypt.hash(payload.password, saltRounds);
+            payload.password = hashedPassword;
+        }
+        if (!payload.email && !payload.address && !payload.password && !payload.username) { 
+            return; // No fields to update, exit early
+        }
+        await Promise.all([
+            updateUserDetailsByAccountId(accountId, {
+                email_address: payload.email,
+                address: payload.address,
+                password_hash: payload.password,
+            }),
+            updateProfileAccountRepositories(accountId, {
+                handle: payload.username,
+            })
+        ]);
+        
+    }catch (err) {
+        console.error('Error updating account info:', err);
+        throw err;
+    }
+}
+
 module.exports = {
     fetchAllAccounts,
     createNewAccount,
@@ -166,5 +210,6 @@ module.exports = {
     checkAccountIdService,
     getDisplayNameByAccountIdService,
     updateAndInsertAccountProfileServices,
-    updateAccountProfileServices
+    updateAccountProfileServices,
+    settingAccountInfoUpdate
 };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, CreditCard, AlertTriangle, HelpCircle, FileText, ArrowLeft, AlertCircle } from "lucide-react";
+import { User, CreditCard, AlertTriangle, HelpCircle, FileText, ArrowLeft, AlertCircle,Ticket } from "lucide-react";
 
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
@@ -17,8 +17,8 @@ import { UserSettingsSubscriptionDetails } from "./user_settings_subscriptiondet
 import { UserSettingsReport } from "./user_settings_report";
 import { UserSettingsHelp } from "./user_settings_help";
 import { UserSettingsLegalPolicies } from "./user_settings_legalpolicies";
-
-type TabType = "account" | "subscription" | "report" | "help" | "legal";
+import PageSubmitATicket from '@/pages/landing/pages/page_SubmitATicket';
+type TabType = "account" | "subscription" | "report" | "help" | "legal" | "ticket";
 
 interface Preset {
   file_id: number;
@@ -203,21 +203,40 @@ export default function UserSettings() {
     }
   };
 
-  const handleSaveAccountDetails = async (e: React.FormEvent) => {
+  // UPDATED: Handle save with email verification and username uniqueness
+  const handleSaveAccountDetails = async (
+    e: React.FormEvent, 
+    isEmailVerified: boolean, 
+    isUsernameUnique: boolean
+  ) => {
     e.preventDefault();
 
+    // Check username uniqueness
+    if (!isUsernameUnique) {
+      toast.error("Username is already taken. Please choose another.");
+      return;
+    }
+
+    // Check password match
     if (password && password !== confirmPassword) {
       toast.error("Passwords do not match");
+      return;
+    }
+
+    // Check email verification if changed
+    const isEmailChanged = email !== initialValues.email;
+    if (isEmailChanged && !isEmailVerified) {
+      toast.error("Please verify your email before saving.");
       return;
     }
 
     try {
       const toastId = toast.loading("Updating settings...");
 
-      await api.put("/api/accounts/update-settings", {
-        username,
-        address,
-        email,
+      await api.put("/api/accounts/setting-account-info", {
+        ...(username !== initialValues.username) ? { username,isUsernameUnique } : {},
+        ...(address !== initialValues.address) ? { address } : {},
+        ...(email !== initialValues.email) ? { email,isEmailVerified } : {},
         ...(password ? { password } : {}),
       });
 
@@ -237,59 +256,7 @@ export default function UserSettings() {
     }
   };
 
-  const handleSaveAvatar = async (fileOrPresetId: File | number, isPreset: boolean) => {
-    try {
-      if (isPreset) {
-        const selectedPreset = avatarPresets.find((p) => p.file_id === fileOrPresetId);
-        if (!selectedPreset) {
-          toast.error("Invalid preset selected.");
-          return;
-        }
-
-        await api.put("/api/accounts/update-profile-id", {
-          fileId: selectedPreset.file_id,
-        });
-
-        setAvatarUrl(constructAvatarUrl(selectedPreset.path));
-        toast.success("Preset avatar updated successfully.");
-      } else {
-        const file = fileOrPresetId as File;
-        const toastId = toast.loading("Uploading avatar...");
-
-        const response = await api.post("/api/files/upload-url", {
-          folder: "profile",
-          filename: file.name,
-          contentType: file.type,
-        });
-
-        const { uploadUrl, key } = response.data;
-
-        await fetch(uploadUrl, {
-          method: "PUT",
-          headers: { "Content-Type": file.type },
-          body: file,
-        });
-
-        await api.post("/api/accounts/update-profile", {
-          name: file.name,
-          path: key,
-          mime_type: file.type,
-          size_bytes: file.size,
-        });
-
-        const fullUrl = constructAvatarUrl(key);
-        setAvatarUrl(fullUrl);
-        toast.success("Custom avatar uploaded successfully.", { id: toastId });
-      }
-
-      setIsAvatarModalOpen(false);
-      fetchSettings();
-    } catch (error) {
-      console.error("Error updating avatar:", error);
-      toast.error("Failed to save avatar.");
-    }
-  };
-
+ 
   const handleCancelSubscription = async () => {
     if (confirm("Are you sure you want to cancel your current subscription?")) {
       try {
@@ -327,6 +294,7 @@ export default function UserSettings() {
     { id: "account", label: "Account Details", icon: User },
     { id: "subscription", label: "Subscription Details", icon: CreditCard },
     { id: "report", label: "Report Technical Problem", icon: AlertTriangle },
+    { id: "ticket", label: "Submit a Ticket", icon: Ticket },
     { id: "help", label: "Help & Support", icon: HelpCircle },
     { id: "legal", label: "Legal & Policies", icon: FileText },
   ] as const;
@@ -417,10 +385,8 @@ export default function UserSettings() {
                     setPassword={setPassword}
                     confirmPassword={confirmPassword}
                     setConfirmPassword={setConfirmPassword}
-                    avatarUrl={avatarUrl}
                     onSave={handleSaveAccountDetails}
                     onOpenEditModal={() => setIsEditModalOpen(true)}
-                    onOpenAvatarModal={() => setIsAvatarModalOpen(true)}
                     initialValues={initialValues}
                     setIsDirty={setIsDirty}
                   />
@@ -446,6 +412,7 @@ export default function UserSettings() {
                 {activeTab === "help" && <UserSettingsHelp />}
 
                 {activeTab === "legal" && <UserSettingsLegalPolicies />}
+                {activeTab === "ticket" && <PageSubmitATicket />}
               </motion.div>
             </AnimatePresence>
           </main>
@@ -473,7 +440,9 @@ export default function UserSettings() {
               <button
                 onClick={(e) => {
                   setShowUnsavedModal(false);
-                  handleSaveAccountDetails(e);
+                  // Create a synthetic event to pass to handleSaveAccountDetails
+                  const syntheticEvent = e as any;
+                  handleSaveAccountDetails(syntheticEvent, false, true);
                 }}
                 className="px-4 py-2 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md"
               >
@@ -506,15 +475,6 @@ export default function UserSettings() {
           joinedDate: profileData.joinedDate || "",
         }}
         onSave={() => fetchSettings()}
-      />
-
-      <AvatarEditModal
-        isOpen={isAvatarModalOpen}
-        onClose={() => setIsAvatarModalOpen(false)}
-        onSave={handleSaveAvatar}
-        currentAvatarName={fullName}
-        currentAvatarUrl={avatarUrl || undefined}
-        presets={avatarPresets}
       />
     </div>
   );
