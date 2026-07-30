@@ -1,3 +1,3 @@
-1. Added dynamic version history logs
-2. Refactored banner collapsible animations for a smoother user experience.
-3. Updated the Homepage Experience
+1. Updated the Homepage Experience
+2. Updated the Forums Page
+3. Fixed Bugs
