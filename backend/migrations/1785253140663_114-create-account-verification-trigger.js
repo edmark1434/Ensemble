@@ -1,5 +1,11 @@
-// migrations/109-create-account-verification-trigger.js
+/**
+ * @type {import('node-pg-migrate').ColumnDefinitions | undefined}
+ */
+exports.shorthands = undefined;
 
+/**
+ * @param pgm {import('node-pg-migrate').MigrationBuilder}
+ */
 exports.up = (pgm) => {
   // ============================================
   // FUNCTION
