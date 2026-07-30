@@ -2319,7 +2319,7 @@ const Forums = () => {
           </button>
         </div>
 
-        <div className={`grid grid-cols-1 gap-6 ${activeTab === "feed" ? "lg:grid-cols-[280px_1fr]" : "lg:grid-cols-1"}`}>
+        <div className={`grid grid-cols-1 gap-6 ${activeTab === "feed" && isFilterVisible ? "lg:grid-cols-[280px_1fr]" : "lg:grid-cols-1"}`}>
           {activeTab === "feed" && (
             <div>
               {renderFilterSidebar()}
