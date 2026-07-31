@@ -277,12 +277,13 @@ export type TicketsOverview = {
   reports: UserReport[];
   staffWorkload: StaffWorkload[];
   recentActivity: TicketActivity[];
+  currentStaffId?: string | number | null;
   alerts: {
     id: string;
     message: string;
     severity: string;
     action?: {
-      tab?: 'overview' | 'tickets' | 'disputes' | 'reports' | 'assignments';
+      tab?: 'overview' | 'tickets' | 'mine' | 'disputes' | 'reports' | 'assignments' | string;
       ticketFilters?: Partial<{
         search: string;
         status: string;

@@ -15,7 +15,7 @@ const { pool } = require('../lib/database');
 
 async function getAdminTicketsOverview(req, res) {
   try {
-    const data = await getTicketsOverview();
+    const data = await getTicketsOverview(req.session);
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching tickets overview:', err);

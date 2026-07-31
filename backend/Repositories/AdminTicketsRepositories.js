@@ -322,7 +322,7 @@ function mapReportRow(row) {
   };
 }
 
-async function getTicketsOverview() {
+async function getTicketsOverview(staffSession = null) {
   const [
     ticketCounts,
     disputeCounts,
@@ -451,6 +451,9 @@ async function getTicketsOverview() {
 
   const types = catalog.types.length ? catalog.types : typeLabels;
 
+  const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
+  const currentStaffId = staff?.staff_id != null ? String(staff.staff_id) : sessionStaffId(staffSession);
+
   return {
     lastUpdated: new Date().toISOString(),
     summary: {
@@ -494,6 +497,7 @@ async function getTicketsOverview() {
     reports,
     staffWorkload,
     recentActivity,
+    currentStaffId,
     alerts: buildTicketAlerts(tc, dc, rc),
     dataSources: {
       tables: [

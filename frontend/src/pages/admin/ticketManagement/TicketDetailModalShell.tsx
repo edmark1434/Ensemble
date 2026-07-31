@@ -196,6 +196,7 @@ export default function TicketDetailModalShell({
   endpointBase,
   accent = 'rose',
   allowEscalate = true,
+  allowEscalateToAdmin = true,
   onClose,
   onUpdated,
 }: {
@@ -203,6 +204,8 @@ export default function TicketDetailModalShell({
   endpointBase: string;
   accent?: keyof typeof ACCENT;
   allowEscalate?: boolean;
+  /** Moderators can hand off to Admin; Admin desk hides this (already Admin). */
+  allowEscalateToAdmin?: boolean;
   onClose: () => void;
   onUpdated: () => void;
 }) {
@@ -520,20 +523,23 @@ export default function TicketDetailModalShell({
                     <div>
                       <p className="text-[10px] font-semibold tracking-wide text-amber-200/80">Escalate</p>
                       <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
-                        Hand off to Admin, or move to the correct moderator queue and type. Escalating unassigns you
-                        automatically.
+                        {allowEscalateToAdmin
+                          ? 'Hand off to Admin, or move to the correct moderator queue and type. Escalating unassigns you automatically.'
+                          : 'Move this ticket to the correct moderator queue and type when it belongs on another desk. Escalating unassigns you automatically.'}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => setConfirmEscalateAdmin(true)}
-                      className={`${HANDLER_ACTION_BTN} ${ADMIN_ESCALATE_BTN} w-full justify-center`}
-                    >
-                      <ShieldAlert className={HANDLER_ACTION_ICON} />
-                      Escalate to Admin
-                    </button>
-                    <div className="border-t border-white/5 pt-3">
+                    {allowEscalateToAdmin && (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => setConfirmEscalateAdmin(true)}
+                        className={`${HANDLER_ACTION_BTN} ${ADMIN_ESCALATE_BTN} w-full justify-center`}
+                      >
+                        <ShieldAlert className={HANDLER_ACTION_ICON} />
+                        Escalate to Admin
+                      </button>
+                    )}
+                    <div className={allowEscalateToAdmin ? 'border-t border-white/5 pt-3' : undefined}>
                       <p className="mb-2 text-[11px] font-medium text-zinc-500">Escalate to moderator</p>
                       <div className="space-y-3">
                         <Field label="Moderator Queue">
@@ -696,7 +702,7 @@ export default function TicketDetailModalShell({
           </div>
         )}
 
-        {confirmEscalateAdmin && (
+        {confirmEscalateAdmin && allowEscalateToAdmin && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
             <div className="w-full max-w-md rounded-2xl border border-violet-500/30 bg-[#14151c] p-5 shadow-2xl">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-200/80">Escalate to Admin</p>
