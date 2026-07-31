@@ -39,10 +39,6 @@ export type SupportTicket = {
   updatedAt: string;
   closedAt: string | null;
   resolvedAt?: string | null;
-  takeoverRequestedByStaffId?: number | string | null;
-  takeoverRequestedAt?: string | null;
-  takeoverRequestNote?: string | null;
-  takeoverRequester?: TicketAssignee | null;
 };
 
 export type TicketMessage = {
@@ -75,13 +71,22 @@ export type DisputePermissions = {
   canSelfAssign?: boolean;
   canAssignMyself?: boolean;
   canRequestTakeover?: boolean;
-  canAskTakeover?: boolean;
   canForceTakeover?: boolean;
   canAcceptTakeover?: boolean;
   canCancelTakeoverRequest?: boolean;
 };
 
-export type TicketPermissions = DisputePermissions;
+export type TicketPermissions = {
+  staffId?: string | null;
+  role?: string | null;
+  isAssignee?: boolean;
+  isAdmin?: boolean;
+  canView?: boolean;
+  canAct?: boolean;
+  canAssignOthers?: boolean;
+  canSelfAssign?: boolean;
+  canAssignMyself?: boolean;
+};
 
 export type Dispute = {
   id: number | string;

@@ -61,6 +61,7 @@ function mapTicketRow(row) {
     takeoverRequestedByStaffId: row.takeover_requested_by_staff_id || null,
     takeoverRequestedAt: row.takeover_requested_at || null,
     takeoverRequestNote: row.takeover_request_note || null,
+    takeoverMode: row.takeover_mode || null,
     takeoverRequester: row.takeover_requester_staff_id
       ? {
           staffId: row.takeover_requester_staff_id,
