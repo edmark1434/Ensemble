@@ -63,15 +63,20 @@ export type SupportOverview = {
   charts: {
     ticketStatusMix: ChartSegment[];
     ticketCategories: ChartSegment[];
+    ticketTypes?: ChartSegment[];
     priorityMix: ChartSegment[];
+    openByPriority?: ChartSegment[];
     disputeStatusMix: ChartSegment[];
     activityTrend: { day: string; tickets: number; messages: number }[];
   };
+  tickets?: SupportTicket[];
   recentTickets: SupportTicket[];
   recentDisputes: Dispute[];
   recentReports: UserReport[];
   ticketLog: TicketActivity[];
+  recentActivity?: TicketActivity[];
   staffWorkload: StaffWorkloadLite[];
+  currentStaffId?: string | number | null;
   alerts: Alert[];
   dataSources: { tables: string[]; persisted: boolean };
 };

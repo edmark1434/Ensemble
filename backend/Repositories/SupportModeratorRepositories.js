@@ -1,35 +1,42 @@
 const { pool } = require('../lib/database');
 const {
-  QUEUE_SCOPES,
-  SPECIALIST_TYPES,
   normalizeTicketType,
   normalizeTicketStatus,
   normalizeTicketPriority,
 } = require('../lib/ticketEnums');
 const {
   fetchScopedReports,
-  scopedTicketCounts,
-  scopedTicketCategoryBreakdown,
   scopedReportCounts,
   scopedDisputeCounts,
   toCategoryChart,
   ticketStatusChart,
-  normalizeStatus,
   displayLabel,
   mapTicketRow,
   mapDisputeRow,
 } = require('./ModeratorSharedRepositories');
 
-// Support desk owns general support: everything not routed to a specialist queue.
-const SUPPORT_SCOPE = QUEUE_SCOPES.support;
-const specialistTypes = SPECIALIST_TYPES;
+/** Tickets owned by Admin (assignee role or escalated-to Admin) are hidden from Support. */
+const EXCLUDE_ADMIN_TICKETS_SQL = `
+  LOWER(COALESCE(t.escalated_to_role, '')) NOT IN ('admin', 'administrator')
+  AND (
+    t.handled_by_staff_id IS NULL
+    OR t.handled_by_staff_id NOT IN (
+      SELECT s.staff_id FROM staff s WHERE LOWER(s.role) IN ('admin', 'administrator')
+    )
+  )
+`;
+
+function isAdminTicketPayload(ticket) {
+  if (!ticket) return false;
+  const escalated = String(ticket.escalatedToRole || '').toLowerCase();
+  if (escalated === 'admin' || escalated === 'administrator') return true;
+  const role = String(ticket.assignee?.role || '').toLowerCase();
+  return role === 'admin' || role === 'administrator';
+}
 
 async function getSupportTickets({ status, search, type, category, priority } = {}) {
-  const where = ['t.deleted_at IS NULL'];
+  const where = ['t.deleted_at IS NULL', EXCLUDE_ADMIN_TICKETS_SQL];
   const params = [];
-
-  params.push([...specialistTypes]);
-  where.push(`NOT (t.type = ANY($${params.length}))`);
 
   if (status && status !== 'all') {
     params.push(normalizeTicketStatus(status));
@@ -62,7 +69,7 @@ async function getSupportTickets({ status, search, type, category, priority } = 
     )`);
   }
 
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const whereSql = `WHERE ${where.join(' AND ')}`;
   const result = await pool.query(
     `
     SELECT
@@ -88,11 +95,53 @@ async function getSupportTickets({ status, search, type, category, priority } = 
     ORDER BY
       CASE t.priority WHEN 'High' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END,
       t.updated_at DESC
-    LIMIT 100
+    LIMIT 200
     `,
     params
   );
   return result.rows.map(mapTicketRow);
+}
+
+async function getSupportTicketCounts() {
+  const result = await pool.query(`
+    SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE t.status = 'Open')::int AS open_count,
+      COUNT(*) FILTER (WHERE t.status = 'In Progress')::int AS in_progress,
+      COUNT(*) FILTER (WHERE t.status IN ('Resolved', 'Closed'))::int AS resolved,
+      COUNT(*) FILTER (
+        WHERE t.priority = 'High'
+          AND t.status NOT IN ('Resolved', 'Closed')
+      )::int AS high_priority,
+      COUNT(*) FILTER (
+        WHERE t.handled_by_staff_id IS NULL
+          AND t.status NOT IN ('Resolved', 'Closed')
+      )::int AS unassigned,
+      COUNT(*) FILTER (
+        WHERE t.status NOT IN ('Resolved', 'Closed')
+          AND LOWER(COALESCE(t.last_message_author_type, '')) = 'user'
+      )::int AS awaiting_reply,
+      COUNT(*) FILTER (
+        WHERE t.status NOT IN ('Resolved', 'Closed')
+          AND (t.escalated_to_role IS NOT NULL OR t.escalated_by_staff_id IS NOT NULL)
+      )::int AS escalated
+    FROM tickets t
+    WHERE t.deleted_at IS NULL
+      AND ${EXCLUDE_ADMIN_TICKETS_SQL}
+  `);
+  return result.rows[0];
+}
+
+async function getSupportTicketCategoryBreakdown() {
+  const result = await pool.query(`
+    SELECT t.type AS category, t.type, COUNT(*)::int AS count
+    FROM tickets t
+    WHERE t.deleted_at IS NULL
+      AND ${EXCLUDE_ADMIN_TICKETS_SQL}
+    GROUP BY t.type
+    ORDER BY count DESC
+  `);
+  return result.rows;
 }
 
 async function getSupportReports({ status } = {}) {
@@ -165,7 +214,7 @@ async function getTicketLog() {
         t.updated_at AS at
       FROM tickets t
       WHERE t.deleted_at IS NULL
-        AND NOT (t.type = ANY($1))
+        AND ${EXCLUDE_ADMIN_TICKETS_SQL}
       ORDER BY t.updated_at DESC
       LIMIT 14
     )
@@ -180,7 +229,7 @@ async function getTicketLog() {
       FROM tickets t
       WHERE t.last_message_at IS NOT NULL
         AND t.deleted_at IS NULL
-        AND NOT (t.type = ANY($1))
+        AND ${EXCLUDE_ADMIN_TICKETS_SQL}
       ORDER BY t.last_message_at DESC
       LIMIT 10
     )
@@ -199,8 +248,7 @@ async function getTicketLog() {
     )
     ORDER BY at DESC
     LIMIT 20
-    `,
-    [[...specialistTypes]]
+    `
   );
   return result.rows.map((r, i) => ({
     id: `log-${i}`,
@@ -222,7 +270,7 @@ async function getSupportStaffWorkload() {
         WHERE t.handled_by_staff_id = s.staff_id
           AND t.deleted_at IS NULL
           AND t.status NOT IN ('Resolved', 'Closed')
-          AND NOT (t.type = ANY($1))) AS open_tickets,
+          AND ${EXCLUDE_ADMIN_TICKETS_SQL}) AS open_tickets,
       (SELECT COUNT(*)::int FROM reports r
         WHERE r.assigned_staff_id = s.staff_id
           AND LOWER(r.status) NOT IN ('resolved', 'closed', 'dismissed')
@@ -236,7 +284,7 @@ async function getSupportStaffWorkload() {
     WHERE s.role IN ('Support Moderator', 'Admin')
       AND a.deleted_at IS NULL
     ORDER BY open_tickets DESC, open_disputes DESC
-  `, [[...specialistTypes]]);
+  `);
   return result.rows.map((r) => ({
     staffId: r.staff_id,
     name: r.name,
@@ -317,7 +365,28 @@ function buildAlerts(tc, rc, dc) {
   return alerts;
 }
 
-async function getSupportOverview() {
+async function resolveCurrentStaffId(session) {
+  if (!session) return null;
+  const direct = session.staff_id ?? session.staffId ?? null;
+  if (direct != null && direct !== '') {
+    const existing = await pool.query(
+      `SELECT staff_id FROM staff WHERE staff_id::text = $1 LIMIT 1`,
+      [String(direct)]
+    );
+    if (existing.rows[0]) return existing.rows[0].staff_id;
+  }
+  const accountId = session.account_id ?? session.accountId ?? null;
+  if (accountId != null && accountId !== '') {
+    const byAccount = await pool.query(
+      `SELECT staff_id FROM staff WHERE account_id::text = $1 LIMIT 1`,
+      [String(accountId)]
+    );
+    if (byAccount.rows[0]) return byAccount.rows[0].staff_id;
+  }
+  return null;
+}
+
+async function getSupportOverview(session = null) {
   const [
     ticketCounts,
     categoryRows,
@@ -332,9 +401,10 @@ async function getSupportOverview() {
     priorityMix,
     disputeMix,
     ticketTrend,
+    currentStaff,
   ] = await Promise.all([
-    scopedTicketCounts(SUPPORT_SCOPE),
-    scopedTicketCategoryBreakdown(SUPPORT_SCOPE),
+    getSupportTicketCounts(),
+    getSupportTicketCategoryBreakdown(),
     scopedReportCounts({}),
     scopedDisputeCounts({}),
     getSupportTickets(),
@@ -346,28 +416,29 @@ async function getSupportOverview() {
       SELECT
         (SELECT COUNT(*)::int FROM tickets t
           WHERE t.deleted_at IS NULL
-            AND NOT (t.type = ANY($1))
+            AND ${EXCLUDE_ADMIN_TICKETS_SQL}
             AND t.created_at >= NOW() - INTERVAL '7 days') AS tickets_this_week,
         (SELECT COALESCE(SUM(t.message_count), 0)::int FROM tickets t
           WHERE t.deleted_at IS NULL
-            AND NOT (t.type = ANY($1))
+            AND ${EXCLUDE_ADMIN_TICKETS_SQL}
             AND t.last_message_at >= NOW() - INTERVAL '7 days') AS messages_this_week,
         (SELECT COALESCE(SUM(t.message_count), 0)::int FROM tickets t
           WHERE t.deleted_at IS NULL
-            AND NOT (t.type = ANY($1))) AS total_messages,
+            AND ${EXCLUDE_ADMIN_TICKETS_SQL}) AS total_messages,
         (SELECT COUNT(*)::int FROM violations v
           WHERE v.deleted_at IS NULL AND LOWER(v.status) = 'active') AS active_violations,
         (SELECT COUNT(*)::int FROM restrictions r
           WHERE r.ends_at IS NULL OR r.ends_at > NOW()) AS active_restrictions
-    `, [[...specialistTypes]]),
+    `),
     pool.query(`
-      SELECT priority, COUNT(*)::int AS count
+      SELECT t.priority, COUNT(*)::int AS count
       FROM tickets t
       WHERE t.deleted_at IS NULL
-        AND NOT (t.type = ANY($1))
-      GROUP BY priority
+        AND ${EXCLUDE_ADMIN_TICKETS_SQL}
+        AND t.status NOT IN ('Resolved', 'Closed')
+      GROUP BY t.priority
       ORDER BY count DESC
-    `, [[...specialistTypes]]),
+    `),
     pool.query(`
       SELECT LOWER(status) AS status, COUNT(*)::int AS count
       FROM disputes
@@ -379,15 +450,16 @@ async function getSupportOverview() {
       SELECT day::date AS day,
         (SELECT COUNT(*)::int FROM tickets t
           WHERE t.deleted_at IS NULL
-            AND NOT (t.type = ANY($1))
+            AND ${EXCLUDE_ADMIN_TICKETS_SQL}
             AND t.created_at::date = day::date) AS tickets,
         (SELECT COALESCE(SUM(t.message_count), 0)::int FROM tickets t
           WHERE t.deleted_at IS NULL
-            AND NOT (t.type = ANY($1))
+            AND ${EXCLUDE_ADMIN_TICKETS_SQL}
             AND t.last_message_at::date = day::date) AS messages
       FROM generate_series(NOW() - INTERVAL '13 days', NOW(), INTERVAL '1 day') day
       ORDER BY day
-    `, [[...specialistTypes]]),
+    `),
+    resolveCurrentStaffId(session),
   ]);
 
   const tc = ticketCounts;
@@ -427,7 +499,13 @@ async function getSupportOverview() {
     charts: {
       ticketStatusMix: ticketStatusChart(tc),
       ticketCategories: toCategoryChart(categoryRows),
+      ticketTypes: toCategoryChart(categoryRows),
       priorityMix: priorityMix.rows.map((r) => ({
+        label: r.priority || 'Medium',
+        value: Number(r.count),
+        color: priorityColors[r.priority] || '#71717a',
+      })),
+      openByPriority: priorityMix.rows.map((r) => ({
         label: r.priority || 'Medium',
         value: Number(r.count),
         color: priorityColors[r.priority] || '#71717a',
@@ -443,11 +521,14 @@ async function getSupportOverview() {
         messages: Number(r.messages),
       })),
     },
+    tickets,
     recentTickets: tickets.slice(0, 8),
     recentDisputes: disputes.slice(0, 6),
     recentReports: reports.slice(0, 6),
     ticketLog,
+    recentActivity: ticketLog,
     staffWorkload,
+    currentStaffId: currentStaff,
     alerts: buildAlerts(tc, rc, dc),
     dataSources: {
       tables: [
@@ -471,4 +552,5 @@ module.exports = {
   getSupportReports,
   getSupportDisputes,
   getTicketLog,
+  isAdminTicketPayload,
 };

@@ -58,6 +58,18 @@ function mapTicketRow(row) {
       : null,
     escalatedToRole: row.escalated_to_role || null,
     isEscalated: Boolean(row.escalated_to_role || row.escalated_by_staff_id),
+    takeoverRequestedByStaffId: row.takeover_requested_by_staff_id || null,
+    takeoverRequestedAt: row.takeover_requested_at || null,
+    takeoverRequestNote: row.takeover_request_note || null,
+    takeoverRequester: row.takeover_requester_staff_id
+      ? {
+          staffId: row.takeover_requester_staff_id,
+          name: row.takeover_requester_name || 'Staff',
+          role: row.takeover_requester_role || null,
+        }
+      : row.takeover_requested_by_staff_id
+        ? { staffId: row.takeover_requested_by_staff_id, name: 'Staff', role: null }
+        : null,
     waitingForResponse,
     lastMessageAuthorType: row.last_message_author_type || null,
     relatedReportId: row.related_report_id,

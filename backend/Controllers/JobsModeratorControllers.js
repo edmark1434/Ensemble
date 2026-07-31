@@ -41,7 +41,7 @@ async function getTickets(req, res) {
 
 async function getTicket(req, res) {
   try {
-    const data = await getTicketDetail(req.params.id);
+    const data = await getTicketDetail(req.params.id, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {

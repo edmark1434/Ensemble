@@ -23,9 +23,27 @@ async function getAdminTicketsOverview(req, res) {
   }
 }
 
+function isTicketClientError(message) {
+  const msg = String(message || '');
+  return (
+    msg.includes('not valid for') ||
+    msg.includes('type is required') ||
+    msg.includes('only be changed when escalating') ||
+    msg.includes('cannot') ||
+    msg.includes('Cannot') ||
+    msg.includes('Only ') ||
+    msg.includes('Pick ') ||
+    msg.includes('No pending') ||
+    msg.includes('Unknown ticket action') ||
+    msg.includes('Could not match') ||
+    msg.includes('Staff member not found') ||
+    msg.includes('already own')
+  );
+}
+
 async function getAdminTicketDetail(req, res) {
   try {
-    const data = await getTicketDetail(req.params.id);
+    const data = await getTicketDetail(req.params.id, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -81,21 +99,11 @@ async function patchAdminTicket(req, res) {
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error updating ticket:', err);
-    const msg =
-      err?.message?.includes('not valid for') ||
-      err?.message?.includes('type is required') ||
-      err?.message?.includes('only be changed when escalating')
-        ? err.message
-        : 'Failed to update ticket';
-    res
-      .status(
-        err?.message?.includes('not valid for') ||
-          err?.message?.includes('type is required') ||
-          err?.message?.includes('only be changed when escalating')
-          ? 400
-          : 500
-      )
-      .json({ success: false, message: msg });
+    const client = isTicketClientError(err?.message);
+    res.status(client ? 400 : 500).json({
+      success: false,
+      message: client ? err.message : 'Failed to update ticket',
+    });
   }
 }
 
@@ -338,6 +346,7 @@ async function getMyTicket(req, res) {
     // Hide staff internal notes from requesters.
     data.messages = (data.messages || []).filter((m) => !m.isInternal);
     delete data.assignableStaff;
+    delete data.permissions;
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching user ticket:', err);

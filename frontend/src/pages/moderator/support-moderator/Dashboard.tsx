@@ -92,8 +92,9 @@ export default function SupportModeratorDashboard() {
   const handleAlertClick = (alert: Alert) => {
     const tab = alert.action?.tab;
     if (!tab) return;
-    if (tab === "ticket-management" && alert.action?.ticketFilters) {
-      const params = new URLSearchParams(alert.action.ticketFilters);
+    if (tab === "ticket-management") {
+      const params = new URLSearchParams(alert.action?.ticketFilters || {});
+      params.set("tab", "tickets");
       navigate(`/moderator/support/ticket-management?${params.toString()}`);
       return;
     }
@@ -166,7 +167,7 @@ export default function SupportModeratorDashboard() {
           </p>
           <h1 className="text-2xl font-bold text-white">Support desk overview</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Live queues from Postgres tickets, disputes, and reports.
+            Live queues from Postgres tickets, disputes, and reports (all ticket queues except Admin).
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -319,7 +320,7 @@ export default function SupportModeratorDashboard() {
           <DeskPanel
             icon={Ticket}
             title="Recent tickets"
-            subtitle="Support-scope tickets from the database"
+            subtitle="Tickets from the database (all queues except Admin)"
             action={
               <Link
                 to="/moderator/support/ticket-management"

@@ -779,7 +779,7 @@ function mapMongoTicketMessage(m) {
   };
 }
 
-async function getTicketDetail(ticketId) {
+async function getTicketDetail(ticketId, staffSession = null) {
   const ticketResult = await pool.query(
     `
     SELECT
@@ -791,7 +791,10 @@ async function getTicketDetail(ticketId) {
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
       st.role AS assignee_role,
       COALESCE(ea.display_name, es.first_name || ' ' || es.last_name) AS escalated_by_name,
-      es.role AS escalated_by_role
+      es.role AS escalated_by_role,
+      tr.staff_id AS takeover_requester_staff_id,
+      COALESCE(tra.display_name, tr.first_name || ' ' || tr.last_name) AS takeover_requester_name,
+      tr.role AS takeover_requester_role
     FROM tickets t
     LEFT JOIN accounts ra ON ra.account_id = t.account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id
@@ -799,6 +802,8 @@ async function getTicketDetail(ticketId) {
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
     LEFT JOIN staff es ON es.staff_id = t.escalated_by_staff_id
     LEFT JOIN accounts ea ON ea.account_id = es.account_id
+    LEFT JOIN staff tr ON tr.staff_id = t.takeover_requested_by_staff_id
+    LEFT JOIN accounts tra ON tra.account_id = tr.account_id
     WHERE t.ticket_id = $1 AND t.deleted_at IS NULL
     `,
     [ticketId]
@@ -808,7 +813,8 @@ async function getTicketDetail(ticketId) {
   const staffResult = await pool.query(`
     SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
     FROM staff s INNER JOIN accounts a ON a.account_id = s.account_id
-    ORDER BY s.role
+    WHERE a.deleted_at IS NULL
+    ORDER BY s.role, name
   `);
 
   let messages = [];
@@ -831,6 +837,8 @@ async function getTicketDetail(ticketId) {
 
   const row = ticketResult.rows[0];
   const catalog = await getTicketCatalog();
+  const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
+  const { buildTicketPermissions } = require('./TicketAssignmentHelpers');
 
   const lastPublic = [...messages].reverse().find((m) => !m.isInternal);
   const derivedAuthor =
@@ -856,6 +864,7 @@ async function getTicketDetail(ticketId) {
     typeDetails: catalog.typeDetails,
     escalateByRole: catalog.escalateByRole,
     escalateRoles: catalog.escalateRoles,
+    permissions: buildTicketPermissions(row, staff, sessionStaffId(staffSession)),
     assignableStaff: staffResult.rows.map((s) => ({
       staffId: s.staff_id,
       name: s.name,
@@ -864,7 +873,166 @@ async function getTicketDetail(ticketId) {
   };
 }
 
+async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
+  const { buildTicketPermissions, normalizeStaffId } = require('./TicketAssignmentHelpers');
+  const action = String(patch.action || '').trim();
+  if (!action) return null;
+
+  const staff = await resolveDisputeStaffId(staffSession);
+  if (!staff) throw new Error('Could not match your login to a staff profile.');
+
+  const detail = await getTicketDetail(ticketId, staffSession);
+  if (!detail) return null;
+  const row = {
+    handled_by_staff_id: detail.ticket.assignee?.staffId || null,
+    takeover_requested_by_staff_id: detail.ticket.takeoverRequestedByStaffId || null,
+  };
+  // Prefer fresh DB row for ids
+  const fresh = await pool.query(
+    `SELECT handled_by_staff_id, takeover_requested_by_staff_id FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  );
+  if (!fresh.rows.length) return null;
+  Object.assign(row, fresh.rows[0]);
+
+  const perms = buildTicketPermissions(row, staff, sessionStaffId(staffSession));
+
+  if (action === 'self_assign') {
+    if (!perms.canAssignMyself && !perms.canSelfAssign) {
+      throw new Error('You cannot assign this ticket to yourself.');
+    }
+    if (row.handled_by_staff_id && perms.isAdmin && !perms.isAssignee) {
+      await pool.query(
+        `UPDATE tickets SET
+           handled_by_staff_id = $1,
+           takeover_requested_by_staff_id = NULL,
+           takeover_requested_at = NULL,
+           takeover_request_note = NULL,
+           updated_at = NOW()
+         WHERE ticket_id = $2 AND deleted_at IS NULL`,
+        [staff.staff_id, ticketId]
+      );
+    } else {
+      await pool.query(
+        `UPDATE tickets SET
+           handled_by_staff_id = $1,
+           takeover_requested_by_staff_id = NULL,
+           takeover_requested_at = NULL,
+           takeover_request_note = NULL,
+           updated_at = NOW()
+         WHERE ticket_id = $2 AND deleted_at IS NULL AND handled_by_staff_id IS NULL`,
+        [staff.staff_id, ticketId]
+      );
+    }
+    return getTicketDetail(ticketId, staffSession);
+  }
+
+  if (action === 'request_takeover') {
+    if (!perms.canRequestTakeover) {
+      throw new Error('You cannot request takeover for this ticket.');
+    }
+    await pool.query(
+      `UPDATE tickets
+       SET takeover_requested_by_staff_id = $1,
+           takeover_requested_at = NOW(),
+           takeover_request_note = $2,
+           updated_at = NOW()
+       WHERE ticket_id = $3 AND deleted_at IS NULL`,
+      [staff.staff_id, patch.takeover_request_note || patch.note || null, ticketId]
+    );
+    return getTicketDetail(ticketId, staffSession);
+  }
+
+  if (action === 'ask_takeover') {
+    if (!perms.canAskTakeover) {
+      throw new Error('Only the current handler can ask someone to take over.');
+    }
+    const inviteId = patch.staff_id || patch.invite_staff_id || patch.handled_by_staff_id;
+    if (!inviteId) throw new Error('Pick a staff member to ask.');
+    if (normalizeStaffId(inviteId) === normalizeStaffId(staff.staff_id)) {
+      throw new Error('Pick someone else to take over this ticket.');
+    }
+    const invited = await pool.query(
+      `SELECT staff_id FROM staff WHERE staff_id::text = $1 LIMIT 1`,
+      [String(inviteId)]
+    );
+    if (!invited.rows.length) throw new Error('Staff member not found.');
+    await pool.query(
+      `UPDATE tickets
+       SET takeover_requested_by_staff_id = $1,
+           takeover_requested_at = NOW(),
+           takeover_request_note = $2,
+           updated_at = NOW()
+       WHERE ticket_id = $3 AND deleted_at IS NULL`,
+      [
+        invited.rows[0].staff_id,
+        patch.takeover_request_note || patch.note || 'Asked to take over this ticket',
+        ticketId,
+      ]
+    );
+    return getTicketDetail(ticketId, staffSession);
+  }
+
+  if (action === 'cancel_takeover_request') {
+    if (!perms.canCancelTakeoverRequest) {
+      throw new Error('Only the requester can cancel this takeover request.');
+    }
+    await pool.query(
+      `UPDATE tickets
+       SET takeover_requested_by_staff_id = NULL,
+           takeover_requested_at = NULL,
+           takeover_request_note = NULL,
+           updated_at = NOW()
+       WHERE ticket_id = $1 AND deleted_at IS NULL`,
+      [ticketId]
+    );
+    return getTicketDetail(ticketId, staffSession);
+  }
+
+  if (action === 'takeover') {
+    if (!perms.canForceTakeover) {
+      throw new Error('Only Admin can force-takeover a ticket. Request takeover instead.');
+    }
+    await pool.query(
+      `UPDATE tickets SET
+         handled_by_staff_id = $1,
+         takeover_requested_by_staff_id = NULL,
+         takeover_requested_at = NULL,
+         takeover_request_note = NULL,
+         updated_at = NOW()
+       WHERE ticket_id = $2 AND deleted_at IS NULL`,
+      [staff.staff_id, ticketId]
+    );
+    return getTicketDetail(ticketId, staffSession);
+  }
+
+  if (action === 'accept_takeover') {
+    if (!perms.canAcceptTakeover) {
+      throw new Error('You cannot accept this takeover request.');
+    }
+    const toStaffId = row.takeover_requested_by_staff_id;
+    if (!toStaffId) throw new Error('No pending takeover request.');
+    await pool.query(
+      `UPDATE tickets SET
+         handled_by_staff_id = $1,
+         takeover_requested_by_staff_id = NULL,
+         takeover_requested_at = NULL,
+         takeover_request_note = NULL,
+         updated_at = NOW()
+       WHERE ticket_id = $2 AND deleted_at IS NULL`,
+      [toStaffId, ticketId]
+    );
+    return getTicketDetail(ticketId, staffSession);
+  }
+
+  throw new Error(`Unknown ticket action: ${action}`);
+}
+
 async function updateTicket(ticketId, patch, staffSession) {
+  if (patch?.action) {
+    return applyTicketAssignmentAction(ticketId, patch, staffSession);
+  }
+
   const sets = [];
   const values = [];
   let idx = 1;
@@ -909,6 +1077,13 @@ async function updateTicket(ticketId, patch, staffSession) {
       values.push(escalatedBy);
       idx += 1;
     }
+
+    if (patch.handled_by_staff_id === undefined) {
+      patch.handled_by_staff_id = null;
+    }
+    sets.push(`takeover_requested_by_staff_id = NULL`);
+    sets.push(`takeover_requested_at = NULL`);
+    sets.push(`takeover_request_note = NULL`);
   }
 
   if (patch.status !== undefined) {
@@ -937,7 +1112,7 @@ async function updateTicket(ticketId, patch, staffSession) {
     idx += 1;
   }
 
-  if (!sets.length && !patch.note) return getTicketDetail(ticketId);
+  if (!sets.length && !patch.note) return getTicketDetail(ticketId, staffSession);
 
   if (sets.length) {
     if (patch.status && isClosedStatus(patch.status)) {
@@ -955,10 +1130,10 @@ async function updateTicket(ticketId, patch, staffSession) {
 
   if (patch.note) {
     await addTicketMessage(ticketId, patch.note, staffSession, Boolean(patch.internalNote));
-    return getTicketDetail(ticketId);
+    return getTicketDetail(ticketId, staffSession);
   }
 
-  return getTicketDetail(ticketId);
+  return getTicketDetail(ticketId, staffSession);
 }
 
 async function addTicketMessage(ticketId, body, staffSession, isInternal = false) {
@@ -1030,7 +1205,7 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
     }
   }
 
-  return getTicketDetail(ticketId);
+  return getTicketDetail(ticketId, staffSession);
 }
 
 async function resolveDisputeStaffId(session) {

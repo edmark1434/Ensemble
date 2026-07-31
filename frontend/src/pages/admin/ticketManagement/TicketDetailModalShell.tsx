@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Loader2, Lock, MessageSquare, Send, UserRound, X } from 'lucide-react';
+import { Hand, Loader2, Lock, MessageSquare, Send, ShieldAlert, UserRound, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import type { TicketDetail, TicketMessage } from './ticketTypes';
@@ -11,6 +11,24 @@ import {
   TICKET_PRIORITY_OPTIONS,
 } from './ticketTypes';
 import { formatEscalatedLabel } from './ticketFilterUtils';
+
+const HANDLER_ACTION_BTN =
+  'inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm disabled:opacity-50';
+const HANDLER_ACTION_ICON = 'h-4 w-4 shrink-0';
+const HANDLER_TONES = {
+  claim: 'border-sky-500/30 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20',
+  request: 'border-amber-500/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20',
+  force: 'border-rose-500/30 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20',
+  accept: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20',
+  cancel: 'border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10',
+  admin: 'border-violet-500/30 bg-violet-500/10 text-violet-200 hover:bg-violet-500/20',
+} as const;
+
+function apiErrorMessage(err: unknown, fallback: string) {
+  return (
+    (err as { response?: { data?: { message?: string } } })?.response?.data?.message || fallback
+  );
+}
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '—';
@@ -207,6 +225,9 @@ export default function TicketDetailModalShell({
   const [escalateRole, setEscalateRole] = useState<string>('Support Moderator');
   const [escalateType, setEscalateType] = useState<string>('');
   const [confirmEscalate, setConfirmEscalate] = useState(false);
+  const [confirmEscalateAdmin, setConfirmEscalateAdmin] = useState(false);
+  const [takeoverNote, setTakeoverNote] = useState('');
+  const [askStaffId, setAskStaffId] = useState('');
   const threadEndRef = useRef<HTMLDivElement>(null);
 
   const escalateRoles = detail?.escalateRoles?.length
@@ -250,6 +271,12 @@ export default function TicketDetailModalShell({
         const t = ticketTypeOf(data.ticket);
         setCurrentType(t);
         setAssigneeId(data.ticket.assignee?.staffId?.toString() || '');
+        setTakeoverNote('');
+        const myId = data.permissions?.staffId != null ? String(data.permissions.staffId) : '';
+        const others = (data.assignableStaff || []).filter(
+          (s) => !myId || String(s.staffId).toLowerCase() !== myId.toLowerCase()
+        );
+        setAskStaffId(others[0]?.staffId?.toString() || '');
         const ownerRole =
           data.typeDetails?.find((d) => d.label === t)?.queueRole ||
           Object.entries(data.escalateByRole || {}).find(([, types]) => types.includes(t))?.[0] ||
@@ -279,6 +306,28 @@ export default function TicketDetailModalShell({
     syncEscalateType(role, currentType);
   };
 
+  const perms = detail?.permissions;
+  const myStaffId = perms?.staffId != null ? String(perms.staffId) : '';
+  const askStaffOptions = useMemo(() => {
+    const staff = detail?.assignableStaff || [];
+    if (!myStaffId) return staff;
+    return staff.filter((s) => String(s.staffId).toLowerCase() !== myStaffId.toLowerCase());
+  }, [detail?.assignableStaff, myStaffId]);
+
+  const runAction = async (body: Record<string, unknown>, successMsg: string) => {
+    setSaving(true);
+    try {
+      await api.patch(`${endpointBase}/${ticketId}`, body);
+      showSuccessToast(successMsg);
+      await load();
+      onUpdated();
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, 'Failed to update ticket'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const saveChanges = async () => {
     setSaving(true);
     try {
@@ -290,35 +339,57 @@ export default function TicketDetailModalShell({
       showSuccessToast('Ticket updated');
       await load();
       onUpdated();
-    } catch {
-      showErrorToast('Failed to update ticket');
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, 'Failed to update ticket'));
     } finally {
       setSaving(false);
     }
   };
 
-  const escalateTo = async () => {
-    if (!escalateType.trim() || !escalateTypeOptions.includes(escalateType)) {
+  const escalateTo = async (role: string, type: string, closeAfter = false) => {
+    if (!type.trim()) {
+      showErrorToast('Pick a ticket type allowed for this queue');
+      return;
+    }
+    const allowed =
+      detail?.escalateByRole?.[role]?.length
+        ? detail.escalateByRole[role]
+        : escalateTypesForRole(role);
+    if (!allowed.includes(type)) {
       showErrorToast('Pick a ticket type allowed for this queue');
       return;
     }
     setConfirmEscalate(false);
+    setConfirmEscalateAdmin(false);
     setSaving(true);
     try {
       await api.patch(`${endpointBase}/${ticketId}`, {
         status: 'In Progress',
-        assigned_role: escalateRole,
-        type: escalateType,
+        assigned_role: role,
+        type,
         handled_by_staff_id: null,
       });
-      showSuccessToast(`Escalated to ${escalateRole} as ${escalateType}`);
-      await load();
+      showSuccessToast(`Escalated to ${role} as ${type}`);
       onUpdated();
-    } catch {
-      showErrorToast('Failed to escalate ticket');
+      if (closeAfter) {
+        onClose();
+        return;
+      }
+      await load();
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, 'Failed to escalate ticket'));
     } finally {
       setSaving(false);
     }
+  };
+
+  const escalateToAdmin = async () => {
+    const adminTypes =
+      detail?.escalateByRole?.Admin ||
+      detail?.escalateByRole?.Administrator ||
+      escalateTypesForRole('Admin');
+    const type = adminTypes.includes(currentType) ? currentType : adminTypes[0] || currentType;
+    await escalateTo('Admin', type, true);
   };
 
   const sendReply = async () => {
@@ -333,8 +404,8 @@ export default function TicketDetailModalShell({
       showSuccessToast(internalNote ? 'Internal note added' : 'Reply sent');
       await load();
       onUpdated();
-    } catch {
-      showErrorToast('Failed to send message');
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, 'Failed to send message'));
     } finally {
       setSaving(false);
     }
@@ -343,6 +414,10 @@ export default function TicketDetailModalShell({
   const t = detail?.ticket;
   const typeMeta = detail?.typeDetails?.find((d) => d.label === currentType);
   const escalateTypeMeta = detail?.typeDetails?.find((d) => d.label === escalateType);
+  const isAdminQueue = (role: string) => {
+    const r = role.toLowerCase();
+    return r === 'admin' || r === 'administrator';
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 sm:p-5">
@@ -473,15 +548,165 @@ export default function TicketDetailModalShell({
                   </button>
                 </section>
 
+                <section className="space-y-3 rounded-xl border border-sky-500/20 bg-sky-500/[0.04] p-4">
+                  <div>
+                    <p className="text-[10px] font-semibold tracking-wide text-sky-200/80">Assignment</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+                      Claim the ticket, request a takeover, or ask a teammate to take over.
+                    </p>
+                  </div>
+
+                  {t.takeoverRequester && (
+                    <div className="flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-sm text-amber-100">
+                      <Hand className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div>
+                        <p className="font-medium">Takeover requested by {t.takeoverRequester.name}</p>
+                        {t.takeoverRequestNote && (
+                          <p className="mt-1 text-xs text-amber-200/80">{t.takeoverRequestNote}</p>
+                        )}
+                        <p className="mt-1 text-[11px] text-amber-200/60">
+                          {formatDateTime(t.takeoverRequestedAt)}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-2">
+                    {perms?.canAssignMyself || perms?.canSelfAssign ? (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => void runAction({ action: 'self_assign' }, 'You are now assigned')}
+                        className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.claim}`}
+                      >
+                        <Hand className={HANDLER_ACTION_ICON} />
+                        Assign myself
+                      </button>
+                    ) : null}
+                    {perms?.canForceTakeover ? (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => void runAction({ action: 'takeover' }, 'Takeover complete')}
+                        className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.force}`}
+                      >
+                        <Hand className={HANDLER_ACTION_ICON} />
+                        Force takeover
+                      </button>
+                    ) : null}
+                    {perms?.canCancelTakeoverRequest ? (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() =>
+                          void runAction({ action: 'cancel_takeover_request' }, 'Takeover request cancelled')
+                        }
+                        className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.cancel}`}
+                      >
+                        <Hand className={HANDLER_ACTION_ICON} />
+                        Cancel my takeover request
+                      </button>
+                    ) : null}
+                    {perms?.canAcceptTakeover ? (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => void runAction({ action: 'accept_takeover' }, 'Takeover accepted')}
+                        className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.accept}`}
+                      >
+                        <Hand className={HANDLER_ACTION_ICON} />
+                        {perms.isAssignee
+                          ? `Transfer to ${t.takeoverRequester?.name || 'requester'}`
+                          : 'Accept takeover request'}
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {perms?.canRequestTakeover ? (
+                    <div className="space-y-2">
+                      <input
+                        value={takeoverNote}
+                        onChange={(e) => setTakeoverNote(e.target.value)}
+                        placeholder="Optional note for takeover request"
+                        className="w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none focus:border-white/25"
+                      />
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() =>
+                          void runAction(
+                            { action: 'request_takeover', note: takeoverNote || null },
+                            'Takeover requested'
+                          )
+                        }
+                        className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.request} w-full justify-center`}
+                      >
+                        <Hand className={HANDLER_ACTION_ICON} />
+                        Request takeover
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {perms?.canAskTakeover ? (
+                    <div className="space-y-2 border-t border-white/5 pt-3">
+                      <p className="text-[11px] font-medium text-zinc-500">Ask someone to take over</p>
+                      <select
+                        value={askStaffId}
+                        onChange={(e) => setAskStaffId(e.target.value)}
+                        className={selectCls}
+                      >
+                        <option value="">Select staff…</option>
+                        {askStaffOptions.map((s) => (
+                          <option key={s.staffId} value={s.staffId}>
+                            {s.name} ({s.role})
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        value={takeoverNote}
+                        onChange={(e) => setTakeoverNote(e.target.value)}
+                        placeholder="Optional note for the invite"
+                        className="w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none focus:border-white/25"
+                      />
+                      <button
+                        type="button"
+                        disabled={saving || !askStaffId}
+                        onClick={() =>
+                          void runAction(
+                            {
+                              action: 'ask_takeover',
+                              staff_id: askStaffId,
+                              note: takeoverNote || 'Asked to take over this ticket',
+                            },
+                            'Takeover invite sent'
+                          )
+                        }
+                        className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.request} w-full justify-center`}
+                      >
+                        <Hand className={HANDLER_ACTION_ICON} />
+                        Ask to take over
+                      </button>
+                    </div>
+                  ) : null}
+                </section>
+
                 {allowEscalate && (
                   <section className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4">
                     <div>
                       <p className="text-[10px] font-semibold tracking-wide text-amber-200/80">Escalate</p>
                       <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
-                        Pick a moderator queue, then choose the correct type for that desk. Example: created as Forums but
-                        it is Subscriptions and Plans → Support Moderator + Subscriptions and Plans.
+                        Move this ticket to another moderator queue, or hand it to Admin when Support cannot resolve it.
                       </p>
                     </div>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => setConfirmEscalateAdmin(true)}
+                      className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.admin} w-full justify-center`}
+                    >
+                      <ShieldAlert className={HANDLER_ACTION_ICON} />
+                      Escalate to Admin
+                    </button>
                     <Field label="Moderator Queue">
                       <select
                         value={escalateRole}
@@ -615,7 +840,8 @@ export default function TicketDetailModalShell({
                 Type: <span className="text-amber-100">{escalateType}</span>
               </p>
               <p className="mt-2 text-xs text-zinc-500">
-                Assignee will be cleared. Type changes only through escalate.
+                Assignee and pending takeover requests will be cleared. Type changes only through escalate.
+                {isAdminQueue(escalateRole) ? ' Support Moderators will no longer see this ticket.' : ''}
               </p>
               <div className="mt-5 flex flex-wrap justify-end gap-2">
                 <button
@@ -628,11 +854,41 @@ export default function TicketDetailModalShell({
                 </button>
                 <button
                   type="button"
-                  onClick={() => void escalateTo()}
+                  onClick={() => void escalateTo(escalateRole, escalateType, isAdminQueue(escalateRole))}
                   disabled={saving}
                   className="rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 py-2 text-sm font-medium text-amber-100 hover:bg-amber-500/25 disabled:opacity-50"
                 >
                   {saving ? 'Escalating…' : 'Confirm Escalate'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {confirmEscalateAdmin && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-md rounded-2xl border border-violet-500/30 bg-[#14151c] p-5 shadow-2xl">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-200/80">Escalate to Admin</p>
+              <h3 className="mt-2 text-lg font-semibold text-white">Hand this ticket to Admin?</h3>
+              <p className="mt-2 text-sm text-zinc-400">
+                The ticket will leave the Support queue. Assignee and any takeover request will be cleared.
+              </p>
+              <div className="mt-5 flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmEscalateAdmin(false)}
+                  disabled={saving}
+                  className="rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:bg-white/5"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void escalateToAdmin()}
+                  disabled={saving}
+                  className="rounded-xl border border-violet-500/40 bg-violet-500/15 px-4 py-2 text-sm font-medium text-violet-100 hover:bg-violet-500/25 disabled:opacity-50"
+                >
+                  {saving ? 'Escalating…' : 'Confirm escalate to Admin'}
                 </button>
               </div>
             </div>

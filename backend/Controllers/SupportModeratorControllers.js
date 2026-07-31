@@ -3,6 +3,7 @@ const {
   getSupportTickets,
   getSupportReports,
   getSupportDisputes,
+  isAdminTicketPayload,
 } = require('../Repositories/SupportModeratorRepositories');
 const {
   getTicketDetail,
@@ -23,7 +24,7 @@ const {
 
 async function getOverview(req, res) {
   try {
-    const data = await getSupportOverview();
+    const data = await getSupportOverview(req.session);
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching support overview:', err);
@@ -46,10 +47,31 @@ async function getTickets(req, res) {
   }
 }
 
+function isTicketClientError(message) {
+  const msg = String(message || '');
+  return (
+    msg.includes('not valid for') ||
+    msg.includes('type is required') ||
+    msg.includes('only be changed when escalating') ||
+    msg.includes('cannot') ||
+    msg.includes('Cannot') ||
+    msg.includes('Only ') ||
+    msg.includes('Pick ') ||
+    msg.includes('No pending') ||
+    msg.includes('Unknown ticket action') ||
+    msg.includes('Could not match') ||
+    msg.includes('Staff member not found') ||
+    msg.includes('already own')
+  );
+}
+
 async function getTicket(req, res) {
   try {
-    const data = await getTicketDetail(req.params.id);
+    const data = await getTicketDetail(req.params.id, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    if (isAdminTicketPayload(data.ticket || data)) {
+      return res.status(404).json({ success: false, message: 'Ticket not found' });
+    }
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching ticket detail:', err);
@@ -59,24 +81,21 @@ async function getTicket(req, res) {
 
 async function patchTicket(req, res) {
   try {
+    const existing = await getTicketDetail(req.params.id, req.session);
+    if (!existing) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    if (isAdminTicketPayload(existing.ticket || existing)) {
+      return res.status(403).json({ success: false, message: 'Admin tickets are not available to Support Moderators' });
+    }
     const data = await updateTicket(req.params.id, req.body, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error updating ticket:', err);
-    const msg =
-      err?.message?.includes('not valid for') || err?.message?.includes('type is required') ||
-        err?.message?.includes('only be changed when escalating')
-        ? err.message
-        : 'Failed to update ticket';
-    res
-      .status(
-        err?.message?.includes('not valid for') || err?.message?.includes('type is required') ||
-        err?.message?.includes('only be changed when escalating')
-          ? 400
-          : 500
-      )
-      .json({ success: false, message: msg });
+    const client = isTicketClientError(err?.message);
+    res.status(client ? 400 : 500).json({
+      success: false,
+      message: client ? err.message : 'Failed to update ticket',
+    });
   }
 }
 
@@ -85,6 +104,11 @@ async function postTicketMessage(req, res) {
     const { body, isInternal } = req.body;
     if (!body?.trim()) {
       return res.status(400).json({ success: false, message: 'Message body is required' });
+    }
+    const existing = await getTicketDetail(req.params.id, req.session);
+    if (!existing) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    if (isAdminTicketPayload(existing.ticket || existing)) {
+      return res.status(403).json({ success: false, message: 'Admin tickets are not available to Support Moderators' });
     }
     const data = await addTicketMessage(req.params.id, body.trim(), req.session, Boolean(isInternal));
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });

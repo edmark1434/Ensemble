@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Inbox, Loader2, RefreshCw } from "lucide-react";
+import { Hand, Inbox, Loader2, RefreshCw, Search, Ticket } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import api from "@/lib/axios";
 import TicketFiltersPanel from "@/pages/admin/ticketManagement/TicketFiltersPanel";
@@ -21,17 +21,14 @@ import ModeratorTicketDetailModal from "./ModeratorTicketDetailModal";
 import { PriorityBadge, StatusBadge, type Accent } from "./ui";
 import type { SupportTicket } from "./moderatorTypes";
 
-function relativeTime(value: string | null | undefined) {
+function formatDateTime(value: string | null | undefined) {
   if (!value) return "—";
-  const diffMs = Date.now() - new Date(value).getTime();
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 30) return `${days}d ago`;
-  return new Date(value).toLocaleDateString();
+  return new Date(value).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function shortId(value: string | number | null | undefined) {
@@ -40,19 +37,12 @@ function shortId(value: string | number | null | undefined) {
   return s.length > 10 ? `${s.slice(0, 8)}…` : s;
 }
 
-function SummaryChip({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number | string;
-  tone: string;
-}) {
+function SummaryCard({ label, value, sub }: { label: string; value: string | number; sub: string }) {
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-[#14151c] px-4 py-3">
-      <p className={`text-lg font-bold leading-tight ${tone}`}>{value}</p>
-      <p className="text-[11px] text-zinc-500">{label}</p>
+    <div className="rounded-2xl border border-white/[0.08] bg-[#14151c] px-4 py-4">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tabular-nums text-white">{value}</p>
+      <p className="mt-1 text-xs text-zinc-500">{sub}</p>
     </div>
   );
 }
@@ -78,8 +68,22 @@ const ACCENT_SPIN: Record<Accent, string> = {
   rose: "text-rose-400",
 };
 
+const ACCENT_FOCUS: Record<Accent, string> = {
+  sky: "focus:border-sky-500/40",
+  violet: "focus:border-violet-500/40",
+  emerald: "focus:border-emerald-500/40",
+  rose: "focus:border-rose-500/40",
+};
+
+const ACCENT_ICON: Record<Accent, string> = {
+  sky: "text-sky-300",
+  violet: "text-violet-300",
+  emerald: "text-emerald-300",
+  rose: "text-rose-300",
+};
+
 /**
- * Shared moderator ticket desk with full filters + search.
+ * Shared moderator ticket desk with admin-style desk filters + quick chips.
  */
 export default function ModeratorTicketDesk({
   title = "Ticket Management",
@@ -94,7 +98,6 @@ export default function ModeratorTicketDesk({
   subtitle?: string;
   roleLabel: string;
   endpointBase: string;
-  /** GET list URL; defaults to endpointBase */
   listPath?: string;
   accent?: Accent;
   queueKey?: keyof typeof QUEUE_TYPES;
@@ -102,6 +105,8 @@ export default function ModeratorTicketDesk({
   const [searchParams] = useSearchParams();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
   const [filters, setFilters] = useState<TicketFilterState>(() => {
     const next = { ...DEFAULT_TICKET_FILTERS };
     const assignee = searchParams.get("assignee");
@@ -129,13 +134,19 @@ export default function ModeratorTicketDesk({
 
   const typeCatalog = [...QUEUE_TYPES[queueKey]];
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent = false) => {
+    if (!silent) setLoading(true);
+    else setRefreshing(true);
+    setError("");
     try {
       const res = await api.get(listPath || endpointBase);
       if (res.data?.success) setTickets(res.data.data || []);
+      else setError("Failed to load tickets");
+    } catch {
+      setError("Failed to load tickets");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -165,45 +176,116 @@ export default function ModeratorTicketDesk({
     return [...set].sort();
   }, [tickets]);
 
-  const summary = useMemo(
+  const summary = useMemo(() => {
+    const open = tickets.filter((t) => t.status === "Open" || t.status === "In Progress");
+    return {
+      open: open.length,
+      unassigned: tickets.filter((t) => !t.assignee && (t.status === "Open" || t.status === "In Progress")).length,
+      high: tickets.filter(
+        (t) =>
+          String(t.priority).toLowerCase() === "high" &&
+          (t.status === "Open" || t.status === "In Progress")
+      ).length,
+      awaiting: tickets.filter((t) => t.waitingForResponse).length,
+    };
+  }, [tickets]);
+
+  const quickCounts = useMemo(
     () => ({
-      total: filtered.length,
-      open: filtered.filter((t) => t.status === "Open" || t.status === "In Progress").length,
-      unassigned: filtered.filter((t) => !t.assignee).length,
-      high: filtered.filter((t) => t.priority === "High").length,
-      awaiting: filtered.filter((t) => t.waitingForResponse).length,
+      all: tickets.length,
+      open_only: summary.open,
+      awaiting: summary.awaiting,
+      escalated: tickets.filter((t) => t.isEscalated).length,
+      unassigned: summary.unassigned,
+      high: summary.high,
     }),
-    [filtered]
+    [tickets, summary]
   );
 
+  if (loading) {
+    return (
+      <main className="relative z-10 flex min-h-screen items-center justify-center md:ml-72">
+        <Loader2 className={`h-8 w-8 animate-spin ${ACCENT_SPIN[accent]}`} />
+      </main>
+    );
+  }
+
+  if (error && tickets.length === 0) {
+    return (
+      <main className="relative z-10 p-8 md:ml-72">
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">
+          {error}
+          <button type="button" onClick={() => void load()} className="mt-4 block text-sm underline">
+            Retry
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <main className="relative z-10 min-h-screen px-6 py-8 md:ml-72 md:px-10" style={{ animation: "fadeIn 420ms ease" }}>
+    <main
+      className="relative z-10 min-h-screen px-6 py-8 md:ml-72 md:px-10"
+      style={{ animation: "fadeIn 420ms ease" }}
+    >
+      {selectedId !== null && (
+        <ModeratorTicketDetailModal
+          ticketId={selectedId}
+          endpointBase={endpointBase}
+          accent={accent}
+          onClose={() => setSelectedId(null)}
+          onUpdated={() => void load(true)}
+        />
+      )}
+
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className={`text-[11px] font-semibold uppercase tracking-wide ${ACCENT_LABEL[accent]}`}>{roleLabel}</p>
+          <p className={`text-[11px] font-semibold uppercase tracking-wide ${ACCENT_LABEL[accent]}`}>
+            {roleLabel}
+          </p>
           <h1 className="text-2xl font-bold text-white">{title}</h1>
           {subtitle && <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>}
         </div>
         <button
           type="button"
-          onClick={() => void load()}
-          disabled={loading}
+          onClick={() => void load(true)}
+          disabled={refreshing}
           className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
           Refresh
         </button>
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <SummaryChip label="In view" value={summary.total} tone="text-white" />
-        <SummaryChip label="Open / In Progress" value={summary.open} tone={ACCENT_LABEL[accent]} />
-        <SummaryChip label="Unassigned" value={summary.unassigned} tone="text-amber-300" />
-        <SummaryChip label="High Priority" value={summary.high} tone="text-red-300" />
-        <SummaryChip label="Awaiting Reply" value={summary.awaiting} tone="text-amber-200" />
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <SummaryCard label="Open tickets" value={summary.open} sub="Active queue" />
+        <SummaryCard label="Unassigned" value={summary.unassigned} sub="Need a handler" />
+        <SummaryCard label="High priority" value={summary.high} sub="Open and urgent" />
+        <SummaryCard label="Awaiting reply" value={summary.awaiting} sub="User message waiting" />
       </div>
 
-      <div className="mb-4">
+      <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0f1016]">
+        <div className="flex flex-col gap-4 border-b border-white/[0.06] px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Ticket className={`h-4 w-4 ${ACCENT_ICON[accent]}`} />
+              <h2 className="text-sm font-semibold text-white">Ticket desk</h2>
+            </div>
+            <p className="mt-1 text-xs text-zinc-500">
+              Assign, escalate, and reply from the detail modal.
+            </p>
+          </div>
+          <div className="relative w-full max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <input
+              value={filters.search}
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              placeholder="Search number, subject, requester…"
+              className={`w-full rounded-xl border border-white/[0.08] bg-[#14151c] py-2.5 pl-9 pr-3 text-sm text-white outline-none placeholder:text-zinc-600 ${ACCENT_FOCUS[accent]}`}
+            />
+          </div>
+        </div>
+
         <TicketFiltersPanel
           filters={filters}
           onChange={setFilters}
@@ -214,62 +296,76 @@ export default function ModeratorTicketDesk({
           showQueue={false}
           resultCount={filtered.length}
           totalCount={tickets.length}
+          variant="desk"
+          hideSearch
+          quickCounts={quickCounts}
         />
-      </div>
 
-      <div className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className={`h-6 w-6 animate-spin ${ACCENT_SPIN[accent]}`} />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.03] text-zinc-600">
-              <Inbox className="h-7 w-7" />
-            </span>
-            <div>
-              <p className="text-sm font-medium text-zinc-400">No tickets match these filters</p>
-              <p className="mt-0.5 text-xs text-zinc-600">Try clearing search or switching filters.</p>
+        <div className="overflow-x-auto">
+          {filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.03] text-zinc-600">
+                <Inbox className="h-7 w-7" />
+              </span>
+              <div>
+                <p className="text-sm font-medium text-zinc-400">No tickets match these filters</p>
+                <p className="mt-0.5 text-xs text-zinc-600">Try clearing search or switching filters.</p>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px] text-left text-sm">
+          ) : (
+            <table className="w-full min-w-[980px] text-left text-sm">
               <thead>
-                <tr className="text-[10px] uppercase tracking-wide text-zinc-500">
-                  <th className="pb-3">Ticket</th>
-                  <th className="pb-3">Subject</th>
-                  <th className="pb-3">Requester</th>
-                  <th className="pb-3">Type</th>
-                  <th className="pb-3">Flags</th>
-                  <th className="pb-3">Channel</th>
-                  <th className="pb-3">Priority</th>
-                  <th className="pb-3">Status</th>
-                  <th className="pb-3 text-center">Msgs</th>
-                  <th className="pb-3">Assignee</th>
-                  <th className="pb-3">Updated</th>
+                <tr className="border-b border-white/[0.06] text-[11px] uppercase tracking-wide text-zinc-500">
+                  <th className="px-5 py-3 font-medium">Ticket</th>
+                  <th className="px-4 py-3 font-medium">Requester</th>
+                  <th className="px-4 py-3 font-medium">Type</th>
+                  <th className="px-4 py-3 font-medium">Priority</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Handler</th>
+                  <th className="px-4 py-3 font-medium">Flags</th>
+                  <th className="px-5 py-3 font-medium">Updated</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody>
                 {filtered.map((t) => (
                   <tr
                     key={t.id}
                     onClick={() => setSelectedId(t.id)}
-                    className="cursor-pointer transition hover:bg-white/[0.03]"
+                    className="cursor-pointer border-b border-white/[0.04] transition hover:bg-white/[0.03]"
                   >
-                    <td className="py-3 font-mono text-[11px] text-zinc-400">{t.number}</td>
-                    <td className="max-w-[240px] py-3">
-                      <p className="truncate font-medium text-zinc-200">{t.subject}</p>
-                      {t.relatedDisputeId && <p className="text-[10px] text-amber-400/80">Linked Dispute</p>}
+                    <td className="px-5 py-3.5">
+                      <p className="font-medium text-white">{t.number}</p>
+                      <p className="mt-0.5 line-clamp-1 text-xs text-zinc-500">{t.subject}</p>
                     </td>
-                    <td className="min-w-[140px] py-3">
-                      <p className="text-zinc-300">{t.requester.name}</p>
-                      <p className="text-[11px] text-zinc-500">@{t.requester.username || "—"}</p>
-                      <p className="font-mono text-[10px] text-zinc-600">acc {shortId(t.requester.accountId)}</p>
+                    <td className="px-4 py-3.5">
+                      <p className="text-zinc-200">{t.requester.name}</p>
+                      <p className="text-xs text-zinc-500">@{t.requester.username || "—"}</p>
+                      <p className="font-mono text-[10px] text-zinc-600">
+                        acc {shortId(t.requester.accountId)}
+                      </p>
                     </td>
-                    <td className="py-3 text-zinc-400">{t.type || t.category || "—"}</td>
-                    <td className="py-3">
-                      <div className="flex min-w-[120px] flex-col gap-1">
+                    <td className="px-4 py-3.5 text-zinc-300">{t.type || t.category || "—"}</td>
+                    <td className="px-4 py-3.5">
+                      <PriorityBadge priority={t.priority} />
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <StatusBadge status={t.status} />
+                    </td>
+                    <td className="px-4 py-3.5 text-zinc-300">
+                      {t.assignee ? (
+                        <>
+                          <p>{t.assignee.name}</p>
+                          <p className="text-[11px] text-zinc-500">{t.assignee.role}</p>
+                        </>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-amber-200/90">
+                          <Hand className="h-3.5 w-3.5" />
+                          Unassigned
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex flex-col gap-1">
                         {t.waitingForResponse && (
                           <span className="w-fit rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
                             Awaiting Reply
@@ -280,40 +376,21 @@ export default function ModeratorTicketDesk({
                             {formatEscalatedLabel(t)}
                           </span>
                         )}
-                        {!t.waitingForResponse && !t.isEscalated && <span className="text-zinc-600">—</span>}
+                        {!t.waitingForResponse && !t.isEscalated && (
+                          <span className="text-xs text-zinc-600">—</span>
+                        )}
                       </div>
                     </td>
-                    <td className="py-3 capitalize text-zinc-500">{t.channel || "web"}</td>
-                    <td className="py-3">
-                      <PriorityBadge priority={t.priority} />
-                    </td>
-                    <td className="py-3">
-                      <StatusBadge status={t.status} />
-                    </td>
-                    <td className="py-3 text-center tabular-nums text-zinc-300">{t.messageCount}</td>
-                    <td className="py-3 text-zinc-400">
-                      {t.assignee?.name || <span className="text-amber-300/80">Unassigned</span>}
-                    </td>
-                    <td className="py-3 text-xs text-zinc-500" title={new Date(t.updatedAt).toLocaleString()}>
-                      {relativeTime(t.lastMessageAt || t.updatedAt)}
+                    <td className="px-5 py-3.5 text-xs text-zinc-500">
+                      {formatDateTime(t.updatedAt)}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
-      </div>
-
-      {selectedId !== null && (
-        <ModeratorTicketDetailModal
-          ticketId={selectedId}
-          endpointBase={endpointBase}
-          accent={accent}
-          onClose={() => setSelectedId(null)}
-          onUpdated={() => void load()}
-        />
-      )}
+          )}
+        </div>
+      </section>
     </main>
   );
 }
