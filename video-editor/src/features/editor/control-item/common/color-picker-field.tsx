@@ -11,6 +11,7 @@ import ColorPicker from "@/components/color-picker";
 import { formatColorDisplay, isGradientColor } from "@/components/color-picker/helpers";
 import { useIsLargeScreen } from "@/hooks/use-media-query";
 import useLayoutStore from "../../store/use-layout-store";
+import {cn} from "@/lib/utils";
 
 const CHECKERBOARD_STYLE: React.CSSProperties = {
   backgroundImage:
@@ -28,6 +29,7 @@ interface ColorPickerFieldProps {
   mobileControlType: string;
   mobileControlLabel: string;
   disabled: boolean;
+  mixed?: boolean;
 }
 
 function useDraggable() {
@@ -67,10 +69,10 @@ function useDraggable() {
 }
 
 function DraggableColorPanel({
-                               title = "Color",
-                               onClose,
-                               children
-                             }: {
+  title = "Color",
+  onClose,
+  children
+}: {
   title?: string;
   onClose: () => void;
   children: React.ReactNode;
@@ -105,14 +107,36 @@ function DraggableColorPanel({
   );
 }
 
-function ColorSwatch({ value }: { value: string }) {
+const MIXED_SWATCH_STYLE: React.CSSProperties = {
+  background: "radial-gradient(circle at 50% 100%, var(--primary) 0%, var(--primary-foreground) 100%)"
+};
+
+function ColorSwatch({ value, disabled, mixed }: { value: string; disabled: boolean; mixed?: boolean }) {
+  if (mixed) {
+    return (
+      <div
+        className={cn(
+          "relative h-9 w-9 flex-none overflow-hidden rounded-md rounded-r-none border border-border border-r-0",
+          disabled ? "opacity-50" : ""
+        )}>
+
+        <div className="absolute inset-0" style={MIXED_SWATCH_STYLE} />
+      </div>
+    );
+  }
+
   const gradient = isGradientColor(value);
   const fullHex = value || "#ffffffff";
   const solidColor = fullHex.slice(0, 7);
 
   if (gradient) {
     return (
-      <div className="relative h-9 w-9 flex-none overflow-hidden rounded-md rounded-r-none border border-border border-r-0">
+      <div
+        className={cn(
+          "relative h-9 w-9 flex-none overflow-hidden rounded-md rounded-r-none border border-border border-r-0",
+          disabled ? "opacity-50" : ""
+        )}>
+
         <div className="absolute inset-0 rounded-lg" style={CHECKERBOARD_STYLE} />
         <div className="absolute inset-0" style={{ background: value }} />
       </div>
@@ -120,7 +144,12 @@ function ColorSwatch({ value }: { value: string }) {
   }
 
   return (
-    <div className="relative h-9 w-9 flex-none overflow-hidden rounded-md rounded-r-none border border-border border-r-0">
+    <div
+      className={cn(
+        "relative h-9 w-9 flex-none overflow-hidden rounded-md rounded-r-none border border-border border-r-0",
+        disabled ? "opacity-50" : ""
+      )}>
+
       <div
         className="absolute inset-y-0 left-0 w-1/2"
         style={{ background: solidColor }}
@@ -141,7 +170,8 @@ export function ColorPickerField({
   popoverTitle = "Color",
   mobileControlType,
   mobileControlLabel,
-  disabled
+  disabled,
+  mixed = false
 }: ColorPickerFieldProps) {
   const [localValue, setLocalValue] = useState<string>(value);
   const [open, setOpen] = useState(false);
@@ -170,16 +200,20 @@ export function ColorPickerField({
       <div className="relative w-32">
         <div className="relative" onClick={handleColorClick}>
           <div
-            style={{
-              background: isGradientColor(localValue)
-                ? localValue
-                : localValue || "#ffffff"
-            }}
+            style={
+              mixed
+                ? MIXED_SWATCH_STYLE
+                : {
+                  background: isGradientColor(localValue)
+                    ? localValue
+                    : localValue || "#ffffff"
+                }
+            }
             className="absolute left-0.5 top-0.5 h-7 w-7 flex-none rounded-md border border-border"
           />
           <Input
             className="pointer-events-none pl-10 rounded-l-none"
-            value={formatColorDisplay(localValue)}
+            value={mixed ? "Mixed" : formatColorDisplay(localValue)}
             onChange={() => {}}
             disabled={disabled}
           />
@@ -192,14 +226,14 @@ export function ColorPickerField({
     <Popover open={disabled ? false : open} onOpenChange={(o) => { if (!disabled) setOpen(o); }}>
       <PopoverTrigger asChild>
         <div className="relative flex w-full">
-          <ColorSwatch value={localValue} />
+          <ColorSwatch value={localValue} disabled={disabled} mixed={mixed} />
           <Button
             className="flex w-full flex-1 items-center justify-between px-3 text-sm rounded-l-none font-normal"
             variant="outline"
             disabled={disabled}
           >
             <div className="w-full overflow-hidden text-left">
-              <p className="truncate">{formatColorDisplay(localValue)}</p>
+              <p className="truncate">{mixed ? "Mixed" : formatColorDisplay(localValue)}</p>
             </div>
             <ChevronDown className="text-muted-foreground" size={14} />
           </Button>

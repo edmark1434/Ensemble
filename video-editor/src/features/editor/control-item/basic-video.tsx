@@ -35,9 +35,9 @@ const getPropertiesFromDetails = (
 });
 
 const BasicVideo = ({
-                      trackItem,
-                      type
-                    }: {
+  trackItem,
+  type
+}: {
   trackItem: ITrackItem & IVideo;
   type?: string;
 }) => {
@@ -167,7 +167,7 @@ const BasicVideo = ({
             <div className="flex gap-2 items-center text-primary text-sm font-normal">
               <Lock size={16} />
               <span>
-                This element has been locked
+                This item has been locked
               </span>
             </div>
           )}

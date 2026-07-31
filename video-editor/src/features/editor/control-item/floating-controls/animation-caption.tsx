@@ -14,36 +14,36 @@ import { LazyCaptionPresetPreview } from "@/features/editor/control-item/floatin
 import {
   isExcludedForCaptions
 } from "@/features/editor/control-item/floating-controls/animation-preview/caption/preview-exclusions";
+import {useCaptionGroupIds} from "@/features/editor/control-item/common/animation-caption";
 
 const AnimationCaption = () => {
-  const { setFloatingControl, trackItem } = useLayoutStore();
+  const { setFloatingControl, trackItem, floatingControlIds } = useLayoutStore();
   const { trackItemsMap } = useStore();
-  const [captionItemIds, setCaptionItemIds] = useState<string[]>([]);
 
-  useEffect(() => {
-    const groupedCaptions = groupCaptionItems(trackItemsMap);
-    const currentGroupItems = groupedCaptions[trackItem?.metadata?.sourceUrl ?? ""];
-    setCaptionItemIds(currentGroupItems?.map((item) => item.id) ?? []);
-  }, [trackItemsMap, trackItem]);
+  const sourceIds =
+    floatingControlIds && floatingControlIds.length > 0
+      ? floatingControlIds
+      : trackItem?.id
+        ? [trackItem.id]
+        : [];
 
-  const firstItem = trackItemsMap[captionItemIds[0]];
-  const isNoneSelected = !firstItem?.animations?.in;
+  const { captionItemIds, representativeIds } = useCaptionGroupIds(sourceIds);
+
+  const isNoneSelected = representativeIds.every((id) => !trackItemsMap[id]?.animations?.in);
 
   const isAnimationActive = (presetName: PresetName) =>
-    captionItemIds.some((id) => trackItemsMap[id]?.animations?.in?.name === presetName);
+    representativeIds.every((id) => trackItemsMap[id]?.animations?.in?.name === presetName);
 
   const applyAnimation = (presetName: PresetName) => {
     if (!captionItemIds.length) {
       console.warn("No caption items to apply the animation to.");
       return;
     }
-    const presetAnimation = presets[presetName];
-    const composition: Animation[] = [{ ...presetAnimation, durationInFrames: 4 }];
-
-    const payload = captionItemIds.reduce(
-      (acc, id) => ({ ...acc, [id]: { animations: { in: { name: presetName, composition } } } }),
-      {}
-    );
+    const payload: Record<string, any> = {};
+    captionItemIds.forEach((id) => {
+      const composition: Animation[] = [{ ...presets[presetName], durationInFrames: 4 }];
+      payload[id] = { animations: { in: { name: presetName, composition } } };
+    });
     dispatch(EDIT_OBJECT, { payload });
   };
 
@@ -57,6 +57,10 @@ const AnimationCaption = () => {
   };
 
   const idsKey = captionItemIds.join(",");
+  const animationKey = representativeIds
+    .map((id) => trackItemsMap[id]?.animations?.in?.name ?? "none")
+    .join(",");
+
   const presetButtons = useMemo(() => {
     const noneButton = (
       <div
@@ -103,7 +107,7 @@ const AnimationCaption = () => {
       });
 
     return [noneButton, ...buttons];
-  }, [idsKey, firstItem?.animations?.in?.name]);
+  }, [idsKey, animationKey]);
 
   const floatingRef = useRef<HTMLDivElement>(null);
   useClickOutside(floatingRef as React.RefObject<HTMLElement>, () => setFloatingControl(""));

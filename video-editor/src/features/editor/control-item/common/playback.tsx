@@ -7,6 +7,7 @@ interface PlaybackControlsProps {
   speed: number;
   onChangeVolume: (v: number) => void;
   onChangeSpeed: (v: number) => void;
+  ids?: string[];
   disabled?: boolean;
 }
 
@@ -15,14 +16,15 @@ export const PlaybackControls = ({
   speed,
   onChangeVolume,
   onChangeSpeed,
+  ids,
   disabled = false
 }: PlaybackControlsProps) => {
   return (
     <div className="flex flex-col gap-3">
       <Label className="font-sans text-sm font-semibold">Playback</Label>
       <div className="flex flex-col gap-2">
-        <Volume value={volume} onChange={onChangeVolume} disabled={disabled} />
-        {/*<Speed value={speed} onChange={onChangeSpeed} disabled={disabled} />*/}
+        <Volume value={volume} onChange={onChangeVolume} ids={ids} disabled={disabled} />
+        {/*<Speed value={speed} onChange={onChangeSpeed} ids={ids} disabled={disabled} />*/}
       </div>
     </div>
   );

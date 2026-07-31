@@ -4,7 +4,7 @@ import { dispatch } from "@designcombo/events";
 import { EDIT_OBJECT } from "@designcombo/state";
 
 const FPS = 30;
-const LOOP_DURATION_MS = 100; // ⚠️ comment says "pinned to 1s" — still unconfirmed, didn't touch
+const LOOP_DURATION_MS = 100;
 const msToFrames = (ms: number) => Math.round((ms * FPS) / 1000);
 const framesToMs = (frames: number) => (frames * 1000) / FPS;
 
@@ -24,9 +24,10 @@ function shrinkProportionally(inFrames: number, outFrames: number, budgetFrames:
 
 type AnimationType = "in" | "out" | "loop";
 
-export const useAnimationDuration = () => {
+export const useAnimationDuration = (ids?: string[]) => {
   const { activeIds, trackItemsMap } = useStore();
-  const item = trackItemsMap[activeIds[0]];
+  const targetIds = ids && ids.length > 0 ? ids : activeIds;
+  const item = trackItemsMap[targetIds[0]];
 
   const [itemDuration, setItemDuration] = useState(0);
   const [inDuration, setInDuration] = useState(0);
@@ -48,27 +49,26 @@ export const useAnimationDuration = () => {
       );
       if (types.length === 0) return;
 
-      const animations: Record<string, any> = {};
-      for (const type of types) {
-        const frames = Math.max(MIN_ANIMATION_FRAMES, msToFrames(updates[type] as number));
-        animations[type] = {
-          name: item.animations?.[type]?.name,
-          composition: [
-            {
-              ...item.animations?.[type]?.composition?.[0],
-              durationInFrames: frames
-            }
-          ]
-        };
-      }
-
-      dispatch(EDIT_OBJECT, {
-        payload: {
-          [activeIds[0]]: { animations }
+      const payload: Record<string, any> = {};
+      targetIds.forEach((id) => {
+        const targetItem = trackItemsMap[id];
+        if (!targetItem) return;
+        const animations: Record<string, any> = {};
+        for (const type of types) {
+          const frames = Math.max(MIN_ANIMATION_FRAMES, msToFrames(updates[type] as number));
+          animations[type] = {
+            name: targetItem.animations?.[type]?.name,
+            composition: [
+              { ...targetItem.animations?.[type]?.composition?.[0], durationInFrames: frames }
+            ]
+          };
         }
+        payload[id] = { animations };
       });
+
+      dispatch(EDIT_OBJECT, { payload });
     },
-    [activeIds, item]
+    [targetIds, item, trackItemsMap]
   );
 
   // Kept for single-slider user edits (handleInChange/handleOutChange) —
@@ -80,8 +80,10 @@ export const useAnimationDuration = () => {
     [dispatchAnimationUpdates]
   );
 
+  const idsKey = targetIds.join(",");
+
   useEffect(() => {
-    if (!item) {
+    if (!item || targetIds.length === 0) {
       setItemDuration(0);
       setInDuration(0);
       setOutDuration(0);
@@ -89,16 +91,24 @@ export const useAnimationDuration = () => {
       return;
     }
 
-    const durationMs = Math.max(0, (item.display?.to ?? 0) - (item.display?.from ?? 0));
-    const durationFrames = msToFrames(durationMs);
+    // The binding constraint for a group is its shortest clip — a duration
+    // broadcast to every id must never overshoot any single one of them.
+    let minDurationFrames = Infinity;
+    targetIds.forEach((id) => {
+      const targetItem = trackItemsMap[id];
+      if (!targetItem) return;
+      const durationMs = Math.max(0, (targetItem.display?.to ?? 0) - (targetItem.display?.from ?? 0));
+      minDurationFrames = Math.min(minDurationFrames, msToFrames(durationMs));
+    });
+    if (!Number.isFinite(minDurationFrames)) minDurationFrames = 0;
 
     const hasLoop = !!item.animations?.loop;
     const rawLoopFrames = item.animations?.loop?.composition[0]?.durationInFrames || 0;
     const clampedLoopFrames = hasLoop
-      ? Math.min(msToFrames(LOOP_DURATION_MS), durationFrames)
+      ? Math.min(msToFrames(LOOP_DURATION_MS), minDurationFrames)
       : 0;
 
-    const budgetFrames = Math.max(0, durationFrames - clampedLoopFrames);
+    const budgetFrames = Math.max(0, minDurationFrames - clampedLoopFrames);
 
     const rawInFrames = item.animations?.in?.composition[0]?.durationInFrames || 0;
     const rawOutFrames = item.animations?.out?.composition[0]?.durationInFrames || 0;
@@ -109,7 +119,7 @@ export const useAnimationDuration = () => {
       budgetFrames
     );
 
-    setItemDuration(durationMs);
+    setItemDuration(framesToMs(minDurationFrames));
     setInDuration(framesToMs(clampedInFrames));
     setOutDuration(framesToMs(clampedOutFrames));
     setLoopDuration(framesToMs(clampedLoopFrames));
@@ -138,7 +148,7 @@ export const useAnimationDuration = () => {
     }, 250);
 
     return () => clearTimeout(timeout);
-  }, [item, dispatchAnimationUpdates]);
+  }, [item, idsKey, trackItemsMap, dispatchAnimationUpdates]);
 
   const handleInChange = useCallback(
     (duration: number) => {

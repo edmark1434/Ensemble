@@ -18,6 +18,8 @@ import { ITrackItem } from "@designcombo/types";
 import { useGoogleFonts, FontCategory } from "../../hooks/use-google-fonts";
 import { getDefaultFont, itemToFonts } from "../../utils/fetch-google-fonts";
 import useDataState from "@/features/editor/store/use-data-state";
+import { useMixedValue } from "../../hooks/use-mixed-value";
+import { DEFAULT_FONT } from "../../constants/font";
 
 // ---------------------------------------------------------------------------
 // Font change handler (kept export-compatible with old signature for callers
@@ -46,19 +48,17 @@ export const onChangeFontFamily = async (
 };
 
 // Internal handler that works directly with IFont (from the new fetch layer)
-const applyFont = async (font: IFont, trackItem: ITrackItem) => {
+const applyFont = async (font: IFont, ids: string[]) => {
   await loadFonts([{ name: font.postScriptName, url: font.url }]);
 
-  dispatch(EDIT_OBJECT, {
-    payload: {
-      [trackItem.id as string]: {
-        details: {
-          fontFamily: font.postScriptName,
-          fontUrl: font.url,
-        },
-      },
-    },
+  const payload: Record<string, { details: { fontFamily: string; fontUrl: string } }> = {};
+  ids.forEach((id) => {
+    payload[id] = {
+      details: { fontFamily: font.postScriptName, fontUrl: font.url },
+    };
   });
+
+  dispatch(EDIT_OBJECT, { payload });
 };
 
 // ---------------------------------------------------------------------------
@@ -115,37 +115,38 @@ const FontPreviewRow = ({
 // ---------------------------------------------------------------------------
 
 export default function FontFamilyPicker() {
-  const { setFloatingControl, trackItem } = useLayoutStore();
+  const { setFloatingControl, trackItem, floatingControlIds } = useLayoutStore();
   const floatingRef = useRef<HTMLDivElement>(null);
   const [categoryOpen, setCategoryOpen] = useState(false);
 
   const {
-    visibleItems,
-    loading,
-    error,
-    filteredCount,
-    hasMore,
-    loadMore,
-    search,
-    setSearch,
-    category,
-    setCategory,
-    availableCategories,
+    visibleItems, loading, error, filteredCount, hasMore, loadMore,
+    search, setSearch, category, setCategory, availableCategories,
   } = useGoogleFonts();
 
   const compactFonts = useDataState((state) => state.compactFonts);
-  const selectedFamily = compactFonts.find(
-    (f) => f.default.postScriptName === trackItem?.details?.fontFamily
-  )?.family;
+
+  const targetIds =
+    floatingControlIds.length > 0
+      ? floatingControlIds
+      : trackItem
+        ? [trackItem.id]
+        : [];
+
+  const { value: groupFontFamily, isMixed: isFamilyMixed } = useMixedValue<string>(
+    targetIds,
+    (item) => item.details?.fontFamily ?? DEFAULT_FONT.postScriptName
+  );
+
+  const selectedFamily = isFamilyMixed
+    ? undefined
+    : compactFonts.find((f) => f.default.postScriptName === groupFontFamily)?.family;
 
   const handleSelectFont = async (family: string) => {
-    if (!trackItem) return;
+    if (targetIds.length === 0) return;
 
     const item = visibleItems.find((item) => item.family === family) ?? {
-      family,
-      category: "sans-serif",
-      subsets: [],
-      tags: [],
+      family, category: "sans-serif", subsets: [], tags: [],
       variants: [{ variant: "regular", url: "" }],
     };
 
@@ -161,7 +162,7 @@ export default function FontFamilyPicker() {
       setCompactFonts([...compactFonts, { family: item.family, styles, default: defaultFont }]);
     }
 
-    await applyFont(defaultFont, trackItem);
+    await applyFont(defaultFont, targetIds);
   };
 
   const selectedCategoryLabel =

@@ -32,9 +32,6 @@ import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import TableFilterBar, { uniqueOptions } from '../userTeam/components/TableFilterBar';
-import { ListingCaseDetailModal, ReportCaseDetailModal } from './CaseDetailModals';
-import { VerificationModal } from '../userTeam/components/AccountModals';
-import type { PlatformUserAccount } from '../userTeam/userTeamTypes';
 import type {
   ModerationActivity,
   ModerationCase,
@@ -44,6 +41,40 @@ import type {
 import type { Dispute, UserReport } from '../ticketManagement/ticketTypes';
 import DisputesTab from './DisputesTab';
 import ReportsTab from './ReportsTab';
+import ListingApprovalsTab from './ListingApprovalsTab';
+import IdentityVerificationTab from './IdentityVerificationTab';
+import MyCasesTab from './MyCasesTab';
+
+const CLOSED_DISPUTE_STATUSES = new Set([
+  'resolved',
+  'closed',
+  'sanctioned',
+  'dismissed',
+  'withdrawn',
+]);
+
+function disputeToModerationCase(d: Dispute): ModerationCase {
+  return {
+    id: String(d.id),
+    source: 'dispute',
+    type: 'Dispute',
+    priority: d.priority || 'Medium',
+    target: d.title || d.number,
+    targetHandle: d.number,
+    targetType: 'Dispute',
+    reason: d.reason || d.title || 'Dispute case',
+    description: d.reason,
+    referenceNumber: d.number,
+    assignedRole: d.assignee?.role || null,
+    assignedStaffId: d.assignee?.staffId ?? null,
+    assignedStaffName: d.assignee?.name || null,
+    openedAt: d.openedAt,
+    status: d.status,
+    canTakeOver: false,
+    canEdit: true,
+    canDelete: true,
+  };
+}
 
 const STAFF_ROLE_OPTIONS = [
   { value: 'Support Moderator', label: 'Support Moderator' },
@@ -746,47 +777,28 @@ function CasesTab({
   onQueueChange: (queue: CaseQueue) => void;
   onRefresh: () => void;
 }) {
-  type MineCategory = 'all' | 'report' | 'listing' | 'identity';
-  const [mineCategory, setMineCategory] = useState<MineCategory>('all');
-  const [search, setSearch] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState('all');
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
-  const [selected, setSelected] = useState<ModerationCase | null>(null);
-  const [mode, setMode] = useState<'view' | 'delete' | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [identityUser, setIdentityUser] = useState<PlatformUserAccount | null>(null);
-  const [identityLoading, setIdentityLoading] = useState(false);
-
   const myStaffId = staffId != null && staffId !== '' ? String(staffId) : null;
 
-  const myCases = useMemo(
-    () =>
-      myStaffId
-        ? cases.filter(
-            (c) =>
-              c.assignedStaffId != null &&
-              String(c.assignedStaffId) === myStaffId &&
-              (c.source === 'report' || c.source === 'listing' || c.source === 'identity')
-          )
-        : [],
-    [cases, myStaffId]
-  );
-  const myCasesByCategory = useMemo(() => {
-    if (mineCategory === 'all') return myCases;
-    return myCases.filter((c) => c.source === mineCategory);
-  }, [myCases, mineCategory]);
-  const myCategoryCounts = useMemo(
-    () => ({
-      all: myCases.length,
-      report: myCases.filter((c) => c.source === 'report').length,
-      listing: myCases.filter((c) => c.source === 'listing').length,
-      identity: myCases.filter((c) => c.source === 'identity').length,
-    }),
-    [myCases]
-  );
+  const myCases = useMemo(() => {
+    if (!myStaffId) return [];
+    const fromQueues = cases.filter(
+      (c) =>
+        c.assignedStaffId != null &&
+        String(c.assignedStaffId).toLowerCase() === myStaffId.toLowerCase() &&
+        (c.source === 'report' || c.source === 'listing' || c.source === 'identity')
+    );
+    const fromDisputes = disputes
+      .filter(
+        (d) =>
+          d.assignee != null &&
+          String(d.assignee.staffId).toLowerCase() === myStaffId.toLowerCase() &&
+          !CLOSED_DISPUTE_STATUSES.has(String(d.status).toLowerCase())
+      )
+      .map(disputeToModerationCase);
+    return [...fromQueues, ...fromDisputes].sort(
+      (a, b) => new Date(b.openedAt || 0).getTime() - new Date(a.openedAt || 0).getTime()
+    );
+  }, [cases, disputes, myStaffId]);
   const listingCases = useMemo(
     () => cases.filter((c) => c.source === 'listing'),
     [cases]
@@ -812,187 +824,10 @@ function CasesTab({
       ).length,
     [reports]
   );
-  const scopedCases =
-    queue === 'mine'
-      ? myCasesByCategory
-      : queue === 'listings'
-        ? listingCases
-        : queue === 'identity'
-          ? identityCases
-          : [];
 
   const switchQueue = (next: CaseQueue) => {
     if (next === queue) return;
     onQueueChange(next);
-    setMineCategory('all');
-    setSearch('');
-    setPriorityFilter('all');
-    setTypeFilter('all');
-    setRoleFilter('all');
-    setStatusFilter('all');
-    setSortBy('newest');
-    setSelected(null);
-    setMode(null);
-    setIdentityUser(null);
-  };
-
-  const priorityOptions = useMemo(
-    () => uniqueOptions(scopedCases.map((c) => c.priority)),
-    [scopedCases]
-  );
-  const typeOptions = useMemo(() => {
-    if (queue === 'mine' && mineCategory === 'all') {
-      return uniqueOptions([
-        'Report',
-        'Listing review',
-        'Identity verification',
-        ...scopedCases.map((c) => c.type),
-      ]);
-    }
-    return uniqueOptions(scopedCases.map((c) => c.type));
-  }, [scopedCases, queue, mineCategory]);
-  const roleOptions = useMemo(
-    () => uniqueOptions(scopedCases.map((c) => c.assignedRole).filter(Boolean) as string[]),
-    [scopedCases]
-  );
-  const statusOptions = useMemo(
-    () => uniqueOptions(scopedCases.map((c) => c.status)),
-    [scopedCases]
-  );
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let list = scopedCases.filter((c) => {
-      if (priorityFilter !== 'all' && c.priority.toLowerCase() !== priorityFilter) return false;
-      if (typeFilter !== 'all' && c.type.toLowerCase() !== typeFilter) return false;
-      if (roleFilter !== 'all' && (c.assignedRole || '').toLowerCase() !== roleFilter) return false;
-      if (statusFilter !== 'all' && c.status.toLowerCase() !== statusFilter) return false;
-      if (!q) return true;
-      return (
-        c.target.toLowerCase().includes(q) ||
-        c.targetHandle.toLowerCase().includes(q) ||
-        c.type.toLowerCase().includes(q) ||
-        c.reason.toLowerCase().includes(q) ||
-        (c.source || '').toLowerCase().includes(q) ||
-        (c.assignedRole || '').toLowerCase().includes(q) ||
-        (c.assignedStaffName || '').toLowerCase().includes(q) ||
-        (c.referenceNumber || '').toLowerCase().includes(q)
-      );
-    });
-
-    list = [...list].sort((a, b) => {
-      switch (sortBy) {
-        case 'oldest':
-          return new Date(a.openedAt || 0).getTime() - new Date(b.openedAt || 0).getTime();
-        case 'priority': {
-          const rank = (p: string) => (p === 'high' ? 0 : p === 'medium' ? 1 : 2);
-          return rank(a.priority.toLowerCase()) - rank(b.priority.toLowerCase());
-        }
-        case 'type':
-          return a.type.localeCompare(b.type);
-        case 'target':
-          return a.target.localeCompare(b.target);
-        case 'newest':
-        default:
-          return new Date(b.openedAt || 0).getTime() - new Date(a.openedAt || 0).getTime();
-      }
-    });
-
-    return list;
-  }, [scopedCases, search, priorityFilter, typeFilter, roleFilter, statusFilter, sortBy]);
-
-  const q = search.trim();
-  const hasFilters =
-    q ||
-    (queue === 'mine' && mineCategory !== 'all') ||
-    priorityFilter !== 'all' ||
-    typeFilter !== 'all' ||
-    roleFilter !== 'all' ||
-    statusFilter !== 'all';
-
-  const closeModal = () => {
-    setSelected(null);
-    setMode(null);
-    setIdentityUser(null);
-  };
-
-  const openIdentityVerification = async (c: ModerationCase) => {
-    if (!c.accountId) {
-      showErrorToast('This identity case has no linked account');
-      return;
-    }
-    setSelected(c);
-    setMode('view');
-    setIdentityLoading(true);
-    setIdentityUser(null);
-    try {
-      const res = await api.get('/api/admin/users-management');
-      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to load user');
-      const user = (res.data.data.users as PlatformUserAccount[]).find(
-        (u) => String(u.accountId) === String(c.accountId)
-      );
-      if (!user) throw new Error('User not found for this verification case');
-      setIdentityUser(user);
-    } catch (err: unknown) {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        (err instanceof Error ? err.message : 'Failed to open verification');
-      showErrorToast(message);
-      closeModal();
-    } finally {
-      setIdentityLoading(false);
-    }
-  };
-
-  const handleTakeOver = async (c: ModerationCase) => {
-    if (!c.canTakeOver) return;
-    setBusyId(c.id);
-    try {
-      const res = await api.post(`/api/admin/moderation/cases/${c.id}/take-over`, {
-        source: c.source,
-      });
-      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to take over case');
-      showSuccessToast(res.data.message || 'Case assigned to you');
-      onRefresh();
-    } catch (err: unknown) {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        (err instanceof Error ? err.message : 'Failed to take over case');
-      showErrorToast(message);
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!selected) return;
-    setBusyId(selected.id);
-    try {
-      const res = await api.delete(`/api/admin/moderation/cases/${selected.id}`, {
-        data: { source: selected.source },
-      });
-      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to delete case');
-      showSuccessToast(res.data.message || 'Case deleted');
-      closeModal();
-      onRefresh();
-    } catch (err: unknown) {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        (err instanceof Error ? err.message : 'Failed to delete case');
-      showErrorToast(message);
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const clearFilters = () => {
-    setMineCategory('all');
-    setSearch('');
-    setPriorityFilter('all');
-    setTypeFilter('all');
-    setRoleFilter('all');
-    setStatusFilter('all');
-    setSortBy('newest');
   };
 
   return (
@@ -1055,209 +890,24 @@ function CasesTab({
         ))}
       </div>
 
+      {queue === 'mine' && (
+        <MyCasesTab cases={myCases} currentStaffId={myStaffId} onUpdated={onRefresh} />
+      )}
       {queue === 'disputes' && <DisputesTab disputes={disputes} onUpdated={onRefresh} />}
       {queue === 'reports' && <ReportsTab reports={reports} onUpdated={onRefresh} />}
-
-      {queue !== 'disputes' && queue !== 'reports' && (
-      <>
-      {queue === 'mine' && (
-        <div className="flex flex-wrap gap-1.5">
-          {(
-            [
-              { id: 'all' as const, label: 'All assigned' },
-              { id: 'report' as const, label: 'Reports' },
-              { id: 'listing' as const, label: 'Listing approvals' },
-              { id: 'identity' as const, label: 'Identity verification' },
-            ] as const
-          ).map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => {
-                setMineCategory(id);
-                setTypeFilter('all');
-              }}
-              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
-                mineCategory === id
-                  ? 'border-rose-400/40 bg-rose-500/15 text-rose-100'
-                  : 'border-white/[0.08] bg-white/[0.02] text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              {label}
-              <span className="ml-1.5 tabular-nums text-[10px] opacity-70">
-                {myCategoryCounts[id]}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
-        <div className="flex flex-col gap-3 border-b border-white/[0.06] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center">
-          <div className="relative min-w-[200px] flex-1 sm:max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={
-                queue === 'listings'
-                  ? 'Search listing / submitter…'
-                  : queue === 'identity'
-                    ? 'Search name / username…'
-                    : queue === 'mine'
-                      ? 'Search my reports, listings, identity…'
-                      : 'Search case / target…'
-              }
-              className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
-            />
-          </div>
-          <p className="text-xs text-zinc-500 sm:order-last sm:w-full lg:order-none lg:w-auto">
-            {filtered.length}{' '}
-            {queue === 'listings'
-              ? 'listing'
-              : queue === 'identity'
-                ? 'review'
-                : queue === 'mine'
-                  ? 'assigned case'
-                  : 'case'}
-            {filtered.length === 1 ? '' : 's'}
-            {hasFilters ? ` matching filters (of ${scopedCases.length})` : ''}
-          </p>
-          <div className="hidden flex-1 lg:block" />
-          <TableFilterBar
-            filters={[
-              {
-                id: 'priority',
-                label: 'Priority',
-                value: priorityFilter,
-                options: priorityOptions,
-              },
-              ...(queue === 'mine'
-                ? [
-                    {
-                      id: 'type',
-                      label: 'Type',
-                      value: typeFilter,
-                      options: typeOptions,
-                    },
-                  ]
-                : []),
-              ...(queue !== 'mine'
-                ? [
-                    {
-                      id: 'role',
-                      label: 'Assigned title',
-                      value: roleFilter,
-                      options: roleOptions,
-                    },
-                  ]
-                : []),
-              { id: 'status', label: 'Status', value: statusFilter, options: statusOptions },
-            ]}
-            sort={{
-              value: sortBy,
-              options: [
-                { value: 'newest', label: 'Newest first' },
-                { value: 'oldest', label: 'Oldest first' },
-                { value: 'priority', label: 'Priority (High first)' },
-                ...(queue === 'mine'
-                  ? [{ value: 'type', label: 'Type A–Z' }]
-                  : []),
-                { value: 'target', label: 'Target A–Z' },
-              ],
-            }}
-            onFilterChange={(id, value) => {
-              if (id === 'priority') setPriorityFilter(value);
-              if (id === 'type') setTypeFilter(value);
-              if (id === 'role') setRoleFilter(value);
-              if (id === 'status') setStatusFilter(value);
-            }}
-            onSortChange={setSortBy}
-            onClear={clearFilters}
-          />
-        </div>
-        <CasesTableBody
-          cases={filtered}
-          emptyLabel={
-            queue === 'listings'
-              ? 'No marketplace listings awaiting approval.'
-              : queue === 'identity'
-                ? 'No identity verification reviews pending.'
-                : queue === 'mine'
-                  ? myStaffId
-                    ? hasFilters
-                      ? 'No assigned cases match your filters.'
-                      : 'No cases are assigned to you yet. Take over a report, listing, or identity review to see it here.'
-                    : 'Staff session required to show your assigned cases.'
-                  : 'No open reports match your filters.'
-          }
-          busyId={busyId || (identityLoading ? selected?.id : null)}
+      {queue === 'listings' && (
+        <ListingApprovalsTab
+          cases={listingCases}
           currentStaffId={myStaffId}
-          onView={(c) => {
-            if (c.source === 'identity') {
-              void openIdentityVerification(c);
-              return;
-            }
-            setSelected(c);
-            setMode('view');
-          }}
-          onDelete={
-            queue === 'identity'
-              ? undefined
-              : (c) => {
-                  if (c.source === 'identity') return;
-                  setSelected(c);
-                  setMode('delete');
-                }
-          }
-          onTakeOver={handleTakeOver}
-        />
-      </section>
-
-      {selected && mode === 'view' && selected.source === 'report' && (
-        <ReportCaseDetailModal
-          reportId={selected.id}
-          onClose={closeModal}
           onUpdated={onRefresh}
         />
       )}
-
-      {selected && mode === 'view' && selected.source === 'listing' && (
-        <ListingCaseDetailModal
-          caseItem={selected}
-          onClose={closeModal}
+      {queue === 'identity' && (
+        <IdentityVerificationTab
+          cases={identityCases}
+          currentStaffId={myStaffId}
           onUpdated={onRefresh}
         />
-      )}
-
-      {identityLoading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 md:pl-[260px]">
-          <Loader2 className="h-8 w-8 animate-spin text-rose-400" />
-        </div>
-      )}
-
-      {identityUser && selected?.source === 'identity' && (
-        <VerificationModal
-          entityName={identityUser.name}
-          accountId={identityUser.accountId}
-          verification={identityUser.verification}
-          onClose={closeModal}
-          onChanged={() => {
-            closeModal();
-            onRefresh();
-          }}
-        />
-      )}
-
-      {selected && mode === 'delete' && (
-        <CaseDeleteModal
-          caseItem={selected}
-          busy={busyId === selected.id}
-          onClose={closeModal}
-          onConfirm={() => void handleDelete()}
-        />
-      )}
-      </>
       )}
     </div>
   );
@@ -1349,7 +999,7 @@ function CasesTableBody({
   const isMine = (c: ModerationCase) =>
     currentStaffId != null &&
     c.assignedStaffId != null &&
-    String(c.assignedStaffId) === currentStaffId;
+    String(c.assignedStaffId).toLowerCase() === String(currentStaffId).toLowerCase();
 
   return (
     <div className="overflow-x-auto">
@@ -2638,50 +2288,6 @@ function ForumSection({
           </div>
         </section>
       )}
-    </div>
-  );
-}
-
-function CaseDeleteModal({
-  caseItem,
-  busy,
-  onClose,
-  onConfirm,
-}: {
-  caseItem: ModerationCase;
-  busy?: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 md:pl-[260px]">
-      <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
-      <div className="relative w-full max-w-md rounded-2xl border border-white/[0.1] bg-[#12131a] p-6 shadow-2xl">
-        <h2 className="text-lg font-bold text-white">Delete this case?</h2>
-        <p className="mt-2 text-sm text-zinc-400">
-          Remove “{caseItem.type}” for {caseItem.target} from the pending queue.
-          {caseItem.source === 'listing'
-            ? ' The listing will be marked as rejected.'
-            : ' The record will be soft-deleted.'}
-        </p>
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onConfirm}
-            className="rounded-xl bg-red-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
-          >
-            {busy ? 'Deleting…' : 'Delete case'}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

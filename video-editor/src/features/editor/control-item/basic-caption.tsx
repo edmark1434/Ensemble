@@ -119,9 +119,9 @@ const getPropertiesFromDetails = (
 };
 
 const BasicCaption = ({
-                        trackItem,
-                        type
-                      }: {
+  trackItem,
+  type
+}: {
   trackItem: ITrackItem & ICaption;
   type?: string;
 }) => {
@@ -536,7 +536,7 @@ const BasicCaption = ({
               <div className="flex gap-2 items-center text-primary text-sm font-normal">
                 <Lock size={16} />
                 <span>
-                This element has been locked
+                This item has been locked
               </span>
               </div>
             )}

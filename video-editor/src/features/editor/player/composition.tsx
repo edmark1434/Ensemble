@@ -5,7 +5,8 @@ import { EDIT_OBJECT, ENTER_EDIT_MODE } from "@designcombo/state";
 import { groupTrackItems } from "../utils/track-items";
 import { TransitionSeries, Transitions } from "@designcombo/transitions";
 import { calculateTextHeight } from "../utils/text";
-import { useCurrentFrame } from "remotion";
+import { getBackgroundFillStyle } from "./styles";
+import { AbsoluteFill, useCurrentFrame } from "remotion";
 import useStore from "../store/use-store";
 
 const Composition = () => {
@@ -16,6 +17,7 @@ const Composition = () => {
     fps,
     sceneMoveableRef,
     size,
+    background,
     transitionsMap,
     structure,
     activeIds
@@ -29,10 +31,10 @@ const Composition = () => {
   });
 
   const visibleGroupedItems = groupedItems.map(group =>
-      group.filter(item => {
-        if (item.type === "transition") return true;
-        return !trackItemsMap[item.id]?.details?.hidden;
-      })
+    group.filter(item => {
+      if (item.type === "transition") return true;
+      return !trackItemsMap[item.id]?.details?.hidden;
+    })
   ).filter(group => group.length > 0);
 
   const mediaItems = Object.values(trackItemsMap).filter((item) => {
@@ -214,45 +216,47 @@ const Composition = () => {
 
   return (
     <>
-      {visibleGroupedItems.map((group, index) => {
-        if (group.length === 1) {
-          const item = trackItemsMap[group[0].id];
-          return SequenceItem[item.type](item, {
-            fps,
-            handleTextChange,
-            onTextBlur,
-            editableTextId,
-            frame,
-            size,
-            isTransition: false
-          });
-        }
-        const firstItem = trackItemsMap[group[0].id];
-        const from = (firstItem.display.from / 1000) * fps;
-        return (
-          <TransitionSeries from={from} key={index}>
-            {group.map((item) => {
-              if (item.type === "transition") {
-                const durationInFrames = (item.duration / 1000) * fps;
-                return Transitions[item.kind]({
-                  durationInFrames,
-                  ...size,
-                  id: item.id,
-                  direction: item.direction
+      <AbsoluteFill style={getBackgroundFillStyle(background.value)} />
+        {visibleGroupedItems.map((group, index) => {
+          if (group.length === 1) {
+            const item = trackItemsMap[group[0].id];
+            return SequenceItem[item.type](item, {
+              fps,
+              handleTextChange,
+              onTextBlur,
+              editableTextId,
+              frame,
+              size,
+              isTransition: false
+            });
+          }
+          const firstItem = trackItemsMap[group[0].id];
+          const from = (firstItem.display.from / 1000) * fps;
+          return (
+            <TransitionSeries from={from} key={index}>
+              {group.map((item) => {
+                if (item.type === "transition") {
+                  const durationInFrames = (item.duration / 1000) * fps;
+                  return Transitions[item.kind]({
+                    durationInFrames,
+                    ...size,
+                    id: item.id,
+                    direction: item.direction
+                  });
+                }
+                return SequenceItem[item.type](trackItemsMap[item.id], {
+                  fps,
+                  handleTextChange,
+                  editableTextId,
+                  isTransition: true,
+                  size,
+                  frame
                 });
-              }
-              return SequenceItem[item.type](trackItemsMap[item.id], {
-                fps,
-                handleTextChange,
-                editableTextId,
-                isTransition: true,
-                size,
-                frame
-              });
-            })}
-          </TransitionSeries>
-        );
-      })}
+              })}
+            </TransitionSeries>
+          );
+        }
+      )}
     </>
   );
 };

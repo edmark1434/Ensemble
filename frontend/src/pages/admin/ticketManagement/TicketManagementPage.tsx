@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
+  Hand,
   LayoutGrid,
   Loader2,
   RefreshCw,
@@ -39,7 +40,12 @@ const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
 
 function formatDateTime(value: string | null) {
   if (!value) return '—';
-  return new Date(value).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  return new Date(value).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 function formatStatusLabel(value: string) {
@@ -57,16 +63,32 @@ function badgeClass(kind: 'status' | 'priority', value: string) {
   if (kind === 'priority') {
     if (v === 'high') return 'bg-red-500/15 text-red-300 border-red-500/25';
     if (v === 'medium') return 'bg-amber-500/15 text-amber-200 border-amber-500/25';
-    return 'bg-zinc-500/15 text-zinc-300 border-white/10';
+    return 'bg-sky-500/15 text-sky-300 border-sky-500/25';
   }
-  if (v === 'open' || v === 'pending review') return 'bg-red-500/15 text-red-300';
-  if (v === 'in progress' || v === 'under review' || v === 'in review' || v === 'escalated' || v === 'awaiting response') {
-    return 'bg-amber-500/15 text-amber-200';
+  if (v === 'open' || v === 'pending review') return 'bg-rose-500/15 text-rose-200 border-rose-500/25';
+  if (
+    v === 'in progress' ||
+    v === 'under review' ||
+    v === 'in review' ||
+    v === 'escalated' ||
+    v === 'awaiting response'
+  ) {
+    return 'bg-amber-500/15 text-amber-200 border-amber-500/25';
   }
-  if (v === 'sanctioned') return 'bg-violet-500/15 text-violet-300';
-  if (v === 'dismissed' || v === 'withdrawn') return 'bg-zinc-500/15 text-zinc-300';
-  if (v === 'resolved' || v === 'closed') return 'bg-emerald-500/15 text-emerald-300';
-  return 'bg-zinc-500/15 text-zinc-300';
+  if (v === 'sanctioned') return 'bg-violet-500/15 text-violet-200 border-violet-500/25';
+  if (v === 'dismissed' || v === 'withdrawn') return 'bg-zinc-500/15 text-zinc-300 border-white/10';
+  if (v === 'resolved' || v === 'closed') return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25';
+  return 'bg-zinc-500/15 text-zinc-300 border-white/10';
+}
+
+function SummaryCard({ label, value, sub }: { label: string; value: string | number; sub: string }) {
+  return (
+    <div className="rounded-2xl border border-white/[0.08] bg-[#14151c] px-4 py-4">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tabular-nums text-white">{value}</p>
+      <p className="mt-1 text-xs text-zinc-500">{sub}</p>
+    </div>
+  );
 }
 
 export default function TicketManagementPage() {
@@ -80,10 +102,10 @@ export default function TicketManagementPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<TabId>(initialTab);
-  const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState<number | string | null>(null);
   const [ticketFilters, setTicketFilters] = useState<TicketFilterState>(DEFAULT_TICKET_FILTERS);
+
   const load = async (silent = false) => {
     if (!silent) setLoading(true);
     else setRefreshing(true);
@@ -135,14 +157,8 @@ export default function TicketManagementPage() {
 
   const filteredTickets = useMemo(() => {
     if (!data) return [];
-    // Header search still applies across tickets when on tickets tab;
-    // ticketFilters.search is the dedicated ticket search.
-    const merged: TicketFilterState = {
-      ...ticketFilters,
-      search: ticketFilters.search || (tab === 'tickets' ? search : ticketFilters.search),
-    };
-    return filterTickets(data.tickets, merged);
-  }, [data, ticketFilters, search, tab]);
+    return filterTickets(data.tickets, ticketFilters);
+  }, [data, ticketFilters]);
 
   const ticketTypes = useMemo(() => {
     if (!data) return [...TICKET_TYPE_OPTIONS];
@@ -197,32 +213,24 @@ export default function TicketManagementPage() {
       <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#06070c]/90 backdrop-blur-xl">
         <div className="flex flex-col gap-4 px-6 py-4 lg:flex-row lg:items-center lg:justify-between md:px-8">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-400/80">Support desk</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-400/80">
+              Support desk
+            </p>
             <h1 className="text-xl font-bold text-white">Ticket management</h1>
             <p className="mt-1 text-xs text-zinc-500">
-              {summary.openTickets} open tickets · {summary.totalTickets} total · @{user?.username || 'admin'}
+              {summary.openTickets} open tickets · {summary.totalTickets} total · @
+              {user?.username || 'admin'}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[200px] flex-1 lg:w-72">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search tickets…"
-                className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => void load(true)}
-              disabled={refreshing}
-              className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-4 py-2 text-sm text-zinc-300 hover:text-white"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => void load(true)}
+            disabled={refreshing}
+            className="flex items-center gap-2 self-start rounded-xl border border-white/[0.08] px-4 py-2 text-sm text-zinc-300 hover:text-white"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
         </div>
         <div className="flex gap-1 overflow-x-auto px-4 pb-0 md:px-6">
           {TABS.map(({ id, label, icon: Icon }) => (
@@ -231,7 +239,9 @@ export default function TicketManagementPage() {
               type="button"
               onClick={() => switchTab(id)}
               className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition ${
-                tab === id ? 'border-rose-400 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                tab === id
+                  ? 'border-rose-400 text-white'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-300'
               }`}
             >
               <Icon className="h-4 w-4" />
@@ -242,40 +252,53 @@ export default function TicketManagementPage() {
       </header>
 
       <div className="space-y-6 px-6 py-6 md:px-8 md:py-8">
-        <div className="flex flex-wrap gap-2">
-          {alerts.map((a) => {
-            const clickable = Boolean(a.action?.tab);
-            return (
-              <button
-                key={a.id}
-                type="button"
-                disabled={!clickable}
-                onClick={() => handleAlertClick(a)}
-                title={clickable ? 'Open related queue' : undefined}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-left text-xs transition ${
-                  a.severity === 'warning'
-                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-100'
-                    : a.severity === 'error'
-                      ? 'border-red-500/30 bg-red-500/10 text-red-200'
-                      : a.severity === 'success'
-                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                        : 'border-white/10 bg-white/[0.03] text-zinc-300'
-                } ${clickable ? 'hover:brightness-110 cursor-pointer' : 'cursor-default'}`}
-              >
-                {a.severity === 'success' ? <CheckCircle2 className="h-3 w-3 shrink-0" /> : <AlertTriangle className="h-3 w-3 shrink-0" />}
-                {a.message}
-              </button>
-            );
-          })}
-        </div>
+        {alerts.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {alerts.map((a) => {
+              const clickable = Boolean(a.action?.tab);
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  disabled={!clickable}
+                  onClick={() => handleAlertClick(a)}
+                  title={clickable ? 'Open related queue' : undefined}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-left text-xs transition ${
+                    a.severity === 'warning'
+                      ? 'border-amber-500/30 bg-amber-500/10 text-amber-100'
+                      : a.severity === 'error'
+                        ? 'border-red-500/30 bg-red-500/10 text-red-200'
+                        : a.severity === 'success'
+                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                          : 'border-white/10 bg-white/[0.03] text-zinc-300'
+                  } ${clickable ? 'cursor-pointer hover:brightness-110' : 'cursor-default'}`}
+                >
+                  {a.severity === 'success' ? (
+                    <CheckCircle2 className="h-3 w-3 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                  )}
+                  {a.message}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {tab === 'overview' && (
-          <OverviewTab summary={summary} charts={charts} recentActivity={recentActivity} staffWorkload={staffWorkload} />
+          <OverviewTab
+            summary={summary}
+            charts={charts}
+            recentActivity={recentActivity}
+            staffWorkload={staffWorkload}
+          />
         )}
         {tab === 'tickets' && (
           <TicketsTab
             tickets={filteredTickets}
+            allTickets={data.tickets}
             totalCount={data.tickets.length}
+            summary={summary}
             ticketTypes={ticketTypes}
             channels={ticketChannels}
             moderators={data.staffWorkload.map((s) => ({
@@ -294,16 +317,6 @@ export default function TicketManagementPage() {
   );
 }
 
-function Kpi({ label, value, sub }: { label: string; value: string | number; sub?: ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
-      <p className="mt-2 text-3xl font-bold tabular-nums text-white">{value}</p>
-      {sub && <div className="mt-1 text-xs text-zinc-500">{sub}</div>}
-    </div>
-  );
-}
-
 function OverviewTab({
   summary,
   charts,
@@ -316,30 +329,18 @@ function OverviewTab({
   staffWorkload: TicketsOverview['staffWorkload'];
 }) {
   return (
-    <>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-        <Kpi label="Open tickets" value={summary.openTickets} sub={`${summary.totalTickets} total`} />
-        <Kpi label="Unassigned" value={summary.unassignedTickets} sub="Need assignee" />
-        <Kpi label="High priority" value={summary.highPriorityTickets} sub="Open tickets flagged urgent" />
-        <Kpi label="Awaiting reply" value={summary.awaitingReplyTickets ?? 0} sub="User message waiting" />
-        <Kpi
-          label="Open disputes"
-          value={summary.openDisputes}
-          sub={
-            <Link to="/admin/moderation?tab=cases&queue=disputes" className="text-rose-300 hover:underline">
-              Managed in Moderation
-            </Link>
-          }
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <SummaryCard label="Open tickets" value={summary.openTickets} sub={`${summary.totalTickets} total filed`} />
+        <SummaryCard label="Unassigned" value={summary.unassignedTickets} sub="Need a designated handler" />
+        <SummaryCard label="High priority" value={summary.highPriorityTickets} sub="Open and urgent" />
+        <SummaryCard
+          label="Awaiting reply"
+          value={summary.awaitingReplyTickets ?? 0}
+          sub="User message waiting"
         />
-        <Kpi
-          label="Open reports"
-          value={summary.openReports}
-          sub={
-            <Link to="/admin/moderation?tab=cases&queue=reports" className="text-rose-300 hover:underline">
-              Managed in Moderation
-            </Link>
-          }
-        />
+        <SummaryCard label="Open disputes" value={summary.openDisputes} sub="Managed in Moderation" />
+        <SummaryCard label="Open reports" value={summary.openReports} sub="Managed in Moderation" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -353,12 +354,15 @@ function OverviewTab({
             }))}
           />
         </ChartCard>
-        <section className="flex flex-col justify-center rounded-2xl border border-rose-500/20 bg-gradient-to-br from-rose-500/10 to-transparent p-6">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-300/80">Moderation queues</p>
-          <p className="mt-2 text-3xl font-semibold tabular-nums text-white">
+        <section className="flex flex-col justify-center overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0f1016] p-6">
+          <div className="flex items-center gap-2">
+            <Ticket className="h-4 w-4 text-rose-300" />
+            <p className="text-sm font-semibold text-white">Moderation queues</p>
+          </div>
+          <p className="mt-3 text-3xl font-semibold tabular-nums text-white">
             {summary.openDisputes + summary.openReports}
           </p>
-          <p className="mt-1 text-sm text-zinc-400">
+          <p className="mt-1 text-sm text-zinc-500">
             {summary.openDisputes} disputes · {summary.openReports} reports
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
@@ -382,7 +386,10 @@ function OverviewTab({
         <ChartCard>
           <VerticalBarChart
             title="Tickets by type"
-            data={(charts.ticketTypes || charts.ticketCategories).map((c) => ({ label: c.label, value: c.value }))}
+            data={(charts.ticketTypes || charts.ticketCategories).map((c) => ({
+              label: c.label,
+              value: c.value,
+            }))}
             color="#a78bfa"
           />
         </ChartCard>
@@ -395,45 +402,61 @@ function OverviewTab({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
-          <h3 className="text-sm font-semibold text-white">Recent desk activity</h3>
-          <ul className="mt-4 space-y-2">
+        <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0f1016]">
+          <div className="border-b border-white/[0.06] px-5 py-4">
+            <h3 className="text-sm font-semibold text-white">Recent desk activity</h3>
+            <p className="mt-1 text-xs text-zinc-500">Latest ticket and moderation desk events</p>
+          </div>
+          <ul className="divide-y divide-white/[0.04] px-2 py-1">
             {recentActivity.slice(0, 12).map((a) => (
-              <li key={a.id} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-sm">
+              <li key={a.id} className="flex items-center justify-between px-3 py-2.5 text-sm">
                 <div>
                   <span className="text-zinc-500">{a.type}</span>{' '}
                   <span className="font-medium text-white">{a.ref}</span>
                   <p className="text-xs text-zinc-500">{a.label}</p>
                 </div>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] ${badgeClass('status', a.status)}`}>
+                <span
+                  className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] ${badgeClass('status', a.status)}`}
+                >
                   {formatStatusLabel(a.status)}
                 </span>
               </li>
             ))}
+            {recentActivity.length === 0 && (
+              <li className="px-3 py-10 text-center text-sm text-zinc-500">No recent activity.</li>
+            )}
           </ul>
         </section>
-        <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
-          <h3 className="text-sm font-semibold text-white">Staff workload snapshot</h3>
-          <ul className="mt-4 space-y-2">
+        <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0f1016]">
+          <div className="border-b border-white/[0.06] px-5 py-4">
+            <h3 className="text-sm font-semibold text-white">Staff workload snapshot</h3>
+            <p className="mt-1 text-xs text-zinc-500">Open tickets, disputes, and reports by handler</p>
+          </div>
+          <ul className="divide-y divide-white/[0.04] px-2 py-1">
             {staffWorkload.slice(0, 8).map((s) => (
-              <li key={s.staffId} className="flex items-center justify-between rounded-xl border border-white/[0.06] px-3 py-2 text-sm">
+              <li key={s.staffId} className="flex items-center justify-between px-3 py-2.5 text-sm">
                 <div>
                   <p className="font-medium text-white">{s.name}</p>
                   <p className="text-xs text-zinc-500">{s.role}</p>
                 </div>
-                <span className="text-white">{s.totalOpen} open</span>
+                <span className="tabular-nums text-zinc-300">{s.totalOpen} open</span>
               </li>
             ))}
+            {staffWorkload.length === 0 && (
+              <li className="px-3 py-10 text-center text-sm text-zinc-500">No staff workload yet.</li>
+            )}
           </ul>
         </section>
       </div>
-    </>
+    </div>
   );
 }
 
 function TicketsTab({
   tickets,
+  allTickets,
   totalCount,
+  summary,
   ticketTypes,
   channels,
   moderators,
@@ -442,7 +465,9 @@ function TicketsTab({
   onOpenTicket,
 }: {
   tickets: SupportTicket[];
+  allTickets: SupportTicket[];
   totalCount: number;
+  summary: TicketsOverview['summary'];
   ticketTypes: string[];
   channels: string[];
   moderators: { staffId: number | string; name: string; role: string }[];
@@ -456,123 +481,242 @@ function TicketsTab({
     return s.length > 10 ? `${s.slice(0, 8)}…` : s;
   };
 
+  const quickCounts = useMemo(() => {
+    const openOnly = allTickets.filter((t) => t.status === 'Open' || t.status === 'In Progress').length;
+    const awaiting = allTickets.filter((t) => t.waitingForResponse).length;
+    const escalated = allTickets.filter((t) => t.isEscalated).length;
+    const unassigned = allTickets.filter((t) => !t.assignee).length;
+    const high = allTickets.filter((t) => String(t.priority).toLowerCase() === 'high').length;
+    return {
+      all: allTickets.length,
+      open_only: openOnly,
+      awaiting,
+      escalated,
+      unassigned,
+      high,
+    };
+  }, [allTickets]);
+
   return (
-    <div className="space-y-4">
-      <TicketFiltersPanel
-        filters={filters}
-        onChange={onFiltersChange}
-        ticketTypes={ticketTypes}
-        channels={channels}
-        moderators={moderators}
-        accent="rose"
-        showQueue
-        showAdminToggle
-        resultCount={tickets.length}
-        totalCount={totalCount}
-      />
-      <DataTable
-        columns={['Ticket', 'Subject', 'Requester', 'Type', 'Flags', 'Priority', 'Status', 'Assignee', 'Updated']}
-        rows={tickets.map((t) => ({
-          key: t.id,
-          cells: [
-            t.number,
-            t.subject,
-            <div key="req" className="min-w-[140px]">
-              <p className="font-medium text-zinc-200">{t.requester.name}</p>
-              <p className="text-[11px] text-zinc-500">@{t.requester.username || '—'}</p>
-              <p className="font-mono text-[10px] text-zinc-600">acc {shortId(t.requester.accountId)}</p>
-              <p className="font-mono text-[10px] text-zinc-600">usr {shortId(t.requester.userId)}</p>
-            </div>,
-            t.type || t.category || '—',
-            <div key="flags" className="flex min-w-[140px] flex-col gap-1">
-              {t.waitingForResponse && (
-                <span className="w-fit rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
-                  Awaiting Reply
-                </span>
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <SummaryCard label="Open tickets" value={summary.openTickets} sub="Active support queue" />
+        <SummaryCard label="Unassigned" value={summary.unassignedTickets} sub="Need a designated handler" />
+        <SummaryCard label="High priority" value={summary.highPriorityTickets} sub="Open and urgent" />
+        <SummaryCard
+          label="Awaiting reply"
+          value={summary.awaitingReplyTickets ?? 0}
+          sub="User message waiting"
+        />
+      </div>
+
+      <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0f1016]">
+        <div className="flex flex-col gap-4 border-b border-white/[0.06] px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Ticket className="h-4 w-4 text-rose-300" />
+              <h2 className="text-sm font-semibold text-white">Ticket desk</h2>
+            </div>
+            <p className="mt-1 text-xs text-zinc-500">
+              Triage support tickets, assign handlers, escalate to moderator queues, and reply to
+              members.
+            </p>
+          </div>
+          <div className="relative w-full max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <input
+              value={filters.search}
+              onChange={(e) => onFiltersChange({ ...filters, search: e.target.value })}
+              placeholder="Search number, subject, requester…"
+              className="w-full rounded-xl border border-white/[0.08] bg-[#14151c] py-2.5 pl-9 pr-3 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-rose-500/40"
+            />
+          </div>
+        </div>
+
+        <TicketFiltersPanel
+          filters={filters}
+          onChange={onFiltersChange}
+          ticketTypes={ticketTypes}
+          channels={channels}
+          moderators={moderators}
+          accent="rose"
+          showQueue
+          showAdminToggle
+          resultCount={tickets.length}
+          totalCount={totalCount}
+          variant="desk"
+          hideSearch
+          quickCounts={quickCounts}
+        />
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[980px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-white/[0.06] text-[11px] uppercase tracking-wide text-zinc-500">
+                <th className="px-5 py-3 font-medium">Ticket</th>
+                <th className="px-4 py-3 font-medium">Requester</th>
+                <th className="px-4 py-3 font-medium">Type</th>
+                <th className="px-4 py-3 font-medium">Priority</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Handler</th>
+                <th className="px-4 py-3 font-medium">Flags</th>
+                <th className="px-5 py-3 font-medium">Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tickets.map((t) => (
+                <tr
+                  key={String(t.id)}
+                  onClick={() => onOpenTicket(t.id)}
+                  className="cursor-pointer border-b border-white/[0.04] transition hover:bg-white/[0.03]"
+                >
+                  <td className="px-5 py-3.5">
+                    <p className="font-medium text-white">{t.number}</p>
+                    <p className="mt-0.5 line-clamp-1 text-xs text-zinc-500">{t.subject}</p>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <p className="text-zinc-200">{t.requester.name}</p>
+                    <p className="text-xs text-zinc-500">@{t.requester.username || '—'}</p>
+                    <p className="font-mono text-[10px] text-zinc-600">
+                      acc {shortId(t.requester.accountId)} · usr {shortId(t.requester.userId)}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3.5 text-zinc-300">{t.type || t.category || '—'}</td>
+                  <td className="px-4 py-3.5">
+                    <span
+                      className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${badgeClass('priority', t.priority)}`}
+                    >
+                      {formatStatusLabel(t.priority)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <span
+                      className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${badgeClass('status', t.status)}`}
+                    >
+                      {formatStatusLabel(t.status)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3.5 text-zinc-300">
+                    {t.assignee ? (
+                      <>
+                        <p>{t.assignee.name}</p>
+                        <p className="text-[11px] text-zinc-500">{t.assignee.role}</p>
+                      </>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-amber-200/90">
+                        <Hand className="h-3.5 w-3.5" />
+                        Unassigned
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <div className="flex flex-col gap-1">
+                      {t.waitingForResponse && (
+                        <span className="w-fit rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
+                          Awaiting Reply
+                        </span>
+                      )}
+                      {t.isEscalated && (
+                        <span className="w-fit rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] text-violet-200">
+                          {formatEscalatedLabel(t)}
+                        </span>
+                      )}
+                      {!t.waitingForResponse && !t.isEscalated && (
+                        <span className="text-xs text-zinc-600">—</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-5 py-3.5 text-xs text-zinc-500">{formatDateTime(t.updatedAt)}</td>
+                </tr>
+              ))}
+              {tickets.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-5 py-16 text-center text-sm text-zinc-500">
+                    No tickets match this filter.
+                  </td>
+                </tr>
               )}
-              {t.isEscalated && (
-                <span className="w-fit rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] text-violet-200">
-                  {formatEscalatedLabel(t)}
-                </span>
-              )}
-              {!t.waitingForResponse && !t.isEscalated && <span className="text-zinc-600">—</span>}
-            </div>,
-            t.priority,
-            t.status,
-            t.assignee?.name || '—',
-            formatDateTime(t.updatedAt),
-          ],
-          onClick: () => onOpenTicket(t.id),
-        }))}
-      />
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }
 
 function AssignmentsTab({ workload }: { workload: TicketsOverview['staffWorkload'] }) {
   return (
-    <>
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <SummaryCard label="Staff on desk" value={workload.length} sub="Handlers with workload rows" />
+        <SummaryCard
+          label="Open tickets"
+          value={workload.reduce((s, w) => s + w.openTickets, 0)}
+          sub="Assigned across staff"
+        />
+        <SummaryCard
+          label="Open disputes"
+          value={workload.reduce((s, w) => s + w.openDisputes, 0)}
+          sub="Assigned dispute load"
+        />
+        <SummaryCard
+          label="Open reports"
+          value={workload.reduce((s, w) => s + w.openReports, 0)}
+          sub="Assigned report load"
+        />
+      </div>
+
       <ChartCard>
         <HorizontalBarChart
           title="Open workload by staff member"
           data={workload.map((s) => ({ label: s.name.slice(0, 16), value: s.totalOpen }))}
         />
       </ChartCard>
-      <DataTable
-        columns={['Staff', 'Role', 'Tickets', 'Disputes', 'Reports', 'Total open']}
-        rows={workload.map((s) => ({
-          key: s.staffId,
-          cells: [s.name, s.role, String(s.openTickets), String(s.openDisputes), String(s.openReports), String(s.totalOpen)],
-        }))}
-      />
-    </>
-  );
-}
 
-function DataTable({
-  columns,
-  rows,
-}: {
-  columns: string[];
-  rows: { key: string | number; cells: ReactNode[]; onClick?: () => void; actions?: ReactNode }[];
-}) {
-  return (
-    <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-white/[0.06] bg-[#0f1016] text-[10px] uppercase text-zinc-600">
-              {columns.map((c) => (
-                <th key={c} className="px-4 py-3">
-                  {c}
-                </th>
+      <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0f1016]">
+        <div className="border-b border-white/[0.06] px-5 py-4">
+          <div className="flex items-center gap-2">
+            <UserCog className="h-4 w-4 text-rose-300" />
+            <h2 className="text-sm font-semibold text-white">Assignment desk</h2>
+          </div>
+          <p className="mt-1 text-xs text-zinc-500">
+            Open tickets, disputes, and reports currently assigned to each staff member.
+          </p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-white/[0.06] text-[11px] uppercase tracking-wide text-zinc-500">
+                <th className="px-5 py-3 font-medium">Staff</th>
+                <th className="px-4 py-3 font-medium">Role</th>
+                <th className="px-4 py-3 font-medium">Tickets</th>
+                <th className="px-4 py-3 font-medium">Disputes</th>
+                <th className="px-4 py-3 font-medium">Reports</th>
+                <th className="px-5 py-3 font-medium">Total open</th>
+              </tr>
+            </thead>
+            <tbody>
+              {workload.map((s) => (
+                <tr key={String(s.staffId)} className="border-b border-white/[0.04] hover:bg-white/[0.03]">
+                  <td className="px-5 py-3.5 font-medium text-white">{s.name}</td>
+                  <td className="px-4 py-3.5 text-zinc-400">{s.role}</td>
+                  <td className="px-4 py-3.5 tabular-nums text-zinc-300">{s.openTickets}</td>
+                  <td className="px-4 py-3.5 tabular-nums text-zinc-300">{s.openDisputes}</td>
+                  <td className="px-4 py-3.5 tabular-nums text-zinc-300">{s.openReports}</td>
+                  <td className="px-5 py-3.5 tabular-nums font-medium text-white">{s.totalOpen}</td>
+                </tr>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr
-                key={row.key}
-                onClick={row.onClick}
-                className={`border-b border-white/[0.04] text-zinc-300 ${row.onClick ? 'cursor-pointer hover:bg-white/[0.02]' : ''}`}
-              >
-                {row.cells.map((cell, j) => (
-                  <td key={j} className="px-4 py-2.5">
-                    {cell === 'actions' && row.actions ? row.actions : cell}
+              {workload.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-5 py-16 text-center text-sm text-zinc-500">
+                    No staff workload to show.
                   </td>
-                ))}
-              </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={columns.length} className="px-4 py-8 text-center text-zinc-500">
-                  No results.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </section>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   );
 }

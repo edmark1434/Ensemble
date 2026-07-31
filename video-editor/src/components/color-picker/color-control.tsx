@@ -4,7 +4,7 @@ import { checkFormat } from "./utils";
 import { getAlphaValue, onlyDigits, onlyHex } from "./helpers";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 import { Input } from "../ui/input";
-import {Button} from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 
 interface IChange {
   hex: string;
@@ -24,50 +24,46 @@ const InputRgba: FC<TProps> = ({
   alpha,
   format = "rgb",
   onChange,
-  onSubmitChange
+onSubmitChange
 }) => {
+  const canonicalHex = hex.toUpperCase();
   const [color, setColor] = useState({
     alpha,
-    hex
+    hex: canonicalHex
   });
 
   const onChangeAlpha = (alpha: string) => {
     const validAlpha = getAlphaValue(alpha);
-
-    setColor({
-      ...color,
-      alpha: Number(validAlpha)
-    });
+    setColor((prev) => ({ ...prev, alpha: Number(validAlpha) }));
   };
 
   const onChangeHex = (hex: string) => {
-    setColor({
-      ...color,
-      hex: hex.toUpperCase()
-    });
+    setColor((prev) => ({ ...prev, hex: hex.toUpperCase() }));
   };
 
-  const onHandleSubmit = () => {
-    const rgba = tinycolor(color.hex[0] === "#" ? color.hex : `#${color.hex}`);
+  const commit = () => {
+    const hasChanged = color.alpha !== alpha || color.hex !== canonicalHex;
+
+    if (!hasChanged) {
+      setColor({ hex: canonicalHex, alpha });
+      return;
+    }
+
+    const normalizedHex = color.hex[0] === "#" ? color.hex : `#${color.hex}`;
+    const rgba = tinycolor(normalizedHex);
     rgba.setAlpha(Number(color.alpha) / 100);
 
-    if (rgba && (color.alpha !== alpha || color.hex !== hex)) {
-      onChange({
-        hex: color.hex[0] === "#" ? color.hex : `#${color.hex}`,
-        alpha: Number(color.alpha)
-      });
-      if (onSubmitChange) {
-        onSubmitChange(checkFormat(rgba.toRgbString(), format, color.alpha));
-      }
-    } else {
-      setColor({
-        hex: hex.toUpperCase(),
-        alpha
-      });
-      onChange({
-        hex,
-        alpha
-      });
+    onChange({ hex: normalizedHex, alpha: Number(color.alpha) });
+    onSubmitChange?.(checkFormat(rgba.toRgbString(), format, color.alpha));
+  };
+
+  const handleBlur = () => {
+    setColor({ hex: canonicalHex, alpha });
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      commit();
     }
   };
 
@@ -86,35 +82,11 @@ const InputRgba: FC<TProps> = ({
       className="grid gap-2"
     >
       <div className="relative">
-        {/*<Popover>*/}
-        {/*  <PopoverTrigger className="absolute left-3 top-0 flex h-full items-center gap-1 border-r border-black/15 pr-2 text-sm font-medium">*/}
-        {/*    Hex*/}
-        {/*    <svg*/}
-        {/*      fill="none"*/}
-        {/*      stroke="currentColor"*/}
-        {/*      strokeWidth="4"*/}
-        {/*      viewBox="0 0 48 48"*/}
-        {/*      aria-hidden="true"*/}
-        {/*      focusable="false"*/}
-        {/*      width={12}*/}
-        {/*      className="text-muted-foreground"*/}
-        {/*    >*/}
-        {/*      <path d="M39.6 17.443 24.043 33 8.487 17.443" />*/}
-        {/*    </svg>*/}
-        {/*  </PopoverTrigger>*/}
-        {/*  <PopoverContent className="w-16">*/}
-        {/*    <div>Hex</div>*/}
-        {/*  </PopoverContent>*/}
-        {/*</Popover>*/}
         <Input
           value={color.hex}
           onChange={(e) => onChangeHex(onlyHex(e.target.value))}
-          onBlur={onHandleSubmit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              onHandleSubmit();
-            }
-          }}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
           className="px-3"
           autoFocus={false}
           tabIndex={-1}
@@ -124,12 +96,8 @@ const InputRgba: FC<TProps> = ({
         <Input
           value={color.alpha}
           onChange={(e) => onChangeAlpha(onlyDigits(e.target.value))}
-          onBlur={onHandleSubmit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              onHandleSubmit();
-            }
-          }}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
           className="px-3"
           autoFocus={false}
           tabIndex={-1}

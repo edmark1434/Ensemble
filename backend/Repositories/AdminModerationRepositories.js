@@ -658,7 +658,15 @@ async function getModerationOverview(staffSession = null) {
         ? pendingCases.filter(
             (c) =>
               c.assignedStaffId != null &&
-              String(c.assignedStaffId) === String(currentStaffId)
+              String(c.assignedStaffId).toLowerCase() === String(currentStaffId).toLowerCase()
+          ).length +
+          (disputes || []).filter(
+            (d) =>
+              d.assignee &&
+              String(d.assignee.staffId).toLowerCase() === String(currentStaffId).toLowerCase() &&
+              !['resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn'].includes(
+                String(d.status || '').toLowerCase()
+              )
           ).length
         : 0,
       moderatorPerformancePercent: avgPerformance,

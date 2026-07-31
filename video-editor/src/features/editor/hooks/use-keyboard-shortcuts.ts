@@ -96,10 +96,12 @@ export function useKeyboardShortcuts(stateManager: StateManager) {
       // select all
       if (mod && e.code === "KeyA") {
         e.preventDefault();
-        const { trackItemsMap } = useStore.getState();
-        const allIds = Object.keys(trackItemsMap).filter(
+        const { trackItemsMap, transitionsMap } = useStore.getState();
+        const trackIds = Object.keys(trackItemsMap).filter(
           (id) => !trackItemsMap[id]?.details?.locked
         );
+        const transitionIds = Object.keys(transitionsMap);
+        const allIds = [...trackIds, ...transitionIds];
         if (!allIds.length) return;
         dispatch(LAYER_SELECT, { payload: { trackItemIds: allIds } });
       }
