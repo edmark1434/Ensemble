@@ -26,6 +26,7 @@ import {
   DEFAULT_TICKET_FILTERS,
   filterTickets,
   formatEscalatedLabel,
+  isAdminTicket,
   type TicketFilterState,
 } from './ticketFilterUtils';
 import type { SupportTicket, TicketsOverview } from './ticketTypes';
@@ -175,18 +176,28 @@ export default function TicketManagementPage() {
   }, [data?.currentStaffId, user]);
 
   const myTickets = useMemo(() => {
-    if (!myStaffId) return [];
-    return allTickets.filter(
-      (t) =>
+    return allTickets.filter((t) => {
+      const assignedToMe =
+        Boolean(myStaffId) &&
         t.assignee?.staffId != null &&
-        String(t.assignee.staffId).toLowerCase() === myStaffId.toLowerCase()
-    );
+        String(t.assignee.staffId).toLowerCase() === myStaffId!.toLowerCase();
+      if (assignedToMe) return true;
+      // Escalated to Admin and still unassigned — visible in every Admin's My tickets to claim
+      const toAdmin = String(t.escalatedToRole || '').toLowerCase();
+      if ((toAdmin === 'admin' || toAdmin === 'administrator') && !t.assignee) return true;
+      return false;
+    });
   }, [allTickets, myStaffId]);
 
-  const filteredTickets = useMemo(
-    () => filterTickets(allTickets, ticketFilters),
-    [allTickets, ticketFilters]
-  );
+  const filteredTickets = useMemo(() => {
+    // Support tickets tab no longer surfaces Admin-only views — keep those on My tickets
+    const filters: TicketFilterState = {
+      ...ticketFilters,
+      adminTicketsOnly: false,
+      queue: ticketFilters.queue === 'Admin' ? 'all' : ticketFilters.queue,
+    };
+    return filterTickets(allTickets, filters);
+  }, [allTickets, ticketFilters]);
 
   const filteredMyTickets = useMemo(
     () => filterTickets(myTickets, myFilters),
@@ -195,9 +206,10 @@ export default function TicketManagementPage() {
 
   const mySummary = useMemo(() => {
     const open = myTickets.filter((t) => t.status === 'Open' || t.status === 'In Progress');
+    const unassignedAdmin = myTickets.filter((t) => !t.assignee && isAdminTicket(t)).length;
     return {
       openTickets: open.length,
-      unassignedTickets: 0,
+      unassignedTickets: unassignedAdmin,
       highPriorityTickets: open.filter((t) => String(t.priority).toLowerCase() === 'high').length,
       awaitingReplyTickets: myTickets.filter((t) => t.waitingForResponse).length,
       totalTickets: myTickets.length,
@@ -363,14 +375,15 @@ export default function TicketManagementPage() {
             onFiltersChange={setTicketFilters}
             onOpenTicket={setSelectedTicketId}
             showQueue
-            showAdminToggle
+            showAdminToggle={false}
+            includeAdminQueue={false}
             desk="admin"
           />
         )}
         {tab === 'mine' && (
           <TicketsTab
             title="My tickets"
-            subtitle="Tickets currently assigned to you. Reply, update status, or escalate from the detail modal."
+            subtitle="Your assigned tickets, plus unassigned tickets escalated to Admin."
             tickets={filteredMyTickets}
             allTickets={myTickets}
             totalCount={myTickets.length}
@@ -387,11 +400,12 @@ export default function TicketManagementPage() {
             onOpenTicket={setSelectedTicketId}
             showQueue={false}
             showAdminToggle={false}
+            includeAdminQueue={false}
             showAssigneeFilters={false}
             desk="admin"
             emptyHint={
               myStaffId
-                ? 'No tickets assigned to you. Pick up unassigned tickets from Support tickets.'
+                ? 'No tickets assigned to you, and no unassigned Admin escalations waiting.'
                 : 'Could not resolve your staff profile. Re-login and try again.'
             }
           />
@@ -553,6 +567,7 @@ function TicketsTab({
   showQueue = true,
   showAdminToggle = true,
   showAssigneeFilters = true,
+  includeAdminQueue = true,
   desk = 'admin',
   emptyHint = 'No tickets match this filter.',
 }: {
@@ -571,6 +586,7 @@ function TicketsTab({
   showQueue?: boolean;
   showAdminToggle?: boolean;
   showAssigneeFilters?: boolean;
+  includeAdminQueue?: boolean;
   desk?: 'admin' | 'support';
   emptyHint?: string;
 }) {
@@ -640,6 +656,7 @@ function TicketsTab({
           showQueue={showQueue}
           showAdminToggle={showAdminToggle}
           showAssigneeFilters={showAssigneeFilters}
+          includeAdminQueue={includeAdminQueue}
           resultCount={tickets.length}
           totalCount={totalCount}
           variant="desk"

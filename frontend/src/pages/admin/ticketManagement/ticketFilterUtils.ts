@@ -58,8 +58,8 @@ export const TICKET_QUEUE_OPTIONS: { value: TicketQueueFilter; label: string; ty
 ];
 
 /** Queues visible on each desk (Support never owns Admin tickets). */
-export function queueOptionsForDesk(desk: TicketDesk) {
-  if (desk === 'support') {
+export function queueOptionsForDesk(desk: TicketDesk, includeAdminQueue = desk === 'admin') {
+  if (desk === 'support' || !includeAdminQueue) {
     return TICKET_QUEUE_OPTIONS.filter((q) => q.value !== 'Admin');
   }
   return TICKET_QUEUE_OPTIONS;

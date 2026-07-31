@@ -82,6 +82,7 @@ export default function TicketFiltersPanel({
   showQueue = true,
   showAdminToggle = false,
   showAssigneeFilters = true,
+  includeAdminQueue,
   resultCount,
   totalCount,
   variant = 'panel',
@@ -100,6 +101,8 @@ export default function TicketFiltersPanel({
   showAdminToggle?: boolean;
   /** Hide assignee status / staff picker (e.g. My tickets) */
   showAssigneeFilters?: boolean;
+  /** Admin desk Support tickets tab: omit Admin queue (use My tickets instead) */
+  includeAdminQueue?: boolean;
   resultCount?: number;
   totalCount?: number;
   /** `desk` embeds into a moderation-style panel (chips + collapsible advanced). */
@@ -110,7 +113,8 @@ export default function TicketFiltersPanel({
   const [moderatorSearch, setModeratorSearch] = useState('');
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const active = countActiveTicketFilters(filters);
-  const queueChoices = queueOptionsForDesk(desk);
+  const allowAdminQueue = includeAdminQueue ?? desk === 'admin';
+  const queueChoices = queueOptionsForDesk(desk, allowAdminQueue);
   const escalateRoles = escalateRoleFilterOptions(desk);
   const deskModerators = useMemo(
     () => filterModeratorsForDesk(moderators, desk),
@@ -438,7 +442,7 @@ export default function TicketFiltersPanel({
             Showing <span className="text-zinc-300">{resultCount}</span> of {totalCount}
           </span>
         )}
-        {showAdminToggle && desk === 'admin' && (
+        {showAdminToggle && desk === 'admin' && allowAdminQueue && (
           <button
             type="button"
             onClick={() =>
