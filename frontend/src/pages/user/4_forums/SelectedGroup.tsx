@@ -551,7 +551,7 @@ const CommentItem = ({
 }: { 
   comment: Comment;
   postId: string;
-  membersDetails: Record<number, { name: string; avatar: string }>;
+  membersDetails: Record<string, { name: string; avatar: string }>;
   onLike: (postId: string, commentId: string) => void;
   onReply: (postId: string, commentId: string, authorName: string, authorId: number) => void;
   onEditComment: (postId: string, commentId: string, newText: string) => void;
@@ -816,6 +816,7 @@ const SelectedGroup = () => {
   const [replyingTo, setReplyingTo] = useState<{ commentId: string; authorName: string; authorId: number } | null>(null);
   const [commentReplyImages, setCommentReplyImages] = useState<ImageAttachment[]>([]);
   const [commentReplyUploading, setCommentReplyUploading] = useState(false);
+  const [participantDetails, setParticipantDetails] = useState<Record<string, { name: string; avatar: string }>>({});
   
   const user = useGlobalState((state) => state.user);
   const currentUserId = user?.user_id || user?.userId || 1;
@@ -826,17 +827,47 @@ const SelectedGroup = () => {
   
   const getMemberDetails = (userId: number) => {
     const member = membersWithDetails.find(m => m.userId === userId);
+    const participant = participantDetails[String(userId)];
     return {
-      name: member?.name || `User ${userId}`,
-      avatar: member?.avatar || `https://i.pravatar.cc/150?u=${userId}`,
+      name: member?.name || participant?.name || "Forum member",
+      avatar: member?.avatar || participant?.avatar || currentUserAvatar,
     };
   };
 
   const membersDetailsMap = membersWithDetails.reduce((acc, member) => {
-    acc[member.userId] = { name: member.name, avatar: member.avatar };
+    acc[String(member.userId)] = { name: member.name, avatar: member.avatar };
     return acc;
-  }, {} as Record<number, { name: string; avatar: string }>);
+  }, { ...participantDetails } as Record<string, { name: string; avatar: string }>);
   useForumRealtime((event) => setPosts((current) => reconcileForumDiscussions(current, event)), { groupId: id });
+
+  const participantIdsKey = useMemo(() => [...new Set(posts.flatMap((post) => [
+    post.user_id,
+    ...(post.comments || []).map((comment) => comment.user_id),
+  ]).filter(Boolean).map(String))].sort().join(","), [posts]);
+
+  useEffect(() => {
+    if (!participantIdsKey) return;
+    let cancelled = false;
+    const loadParticipantDetails = async () => {
+      try {
+        const response = await api.post("api/users/list-of-details", {
+          userIds: participantIdsKey.split(","),
+        });
+        const identities: Record<string, { name: string; avatar: string }> = {};
+        for (const details of response.data?.usersList || []) {
+          identities[String(details.user_id)] = identityFromDetails(details);
+        }
+        if (String(currentUserId) in identities) {
+          identities[String(currentUserId)].avatar = currentUserAvatar;
+        }
+        if (!cancelled) setParticipantDetails((current) => ({ ...current, ...identities }));
+      } catch (error) {
+        console.error("Failed to load forum participant identities:", error);
+      }
+    };
+    void loadParticipantDetails();
+    return () => { cancelled = true; };
+  }, [participantIdsKey, currentUserAvatar, currentUserId]);
 
   useEffect(() => {
     const fetchData = async () => {

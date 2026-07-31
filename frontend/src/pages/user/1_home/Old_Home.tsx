@@ -22,7 +22,6 @@ const Home: React.FC = () => {
 
   console.log("userInfo from global state:", useGlobalState((state) => state.user));
 
-  // Simulate loading on mount
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 800);
     return () => clearTimeout(timer);
@@ -64,7 +63,6 @@ const Home: React.FC = () => {
             </div>
 
             <div className="flex flex-col gap-6 lg:flex-row">
-              {/* Sidebar Filters Skeletons */}
               <div className="lg:w-64">
                 <div className="sticky top-48 rounded-xl border border-white/10 bg-white/5 p-4">
                   <div className="mb-4">
@@ -87,7 +85,6 @@ const Home: React.FC = () => {
                 </div>
               </div>
 
-              {/* Asset Grid Skeletons */}
               <div className="flex-1">
                 <div className="mb-4 h-5 w-48 animate-pulse rounded-lg bg-white/5" />
                 <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
@@ -110,10 +107,10 @@ const Home: React.FC = () => {
 
       {/* Main Content */}
       <div className="mx-auto max-w-7xl p-6 md:p-8">
-        {/* 1. Welcome Banner with Collapsible Search & Quick Actions */}
+        {/* 1. Welcome Banner */}
         <HomeBanner searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
 
-        {/* 2. Featured Content (Latest Job Posts -> Top Services -> Popular Assets) */}
+        {/* 2. Featured Content Sections */}
         <HomeFeatured
           ref={assetsSectionRef}
           searchQuery={searchQuery}
