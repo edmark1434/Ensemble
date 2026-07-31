@@ -1,6 +1,7 @@
 // src/components/ui/inbox/inbox_functions/inbox_create_group.tsx
-import React, { useState, useMemo } from "react";
-import { Users, X, Plus, Trash2, Check } from "lucide-react";
+import React, { useEffect, useState, useMemo } from "react";
+import { Users, X, Plus, Trash2 } from "lucide-react";
+import api from "@/lib/axios";
 
 export interface SuggestedAccount {
   account_id: string;
@@ -9,60 +10,84 @@ export interface SuggestedAccount {
   avatar: string;
 }
 
-// Sample suggested accounts list (Replace or pass as props from your user store)
-const MOCK_SUGGESTED_ACCOUNTS: SuggestedAccount[] = [
-  {
-    account_id: "user2",
-    name: "Charlyn",
-    username: "@charlyn_s",
-    avatar: "https://ui-avatars.com/api/?name=Charlyn&background=ec4899&color=fff&bold=true",
-  },
-  {
-    account_id: "user3",
-    name: "Dave",
-    username: "@dave_dev",
-    avatar: "https://ui-avatars.com/api/?name=Dave&background=10b981&color=fff&bold=true",
-  },
-  {
-    account_id: "user4",
-    name: "Sora",
-    username: "@soraaaa",
-    avatar: "https://ui-avatars.com/api/?name=Sora&background=f59e0b&color=fff&bold=true",
-  },
-  {
-    account_id: "user5",
-    name: "Melinda Mahilom",
-    username: "@melinda_m",
-    avatar: "https://ui-avatars.com/api/?name=Melinda+Mahilom&background=8b5cf6&color=fff&bold=true",
-  },
-];
-
 interface InboxCreateGroupModalProps {
   onClose: () => void;
-  onCreateGroup: (groupData: { name: string; members: SuggestedAccount[] }) => void;
+  onCreateGroup: (groupData: { name: string; members: SuggestedAccount[] }) => Promise<void>;
   suggestedAccounts?: SuggestedAccount[];
 }
 
 export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
   onClose,
   onCreateGroup,
-  suggestedAccounts = MOCK_SUGGESTED_ACCOUNTS,
+  suggestedAccounts = [],
 }) => {
   const [groupName, setGroupName] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedMembers, setSelectedMembers] = useState<SuggestedAccount[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchResults, setSearchResults] = useState<SuggestedAccount[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  useEffect(() => {
+    const query = searchTerm.replace(/^@/, "").trim();
+    if (query.length < 2) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const response = await api.get("/api/accounts/search-users", {
+          params: { handle: query },
+        });
+        const cloudfront = String(
+          import.meta.env.VITE_CLOUDFRONT_URL || ""
+        ).replace(/\/$/, "");
+        const accounts = (response.data?.data || []).map((account: any) => {
+          const avatarPath = account.avatar_preset_url || "";
+          return {
+            account_id: String(account.account_id),
+            name: account.display_name || account.handle,
+            username: `@${account.handle}`,
+            avatar: avatarPath
+              ? /^https?:\/\//i.test(avatarPath)
+                ? avatarPath
+                : `${cloudfront}/${String(avatarPath).replace(/^\/+/, "")}`
+              : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                  account.display_name || account.handle
+                )}&background=6366f1&color=fff`,
+          };
+        });
+        if (!cancelled) setSearchResults(accounts);
+      } catch {
+        if (!cancelled) setSearchResults([]);
+      } finally {
+        if (!cancelled) setIsSearching(false);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [searchTerm]);
 
   // Filter suggested accounts based on search input and exclude already selected members
   const filteredSuggestions = useMemo(() => {
-    return suggestedAccounts.filter((acc) => {
+    const source = searchTerm.trim().length >= 2
+      ? searchResults
+      : suggestedAccounts;
+    return source.filter((acc) => {
       const matchesSearch =
         acc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         acc.username.toLowerCase().includes(searchTerm.toLowerCase());
       const notSelected = !selectedMembers.some((m) => m.account_id === acc.account_id);
       return matchesSearch && notSelected;
     });
-  }, [suggestedAccounts, searchTerm, selectedMembers]);
+  }, [suggestedAccounts, searchResults, searchTerm, selectedMembers]);
 
   const handleSelectMember = (account: SuggestedAccount) => {
     setSelectedMembers((prev) => [...prev, account]);
@@ -74,15 +99,24 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
     setSelectedMembers((prev) => prev.filter((m) => m.account_id !== accountId));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!groupName.trim()) return;
-
-    onCreateGroup({
-      name: groupName.trim(),
-      members: selectedMembers,
-    });
-    onClose();
+    if (!groupName.trim() || selectedMembers.length === 0 || isSubmitting) return;
+    setIsSubmitting(true);
+    setError(null);
+    try {
+      await onCreateGroup({
+        name: groupName.trim(),
+        members: selectedMembers,
+      });
+      onClose();
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error ? submitError.message : "Unable to create group"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -173,6 +207,11 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
                 ))}
               </div>
             )}
+            {isDropdownOpen && isSearching && (
+              <div className="absolute left-0 right-0 top-full z-20 mt-1.5 rounded-xl border border-white/10 bg-[#1a1d2d] p-3 text-center text-xs text-zinc-400">
+                Searching handles...
+              </div>
+            )}
           </div>
 
           {/* Selected Members Chips */}
@@ -207,6 +246,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
           )}
 
           {/* Form Action Buttons */}
+          {error && <p className="text-xs text-red-400">{error}</p>}
           <div className="flex items-center justify-end gap-2 pt-4 border-t border-white/10">
             <button
               type="button"
@@ -217,10 +257,10 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={!groupName.trim()}
+              disabled={!groupName.trim() || selectedMembers.length === 0 || isSubmitting}
               className="rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-blue-500/20 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
-              Create Group
+              {isSubmitting ? "Creating..." : "Create Group"}
             </button>
           </div>
         </form>

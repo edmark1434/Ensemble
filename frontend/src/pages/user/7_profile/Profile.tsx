@@ -4,7 +4,6 @@ import UserHeader from "@/components/nav/user_header";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
 import toast from "react-hot-toast";
-import socket from "@/lib/socket";
 
 // Modularized Profile Sub-Components
 import { TopSection_ProfileDisplay } from "./Displays/TopSection_ProfileDisplay.tsx";
@@ -101,8 +100,9 @@ export default function Profile() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>("portfolio");
-  const user = useGlobalState((state) => state.user);
-  const id = useParams().id || user?.account_id;
+  const { user } = useGlobalState();
+  const { id: profileAccountId } = useParams<{ id?: string }>();
+  const id = profileAccountId || user?.account_id;
 
   // Outlet context handler for global chat control
   const { openChatWithUser } = useOutletContext<{
@@ -123,12 +123,8 @@ export default function Profile() {
   const isOwner = id == user?.account_id;
 
   // Open Chat Trigger Handler
-  const handleOpenChat = async() => {
-    if (!userDetails) return;
-    await api.post(`/api/inbox/two-accounts`, {
-      recipientId: id,
-      conversation_type : "direct"
-    });
+  const handleOpenChat = () => {
+    if (!userDetails || !id) return;
     const fullName = [userDetails.name, userDetails.middleName, userDetails.suffix]
       .filter(Boolean)
       .join(" ");
@@ -442,11 +438,6 @@ export default function Profile() {
   }, [id]);
 
   useEffect(() => {
-    socket.connect();
-    return () => { socket.off("connect"); };
-  }, []);
-
-  useEffect(() => {
     const fetchProfile = async () => {
       try {
         setLoading(true);
@@ -465,7 +456,16 @@ export default function Profile() {
           api.get(`api/accounts/links/${id}`)
         ]);
 
-        const profileData = profileResponse.data.data || profileResponse.data.profile;
+        const profilePayload =
+          profileResponse.data?.data ??
+          profileResponse.data?.profile ??
+          profileResponse.data;
+        const profileData = Array.isArray(profilePayload)
+          ? profilePayload[0]
+          : profilePayload;
+        if (!profileData || typeof profileData !== "object") {
+          throw new Error("Profile data was not returned by the server");
+        }
         console.log("Fetched profile data:", profileData);
 
         setAvailableSkills(tagsResponse.data.data || []);

@@ -3,14 +3,17 @@ import React, { useState } from "react";
 import { Users, Briefcase, UserPlus } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { InboxCreateGroupModal } from "../inbox_functions/inbox_create_group";
+import type { SuggestedAccount } from "../inbox_functions/inbox_create_group";
 
 interface InboxTabProps {
-  onCreateGroup?: (groupData: { name: string; members: any[] }) => void;
+  onCreateGroup?: (groupData: { name: string; members: SuggestedAccount[] }) => Promise<void>;
+  suggestedAccounts?: SuggestedAccount[];
   isCollapsed?: boolean;
 }
 
 export const InboxTab: React.FC<InboxTabProps> = ({
   onCreateGroup,
+  suggestedAccounts = [],
   isCollapsed = false,
 }) => {
   const navigate = useNavigate();
@@ -86,7 +89,11 @@ export const InboxTab: React.FC<InboxTabProps> = ({
       {isModalOpen && (
         <InboxCreateGroupModal
           onClose={() => setIsModalOpen(false)}
-          onCreateGroup={(data) => onCreateGroup?.(data)}
+          onCreateGroup={async (data) => {
+            if (!onCreateGroup) throw new Error("Group creation is unavailable");
+            await onCreateGroup(data);
+          }}
+          suggestedAccounts={suggestedAccounts}
         />
       )}
     </>

@@ -10,7 +10,11 @@ interface InboxMarketplaceProps {
   searchQuery: string;
   getConversationName: (inbox: Inbox) => string;
   getAvatar: (inbox: Inbox) => string;
+  getAccountName?: (accountId: string) => string | undefined;
   formatTime: (dateString?: string | Date) => string;
+  isCollapsed?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
 }
 
 export const InboxMarketplace: React.FC<InboxMarketplaceProps> = (props) => {

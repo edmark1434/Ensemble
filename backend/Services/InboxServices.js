@@ -1,251 +1,1132 @@
+const { randomUUID } = require('crypto');
 const {
     createInboxRepositories,
     createMessageRepositories,
-    updateMessageRepositories,
+    createReplyRepositories,
+    getMessageByIdRepositories,
+    editMessageRepositories,
+    deleteMessageRepositories,
+    setMessageReactionRepositories,
+    removeMessageReactionRepositories,
+    markConversationMessagesReadRepositories,
     updateInboxRepositories,
+    getInboxByIdRepositories,
+    getInboxByContextRepositories,
+    addInboxMemberRepositories,
+    updateInboxMemberRepositories,
+    pinMessageRepositories,
+    unpinMessageRepositories,
     getConversationByConvoId,
-    checkInboxExists,
     getInboxByAccountId,
-    getInboxByTwoAccountIds
-} = require("../Repositories/InboxRepositories");
-const {
-    checkAccountIdService,
-    
-} = require("../services/AccountServices");
+    getInboxByTwoAccountIds,
+} = require('../Repositories/InboxRepositories');
+const { checkAccountIdService } = require('./AccountServices');
+const { getProfileCurrentAvatarByAccountIdService } = require('./ProfileServices');
+const { createNotificationServices } = require('./NotificationServices');
+const { getAccountById } = require('../Repositories/AccountRepositories');
 
-const {
-    getProfileCurrentAvatarByAccountIdService
-} = require('../Services/ProfileServices');
-function dataValidation(payload = {}) {
-    const ErrorMessages = [];
-    console.log("Validating payload:", payload);
-    // Conversation Validation
-    if (
-        payload.conversation_name !== undefined &&
-        typeof payload.conversation_name !== "string"
-    ) {
-        ErrorMessages.push("conversation_name must be a string");
+const CONVERSATION_TYPES = ['direct', 'engagement', 'group', 'ticket', 'dispute'];
+const MESSAGE_TYPES = ['text', 'image', 'video', 'audio', 'file', 'system'];
+const ENGAGEMENT_CONTEXT_FIELDS = [
+    'engagement_id',
+    'contract_id',
+    'job_id',
+    'gig_id',
+    'asset_id',
+];
+const activeCalls = new Map();
+const activeCallsById = new Map();
+const MAX_CALL_PARTICIPANTS = 8;
+const CALL_RING_TIMEOUT_MS = 60_000;
+
+class ChatServiceError extends Error {
+    constructor(message, statusCode = 400) {
+        super(message);
+        this.statusCode = statusCode;
     }
+}
 
-    if (
-        payload.conversation_type !== undefined &&
-        !["direct", "group"].includes(payload.conversation_type)
-    ) {
-        ErrorMessages.push("conversation_type must be either direct or group");
+function requireValue(value, message) {
+    if (value === undefined || value === null || value === '') {
+        throw new ChatServiceError(message);
     }
+    return value;
+}
 
-    if (payload.members !== undefined) {
-        if (!Array.isArray(payload.members)) {
-            ErrorMessages.push("members must be an array");
-        } else {
-            payload.members.forEach((member, index) => {
-                if (!member.account_id) {
-                    ErrorMessages.push(
-                        `members[${index}].account_id is required`
-                    );
-                }
+async function requireAccount(accountId) {
+    requireValue(accountId, 'Account ID is required');
+    if (!await checkAccountIdService(accountId)) {
+        throw new ChatServiceError('Invalid account ID', 404);
+    }
+    return String(accountId);
+}
 
-                if (
-                    member.role &&
-                    !["owner", "admin", "member"].includes(member.role)
-                ) {
-                    ErrorMessages.push(
-                        `members[${index}].role is invalid`
-                    );
-                }
-            });
+function activeMember(inbox, accountId) {
+    return inbox?.members?.find(
+        (member) =>
+            String(member.account_id) === String(accountId) &&
+            !['left', 'removed'].includes(member.status)
+    );
+}
+
+async function requireConversationMember(conversationId, accountId) {
+    requireValue(conversationId, 'Conversation ID is required');
+    const inbox = await getInboxByIdRepositories(conversationId);
+    if (!inbox) {
+        throw new ChatServiceError('Conversation not found', 404);
+    }
+    if (!activeMember(inbox, accountId)) {
+        throw new ChatServiceError('You are not an active member of this conversation', 403);
+    }
+    return inbox;
+}
+
+async function requireMessageMember(messageId, accountId) {
+    requireValue(messageId, 'Message ID is required');
+    const message = await getMessageByIdRepositories(messageId);
+    if (!message || message.is_deleted || message.deleted_at) {
+        throw new ChatServiceError('Message not found', 404);
+    }
+    const inbox = await requireConversationMember(message.conversation_id, accountId);
+    return { inbox, message };
+}
+
+function normalizeMembers(members, ownerId) {
+    const byAccountId = new Map();
+    byAccountId.set(String(ownerId), {
+        account_id: String(ownerId),
+        role: 'owner',
+        status: 'active',
+        joined_at: new Date(),
+    });
+
+    for (const member of members || []) {
+        const accountId = String(member.account_id || member);
+        if (!accountId || accountId === 'undefined') continue;
+        byAccountId.set(accountId, {
+            account_id: accountId,
+            role: member.role === 'admin' ? 'admin' : 'member',
+            status: 'active',
+            joined_at: new Date(),
+        });
+    }
+    return [...byAccountId.values()];
+}
+
+async function validateMemberAccounts(members) {
+    await Promise.all(members.map((member) => requireAccount(member.account_id)));
+}
+
+function validateConversationType(conversationType) {
+    if (!CONVERSATION_TYPES.includes(conversationType)) {
+        throw new ChatServiceError('Invalid conversation type');
+    }
+}
+
+function validateAttachments(attachments = []) {
+    if (!Array.isArray(attachments)) {
+        throw new ChatServiceError('attachments must be an array');
+    }
+    for (const attachment of attachments) {
+        const key = attachment?.attachment_key ?? attachment?.attachment_url ?? attachment?.key;
+        if (!key || typeof key !== 'string' || /^(?:data:|blob:|https?:\/\/)/i.test(key)) {
+            throw new ChatServiceError('Attachments must contain S3 object keys only');
         }
     }
-
-    if (payload.pinned_messages !== undefined) {
-        if (!Array.isArray(payload.pinned_messages)) {
-            ErrorMessages.push("pinned_messages must be an array");
-        }
-    }
-
-    // Message Validation
-    if (
-        payload.conversation_id !== undefined &&
-        typeof payload.conversation_id !== "string"
-    ) {
-        ErrorMessages.push("conversation_id must be a string");
-    }
-
-
-    if (
-        payload.message_content !== undefined &&
-        typeof payload.message_content !== "string"
-    ) {
-        ErrorMessages.push("message_content must be a string");
-    }
-
-    if (
-        payload.message_type !== undefined &&
-        ![
-            "text",
-            "image",
-            "video",
-            "audio",
-            "file",
-            "system"
-        ].includes(payload.message_type)
-    ) {
-        ErrorMessages.push("invalid message_type");
-    }
-
-    if (
-        payload.message_id_reply !== undefined &&
-        payload.message_id_reply !== null &&
-        typeof payload.message_id_reply !== "string"
-    ) {
-        ErrorMessages.push("message_id_reply must be a string");
-    }
-
-    if (
-        payload.attachments !== undefined &&
-        !Array.isArray(payload.attachments)
-    ) {
-        ErrorMessages.push("attachments must be an array");
-    }
-
-    if (
-        payload.links !== undefined &&
-        !Array.isArray(payload.links)
-    ) {
-        ErrorMessages.push("links must be an array");
-    }
-
-    if (
-        payload.message_react !== undefined &&
-        !Array.isArray(payload.message_react)
-    ) {
-        ErrorMessages.push("message_react must be an array");
-    }
-
-    if (
-        payload.read_by !== undefined &&
-        !Array.isArray(payload.read_by)
-    ) {
-        ErrorMessages.push("read_by must be an array");
-    }
-
-    if (
-        payload.is_edited !== undefined &&
-        typeof payload.is_edited !== "boolean"
-    ) {
-        ErrorMessages.push("is_edited must be a boolean");
-    }
-
-    if (
-        payload.is_deleted !== undefined &&
-        typeof payload.is_deleted !== "boolean"
-    ) {
-        ErrorMessages.push("is_deleted must be a boolean");
-    }
-
-    if (ErrorMessages.length > 0) {
-        throw new Error(ErrorMessages.join(", "));
-    }
-
-    return true;
+    return attachments;
 }
 
-async function createInboxServices(inboxPayload){
-    dataValidation(inboxPayload);
-    return await createInboxRepositories(inboxPayload);
-}
-
-async function createMessageServices(messagePayload){
-    dataValidation(messagePayload);
-    return await createMessageRepositories(messagePayload);
-}
-
-async function updateMessageServices(messageId,action, updateFields){
-    return await updateMessageRepositories(messageId,action, updateFields);
-}
-
-async function updateInboxServices(inboxId, updateFields){
-    dataValidation(updateFields);
-    return await updateInboxRepositories(inboxId, updateFields);
-}
-
-async function getConversationByConvoIdServices(convoId){
-    if(!convoId){
-        throw new Error('Conversation ID is required');
-    }
-    if(!checkInboxExists(convoId)){
-        throw new Error('Conversation not found');
-    }
-    return await getConversationByConvoId(convoId);
-}
-
-async function getInboxByAccountIdServices(accountId, conversation_type){
-    if(!checkAccountIdService(accountId)){
-        throw new Error('Invalid account ID');
-    }
-    return await getInboxByAccountId(accountId, conversation_type);
-}
-
-async function checkInboxByTwoAccountIdsServices(messagePayload, account_id) {
-    console.log("Checking inbox for accounts:", account_id, messagePayload.recipientId);
-    if(!checkAccountIdService(account_id) || !checkAccountIdService(messagePayload.recipientId)){
-        throw new Error('Invalid account ID(s)');
-    }
-     try{
-        const { recipientId, conversation_type } = messagePayload;
-        let inbox = await getInboxByTwoAccountIds(account_id, recipientId, conversation_type);
-        if(!inbox){
-            inbox = await createInboxServices({
-                conversation_name: "",
-                conversation_type: conversation_type,
-                members: [
-                    { account_id: account_id, role: "member", joined_at: new Date() },
-                    { account_id: recipientId, role: "member", joined_at: new Date() }
-                ],
-                pinned_messages: [],
-                created_at: new Date(),
-                updated_at: new Date()
-            });
-            console.log(`New inbox created for accounts ${account_id} and ${recipientId}:`, inbox);
-        }
-        return inbox.insertedId ? inbox.insertedId : inbox._id; // Return the new inbox ID or existing inbox ID
-    }catch(err){
-        console.error("Error handling direct message:", err);
-    }
-}
-
-async function getInboxByTwoAccountIdsServices(accountId1, accountId2, conversation_type) { 
+async function actorDisplayName(accountId) {
     try {
-        if (!checkAccountIdService(accountId1) || !checkAccountIdService(accountId2)) {
-            throw new Error('Invalid account ID(s)');
-        }
-        const inbox = await getInboxByTwoAccountIds(accountId1, accountId2, conversation_type);
-        if (!inbox) {
-            throw new Error('Inbox not found for the given account IDs');
-        }
-        const avatarPayload = {};
-        for (const member of inbox.members) {
-            const avatar = await getProfileCurrentAvatarByAccountIdService(member.account_id);
-            avatarPayload[member.account_id] = avatar ? avatar.path : null;
-        }
-        return { ...inbox, avatarPayload };
-    }catch (err) {
-        console.error("Error checking inbox by two account IDs:", err);
-        throw err;
+        const account = await getAccountById(accountId);
+        return account?.display_name || account?.handle || 'Someone';
+    } catch (_error) {
+        return 'Someone';
     }
 }
 
+async function persistChatNotifications({
+    inbox,
+    actorId,
+    recipientIds,
+    message,
+    prefix,
+    onNotification,
+}) {
+    const activeRecipientIds = new Set(
+        (inbox.members || [])
+            .filter((member) => !['left', 'removed'].includes(member.status || 'active'))
+            .map((member) => String(member.account_id))
+    );
+    const recipients = new Set(
+        (recipientIds || inbox.members || [])
+            .map((member) => String(member.account_id || member))
+            .filter((accountId) =>
+                accountId &&
+                accountId !== String(actorId) &&
+                activeRecipientIds.has(accountId)
+            )
+    );
+    if (!recipients.size) return;
 
+    const actorName = await actorDisplayName(actorId);
+    return (await Promise.all([...recipients].map(async (accountId) => {
+        try {
+            const notification = await createNotificationServices({
+                account_id: accountId,
+                message: `${actorName} ${message}`,
+                is_read: false,
+                reference_table: 'inbox',
+                reference_prefix: prefix,
+                reference_path: `/inbox/direct?conversation=${inbox._id}`,
+                reference_id: randomUUID(),
+            });
+            if (onNotification) await onNotification(accountId, notification);
+            return notification;
+        } catch (error) {
+            console.error('Error creating chat notification:', error);
+            return null;
+        }
+    }))).filter(Boolean);
+}
 
+async function createGroupServices(payload, accountId) {
+    const ownerId = await requireAccount(accountId);
+    const conversationName = String(payload.conversation_name || '').trim();
+    if (!conversationName) {
+        throw new ChatServiceError('conversation_name is required');
+    }
+
+    const members = normalizeMembers(payload.members, ownerId);
+    if (members.length < 2) {
+        throw new ChatServiceError('A group requires at least two members');
+    }
+    await validateMemberAccounts(members);
+
+    const now = new Date();
+    const result = await createInboxRepositories({
+        conversation_name: conversationName,
+        conversation_type: 'group',
+        members,
+        pinned_messages: [],
+        created_at: now,
+        updated_at: now,
+        deleted_at: null,
+    });
+    const inbox = await getInboxByIdRepositories(result.insertedId);
+    await persistChatNotifications({
+        inbox,
+        actorId: ownerId,
+        message: `added you to "${conversationName}".`,
+        prefix: 'CHAT_GROUP_ADDED',
+    });
+    return inbox;
+}
+
+async function createEngagementChatServices(payload, accountId) {
+    const ownerId = await requireAccount(accountId);
+    const contextEntry = ENGAGEMENT_CONTEXT_FIELDS
+        .map((field) => [field, payload[field]])
+        .find(([, value]) => value);
+    if (!contextEntry) {
+        throw new ChatServiceError('An engagement context ID is required');
+    }
+
+    const [contextField, contextValue] = contextEntry;
+    const existing = await getInboxByContextRepositories('engagement', {
+        [contextField]: String(contextValue),
+    });
+    if (existing) {
+        if (!activeMember(existing, ownerId)) {
+            throw new ChatServiceError('You are not a member of this engagement chat', 403);
+        }
+        return existing;
+    }
+
+    const members = normalizeMembers(payload.members, ownerId);
+    if (members.length < 2) {
+        throw new ChatServiceError('An engagement chat requires at least two members');
+    }
+    await validateMemberAccounts(members);
+
+    const now = new Date();
+    const result = await createInboxRepositories({
+        conversation_name: String(payload.conversation_name || payload.title || 'Engagement'),
+        conversation_type: 'engagement',
+        [contextField]: String(contextValue),
+        listing_type: payload.listing_type || null,
+        listing_title: payload.listing_title || payload.title || null,
+        listing_preview: payload.listing_preview || null,
+        listing_path: payload.listing_path || null,
+        members,
+        pinned_messages: [],
+        created_at: now,
+        updated_at: now,
+        deleted_at: null,
+    });
+    const inbox = await getInboxByIdRepositories(result.insertedId);
+    await persistChatNotifications({
+        inbox,
+        actorId: ownerId,
+        message: 'started an engagement conversation with you.',
+        prefix: 'CHAT_ENGAGEMENT_CREATED',
+    });
+    return inbox;
+}
+
+async function createInboxServices(payload, accountId) {
+    if (payload.conversation_type === 'group') {
+        return await createGroupServices(payload, accountId);
+    }
+    if (payload.conversation_type === 'engagement') {
+        return await createEngagementChatServices(payload, accountId);
+    }
+    if (payload.conversation_type === 'direct') {
+        return await createOrReuseDirectChatServices(payload, accountId);
+    }
+    throw new ChatServiceError('Use an existing ticket or dispute workflow for this conversation type');
+}
+
+async function createOrReuseDirectChatServices(payload, accountId) {
+    const senderId = await requireAccount(accountId);
+    const recipientId = await requireAccount(payload.recipientId);
+
+    let inbox = await getInboxByTwoAccountIds(senderId, recipientId, 'direct');
+    if (!inbox) {
+        const now = new Date();
+        const result = await createInboxRepositories({
+            conversation_name: '',
+            conversation_type: 'direct',
+            members: senderId === recipientId
+                ? [
+                    {
+                        account_id: senderId,
+                        role: 'member',
+                        status: 'active',
+                        joined_at: now,
+                    },
+                ]
+                : [
+                    { account_id: senderId, role: 'member', status: 'active', joined_at: now },
+                    { account_id: recipientId, role: 'member', status: 'active', joined_at: now },
+                ],
+            pinned_messages: [],
+            created_at: now,
+            updated_at: now,
+            deleted_at: null,
+        });
+        inbox = await getInboxByIdRepositories(result.insertedId);
+    }
+    return inbox;
+}
+
+async function buildMessage(payload, accountId) {
+    const senderId = await requireAccount(accountId);
+    const conversationId = String(requireValue(payload.conversation_id, 'conversation_id is required'));
+    const inbox = await requireConversationMember(conversationId, senderId);
+    const messageType = payload.message_type || 'text';
+    if (!MESSAGE_TYPES.includes(messageType) || messageType === 'system') {
+        throw new ChatServiceError('Invalid message type');
+    }
+
+    const attachments = validateAttachments(payload.attachments || []);
+    const messageContent = typeof payload.message_content === 'string'
+        ? payload.message_content.trim()
+        : '';
+    if (!messageContent && !attachments.length) {
+        throw new ChatServiceError('Message content or an attachment is required');
+    }
+
+    const now = new Date();
+    return {
+        inbox,
+        document: {
+            conversation_id: conversationId,
+            sender_id: senderId,
+            message_type: messageType,
+            message_content: messageContent,
+            message_id_reply: null,
+            attachments,
+            links: Array.isArray(payload.links) ? payload.links : [],
+            message_react: [],
+            read_by: [{ account_id: senderId, read_at: now }],
+            is_edited: false,
+            is_deleted: false,
+            deleted_at: null,
+            created_at: now,
+            updated_at: now,
+        },
+    };
+}
+
+async function createMessageServices(payload, accountId, options = {}) {
+    const { inbox, document } = await buildMessage(payload, accountId);
+    const insertedId = await createMessageRepositories(document);
+    const message = await getMessageByIdRepositories(insertedId);
+    await persistChatNotifications({
+        inbox,
+        actorId: accountId,
+        message: 'sent you a message.',
+        prefix: 'CHAT_MESSAGE',
+        onNotification: options.onNotification,
+    });
+    return message;
+}
+
+async function replyMessageServices(parentMessageId, payload, accountId, options = {}) {
+    const { inbox, message: parent } = await requireMessageMember(parentMessageId, accountId);
+    if (payload.conversation_id && String(payload.conversation_id) !== String(parent.conversation_id)) {
+        throw new ChatServiceError('Reply conversation does not match the parent message');
+    }
+
+    const built = await buildMessage({
+        ...payload,
+        conversation_id: parent.conversation_id,
+    }, accountId);
+    const insertedId = await createReplyRepositories(
+        parent.conversation_id,
+        parentMessageId,
+        built.document
+    );
+    const reply = await getMessageByIdRepositories(insertedId);
+    await persistChatNotifications({
+        inbox,
+        actorId: accountId,
+        recipientIds: [parent.sender_id],
+        message: 'replied to your message.',
+        prefix: 'CHAT_REPLY',
+        onNotification: options.onNotification,
+    });
+    return reply;
+}
+
+async function reactMessageServices(messageId, reactType, accountId) {
+    const { inbox, message } = await requireMessageMember(messageId, accountId);
+    const reaction = String(reactType || '').trim();
+    if (!reaction || reaction.length > 32) {
+        throw new ChatServiceError('A valid reaction is required');
+    }
+    const updated = await setMessageReactionRepositories(messageId, {
+        account_id: accountId,
+        react_type: reaction,
+    });
+    await persistChatNotifications({
+        inbox,
+        actorId: accountId,
+        recipientIds: [message.sender_id],
+        message: 'reacted to your message.',
+        prefix: 'CHAT_REACTION',
+    });
+    return updated;
+}
+
+async function removeMessageReactionServices(messageId, accountId) {
+    await requireMessageMember(messageId, accountId);
+    return await removeMessageReactionRepositories(messageId, accountId);
+}
+
+async function pinMessageServices(conversationId, messageId, accountId) {
+    const inbox = await requireConversationMember(conversationId, accountId);
+    const message = await getMessageByIdRepositories(messageId);
+    if (
+        !message ||
+        message.is_deleted ||
+        message.deleted_at ||
+        String(message.conversation_id) !== String(conversationId)
+    ) {
+        throw new ChatServiceError('Message not found in this conversation', 404);
+    }
+    return await pinMessageRepositories(conversationId, {
+        message_id: String(messageId),
+        pinned_by: String(accountId),
+        pinned_at: new Date(),
+    });
+}
+
+async function unpinMessageServices(conversationId, messageId, accountId) {
+    await requireConversationMember(conversationId, accountId);
+    return await unpinMessageRepositories(conversationId, messageId);
+}
+
+async function editMessageServices(messageId, messageContent, accountId) {
+    const { message } = await requireMessageMember(messageId, accountId);
+    if (String(message.sender_id) !== String(accountId)) {
+        throw new ChatServiceError('You can only edit your own messages', 403);
+    }
+    const content = String(messageContent || '').trim();
+    if (!content) {
+        throw new ChatServiceError('message_content is required');
+    }
+    return await editMessageRepositories(messageId, content);
+}
+
+async function deleteMessageServices(messageId, accountId) {
+    const { message } = await requireMessageMember(messageId, accountId);
+    if (String(message.sender_id) !== String(accountId)) {
+        throw new ChatServiceError('You can only delete your own messages', 403);
+    }
+    return await deleteMessageRepositories(messageId);
+}
+
+async function renameConversationServices(conversationId, conversationName, accountId) {
+    const inbox = await requireConversationMember(conversationId, accountId);
+    const member = activeMember(inbox, accountId);
+    if (
+        inbox.conversation_type !== 'group' &&
+        !['owner', 'admin'].includes(member.role)
+    ) {
+        throw new ChatServiceError('Only conversation owners and admins can rename it', 403);
+    }
+    const name = String(conversationName || '').trim();
+    if (!name) {
+        throw new ChatServiceError('conversation_name is required');
+    }
+    await updateInboxRepositories(conversationId, {
+        $set: { conversation_name: name, updated_at: new Date() },
+    });
+    return await getInboxByIdRepositories(conversationId);
+}
+
+async function updateGroupProfileImageServices(conversationId, imageKey, accountId) {
+    const inbox = await requireConversationMember(conversationId, accountId);
+    if (inbox.conversation_type !== 'group') {
+        throw new ChatServiceError('Profile images are only available for group chats');
+    }
+    activeMember(inbox, accountId);
+    const key = String(imageKey || '').trim();
+    if (
+        !key ||
+        /^https?:\/\//i.test(key) ||
+        key.startsWith('data:') ||
+        key.startsWith('blob:')
+    ) {
+        throw new ChatServiceError('A valid S3 object key is required');
+    }
+    await updateInboxRepositories(conversationId, {
+        $set: {
+            conversation_image_key: key,
+            updated_at: new Date(),
+        },
+        $unset: {
+            conversation_image_url: '',
+        },
+    });
+    return await getInboxByIdRepositories(conversationId);
+}
+
+async function updateGroupMemberServices(conversationId, targetAccountId, payload, accountId) {
+    const inbox = await requireConversationMember(conversationId, accountId);
+    if (inbox.conversation_type !== 'group') {
+        throw new ChatServiceError('Member management is only available for group chats');
+    }
+    const actor = activeMember(inbox, accountId);
+    const targetId = await requireAccount(targetAccountId);
+    const requestedStatus = payload.status || 'active';
+    const existing = inbox.members.find(
+        (member) => String(member.account_id) === targetId
+    );
+    const requestedRole = payload.role || existing?.role || 'member';
+    const isSelfLeaving =
+        targetId === String(accountId) && requestedStatus === 'left';
+    const isPrivilegedActor = ['owner', 'admin'].includes(actor.role);
+    const isAddingMember =
+        requestedStatus === 'active' &&
+        requestedRole === 'member' &&
+        (!existing || ['left', 'removed'].includes(existing.status || 'active'));
+    if (!isSelfLeaving && !isPrivilegedActor && !isAddingMember) {
+        throw new ChatServiceError('Only group owners and admins can manage members', 403);
+    }
+
+    if (
+        existing?.role === 'admin' &&
+        actor.role !== 'owner' &&
+        requestedRole !== 'admin'
+    ) {
+        throw new ChatServiceError('Only the group owner can change an admin role', 403);
+    }
+    if (!['owner', 'admin', 'member'].includes(requestedRole)) {
+        throw new ChatServiceError('Invalid member role');
+    }
+    if (!['active', 'left', 'removed'].includes(requestedStatus)) {
+        throw new ChatServiceError('Invalid member status');
+    }
+    if (requestedRole === 'owner' && existing?.role !== 'owner') {
+        throw new ChatServiceError('Group ownership transfer is not supported');
+    }
+    if (actor.role !== 'owner' && requestedRole === 'admin') {
+        throw new ChatServiceError('Only the group owner can assign admins', 403);
+    }
+    if (existing?.role === 'owner' && requestedStatus !== 'active') {
+        throw new ChatServiceError('The group owner cannot be removed');
+    }
+
+    const now = new Date();
+    if (existing) {
+        await updateInboxMemberRepositories(conversationId, targetId, {
+            role: requestedRole,
+            status: requestedStatus,
+            ...(requestedStatus === 'active'
+                ? { rejoined_at: now, removed_at: null }
+                : { removed_at: now }),
+        }, now);
+    } else {
+        if (requestedStatus !== 'active') {
+            throw new ChatServiceError('A new member must be active');
+        }
+        await addInboxMemberRepositories(conversationId, {
+            account_id: targetId,
+            role: requestedRole,
+            status: 'active',
+            joined_at: now,
+        }, now);
+    }
+    const updatedInbox = await getInboxByIdRepositories(conversationId);
+    let membershipEventMessage = null;
+    if (
+        existing &&
+        existing.status !== requestedStatus &&
+        ['left', 'removed'].includes(requestedStatus)
+    ) {
+        const memberName = await actorDisplayName(targetId);
+        const now = new Date();
+        const insertedId = await createMessageRepositories({
+            conversation_id: String(conversationId),
+            sender_id: String(accountId),
+            message_type: 'system',
+            message_content:
+                requestedStatus === 'left'
+                    ? `${memberName} left the group chat.`
+                    : `${memberName} was removed from the group chat.`,
+            message_id_reply: null,
+            attachments: [],
+            links: [],
+            message_react: [],
+            read_by: [{ account_id: String(accountId), read_at: now }],
+            is_edited: false,
+            is_deleted: false,
+            deleted_at: null,
+            created_at: now,
+            updated_at: now,
+        });
+        membershipEventMessage = await getMessageByIdRepositories(insertedId);
+    }
+    return {
+        ...updatedInbox,
+        membership_event_message: membershipEventMessage,
+    };
+}
+
+async function removeGroupMemberServices(conversationId, targetAccountId, accountId) {
+    return await updateGroupMemberServices(
+        conversationId,
+        targetAccountId,
+        { status: 'removed' },
+        accountId
+    );
+}
+
+async function getConversationByConvoIdServices(conversationId, accountId) {
+    const inbox = await getInboxByIdRepositories(conversationId);
+    if (
+        !inbox ||
+        !inbox.members.some(
+            (member) => String(member.account_id) === String(accountId)
+        )
+    ) {
+        throw new ChatServiceError('Conversation access denied', 403);
+    }
+    return await getConversationByConvoId(conversationId);
+}
+
+async function getConversationSummaryServices(conversationId, accountId) {
+    return await requireConversationMember(conversationId, accountId);
+}
+
+async function authorizeConversationServices(conversationId, accountId) {
+    return await requireConversationMember(conversationId, accountId);
+}
+
+async function authorizeSocketRoomServices(roomId, accountId) {
+    requireValue(roomId, 'Room ID is required');
+    if (String(roomId) === String(accountId)) {
+        return { room_type: 'account', room_id: String(roomId), members: [String(accountId)] };
+    }
+    const inbox = await requireConversationMember(roomId, accountId);
+    return {
+        room_type: 'conversation',
+        room_id: String(inbox._id),
+        members: inbox.members
+            .filter((member) => !['left', 'removed'].includes(member.status))
+            .map((member) => String(member.account_id)),
+    };
+}
+
+async function typingEventServices(conversationId, isTyping, accountId) {
+    await requireConversationMember(conversationId, accountId);
+    if (typeof isTyping !== 'boolean') {
+        throw new ChatServiceError('is_typing must be a boolean');
+    }
+    return {
+        conversation_id: String(conversationId),
+        account_id: String(accountId),
+        is_typing: isTyping,
+        emitted_at: new Date(),
+    };
+}
+
+async function markConversationReadServices(conversationId, accountId) {
+    await requireConversationMember(conversationId, accountId);
+    const readAt = new Date();
+    const result = await markConversationMessagesReadRepositories(
+        conversationId,
+        accountId,
+        readAt
+    );
+    return {
+        conversation_id: String(conversationId),
+        account_id: String(accountId),
+        read_at: readAt,
+        modified_count: result.modifiedCount,
+    };
+}
+
+async function callSignalServices(payload, accountId) {
+    const conversationId = String(
+        requireValue(payload.conversation_id, 'conversation_id is required')
+    );
+    const inbox = await requireConversationMember(conversationId, accountId);
+    const signalType = String(payload.signal_type || '').toLowerCase();
+    if (!['offer', 'answer', 'ice-candidate', 'media-state', 'end', 'end-for-everyone', 'reject', 'resume'].includes(signalType)) {
+        throw new ChatServiceError('Invalid call signal type');
+    }
+
+    const targetAccountId = payload.target_account_id
+        ? String(payload.target_account_id)
+        : null;
+    if (targetAccountId && !activeMember(inbox, targetAccountId)) {
+        throw new ChatServiceError('Call target is not a conversation member', 403);
+    }
+    if (targetAccountId === String(accountId)) {
+        throw new ChatServiceError('Call target cannot be the sender');
+    }
+    if (!targetAccountId && inbox.conversation_type !== 'group') {
+        throw new ChatServiceError('target_account_id is required');
+    }
+
+    const callerId = String(accountId);
+    const callId = String(payload.call_id || randomUUID());
+    const existingTargetCall = targetAccountId && inbox.conversation_type !== 'group'
+        ? activeCalls.get(targetAccountId)
+        : null;
+    const existingCallerCall = activeCalls.get(callerId);
+    let call = activeCallsById.get(callId) || existingCallerCall || null;
+    let recipientAccountIds = targetAccountId ? [targetAccountId] : [];
+    let emittedSignalType = signalType;
+
+    if (signalType === 'offer') {
+        const isActiveCallRenegotiation =
+            call?.call_id === callId &&
+            call.participant_ids.includes(callerId) &&
+            targetAccountId &&
+            call.participant_ids.includes(targetAccountId);
+        if ((existingTargetCall || existingCallerCall) && !isActiveCallRenegotiation) {
+            return {
+                conversation_id: conversationId,
+                call_id: existingCallerCall?.call_id || callId,
+                account_id: targetAccountId,
+                target_account_id: callerId,
+                recipient_account_id: callerId,
+                signal_type: 'busy',
+                signal: null,
+                emitted_at: new Date(),
+            };
+        }
+        if (!isActiveCallRenegotiation) {
+            const activeMembers = inbox.members
+                .filter((member) => !['left', 'removed'].includes(member.status))
+                .map((member) => String(member.account_id));
+            const invitedIds = inbox.conversation_type === 'group'
+                ? activeMembers.filter((memberId) => memberId !== callerId)
+                : [targetAccountId];
+            const now = new Date();
+            const callerAvatar = await getProfileCurrentAvatarByAccountIdService(callerId)
+                .catch(() => null);
+            call = {
+                call_id: callId,
+                conversation_id: conversationId,
+                caller_id: callerId,
+                conversation_type: inbox.conversation_type,
+                conversation_name: inbox.conversation_name || null,
+                conversation_image_key: inbox.conversation_image_key || null,
+                caller_name: await actorDisplayName(callerId),
+                caller_avatar: callerAvatar?.path || null,
+                invited_ids: invitedIds,
+                participant_ids: [callerId],
+                media_states: {
+                    [callerId]: { video: false, audio: false },
+                },
+                status: 'ringing',
+                started_at: now,
+                expires_at: new Date(now.getTime() + CALL_RING_TIMEOUT_MS),
+            };
+            activeCallsById.set(callId, call);
+            [callerId, ...invitedIds].forEach((memberId) =>
+                activeCalls.set(memberId, call)
+            );
+            recipientAccountIds = invitedIds;
+        }
+    } else {
+        if (
+            !call ||
+            call.call_id !== callId ||
+            call.conversation_id !== conversationId
+        ) {
+            throw new ChatServiceError('Call is no longer active', 409);
+        }
+        call.participant_ids = Array.from(new Set(call.participant_ids.map(String)));
+        call.invited_ids = Array.from(new Set(call.invited_ids.map(String)));
+        if (
+            targetAccountId &&
+            !call.participant_ids.includes(targetAccountId) &&
+            !call.invited_ids.includes(targetAccountId)
+        ) {
+            if (call.conversation_type === 'group') {
+                return {
+                    conversation_id: conversationId,
+                    call_id: callId,
+                    account_id: targetAccountId,
+                    target_account_id: callerId,
+                    recipient_account_id: callerId,
+                    recipient_account_ids: [callerId],
+                    signal_type: 'participant-left',
+                    signal: null,
+                    conversation_type: call.conversation_type,
+                    conversation_name: call.conversation_name,
+                    conversation_image_key: call.conversation_image_key,
+                    caller_id: call.caller_id,
+                    caller_name: call.caller_name,
+                    caller_avatar: call.caller_avatar,
+                    participant_ids: [...call.participant_ids],
+                    started_at: call.started_at,
+                    expires_at: null,
+                    emitted_at: new Date(),
+                };
+            }
+            throw new ChatServiceError('Invalid call recipient', 403);
+        }
+        const isGroupJoin =
+            call.conversation_type === 'group' && signalType === 'answer';
+        if (
+            !isGroupJoin &&
+            !call.participant_ids.includes(callerId) &&
+            !call.invited_ids.includes(callerId)
+        ) {
+            throw new ChatServiceError('You are not invited to this call', 403);
+        }
+        if (signalType === 'answer' && !call.participant_ids.includes(callerId)) {
+            if (call.participant_ids.length >= MAX_CALL_PARTICIPANTS) {
+                throw new ChatServiceError('This video call already has 8 participants.', 409);
+            }
+            recipientAccountIds = [...call.participant_ids];
+            call.participant_ids.push(callerId);
+            activeCalls.set(callerId, call);
+            call.media_states ||= {};
+            call.media_states[callerId] ||= { video: false, audio: false };
+            call.status = 'active';
+        }
+        if (signalType === 'media-state') {
+            if (!call.participant_ids.includes(callerId)) {
+                throw new ChatServiceError('Only a call participant can update media state', 403);
+            }
+            const mediaState = payload.signal || {};
+            call.media_states ||= {};
+            call.media_states[callerId] = {
+                video: Boolean(mediaState.video),
+                audio: Boolean(mediaState.audio),
+            };
+            recipientAccountIds = call.conversation_type === 'group'
+                ? call.participant_ids.filter((participantId) => participantId !== callerId)
+                : [targetAccountId];
+            return {
+                conversation_id: conversationId,
+                call_id: callId,
+                account_id: callerId,
+                target_account_id: targetAccountId,
+                recipient_account_id: targetAccountId,
+                recipient_account_ids: recipientAccountIds,
+                signal_type: 'media-state',
+                signal: call.media_states[callerId],
+                conversation_type: call.conversation_type,
+                participant_ids: [...call.participant_ids],
+                media_states: { ...call.media_states },
+                emitted_at: new Date(),
+            };
+        }
+        if (signalType === 'resume') {
+            recipientAccountIds = call.participant_ids.filter(
+                (participantId) => participantId !== callerId
+            );
+        }
+        if (['end', 'end-for-everyone'].includes(signalType) && !call.participant_ids.includes(callerId)) {
+            throw new ChatServiceError('Only a call participant can end the call', 403);
+        }
+        if (signalType === 'end-for-everyone') {
+            if (call.conversation_type !== 'group') {
+                throw new ChatServiceError('End for everyone is only available for group calls');
+            }
+            if (call.caller_id !== callerId) {
+                throw new ChatServiceError('Only the call starter can end the call for everyone', 403);
+            }
+            recipientAccountIds = Array.from(new Set([
+                ...call.invited_ids,
+                ...call.participant_ids,
+            ])).filter((memberId) => memberId !== callerId);
+            call.participant_ids = [];
+            call.status = 'ended';
+            emittedSignalType = 'end';
+            activeCallsById.delete(call.call_id);
+            [call.caller_id, ...call.invited_ids, ...recipientAccountIds].forEach(
+                (memberId) => activeCalls.delete(memberId)
+            );
+        }
+        if (signalType === 'end' && call.conversation_type === 'group') {
+            call.participant_ids = call.participant_ids.filter(
+                (participantId) => participantId !== callerId
+            );
+            call.invited_ids = call.invited_ids.filter(
+                (memberId) => memberId !== callerId
+            );
+            activeCalls.delete(callerId);
+            if (call.media_states) delete call.media_states[callerId];
+            recipientAccountIds = [...call.participant_ids];
+            if (call.participant_ids.length > 0) {
+                call.status = 'active';
+                emittedSignalType = 'participant-left';
+            } else {
+                emittedSignalType = 'end';
+                activeCallsById.delete(call.call_id);
+                call.invited_ids.forEach((memberId) => activeCalls.delete(memberId));
+                recipientAccountIds = [...call.invited_ids];
+            }
+        } else if (signalType === 'reject' && call.conversation_type === 'group') {
+            call.invited_ids = call.invited_ids.filter(
+                (memberId) => memberId !== callerId
+            );
+            activeCalls.delete(callerId);
+            if (call.media_states) delete call.media_states[callerId];
+            recipientAccountIds = [];
+        } else if (['end', 'reject'].includes(signalType)) {
+            recipientAccountIds = Array.from(new Set([
+                ...call.invited_ids,
+                ...call.participant_ids,
+            ])).filter((memberId) => memberId !== callerId);
+            activeCallsById.delete(call.call_id);
+            [call.caller_id, ...call.invited_ids].forEach((memberId) =>
+                activeCalls.delete(memberId)
+            );
+        }
+    }
+
+    const signal = payload.signal ?? null;
+    if (signal && JSON.stringify(signal).length > 100000) {
+        throw new ChatServiceError('Call signal payload is too large');
+    }
+    const [callerName, callerAvatar] = await Promise.all([
+        actorDisplayName(callerId),
+        getProfileCurrentAvatarByAccountIdService(callerId).catch(() => null),
+    ]);
+    return {
+        conversation_id: conversationId,
+        call_id: callId,
+        account_id: callerId,
+        target_account_id: targetAccountId,
+        recipient_account_id: targetAccountId,
+        recipient_account_ids: recipientAccountIds,
+        signal_type: emittedSignalType,
+        signal,
+        actor_name: callerName,
+        actor_avatar: callerAvatar?.path || null,
+        conversation_type: call?.conversation_type || inbox.conversation_type,
+        conversation_name: call?.conversation_name || inbox.conversation_name || null,
+        conversation_image_key:
+            call?.conversation_image_key || inbox.conversation_image_key || null,
+        caller_id: call?.caller_id || callerId,
+        caller_name: call?.caller_name || callerName,
+        caller_avatar: call?.caller_avatar || callerAvatar?.path || null,
+        participant_ids: call?.participant_ids || [callerId],
+        media_states: call?.media_states || {},
+        started_at: call?.started_at || new Date(),
+        expires_at: call?.expires_at || null,
+        emitted_at: new Date(),
+    };
+}
+
+function releaseCallsForAccountServices(accountId) {
+    return activeCalls.get(String(accountId)) || null;
+}
+
+function getActiveCallForAccountServices(accountId) {
+    const call = activeCalls.get(String(accountId));
+    if (!call) return null;
+    if (call.status === 'ringing' && new Date(call.expires_at).getTime() <= Date.now()) {
+        expireCallServices(call.call_id);
+        return null;
+    }
+    return {
+        call_id: call.call_id,
+        conversation_id: call.conversation_id,
+        conversation_type: call.conversation_type,
+        conversation_name: call.conversation_name,
+        conversation_image_key: call.conversation_image_key,
+        caller_id: call.caller_id,
+        caller_name: call.caller_name,
+        caller_avatar: call.caller_avatar,
+        participant_ids: [...call.participant_ids],
+        media_states: { ...(call.media_states || {}) },
+        call_status: call.status,
+        status: call.participant_ids.includes(String(accountId))
+            ? call.status
+            : 'ringing',
+        started_at: call.started_at,
+        expires_at: call.status === 'ringing' ? call.expires_at : null,
+    };
+}
+
+function expireCallServices(callId) {
+    const call = activeCallsById.get(String(callId));
+    if (!call || call.status !== 'ringing') return null;
+    activeCallsById.delete(call.call_id);
+    [call.caller_id, ...call.invited_ids].forEach((memberId) =>
+        activeCalls.delete(memberId)
+    );
+    return call;
+}
+
+async function getActiveGroupCallServices(conversationId, accountId) {
+    const inbox = await requireConversationMember(conversationId, accountId);
+    if (inbox.conversation_type !== 'group') return null;
+    const call = [...activeCallsById.values()].find(
+        (item) =>
+            item.conversation_type === 'group' &&
+            item.conversation_id === String(conversationId)
+    );
+    if (!call) return null;
+    call.participant_ids = Array.from(new Set(call.participant_ids.map(String)));
+    const participantProfiles = await Promise.all(
+        call.participant_ids.map(async (participantId) => {
+            const [name, avatar] = await Promise.all([
+                actorDisplayName(participantId),
+                getProfileCurrentAvatarByAccountIdService(participantId).catch(() => null),
+            ]);
+            return {
+                account_id: participantId,
+                display_name: name,
+                avatar_key: avatar?.path || null,
+            };
+        })
+    );
+    return {
+        call_id: call.call_id,
+        conversation_id: call.conversation_id,
+        conversation_name: call.conversation_name,
+        conversation_image_key: call.conversation_image_key,
+        caller_id: call.caller_id,
+        caller_name: call.caller_name,
+        caller_avatar: call.caller_avatar,
+        participant_ids: [...call.participant_ids],
+        participant_names: participantProfiles.map((participant) => participant.display_name),
+        participant_profiles: participantProfiles,
+        media_states: { ...(call.media_states || {}) },
+        status: call.status,
+        started_at: call.started_at,
+    };
+}
+
+async function getInboxByAccountIdServices(accountId, conversationType) {
+    await requireAccount(accountId);
+    validateConversationType(conversationType);
+    return await getInboxByAccountId(accountId, conversationType);
+}
+
+async function getAllInboxesByAccountIdServices(accountId) {
+    await requireAccount(accountId);
+    const conversations = await Promise.all(
+        CONVERSATION_TYPES.map((type) => getInboxByAccountId(accountId, type))
+    );
+    return conversations.flat().sort((left, right) => {
+        const leftTime = new Date(left.last_message_time || left.updated_at || 0);
+        const rightTime = new Date(right.last_message_time || right.updated_at || 0);
+        return rightTime - leftTime;
+    });
+}
+
+async function checkInboxByTwoAccountIdsServices(payload, accountId) {
+    const inbox = await createOrReuseDirectChatServices(payload, accountId);
+    return inbox._id;
+}
+
+async function getInboxByTwoAccountIdsServices(accountId, recipientId) {
+    await requireAccount(accountId);
+    await requireAccount(recipientId);
+    const inbox = await getInboxByTwoAccountIds(accountId, recipientId, 'direct');
+    if (!inbox) {
+        throw new ChatServiceError('Inbox not found for the given account IDs', 404);
+    }
+
+    const avatarEntries = await Promise.all(inbox.members.map(async (member) => {
+        const avatar = await getProfileCurrentAvatarByAccountIdService(member.account_id);
+        return [member.account_id, avatar?.path || null];
+    }));
+    return { ...inbox, avatarPayload: Object.fromEntries(avatarEntries) };
+}
+
+// Backward-compatible service names now route through explicit authorized operations.
+async function updateMessageServices(messageId, action, updateFields, accountId) {
+    if (action !== 'set' || typeof updateFields?.message_content !== 'string') {
+        throw new ChatServiceError('Unsupported message update');
+    }
+    return await editMessageServices(messageId, updateFields.message_content, accountId);
+}
+
+async function updateInboxServices(inboxId, updateFields, accountId) {
+    const conversationName =
+        updateFields?.conversation_name ?? updateFields?.$set?.conversation_name;
+    return await renameConversationServices(inboxId, conversationName, accountId);
+}
 
 module.exports = {
+    ChatServiceError,
     createInboxServices,
+    createGroupServices,
+    createEngagementChatServices,
+    createOrReuseDirectChatServices,
     createMessageServices,
+    replyMessageServices,
+    reactMessageServices,
+    removeMessageReactionServices,
+    pinMessageServices,
+    unpinMessageServices,
+    editMessageServices,
+    deleteMessageServices,
+    renameConversationServices,
+    updateGroupProfileImageServices,
+    updateGroupMemberServices,
+    removeGroupMemberServices,
     updateMessageServices,
     updateInboxServices,
+    authorizeConversationServices,
+    authorizeSocketRoomServices,
+    typingEventServices,
+    markConversationReadServices,
+    callSignalServices,
+    releaseCallsForAccountServices,
+    getActiveCallForAccountServices,
+    expireCallServices,
+    getActiveGroupCallServices,
     getConversationByConvoIdServices,
+    getConversationSummaryServices,
     getInboxByAccountIdServices,
+    getAllInboxesByAccountIdServices,
     checkInboxByTwoAccountIdsServices,
-    getInboxByTwoAccountIdsServices
+    getInboxByTwoAccountIdsServices,
 };
-

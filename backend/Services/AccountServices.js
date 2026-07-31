@@ -3,7 +3,8 @@ const { getAllAccounts, createAccount, getAccountByHandle, getAccountWalletRepos
     checkUserAccountIdRepositories,
     getDisplayNameByAccountId,
     updateAndInsertAccountProfile,
-    updateAccountProfile
+    updateAccountProfile,
+    searchUserAccountsByHandle
 } = require("../Repositories/AccountRepositories");
 const {
     updateUserDetailsByAccountId,
@@ -52,6 +53,13 @@ async function getAccountByHandleService(handle) {
         console.error('Error fetching account by handle:', err);
         throw err;
     }
+}
+
+async function searchUserAccountsByHandleService(handle, accountId) {
+    const query = String(handle || '').replace(/^@/, '').trim();
+    if (query.length < 2) return [];
+    console.log(`test query: ${query}`);
+    return await searchUserAccountsByHandle(query, accountId, 10);
 }
 
 async function getAccountWalletService(accountId, type) { 
@@ -203,6 +211,7 @@ module.exports = {
     fetchAllAccounts,
     createNewAccount,
     getAccountByHandleService,
+    searchUserAccountsByHandleService,
     getAccountWalletService,
     getProfileServices,
     getAccountLinkByAccountIdService,

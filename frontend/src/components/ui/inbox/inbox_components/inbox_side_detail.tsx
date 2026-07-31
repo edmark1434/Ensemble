@@ -1,5 +1,5 @@
 // src/components/ui/inbox/inbox_functions/inbox_side_details.tsx
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   X,
   User,
@@ -13,19 +13,45 @@ import {
   Pin,
   Link as LinkIcon,
   ExternalLink,
+  UserPlus,
+  UserMinus,
+  LogOut,
+  Camera,
+  Plus,
 } from "lucide-react";
-import type { Inbox, Message } from "../inbox_dataset";
+import type {
+  Inbox,
+  Members,
+  Message,
+  PinnedMessage,
+} from "../inbox_dataset";
+import type { SuggestedAccount } from "../inbox_functions/inbox_create_group";
+import {
+  chatAttachmentUrl,
+  uploadChatAttachment,
+} from "../inbox_functions/inbox_upload_image";
+import api from "@/lib/axios";
 
 interface InboxSideDetailsProps {
   selectedConversation: Inbox;
   getConversationName: (inbox: Inbox) => string;
   getAvatar: (inbox: Inbox) => string;
   messages: Message[];
-  pinnedMessages?: string[]; // Array of pinned message IDs
+  pinnedMessages?: PinnedMessage[];
   onClose: () => void;
   onUpdateGroupName?: (newGroupTitle: string) => void;
   onJumpToMessage?: (messageId: string) => void;
-  currentUserId?: string;
+  currentUserId: string;
+  getMemberName?: (accountId: string) => string;
+  getMemberAvatar?: (accountId: string) => string;
+  onUpdateMember?: (
+    accountId: string,
+    updates: { role?: "owner" | "admin" | "member"; status?: "active" | "left" | "removed" }
+  ) => Promise<Inbox>;
+  onRemoveMember?: (accountId: string) => Promise<Inbox>;
+  onUpdateGroupProfileImage?: (imageKey: string) => Promise<Inbox>;
+  onPreviewAttachment?: (url: string, type?: string) => void;
+  suggestedAccounts?: SuggestedAccount[];
   isOpen: boolean;
 }
 
@@ -38,7 +64,15 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   onClose,
   onUpdateGroupName,
   onJumpToMessage,
-  currentUserId = "user1",
+  currentUserId,
+  getMemberName = (accountId) => `User ${accountId.slice(0, 8)}`,
+  getMemberAvatar = (accountId) =>
+    `https://ui-avatars.com/api/?name=${accountId.slice(0, 8)}&background=6366f1&color=fff`,
+  onUpdateMember,
+  onRemoveMember,
+  onUpdateGroupProfileImage,
+  onPreviewAttachment,
+  suggestedAccounts = [],
   isOpen,
 }) => {
   const isGroup = Boolean(
@@ -58,9 +92,25 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   // Group Name Edit States
   const [isEditingName, setIsEditingName] = useState(false);
   const [customNameInput, setCustomNameInput] = useState(name);
+  const [memberActionError, setMemberActionError] = useState<string | null>(null);
+  const [showMemberSearch, setShowMemberSearch] = useState(false);
+  const [memberSearch, setMemberSearch] = useState("");
+  const [memberSearchResults, setMemberSearchResults] = useState<SuggestedAccount[]>([]);
+  const [isSearchingMembers, setIsSearchingMembers] = useState(false);
+  const [isUploadingGroupImage, setIsUploadingGroupImage] = useState(false);
+  const groupImageInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isEditingName) setCustomNameInput(name);
+  }, [isEditingName, name]);
 
   // 1. Collect Pinned Messages
-  const pinnedList = messages.filter((m) => pinnedMessages.includes(m._id));
+  const pinnedMessageIds = new Set(
+    pinnedMessages.map((pinned) => String(pinned.message_id))
+  );
+  const pinnedList = messages.filter((message) =>
+    pinnedMessageIds.has(String(message._id))
+  );
 
   // 2. Extract Shared Links (from message text regex and links array)
   const extractedLinks = messages.flatMap((m) => {
@@ -76,9 +126,92 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   // 3. Collect all media and file attachments
   const attachments = messages.flatMap((m) => m.attachments || []);
 
-  const creatorId = selectedConversation.creator_id || currentUserId;
+  const owner = selectedConversation.members?.find((member) => member.role === "owner");
+  const creatorId = selectedConversation.creator_id || owner?.account_id || currentUserId;
   const isCreatorSelf = creatorId === currentUserId;
-  const memberList = selectedConversation.members || [currentUserId];
+  const memberList: Members[] = selectedConversation.members || [];
+  const activeMembers = memberList.filter(
+    (member) => !["left", "removed"].includes(member.status || "active")
+  );
+  const currentMember = memberList.find(
+    (member) => String(member.account_id) === currentUserId
+  );
+  const isActiveMember =
+    Boolean(currentMember) &&
+    !["left", "removed"].includes(currentMember?.status || "active");
+  const canManageMembers = ["owner", "admin"].includes(currentMember?.role || "");
+  useEffect(() => {
+    const query = memberSearch.replace(/^@/, "").trim();
+    if (!showMemberSearch || query.length < 2) {
+      setMemberSearchResults([]);
+      setIsSearchingMembers(false);
+      return;
+    }
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      setIsSearchingMembers(true);
+      try {
+        const response = await api.get("/api/accounts/search-users", {
+          params: { handle: query },
+        });
+        const results = (response.data?.data || []).map((account: any) => ({
+          account_id: String(account.account_id),
+          name: account.display_name || account.handle,
+          username: `@${account.handle}`,
+          avatar: account.avatar_preset_url
+            ? chatAttachmentUrl(account.avatar_preset_url)
+            : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                account.display_name || account.handle
+              )}&background=6366f1&color=fff`,
+        }));
+        if (!cancelled) setMemberSearchResults(results);
+      } catch {
+        if (!cancelled) setMemberSearchResults([]);
+      } finally {
+        if (!cancelled) setIsSearchingMembers(false);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [memberSearch, showMemberSearch]);
+
+  const handleGroupImageChange = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !onUpdateGroupProfileImage) return;
+    setMemberActionError(null);
+    setIsUploadingGroupImage(true);
+    try {
+      const uploaded = await uploadChatAttachment({
+        id: `group-image-${Date.now()}`,
+        file,
+        previewUrl: URL.createObjectURL(file),
+        type: "image",
+      });
+      await onUpdateGroupProfileImage(uploaded.attachment_key);
+    } catch (error) {
+      setMemberActionError(
+        error instanceof Error ? error.message : "Unable to update group image"
+      );
+    } finally {
+      setIsUploadingGroupImage(false);
+    }
+  };
+
+  const runMemberAction = async (action: () => Promise<Inbox>) => {
+    setMemberActionError(null);
+    try {
+      await action();
+    } catch (error) {
+      setMemberActionError(
+        error instanceof Error ? error.message : "Unable to update member"
+      );
+    }
+  };
 
   const handleSaveGroupName = () => {
     const trimmed = customNameInput.trim();
@@ -117,11 +250,32 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
               alt={name}
               className="h-20 w-20 rounded-full object-cover ring-2 ring-blue-500/30"
             />
-            <span className="absolute bottom-1 right-1 h-4 w-4 rounded-full bg-emerald-500 ring-2 ring-[#0d0f1a]" />
+            {isGroup && isActiveMember ? (
+              <>
+                <input
+                  ref={groupImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => void handleGroupImageChange(event)}
+                />
+                <button
+                  type="button"
+                  disabled={isUploadingGroupImage}
+                  onClick={() => groupImageInputRef.current?.click()}
+                  className="absolute bottom-0 right-0 rounded-full bg-blue-600 p-2 text-white ring-2 ring-[#0d0f1a] hover:bg-blue-500 disabled:opacity-50"
+                  title="Change group image"
+                >
+                  <Camera className="h-3.5 w-3.5" />
+                </button>
+              </>
+            ) : (
+              <span className="absolute bottom-1 right-1 h-4 w-4 rounded-full bg-emerald-500 ring-2 ring-[#0d0f1a]" />
+            )}
           </div>
           <h2 className="text-base font-bold text-white mb-0.5">{name}</h2>
           <p className="text-xs text-zinc-400">
-            {isGroup ? `${memberList.length} members` : "Active now"}
+            {isGroup ? `${activeMembers.length} members` : "Active now"}
           </p>
 
           {isGroup && (
@@ -206,27 +360,101 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           {/* 2. Group Members Section */}
           {isGroup && (
             <div className="rounded-xl overflow-hidden bg-white/5 border border-white/5">
-              <button
+              <div
                 onClick={() => setIsMembersOpen((prev) => !prev)}
                 className="w-full flex items-center justify-between p-3 text-xs font-semibold text-zinc-300 hover:text-white hover:bg-white/5 transition"
               >
-                <div className="flex items-center gap-2">
+                <button type="button" className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-blue-400" />
-                  <span>Members ({memberList.length})</span>
+                  <span>Members ({activeMembers.length})</span>
+                </button>
+                <div className="flex items-center gap-1">
+                  {isActiveMember && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setShowMemberSearch((open) => !open);
+                        setIsMembersOpen(true);
+                      }}
+                      className="rounded-full p-1 text-blue-400 hover:bg-white/10"
+                      title="Add members"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  )}
+                  {isMembersOpen ? (
+                    <ChevronUp className="h-4 w-4 text-zinc-400" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-zinc-400" />
+                  )}
                 </div>
-                {isMembersOpen ? (
-                  <ChevronUp className="h-4 w-4 text-zinc-400" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 text-zinc-400" />
-                )}
-              </button>
+              </div>
 
               {isMembersOpen && (
                 <div className="p-2 border-t border-white/5 space-y-1 max-h-48 overflow-y-auto inbox-scroll-thin">
-                  {memberList.map((memberId) => {
+                  {isActiveMember && showMemberSearch && (
+                    <div className="mb-2 space-y-1.5">
+                      <input
+                        value={memberSearch}
+                        onChange={(event) => setMemberSearch(event.target.value)}
+                        placeholder="Search by @handle"
+                        className="w-full rounded-lg border border-white/10 bg-[#171a27] p-2 text-xs text-white outline-none focus:border-blue-500"
+                      />
+                      {isSearchingMembers && (
+                        <p className="px-2 text-[10px] text-zinc-500">Searching...</p>
+                      )}
+                      {memberSearchResults.map((account) => {
+                        const existing = memberList.find(
+                          (member) =>
+                            String(member.account_id) === account.account_id
+                        );
+                        const isActive =
+                          existing &&
+                          !["left", "removed"].includes(
+                            existing.status || "active"
+                          );
+                        return (
+                          <button
+                            key={account.account_id}
+                            type="button"
+                            disabled={Boolean(isActive)}
+                            onClick={() =>
+                              void runMemberAction(async () => {
+                                const updated = await onUpdateMember!(
+                                  account.account_id,
+                                  { role: "member", status: "active" }
+                                );
+                                setMemberSearch("");
+                                setMemberSearchResults([]);
+                                return updated;
+                              })
+                            }
+                            className="flex w-full items-center gap-2 rounded-lg p-2 text-left hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <img src={account.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-xs text-white">{account.name}</span>
+                              <span className="block truncate text-[10px] text-zinc-500">{account.username}</span>
+                            </span>
+                            <span className="text-[10px] text-blue-400">
+                              {isActive ? "Member" : existing ? "Re-add" : "Add"}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {memberActionError && (
+                    <p className="px-2 text-[10px] text-red-400">{memberActionError}</p>
+                  )}
+                  {memberList.map((member) => {
+                    const memberId = String(member.account_id);
                     const isSelf = memberId === currentUserId;
-                    const isAdmin = memberId === creatorId;
-                    const memberName = isSelf ? "You" : `Member (${memberId})`;
+                    const memberName = isSelf ? "You" : getMemberName(memberId);
+                    const isInactive = ["left", "removed"].includes(
+                      member.status || "active"
+                    );
 
                     return (
                       <div
@@ -235,9 +463,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <img
-                            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
-                              memberName
-                            )}&background=6366f1&color=fff&bold=true`}
+                            src={getMemberAvatar(memberId)}
                             alt={memberName}
                             className="h-7 w-7 rounded-full object-cover"
                           />
@@ -245,11 +471,61 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                             {memberName}
                           </span>
                         </div>
-                        {isAdmin && (
-                          <span className="text-[10px] font-semibold text-yellow-400 bg-yellow-500/10 px-2 py-0.5 rounded-full border border-yellow-500/20 flex items-center gap-1">
-                            <Crown className="h-2.5 w-2.5" /> Admin
+                        <div className="flex items-center gap-1">
+                          <span className={`rounded-full px-1.5 py-0.5 text-[9px] ${
+                            isInactive ? "bg-red-500/10 text-red-400" : "bg-white/5 text-zinc-400"
+                          }`}>
+                            {isInactive ? member.status : member.role}
                           </span>
-                        )}
+                          {canManageMembers && member.role !== "owner" && (
+                            <>
+                              {isInactive ? (
+                                <button
+                                  title="Re-add member"
+                                  onClick={() =>
+                                    onUpdateMember &&
+                                    void runMemberAction(() =>
+                                      onUpdateMember(memberId, { status: "active" })
+                                    )
+                                  }
+                                  className="p-1 text-emerald-400 hover:bg-white/10"
+                                >
+                                  <UserPlus className="h-3.5 w-3.5" />
+                                </button>
+                              ) : (
+                                <>
+                                  <select
+                                    value={member.role}
+                                    onChange={(event) =>
+                                      onUpdateMember &&
+                                      void runMemberAction(() =>
+                                        onUpdateMember(memberId, {
+                                          role: event.target.value as "admin" | "member",
+                                        })
+                                      )
+                                    }
+                                    className="rounded bg-[#171a27] p-1 text-[9px]"
+                                  >
+                                    <option value="member">Member</option>
+                                    {currentMember?.role === "owner" && (
+                                      <option value="admin">Admin</option>
+                                    )}
+                                  </select>
+                                  <button
+                                    title="Remove member"
+                                    onClick={() =>
+                                      onRemoveMember &&
+                                      void runMemberAction(() => onRemoveMember(memberId))
+                                    }
+                                    className="p-1 text-red-400 hover:bg-white/10"
+                                  >
+                                    <UserMinus className="h-3.5 w-3.5" />
+                                  </button>
+                                </>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -374,16 +650,47 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                         key={a.attachment_id || i}
                         className="aspect-square rounded-lg overflow-hidden bg-black/40 border border-white/10 relative group"
                       >
-                        {a.attachment_type === "video" ? (
+                        {a.attachment_type === "file" ? (
+                          <a
+                            href={chatAttachmentUrl(
+                              a.attachment_key || a.attachment_url
+                            )}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex h-full w-full items-center justify-center p-2 text-center text-[9px] text-blue-300"
+                          >
+                            {a.attachment_name || "Attachment"}
+                          </a>
+                        ) : a.attachment_type === "video" ? (
                           <video
-                            src={a.attachment_url}
+                            src={chatAttachmentUrl(
+                              a.attachment_key || a.attachment_url
+                            )}
                             className="h-full w-full object-cover"
+                            onClick={() =>
+                              onPreviewAttachment?.(
+                                chatAttachmentUrl(
+                                  a.attachment_key || a.attachment_url
+                                ),
+                                "video"
+                              )
+                            }
                           />
                         ) : (
                           <img
-                            src={a.attachment_url}
+                            src={chatAttachmentUrl(
+                              a.attachment_key || a.attachment_url
+                            )}
                             alt="Attachment"
-                            className="h-full w-full object-cover group-hover:scale-105 transition"
+                            onClick={() =>
+                              onPreviewAttachment?.(
+                                chatAttachmentUrl(
+                                  a.attachment_key || a.attachment_url
+                                ),
+                                "image"
+                              )
+                            }
+                            className="h-full w-full cursor-pointer object-cover group-hover:scale-105 transition"
                           />
                         )}
                       </div>
@@ -393,6 +700,26 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
               </div>
             )}
           </div>
+
+          {isGroup &&
+            currentMember?.role !== "owner" &&
+            !["left", "removed"].includes(
+              currentMember?.status || "active"
+            ) && (
+              <button
+                type="button"
+                onClick={() =>
+                  onUpdateMember &&
+                  void runMemberAction(() =>
+                    onUpdateMember(currentUserId, { status: "left" })
+                  )
+                }
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs font-semibold text-red-400 hover:bg-red-500/15"
+              >
+                <LogOut className="h-4 w-4" />
+                Leave group chat
+              </button>
+            )}
         </div>
       </div>
     </div>

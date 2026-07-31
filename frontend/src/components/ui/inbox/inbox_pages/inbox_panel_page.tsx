@@ -1,5 +1,5 @@
 // src/components/ui/inbox/inbox_pages/inbox_panel_page.tsx
-import React, { useState } from "react";
+import React from "react";
 import { InboxPanelHeader } from "../inbox_components/inbox_panel_header";
 import { InboxPanelViewMessage } from "../inbox_components/inbox_panel_viewmessage";
 import { InboxPanelChatbox } from "../inbox_components/inbox_panel_chatbox";
@@ -11,7 +11,13 @@ export const InboxPanelPage = ({
   getConversationName,
   getAvatar,
   messages,
+  visibleMessages,
   messageLoading,
+  messageError,
+  retryMessages,
+  hasOlderMessages,
+  loadingOlder,
+  onLoadOlder,
   containerRef,
   endRef,
   handleScroll,
@@ -19,6 +25,8 @@ export const InboxPanelPage = ({
   messageInput,
   setMessageInput,
   handleSendMessage,
+  isSending,
+  typingCount,
   replyToMessage,
   editingMessage,
   cancelReply,
@@ -32,8 +40,17 @@ export const InboxPanelPage = ({
   onJumpToPinned,
   textareaRef,
   onUpdateGroupName,
+  currentUserId,
+  getMemberName,
+  getMemberAvatar,
+  suggestedAccounts,
+  onUpdateMember,
+  onRemoveMember,
+  onUpdateGroupProfileImage,
+  showDetails,
+  onShowDetailsChange,
+  onPreviewAttachment,
 }: any) => {
-  const [showDetails, setShowDetails] = useState(false);
 
   if (!selectedConversation) {
     return (
@@ -42,6 +59,14 @@ export const InboxPanelPage = ({
       </div>
     );
   }
+  const currentMember = selectedConversation.members?.find(
+    (member: { account_id: string }) =>
+      String(member.account_id) === String(currentUserId)
+  );
+  const cannotSendToGroup =
+    selectedConversation.conversation_type === "group" &&
+    (!currentMember ||
+      ["left", "removed"].includes(currentMember.status || "active"));
 
   return (
     <div className="flex h-full max-h-full w-full overflow-hidden bg-[#080a12] relative">
@@ -51,7 +76,7 @@ export const InboxPanelPage = ({
           selectedConversation={selectedConversation}
           getConversationName={getConversationName}
           getAvatar={getAvatar}
-          onToggleDetails={() => setShowDetails((prev) => !prev)}
+          onToggleDetails={() => onShowDetailsChange?.(!showDetails)}
         />
 
         <InboxPinnedBanner
@@ -63,18 +88,30 @@ export const InboxPanelPage = ({
 
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <InboxPanelViewMessage
-            messages={messages}
+            messages={visibleMessages || messages}
             messageLoading={messageLoading}
+            error={messageError}
+            onRetry={retryMessages}
+            hasOlderMessages={hasOlderMessages}
+            loadingOlder={loadingOlder}
+            onLoadOlder={onLoadOlder}
             containerRef={containerRef}
             endRef={endRef}
             handleScroll={handleScroll}
             renderMessage={renderMessage}
           />
 
+          {cannotSendToGroup ? (
+            <div className="border-t border-white/10 bg-[#0d0f1a] p-4 text-center text-sm text-zinc-400">
+              You cannot send messages to this group chat anymore.
+            </div>
+          ) : (
           <InboxPanelChatbox
             messageInput={messageInput}
             setMessageInput={setMessageInput}
             handleSendMessage={handleSendMessage}
+            isSending={isSending}
+            typingCount={typingCount}
             replyToMessage={replyToMessage}
             editingMessage={editingMessage}
             cancelReply={cancelReply}
@@ -85,6 +122,7 @@ export const InboxPanelPage = ({
             removeMedia={removeMedia}
             textareaRef={textareaRef}
           />
+          )}
         </div>
       </div>
 
@@ -96,9 +134,17 @@ export const InboxPanelPage = ({
         getAvatar={getAvatar}
         messages={messages}
         pinnedMessages={pinnedMessages}
-        onClose={() => setShowDetails(false)}
+        onClose={() => onShowDetailsChange?.(false)}
         onUpdateGroupName={onUpdateGroupName}
+        currentUserId={currentUserId}
+        getMemberName={getMemberName}
+        getMemberAvatar={getMemberAvatar}
+        suggestedAccounts={suggestedAccounts}
+        onUpdateMember={onUpdateMember}
+        onRemoveMember={onRemoveMember}
+        onUpdateGroupProfileImage={onUpdateGroupProfileImage}
         onJumpToMessage={onJumpToPinned}
+        onPreviewAttachment={onPreviewAttachment}
       />
     </div>
   );
