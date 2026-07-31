@@ -183,13 +183,26 @@ export default function ModeratorDisputeDetailModal({
   }, [disputeId]);
 
   const perms = detail?.permissions;
-  const canAct = adminMode ? Boolean(perms?.canAct) : true;
-  const canAssignOthers = adminMode ? Boolean(perms?.canAssignOthers) : true;
-  const canSelfAssign = adminMode ? Boolean(perms?.canSelfAssign) : false;
-  const canAssignMyself = adminMode
-    ? Boolean(perms?.canAssignMyself || perms?.canSelfAssign || perms?.canForceTakeover)
-    : false;
   const myStaffId = perms?.staffId != null ? String(perms.staffId) : "";
+  const assigneeStaffId =
+    detail?.dispute?.assignee?.staffId != null ? String(detail.dispute.assignee.staffId) : "";
+  const alreadyAssignedToMe = Boolean(
+    perms?.isAssignee ||
+      (myStaffId &&
+        assigneeStaffId &&
+        myStaffId.toLowerCase() === assigneeStaffId.toLowerCase())
+  );
+  const canAct = adminMode ? Boolean(perms?.canAct || alreadyAssignedToMe) : true;
+  const canAssignOthers = adminMode ? Boolean(perms?.canAssignOthers) : true;
+  const canSelfAssign = adminMode
+    ? Boolean(perms?.canSelfAssign && !alreadyAssignedToMe)
+    : false;
+  const canAssignMyself = adminMode
+    ? Boolean(
+        !alreadyAssignedToMe &&
+          (perms?.canAssignMyself || perms?.canSelfAssign || perms?.canForceTakeover)
+      )
+    : false;
   const viewOnly = adminMode && !canAct;
   /** Handler dropdown: assignee, Admin assigning others, or claiming / taking over */
   const canEditHandler =
@@ -225,7 +238,13 @@ export default function ModeratorDisputeDetailModal({
     if (!adminMode) return;
 
     // Claim unassigned dispute by picking yourself
-    if ((canSelfAssign || canAssignMyself) && next && myStaffId && next === myStaffId && !canAct) {
+    if (
+      (canSelfAssign || canAssignMyself) &&
+      next &&
+      myStaffId &&
+      next.toLowerCase() === myStaffId.toLowerCase() &&
+      !canAct
+    ) {
       await runAction({ action: "self_assign" }, "You are now assigned");
       return;
     }
@@ -240,7 +259,14 @@ export default function ModeratorDisputeDetailModal({
   };
 
   const saveChanges = async (overrideStatus?: string) => {
-    if (adminMode && viewOnly && (canSelfAssign || canAssignMyself) && assigneeId && assigneeId === myStaffId) {
+    if (
+      adminMode &&
+      viewOnly &&
+      (canSelfAssign || canAssignMyself) &&
+      assigneeId &&
+      myStaffId &&
+      assigneeId.toLowerCase() === myStaffId.toLowerCase()
+    ) {
       await runAction({ action: "self_assign" }, "You are now assigned");
       return;
     }
@@ -551,12 +577,17 @@ export default function ModeratorDisputeDetailModal({
                 >
                   <option value="">Unassigned</option>
                   {(canAssignMyself && !canAssignOthers && !canAct
-                    ? detail.assignableStaff.filter((s) => String(s.staffId) === myStaffId)
+                    ? detail.assignableStaff.filter(
+                        (s) => String(s.staffId).toLowerCase() === myStaffId.toLowerCase()
+                      )
                     : detail.assignableStaff
                   ).map((s) => (
                     <option key={s.staffId} value={String(s.staffId)}>
                       {s.name}
-                      {myStaffId && String(s.staffId) === myStaffId ? " (you)" : ""} ({s.role})
+                      {myStaffId && String(s.staffId).toLowerCase() === myStaffId.toLowerCase()
+                        ? " (you)"
+                        : ""}{" "}
+                      ({s.role})
                     </option>
                   ))}
                 </select>
@@ -641,17 +672,34 @@ export default function ModeratorDisputeDetailModal({
             </label>
 
             <div className="flex flex-wrap gap-2">
-              {(canAct || canAssignOthers || (canAssignMyself && assigneeId === myStaffId)) && (
+              {(canAct ||
+                canAssignOthers ||
+                (canAssignMyself &&
+                  assigneeId &&
+                  myStaffId &&
+                  assigneeId.toLowerCase() === myStaffId.toLowerCase())) && (
                 <button
                   type="button"
                   onClick={() => void saveChanges()}
                   disabled={
                     saving ||
-                    (viewOnly && !canAssignOthers && !(canAssignMyself && assigneeId === myStaffId))
+                    (viewOnly &&
+                      !canAssignOthers &&
+                      !(
+                        canAssignMyself &&
+                        assigneeId &&
+                        myStaffId &&
+                        assigneeId.toLowerCase() === myStaffId.toLowerCase()
+                      ))
                   }
                   className={`rounded-xl px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${ACCENT_BTN[accent]}`}
                 >
-                  {viewOnly && canAssignMyself && assigneeId === myStaffId && !canAssignOthers
+                  {viewOnly &&
+                  canAssignMyself &&
+                  assigneeId &&
+                  myStaffId &&
+                  assigneeId.toLowerCase() === myStaffId.toLowerCase() &&
+                  !canAssignOthers
                     ? "Confirm assign myself"
                     : viewOnly && canAssignOthers
                       ? "Save assignment"

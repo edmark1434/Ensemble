@@ -127,6 +127,11 @@ function sessionStaffId(session) {
   return id != null ? String(id) : null;
 }
 
+function normalizeStaffId(id) {
+  if (id == null || id === '') return null;
+  return String(id).trim().toLowerCase();
+}
+
 function normalizeStatus(status) {
   if (!status) return 'open';
   const s = String(status).toLowerCase();
@@ -1044,6 +1049,26 @@ async function resolveDisputeStaffId(session) {
     );
     if (byAccount.rows.length) return byAccount.rows[0];
   }
+  const email = session?.email || session?.email_address || null;
+  if (email) {
+    const byEmail = await pool.query(
+      `SELECT staff_id, role FROM staff WHERE LOWER(email_address) = LOWER($1) LIMIT 1`,
+      [String(email).trim()]
+    );
+    if (byEmail.rows.length) return byEmail.rows[0];
+  }
+  const handle = session?.username || session?.handle || null;
+  if (handle) {
+    const byHandle = await pool.query(
+      `SELECT s.staff_id, s.role
+       FROM staff s
+       INNER JOIN accounts a ON a.account_id = s.account_id
+       WHERE LOWER(a.handle) = LOWER($1)
+       LIMIT 1`,
+      [String(handle).trim()]
+    );
+    if (byHandle.rows.length) return byHandle.rows[0];
+  }
   // Session fallback so Admin/Support can still claim when Redis payload has staffId/role
   if (direct && session?.role) {
     return { staff_id: direct, role: session.role };
@@ -1102,19 +1127,17 @@ async function loadDisputeRow(disputeId) {
 
 function buildDisputePermissions(row, staff, session = null) {
   const staffId =
-    (staff?.staff_id ? String(staff.staff_id) : null) || sessionStaffId(session) || null;
+    normalizeStaffId(staff?.staff_id) || normalizeStaffId(sessionStaffId(session));
   const role = staff?.role || session?.role || null;
-  const assigneeId = row?.assigned_staff_id ? String(row.assigned_staff_id) : null;
-  const requesterId = row?.takeover_requested_by_staff_id
-    ? String(row.takeover_requested_by_staff_id)
-    : null;
+  const assigneeId = normalizeStaffId(row?.assigned_staff_id);
+  const requesterId = normalizeStaffId(row?.takeover_requested_by_staff_id);
   const isAssignee = Boolean(staffId && assigneeId && staffId === assigneeId);
   const isAdmin = isAdminRole(role);
   const unassigned = !assigneeId;
   const designated = isDesignatedHandlerRole(role);
 
   return {
-    staffId,
+    staffId: staff?.staff_id != null ? String(staff.staff_id) : sessionStaffId(session),
     role,
     isAssignee,
     isAdmin,
