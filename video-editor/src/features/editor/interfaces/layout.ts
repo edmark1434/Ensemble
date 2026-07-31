@@ -42,4 +42,8 @@ export interface ILayoutState {
 
   animationPickerInitialTab: "in" | "out" | "loop";
   setAnimationPickerInitialTab: (tab: "in" | "out" | "loop") => void;
+
+  floatingControlIds: string[];
+  floatingControlAnimationType?: "text" | "media";
+  setFloatingControlIds: (ids: string[], animationType?: "text" | "media") => void;
 }

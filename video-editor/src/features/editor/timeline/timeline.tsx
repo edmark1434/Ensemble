@@ -29,6 +29,7 @@ import {useResizbleTimeline} from "../hooks/use-resizable-timeline";
 import "./items/transition-render";
 import {patchTransitionGuideRender} from "@/features/editor/timeline/items/transition-guide-render";
 import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
+import {patchTransitionZOrder} from "@/features/editor/timeline/items/transition-z-order";
 
 CanvasTimeline.registerItems({
   Text,
@@ -238,6 +239,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     canvasRef.current = canvas;
 
     patchTransitionGuideRender(canvas);
+    const unsubscribeTransitionZOrder = patchTransitionZOrder(canvas);
 
     setCanvasSize({ width: containerWidth, height: containerHeight });
     setTimeline(canvas);
@@ -373,6 +375,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     });
 
     return () => {
+      unsubscribeTransitionZOrder();
       canvas.purge();
     };
   }, []);

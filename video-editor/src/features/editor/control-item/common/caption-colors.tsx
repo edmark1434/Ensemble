@@ -1,8 +1,8 @@
 import { ColorPickerField } from "@/features/editor/control-item/common/color-picker-field";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { dispatch } from "@designcombo/events";
-import { EDIT_OBJECT } from "@designcombo/state";
+import { dispatchGroupEdit } from "@/features/editor/utils/dispatch-group-edit";
+import { useMixedValue } from "@/features/editor/hooks/use-mixed-value";
 import { useEffect, useState } from "react";
 
 interface ICaptionColors {
@@ -17,11 +17,15 @@ interface ICaptionColors {
 
 interface ICaptionColorsProps extends ICaptionColors {
   id: string;
+  textLikeIds?: string[];
+  captionIds?: string[];
   disabled?: boolean;
 }
 
 const CaptionColors = ({
   id,
+  textLikeIds,
+  captionIds,
   color,
   backgroundColor,
   appearedColor,
@@ -31,6 +35,34 @@ const CaptionColors = ({
   preservedColorKeyWord,
   disabled = false,
 }: ICaptionColorsProps) => {
+  const targetTextLikeIds = textLikeIds && textLikeIds.length > 0 ? textLikeIds : [id];
+  const targetCaptionIds = captionIds && captionIds.length > 0 ? captionIds : [id];
+
+  const { isMixed: isColorMixed } = useMixedValue<string>(
+    targetTextLikeIds,
+    (item) => item.details?.color ?? "#ffffff"
+  );
+  const { isMixed: isBackgroundColorMixed } = useMixedValue<string>(
+    targetTextLikeIds,
+    (item) => item.details?.backgroundColor ?? "transparent"
+  );
+  const { isMixed: isAppearedColorMixed } = useMixedValue<string>(
+    targetCaptionIds,
+    (item) => item.details?.appearedColor ?? "#ffffff"
+  );
+  const { isMixed: isActiveColorMixed } = useMixedValue<string>(
+    targetCaptionIds,
+    (item) => item.details?.activeColor ?? "#ffffff"
+  );
+  const { isMixed: isActiveFillColorMixed } = useMixedValue<string>(
+    targetCaptionIds,
+    (item) => item.details?.activeFillColor ?? "#ffffff"
+  );
+  const { isMixed: isEmphasizeColorMixed } = useMixedValue<string>(
+    targetCaptionIds,
+    (item) => item.details?.isKeywordColor ?? "transparent"
+  );
+
   const [localColor, setLocalColor] = useState<string>(color);
   const [localBackgroundColor, setLocalBackgroundColor] = useState<string>(backgroundColor);
   const [localAppearedColor, setLocalAppearedColor] = useState<string>(appearedColor);
@@ -41,37 +73,37 @@ const CaptionColors = ({
 
   const onChangeColor = (v: string) => {
     setLocalColor(v);
-    dispatch(EDIT_OBJECT, { payload: { [id]: { details: { color: v } } } });
+    dispatchGroupEdit(targetTextLikeIds, { color: v });
   };
 
   const onChangeBackgroundColor = (v: string) => {
     setLocalBackgroundColor(v);
-    dispatch(EDIT_OBJECT, { payload: { [id]: { details: { backgroundColor: v } } } });
+    dispatchGroupEdit(targetTextLikeIds, { backgroundColor: v });
   };
 
   const onChangeAppearedColor = (v: string) => {
     setLocalAppearedColor(v);
-    dispatch(EDIT_OBJECT, { payload: { [id]: { details: { appearedColor: v } } } });
+    dispatchGroupEdit(targetCaptionIds, { appearedColor: v });
   };
 
   const onChangeActiveColor = (v: string) => {
     setLocalActiveColor(v);
-    dispatch(EDIT_OBJECT, { payload: { [id]: { details: { activeColor: v } } } });
+    dispatchGroupEdit(targetCaptionIds, { activeColor: v });
   };
 
   const onChangeActiveFillColor = (v: string) => {
     setLocalActiveFillColor(v);
-    dispatch(EDIT_OBJECT, { payload: { [id]: { details: { activeFillColor: v } } } });
+    dispatchGroupEdit(targetCaptionIds, { activeFillColor: v });
   };
 
   const onChangeEmphasizeColor = (v: string) => {
     setLocalEmphasizeColor(v);
-    dispatch(EDIT_OBJECT, { payload: { [id]: { details: { isKeywordColor: v } } } });
+    dispatchGroupEdit(targetCaptionIds, { isKeywordColor: v });
   };
 
   const onChangePreservedColor = (v: boolean) => {
     setLocalPreservedColor(v);
-    dispatch(EDIT_OBJECT, { payload: { [id]: { details: { preservedColorKeyWord: v } } } });
+    dispatchGroupEdit(targetCaptionIds, { preservedColorKeyWord: v });
   };
 
   useEffect(() => {
@@ -90,7 +122,7 @@ const CaptionColors = ({
 
       <div className="grid grid-cols-2 gap-2">
         <div className="flex flex-col gap-2 flex-1">
-          <div className="flex flex-1 items-center text-xs text-muted-foreground">Upcoming</div>
+          <div className="flex flex-1 items-center text-xs text-muted-foreground">Text (Start)</div>
           <ColorPickerField
             value={localColor}
             onChange={onChangeColor}
@@ -98,6 +130,7 @@ const CaptionColors = ({
             mobileControlType="color"
             mobileControlLabel="Text Color"
             disabled={disabled}
+            mixed={isColorMixed}
           />
         </div>
 
@@ -110,6 +143,7 @@ const CaptionColors = ({
             mobileControlType="appearedColor"
             mobileControlLabel="Appeared Color"
             disabled={disabled}
+            mixed={isAppearedColorMixed}
           />
         </div>
 
@@ -122,6 +156,7 @@ const CaptionColors = ({
             mobileControlType="activeColor"
             mobileControlLabel="Active Color"
             disabled={disabled}
+            mixed={isActiveColorMixed}
           />
         </div>
 
@@ -134,6 +169,7 @@ const CaptionColors = ({
             mobileControlType="activeFillColor"
             mobileControlLabel="Active Background Color"
             disabled={disabled}
+            mixed={isActiveFillColorMixed}
           />
         </div>
 
@@ -146,25 +182,10 @@ const CaptionColors = ({
             mobileControlType="backgroundColor"
             mobileControlLabel="Background Color"
             disabled={disabled}
+            mixed={isBackgroundColorMixed}
           />
         </div>
-
-        {/*<div className="flex flex-col gap-2 flex-1">*/}
-        {/*  <div className="flex flex-1 items-center text-xs text-muted-foreground">Emphasize</div>*/}
-        {/*  <ColorPickerField*/}
-        {/*    value={localEmphasizeColor}*/}
-        {/*    onChange={onChangeEmphasizeColor}*/}
-        {/*    gradient={true}*/}
-        {/*    mobileControlType="emphasizeColor"*/}
-        {/*    mobileControlLabel="Emphasize Color"*/}
-        {/*  />*/}
-        {/*</div>*/}
       </div>
-
-      {/*<div className="flex gap-2 items-center">*/}
-      {/*  <div className="flex flex-1 items-center text-sm text-muted-foreground">Preserved Color</div>*/}
-      {/*  <Switch checked={localPreservedColor} onCheckedChange={onChangePreservedColor} />*/}
-      {/*</div>*/}
     </div>
   );
 };

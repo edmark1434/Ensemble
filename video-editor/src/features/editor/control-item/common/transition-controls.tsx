@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Check, ChevronDown } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import useStore from "../../store/use-store";
-import {TRANSITIONS} from "@/features/editor/data/transitions";
+import { useMixedTransitionValue } from "../../hooks/use-mixed-value";
+import { TRANSITIONS } from "@/features/editor/data/transitions";
 
 type TransitionPreset = (typeof TRANSITIONS)[number];
 
@@ -23,7 +24,8 @@ interface ITransitionLike {
 }
 
 interface TransitionControlsProps {
-  transition: ITransitionLike;
+  id: string;
+  ids?: string[];
   disabled?: boolean;
 }
 
@@ -31,48 +33,66 @@ const MIN_DURATION_SECONDS = 0.33;
 const MAX_DURATION_SECONDS = 5;
 
 export const TransitionControls = ({
-  transition,
+  id,
+  ids,
   disabled = false
 }: TransitionControlsProps) => {
-  const selectedPreset =
-    TRANSITIONS.find(
-      (t) =>
-        t.kind === transition.kind &&
-        (t as any).direction === transition.direction
-    ) ?? TRANSITIONS.find((t) => t.kind === transition.kind);
+  const targetIds = ids && ids.length > 0 ? ids : [id];
+  const { transitionsMap } = useStore();
 
-  const [durationSeconds, setDurationSeconds] = useState<number>(
-    Math.round((transition.duration / 1000) * 100) / 100
+  const representative = transitionsMap[targetIds[0]] as ITransitionLike | undefined;
+
+  const { isMixed: isKindMixed } = useMixedTransitionValue<[string, string | null]>(
+    targetIds,
+    (t) => [t.kind, t.direction ?? null]
   );
 
-  useEffect(() => {
-    setDurationSeconds(Math.round((transition.duration / 1000) * 100) / 100);
-  }, [transition.duration]);
+  const { value: durationValue, isMixed: isDurationMixed } = useMixedTransitionValue<number>(
+    targetIds,
+    (t) => t.duration
+  );
 
-  const patchTransition = (patch: Partial<ITransitionLike>) => {
+  if (!representative) return null;
+
+  const selectedPreset = !isKindMixed
+    ? TRANSITIONS.find(
+    (t) =>
+      t.kind === representative.kind &&
+      (t as any).direction === representative.direction
+  ) ?? TRANSITIONS.find((t) => t.kind === representative.kind)
+    : undefined;
+
+  const resolvedDurationSeconds =
+    Math.round(((durationValue ?? representative.duration) / 1000) * 100) / 100;
+
+  const patchTransitions = (patch: Partial<ITransitionLike>) => {
     const canvas = useStore.getState().timeline;
     if (!canvas) return;
 
-    const current = canvas.transitionsMap[transition.id];
-    if (!current) return;
+    let changed = false;
 
-    canvas.transitionsMap = {
-      ...canvas.transitionsMap,
-      [transition.id]: { ...current, ...patch }
-    };
+    targetIds.forEach((tid) => {
+      const current = canvas.transitionsMap[tid];
+      if (!current) return;
 
-    canvas.renderTransitions();
+      // swap + render per id, exactly like the single-item path does
+      canvas.transitionsMap = { ...canvas.transitionsMap, [tid]: { ...current, ...patch } };
+      canvas.renderTransitions();
+      changed = true;
+    });
+
+    if (!changed) return;
+
     canvas.requestRenderAll();
     canvas.updateState({ updateHistory: true, kind: "update:details" });
   };
 
   const handleSelectKind = (t: TransitionPreset) => {
-    patchTransition({ kind: t.kind, direction: (t as any).direction });
+    patchTransitions({ kind: t.kind, direction: (t as any).direction });
   };
 
   const handleChangeDuration = (seconds: number) => {
-    setDurationSeconds(seconds);
-    patchTransition({ duration: Math.round(seconds * 1000) });
+    patchTransitions({ duration: Math.round(seconds * 1000) });
   };
 
   return (
@@ -81,11 +101,13 @@ export const TransitionControls = ({
       <div className="flex flex-col gap-2">
         <TransitionKindSelect
           selected={selectedPreset}
+          isMixed={isKindMixed}
           onSelect={handleSelectKind}
           disabled={disabled}
         />
         <Duration
-          value={durationSeconds}
+          value={resolvedDurationSeconds}
+          isMixed={isDurationMixed}
           onChange={handleChangeDuration}
           disabled={disabled}
         />
@@ -96,13 +118,17 @@ export const TransitionControls = ({
 
 const TransitionKindSelect = ({
   selected,
+  isMixed,
   onSelect,
   disabled
 }: {
   selected?: TransitionPreset;
+  isMixed: boolean;
   onSelect: (t: TransitionPreset) => void;
   disabled?: boolean;
 }) => {
+  const label = isMixed ? "Mixed" : selected?.name ?? "Select transition";
+
   return (
     <div className="flex flex-col gap-2 flex-1">
       <Popover>
@@ -113,7 +139,7 @@ const TransitionKindSelect = ({
             disabled={disabled}
           >
             <div className="w-full overflow-hidden text-left">
-              <p className="truncate">{selected?.name ?? "Select transition"}</p>
+              <p className="truncate">{label}</p>
             </div>
             <ChevronDown className="text-muted-foreground" size={14} />
           </Button>
@@ -131,7 +157,7 @@ const TransitionKindSelect = ({
                 className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
               >
                 <span className="flex-1 truncate">{t.name}</span>
-                {selected?.id === t.id && (
+                {!isMixed && selected?.id === t.id && (
                   <Check size={14} className="flex-none text-muted-foreground" />
                 )}
               </div>
@@ -145,41 +171,40 @@ const TransitionKindSelect = ({
 
 const Duration = ({
   value,
+  isMixed,
   onChange,
   disabled
 }: {
   value: number;
+  isMixed: boolean;
   onChange: (v: number) => void;
   disabled?: boolean;
 }) => {
-  const [localValue, setLocalValue] = useState<string | number>(value);
+  const canonicalValue = isMixed ? "-" : String(value);
+  const [localValue, setLocalValue] = useState<string>(canonicalValue);
 
   useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
+    setLocalValue(canonicalValue);
+  }, [canonicalValue]);
 
   const clamp = (v: number) =>
     Math.min(Math.max(v, MIN_DURATION_SECONDS), MAX_DURATION_SECONDS);
 
   const commit = (v: number) => {
     const clamped = clamp(v);
-    setLocalValue(clamped);
     onChange(clamped);
+    setLocalValue(String(clamped));
   };
 
   const handleBlur = () => {
-    if (localValue === "") {
-      commit(MIN_DURATION_SECONDS);
-      return;
-    }
-    commit(Number(localValue));
+    setLocalValue(canonicalValue);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && localValue !== "") {
-      commit(Number(localValue));
-      (e.target as HTMLInputElement).blur();
-    }
+    if (e.key !== "Enter") return;
+    if (localValue === "" || localValue === "-") return;
+    const num = Number(localValue);
+    if (!Number.isNaN(num)) commit(num);
   };
 
   return (
@@ -190,11 +215,12 @@ const Duration = ({
       <div className="w-full flex gap-2">
         <Input
           className="w-15 text-center text-sm"
-          type="number"
-          step={0.1}
-          min={MIN_DURATION_SECONDS}
-          max={MAX_DURATION_SECONDS}
+          type="text"
+          inputMode="decimal"
           value={localValue}
+          onFocus={() => {
+            if (localValue === "-") setLocalValue("");
+          }}
           onChange={(e) => {
             const newValue = e.target.value;
             if (newValue === "" || /^\d*\.?\d*$/.test(newValue)) {
@@ -207,11 +233,8 @@ const Duration = ({
         />
         <Slider
           id="transition-duration"
-          value={[typeof localValue === "number" ? localValue : Number(localValue) || 0]}
-          onValueChange={(v) => {
-            setLocalValue(v[0]);
-            commit(v[0]);
-          }}
+          value={[isMixed ? MIN_DURATION_SECONDS : value]}
+          onValueChange={(v) => commit(v[0])}
           min={MIN_DURATION_SECONDS}
           max={MAX_DURATION_SECONDS}
           step={0.1}

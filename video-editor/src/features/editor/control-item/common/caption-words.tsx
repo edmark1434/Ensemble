@@ -19,6 +19,7 @@ import { generateId } from "@designcombo/timeline";
 import { debounce } from "lodash";
 import {PresetPicker} from "@/features/editor/control-item/common/preset-picker";
 import {useIsLargeScreen} from "@/hooks/use-media-query";
+import {useMixedValue} from "@/features/editor/hooks/use-mixed-value";
 
 export function regroupCaptions(
   captions: ICaption[],
@@ -185,7 +186,7 @@ export function transformCaptions(
       while (
         currentStart < (allWords[allWords.length - 1]?.end || 0) &&
         wordIndex < allWords.length
-      ) {
+        ) {
         const currentEnd = Math.min(
           currentStart + interval,
           allWords[allWords.length - 1]?.end || 0
@@ -196,7 +197,7 @@ export function transformCaptions(
         while (
           wordIndex < allWords.length &&
           allWords[wordIndex].start < currentEnd
-        ) {
+          ) {
           chunkWords.push(allWords[wordIndex]);
           wordIndex++;
         }
@@ -242,6 +243,10 @@ const OPTIONS_LINES_PER_PAGE = [
 
 const OPTIONS_WORDS_PER_LINE = [
   {
+    label: "Space",
+    value: "singleWord"
+  },
+  {
     label: "Punctuation",
     value: "punctuationOrPause"
   },
@@ -249,10 +254,6 @@ const OPTIONS_WORDS_PER_LINE = [
     label: "Time",
     value: "time"
   },
-  {
-    label: "Single Word",
-    value: "singleWord"
-  }
 ];
 
 const OPTIONS_WORDS_IN_LINE = [
@@ -271,16 +272,21 @@ const OPTIONS_WORDS_IN_LINE = [
 ];
 const CaptionWords = ({
   handleModalAnimation,
-  trackItem
+  trackItem,
+  ids
 }: {
   id: string;
+  ids?: string[];
   handleModalAnimation: (newState?: boolean) => void;
   trackItem: ITrackItem & any;
 }) => {
   const { setFloatingControl } = useLayoutStore();
   const { trackItemsMap, size } = useStore();
+  const targetIds = ids && ids.length > 0 ? ids : [trackItem.id];
+
   const [captionsData, setCaptionsData] = useState<any[]>([]);
   const [captionItemIds, setCaptionItemIds] = useState<string[]>([]);
+  const [captionSourceGroups, setCaptionSourceGroups] = useState<any[][]>([]);
   const [topPosition, setTopPosition] = useState<string>(() => {
     const topValue = trackItem?.details.top;
     if (topValue === undefined) return "800";
@@ -314,14 +320,59 @@ const CaptionWords = ({
   );
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
+  const getPositionLabelForItem = (item: any, canvasHeight: number) => {
+    const top = Number(item?.details?.top) || 0;
+    const elementHeight = Number(item?.details?.height) || 0;
+    const upVal = canvasHeight * 0.1;
+    const middleVal = canvasHeight / 2 - elementHeight / 2;
+    const downVal = canvasHeight * 0.9 - elementHeight;
+
+    if (Math.abs(top - upVal) < 1) return "Top";
+    if (Math.abs(top - middleVal) < 1) return "Middle";
+    if (Math.abs(top - downVal) < 1) return "Bottom";
+    return "Custom";
+  };
+
+  const { isMixed: isLinesPerCaptionMixed } = useMixedValue<number>(
+    targetIds,
+    (item) => item.details?.linesPerCaption ?? 2
+  );
+  const { isMixed: isWordsPerLineMixed } = useMixedValue<string>(
+    targetIds,
+    (item) => item.details?.wordsPerLine ?? "punctuationOrPause"
+  );
+  const { isMixed: isShowObjectMixed } = useMixedValue<string>(
+    targetIds,
+    (item) => item.details?.showObject ?? "page"
+  );
+  const { value: positionLabel, isMixed: isPositionMixed } = useMixedValue<string>(
+    targetIds,
+    (item) => getPositionLabelForItem(item, size.height)
+  );
+
+  // Group the currently-selected caption ids by their source audio, since
+  // each source's captions represent an independent transcript. Regrouping
+  // by lines/words per line has to run per-source, otherwise flattening
+  // words across two different audio tracks produces garbage splits.
   useEffect(() => {
     const groupedCaptions = groupCaptionItems(trackItemsMap);
 
-    const currentGroupItems = groupedCaptions[trackItem.metadata.sourceUrl];
-    const captionItemIds = currentGroupItems?.map((item) => item.id);
-    setCaptionItemIds(captionItemIds);
-    setCaptionsData(currentGroupItems);
-  }, [trackItemsMap, trackItem]);
+    const sourceUrls = Array.from(
+      new Set(
+        targetIds
+          .map((itemId) => trackItemsMap[itemId]?.metadata?.sourceUrl)
+          .filter(Boolean)
+      )
+    );
+
+    const groups = sourceUrls.map((sourceUrl) => groupedCaptions[sourceUrl] || []);
+    const allItems = groups.flat();
+
+    setCaptionSourceGroups(groups);
+    setCaptionItemIds(allItems.map((item) => item.id));
+    setCaptionsData(allItems);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackItemsMap, trackItem, ids]);
 
   useEffect(() => {
     const handleClick = (event: Event) => {
@@ -341,17 +392,23 @@ const CaptionWords = ({
   }, []);
 
   const onChange = ({ type, value }: { type: string; value: any }) => {
-    let newData;
     setData({ ...data, [type]: value });
+
+    let newGroups: any[][] = [];
+
     if (type === "linesPerCaption") {
-      newData = regroupCaptions(captionsData, value);
+      newGroups = captionSourceGroups.map((group) => regroupCaptions(group, value));
     } else if (type === "wordsPerLine") {
-      newData = transformCaptions(captionsData, value);
+      newGroups = captionSourceGroups.map((group) => transformCaptions(group, value));
     } else if (type === "showObject") {
-      newData = captionsData.map((item) => ({
-        ...item,
-        details: { ...item.details, showObject: value }
-      }));
+      newGroups = captionSourceGroups.map((group) =>
+        group.map((item) => ({
+          ...item,
+          details: { ...item.details, showObject: value }
+        }))
+      );
+    } else {
+      return;
     }
 
     dispatch(LAYER_DELETE, {
@@ -359,17 +416,17 @@ const CaptionWords = ({
         trackItemIds: captionsData.map((t) => t.id)
       }
     });
-    console.log(newData);
+
     dispatch(ADD_ITEMS, {
       payload: {
-        trackItems: newData,
-        tracks: [
-          {
+        trackItems: newGroups.flat(),
+        tracks: newGroups
+          .filter((group) => group.length > 0)
+          .map((group) => ({
             id: generateId(),
-            items: newData?.map((item) => item.id) || [],
+            items: group.map((item) => item.id),
             type: "caption"
-          }
-        ]
+          }))
       }
     });
   };
@@ -485,7 +542,6 @@ const CaptionWords = ({
   }
 
   const selectAnimation = (animation: string) => {
-    console.log("animation", animation);
     const payload = captionItemIds.reduce((acc, id) => {
       return {
         ...acc,
@@ -502,16 +558,8 @@ const CaptionWords = ({
   };
 
   const getPositionLabel = () => {
-    const top = parseFloat(topPosition) || 0;
-    const elementHeight = trackItem?.details.height || 0;
-    const upVal = size.height * 0.1;
-    const middleVal = size.height / 2 - elementHeight / 2;
-    const downVal = size.height * 0.9 - elementHeight;
-
-    if (Math.abs(top - upVal) < 1) return "Top";
-    if (Math.abs(top - middleVal) < 1) return "Middle";
-    if (Math.abs(top - downVal) < 1) return "Bottom";
-    return "Custom";
+    if (isPositionMixed) return "Mixed";
+    return positionLabel ?? "Custom";
   };
 
   const isLargeScreen = useIsLargeScreen();
@@ -530,58 +578,40 @@ const CaptionWords = ({
   const [positionOpen, setPositionOpen] = useState(false);
   // const [transitionOpen, setTransitionOpen] = useState(false);
 
+  useEffect(() => {
+    setData({
+      linesPerCaption: trackItem?.details?.linesPerCaption || 2,
+      wordsPerLine: trackItem?.details?.wordsPerLine || "punctuationOrPause",
+      captionsTransitions: "none",
+      showObject: trackItem?.details?.showObject || "page"
+    });
+
+    const topValue = trackItem?.details.top;
+    setTopPosition(
+      topValue === undefined
+        ? "800"
+        : typeof topValue === "string"
+          ? topValue.replace("px", "")
+          : String(topValue)
+    );
+
+    const leftValue = trackItem?.details.left;
+    setLeftPosition(
+      leftValue === undefined
+        ? String((size.width - elementWidth) / 2)
+        : typeof leftValue === "string"
+          ? leftValue.replace("px", "")
+          : String(leftValue)
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackItem?.id]);
+
   return (
     <div className="flex flex-col gap-3">
       <Label className="font-sans text-sm font-semibold">Captions</Label>
 
       <div className="flex flex-col gap-2">
         <div className="flex gap-2">
-          <div className="flex flex-col gap-2 flex-1">
-            <div className="flex flex-1 items-center text-xs text-muted-foreground">
-              Show object
-            </div>
-            <Popover open={showObjectOpen} onOpenChange={setShowObjectOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  className="flex w-full items-center justify-between text-sm"
-                  variant="outline"
-                >
-                  <div className="w-full overflow-hidden text-left">
-                    <p className="truncate">
-                      {
-                        OPTIONS_WORDS_IN_LINE.filter(
-                          (option) => option.value === data.showObject
-                        )[0].label
-                      }
-                    </p>
-                  </div>
-                  <ChevronDown className="text-muted-foreground" size={14} />
-                </Button>
-              </PopoverTrigger>
-
-              <PopoverContent
-                className="z-[300] p-0"
-                style={{ width: "var(--radix-popover-trigger-width)" }}
-              >
-                {OPTIONS_WORDS_IN_LINE.map((option, index) => (
-                  <div
-                    key={index}
-                    onClick={() => {
-                      onChange({ type: "showObject", value: option.value });
-                      setShowObjectOpen(false);
-                    }}
-                    className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
-                  >
-                    {option.label}
-                    {option.value === data.showObject && (
-                      <Check size={14} className="text-muted-foreground" />
-                    )}
-                  </div>
-                ))}
-              </PopoverContent>
-            </Popover>
-          </div>
-
           <div className="flex flex-col gap-2 flex-1">
             <div className="flex flex-1 items-center text-xs text-muted-foreground">
               Position
@@ -671,9 +701,9 @@ const CaptionWords = ({
         <div className="flex gap-2">
           <div className="flex flex-col gap-2 flex-1">
             <div className="flex flex-1 items-center text-xs text-muted-foreground">
-              Lines per caption
+              Object
             </div>
-            <Popover open={linesPerCaptionOpen} onOpenChange={setLinesPerCaptionOpen}>
+            <Popover open={showObjectOpen} onOpenChange={setShowObjectOpen}>
               <PopoverTrigger asChild>
                 <Button
                   className="flex w-full items-center justify-between text-sm"
@@ -681,11 +711,11 @@ const CaptionWords = ({
                 >
                   <div className="w-full overflow-hidden text-left">
                     <p className="truncate">
-                      {
-                        OPTIONS_LINES_PER_PAGE.filter(
-                          (option) => option.value === data.linesPerCaption
-                        )[0].label
-                      }
+                      {isShowObjectMixed
+                        ? "Mixed"
+                        : OPTIONS_WORDS_IN_LINE.filter(
+                          (option) => option.value === data.showObject
+                        )[0].label}
                     </p>
                   </div>
                   <ChevronDown className="text-muted-foreground" size={14} />
@@ -696,17 +726,17 @@ const CaptionWords = ({
                 className="z-[300] p-0"
                 style={{ width: "var(--radix-popover-trigger-width)" }}
               >
-                {OPTIONS_LINES_PER_PAGE.map((option, index) => (
+                {OPTIONS_WORDS_IN_LINE.map((option, index) => (
                   <div
                     key={index}
                     onClick={() => {
-                      onChange({ type: "linesPerCaption", value: option.value });
-                      setLinesPerCaptionOpen(false);
+                      onChange({ type: "showObject", value: option.value });
+                      setShowObjectOpen(false);
                     }}
                     className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
                   >
                     {option.label}
-                    {option.value === data.linesPerCaption && (
+                    {!isShowObjectMixed && option.value === data.showObject && (
                       <Check size={14} className="text-muted-foreground" />
                     )}
                   </div>
@@ -715,9 +745,55 @@ const CaptionWords = ({
             </Popover>
           </div>
 
+          {/*<div className="flex flex-col gap-2 flex-1">*/}
+          {/*  <div className="flex flex-1 items-center text-xs text-muted-foreground">*/}
+          {/*    Lines per caption*/}
+          {/*  </div>*/}
+          {/*  <Popover open={linesPerCaptionOpen} onOpenChange={setLinesPerCaptionOpen}>*/}
+          {/*    <PopoverTrigger asChild>*/}
+          {/*      <Button*/}
+          {/*        className="flex w-full items-center justify-between text-sm"*/}
+          {/*        variant="outline"*/}
+          {/*      >*/}
+          {/*        <div className="w-full overflow-hidden text-left">*/}
+          {/*          <p className="truncate">*/}
+          {/*            {isLinesPerCaptionMixed*/}
+          {/*              ? "Mixed"*/}
+          {/*              : OPTIONS_LINES_PER_PAGE.filter(*/}
+          {/*                (option) => option.value === data.linesPerCaption*/}
+          {/*              )[0].label}*/}
+          {/*          </p>*/}
+          {/*        </div>*/}
+          {/*        <ChevronDown className="text-muted-foreground" size={14} />*/}
+          {/*      </Button>*/}
+          {/*    </PopoverTrigger>*/}
+
+          {/*    <PopoverContent*/}
+          {/*      className="z-[300] p-0"*/}
+          {/*      style={{ width: "var(--radix-popover-trigger-width)" }}*/}
+          {/*    >*/}
+          {/*      {OPTIONS_LINES_PER_PAGE.map((option, index) => (*/}
+          {/*        <div*/}
+          {/*          key={index}*/}
+          {/*          onClick={() => {*/}
+          {/*            onChange({ type: "linesPerCaption", value: option.value });*/}
+          {/*            setLinesPerCaptionOpen(false);*/}
+          {/*          }}*/}
+          {/*          className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"*/}
+          {/*        >*/}
+          {/*          {option.label}*/}
+          {/*          {!isLinesPerCaptionMixed && option.value === data.linesPerCaption && (*/}
+          {/*            <Check size={14} className="text-muted-foreground" />*/}
+          {/*          )}*/}
+          {/*        </div>*/}
+          {/*      ))}*/}
+          {/*    </PopoverContent>*/}
+          {/*  </Popover>*/}
+          {/*</div>*/}
+
           <div className="flex flex-col gap-2 flex-1">
             <div className="flex flex-1 items-center text-xs text-muted-foreground">
-              Words per line
+              Separator
             </div>
             <Popover open={wordsPerLineOpen} onOpenChange={setWordsPerLineOpen}>
               <PopoverTrigger asChild>
@@ -727,11 +803,11 @@ const CaptionWords = ({
                 >
                   <div className="w-full overflow-hidden text-left">
                     <p className="truncate">
-                      {
-                        OPTIONS_WORDS_PER_LINE.filter(
+                      {isWordsPerLineMixed
+                        ? "Mixed"
+                        : OPTIONS_WORDS_PER_LINE.filter(
                           (option) => option.value === data.wordsPerLine
-                        )[0].label
-                      }
+                        )[0].label}
                     </p>
                   </div>
                   <ChevronDown className="text-muted-foreground" size={14} />
@@ -752,7 +828,7 @@ const CaptionWords = ({
                     className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
                   >
                     {option.label}
-                    {option.value === data.wordsPerLine && (
+                    {!isWordsPerLineMixed && option.value === data.wordsPerLine && (
                       <Check size={14} className="text-muted-foreground" />
                     )}
                   </div>
@@ -762,51 +838,51 @@ const CaptionWords = ({
           </div>
         </div>
 
-        <div className="flex gap-2">
-          {/*<div className="flex flex-col gap-2 flex-1">*/}
-          {/*  <div className="flex flex-1 items-center text-xs text-muted-foreground">*/}
-          {/*    Transition*/}
-          {/*  </div>*/}
-          {/*  <Popover>*/}
-          {/*    <PopoverTrigger asChild>*/}
-          {/*      <Button*/}
-          {/*        className="flex w-full items-center justify-between text-sm"*/}
-          {/*        variant="outline"*/}
-          {/*      >*/}
-          {/*        <div className="w-full overflow-hidden text-left">*/}
-          {/*          <p className="truncate">*/}
-          {/*            {selectedOptions.length === 0*/}
-          {/*              ? "None"*/}
-          {/*              : animationOptions.find(*/}
-          {/*              (opt) => opt.key === selectedOptions[0]*/}
-          {/*            )?.label || "None"}*/}
-          {/*          </p>*/}
-          {/*        </div>*/}
-          {/*        <ChevronDown className="text-muted-foreground" size={14} />*/}
-          {/*      </Button>*/}
-          {/*    </PopoverTrigger>*/}
+        {/*<div className="flex gap-2">*/}
+        {/*  <div className="flex flex-col gap-2 flex-1">*/}
+        {/*    <div className="flex flex-1 items-center text-xs text-muted-foreground">*/}
+        {/*      Transition*/}
+        {/*    </div>*/}
+        {/*    <Popover>*/}
+        {/*      <PopoverTrigger asChild>*/}
+        {/*        <Button*/}
+        {/*          className="flex w-full items-center justify-between text-sm"*/}
+        {/*          variant="outline"*/}
+        {/*        >*/}
+        {/*          <div className="w-full overflow-hidden text-left">*/}
+        {/*            <p className="truncate">*/}
+        {/*              {selectedOptions.length === 0*/}
+        {/*                ? "None"*/}
+        {/*                : animationOptions.find(*/}
+        {/*                (opt) => opt.key === selectedOptions[0]*/}
+        {/*              )?.label || "None"}*/}
+        {/*            </p>*/}
+        {/*          </div>*/}
+        {/*          <ChevronDown className="text-muted-foreground" size={14} />*/}
+        {/*        </Button>*/}
+        {/*      </PopoverTrigger>*/}
 
-          {/*    <PopoverContent*/}
-          {/*      className="z-[300] p-0"*/}
-          {/*      style={{ width: "var(--radix-popover-trigger-width)" }}*/}
-          {/*    >*/}
-          {/*      {animationOptions.map((opt) => (*/}
-          {/*        <div*/}
-          {/*          key={opt.key}*/}
-          {/*          onClick={() => toggleOption(opt.key)}*/}
-          {/*          className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"*/}
-          {/*        >*/}
-          {/*          {opt.label}*/}
-          {/*          {(selectedOptions.includes(opt.key) ||*/}
-          {/*            selectedOptions.length === 0 && opt.label === "None") && (*/}
-          {/*            <Check size={14} className="text-muted-foreground" />*/}
-          {/*          )}*/}
-          {/*        </div>*/}
-          {/*      ))}*/}
-          {/*    </PopoverContent>*/}
-          {/*  </Popover>*/}
-          {/*</div>*/}
-        </div>
+        {/*      <PopoverContent*/}
+        {/*        className="z-[300] p-0"*/}
+        {/*        style={{ width: "var(--radix-popover-trigger-width)" }}*/}
+        {/*      >*/}
+        {/*        {animationOptions.map((opt) => (*/}
+        {/*          <div*/}
+        {/*            key={opt.key}*/}
+        {/*            onClick={() => toggleOption(opt.key)}*/}
+        {/*            className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"*/}
+        {/*          >*/}
+        {/*            {opt.label}*/}
+        {/*            {(selectedOptions.includes(opt.key) ||*/}
+        {/*              selectedOptions.length === 0 && opt.label === "None") && (*/}
+        {/*              <Check size={14} className="text-muted-foreground" />*/}
+        {/*            )}*/}
+        {/*          </div>*/}
+        {/*        ))}*/}
+        {/*      </PopoverContent>*/}
+        {/*    </Popover>*/}
+        {/*  </div>*/}
+        {/*</div>*/}
       </div>
     </div>
   );

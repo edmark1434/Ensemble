@@ -13,7 +13,7 @@ const BasicTransition = ({ transition }: { transition: ITransitionLike }) => {
     <div className="flex h-full flex-1 flex-col overflow-hidden min-h-0">
       <ScrollArea className="h-full">
         <div className="flex flex-col gap-6 p-4 min-w-0">
-          <TransitionControls transition={transition} />
+          <TransitionControls id={transition.id} />
         </div>
       </ScrollArea>
     </div>

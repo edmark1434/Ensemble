@@ -58,6 +58,10 @@ export default function Navbar({
   const { isShortcutsModalOpen, setShortcutsModalOpen, projectName, setProjectName } = useStore();
   const [title, setTitle] = useState(projectName);
 
+  useEffect(() => {
+    setTitle(projectName);
+  }, [projectName]);
+
   const handleUndo = () => {
     dispatch(HISTORY_UNDO);
   };
@@ -66,25 +70,23 @@ export default function Navbar({
     dispatch(HISTORY_REDO);
   };
 
-  const debouncedSetProjectName = useCallback(
-    debounce((name: string) => {
-      setProjectName(name);
-    }, 2000),
-    []
-  );
-
-  useEffect(() => {
-    debouncedSetProjectName(title);
-  }, [title, debouncedSetProjectName]);
-
-  useEffect(() => {
-    return () => {
-      debouncedSetProjectName.cancel();
-    };
-  }, [debouncedSetProjectName]);
+  const commitTitle = () => {
+    if (title.trim() === "") {
+      setTitle(projectName);
+      return;
+    }
+    setProjectName(title);
+  };
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setTitle(e.target.value);
+  };
+
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      commitTitle();
+      e.currentTarget.blur();
+    }
   };
 
   const [canUndo, setCanUndo] = useState(false);
@@ -190,6 +192,8 @@ export default function Navbar({
               name="title"
               value={title}
               onChange={handleTitleChange}
+              onBlur={commitTitle}
+              onKeyDown={handleTitleKeyDown}
               width={200}
               inputClassName="h-9 text-sm font-semibold"
             />
