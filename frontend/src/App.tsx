@@ -96,7 +96,6 @@ import MarketplaceTicketManagement from './pages/moderator/marketplace-moderator
 import MarketplaceRestrictions from './pages/moderator/marketplace-moderator/Restrictions'
 import SupportModeratorLayout from './pages/moderator/support-moderator/Layout'
 import SupportModeratorDashboard from './pages/moderator/support-moderator/Dashboard'
-import SupportChat from './pages/moderator/support-moderator/ChatSupport'
 import SupportTicketManagement from './pages/moderator/support-moderator/TicketManagement'
 import SupportDisputes from './pages/moderator/support-moderator/Disputes'
 import SupportUserTeam from './pages/moderator/support-moderator/UserTeam'
@@ -275,7 +274,6 @@ function App() {
 
         <Route path='/moderator/support' element={<SupportModeratorLayout />}>
           <Route index element={<SupportModeratorDashboard />} />
-          <Route path='chat-support' element={<SupportChat />} />
           <Route path='ticket-management' element={<SupportTicketManagement />} />
           <Route path='disputes' element={<SupportDisputes />} />
           <Route path='user-team' element={<SupportUserTeam />} />

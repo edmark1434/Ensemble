@@ -1,5 +1,5 @@
 // src/components/ui/inbox/inbox_functions/inbox_emoji_picker.tsx
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import EmojiPicker, { EmojiStyle } from "emoji-picker-react";
 import type { MessageReact } from "../inbox_dataset";
 
@@ -16,8 +16,20 @@ export const InboxEmojiPicker: React.FC<InboxEmojiPickerProps> = ({
   onClose,
   isSender = false,
 }) => {
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!pickerRef.current?.contains(event.target as Node)) onClose();
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () =>
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+  }, [onClose]);
+
   return (
     <div
+      ref={pickerRef}
       className={`absolute z-50 max-w-[280px] sm:max-w-[300px] rounded-2xl border border-white/10 bg-[#12141f]/95 backdrop-blur-md p-1.5 shadow-2xl ${
         isSender ? "bottom-full mb-2 right-0" : "top-full mt-2 left-0"
       }`}

@@ -48,7 +48,23 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
     }
 
     onClose();
-    window.location.href = notification.reference_path;
+    const referencePath = notification.reference_path || "";
+    const directConversationMatch = referencePath.match(
+      /^\/inbox\/(?!direct(?:\/|$)|marketplace(?:\/|$))([^/?#]+)/
+    );
+    const queryIndex = referencePath.indexOf("?");
+    const conversationId =
+      new URLSearchParams(
+        queryIndex >= 0 ? referencePath.slice(queryIndex + 1) : ""
+      ).get("conversation") || directConversationMatch?.[1];
+
+    if (conversationId) {
+      navigate("/inbox/direct", {
+        state: { conversationId },
+      });
+      return;
+    }
+    navigate(referencePath || "/");
   };
 
   const handleMarkAllRead = () => {

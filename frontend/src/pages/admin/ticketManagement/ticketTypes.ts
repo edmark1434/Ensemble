@@ -76,6 +76,18 @@ export type DisputePermissions = {
   canCancelTakeoverRequest?: boolean;
 };
 
+export type TicketPermissions = {
+  staffId?: string | null;
+  role?: string | null;
+  isAssignee?: boolean;
+  isAdmin?: boolean;
+  canView?: boolean;
+  canAct?: boolean;
+  canAssignOthers?: boolean;
+  canSelfAssign?: boolean;
+  canAssignMyself?: boolean;
+};
+
 export type Dispute = {
   id: number | string;
   number: string;
@@ -265,12 +277,13 @@ export type TicketsOverview = {
   reports: UserReport[];
   staffWorkload: StaffWorkload[];
   recentActivity: TicketActivity[];
+  currentStaffId?: string | number | null;
   alerts: {
     id: string;
     message: string;
     severity: string;
     action?: {
-      tab?: 'overview' | 'tickets' | 'disputes' | 'reports' | 'assignments';
+      tab?: 'overview' | 'tickets' | 'mine' | 'disputes' | 'reports' | 'assignments' | string;
       ticketFilters?: Partial<{
         search: string;
         status: string;
@@ -297,6 +310,7 @@ export type TicketDetail = {
   escalateRoles?: string[];
   /** @deprecated use types */
   categories?: string[];
+  permissions?: TicketPermissions;
   assignableStaff: { staffId: number | string; name: string; role: string }[];
 };
 

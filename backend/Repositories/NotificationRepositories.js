@@ -73,15 +73,16 @@ async function getNotificationsByAccountId(accountId) {
     }
 }
 
-async function markNotificationAsRead(notificationId) {
+async function markNotificationAsRead(notificationId, accountId) {
     try {
         const query = `
             UPDATE notifications
             SET is_read = true
             WHERE notification_id = $1
+              AND account_id = $2
             RETURNING *;
         `;
-        const { rows } = await pool.query(query, [notificationId]);
+        const { rows } = await pool.query(query, [notificationId, accountId]);
         return rows[0];
     } catch (err) {
         console.error("Error marking notification as read:", err);

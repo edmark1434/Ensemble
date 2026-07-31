@@ -75,6 +75,44 @@ async function getAccountByHandle(handle) {
     }
 }
 
+async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 10) {
+    const search = String(handle || '').replace(/^@/, '').trim();
+    if (!search) return [];
+
+    const escapedSearch = search.replace(/[\\%_]/g, '\\$&');
+
+    const result = await pool.query(
+        `SELECT
+            a.account_id,
+            a.display_name,
+            a.handle,
+            f.path AS avatar_preset_url
+         FROM accounts a
+         LEFT JOIN files f ON f.file_id = a.avatar_file_id
+         WHERE a.type = 'User'
+           AND LOWER(a.status) = 'active'
+           AND a.deleted_at IS NULL
+           AND ($3::uuid IS NULL OR a.account_id <> $3::uuid)
+           AND (
+                LOWER(a.handle) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
+                OR LOWER(a.display_name) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
+           )
+         ORDER BY
+           CASE
+             WHEN LOWER(a.handle) = LOWER($2) THEN 0
+             WHEN LOWER(a.display_name) = LOWER($2) THEN 1
+             WHEN LOWER(a.handle) LIKE LOWER($1) || '%' ESCAPE '\\' THEN 2
+             WHEN LOWER(a.display_name) LIKE LOWER($1) || '%' ESCAPE '\\' THEN 3
+             ELSE 4
+           END,
+           a.display_name
+         LIMIT $4`,
+        [escapedSearch, search, excludeAccountId || null, limit]
+    );
+
+    return result.rows;
+}
+
 async function getAccountWalletRepositories(accountId,type = 'account wallets') { 
     try {
         const queryText = `
@@ -234,6 +272,7 @@ module.exports = {
     getAccountById,
     createAccount,
     getAccountByHandle,
+    searchUserAccountsByHandle,
     getAccountWalletRepositories,
     checkAccountId,
     getProfileRepositories,

@@ -61,17 +61,33 @@ const SEVERITY_STYLES: Record<string, string> = {
   success: "border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-200",
 };
 
-export function AlertList({ alerts }: { alerts: Alert[] }) {
+export function AlertList({
+  alerts,
+  onAlertClick,
+}: {
+  alerts: Alert[];
+  onAlertClick?: (alert: Alert) => void;
+}) {
   return (
     <ul className="space-y-2">
-      {alerts.map((a) => (
-        <li
-          key={a.id}
-          className={`rounded-lg border px-3 py-2 text-sm ${SEVERITY_STYLES[a.severity] || SEVERITY_STYLES.info}`}
-        >
-          {a.message}
-        </li>
-      ))}
+      {alerts.map((a) => {
+        const clickable = Boolean(a.action?.tab && onAlertClick);
+        return (
+          <li key={a.id}>
+            <button
+              type="button"
+              disabled={!clickable}
+              onClick={() => clickable && onAlertClick?.(a)}
+              className={`w-full rounded-lg border px-3 py-2 text-left text-sm transition ${
+                SEVERITY_STYLES[a.severity] || SEVERITY_STYLES.info
+              } ${clickable ? 'cursor-pointer hover:brightness-110' : 'cursor-default'}`}
+            >
+              {a.message}
+              {clickable && <span className="mt-0.5 block text-[10px] opacity-70">Open related queue →</span>}
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
 }

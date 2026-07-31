@@ -1,8 +1,9 @@
 // src/components/ui/inbox/inbox_functions/inbox_upload_image.tsx
 import React, { useRef, useState, useCallback } from "react";
-import { X, ImagePlus, Film } from "lucide-react";
+import { X, Paperclip, Film, FileText } from "lucide-react";
+import api from "@/lib/axios";
 
-export type MediaType = "image" | "gif" | "video";
+export type MediaType = "image" | "gif" | "video" | "file";
 
 export interface UploadedMedia {
   id: string;
@@ -10,6 +11,51 @@ export interface UploadedMedia {
   previewUrl: string;
   type: MediaType;
 }
+
+export interface ChatAttachmentPayload {
+  attachment_id: string;
+  attachment_type: MediaType;
+  attachment_key: string;
+  attachment_url: string;
+  attachment_name: string;
+  attachment_size: number;
+}
+
+export const chatAttachmentUrl = (attachmentKey: string): string => {
+  if (/^(?:https?:|blob:|data:)/i.test(attachmentKey)) return attachmentKey;
+  const base = String(import.meta.env.VITE_CLOUDFRONT_URL || "").replace(/\/$/, "");
+  return base ? `${base}/${attachmentKey.replace(/^\/+/, "")}` : attachmentKey;
+};
+
+export const uploadChatAttachment = async (
+  media: UploadedMedia
+): Promise<ChatAttachmentPayload> => {
+  const response = await api.post("/api/files/upload-url", {
+    folder: "chat-attachments",
+    filename: media.file.name,
+    contentType: media.file.type || "application/octet-stream",
+  });
+  const { uploadUrl, key } = response.data || {};
+  if (!uploadUrl || !key) throw new Error("Unable to prepare attachment upload");
+  const uploadResponse = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Type": media.file.type || "application/octet-stream",
+    },
+    body: media.file,
+  });
+  if (!uploadResponse.ok) {
+    throw new Error(`Attachment upload failed (${uploadResponse.status})`);
+  }
+  return {
+    attachment_id: media.id,
+    attachment_type: media.type,
+    attachment_key: key,
+    attachment_url: key,
+    attachment_name: media.file.name,
+    attachment_size: media.file.size,
+  };
+};
 
 interface UseInboxUploadMediaReturn {
   mediaList: UploadedMedia[];
@@ -42,29 +88,29 @@ export const useInboxUploadMedia = (maxFiles = 3): UseInboxUploadMediaReturn => 
       const filesToProcess = selectedFiles.slice(0, availableSlots);
 
       filesToProcess.forEach((file) => {
-        let mediaType: MediaType = "image";
+        let mediaType: MediaType = "file";
         if (file.type.startsWith("video/")) {
           mediaType = "video";
         } else if (file.type === "image/gif" || file.name.toLowerCase().endsWith(".gif")) {
           mediaType = "gif";
+        } else if (
+          file.type.startsWith("image/") ||
+          /\.(?:avif|bmp|jpe?g|png|svg|webp)$/i.test(file.name)
+        ) {
+          mediaType = "image";
         }
 
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const result = event.target?.result as string;
-          if (result) {
-            setMediaList((prev) => [
-              ...prev,
-              {
-                id: `media-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-                file,
-                previewUrl: result, // Persistent Base64 Data URL!
-                type: mediaType,
-              },
-            ]);
-          }
-        };
-        reader.readAsDataURL(file);
+        const previewUrl =
+          mediaType === "file" ? "" : URL.createObjectURL(file);
+        setMediaList((prev) => [
+          ...prev,
+          {
+            id: `media-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            file,
+            previewUrl,
+            type: mediaType,
+          },
+        ]);
       });
 
       e.target.value = "";
@@ -73,11 +119,20 @@ export const useInboxUploadMedia = (maxFiles = 3): UseInboxUploadMediaReturn => 
   );
 
   const removeMedia = useCallback((id: string) => {
-    setMediaList((prev) => prev.filter((item) => item.id !== id));
+    setMediaList((prev) => {
+      const removed = prev.find((item) => item.id === id);
+      if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      return prev.filter((item) => item.id !== id);
+    });
   }, []);
 
   const clearMedia = useCallback(() => {
-    setMediaList([]);
+    setMediaList((current) => {
+      current.forEach((item) => {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      });
+      return [];
+    });
   }, []);
 
   return {
@@ -109,7 +164,7 @@ export const InboxUploadMediaButton: React.FC<InboxUploadMediaButtonProps> = ({
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/*,video/*"
+        accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
         className="hidden"
         onChange={onFileChange}
       />
@@ -117,14 +172,14 @@ export const InboxUploadMediaButton: React.FC<InboxUploadMediaButtonProps> = ({
         type="button"
         onClick={onClick}
         disabled={disabled}
-        title="Upload Image, GIF, or Video (Max 3)"
+        title="Attach images or files (Max 3)"
         className={`rounded-xl p-2.5 transition flex-shrink-0 ${
           disabled
             ? "text-zinc-600 cursor-not-allowed"
             : "text-zinc-400 hover:bg-white/10 hover:text-white"
         }`}
       >
-        <ImagePlus className="h-5 w-5" />
+        <Paperclip className="h-5 w-5" />
       </button>
     </>
   );
@@ -145,7 +200,12 @@ export const InboxUploadMediaPreview: React.FC<InboxUploadMediaPreviewProps> = (
     <div className="px-4 pt-3 flex gap-2 overflow-x-auto flex-shrink-0 inbox-scroll-thin">
       {mediaList.map((media) => (
         <div key={media.id} className="relative inline-block flex-shrink-0">
-          {media.type === "video" ? (
+          {media.type === "file" ? (
+            <div className="h-20 w-40 rounded-xl border border-white/10 bg-white/5 p-3 text-zinc-300">
+              <FileText className="mb-1 h-5 w-5 text-blue-400" />
+              <p className="truncate text-xs">{media.file.name}</p>
+            </div>
+          ) : media.type === "video" ? (
             <div className="relative h-20 w-20 rounded-xl overflow-hidden border border-white/10 bg-black flex items-center justify-center">
               <video src={media.previewUrl} className="h-full w-full object-cover" muted />
               <div className="absolute inset-0 bg-black/30 flex items-center justify-center">

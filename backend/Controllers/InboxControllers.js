@@ -1,118 +1,270 @@
 const {
     createInboxServices,
+    createGroupServices,
+    createEngagementChatServices,
     createMessageServices,
-    updateMessageServices,
-    updateInboxServices,
+    replyMessageServices,
+    reactMessageServices,
+    removeMessageReactionServices,
+    pinMessageServices,
+    unpinMessageServices,
+    editMessageServices,
+    deleteMessageServices,
+    renameConversationServices,
+    updateGroupMemberServices,
+    removeGroupMemberServices,
     getConversationByConvoIdServices,
     getInboxByAccountIdServices,
+    getAllInboxesByAccountIdServices,
     checkInboxByTwoAccountIdsServices,
-    getInboxByTwoAccountIdsServices
-} = require("../Services/InboxServices");
+    getInboxByTwoAccountIdsServices,
+} = require('../Services/InboxServices');
+
+function accountId(req) {
+    return req.session.account_id;
+}
+
+function sendError(res, error) {
+    return res.status(error.statusCode || 400).json({ error: error.message });
+}
 
 async function createInboxController(req, res) {
     try {
-        const result = await createInboxServices(req.body);
-        res.status(201).json(result);
-    } catch (err) {
-        res.status(400).json({ error: err.message });
+        const result = await createInboxServices(req.body, accountId(req));
+        return res.status(201).json(result);
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
+async function createGroupController(req, res) {
+    try {
+        const result = await createGroupServices(req.body, accountId(req));
+        return res.status(201).json(result);
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
+async function createEngagementChatController(req, res) {
+    try {
+        const result = await createEngagementChatServices(req.body, accountId(req));
+        return res.status(201).json(result);
+    } catch (error) {
+        return sendError(res, error);
     }
 }
 
 async function createMessageController(req, res) {
     try {
-        const result = await createMessageServices(req.body);
-        res.status(201).json(result);
-    } catch (err) {
-        res.status(400).json({ error: err.message });
+        const result = await createMessageServices(req.body, accountId(req));
+        return res.status(201).json(result);
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
+async function replyMessageController(req, res) {
+    try {
+        const result = await replyMessageServices(
+            req.params.messageId,
+            req.body,
+            accountId(req)
+        );
+        return res.status(201).json(result);
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
+async function reactMessageController(req, res) {
+    try {
+        const result = await reactMessageServices(
+            req.params.messageId,
+            req.body.react_type,
+            accountId(req)
+        );
+        return res.status(200).json(result);
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
+async function removeMessageReactionController(req, res) {
+    try {
+        const result = await removeMessageReactionServices(
+            req.params.messageId,
+            accountId(req)
+        );
+        return res.status(200).json(result);
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
+async function pinMessageController(req, res) {
+    try {
+        const result = await pinMessageServices(
+            req.params.conversationId,
+            req.params.messageId,
+            accountId(req)
+        );
+        return res.status(200).json(result);
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
+async function unpinMessageController(req, res) {
+    try {
+        const result = await unpinMessageServices(
+            req.params.conversationId,
+            req.params.messageId,
+            accountId(req)
+        );
+        return res.status(200).json(result);
+    } catch (error) {
+        return sendError(res, error);
     }
 }
 
 async function updateMessageController(req, res) {
     try {
-        const { messageId } = req.params;
-        const result = await updateMessageServices(messageId, req.body);
-        if (result) {
-            res.status(200).json({ message: "Message updated successfully" });
-        } else {
-            res.status(404).json({ error: "Message not found" });
-        }
-    } catch (err) {
-        res.status(400).json({ error: err.message });
+        const result = await editMessageServices(
+            req.params.messageId,
+            req.body.message_content,
+            accountId(req)
+        );
+        return res.status(200).json(result);
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
+async function deleteMessageController(req, res) {
+    try {
+        const result = await deleteMessageServices(req.params.messageId, accountId(req));
+        return res.status(200).json(result);
+    } catch (error) {
+        return sendError(res, error);
     }
 }
 
 async function updateInboxController(req, res) {
     try {
-        const { inboxId } = req.params;
-        const result = await updateInboxServices(inboxId, req.body);
-        if (result) {
-            res.status(200).json({ message: "Inbox updated successfully" });
-        }
-        else {
-            res.status(404).json({ error: "Inbox not found" });
-        }
-    } catch (err) {
-        res.status(400).json({ error: err.message });
+        const result = await renameConversationServices(
+            req.params.inboxId,
+            req.body.conversation_name,
+            accountId(req)
+        );
+        return res.status(200).json(result);
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
+async function updateGroupMemberController(req, res) {
+    try {
+        const result = await updateGroupMemberServices(
+            req.params.inboxId,
+            req.params.accountId,
+            req.body,
+            accountId(req)
+        );
+        return res.status(200).json(result);
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
+async function removeGroupMemberController(req, res) {
+    try {
+        const result = await removeGroupMemberServices(
+            req.params.inboxId,
+            req.params.accountId,
+            accountId(req)
+        );
+        return res.status(200).json(result);
+    } catch (error) {
+        return sendError(res, error);
     }
 }
 
 async function getConversationByConvoIdController(req, res) {
     try {
-        const { convoId } = req.params;
-        const result = await getConversationByConvoIdServices(convoId);
-        res.status(200).json(result);
-    } catch (err) {
-        res.status(400).json({ error: err.message });
+        const result = await getConversationByConvoIdServices(
+            req.params.convoId,
+            accountId(req)
+        );
+        return res.status(200).json(result);
+    } catch (error) {
+        return sendError(res, error);
     }
 }
 
 async function getInboxByAccountIdController(req, res) {
     try {
-        const { account_id } = req.session;
-        const conversation_type = req.params.conversation_type; // Get the conversation_type from route parameters
-        console.log('Received account_id:', account_id); // Debug log
-        const result = await getInboxByAccountIdServices(account_id,conversation_type);
-        res.status(200).json(result);
-    } catch (err) {
-        res.status(400).json({ error: err.message });
+        const result = await getInboxByAccountIdServices(
+            accountId(req),
+            req.params.conversation_type
+        );
+        return res.status(200).json(result);
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
+async function getAllInboxesByAccountIdController(req, res) {
+    try {
+        const result = await getAllInboxesByAccountIdServices(accountId(req));
+        return res.status(200).json(result);
+    } catch (error) {
+        return sendError(res, error);
     }
 }
 
 async function checkInboxByTwoAccountIdsController(req, res) {
     try {
-        const { account_id } = req.session;
-        const messagePayload = req.body;
-        const result = await checkInboxByTwoAccountIdsServices(messagePayload, account_id);
-        res.status(200).json(result);
-    } catch (err) {
-        res.status(400).json({ error: err.message });
+        const result = await checkInboxByTwoAccountIdsServices(req.body, accountId(req));
+        return res.status(200).json(result);
+    } catch (error) {
+        return sendError(res, error);
     }
 }
 
-async function getInboxByTwoAccountIdsController(req, res) { 
+async function getInboxByTwoAccountIdsController(req, res) {
     try {
-        const { account_id } = req.session;
-        const recepientId = req.params.accountId;
-        const response = await getInboxByTwoAccountIdsServices(account_id, recepientId, 'direct');
-        if (!response) {
-            return res.status(404).json({ error: 'Inbox not found' });
-        }
-        res.status(200).json({
+        const inbox = await getInboxByTwoAccountIdsServices(
+            accountId(req),
+            req.params.accountId
+        );
+        return res.status(200).json({
             message: 'Inbox retrieved successfully',
-            inbox: response
+            inbox,
         });
-    }catch (err) {
-        res.status(400).json({ error: err.message });
+    } catch (error) {
+        return sendError(res, error);
     }
 }
 
 module.exports = {
     createInboxController,
+    createGroupController,
+    createEngagementChatController,
     createMessageController,
+    replyMessageController,
+    reactMessageController,
+    removeMessageReactionController,
+    pinMessageController,
+    unpinMessageController,
     updateMessageController,
+    deleteMessageController,
     updateInboxController,
+    updateGroupMemberController,
+    removeGroupMemberController,
     getConversationByConvoIdController,
     getInboxByAccountIdController,
-    checkInboxByTwoAccountIdsController,   
-    getInboxByTwoAccountIdsController
-}
+    getAllInboxesByAccountIdController,
+    checkInboxByTwoAccountIdsController,
+    getInboxByTwoAccountIdsController,
+};

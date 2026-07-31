@@ -1,5 +1,6 @@
 import type { SupportTicket } from './ticketTypes';
 import {
+  ESCALATE_ROLE_OPTIONS,
   FORUM_TICKET_TYPES,
   JOBS_TICKET_TYPES,
   MARKETPLACE_TICKET_TYPES,
@@ -8,10 +9,11 @@ import {
   ticketTypeOf,
 } from './ticketTypes';
 
-export type TicketQueueFilter = 'all' | 'Support' | 'Forums' | 'Marketplace' | 'Jobs and Gigs';
+export type TicketQueueFilter = 'all' | 'Support' | 'Forums' | 'Marketplace' | 'Jobs and Gigs' | 'Admin';
 export type TicketAssigneeFilter = 'all' | 'assigned' | 'unassigned';
 export type TicketFlagFilter = 'all' | 'awaiting' | 'escalated' | 'open_only' | 'has_report' | 'has_dispute';
 export type TicketSortKey = 'priority_desc' | 'priority_asc' | 'updated_desc' | 'updated_asc' | 'created_desc' | 'created_asc';
+export type TicketDesk = 'admin' | 'support';
 
 export type TicketFilterState = {
   search: string;
@@ -26,7 +28,7 @@ export type TicketFilterState = {
   escalatedToRole: string;
   flag: TicketFlagFilter;
   channel: string;
-  /** Admin-only view toggle */
+  /** Admin desk only: show only Admin-owned tickets */
   adminTicketsOnly: boolean;
   sort: TicketSortKey;
 };
@@ -52,7 +54,39 @@ export const TICKET_QUEUE_OPTIONS: { value: TicketQueueFilter; label: string; ty
   { value: 'Forums', label: 'Forums', types: FORUM_TICKET_TYPES },
   { value: 'Marketplace', label: 'Marketplace', types: MARKETPLACE_TICKET_TYPES },
   { value: 'Jobs and Gigs', label: 'Jobs and Gigs', types: JOBS_TICKET_TYPES },
+  { value: 'Admin', label: 'Admin', types: TICKET_TYPE_OPTIONS },
 ];
+
+/** Queues visible on each desk (Support never owns Admin tickets). */
+export function queueOptionsForDesk(desk: TicketDesk, includeAdminQueue = desk === 'admin') {
+  if (desk === 'support' || !includeAdminQueue) {
+    return TICKET_QUEUE_OPTIONS.filter((q) => q.value !== 'Admin');
+  }
+  return TICKET_QUEUE_OPTIONS;
+}
+
+export function isAdminStaffRole(role: string | null | undefined) {
+  const r = String(role || '').toLowerCase();
+  return r === 'admin' || r === 'administrator';
+}
+
+/** Escalate-to options for filters — Support cannot target Admin. */
+export function escalateRoleFilterOptions(desk: TicketDesk): readonly string[] {
+  if (desk === 'support') {
+    return ESCALATE_ROLE_OPTIONS.filter((r) => !isAdminStaffRole(r));
+  }
+  return ESCALATE_ROLE_OPTIONS;
+}
+
+export function filterModeratorsForDesk(
+  moderators: { staffId: number | string; name: string; role: string }[],
+  desk: TicketDesk
+) {
+  if (desk === 'support') {
+    return moderators.filter((m) => !isAdminStaffRole(m.role));
+  }
+  return moderators;
+}
 
 export const TICKET_SORT_OPTIONS: { value: TicketSortKey; label: string }[] = [
   { value: 'priority_desc', label: 'Priority (High → Low)' },
@@ -79,8 +113,7 @@ export function queueForType(type: string): TicketQueueFilter {
 }
 
 function isAdminRole(role: string | null | undefined) {
-  const r = String(role || '').toLowerCase();
-  return r === 'admin' || r === 'administrator';
+  return isAdminStaffRole(role);
 }
 
 export function isAdminTicket(ticket: SupportTicket): boolean {
@@ -156,18 +189,24 @@ export function filterTickets(tickets: SupportTicket[], filters: TicketFilterSta
 
   const filtered = tickets.filter((t) => {
     if (filters.adminTicketsOnly && !isAdminTicket(t)) return false;
+
+    if (filters.queue === 'Admin') {
+      if (!isAdminTicket(t)) return false;
+    } else if (filters.queue !== 'all' && !queueTypes.has(ticketTypeOf(t))) {
+      return false;
+    }
+
     if (filters.status !== 'all' && t.status !== filters.status) return false;
     if (filters.priority !== 'all' && t.priority !== filters.priority) return false;
 
     const type = ticketTypeOf(t);
-    if (filters.queue !== 'all' && !queueTypes.has(type)) return false;
     if (filters.type !== 'all' && type !== filters.type) return false;
 
     if (filters.assignee === 'assigned' && !t.assignee) return false;
     if (filters.assignee === 'unassigned' && t.assignee) return false;
     if (
       filters.assigneeStaffId !== 'all' &&
-      String(t.assignee?.staffId || '') !== String(filters.assigneeStaffId)
+      String(t.assignee?.staffId || '').toLowerCase() !== String(filters.assigneeStaffId).toLowerCase()
     ) {
       return false;
     }
@@ -208,7 +247,8 @@ export function countActiveTicketFilters(filters: TicketFilterState): number {
   if (filters.escalatedToRole !== 'all') n += 1;
   if (filters.flag !== 'all') n += 1;
   if (filters.channel !== 'all') n += 1;
-  if (filters.adminTicketsOnly) n += 1;
+  // Admin queue already counted; don't double-count the toggle when queue is Admin
+  if (filters.adminTicketsOnly && filters.queue !== 'Admin') n += 1;
   if (filters.sort !== DEFAULT_TICKET_FILTERS.sort) n += 1;
   return n;
 }

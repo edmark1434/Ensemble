@@ -1,7 +1,9 @@
 // src/components/ui/inbox/inbox_components/inbox_list.tsx
 import React from "react";
-import { MessageCircle } from "lucide-react";
+import { AlertCircle, MessageCircle } from "lucide-react";
 import type { Inbox } from "../inbox_dataset";
+import useGlobalState from "@/lib/global_state";
+import useChatState from "../../chat_bubble/chat_state";
 
 interface InboxListProps {
   conversations: Inbox[];
@@ -11,8 +13,11 @@ interface InboxListProps {
   searchQuery: string;
   getConversationName: (inbox: Inbox) => string;
   getAvatar: (inbox: Inbox) => string;
+  getAccountName?: (accountId: string) => string | undefined;
   formatTime: (dateString?: string | Date) => string;
   isCollapsed?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
 }
 
 export const InboxList: React.FC<InboxListProps> = ({
@@ -23,13 +28,39 @@ export const InboxList: React.FC<InboxListProps> = ({
   searchQuery,
   getConversationName,
   getAvatar,
+  getAccountName,
   formatTime,
   isCollapsed = false,
+  error,
+  onRetry,
 }) => {
+  const currentAccountId = useGlobalState((state) => state.user?.account_id);
+  const onlineAccounts = useChatState((state) => state.onlineAccounts);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center p-4 text-center">
+        <AlertCircle className="mb-2 h-8 w-8 text-red-400" />
+        {!isCollapsed && (
+          <>
+            <p className="text-xs text-zinc-400">{error}</p>
+            <button
+              type="button"
+              onClick={onRetry}
+              className="mt-3 rounded-lg bg-white/10 px-3 py-1.5 text-xs text-white hover:bg-white/15"
+            >
+              Try again
+            </button>
+          </>
+        )}
       </div>
     );
   }
@@ -53,9 +84,26 @@ export const InboxList: React.FC<InboxListProps> = ({
         const isActive = selectedConversation?._id === inbox._id;
         const name = getConversationName(inbox);
         const avatar = getAvatar(inbox);
-        const lastMessage = inbox.last_message || "No messages yet";
+        const readableLastMessage = inbox.last_message
+          ?.replace(/^\[video-call:(?:missed|ended)\]\s*/, "");
+        const lastMessage = readableLastMessage
+          ? `${
+              String(inbox.last_message_sender_id) ===
+              String(currentAccountId)
+                ? "You"
+                : getAccountName?.(String(inbox.last_message_sender_id)) ||
+                  getConversationName(inbox)
+            }: ${readableLastMessage}`
+          : "No messages yet";
         const time = formatTime(inbox.last_message_time || inbox.updated_at);
         const unreadCount = inbox.unread_count || 0;
+        const otherMember = inbox.members?.find(
+          (member) =>
+            String(member.account_id) !== String(currentAccountId)
+        );
+        const isOnline = otherMember
+          ? Boolean(onlineAccounts[String(otherMember.account_id)])
+          : false;
 
         return (
           <button
@@ -84,7 +132,11 @@ export const InboxList: React.FC<InboxListProps> = ({
                 }}
               />
               {inbox.conversation_type === "direct" && (
-                <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-[#0d0f1a]" />
+                <span
+                  className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-[#0d0f1a] ${
+                    isOnline ? "bg-green-500" : "bg-zinc-600"
+                  }`}
+                />
               )}
               {isCollapsed && unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-blue-500 ring-2 ring-[#0d0f1a]" />
@@ -117,7 +169,7 @@ export const InboxList: React.FC<InboxListProps> = ({
                   </p>
                   {unreadCount > 0 && (
                     <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-blue-500 text-[10px] font-medium text-white px-1 mt-1">
-                      {unreadCount}
+                      {unreadCount > 99 ? "99+" : unreadCount}
                     </span>
                   )}
                 </div>
