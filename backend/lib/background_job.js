@@ -7,6 +7,9 @@ const {
     updateTopUpStatus,
     updateWalletFromTopUp,
     updatePaymentMethodStatus,
+    updatePlatformWalletBalance,
+    getPlatformWallet,
+    createCreditTransaction 
 } = require("../Repositories/PaymentRepositories");
 
 const {
@@ -17,6 +20,12 @@ const {
     endSubscription,
     savePaymentMethod
 } = require("../Services/PaymentServices");
+
+const {
+    createNotification
+} = require("../Repositories/NotificationRepositories");
+
+const {getIo} = require('../lib/websocket');
 
 const config = {
     auth: {
@@ -70,6 +79,7 @@ async function getPaymentRequestByReference(referenceId) {
 }
 
 async function reconcilePayment(payment) {
+    const io = getIo();
     try {
         let paymentRequest = null;
 
@@ -128,10 +138,30 @@ async function reconcilePayment(payment) {
                         "INACTIVE"
                     );
                 }
+                const notification = await createNotification({
+                    message: `Your payment for ${payment.reference_id} has failed. Please try again.`,
+                    is_read: false,
+                    reference_table: "payments",
+                    reference_prefix: "PAYMENT",
+                    reference_path: `${process.env.FRONTEND_URL}/transactions`,
+                    reference_id: payment.payment_id,
+                    user_id: payment.user_id
+                });
+                io.to(notification.account_id).emit("notification", notification);
                 break;
 
             case "EXPIRED":
                 status = "EXPIRED";
+                const notificationExpired = await createNotification({
+                    message: `Your payment for ${payment.reference_id} has expired. Please try again.`,
+                    is_read: false,
+                    reference_table: "payments",
+                    reference_prefix: "PAYMENT",
+                    reference_path: `${process.env.FRONTEND_URL}/transactions`,
+                    reference_id: payment.payment_id,
+                    user_id: payment.user_id
+                });
+                io.to(notificationExpired.account_id).emit("notification", notificationExpired);
                 break;
 
             default:
@@ -172,19 +202,39 @@ async function reconcilePayment(payment) {
                 payment.payment_type === "TOPUP" &&
                 status === "PAID"
             ) {
-                await updateWalletFromTopUp(
+                const userWallet = await updateWalletFromTopUp(
                     payment.user_id,
                     result.credits_granted
                 );
-
                 await savePaymentMethod(paymentRequest);
+                const getPlatformWalletDetails = await getPlatformWallet();
+
+                const userTransaction = await createCreditTransaction({
+                    type: "Fund Transfer",
+                    amount_credits: result.credits_granted,
+                    status: "completed",
+                    source_wallet_id: getPlatformWalletDetails.wallet_id,
+                    destination_wallet_id: userWallet.wallet_id,
+                    fee_transaction_id: null,
+                    reference_table: "payments",
+                    reference_id: payment.payment_id
+                });
+                await updatePlatformWalletBalance(result.credits_granted, 'add');
+                const notification = await createNotification({
+                    message: `Your wallet has been credited with ${result.credits_granted} credits.`,
+                    is_read: false,
+                    reference_table: "credit_transactions",
+                    reference_prefix: "TOPUP",
+                    reference_path: `${payment.redirect_url || `${process.env.FRONTEND_URL}/transactions`}`,
+                    reference_id: userTransaction.credit_transaction_id,
+                    user_id: payment.user_id
+                });
+                const io = getIo();
+                io.to(notification.account_id).emit("notification", notification);
             }
         }
     } catch (err) {
-        console.error(
-            `Failed to reconcile ${payment.reference_id}`,
-            err.response?.data || err.message
-        );
+        console.error("Reconciliation error details:",err);
     }
 }
 

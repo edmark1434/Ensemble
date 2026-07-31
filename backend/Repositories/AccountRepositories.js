@@ -64,7 +64,10 @@ async function createAccount({
 
 async function getAccountByHandle(handle) {
     try{
-        const result = await pool.query('SELECT handle FROM accounts WHERE handle = $1', [handle]);
+        const result = await pool.query(
+            'SELECT account_id, handle, display_name FROM accounts WHERE LOWER(handle) = LOWER($1)',
+            [handle]
+        );
         return result.rows[0];
     } catch (err) {
         console.error(`Error fetching account with handle ${handle}:`, err);

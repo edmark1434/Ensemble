@@ -24,6 +24,7 @@ import {
   Users,
   Video,
   X,
+  Hand,
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
@@ -31,16 +32,49 @@ import api from '@/lib/axios';
 import useGlobalState from '@/lib/global_state';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import TableFilterBar, { uniqueOptions } from '../userTeam/components/TableFilterBar';
-import { ListingCaseDetailModal, ReportCaseDetailModal } from './CaseDetailModals';
-import ModeratorDisputeDetailModal from '@/pages/moderator/shared/ModeratorDisputeDetailModal';
-import { VerificationModal } from '../userTeam/components/AccountModals';
-import type { PlatformUserAccount } from '../userTeam/userTeamTypes';
 import type {
   ModerationActivity,
   ModerationCase,
   ModeratorProfile,
   ModerationOverview,
 } from './moderationTypes';
+import type { Dispute, UserReport } from '../ticketManagement/ticketTypes';
+import DisputesTab from './DisputesTab';
+import ReportsTab from './ReportsTab';
+import ListingApprovalsTab from './ListingApprovalsTab';
+import IdentityVerificationTab from './IdentityVerificationTab';
+import MyCasesTab from './MyCasesTab';
+
+const CLOSED_DISPUTE_STATUSES = new Set([
+  'resolved',
+  'closed',
+  'sanctioned',
+  'dismissed',
+  'withdrawn',
+]);
+
+function disputeToModerationCase(d: Dispute): ModerationCase {
+  return {
+    id: String(d.id),
+    source: 'dispute',
+    type: 'Dispute',
+    priority: d.priority || 'Medium',
+    target: d.title || d.number,
+    targetHandle: d.number,
+    targetType: 'Dispute',
+    reason: d.reason || d.title || 'Dispute case',
+    description: d.reason,
+    referenceNumber: d.number,
+    assignedRole: d.assignee?.role || null,
+    assignedStaffId: d.assignee?.staffId ?? null,
+    assignedStaffName: d.assignee?.name || null,
+    openedAt: d.openedAt,
+    status: d.status,
+    canTakeOver: false,
+    canEdit: true,
+    canDelete: true,
+  };
+}
 
 const STAFF_ROLE_OPTIONS = [
   { value: 'Support Moderator', label: 'Support Moderator' },
@@ -53,13 +87,16 @@ const STAFF_ROLE_OPTIONS = [
 const STAFF_STATUS_OPTIONS = ['Active', 'Suspended', 'Locked', 'Banned', 'Inactive'] as const;
 
 type TabId = 'overview' | 'activity' | 'cases' | 'management';
+type CaseQueue = 'mine' | 'disputes' | 'reports' | 'listings' | 'identity';
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
   { id: 'activity', label: 'Activity log', icon: ScrollText },
-  { id: 'cases', label: 'Pending cases', icon: FileWarning },
+  { id: 'cases', label: 'Pending cases', icon: Gavel },
   { id: 'management', label: 'Management', icon: Settings2 },
 ];
+
+const CASE_QUEUES: CaseQueue[] = ['mine', 'disputes', 'reports', 'listings', 'identity'];
 
 type ManagementSection = 'automated' | 'moderators' | 'video' | 'forum';
 
@@ -110,18 +147,31 @@ function statusClass(status: string) {
 export default function ModerationPage() {
   const { user } = useGlobalState();
   const [searchParams, setSearchParams] = useSearchParams();
-  const paramTab = searchParams.get('tab') as TabId | null;
+  const rawTab = searchParams.get('tab');
   const paramSection = searchParams.get('section') as ManagementSection | null;
+  const paramQueue = searchParams.get('queue') as CaseQueue | null;
   const validTabs: TabId[] = ['overview', 'activity', 'cases', 'management'];
   const validSections = MANAGEMENT_SECTIONS.map((s) => s.id);
-  const initialTab = paramTab && validTabs.includes(paramTab) ? paramTab : 'overview';
+  // Legacy ?tab=disputes|reports → Pending cases sub-queues
+  const legacyQueue =
+    rawTab === 'disputes' || rawTab === 'reports' ? (rawTab as CaseQueue) : null;
+  const initialTab: TabId =
+    legacyQueue || (rawTab === 'cases' && paramQueue && CASE_QUEUES.includes(paramQueue))
+      ? 'cases'
+      : rawTab && validTabs.includes(rawTab as TabId)
+        ? (rawTab as TabId)
+        : 'overview';
   const initialSection =
     paramSection && validSections.includes(paramSection) ? paramSection : 'automated';
+  const initialCaseQueue: CaseQueue =
+    legacyQueue ||
+    (paramQueue && CASE_QUEUES.includes(paramQueue) ? paramQueue : 'mine');
 
   const [data, setData] = useState<ModerationOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [tab, setTab] = useState<TabId>(initialTab);
+  const [caseQueue, setCaseQueue] = useState<CaseQueue>(initialCaseQueue);
   const [mgmtSection, setMgmtSection] = useState<ManagementSection>(initialSection);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<ModerationActivity | null>(null);
@@ -147,12 +197,19 @@ export default function ModerationPage() {
   }, []);
 
   useEffect(() => {
-    if (paramTab && validTabs.includes(paramTab)) setTab(paramTab);
-    else if (!paramTab) setTab('overview');
+    if (rawTab === 'disputes' || rawTab === 'reports') {
+      setTab('cases');
+      setCaseQueue(rawTab);
+      setSearchParams({ tab: 'cases', queue: rawTab }, { replace: true });
+      return;
+    }
+    if (rawTab && validTabs.includes(rawTab as TabId)) setTab(rawTab as TabId);
+    else if (!rawTab) setTab('overview');
+    if (paramQueue && CASE_QUEUES.includes(paramQueue)) setCaseQueue(paramQueue);
     if (paramSection && validSections.includes(paramSection)) setMgmtSection(paramSection);
-  }, [paramTab, paramSection]);
+  }, [rawTab, paramSection, paramQueue]);
 
-  const switchTab = (id: TabId, section?: ManagementSection) => {
+  const switchTab = (id: TabId, section?: ManagementSection, queue?: CaseQueue) => {
     setTab(id);
     if (id === 'management') {
       const nextSection = section || mgmtSection;
@@ -160,7 +217,24 @@ export default function ModerationPage() {
       setSearchParams({ tab: id, section: nextSection }, { replace: true });
       return;
     }
+    if (id === 'cases') {
+      const nextQueue = queue || caseQueue || 'mine';
+      setCaseQueue(nextQueue);
+      setSearchParams(
+        nextQueue === 'mine' ? { tab: id } : { tab: id, queue: nextQueue },
+        { replace: true }
+      );
+      return;
+    }
     setSearchParams(id === 'overview' ? {} : { tab: id }, { replace: true });
+  };
+
+  const switchCaseQueue = (queue: CaseQueue) => {
+    setCaseQueue(queue);
+    setSearchParams(
+      queue === 'mine' ? { tab: 'cases' } : { tab: 'cases', queue },
+      { replace: true }
+    );
   };
 
   const switchMgmtSection = (section: ManagementSection) => {
@@ -234,9 +308,14 @@ export default function ModerationPage() {
             >
               <Icon className="h-4 w-4" />
               {label}
-              {id === 'cases' && summary.yourPendingCases > 0 && (
+              {id === 'cases' &&
+                (summary.yourPendingCases > 0 ||
+                  summary.disputeQueueCount > 0 ||
+                  (summary.openReports ?? 0) > 0) && (
                 <span className="rounded-full bg-amber-500/20 px-1.5 text-[10px] font-bold text-amber-200">
-                  {summary.yourPendingCases}
+                  {summary.yourPendingCases +
+                    summary.disputeQueueCount +
+                    (summary.openReports ?? 0)}
                 </span>
               )}
             </button>
@@ -280,7 +359,11 @@ export default function ModerationPage() {
         {tab === 'cases' && (
           <CasesTab
             cases={data.pendingCases}
+            disputes={(data.disputes || []) as Dispute[]}
+            reports={(data.reports || []) as UserReport[]}
             staffId={data.currentStaffId ?? user?.staffId ?? user?.staff_id ?? null}
+            queue={caseQueue}
+            onQueueChange={switchCaseQueue}
             onRefresh={() => void load(true)}
           />
         )}
@@ -308,7 +391,7 @@ function OverviewTab({
 }: {
   data: ModerationOverview;
   onViewActivity: (a: ModerationActivity) => void;
-  onGoTab: (t: TabId, section?: ManagementSection) => void;
+  onGoTab: (t: TabId, section?: ManagementSection, queue?: CaseQueue) => void;
 }) {
   const s = data.summary;
 
@@ -319,8 +402,8 @@ function OverviewTab({
           <StatCard
             label="Your pending cases"
             value={s.yourPendingCases}
-            sub={`${s.disputeQueueCount} open disputes · open My cases`}
-            icon={FileWarning}
+            sub={`${s.openReports ?? 0} open reports · ${s.disputeQueueCount} disputes`}
+            icon={Gavel}
             onClick={() => onGoTab('cases')}
           />
           <StatCard
@@ -339,14 +422,28 @@ function OverviewTab({
 
         <div className="grid gap-3 sm:grid-cols-4">
           {[
-            ['Forum groups', s.forumGroupsActive],
-            ['Discussions', s.forumDiscussions],
-            ['Disputes', s.disputeQueueCount],
-            ['Soft-deleted', s.softDeletedAccounts],
-          ].map(([label, val]) => (
+            ['Forum groups', s.forumGroupsActive, null as TabId | null, undefined as CaseQueue | undefined],
+            ['Discussions', s.forumDiscussions, null, undefined],
+            ['Disputes', s.disputeQueueCount, 'cases' as TabId, 'disputes' as CaseQueue],
+            ['Reports', s.openReports ?? 0, 'cases' as TabId, 'reports' as CaseQueue],
+          ].map(([label, val, go, queue]) => (
             <div
               key={String(label)}
-              className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3"
+              role={go ? 'button' : undefined}
+              tabIndex={go ? 0 : undefined}
+              onClick={go ? () => onGoTab(go as TabId, undefined, queue as CaseQueue | undefined) : undefined}
+              onKeyDown={
+                go
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        onGoTab(go as TabId, undefined, queue as CaseQueue | undefined);
+                      }
+                    }
+                  : undefined
+              }
+              className={`rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 ${
+                go ? 'cursor-pointer transition hover:border-rose-500/30 hover:bg-rose-500/5' : ''
+              }`}
             >
               <p className="text-[10px] uppercase text-zinc-600">{label}</p>
               <p className="text-xl font-bold text-white">{val}</p>
@@ -505,7 +602,7 @@ function CasesPreview({
   cases: ModerationCase[];
   onViewAll: () => void;
 }) {
-  const moderation = cases.filter((c) => c.source === 'report' || c.source === 'dispute');
+  const moderation = cases.filter((c) => c.source === 'report');
   const listings = cases.filter((c) => c.source === 'listing');
   const identity = cases.filter((c) => c.source === 'identity');
   const preview = (moderation.length ? moderation : identity.length ? identity : listings).slice(
@@ -519,8 +616,7 @@ function CasesPreview({
         <div>
           <h2 className="text-sm font-semibold text-white">Pending cases</h2>
           <p className="text-xs text-zinc-500">
-            {moderation.length} report/dispute · {listings.length} listing · {identity.length}{' '}
-            identity
+            Reports, disputes, listings, and identity — open from Pending cases
           </p>
         </div>
         <button type="button" onClick={onViewAll} className="text-xs text-rose-400 hover:underline">
@@ -529,7 +625,7 @@ function CasesPreview({
       </div>
       <CasesTableBody
         cases={preview}
-        emptyLabel="No open reports, disputes, or listing reviews."
+        emptyLabel="No open reports, listing reviews, or identity checks."
       />
     </section>
   );
@@ -666,64 +762,43 @@ function ActivityTab({
 
 function CasesTab({
   cases,
+  disputes,
+  reports,
   staffId,
+  queue,
+  onQueueChange,
   onRefresh,
 }: {
   cases: ModerationCase[];
+  disputes: Dispute[];
+  reports: UserReport[];
   staffId?: string | number | null;
+  queue: CaseQueue;
+  onQueueChange: (queue: CaseQueue) => void;
   onRefresh: () => void;
 }) {
-  type CaseQueue = 'mine' | 'moderation' | 'listings' | 'identity';
-  type MineCategory = 'all' | 'report' | 'dispute' | 'listing' | 'identity';
-  const [queue, setQueue] = useState<CaseQueue>('mine');
-  const [mineCategory, setMineCategory] = useState<MineCategory>('all');
-  const [search, setSearch] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState('all');
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
-  const [selected, setSelected] = useState<ModerationCase | null>(null);
-  const [mode, setMode] = useState<'view' | 'delete' | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [identityUser, setIdentityUser] = useState<PlatformUserAccount | null>(null);
-  const [identityLoading, setIdentityLoading] = useState(false);
-
   const myStaffId = staffId != null && staffId !== '' ? String(staffId) : null;
 
-  const myCases = useMemo(
-    () =>
-      myStaffId
-        ? cases.filter(
-            (c) =>
-              c.assignedStaffId != null &&
-              String(c.assignedStaffId) === myStaffId &&
-              (c.source === 'report' ||
-                c.source === 'dispute' ||
-                c.source === 'listing' ||
-                c.source === 'identity')
-          )
-        : [],
-    [cases, myStaffId]
-  );
-  const myCasesByCategory = useMemo(() => {
-    if (mineCategory === 'all') return myCases;
-    return myCases.filter((c) => c.source === mineCategory);
-  }, [myCases, mineCategory]);
-  const myCategoryCounts = useMemo(
-    () => ({
-      all: myCases.length,
-      report: myCases.filter((c) => c.source === 'report').length,
-      dispute: myCases.filter((c) => c.source === 'dispute').length,
-      listing: myCases.filter((c) => c.source === 'listing').length,
-      identity: myCases.filter((c) => c.source === 'identity').length,
-    }),
-    [myCases]
-  );
-  const moderationCases = useMemo(
-    () => cases.filter((c) => c.source === 'report' || c.source === 'dispute'),
-    [cases]
-  );
+  const myCases = useMemo(() => {
+    if (!myStaffId) return [];
+    const fromQueues = cases.filter(
+      (c) =>
+        c.assignedStaffId != null &&
+        String(c.assignedStaffId).toLowerCase() === myStaffId.toLowerCase() &&
+        (c.source === 'report' || c.source === 'listing' || c.source === 'identity')
+    );
+    const fromDisputes = disputes
+      .filter(
+        (d) =>
+          d.assignee != null &&
+          String(d.assignee.staffId).toLowerCase() === myStaffId.toLowerCase() &&
+          !CLOSED_DISPUTE_STATUSES.has(String(d.status).toLowerCase())
+      )
+      .map(disputeToModerationCase);
+    return [...fromQueues, ...fromDisputes].sort(
+      (a, b) => new Date(b.openedAt || 0).getTime() - new Date(a.openedAt || 0).getTime()
+    );
+  }, [cases, disputes, myStaffId]);
   const listingCases = useMemo(
     () => cases.filter((c) => c.source === 'listing'),
     [cases]
@@ -732,188 +807,27 @@ function CasesTab({
     () => cases.filter((c) => c.source === 'identity'),
     [cases]
   );
-  const scopedCases =
-    queue === 'mine'
-      ? myCasesByCategory
-      : queue === 'listings'
-        ? listingCases
-        : queue === 'identity'
-          ? identityCases
-          : moderationCases;
+  const openDisputeCount = useMemo(
+    () =>
+      disputes.filter(
+        (d) =>
+          !['resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn'].includes(
+            String(d.status).toLowerCase()
+          )
+      ).length,
+    [disputes]
+  );
+  const openReportCount = useMemo(
+    () =>
+      reports.filter(
+        (r) => !['resolved', 'closed', 'dismissed'].includes(String(r.status).toLowerCase())
+      ).length,
+    [reports]
+  );
 
   const switchQueue = (next: CaseQueue) => {
     if (next === queue) return;
-    setQueue(next);
-    setMineCategory('all');
-    setSearch('');
-    setPriorityFilter('all');
-    setTypeFilter('all');
-    setRoleFilter('all');
-    setStatusFilter('all');
-    setSortBy('newest');
-    setSelected(null);
-    setMode(null);
-    setIdentityUser(null);
-  };
-
-  const priorityOptions = useMemo(
-    () => uniqueOptions(scopedCases.map((c) => c.priority)),
-    [scopedCases]
-  );
-  const typeOptions = useMemo(() => {
-    if (queue === 'mine' && mineCategory === 'all') {
-      return uniqueOptions([
-        'Report',
-        'Dispute',
-        'Listing review',
-        'Identity verification',
-        ...scopedCases.map((c) => c.type),
-      ]);
-    }
-    return uniqueOptions(scopedCases.map((c) => c.type));
-  }, [scopedCases, queue, mineCategory]);
-  const roleOptions = useMemo(
-    () => uniqueOptions(scopedCases.map((c) => c.assignedRole).filter(Boolean) as string[]),
-    [scopedCases]
-  );
-  const statusOptions = useMemo(
-    () => uniqueOptions(scopedCases.map((c) => c.status)),
-    [scopedCases]
-  );
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let list = scopedCases.filter((c) => {
-      if (priorityFilter !== 'all' && c.priority.toLowerCase() !== priorityFilter) return false;
-      if (typeFilter !== 'all' && c.type.toLowerCase() !== typeFilter) return false;
-      if (roleFilter !== 'all' && (c.assignedRole || '').toLowerCase() !== roleFilter) return false;
-      if (statusFilter !== 'all' && c.status.toLowerCase() !== statusFilter) return false;
-      if (!q) return true;
-      return (
-        c.target.toLowerCase().includes(q) ||
-        c.targetHandle.toLowerCase().includes(q) ||
-        c.type.toLowerCase().includes(q) ||
-        c.reason.toLowerCase().includes(q) ||
-        (c.source || '').toLowerCase().includes(q) ||
-        (c.assignedRole || '').toLowerCase().includes(q) ||
-        (c.assignedStaffName || '').toLowerCase().includes(q) ||
-        (c.referenceNumber || '').toLowerCase().includes(q)
-      );
-    });
-
-    list = [...list].sort((a, b) => {
-      switch (sortBy) {
-        case 'oldest':
-          return new Date(a.openedAt || 0).getTime() - new Date(b.openedAt || 0).getTime();
-        case 'priority': {
-          const rank = (p: string) => (p === 'high' ? 0 : p === 'medium' ? 1 : 2);
-          return rank(a.priority.toLowerCase()) - rank(b.priority.toLowerCase());
-        }
-        case 'type':
-          return a.type.localeCompare(b.type);
-        case 'target':
-          return a.target.localeCompare(b.target);
-        case 'newest':
-        default:
-          return new Date(b.openedAt || 0).getTime() - new Date(a.openedAt || 0).getTime();
-      }
-    });
-
-    return list;
-  }, [scopedCases, search, priorityFilter, typeFilter, roleFilter, statusFilter, sortBy]);
-
-  const q = search.trim();
-  const hasFilters =
-    q ||
-    (queue === 'mine' && mineCategory !== 'all') ||
-    priorityFilter !== 'all' ||
-    typeFilter !== 'all' ||
-    roleFilter !== 'all' ||
-    statusFilter !== 'all';
-
-  const closeModal = () => {
-    setSelected(null);
-    setMode(null);
-    setIdentityUser(null);
-  };
-
-  const openIdentityVerification = async (c: ModerationCase) => {
-    if (!c.accountId) {
-      showErrorToast('This identity case has no linked account');
-      return;
-    }
-    setSelected(c);
-    setMode('view');
-    setIdentityLoading(true);
-    setIdentityUser(null);
-    try {
-      const res = await api.get('/api/admin/users-management');
-      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to load user');
-      const user = (res.data.data.users as PlatformUserAccount[]).find(
-        (u) => String(u.accountId) === String(c.accountId)
-      );
-      if (!user) throw new Error('User not found for this verification case');
-      setIdentityUser(user);
-    } catch (err: unknown) {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        (err instanceof Error ? err.message : 'Failed to open verification');
-      showErrorToast(message);
-      closeModal();
-    } finally {
-      setIdentityLoading(false);
-    }
-  };
-
-  const handleTakeOver = async (c: ModerationCase) => {
-    if (!c.canTakeOver) return;
-    setBusyId(c.id);
-    try {
-      const res = await api.post(`/api/admin/moderation/cases/${c.id}/take-over`, {
-        source: c.source,
-      });
-      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to take over case');
-      showSuccessToast(res.data.message || 'Case assigned to you');
-      onRefresh();
-    } catch (err: unknown) {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        (err instanceof Error ? err.message : 'Failed to take over case');
-      showErrorToast(message);
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!selected) return;
-    setBusyId(selected.id);
-    try {
-      const res = await api.delete(`/api/admin/moderation/cases/${selected.id}`, {
-        data: { source: selected.source },
-      });
-      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to delete case');
-      showSuccessToast(res.data.message || 'Case deleted');
-      closeModal();
-      onRefresh();
-    } catch (err: unknown) {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        (err instanceof Error ? err.message : 'Failed to delete case');
-      showErrorToast(message);
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const clearFilters = () => {
-    setMineCategory('all');
-    setSearch('');
-    setPriorityFilter('all');
-    setTypeFilter('all');
-    setRoleFilter('all');
-    setStatusFilter('all');
-    setSortBy('newest');
+    onQueueChange(next);
   };
 
   return (
@@ -928,10 +842,16 @@ function CasesTab({
               icon: UserCog,
             },
             {
-              id: 'moderation' as const,
-              label: 'Reports & disputes',
-              count: moderationCases.length,
+              id: 'disputes' as const,
+              label: 'Disputes',
+              count: openDisputeCount,
               icon: Scale,
+            },
+            {
+              id: 'reports' as const,
+              label: 'Reports',
+              count: openReportCount,
+              icon: FileWarning,
             },
             {
               id: 'listings' as const,
@@ -971,211 +891,22 @@ function CasesTab({
       </div>
 
       {queue === 'mine' && (
-        <div className="flex flex-wrap gap-1.5">
-          {(
-            [
-              { id: 'all' as const, label: 'All assigned' },
-              { id: 'report' as const, label: 'Reports' },
-              { id: 'dispute' as const, label: 'Disputes' },
-              { id: 'listing' as const, label: 'Listing approvals' },
-              { id: 'identity' as const, label: 'Identity verification' },
-            ] as const
-          ).map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => {
-                setMineCategory(id);
-                setTypeFilter('all');
-              }}
-              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
-                mineCategory === id
-                  ? 'border-rose-400/40 bg-rose-500/15 text-rose-100'
-                  : 'border-white/[0.08] bg-white/[0.02] text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              {label}
-              <span className="ml-1.5 tabular-nums text-[10px] opacity-70">
-                {myCategoryCounts[id]}
-              </span>
-            </button>
-          ))}
-        </div>
+        <MyCasesTab cases={myCases} currentStaffId={myStaffId} onUpdated={onRefresh} />
       )}
-
-      <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#14151c]">
-        <div className="flex flex-col gap-3 border-b border-white/[0.06] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center">
-          <div className="relative min-w-[200px] flex-1 sm:max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={
-                queue === 'listings'
-                  ? 'Search listing / submitter…'
-                  : queue === 'identity'
-                    ? 'Search name / username…'
-                    : queue === 'mine'
-                      ? 'Search my reports, disputes, listings, identity…'
-                      : 'Search report / dispute / target…'
-              }
-              className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
-            />
-          </div>
-          <p className="text-xs text-zinc-500 sm:order-last sm:w-full lg:order-none lg:w-auto">
-            {filtered.length}{' '}
-            {queue === 'listings'
-              ? 'listing'
-              : queue === 'identity'
-                ? 'review'
-                : queue === 'mine'
-                  ? 'assigned case'
-                  : 'case'}
-            {filtered.length === 1 ? '' : 's'}
-            {hasFilters ? ` matching filters (of ${scopedCases.length})` : ''}
-          </p>
-          <div className="hidden flex-1 lg:block" />
-          <TableFilterBar
-            filters={[
-              {
-                id: 'priority',
-                label: 'Priority',
-                value: priorityFilter,
-                options: priorityOptions,
-              },
-              ...(queue === 'moderation' || queue === 'mine'
-                ? [
-                    {
-                      id: 'type',
-                      label: 'Type',
-                      value: typeFilter,
-                      options: typeOptions,
-                    },
-                  ]
-                : []),
-              ...(queue !== 'mine'
-                ? [
-                    {
-                      id: 'role',
-                      label: 'Assigned title',
-                      value: roleFilter,
-                      options: roleOptions,
-                    },
-                  ]
-                : []),
-              { id: 'status', label: 'Status', value: statusFilter, options: statusOptions },
-            ]}
-            sort={{
-              value: sortBy,
-              options: [
-                { value: 'newest', label: 'Newest first' },
-                { value: 'oldest', label: 'Oldest first' },
-                { value: 'priority', label: 'Priority (High first)' },
-                ...(queue === 'mine' || queue === 'moderation'
-                  ? [{ value: 'type', label: 'Type A–Z' }]
-                  : []),
-                { value: 'target', label: 'Target A–Z' },
-              ],
-            }}
-            onFilterChange={(id, value) => {
-              if (id === 'priority') setPriorityFilter(value);
-              if (id === 'type') setTypeFilter(value);
-              if (id === 'role') setRoleFilter(value);
-              if (id === 'status') setStatusFilter(value);
-            }}
-            onSortChange={setSortBy}
-            onClear={clearFilters}
-          />
-        </div>
-        <CasesTableBody
-          cases={filtered}
-          emptyLabel={
-            queue === 'listings'
-              ? 'No marketplace listings awaiting approval.'
-              : queue === 'identity'
-                ? 'No identity verification reviews pending.'
-                : queue === 'mine'
-                  ? myStaffId
-                    ? hasFilters
-                      ? 'No assigned cases match your filters.'
-                      : 'No cases are assigned to you yet. Take over a report, dispute, listing, or identity review to see it here.'
-                    : 'Staff session required to show your assigned cases.'
-                  : 'No open reports or disputes match your filters.'
-          }
-          busyId={busyId || (identityLoading ? selected?.id : null)}
+      {queue === 'disputes' && <DisputesTab disputes={disputes} onUpdated={onRefresh} />}
+      {queue === 'reports' && <ReportsTab reports={reports} onUpdated={onRefresh} />}
+      {queue === 'listings' && (
+        <ListingApprovalsTab
+          cases={listingCases}
           currentStaffId={myStaffId}
-          onView={(c) => {
-            if (c.source === 'identity') {
-              void openIdentityVerification(c);
-              return;
-            }
-            setSelected(c);
-            setMode('view');
-          }}
-          onDelete={
-            queue === 'identity'
-              ? undefined
-              : (c) => {
-                  if (c.source === 'identity') return;
-                  setSelected(c);
-                  setMode('delete');
-                }
-          }
-          onTakeOver={handleTakeOver}
-        />
-      </section>
-
-      {selected && mode === 'view' && selected.source === 'dispute' && (
-        <ModeratorDisputeDetailModal
-          disputeId={selected.id}
-          endpointBase="/api/admin/disputes"
-          accent="rose"
-          onClose={closeModal}
           onUpdated={onRefresh}
         />
       )}
-
-      {selected && mode === 'view' && selected.source === 'report' && (
-        <ReportCaseDetailModal
-          reportId={selected.id}
-          onClose={closeModal}
+      {queue === 'identity' && (
+        <IdentityVerificationTab
+          cases={identityCases}
+          currentStaffId={myStaffId}
           onUpdated={onRefresh}
-        />
-      )}
-
-      {selected && mode === 'view' && selected.source === 'listing' && (
-        <ListingCaseDetailModal
-          caseItem={selected}
-          onClose={closeModal}
-          onUpdated={onRefresh}
-        />
-      )}
-
-      {identityLoading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 md:pl-[260px]">
-          <Loader2 className="h-8 w-8 animate-spin text-rose-400" />
-        </div>
-      )}
-
-      {identityUser && selected?.source === 'identity' && (
-        <VerificationModal
-          entityName={identityUser.name}
-          accountId={identityUser.accountId}
-          verification={identityUser.verification}
-          onClose={closeModal}
-          onChanged={() => {
-            closeModal();
-            onRefresh();
-          }}
-        />
-      )}
-
-      {selected && mode === 'delete' && (
-        <CaseDeleteModal
-          caseItem={selected}
-          busy={busyId === selected.id}
-          onClose={closeModal}
-          onConfirm={() => void handleDelete()}
         />
       )}
     </div>
@@ -1268,7 +999,7 @@ function CasesTableBody({
   const isMine = (c: ModerationCase) =>
     currentStaffId != null &&
     c.assignedStaffId != null &&
-    String(c.assignedStaffId) === currentStaffId;
+    String(c.assignedStaffId).toLowerCase() === String(currentStaffId).toLowerCase();
 
   return (
     <div className="overflow-x-auto">
@@ -1337,7 +1068,7 @@ function CasesTableBody({
                         {busyId === c.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          <UserPlus className="h-4 w-4" />
+                          <Hand className="h-4 w-4" />
                         )}
                       </button>
                     )}
@@ -2557,50 +2288,6 @@ function ForumSection({
           </div>
         </section>
       )}
-    </div>
-  );
-}
-
-function CaseDeleteModal({
-  caseItem,
-  busy,
-  onClose,
-  onConfirm,
-}: {
-  caseItem: ModerationCase;
-  busy?: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 md:pl-[260px]">
-      <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
-      <div className="relative w-full max-w-md rounded-2xl border border-white/[0.1] bg-[#12131a] p-6 shadow-2xl">
-        <h2 className="text-lg font-bold text-white">Delete this case?</h2>
-        <p className="mt-2 text-sm text-zinc-400">
-          Remove “{caseItem.type}” for {caseItem.target} from the pending queue.
-          {caseItem.source === 'listing'
-            ? ' The listing will be marked as rejected.'
-            : ' The record will be soft-deleted.'}
-        </p>
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onConfirm}
-            className="rounded-xl bg-red-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
-          >
-            {busy ? 'Deleting…' : 'Delete case'}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

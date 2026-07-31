@@ -27,6 +27,8 @@ exports.up = (pgm) => {
     fee_transaction_id: { type: 'uuid' },
     source_wallet_id: { type: 'uuid', notNull: true },
     destination_wallet_id: { type: 'uuid', notNull: true },
+    reference_table: { type: 'varchar(65)' },
+    reference_id: { type: 'uuid'},
   });
 
   pgm.addConstraint('credit_transactions', 'credit_transactions_source_wallet_id_fkey', 'FOREIGN KEY (source_wallet_id) REFERENCES wallets(wallet_id)');

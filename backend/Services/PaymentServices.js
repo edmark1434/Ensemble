@@ -1,6 +1,7 @@
 const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
 const { pool } = require('../lib/database');
+const {getIo} = require('../lib/websocket');
 
 const {
     getPaymentByUserIdAndStatus,
@@ -17,7 +18,10 @@ const {
     createPaymentMethodForUser,
     paymentMethodExists,
     getAllPaymentMethodsByUserId,
-    updatePaymentMethodStatus
+    updatePaymentMethodStatus,
+    getPlatformWallet,
+    createCreditTransaction,
+    updatePlatformWalletBalance,
 } = require("../Repositories/PaymentRepositories");
 const {
     getSubcriptionByUserIdRepositories,
@@ -29,11 +33,15 @@ const {
     getSubscriptionInvoiceByCycleIdRepositories,
     getFreePlanRepositories,
     getSubscriptionByXenditPlanIdRepositories,
-    updateSubscriptionInvoiceAmountRepositories
+    updateSubscriptionInvoiceAmountRepositories,
+    getSubscriptionBySubscriptionIdRepositories
 } = require("../Repositories/SubscriptionRepositories");
 
-const redisClient = require('../lib/redis');
+const {
+    createNotification
+} = require("../Repositories/NotificationRepositories");
 
+const redisClient = require('../lib/redis');
 async function xenditWebhookHandler(req, res) {
     console.log("📬 Xendit Webhook Received:", req.body);
 
@@ -56,7 +64,11 @@ async function xenditWebhookHandler(req, res) {
                     getSubcriptionByUserIdRepositories(data.metadata.userId),
                     getPlandetailsByPlanIdRepositories(data.metadata.newPlanId)
                 ]);
-
+                let anchorDate = new Date(subscriptionDetails[0].next_billing_at);
+                if(anchorDate.getDate()> 28){
+                    anchorDate.setDate(28);
+                }
+                anchorDate = anchorDate.toISOString();
                 const subscription = subscriptionDetails?.[0];
 
                 if (!subscription)
@@ -68,9 +80,7 @@ async function xenditWebhookHandler(req, res) {
                     schedule: {
                         interval: planDetails.billing_period,
                         interval_count: 1,
-                        anchor_date: new Date(
-                            subscription.next_billing_at
-                        ).toISOString(),
+                        anchor_date: anchorDate,
                         retry_interval: "DAY",
                         retry_interval_count: 1,
                         total_retry: 3,
@@ -129,7 +139,7 @@ async function xenditWebhookHandler(req, res) {
                     );
 
                     console.log("✅ Recurring plan updated.");
-
+                    
                     await updateSubscriptionBySubscriptionId(
                         response.data.metadata.subscriptionId,
                         {
@@ -137,11 +147,22 @@ async function xenditWebhookHandler(req, res) {
                             payment_token_id: data.payment_token_id
                         }
                     );
-
+                    
+                    const notification = await createNotification({
+                        message: `Your subscription has been successfully upgraded to ${planDetails.name}.`,
+                        is_read: false,
+                        reference_table: "subscriptions",
+                        reference_prefix: "SUBSCRIPTION",
+                        reference_path: `${process.env.FRONTEND_URL}/credits-subscriptions`,
+                        reference_id: subscription.subscription_id,
+                        user_id: subscription.user_id
+                    });
                     await updateSubscriptionInvoiceAmountRepositories(
                         subscription.xendit_plan_id,
                         response.data.amount
                     );
+                    const io = getIo();
+                    io.to(notification.account_id).emit("notification", notification);
 
                 } catch (err) {
 
@@ -172,7 +193,17 @@ async function xenditWebhookHandler(req, res) {
                 customer_id: data.customer_id,
                 processed_at: new Date()
             });
-
+            const notification = await createNotification({
+                message: `Your subscription payment of ${data.request_amount / 100} ${data.currency} has been successfully processed.`,
+                is_read: false,
+                reference_table: "payments",
+                reference_prefix: "SUBSCRIPTION",
+                reference_path: `${process.env.FRONTEND_URL}/transactions`,
+                reference_id: data.payment_id,
+                user_id: data.metadata?.userId
+            });
+            const io = getIo();
+            io.to(notification.account_id).emit("notification", notification);
             return res.status(200).json({
                 message: "Subscription payment processed."
             });
@@ -207,9 +238,8 @@ async function xenditWebhookHandler(req, res) {
             await pool.query("BEGIN");
 
             try {
-
+                const getPlatformWalletDetails = await getPlatformWallet();
                 await savePaymentMethod(data);
-
                 await updatePaymentByReference(payment.reference_id, {
                     status: "PAID",
                     payment_id: data.payment_id,
@@ -225,12 +255,33 @@ async function xenditWebhookHandler(req, res) {
                         data.payment_id,
                         data.channel_code
                     );
-
-                await updateWalletFromTopUp(
+                
+                const userWallet = await updateWalletFromTopUp(
                     payment.user_id,
                     result.credits_granted
                 );
-
+                const userTransaction = await createCreditTransaction({
+                    type: "Fund Transfer",
+                    amount_credits: result.credits_granted,
+                    status: "completed",
+                    source_wallet_id: getPlatformWalletDetails.wallet_id,
+                    destination_wallet_id: userWallet.wallet_id,
+                    fee_transaction_id: null,
+                    reference_table: "payments",
+                    reference_id: payment.payment_id
+                });
+                await updatePlatformWalletBalance(result.credits_granted, 'add');
+                const notification = await createNotification({
+                    message: `Your wallet has been credited with ${result.credits_granted} credits.`,
+                    is_read: false,
+                    reference_table: "credit_transactions",
+                    reference_prefix: "TOPUP",
+                    reference_path: `${payment.redirect_url || `${process.env.FRONTEND_URL}/transactions`}`,
+                    reference_id: userTransaction.credit_transaction_id,
+                    user_id: payment.user_id,
+                });
+                const io = getIo();
+                io.to(notification.account_id).emit("notification", notification);
                 await pool.query("COMMIT");
 
                 return res.status(200).json({
@@ -264,7 +315,17 @@ async function xenditWebhookHandler(req, res) {
                 data.payment_id ?? data.latest_payment_id,
                 data.channel_code
             );
-
+            const notification = await createNotification({
+                message: `Your payment of ${data.request_amount / 100} ${data.currency} has failed or expired. Please try again.`,
+                is_read: false,
+                reference_table: "payments",
+                reference_prefix: "TOPUP",
+                reference_path: `${process.env.FRONTEND_URL}/transactions`,
+                reference_id: payment.payment_id,
+                user_id: payment.user_id
+            });
+            const io = getIo();
+            io.to(notification.account_id).emit("notification", notification);
             return res.status(200).json({
                 message: "Payment updated."
             });
@@ -273,12 +334,7 @@ async function xenditWebhookHandler(req, res) {
         return res.sendStatus(200);
 
     } catch (err) {
-
-        console.error(
-            "Webhook Error:",
-            JSON.stringify(err.response?.data ?? err, null, 2)
-        );
-
+        console.error("Webhook Error:", err);
         // Return 200 so Xendit doesn't continuously retry the webhook
         return res.sendStatus(200);
     }
@@ -857,7 +913,7 @@ async function TopUpPaymentByPaymentMethod(req, res) {
                 processed_at: new Date(),
                 redirect_url: redirectUrl,
             }
-
+  
             await Promise.all([
                 updatePaymentByReference(response.data.reference_id, updatePaymentPayload),
             ]);
@@ -895,6 +951,20 @@ async function subscriptionWebhookHandler(req,res){
         await updateSubscriptionBySubscriptionId(data.metadata.subscriptionId, {
             status: 'ACTIVE',
         });
+        const subscriptionDetails = await getSubscriptionBySubscriptionIdRepositories(data.metadata.subscriptionId);
+        const planDetails = await getPlandetailsByPlanIdRepositories(subscriptionDetails.plan_id);
+        const notification = await createNotification({
+            message: `Your subscription plan ${planDetails.name} has Activated.`,
+            is_read: false,
+            reference_table: "subscriptions",
+            reference_prefix: "SUBSCRIPTION",
+            reference_path: `${process.env.FRONTEND_URL}/credits-subscriptions`,
+            reference_id: subscriptionDetails.subscription_id,
+            user_id: subscriptionDetails.user_id
+        });
+        const io = getIo();
+        io.to(notification.account_id).emit("notification", notification);
+
     }else if(event === 'recurring.cycle.failed'){
         const checkCycleId = await getSubscriptionInvoiceByCycleIdRepositories(data.id);
         if(data.type === 'IMMEDIATE'){
@@ -921,6 +991,7 @@ async function subscriptionWebhookHandler(req,res){
                 });
             }
         }
+
         await endSubscription(subscriptionId);
     }
     else if(event === 'recurring.cycle.created'){
@@ -992,13 +1063,30 @@ async function subscriptionWebhookHandler(req,res){
             }
             const updateSubscription = await updateSubscriptionBySubscriptionId(subscriptionId, subscriptionUpdatePayload);
         }
+        const getSubscriptionDetails = await getSubscriptionBySubscriptionIdRepositories(subscriptionId);
+        const planDetails = await getPlandetailsByPlanIdRepositories(getSubscriptionDetails.plan_id);
+        const notification = await createNotification({
+            message: `Your subscription payment for plan ${planDetails.name} has succeeded.`,
+            is_read: false,
+            reference_table: "subscriptions",
+            reference_prefix: "SUBSCRIPTION",
+            reference_path: `${process.env.FRONTEND_URL}/credits-subscriptions`,
+            reference_id: subscriptionId,
+            user_id: getSubscriptionDetails.user_id
+        });
+        const io = getIo();
+        io.to(notification.account_id).emit("notification", notification);
     }
     res.status(200).json({ message: "Subscription payment processing not implemented yet" });
 }
 
 async function processSubscriptionPayment(req, res) {
     console.log("💳 Processing Subscription Payment:", req.body);
-    let anchorDate = new Date().toISOString();
+    let anchorDate = new Date();
+    if (anchorDate.getDate() > 28) {
+        anchorDate.setDate(28);
+    }
+    anchorDate = anchorDate.toISOString();
     let hasNoTrial = true;
     const { userId } = req.session;
     if (!userId) {
@@ -1121,6 +1209,7 @@ async function processSubscriptionPayment(req, res) {
             }
             const updateSubscription = await updateSubscriptionBySubscriptionId(response.data.metadata.subscriptionId, subscriptionUpdatePayload);
             console.log("Updating subscription with payload:", subscriptionUpdatePayload);
+
             return res.status(200).json({
                 message: "Recurring plan created successfully",
                 subscriptionUpdate: updateSubscription
@@ -1142,6 +1231,7 @@ async function cancelSubscription(req,res){
     const {userId} = req.body;
 
     const subscriptionDetails = await getSubcriptionByUserIdRepositories(userId);
+    const planDetails = await getPlandetailsByPlanIdRepositories(subscriptionDetails[0]?.plan_id);
     if (!subscriptionDetails) {
         return res.status(404).json({ error: "No subscription found for this user" });
     }
@@ -1166,6 +1256,17 @@ async function cancelSubscription(req,res){
                 canceled_at: new Date().toISOString(),
             })
         ]);
+        const notification = await createNotification({
+            message: `Your subscription plan ${planDetails.name} has been inactivated.`,
+            is_read: false,
+            reference_table: "subscriptions",
+            reference_prefix: "SUBSCRIPTION",
+            reference_path: `${process.env.FRONTEND_URL}/credits-subscriptions`,
+            reference_id: subscriptionDetails[0].subscription_id,
+            user_id: userId
+        });
+        const io = getIo();
+        io.to(notification.account_id).emit("notification", notification);
         console.log("Subscription canceled successfully");
         res.status(200).json({
             message: "Subscription canceled successfully",
@@ -1183,6 +1284,7 @@ async function cancelSubscription(req,res){
 
 async function endSubscription(subscriptionId) {
     const planDetails = await getFreePlanRepositories();
+    const subscriptionDetails = await getSubscriptionBySubscriptionIdRepositories(subscriptionId);
     try{
         await updateSubscriptionBySubscriptionId(subscriptionId, {
             status: "ACTIVE",
@@ -1193,6 +1295,18 @@ async function endSubscription(subscriptionId) {
             current_period_start: null,
             current_period_end: null,
         });
+        const notification = await createNotification({
+            message: `Your subscription has been downgraded to the free plan.`,
+            is_read: false,
+            reference_table: "subscriptions",
+            reference_prefix: "SUBSCRIPTION",
+            reference_path: `${process.env.FRONTEND_URL}/credits-subscriptions`,
+            reference_id: subscriptionId,
+            user_id: subscriptionDetails?.user_id || null
+        });
+        const io = getIo();
+        io.to(notification.account_id).emit("notification", notification);
+        console.log("Subscription ended and downgraded to free plan successfully");
     }catch(err){
         console.error(err.response?.data || err);
         throw err;
@@ -1282,13 +1396,17 @@ async function updateSubscriptionPayment(req, res) {
         console.log("Subscription Details:", subscriptionDetails);
         console.log("Plan Details:", planDetails);
         try {
-
+            let anchorDate = new Date(subscriptionDetails[0].next_billing_at);
+            if (anchorDate.getDate() > 28) {
+                anchorDate.setDate(28);
+            }
+            anchorDate = anchorDate.toISOString();
             const payload = {
                 amount: planDetails.amount_php_cents,
                 schedule: {
                     interval: planDetails.billing_period,
                     interval_count: 1,
-                    anchor_date: subscriptionDetails[0].next_billing_at,
+                    anchor_date: anchorDate,
                     retry_interval: "DAY",
                     retry_interval_count: 1,
                     total_retry: 3,
@@ -1352,7 +1470,19 @@ async function updateSubscriptionPayment(req, res) {
             }
             const updateSubscription = await updateSubscriptionBySubscriptionId(response.data.metadata.subscriptionId, subscriptionUpdatePayload);
             await updateSubscriptionInvoiceAmountRepositories(subscriptionDetails[0].xendit_plan_id, response.data.amount);
+            const currentPlanDetails = await getPlandetailsByPlanIdRepositories(subscriptionDetails[0].plan_id);
             console.log("Updating subscription with payload:", subscriptionUpdatePayload);
+            const notification = await createNotification({
+                message: `Your subscription downgrade from ${currentPlanDetails.name} to ${planDetails.name} has been initiated. The change will take effect in the next billing cycle.`,
+                is_read: false,
+                reference_table: "subscriptions",
+                reference_prefix: "SUBSCRIPTION",
+                reference_path: `${process.env.FRONTEND_URL}/credits-subscriptions`,
+                reference_id: subscriptionDetails[0].subscription_id,
+                user_id: subscriptionDetails[0].user_id
+            });
+            const io = getIo();
+            io.to(notification.account_id).emit("notification", notification);
             return res.status(200).json({
                 message: `Recurring plan created successfully. Your subscription downgrade will take effect in the next billing cycle ${subscriptionDetails[0].next_billing_at}.`,
                 subscriptionUpdate: updateSubscription

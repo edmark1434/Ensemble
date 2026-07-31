@@ -2,6 +2,8 @@ const {
     discussionPayload,
     createForumDiscussionServices,
     getForumDiscussionByGroupId,
+    getForumDiscussionFeedServices,
+    getForumDiscussionByGroupIdPaginated,
     getForumDiscussionByIdServices,
     getForumDiscussionsByUserIdServices,
     updateForumDiscussionServices,
@@ -13,7 +15,7 @@ const {
 
 async function createForumDiscussionController(req, res) {
     try {
-        const discussion = await createForumDiscussionServices(req.body);
+        const discussion = await createForumDiscussionServices(req.body, req.session);
         res.status(201).json(discussion);
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -22,8 +24,11 @@ async function createForumDiscussionController(req, res) {
 
 async function getForumDiscussionByGroupIdController(req, res) {
     try {
-        const discussion = await getForumDiscussionByGroupId(req.params.groupId);
-        res.status(200).json(discussion);
+        const result = await getForumDiscussionByGroupIdPaginated(
+            req.params.groupId,
+            req.query
+        );
+        res.status(200).json(result);
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
@@ -38,10 +43,26 @@ async function getForumDiscussionByIdController(req, res) {
     }
 }
 
+async function getForumDiscussionFeedController(req, res) {
+    try {
+        const groupIds = String(req.query.groupIds || '')
+            .split(',')
+            .map((id) => id.trim())
+            .filter(Boolean);
+        const result = await getForumDiscussionFeedServices({
+            ...req.query,
+            groupIds,
+        });
+        res.status(200).json(result);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+}
+
 async function getForumDiscussionsByUserIdController(req, res) {
     try {
-        const { userId } = req.session;
-        const discussions = await getForumDiscussionsByUserIdServices(userId);
+        const userId = req.params.userId || req.session.userId;
+        const discussions = await getForumDiscussionsByUserIdServices(userId, req.query);
         res.status(200).json(discussions);
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -50,8 +71,8 @@ async function getForumDiscussionsByUserIdController(req, res) {
 
 async function updateForumDiscussionController(req, res) {
     try {
-        const updated = await updateForumDiscussionServices(req.params.discussionId, req.body);
-        res.status(200).json({ updated });
+        const updated = await updateForumDiscussionServices(req.params.discussionId, req.body, req.session);
+        res.status(200).json(updated);
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
@@ -63,10 +84,9 @@ async function updateForumDiscussionCommentsController(req, res) {
             ...req.body,
             discussionId: req.params.discussionId,
             commentId: req.params.commentId,
-            userId: req.body.userId || req.session?.userId,
         };
 
-        const updated = await updateForumDiscussionCommentsServices(payload);
+        const updated = await updateForumDiscussionCommentsServices(payload, req.session);
         res.status(200).json({ updated });
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -75,7 +95,11 @@ async function updateForumDiscussionCommentsController(req, res) {
 
 async function addForumDiscussionCommentController(req, res) {
     try {
-        const comment = await addForumDiscussionCommentServices(req.params.discussionId, req.body);
+        const comment = await addForumDiscussionCommentServices(
+            req.params.discussionId,
+            req.body,
+            req.session
+        );
         res.status(201).json(comment);
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -85,7 +109,7 @@ async function addForumDiscussionCommentController(req, res) {
 async function getForumDiscussionSavedByUserIdController(req, res) {
     try {
         const userId = req.session?.userId;
-        const savedDiscussions = await getForumDiscussionSavedByUserIdServices(userId);
+        const savedDiscussions = await getForumDiscussionSavedByUserIdServices(userId, req.query);
         res.status(200).json(savedDiscussions);
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -94,7 +118,7 @@ async function getForumDiscussionSavedByUserIdController(req, res) {
 
 async function deleteForumDiscussionController(req, res) {
     try {
-        const deleted = await deleteForumDiscussionServices(req.params.discussionId);
+        const deleted = await deleteForumDiscussionServices(req.params.discussionId, req.session);
         if (deleted) {
             res.status(200).json({ message: 'Discussion deleted successfully' });
         }
@@ -110,6 +134,7 @@ module.exports = {
     discussionPayload,
     createForumDiscussionController,
     getForumDiscussionByGroupIdController,
+    getForumDiscussionFeedController,
     getForumDiscussionByIdController,
     getForumDiscussionsByUserIdController,
     updateForumDiscussionController,

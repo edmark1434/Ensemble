@@ -51,6 +51,7 @@ router.get('/support/disputes', [checkSession, supportModerator], SupportModerat
 router.get('/support/disputes/:id', [checkSession, supportModerator], SupportModerator.getDispute);
 router.patch('/support/disputes/:id', [checkSession, supportModerator], SupportModerator.patchDispute);
 router.post('/support/disputes/:id/messages', [checkSession, supportModerator], SupportModerator.postDisputeMessage);
+router.patch('/support/disputes/:id/messages/:messageId', [checkSession, supportModerator], SupportModerator.patchDisputeMessage);
 router.get('/support/restrictions', [checkSession, supportModerator], SupportModerator.getRestrictions);
 router.post('/support/restrictions/violations', [checkSession, supportModerator], SupportModerator.postViolation);
 router.patch('/support/restrictions/accounts/:id', [checkSession, supportModerator], SupportModerator.patchRestriction);
@@ -65,6 +66,7 @@ router.get('/forum/reports', [checkSession, forumModerator], ForumModerator.getR
 router.patch('/forum/reports/:id', [checkSession, forumModerator], ForumModerator.patchReport);
 router.get('/forum/groups', [checkSession, forumModerator], ForumModerator.getGroups);
 router.patch('/forum/groups/:id', [checkSession, forumModerator], ForumModerator.patchGroup);
+router.patch('/forum/groups/:id/members/:memberId', [checkSession, forumModerator], ForumModerator.patchGroupMember);
 router.get('/forum/discussions', [checkSession, forumModerator], ForumModerator.getDiscussions);
 router.get('/forum/discussions/:id', [checkSession, forumModerator], ForumModerator.getDiscussion);
 router.patch('/forum/discussions/:id', [checkSession, forumModerator], ForumModerator.patchDiscussion);

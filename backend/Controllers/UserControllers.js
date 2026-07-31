@@ -15,7 +15,8 @@ const {
     checkVerificationCode,
     sendVerificationEmailServices,
     getAllCountries,
-    updatePersonalDetails
+    updatePersonalDetails,
+    isUsernameUnique
 } = require('../services/UserServices');
 const { getUserOnboardingStep } = require('../Repositories/UserRepositories');
 const jwt = require('jsonwebtoken');
@@ -443,6 +444,8 @@ async function sendVerificationEmailController(req, res) {
     }
 }
 
+
+
 async function updatePersonalDetailsController(req, res) { 
     try {
         const { userId } = req.session; // Assuming userId is stored in the session
@@ -485,6 +488,24 @@ async function getUserSession(req, res) {
     }
 }
 
+async function checkUsernameUniqueness(req, res) { 
+    try{
+        const { username } = req.query;
+        const isUnique = await isUsernameUnique(username);
+        return res.status(200).json({
+            success: true,
+            isUnique
+        });
+    } catch (err) {
+        if (err instanceof ServiceError) {
+            return res.status(err.statusCode).json({
+                success: false,
+                message: err.message,
+                details: err.details || null,
+            });
+        }
+    }
+}
 
 module.exports = {
     getAllUsers,
@@ -502,5 +523,6 @@ module.exports = {
     checkVerificationCodeController,
     sendVerificationEmailController,
     updatePersonalDetailsController,
-    getUserSession
+    getUserSession,
+    checkUsernameUniqueness
 };

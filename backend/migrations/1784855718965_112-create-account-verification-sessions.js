@@ -1,5 +1,11 @@
-// migrations/101-create-account-verification-sessions.js
+/**
+ * @type {import('node-pg-migrate').ColumnDefinitions | undefined}
+ */
+exports.shorthands = undefined;
 
+/**
+ * @param pgm {import('node-pg-migrate').MigrationBuilder}
+ */
 exports.up = (pgm) => {
   // ============================================
   // CREATE ACCOUNT VERIFICATION SESSIONS TABLE

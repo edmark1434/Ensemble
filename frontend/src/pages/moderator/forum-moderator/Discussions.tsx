@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, MessageSquare, Search, Trash2, Undo2, X } from "lucide-react";
+import { Loader2, Lock, MessageSquare, Pin, Search, Trash2, Undo2, Unlock, X } from "lucide-react";
 import api from "@/lib/axios";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
 import type { ForumDiscussionDetail, ForumDiscussionModeration } from "../shared/moderatorTypes";
@@ -54,6 +54,20 @@ function DiscussionDetailModal({
     }
   };
 
+  const setModeration = async (changes: { isLocked?: boolean; isSticky?: boolean }) => {
+    setSaving(true);
+    try {
+      const res = await api.patch(`/api/moderator/forum/discussions/${discussionId}`, changes);
+      if (res.data?.success) setDetail(res.data.data);
+      showSuccessToast("Discussion moderation updated");
+      onUpdated();
+    } catch {
+      showErrorToast("Failed to update discussion");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const removeComment = async (commentId: string | number) => {
     setSaving(true);
     try {
@@ -96,6 +110,24 @@ function DiscussionDetailModal({
             </div>
 
             <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void setModeration({ isLocked: !detail.isLocked })}
+                className="flex items-center gap-1.5 rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 disabled:opacity-50"
+              >
+                {detail.isLocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                {detail.isLocked ? "Unlock" : "Lock"}
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void setModeration({ isSticky: !detail.isSticky })}
+                className="flex items-center gap-1.5 rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 disabled:opacity-50"
+              >
+                <Pin className="h-4 w-4" />
+                {detail.isSticky ? "Unsticky" : "Sticky"}
+              </button>
               {detail.status === "removed" ? (
                 <button
                   type="button"

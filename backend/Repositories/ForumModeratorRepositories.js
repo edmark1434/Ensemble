@@ -44,7 +44,7 @@ async function lookupHandles(ids) {
 }
 
 // Forum moderation covers Forums tickets and reports about forum content.
-const FORUM_REPORT_TYPES = ['discussion', 'comment', 'post', 'forum', 'thread'];
+const FORUM_REPORT_TYPES = ['discussion', 'comment', 'post', 'forum', 'thread', 'group', 'member'];
 
 async function getForumTickets({ status } = {}) {
   return fetchScopedTickets({ ...FORUM_TICKET_SCOPE, status });
@@ -83,6 +83,11 @@ async function getModeratorForumGroups() {
       imageUrl: g.image_url || null,
       status: g.status || 'active',
       memberCount: Array.isArray(g.members) ? g.members.length : 0,
+      members: (Array.isArray(g.members) ? g.members : []).map((member) => ({
+        userId: member.userId,
+        role: member.role || 'Member',
+        isBanned: Boolean(member.is_banned),
+      })),
       discussionCount: countMap[String(g._id)] || 0,
       tags: Array.isArray(g.tags) ? g.tags : [],
       createdAt: g.created_at || null,
@@ -147,6 +152,8 @@ async function getModeratorForumDiscussions({ groupId, search } = {}) {
       commentCount: Array.isArray(d.comments) ? d.comments.filter((c) => c && c.comment).length : 0,
       likeCount: Array.isArray(d.likes) ? d.likes.length : 0,
       status: d.deleted_at ? 'removed' : 'active',
+      isLocked: Boolean(d.is_locked),
+      isSticky: Boolean(d.is_sticky),
       createdAt: d.created_at || null,
       updatedAt: d.updated_at || null,
     })),
@@ -174,6 +181,8 @@ async function getModeratorForumDiscussionDetail(discussionId) {
       name: handles[d.user_id]?.name || null,
     },
     status: d.deleted_at ? 'removed' : 'active',
+    isLocked: Boolean(d.is_locked),
+    isSticky: Boolean(d.is_sticky),
     createdAt: d.created_at || null,
     comments: comments.map((c) => ({
       commentId: c.comment_id,
@@ -191,15 +200,21 @@ async function getModeratorForumDiscussionDetail(discussionId) {
 }
 
 // Remove or restore a whole discussion (soft delete keeps it queryable for audit).
-async function setForumDiscussionStatus(discussionId, status) {
+async function setForumDiscussionStatus(discussionId, changes = {}) {
   const db = forumDb();
   if (!db) throw new Error('MongoDB is not connected');
-  const allowed = ['active', 'removed'];
-  if (!allowed.includes(status)) throw new Error(`Invalid discussion status: ${status}`);
+  const updates = { updated_at: new Date() };
+  if (changes.status != null) {
+    if (!['active', 'removed'].includes(changes.status)) throw new Error(`Invalid discussion status: ${changes.status}`);
+    updates.deleted_at = changes.status === 'removed' ? new Date() : null;
+  }
+  if (changes.isLocked != null) updates.is_locked = Boolean(changes.isLocked);
+  if (changes.isSticky != null) updates.is_sticky = Boolean(changes.isSticky);
+  if (Object.keys(updates).length === 1) throw new Error('No moderation fields provided');
 
   await db.collection('forum_discussions').updateOne(
     { _id: new ObjectId(discussionId) },
-    { $set: { deleted_at: status === 'removed' ? new Date() : null, updated_at: new Date() } }
+    { $set: updates }
   );
   return getModeratorForumDiscussionDetail(discussionId);
 }

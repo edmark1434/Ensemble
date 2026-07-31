@@ -1,5 +1,5 @@
 // src/components/ui/Layout.tsx
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import UserNav from "@/components/nav/user_nav.tsx";
 import { useState, useEffect, useCallback } from "react";
 import { ChatMain } from "./chat_bubble/chat_main";
@@ -21,7 +21,6 @@ export interface ChatTarget {
   avatarPayload?: {
     [accountId: string]: string; // Mapping of account IDs to avatar URLs
   }
-
 }
 
 declare global {
@@ -38,6 +37,7 @@ export const emitIncomingMessage = (sender: ChatTarget) => {
 };
 
 const Layout = () => {
+  const location = useLocation();
   const [marginLeft, setMarginLeft] = useState("16rem");
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [activeChatUser, setActiveChatUser] = useState<ChatTarget | null>(null);
@@ -45,7 +45,10 @@ const Layout = () => {
   const [accountId, setAccountId] = useState<string | null>(null);
   const [avatarPayload, setAvatarPayload] = useState<{ [accountId: string]: string }>({});
   const { user } = useGlobalState();
-  
+
+  // Check if current page is inside /inbox
+  const isInboxPage = location.pathname.startsWith("/inbox");
+
   // State for messages
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -54,7 +57,7 @@ const Layout = () => {
   // Handle new messages from socket
   const handleNewMessage = useCallback((message: any) => {
     console.log('New message received in Layout:', message);
-    
+
     // Only update if it's for the current conversation
     if (message.conversation_id === conversationId) {
       setChatMessages(prev => {
@@ -66,17 +69,16 @@ const Layout = () => {
     }
   }, [conversationId]);
 
-
   const handleRemoveChat = useCallback((chatId: string) => {
-  setRecentChats((prev) => prev.filter((chat) => chat.id !== chatId));
-  
-  // If the removed chat was the active one, close the chat
-  if (activeChatUser?.id === chatId) {
-    setActiveChatUser(null);
-    setIsChatOpen(false);
-  }
+    setRecentChats((prev) => prev.filter((chat) => chat.id !== chatId));
+
+    // If the removed chat was the active one, close the chat
+    if (activeChatUser?.id === chatId) {
+      setActiveChatUser(null);
+      setIsChatOpen(false);
+    }
   }, [activeChatUser]);
-  
+
   // Listen for socket messages
   useEffect(() => {
     socket.on("newMessage", handleNewMessage);
@@ -84,15 +86,15 @@ const Layout = () => {
     return () => {
       socket.off("newMessage", handleNewMessage);
     };
-  }, [handleNewMessage]);
+  }, [handleNewMessage, conversationId]);
 
   // Fetch conversation when accountId changes
   useEffect(() => {
     if (!accountId) return;
-    
+
     const fetchConversations = async () => {
       setLoadingMessages(true);
-      try { 
+      try {
         // First get the conversation ID
         const fetchConversationId = await api.get(`/api/inbox/conversation/direct/${accountId}`);
         const inboxId = fetchConversationId.data.inbox._id;
@@ -115,10 +117,10 @@ const Layout = () => {
         setAvatarPayload(fetchConversationId.data.inbox.avatarPayload);
         // Then fetch the messages
         const fetchConversation = await api.get(`api/inbox/conversation/${inboxId}`);
-        
+
         console.log("Fetched conversation ID:", fetchConversationId.data);
         console.log("Fetched conversation messages:", fetchConversation.data);
-        
+
         // Set the messages from the response
         setChatMessages(fetchConversation.data.Messages || []);
       } catch (error) {
@@ -128,7 +130,7 @@ const Layout = () => {
         setLoadingMessages(false);
       }
     };
-    
+
     fetchConversations();
   }, [accountId]);
 
@@ -248,19 +250,21 @@ const Layout = () => {
         <Outlet context={{ openChatWithUser }} />
       </main>
 
-      {/* Global Floating Chat Container */}
-      <ChatMain
-        isOpen={isChatOpen}
-        onClose={closeChat}
-        activeUser={activeChatUser}
-        recentChats={recentChats}
-        onSelectChat={(chat) => openChatWithUser(chat)}
-        avatarPayload={avatarPayload}
-        messages={chatMessages}
-        isLoading={loadingMessages}
-        onNewMessage={handleNewMessage}
-        onRemoveChat={handleRemoveChat} // Pass the remove chat handler
-      />
+      {/* Global Floating Chat Container - Hidden on /inbox pages */}
+      {!isInboxPage && (
+        <ChatMain
+          isOpen={isChatOpen}
+          onClose={closeChat}
+          activeUser={activeChatUser}
+          recentChats={recentChats}
+          onSelectChat={(chat) => openChatWithUser(chat)}
+          avatarPayload={avatarPayload}
+          messages={chatMessages}
+          isLoading={loadingMessages}
+          onNewMessage={handleNewMessage}
+          onRemoveChat={handleRemoveChat}
+        />
+      )}
 
       {/* Global Scroll To Top Button */}
       <UtilScrollTop />

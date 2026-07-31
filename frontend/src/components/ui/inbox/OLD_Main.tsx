@@ -24,9 +24,9 @@ import {
   Trash2,
   X
 } from "lucide-react";
-import socket from "@/lib/socket";
-import api from "@/lib/axios";
-import useGlobalState from "@/lib/global_state";
+import socket from "@/lib/socket.ts";
+import api from "@/lib/axios.ts";
+import useGlobalState from "@/lib/global_state.ts";
 import EmojiPicker, { EmojiStyle } from 'emoji-picker-react';
 
 // ============================================================

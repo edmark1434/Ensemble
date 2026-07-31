@@ -1,0 +1,3 @@
+1. Improved Settings UI
+2. Updated Video Editor UI
+3. Fixed Bugs

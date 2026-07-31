@@ -8,7 +8,8 @@ const {
     checkUserAccountIdController,
     getDisplayNameByAccountIdController,
     updateAndInsertAccountProfileController,
-    updateAccountProfileIdController
+    updateAccountProfileIdController,
+    settingAccountInfoUpdateController
 } = require('../Controllers/AccountControllers');
 const {
     updateTaglineAndDescriptionController,
@@ -37,4 +38,5 @@ router.put('/update-profile-user', [checkSession, requireAuth], updateProfileUse
 router.put('/update-profile-social-media', [checkSession, requireAuth], updateProfileSocialMediaController);
 router.put('/update-profile-onboarding', [checkSession, requireAuth], updateProfileOnboardingController);
 router.put('/update-profile-details', [checkSession, requireAuth], updateProfileDetailsController);
+router.put('/setting-account-info', [checkSession, requireAuth], settingAccountInfoUpdateController);
 module.exports = router;

@@ -1,6 +1,7 @@
 import {
     Briefcase,
     ClipboardList,
+    FileText,
     FolderKanban,
     Handshake,
     Home,
@@ -49,6 +50,7 @@ let gigsItemsInitial: NavItem[] = [
 ];
 
 let activityRecordsInitial: NavItem[] = [
+    { label: "My Terms", icon: FileText, to: "/terms-of-services" },
     { label: "My Contracts", icon: Shield, to: "/contracts" },
     { label: "Transaction History", icon: Wallet, to: "/transactions" },
     { label: "Inbox", icon: MessageSquare, to: "/inbox" },
@@ -89,14 +91,12 @@ const UserNav: React.FC<UserNavProps> = () => {
     // Helper to determine active state for Jobs sub-navigation
     const isJobItemActive = (to: string) => {
         if (to === "/jobs") {
-            // Active if on /jobs, /jobs/postings, /jobs/saved-posts, or /jobs/my-job-post, but NOT /jobs/proposals
             return (
                 location.pathname.startsWith("/jobs") &&
                 !location.pathname.startsWith("/jobs/proposals")
             );
         }
         if (to === "/jobs/proposals") {
-            // Active for any proposals route (/jobs/proposals, /jobs/proposals/incoming/*, /jobs/proposals/sent)
             return location.pathname.startsWith("/jobs/proposals");
         }
         return location.pathname === to;

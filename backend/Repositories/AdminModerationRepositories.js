@@ -1,6 +1,7 @@
 const { pool } = require('../lib/database');
 const { getMongoClient, connectMongoDB } = require('../lib/mongodb');
 const { DEFAULT_SETTINGS } = require('./AdminSettingsRepositories');
+const { fetchDisputesList, fetchReportsList } = require('./AdminTicketsRepositories');
 
 function normalizeStatus(status) {
   if (!status) return 'Unknown';
@@ -111,7 +112,7 @@ async function scanForumContent() {
 }
 
 async function fetchPendingCasesFromDb() {
-  const [reports, disputes, listings, identity] = await Promise.all([
+  const [reports, listings, identity] = await Promise.all([
     pool.query(`
       SELECT
         r.report_id,
@@ -140,37 +141,6 @@ async function fetchPendingCasesFromDb() {
       WHERE r.deleted_at IS NULL
         AND LOWER(COALESCE(r.status, 'open')) NOT IN ('resolved', 'closed', 'dismissed')
       ORDER BY r.created_at DESC
-      LIMIT 40
-    `),
-    pool.query(`
-      SELECT
-        d.dispute_id,
-        d.dispute_number,
-        d.title,
-        d.reason,
-        d.status,
-        d.priority,
-        d.opened_at,
-        d.created_at,
-        d.assigned_staff_id,
-        d.handled_by_staff_id,
-        d.initiator_account_id,
-        d.by_account_id,
-        COALESCE(ia.display_name, ia.handle, 'Initiator') AS initiator_name,
-        ia.handle AS initiator_handle,
-        st.role AS assigned_role,
-        COALESCE(
-          NULLIF(TRIM(COALESCE(sta.display_name, '')), ''),
-          NULLIF(TRIM(CONCAT_WS(' ', st.first_name, st.last_name)), ''),
-          sta.handle
-        ) AS assigned_staff_name
-      FROM disputes d
-      LEFT JOIN accounts ia ON ia.account_id = COALESCE(d.initiator_account_id, d.by_account_id)
-      LEFT JOIN staff st ON st.staff_id = COALESCE(d.assigned_staff_id, d.handled_by_staff_id)
-      LEFT JOIN accounts sta ON sta.account_id = st.account_id
-      WHERE LOWER(COALESCE(d.status, 'open')) NOT IN ('resolved', 'closed')
-        AND d.deleted_at IS NULL
-      ORDER BY COALESCE(d.opened_at, d.created_at) DESC
       LIMIT 40
     `),
     pool.query(`
@@ -252,30 +222,6 @@ async function fetchPendingCasesFromDb() {
       assignedStaffName: r.assigned_staff_name || null,
       openedAt: r.created_at,
       status: titleCaseStatus(r.status || 'Open'),
-      canTakeOver: true,
-      canEdit: true,
-      canDelete: true,
-    });
-  }
-
-  for (const d of disputes.rows) {
-    cases.push({
-      id: d.dispute_id,
-      source: 'dispute',
-      type: 'Dispute',
-      priority: normalizePriority(d.priority || 'high'),
-      target: d.title || d.initiator_name,
-      targetHandle: d.initiator_handle || d.dispute_number,
-      targetType: 'Dispute',
-      reason: d.reason || 'Open dispute',
-      description: d.reason || d.title || null,
-      referenceNumber: d.dispute_number || null,
-      accountId: d.initiator_account_id || d.by_account_id || null,
-      assignedRole: d.assigned_role || null,
-      assignedStaffId: d.assigned_staff_id || d.handled_by_staff_id || null,
-      assignedStaffName: d.assigned_staff_name || null,
-      openedAt: d.opened_at || d.created_at,
-      status: titleCaseStatus(d.status || 'Open'),
       canTakeOver: true,
       canEdit: true,
       canDelete: true,
@@ -619,7 +565,9 @@ async function getModerationOverview(staffSession = null) {
       .query(`
         SELECT COUNT(*)::int AS open_disputes
         FROM disputes
-        WHERE LOWER(COALESCE(status, 'open')) NOT IN ('resolved', 'closed')
+        WHERE LOWER(COALESCE(status, 'open')) NOT IN (
+          'resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn'
+        )
       `)
       .catch(() => ({ rows: [{ open_disputes: 0 }] })),
     pool
@@ -654,10 +602,12 @@ async function getModerationOverview(staffSession = null) {
   const staff = staffResult.rows;
   const stats = accountStats.rows[0];
 
-  const [pendingCases, recentActivity, identityReviewCount] = await Promise.all([
+  const [pendingCases, recentActivity, identityReviewCount, disputes, reports] = await Promise.all([
     fetchPendingCasesFromDb(),
     fetchRecentModerationActivity(),
     countOpenIdentityReviews(),
+    fetchDisputesList().catch(() => []),
+    fetchReportsList().catch(() => []),
   ]);
 
   const moderatorPerformance = computeModeratorPerformance(staff, recentActivity);
@@ -708,7 +658,15 @@ async function getModerationOverview(staffSession = null) {
         ? pendingCases.filter(
             (c) =>
               c.assignedStaffId != null &&
-              String(c.assignedStaffId) === String(currentStaffId)
+              String(c.assignedStaffId).toLowerCase() === String(currentStaffId).toLowerCase()
+          ).length +
+          (disputes || []).filter(
+            (d) =>
+              d.assignee &&
+              String(d.assignee.staffId).toLowerCase() === String(currentStaffId).toLowerCase() &&
+              !['resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn'].includes(
+                String(d.status || '').toLowerCase()
+              )
           ).length
         : 0,
       moderatorPerformancePercent: avgPerformance,
@@ -726,6 +684,8 @@ async function getModerationOverview(staffSession = null) {
     },
     currentStaffId,
     pendingCases,
+    disputes,
+    reports,
     recentActivity,
     moderatorRoster: moderatorPerformance,
     accountStatusBreakdown: statusBreakdown.rows.map((r) => ({
@@ -769,7 +729,7 @@ function buildModerationAlerts(cases, forum, stats, openDisputes, openReports, p
   if (openReports > 0) {
     alerts.push({
       id: 'open-reports',
-      message: `${openReports} open report(s) in the triage queue.`,
+      message: `${openReports} open report(s) — manage them in the Reports tab.`,
       severity: 'info',
     });
   }
@@ -807,7 +767,7 @@ function buildModerationAlerts(cases, forum, stats, openDisputes, openReports, p
   if (openDisputes > 0) {
     alerts.push({
       id: 'open-disputes',
-      message: `${openDisputes} open dispute(s) in the resolution queue.`,
+      message: `${openDisputes} open dispute(s) — manage them in the Disputes tab.`,
       severity: openDisputes > 3 ? 'warning' : 'info',
     });
   }

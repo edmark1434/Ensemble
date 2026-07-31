@@ -40,6 +40,19 @@ export default function ForumGroups() {
     }
   };
 
+  const setMemberBan = async (groupId: string, memberId: string | number, isBanned: boolean) => {
+    setSavingId(`${groupId}:${memberId}`);
+    try {
+      await api.patch(`/api/moderator/forum/groups/${groupId}/members/${memberId}`, { isBanned });
+      showSuccessToast(isBanned ? "Member banned from group" : "Member unbanned");
+      await load();
+    } catch {
+      showErrorToast("Failed to update member");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   return (
     <main className="relative z-10 min-h-screen px-6 py-8 md:ml-72 md:px-10" style={{ animation: "fadeIn 420ms ease" }}>
       <div className="mb-6">
@@ -85,6 +98,19 @@ export default function ForumGroups() {
                         <Users className="h-3.5 w-3.5 text-zinc-600" />
                         {g.memberCount}
                       </span>
+                      <div className="mt-1 flex max-w-[220px] flex-wrap gap-1">
+                        {g.members?.filter((member) => member.role !== "Admin").map((member) => (
+                          <button
+                            key={String(member.userId)}
+                            type="button"
+                            disabled={savingId === `${g.id}:${member.userId}`}
+                            onClick={() => void setMemberBan(g.id, member.userId, !member.isBanned)}
+                            className={`rounded px-1.5 py-0.5 text-[10px] ${member.isBanned ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}`}
+                          >
+                            {member.isBanned ? "Unban" : "Ban"} {String(member.userId).slice(0, 8)}
+                          </button>
+                        ))}
+                      </div>
                     </td>
                     <td className="py-2.5 text-zinc-400">{g.discussionCount}</td>
                     <td className="max-w-[180px] truncate py-2.5 text-zinc-500">

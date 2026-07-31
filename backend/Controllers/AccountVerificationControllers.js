@@ -1,7 +1,8 @@
 const {
     createAccountVerificationSession,
     appyForResubmissionServices,
-    getAccountVerificationStatusServices
+    getAccountVerificationStatusServices,
+    sendVerificationServices
 } = require('../Services/AccountVerificationServices');
 const {
     updateAccountVerificationSessionStatus,
@@ -13,7 +14,13 @@ const {
     updateUserDetailsByAccountId
 } = require('../Repositories/UserRepositories');
 
+const {
+    createNotification
+} = require('../Repositories/NotificationRepositories');
+
 const {getIo} = require('../lib/websocket');
+
+const redisClient = require('../lib/redis');
 
 async function createAccountVerificationController(req,res){
     try{
@@ -57,7 +64,18 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
                     payload.expires_at = expiresAt;
                     const session = await getAccountVerificationSessionBySessionId(sessionId);
                     console.log("Updating account verification status to verified for account:", session.verification_session_id);
-                    await updateAccountVerifications(req.body.metadata?.account_id, { is_verified: true, verified_at: new Date(),verification_session_id: session?.verification_session_id || null });
+                    const result = await updateAccountVerifications(req.body.metadata?.account_id, { is_verified: true, verified_at: new Date(),verification_session_id: session?.verification_session_id || null });
+                
+                    const notification = await createNotification({
+                        message: `Your account verification has been approved.`,
+                        is_read: false,
+                        reference_table: "verifications",
+                        reference_prefix: "VERIFICATION",
+                        reference_path: `${req.body?.decision?.session_url || `${process.env.FRONTEND_URL}/account-verification-status`}`,
+                        reference_id: result.verification_id,
+                        account_id: req.body.metadata?.account_id
+                    });
+                    io.to(notification.account_id).emit("notification", notification);
                 }
                 
                 const verification =
@@ -102,12 +120,33 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
 
             case "Declined":
                 await updateAccountVerifications(req.body.metadata?.account_id, { is_verified: false, verified_at: null });
+                const notificationDeclined = await createNotification({
+                    message: `Your account verification has been declined.`,
+                    is_read: false,
+                    reference_table: "verifications",
+                    reference_prefix: "VERIFICATION",
+                    reference_path: `${req.body?.decision?.session_url || `${process.env.FRONTEND_URL}/account-verification-status`}`,
+                    reference_id: req.body.metadata?.account_id,
+                    account_id: req.body.metadata?.account_id
+                });
+                io.to(notificationDeclined.account_id).emit("notification", notificationDeclined);
+                payload.verification_status = "Rejected";
                 const data = await applyForResubmission(sessionId,req.body.metadata?.account_id);
                 payload.verification_status = "Pending";
                 break;
             case "Expired":
             case "Abandoned":
                 payload.verification_status = "Rejected";
+                const notificationRejected = await createNotification({
+                    message: `Your account verification session has expired or was abandoned.`,
+                    is_read: false,
+                    reference_table: "verifications",
+                    reference_prefix: "VERIFICATION",
+                    reference_path: `${req.body?.decision?.session_url || `${process.env.FRONTEND_URL}/account-verification-status`}`,
+                    reference_id: req.body.metadata?.account_id,
+                    account_id: req.body.metadata?.account_id
+                });
+                io.to(notificationRejected.account_id).emit("notification", notificationRejected);
                 break;
 
             case "Not Started":
@@ -118,6 +157,16 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
                     await updateAccountVerifications(req.body.metadata?.account_id, { is_verified: false, verified_at: null });
                 }
                 payload.verification_status = "Pending";
+                const notificationPending = await createNotification({
+                    message: `Your are required to complete the verification process.`,
+                    is_read: false,
+                    reference_table: "verifications",
+                    reference_prefix: "VERIFICATION",
+                    reference_path: `${req.body?.decision?.session_url || `${process.env.FRONTEND_URL}/account-verification-status`}`,
+                    reference_id: req.body.metadata?.account_id,
+                    account_id: req.body.metadata?.account_id
+                });
+                io.to(notificationPending.account_id).emit("notification", notificationPending);
                 break;
 
             default:
@@ -166,8 +215,59 @@ async function getAccountVerificationStatusController(req, res) {
     }
 }
 
+async function sendVerificationController(req, res) { 
+    const { email, first_name, last_name } = req.body;
+    try {
+        const sixDigits = await sendVerificationServices(email, first_name, last_name);
+        return res.status(200).json({
+            success: true,
+            message: 'Verification email sent successfully',
+        });
+    } catch (err) {
+        console.error("Error sending verification email:", err);
+        return res.status(500).json({
+            success: false,
+            message: 'An error occurred while sending the verification email. Please try again.'
+        });
+    }
+}
+
+async function verifyCode(req, res) { 
+    const { email, code } = req.body;
+    try {
+        const storedCode = await redisClient.get(`verification_code:${email}`);
+        if (!storedCode) {
+            return res.status(400).json({
+                success: false,
+                message: 'Verification code has expired or does not exist',
+            });
+        }
+        if (storedCode !== code) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid verification code',
+            });
+        }
+        res.status(200).json({
+            success: true,
+            message: 'Verification code is valid',
+        });
+    } catch (err) {
+        console.error('Error verifying code:', err);
+        if (err instanceof ServiceError) {
+            return res.status(err.statusCode).json({
+                success: false,
+                message: err.message,
+                details: err.details || null,
+            });
+        }
+    }
+}
+
 module.exports = {
     createAccountVerificationController,
     handleVerificationWebhookStatusUpdated,
-    getAccountVerificationStatusController
+    getAccountVerificationStatusController,
+    sendVerificationController,
+    verifyCode
 };

@@ -45,9 +45,35 @@ export type TicketMessage = {
   id: number | string;
   authorType: string;
   authorName: string;
+  authorRole?: string | null;
   body: string;
   isInternal: boolean;
+  audience?: 'staff' | 'author_and_staff' | 'parties' | 'public' | string;
+  publishedAt?: string | null;
   createdAt: string;
+};
+
+export type DisputeCreditHold = {
+  transactionId: number | string | null;
+  status: string;
+  amount: number;
+  type: string;
+};
+
+export type DisputePermissions = {
+  staffId?: string | null;
+  role?: string | null;
+  isAssignee?: boolean;
+  isAdmin?: boolean;
+  canView?: boolean;
+  canAct?: boolean;
+  canAssignOthers?: boolean;
+  canSelfAssign?: boolean;
+  canAssignMyself?: boolean;
+  canRequestTakeover?: boolean;
+  canForceTakeover?: boolean;
+  canAcceptTakeover?: boolean;
+  canCancelTakeoverRequest?: boolean;
 };
 
 export type Dispute = {
@@ -57,16 +83,29 @@ export type Dispute = {
   reason: string | null;
   status: string;
   priority: string;
+  visibility?: string;
   initiator: TicketPerson;
   respondent: TicketPerson;
   relatedEntityType: string | null;
   relatedEntityId: string | null;
   assignee: TicketAssignee | null;
   creditAmount: number;
+  approvedAt?: string | null;
+  approvedByStaffId?: number | string | null;
+  outcome?: string | null;
+  sanctionType?: string | null;
+  sanctionNotes?: string | null;
+  relatedCreditTransactionId?: number | string | null;
+  creditHold?: DisputeCreditHold | null;
+  takeoverRequestedByStaffId?: number | string | null;
+  takeoverRequestedAt?: string | null;
+  takeoverRequestNote?: string | null;
+  takeoverRequester?: TicketAssignee | null;
   openedAt: string;
   updatedAt: string;
   resolvedAt: string | null;
   resolutionNotes: string | null;
+  isClosed?: boolean;
 };
 
 export type UserReport = {

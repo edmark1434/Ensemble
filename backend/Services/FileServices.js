@@ -12,7 +12,7 @@ dotenv.config();
 // Read from environment variables with defaults
 const ALLOWED_FOLDERS = process.env.UPLOAD_ALLOWED_FOLDERS 
     ? process.env.UPLOAD_ALLOWED_FOLDERS.split(',').map(f => f.trim())
-    : ['profile', 'documents', 'assets'];
+    : ['profile', 'documents', 'assets', 'forum'];
 
 const ALLOWED_CONTENT_TYPES = process.env.UPLOAD_ALLOWED_TYPES 
     ? process.env.UPLOAD_ALLOWED_TYPES.split(',').map(t => t.trim())

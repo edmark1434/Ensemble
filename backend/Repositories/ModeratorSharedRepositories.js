@@ -108,6 +108,7 @@ function mapReportRow(row) {
 }
 
 function mapDisputeRow(row) {
+  const closedStatuses = ['resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn'];
   return {
     id: row.dispute_id,
     number: row.dispute_number,
@@ -116,6 +117,7 @@ function mapDisputeRow(row) {
     // Keep status/priority as DB snake_case for filters/forms; format in UI.
     status: String(row.status || 'open').toLowerCase(),
     priority: String(row.priority || 'medium').toLowerCase(),
+    visibility: String(row.visibility || 'pending').toLowerCase(),
     initiator: {
       accountId: row.initiator_account_id,
       name: row.initiator_name || 'Unknown',
@@ -132,10 +134,37 @@ function mapDisputeRow(row) {
       ? { staffId: row.assigned_staff_id, name: row.assignee_name || 'Unassigned', role: row.assignee_role }
       : null,
     creditAmount: Number(row.credit_amount_involved || 0),
+    approvedAt: row.approved_at || null,
+    approvedByStaffId: row.approved_by_staff_id || null,
+    outcome: row.outcome || null,
+    sanctionType: row.sanction_type || null,
+    sanctionNotes: row.sanction_notes || null,
+    relatedCreditTransactionId: row.related_credit_transaction_id || null,
+    creditHold: row.hold_status
+      ? {
+          transactionId: row.related_credit_transaction_id,
+          status: row.hold_status,
+          amount: Number(row.hold_amount ?? row.credit_amount_involved ?? 0),
+          type: row.hold_type || 'Dispute Hold',
+        }
+      : null,
+    takeoverRequestedByStaffId: row.takeover_requested_by_staff_id || null,
+    takeoverRequestedAt: row.takeover_requested_at || null,
+    takeoverRequestNote: row.takeover_request_note || null,
+    takeoverRequester: row.takeover_requester_staff_id
+      ? {
+          staffId: row.takeover_requester_staff_id,
+          name: row.takeover_requester_name || 'Staff',
+          role: row.takeover_requester_role || null,
+        }
+      : row.takeover_requested_by_staff_id
+        ? { staffId: row.takeover_requested_by_staff_id, name: 'Staff', role: null }
+        : null,
     openedAt: row.opened_at,
     updatedAt: row.updated_at,
     resolvedAt: row.resolved_at,
     resolutionNotes: row.resolution_notes,
+    isClosed: closedStatuses.includes(String(row.status || '').toLowerCase()),
   };
 }
 
@@ -325,6 +354,54 @@ async function scopedReportCounts({ targetTypesIn } = {}) {
   return result.rows[0];
 }
 
+async function createReport({
+  reportNumber,
+  reporterAccountId,
+  targetAccountId,
+  targetType,
+  targetId,
+  targetLabel,
+  reason,
+  description,
+  referenceTable,
+}) {
+  const result = await pool.query(
+    `
+    INSERT INTO reports (
+      report_number,
+      by_account_id,
+      for_account_id,
+      target_type,
+      target_id,
+      target_label,
+      reason,
+      description,
+      priority,
+      type,
+      reference_table,
+      reference_prefix,
+      reference_id,
+      status,
+      is_created_by_bot
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'medium', $4, $9, 'forum', $5, 'open', false)
+    RETURNING *
+    `,
+    [
+      reportNumber,
+      reporterAccountId,
+      targetAccountId,
+      targetType,
+      targetId,
+      targetLabel,
+      reason,
+      description,
+      referenceTable,
+    ]
+  );
+  return mapReportRow(result.rows[0]);
+}
+
 // Scoped disputes list. Filter by related entity types and status.
 async function fetchScopedDisputes({ entityTypesIn, status } = {}) {
   const where = [];
@@ -418,6 +495,7 @@ module.exports = {
   scopedTicketTypeBreakdown,
   fetchScopedReports,
   scopedReportCounts,
+  createReport,
   fetchScopedDisputes,
   scopedDisputeCounts,
   toCategoryChart,

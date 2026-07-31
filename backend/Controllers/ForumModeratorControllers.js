@@ -8,19 +8,15 @@ const {
   getModeratorForumDiscussionDetail,
   setForumDiscussionStatus,
   removeForumDiscussionComment,
-} = require('../Repositories/ForumModeratorRepositories');
-const {
   getTicketDetail,
   updateTicket,
   addTicketMessage,
   updateReport,
-} = require('../Repositories/AdminTicketsRepositories');
-const {
   getViolationsAndRestrictions,
   issueViolation,
   updateAccountRestriction,
-} = require('../Repositories/ModeratorRepositories');
-
+  setForumGroupMemberBan,
+} = require('../Services/ForumModeratorServices');
 async function getOverview(req, res) {
   try {
     const data = await getForumOverview();
@@ -155,12 +151,23 @@ async function getDiscussion(req, res) {
 
 async function patchDiscussion(req, res) {
   try {
-    const data = await setForumDiscussionStatus(req.params.id, req.body.status);
+    const data = await setForumDiscussionStatus(req.params.id, req.body);
     if (!data) return res.status(404).json({ success: false, message: 'Discussion not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error updating discussion:', err);
     res.status(500).json({ success: false, message: err.message || 'Failed to update discussion' });
+  }
+}
+
+async function patchGroupMember(req, res) {
+  try {
+    const data = await setForumGroupMemberBan(
+      req.params.id, req.params.memberId, Boolean(req.body.isBanned), req.session
+    );
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
   }
 }
 
@@ -219,6 +226,7 @@ module.exports = {
   patchReport,
   getGroups,
   patchGroup,
+  patchGroupMember,
   getDiscussions,
   getDiscussion,
   patchDiscussion,

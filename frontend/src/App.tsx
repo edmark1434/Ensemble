@@ -31,7 +31,8 @@ import Forums from './pages/user/4_forums/Forums.tsx'
 import SelectedGroup from "@/pages/user/4_forums/SelectedGroup.tsx";
 import ExpandDiscussion from "@/pages/user/4_forums/ExpandDiscussion.tsx";
 
-import Inbox from "@/pages/user/10_inbox/Main.tsx";
+// Updated Inbox Root Import
+import InboxMain from "@/components/ui/inbox/inbox_main.tsx";
 
 import SectionPlaceholder from '@/pages/user/0_misc/SectionPlaceholder.tsx'
 
@@ -58,6 +59,8 @@ import {CreateGigWizard} from "@/pages/user/7_gigs/Gig_Posting/CreateGigWizard.t
 import Verification from "@/pages/user/9_verification/Verification.tsx";
 
 import TransactionHistoryMain from "@/pages/user/11_transactionhistory/main.tsx";
+import TosMain from "@/pages/user/terms_of_service/tos_main.tsx";
+import Contracts from "@/pages/user/contracts/contracts.tsx";
 
 import UserProfilesList from "@/components/nav/user_profiles_list.tsx";
 import {VerificationStatus} from "@/pages/user/7_profile/VerificationStatus/VerificationStatus.tsx";
@@ -185,7 +188,8 @@ function App() {
             <Route path='discussion/:postId' element={<ExpandDiscussion />} />
           </Route>
 
-          <Route path='/inbox' element={<Inbox />} />
+          {/* Wildcard path ensures /inbox/direct and /inbox/marketplace match */}
+          <Route path='/inbox/*' element={<InboxMain />} />
 
           <Route path='/teams'>
             <Route index element={<Teams />} />
@@ -228,7 +232,8 @@ function App() {
           <Route path='/verification' element={<Verification />} />
           <Route path='/requests' element={<SectionPlaceholder title='INCOMING REQUESTS' />} />
           <Route path='/my-requests' element={<SectionPlaceholder title='MY REQUESTS' />} />
-          <Route path='/contracts' element={<SectionPlaceholder title='MY CONTRACTS' />} />
+          <Route path='/terms-of-services' element={<TosMain />} />
+          <Route path='/contracts' element={<Contracts />} />
           <Route path='/transactions' element={<TransactionHistoryMain />} />
         </Route>
       </Route>
