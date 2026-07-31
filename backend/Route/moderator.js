@@ -45,8 +45,8 @@ router.get('/support/tickets/:id', [checkSession, supportModerator], SupportMode
 router.patch('/support/tickets/:id', [checkSession, supportModerator], SupportModerator.patchTicket);
 router.post('/support/tickets/:id/messages', [checkSession, supportModerator], SupportModerator.postTicketMessage);
 router.get('/support/reports', [checkSession, supportModerator], SupportModerator.getReports);
+router.get('/support/reports/:id', [checkSession, supportModerator], SupportModerator.getReport);
 router.patch('/support/reports/:id', [checkSession, supportModerator], SupportModerator.patchReport);
-router.get('/support/chat', [checkSession, supportModerator], SupportModerator.getChat);
 router.get('/support/disputes', [checkSession, supportModerator], SupportModerator.getDisputes);
 router.get('/support/disputes/:id', [checkSession, supportModerator], SupportModerator.getDispute);
 router.patch('/support/disputes/:id', [checkSession, supportModerator], SupportModerator.patchDispute);

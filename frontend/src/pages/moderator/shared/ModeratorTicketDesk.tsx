@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Inbox, Loader2, RefreshCw } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import api from "@/lib/axios";
 import TicketFiltersPanel from "@/pages/admin/ticketManagement/TicketFiltersPanel";
 import {
@@ -7,6 +8,8 @@ import {
   filterTickets,
   formatEscalatedLabel,
   type TicketFilterState,
+  type TicketFlagFilter,
+  type TicketAssigneeFilter,
 } from "@/pages/admin/ticketManagement/ticketFilterUtils";
 import {
   FORUM_TICKET_TYPES,
@@ -96,9 +99,32 @@ export default function ModeratorTicketDesk({
   accent?: Accent;
   queueKey?: keyof typeof QUEUE_TYPES;
 }) {
+  const [searchParams] = useSearchParams();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<TicketFilterState>(DEFAULT_TICKET_FILTERS);
+  const [filters, setFilters] = useState<TicketFilterState>(() => {
+    const next = { ...DEFAULT_TICKET_FILTERS };
+    const assignee = searchParams.get("assignee");
+    const flag = searchParams.get("flag");
+    const priority = searchParams.get("priority");
+    const status = searchParams.get("status");
+    if (assignee === "assigned" || assignee === "unassigned" || assignee === "all") {
+      next.assignee = assignee as TicketAssigneeFilter;
+    }
+    if (
+      flag === "awaiting" ||
+      flag === "escalated" ||
+      flag === "open_only" ||
+      flag === "has_report" ||
+      flag === "has_dispute" ||
+      flag === "all"
+    ) {
+      next.flag = flag as TicketFlagFilter;
+    }
+    if (priority) next.priority = priority;
+    if (status) next.status = status;
+    return next;
+  });
   const [selectedId, setSelectedId] = useState<number | string | null>(null);
 
   const typeCatalog = [...QUEUE_TYPES[queueKey]];

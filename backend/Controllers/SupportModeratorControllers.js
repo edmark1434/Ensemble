@@ -3,7 +3,6 @@ const {
   getSupportTickets,
   getSupportReports,
   getSupportDisputes,
-  getChatQueue,
 } = require('../Repositories/SupportModeratorRepositories');
 const {
   getTicketDetail,
@@ -14,6 +13,7 @@ const {
   addDisputeMessage,
   setDisputeMessageAudience,
   updateReport,
+  getReportDetail,
 } = require('../Repositories/AdminTicketsRepositories');
 const {
   getViolationsAndRestrictions,
@@ -106,6 +106,17 @@ async function getReports(req, res) {
   }
 }
 
+async function getReport(req, res) {
+  try {
+    const data = await getReportDetail(req.params.id);
+    if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching report detail:', err);
+    res.status(500).json({ success: false, message: 'Failed to load report' });
+  }
+}
+
 async function patchReport(req, res) {
   try {
     const data = await updateReport(req.params.id, req.body);
@@ -114,16 +125,6 @@ async function patchReport(req, res) {
   } catch (err) {
     console.error('Error updating report:', err);
     res.status(500).json({ success: false, message: 'Failed to update report' });
-  }
-}
-
-async function getChat(req, res) {
-  try {
-    const data = await getChatQueue();
-    res.status(200).json({ success: true, data });
-  } catch (err) {
-    console.error('Error fetching chat queue:', err);
-    res.status(500).json({ success: false, message: 'Failed to load chat queue' });
   }
 }
 
@@ -260,8 +261,8 @@ module.exports = {
   patchTicket,
   postTicketMessage,
   getReports,
+  getReport,
   patchReport,
-  getChat,
   getDisputes,
   getDispute,
   patchDispute,

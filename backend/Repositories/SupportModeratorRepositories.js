@@ -5,7 +5,6 @@ const {
   normalizeTicketType,
   normalizeTicketStatus,
   normalizeTicketPriority,
-  isClosedStatus,
 } = require('../lib/ticketEnums');
 const {
   fetchScopedReports,
@@ -155,7 +154,8 @@ async function getSupportDisputes({ status, search, entityType } = {}) {
 
 // Chronological ticket log: ticket updates + last-message activity + disputes.
 async function getTicketLog() {
-  const result = await pool.query(`
+  const result = await pool.query(
+    `
     (
       SELECT
         'ticket' AS type,
@@ -165,6 +165,7 @@ async function getTicketLog() {
         t.updated_at AS at
       FROM tickets t
       WHERE t.deleted_at IS NULL
+        AND NOT (t.type = ANY($1))
       ORDER BY t.updated_at DESC
       LIMIT 14
     )
@@ -173,11 +174,13 @@ async function getTicketLog() {
       SELECT
         'message' AS type,
         t.ticket_number AS ref,
-        'Chat activity on ' || t.ticket_number AS label,
+        'Ticket activity on ' || t.ticket_number AS label,
         t.status,
         t.last_message_at AS at
       FROM tickets t
-      WHERE t.last_message_at IS NOT NULL AND t.deleted_at IS NULL
+      WHERE t.last_message_at IS NOT NULL
+        AND t.deleted_at IS NULL
+        AND NOT (t.type = ANY($1))
       ORDER BY t.last_message_at DESC
       LIMIT 10
     )
@@ -190,12 +193,15 @@ async function getTicketLog() {
         d.status,
         d.updated_at AS at
       FROM disputes d
+      WHERE d.deleted_at IS NULL
       ORDER BY d.updated_at DESC
       LIMIT 8
     )
     ORDER BY at DESC
     LIMIT 20
-  `);
+    `,
+    [[...specialistTypes]]
+  );
   return result.rows.map((r, i) => ({
     id: `log-${i}`,
     type: displayLabel(r.type),
@@ -204,33 +210,6 @@ async function getTicketLog() {
     status: displayLabel(r.status),
     at: r.at,
   }));
-}
-
-async function getChatQueue() {
-  // Live chat channel tickets (channel != 'web') sit in the chat queue.
-  const result = await pool.query(
-    `
-    SELECT
-      t.*,
-      COALESCE(ra.display_name, ru.first_name || ' ' || ru.last_name) AS requester_name,
-      ra.handle AS requester_handle,
-      ru.email_address AS requester_email,
-      COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
-      st.role AS assignee_role,
-      COALESCE(t.message_count, 0) AS message_count,
-      t.last_message_at
-    FROM tickets t
-    LEFT JOIN accounts ra ON ra.account_id = t.account_id
-    LEFT JOIN users ru ON ru.account_id = ra.account_id
-    LEFT JOIN staff st ON st.staff_id = t.handled_by_staff_id
-    LEFT JOIN accounts sa ON sa.account_id = st.account_id
-    WHERE t.deleted_at IS NULL
-      AND LOWER(t.channel) IN ('chat', 'live', 'messenger')
-    ORDER BY t.updated_at DESC
-    LIMIT 50
-    `
-  );
-  return result.rows.map(mapTicketRow);
 }
 
 async function getSupportStaffWorkload() {
@@ -242,55 +221,95 @@ async function getSupportStaffWorkload() {
       (SELECT COUNT(*)::int FROM tickets t
         WHERE t.handled_by_staff_id = s.staff_id
           AND t.deleted_at IS NULL
-          AND t.status NOT IN ('Resolved', 'Closed')) AS open_tickets,
+          AND t.status NOT IN ('Resolved', 'Closed')
+          AND NOT (t.type = ANY($1))) AS open_tickets,
       (SELECT COUNT(*)::int FROM reports r
-        WHERE r.assigned_staff_id = s.staff_id AND LOWER(r.status) NOT IN ('resolved', 'closed') AND r.deleted_at IS NULL) AS open_reports
+        WHERE r.assigned_staff_id = s.staff_id
+          AND LOWER(r.status) NOT IN ('resolved', 'closed', 'dismissed')
+          AND r.deleted_at IS NULL) AS open_reports,
+      (SELECT COUNT(*)::int FROM disputes d
+        WHERE d.assigned_staff_id = s.staff_id
+          AND d.deleted_at IS NULL
+          AND LOWER(d.status) NOT IN ('resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn')) AS open_disputes
     FROM staff s
     INNER JOIN accounts a ON a.account_id = s.account_id
     WHERE s.role IN ('Support Moderator', 'Admin')
-    ORDER BY open_tickets DESC
-  `);
+      AND a.deleted_at IS NULL
+    ORDER BY open_tickets DESC, open_disputes DESC
+  `, [[...specialistTypes]]);
   return result.rows.map((r) => ({
     staffId: r.staff_id,
     name: r.name,
     role: r.role,
     openTickets: Number(r.open_tickets),
     openReports: Number(r.open_reports),
-    totalOpen: Number(r.open_tickets) + Number(r.open_reports),
+    openDisputes: Number(r.open_disputes),
+    totalOpen: Number(r.open_tickets) + Number(r.open_reports) + Number(r.open_disputes),
   }));
 }
 
-function buildAlerts(tc, rc, dc, chatOpen) {
+function buildAlerts(tc, rc, dc) {
   const alerts = [];
   const openTickets = Number(tc.open_count) + Number(tc.in_progress);
 
   if (Number(tc.unassigned) > 0) {
-    alerts.push({ id: 'unassigned', message: `${tc.unassigned} support ticket(s) have no assignee.`, severity: 'warning' });
+    alerts.push({
+      id: 'unassigned',
+      message: `${tc.unassigned} support ticket(s) have no assignee.`,
+      severity: 'warning',
+      action: { tab: 'ticket-management', ticketFilters: { assignee: 'unassigned', flag: 'open_only' } },
+    });
   }
   if (Number(tc.high_priority) > 0) {
-    alerts.push({ id: 'high-priority', message: `${tc.high_priority} high-priority ticket(s) need attention.`, severity: 'error' });
+    alerts.push({
+      id: 'high-priority',
+      message: `${tc.high_priority} high-priority ticket(s) need attention.`,
+      severity: 'error',
+      action: { tab: 'ticket-management', ticketFilters: { priority: 'High', flag: 'open_only' } },
+    });
   }
   if (Number(tc.awaiting_reply) > 0) {
-    alerts.push({ id: 'awaiting-reply', message: `${tc.awaiting_reply} ticket(s) awaiting a staff reply.`, severity: 'warning' });
+    alerts.push({
+      id: 'awaiting-reply',
+      message: `${tc.awaiting_reply} ticket(s) awaiting a staff reply.`,
+      severity: 'warning',
+      action: { tab: 'ticket-management', ticketFilters: { flag: 'awaiting' } },
+    });
   }
   if (Number(tc.escalated) > 0) {
-    alerts.push({ id: 'escalated', message: `${tc.escalated} escalated ticket(s) need a queue handoff.`, severity: 'error' });
+    alerts.push({
+      id: 'escalated',
+      message: `${tc.escalated} escalated ticket(s) need a queue handoff.`,
+      severity: 'error',
+      action: { tab: 'ticket-management', ticketFilters: { flag: 'escalated' } },
+    });
   }
   if (Number(dc.open_count) > 0) {
     alerts.push({
       id: 'open-disputes',
       message: `${dc.open_count} dispute(s) open — ${Number(dc.credits_at_risk).toLocaleString()} credits at risk.`,
       severity: 'error',
+      action: { tab: 'disputes' },
     });
   }
   if (Number(rc.open_count) > 0) {
-    alerts.push({ id: 'open-reports', message: `${rc.open_count} user report(s) awaiting triage.`, severity: 'info' });
+    alerts.push({
+      id: 'open-reports',
+      message: `${rc.open_count} user report(s) awaiting triage.`,
+      severity: 'info',
+      action: { tab: 'user-team' },
+    });
   }
-  if (chatOpen > 0) {
-    alerts.push({ id: 'chat-queue', message: `${chatOpen} live chat conversation(s) waiting.`, severity: 'warning' });
-  }
-  if (openTickets > 0 && !alerts.some((a) => a.id === 'high-priority' || a.id === 'unassigned' || a.id === 'awaiting-reply')) {
-    alerts.push({ id: 'open-tickets', message: `${openTickets} support ticket(s) still open.`, severity: 'info' });
+  if (
+    openTickets > 0 &&
+    !alerts.some((a) => a.id === 'high-priority' || a.id === 'unassigned' || a.id === 'awaiting-reply')
+  ) {
+    alerts.push({
+      id: 'open-tickets',
+      message: `${openTickets} support ticket(s) still open.`,
+      severity: 'info',
+      action: { tab: 'ticket-management', ticketFilters: { flag: 'open_only' } },
+    });
   }
   if (!alerts.length) {
     alerts.push({ id: 'clear', message: 'Support desk is clear — no urgent queues.', severity: 'success' });
@@ -308,7 +327,6 @@ async function getSupportOverview() {
     disputes,
     reports,
     staffWorkload,
-    chatQueue,
     ticketLog,
     extraStats,
     priorityMix,
@@ -323,7 +341,6 @@ async function getSupportOverview() {
     getSupportDisputes(),
     getSupportReports(),
     getSupportStaffWorkload(),
-    getChatQueue(),
     getTicketLog(),
     pool.query(`
       SELECT
@@ -377,7 +394,6 @@ async function getSupportOverview() {
   const rc = reportCounts;
   const dc = disputeCounts;
   const es = extraStats.rows[0];
-  const chatOpen = chatQueue.filter((t) => !isClosedStatus(t.status)).length;
 
   const priorityColors = { High: '#f87171', Medium: '#fbbf24', Low: '#60a5fa' };
   const disputeColors = {
@@ -400,7 +416,7 @@ async function getSupportOverview() {
       openDisputes: Number(dc.open_count),
       totalDisputes: Number(dc.total),
       creditsAtRisk: Number(dc.credits_at_risk),
-      chatWaiting: chatOpen,
+      awaitingReplyTickets: Number(tc.awaiting_reply),
       slaCompliancePercent: tc.total > 0 ? Math.round((Number(tc.resolved) / Number(tc.total)) * 100) : 100,
       ticketsThisWeek: Number(es.tickets_this_week),
       messagesThisWeek: Number(es.messages_this_week),
@@ -432,12 +448,12 @@ async function getSupportOverview() {
     recentReports: reports.slice(0, 6),
     ticketLog,
     staffWorkload,
-    alerts: buildAlerts(tc, rc, dc, chatOpen),
+    alerts: buildAlerts(tc, rc, dc),
     dataSources: {
       tables: [
         'tickets',
         'ticket_chats',
-        'inbox/messages (mongo — tickets + disputes)',
+        'inbox/messages (mongo — ticket threads)',
         'disputes',
         'dispute_chats → mongo ObjectId',
         'reports',
@@ -455,5 +471,4 @@ module.exports = {
   getSupportReports,
   getSupportDisputes,
   getTicketLog,
-  getChatQueue,
 };

@@ -1,6 +1,6 @@
-import { Gem, LayoutDashboard, MessageSquare, Scale, ShieldAlert, Ticket, Users } from "lucide-react";
+import { Flag, Gem, LayoutDashboard, Scale, ShieldAlert, Ticket } from "lucide-react";
 import type { ComponentType } from "react";
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import LogoutButton from "../shared/LogoutButton";
 
 type NavItem = {
@@ -11,17 +11,16 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/moderator/support" },
-  { label: "Chat Support", icon: MessageSquare, to: "/moderator/support/chat-support" },
   { label: "Ticket Management", icon: Ticket, to: "/moderator/support/ticket-management" },
   { label: "Disputes", icon: Scale, to: "/moderator/support/disputes" },
-  { label: "User & Team", icon: Users, to: "/moderator/support/user-team" },
+  { label: "Reports", icon: Flag, to: "/moderator/support/user-team" },
   { label: "Restrictions", icon: ShieldAlert, to: "/moderator/support/restrictions" },
 ];
 
 const navClassName = (isActive: boolean) =>
   `flex w-full items-center gap-3 rounded-md border px-3 py-2 text-sm transition ${
     isActive
-      ? "border-white/20 bg-white/10 text-white"
+      ? "border-sky-500/40 bg-sky-500/10 text-white"
       : "border-transparent text-zinc-300 hover:border-white/15 hover:bg-white/5 hover:text-white"
   }`;
 
@@ -34,7 +33,9 @@ const SupportModeratorNavbar = () => {
         </div>
         <div>
           <p className="text-[13px] font-semibold leading-tight tracking-wide text-white">Platform</p>
-          <p className="text-[13px] font-semibold leading-tight tracking-wide text-white">Support Moderator</p>
+          <p className="text-[13px] font-semibold leading-tight tracking-wide text-white">
+            Support Moderator
+          </p>
         </div>
       </div>
 
@@ -42,7 +43,11 @@ const SupportModeratorNavbar = () => {
         <ul className="space-y-1.5">
           {navItems.map(({ label, icon: Icon, to }) => (
             <li key={label}>
-              <NavLink to={to} end={to === "/moderator/support"} className={({ isActive }) => navClassName(isActive)}>
+              <NavLink
+                to={to}
+                end={to === "/moderator/support"}
+                className={({ isActive }) => navClassName(isActive)}
+              >
                 <Icon className="h-4 w-4" />
                 {label}
               </NavLink>
@@ -52,10 +57,13 @@ const SupportModeratorNavbar = () => {
       </nav>
 
       <div className="space-y-2 border-t border-white/10 p-4">
-        <div className="flex items-center justify-between rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs text-zinc-300">
+        <Link
+          to="/"
+          className="flex items-center justify-between rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs text-zinc-300 transition hover:border-sky-500/30 hover:bg-sky-500/10 hover:text-white"
+        >
           <span>Go to platform</span>
-          <span className="text-yellow-300">*</span>
-        </div>
+          <span className="text-sky-300">→</span>
+        </Link>
         <LogoutButton />
       </div>
     </aside>

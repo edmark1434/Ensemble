@@ -113,7 +113,7 @@ export default function TicketFiltersPanel({
         : [...TICKET_TYPE_GROUPS.flatMap((g) => g.types)]
       : [...typesForQueue(filters.queue)];
 
-  const channelChoices = channels?.length ? channels : ['web', 'chat', 'email', 'in_app'];
+  const channelChoices = channels?.length ? channels : ['web', 'email', 'in_app'];
 
   const filteredMods = useMemo(() => {
     const q = moderatorSearch.trim().toLowerCase();
