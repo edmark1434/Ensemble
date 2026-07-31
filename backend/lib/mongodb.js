@@ -7,6 +7,40 @@ const uri = process.env.MONGODB_URI;
 let client = null;
 let isConnected = false;
 
+async function ensureChatIndexes(database) {
+  await Promise.all([
+    database.collection('messages').createIndex(
+      { conversation_id: 1, created_at: -1 },
+      { name: 'chat_messages_conversation_created' }
+    ),
+    database.collection('messages').createIndex(
+      { message_id_reply: 1 },
+      { name: 'chat_messages_reply_parent', sparse: true }
+    ),
+    database.collection('inbox').createIndex(
+      {
+        conversation_type: 1,
+        'members.account_id': 1,
+        deleted_at: 1,
+        last_message_time: -1,
+      },
+      { name: 'chat_inbox_member_type_latest' }
+    ),
+    database.collection('inbox').createIndex(
+      { conversation_type: 1, engagement_id: 1 },
+      { name: 'chat_inbox_engagement_context', sparse: true }
+    ),
+    database.collection('inbox').createIndex(
+      { conversation_type: 1, job_id: 1 },
+      { name: 'chat_inbox_job_context', sparse: true }
+    ),
+    database.collection('inbox').createIndex(
+      { conversation_type: 1, gig_id: 1 },
+      { name: 'chat_inbox_gig_context', sparse: true }
+    ),
+  ]);
+}
+
 async function connectMongoDB() {
   if (!uri) {
     console.warn('MONGODB_URI is not set — MongoDB features (forums, dispute/ticket chats) are disabled.');
@@ -20,6 +54,7 @@ async function connectMongoDB() {
   try {
     client = new MongoClient(uri);
     await client.connect();
+    await ensureChatIndexes(client.db('ensemble'));
     console.log('Connected successfully to MongoDB');
     isConnected = true;
     return client;

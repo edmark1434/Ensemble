@@ -202,10 +202,10 @@ async function getProfileByAccountId(accountId) {
                 F.PATH AS avatar_preset_url,
                 P.NAME AS subscriptionType,
                 U.USER_ID as user_id,
-                V.IS_VERIFIED AS verification_status
+                COALESCE(V.IS_VERIFIED, FALSE) AS verification_status
             FROM ACCOUNTS A
             JOIN USERS U ON A.ACCOUNT_ID = U.ACCOUNT_ID
-            JOIN VERIFICATIONS V ON A.ACCOUNT_ID = V.ACCOUNT_ID
+            LEFT JOIN VERIFICATIONS V ON A.ACCOUNT_ID = V.ACCOUNT_ID
             LEFT JOIN FILES F ON A.AVATAR_FILE_ID = F.FILE_ID
             LEFT JOIN SUBSCRIPTIONS S ON U.USER_ID = S.USER_ID
             LEFT JOIN PLANS P ON S.PLAN_ID = P.PLAN_ID

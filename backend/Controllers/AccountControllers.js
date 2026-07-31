@@ -1,4 +1,5 @@
 const { createNewAccount, fetchAllAccounts, getAccountByHandleService,
+    searchUserAccountsByHandleService,
     getAccountWalletService, getProfileServices, getAccountLinkByAccountIdService,
     checkUserAccountIdService,
     getDisplayNameByAccountIdService,
@@ -22,9 +23,9 @@ async function createAccount(req, res) {
     }
 }
 
-async function getAccountByHandle(handle) {
+async function getAccountByHandle(req, res) {
     try {
-        const account = await getAccountByHandleService(handle);
+        const account = await getAccountByHandleService(req.params.handle);
         if (account) {
             res.json(account);
         } else {
@@ -33,6 +34,19 @@ async function getAccountByHandle(handle) {
     } catch (err) {
         console.error('Error fetching account by handle:', err);
         res.status(500).json({ error: 'Internal server error' });
+    }
+}
+
+async function searchUserAccountsByHandleController(req, res) {
+    try {
+        const accounts = await searchUserAccountsByHandleService(
+            req.query.handle,
+            req.session.account_id
+        );
+        return res.status(200).json({ success: true, data: accounts });
+    } catch (err) {
+        console.error('Error searching user accounts by handle:', err);
+        return res.status(500).json({ success: false, message: 'Unable to search accounts' });
     }
 }
 async function getAccountWalletController(req, res) { 
@@ -212,6 +226,7 @@ async function settingAccountInfoUpdateController(req, res) {
 module.exports = {
     createAccount,
     getAccountByHandle,
+    searchUserAccountsByHandleController,
     getAccountWalletController,
     getProfileController,
     getAccountLinkByAccountIdController,
