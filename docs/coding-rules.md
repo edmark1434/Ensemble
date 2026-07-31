@@ -1,63 +1,40 @@
-# AI Coding Rules
+# Code Rules
 
-Always follow these rules.
+Before coding
 
-## Before Coding
+- Search existing implementation.
+- Reuse existing functions.
+- Extend existing code.
+- Do not duplicate logic.
 
-- Search for existing implementations.
-- Reuse existing utilities.
-- Read related services before creating new code.
-
-## Architecture
-
-Business Logic
-
-Service
-
-Database
-
-Repository
-
-HTTP
+Architecture
 
 Controller
+- Request
+- Validation
+- Service call
 
-Never violate this architecture.
-
-## Code Style
-
-- Make minimal changes.
-- Do not rewrite unrelated code.
-- Preserve existing APIs.
-- Preserve existing naming conventions.
-- Prefer extending existing functions.
-- Avoid duplicate logic.
-- Keep functions small.
-
-## Database
-
-MongoDB
-
-- Forums only
-
-PostgreSQL
-
+Service
+- Business logic
+- Authorization
 - Notifications
-- Accounts
-- Payments
+- WebSocket
 
-## WebSocket
+Repository
+- Database only
 
-Never remove websocket functionality.
+Never violate architecture.
 
-If a feature updates forum data, determine whether a websocket event should also be emitted.
+Do not
 
-## Notifications
+- Rewrite unrelated files
+- Change APIs unnecessarily
+- Create duplicate upload helpers
+- Create duplicate websocket connections
 
-Always create notifications inside Services.
+Always
 
-Never inside Repositories.
-
-## Goal
-
-Implement features with the smallest possible diff while keeping the existing project architecture intact.
+- Keep functions small
+- Follow naming conventions
+- Preserve project style
+- Reuse utilities

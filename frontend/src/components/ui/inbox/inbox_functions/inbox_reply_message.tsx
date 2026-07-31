@@ -71,7 +71,8 @@ export const InboxReplyQuote: React.FC<InboxReplyQuoteProps> = ({
     ? parentMsg.message_content || (parentMsg.attachments?.length ? "Photo" : "Message")
     : "Original message unavailable";
 
-  const isParentSender = parentMsg?.sender_id === currentUserId;
+  const isParentSender =
+    String(parentMsg?.sender_id || "") === String(currentUserId);
 
   return (
     <button
