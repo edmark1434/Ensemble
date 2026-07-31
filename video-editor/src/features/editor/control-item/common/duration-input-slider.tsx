@@ -8,7 +8,7 @@ interface DurationInputSliderProps {
   valueMs: number;
   maxMs: number;
   onChangeMs: (ms: number) => void;
-  disabled: boolean;
+  disabled?: boolean;
 }
 
 const MIN_DURATION_MS = 330; // 10 frames
@@ -21,26 +21,38 @@ export const DurationInputSlider = ({
   disabled,
 }: DurationInputSliderProps) => {
   const safeMaxMs = Math.max(0, maxMs);
-  const safeMaxSeconds = formatearNumero(safeMaxMs / 1000);
   // if max available is smaller than the floor, floor can't exceed max
   const floorMs = Math.min(MIN_DURATION_MS, safeMaxMs);
 
-  const [localMs, setLocalMs] = useState(Math.min(Math.max(valueMs, floorMs), safeMaxMs));
-  const [inputValue, setInputValue] = useState(
-    String(formatearNumero(Math.min(Math.max(valueMs, floorMs), safeMaxMs) / 1000))
-  );
+  const clampedValueMs = Math.min(Math.max(valueMs, floorMs), safeMaxMs);
+  const canonicalValue = String(formatearNumero(clampedValueMs / 1000));
 
-  const commitMs = (ms: number) => {
-    const clamped = Math.min(Math.max(floorMs, ms), safeMaxMs);
-    setLocalMs(clamped);
-    onChangeMs(clamped);
-  };
+  const [localMs, setLocalMs] = useState<number>(clampedValueMs);
+  const [localValue, setLocalValue] = useState<string>(canonicalValue);
 
   useEffect(() => {
-    const clamped = Math.min(Math.max(valueMs, floorMs), safeMaxMs);
-    setLocalMs(clamped);
-    setInputValue(String(formatearNumero(clamped / 1000)));
-  }, [valueMs, safeMaxMs, floorMs]);
+    setLocalMs(clampedValueMs);
+    setLocalValue(canonicalValue);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clampedValueMs]);
+
+  const commitSeconds = (seconds: number) => {
+    const ms = Math.min(Math.max(seconds * 1000, floorMs), safeMaxMs);
+    setLocalMs(ms);
+    setLocalValue(String(formatearNumero(ms / 1000)));
+    onChangeMs(ms);
+  };
+
+  const handleBlur = () => {
+    setLocalValue(canonicalValue);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter") return;
+    if (localValue === "") return;
+    const seconds = Number(localValue);
+    if (!Number.isNaN(seconds)) commitSeconds(seconds);
+  };
 
   return (
     <div className="flex flex-col gap-2 flex-1">
@@ -49,20 +61,18 @@ export const DurationInputSlider = ({
       </div>
       <div className="w-full flex items-center gap-2">
         <Input
-          type="number"
-          min={floorMs / 1000}
-          max={safeMaxSeconds}
-          step={0.1}
+          type="text"
+          inputMode="decimal"
           className="w-16 shrink-0 text-center text-sm"
-          value={inputValue}
+          value={localValue}
           onChange={(e) => {
             const raw = e.target.value;
-            setInputValue(raw);
-            if (raw === "") return;
-            const seconds = Number(raw);
-            if (Number.isNaN(seconds) || seconds < 0) return;
-            commitMs(seconds * 1000);
+            if (raw === "" || /^\d*\.?\d*$/.test(raw)) {
+              setLocalValue(raw);
+            }
           }}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
           disabled={disabled}
         />
         <Slider
@@ -71,8 +81,10 @@ export const DurationInputSlider = ({
           max={safeMaxMs}
           step={1}
           onValueChange={(v) => {
-            setInputValue(String(formatearNumero(v[0] / 1000)));
-            commitMs(v[0]);
+            const clamped = Math.min(Math.max(v[0], floorMs), safeMaxMs);
+            setLocalMs(clamped);
+            setLocalValue(String(formatearNumero(clamped / 1000)));
+            onChangeMs(clamped);
           }}
           className="w-full"
           aria-label={label}

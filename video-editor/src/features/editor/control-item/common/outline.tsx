@@ -2,6 +2,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import React, { useEffect, useState } from "react";
 import { ColorPickerField } from "./color-picker-field";
+import { useMixedValue } from "@/features/editor/hooks/use-mixed-value";
 
 function Outline({
   label,
@@ -9,6 +10,7 @@ function Outline({
   onChangeBorderColor,
   valueBorderWidth,
   valueBorderColor,
+  ids,
   disabled = false,
 }: {
   label: string;
@@ -16,15 +18,46 @@ function Outline({
   onChangeBorderColor: (v: string) => void;
   valueBorderWidth: number;
   valueBorderColor: string;
+  ids?: string[];
   disabled?: boolean;
 }) {
-  const [localValueBorderWidth, setLocalValueBorderWidth] = useState<string | number>(valueBorderWidth);
+  const { isMixed: isWidthMixed } = useMixedValue<number>(
+    ids ?? [],
+    (item) => item.details?.borderWidth ?? 0
+  );
+  const { isMixed: isColorMixed } = useMixedValue<string>(
+    ids ?? [],
+    (item) => item.details?.borderColor ?? "#000000"
+  );
+
+  const canonicalWidth = isWidthMixed ? "Mixed" : String(Math.round(valueBorderWidth));
+
+  const [localValueBorderWidth, setLocalValueBorderWidth] = useState<string>(canonicalWidth);
   const [localValueBorderColor, setLocalValueBorderColor] = useState<string>(valueBorderColor);
 
   useEffect(() => {
-    setLocalValueBorderWidth(valueBorderWidth);
+    setLocalValueBorderWidth(canonicalWidth);
+  }, [canonicalWidth]);
+
+  useEffect(() => {
     setLocalValueBorderColor(valueBorderColor);
-  }, [valueBorderWidth, valueBorderColor]);
+  }, [valueBorderColor]);
+
+  const commitWidth = (num: number) => {
+    onChageBorderWidth(num);
+    setLocalValueBorderWidth(String(Math.round(num)));
+  };
+
+  const handleWidthBlur = () => {
+    setLocalValueBorderWidth(canonicalWidth);
+  };
+
+  const handleWidthKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter") return;
+    if (localValueBorderWidth === "" || localValueBorderWidth === "Mixed") return;
+    const num = Number(localValueBorderWidth);
+    if (!Number.isNaN(num) && num >= 0 && num <= 100) commitWidth(num);
+  };
 
   return (
     <div className="flex flex-col gap-3">
@@ -45,6 +78,7 @@ function Outline({
             mobileControlType="strokeColor"
             mobileControlLabel="Stroke Color"
             disabled={disabled}
+            mixed={isColorMixed}
           />
         </div>
 
@@ -55,6 +89,11 @@ function Outline({
           <div className="relative w-full">
             <Input
               type="text"
+              inputMode="numeric"
+              value={localValueBorderWidth}
+              onFocus={() => {
+                if (localValueBorderWidth === "Mixed") setLocalValueBorderWidth("");
+              }}
               onChange={(e) => {
                 const newValue = e.target.value;
 
@@ -65,13 +104,11 @@ function Outline({
                     Number(newValue) <= 100)
                 ) {
                   setLocalValueBorderWidth(newValue);
-
-                  if (newValue !== "") {
-                    onChageBorderWidth(Number(newValue));
-                  }
                 }
               }}
-              value={localValueBorderWidth}
+              onBlur={handleWidthBlur}
+              onKeyDown={handleWidthKeyDown}
+              disabled={disabled}
             />
           </div>
         </div>

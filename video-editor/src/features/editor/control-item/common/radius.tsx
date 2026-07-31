@@ -1,35 +1,49 @@
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
-import { dispatch } from "@designcombo/events";
-import { EDIT_OBJECT } from "@designcombo/state";
-import { useEffect, useState } from "react";
+import { useEffect, useState, KeyboardEvent } from "react";
+import { dispatchGroupEdit } from "@/features/editor/utils/dispatch-group-edit";
+import { useMixedValue } from "@/features/editor/hooks/use-mixed-value";
 
 const BorderRadius = ({
-                        id,
-                        value,
-                        disabled
-                      }: {
+  id,
+  ids,
+  value,
+  disabled
+}: {
   id: string;
+  ids?: string[];
   value: number;
   disabled: boolean;
 }) => {
-  const [localValue, setLocalValue] = useState<number>(value * 2);
+  const targetIds = ids && ids.length > 0 ? ids : [id];
+  const { value: storeValue, isMixed } = useMixedValue<number>(
+    targetIds,
+    (item) => item.details?.borderRadius ?? 0
+  );
+  const resolvedValue = storeValue ?? value;
+  const canonicalValue = isMixed ? "-" : String(Math.round(resolvedValue * 2));
 
-  const onChange = (v: number) => {
-    dispatch(EDIT_OBJECT, {
-      payload: {
-        [id]: {
-          details: {
-            borderRadius: v / 2
-          }
-        }
-      }
-    });
-  };
+  const [localValue, setLocalValue] = useState<string>(canonicalValue);
 
   useEffect(() => {
-    setLocalValue(Math.round(value * 2));
-  }, [value]);
+    setLocalValue(canonicalValue);
+  }, [canonicalValue]);
+
+  const commit = (num: number) => {
+    dispatchGroupEdit(targetIds, { borderRadius: num / 2 });
+    setLocalValue(String(Math.round(num)));
+  };
+
+  const handleBlur = () => {
+    setLocalValue(canonicalValue);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter") return;
+    if (localValue === "" || localValue === "-") return;
+    const num = Number(localValue);
+    if (!Number.isNaN(num) && num >= 0 && num <= 100) commit(num);
+  };
 
   return (
     <div className="flex flex-col gap-2 flex-1">
@@ -38,26 +52,30 @@ const BorderRadius = ({
       </div>
       <div className="w-full flex gap-2">
         <Input
-          max={100}
           className="w-15 text-center text-sm"
-          type="number"
+          type="text"
+          inputMode="numeric"
+          value={localValue}
+          onFocus={() => {
+            if (localValue === "-") setLocalValue("");
+          }}
           onChange={(e) => {
-            const newValue = Number(e.target.value);
-            if (newValue >= 0 && newValue <= 100) {
-              setLocalValue(newValue);
-              onChange(newValue);
+            const raw = e.target.value;
+            if (
+              raw === "" ||
+              (!Number.isNaN(Number(raw)) && Number(raw) >= 0 && Number(raw) <= 100)
+            ) {
+              setLocalValue(raw);
             }
           }}
-          value={localValue}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
           disabled={disabled}
         />
         <Slider
           id="corner-radius"
-          value={[localValue]}
-          onValueChange={(e) => {
-            setLocalValue(e[0]);
-            onChange(e[0]);
-          }}
+          value={[isMixed ? 0 : Math.round(resolvedValue * 2)]}
+          onValueChange={(e) => commit(e[0])}
           min={0}
           max={100}
           step={1}

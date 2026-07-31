@@ -66,10 +66,11 @@ export const ControlItem = () => {
   const { setTrackItem: setLayoutTrackItem, setFloatingControl } = useLayoutStore();
 
   useEffect(() => {
+    setFloatingControl("");
+
     if (activeIds.length === 0) {
       setSelection({ type: "none" });
       setLayoutTrackItem(null);
-      setFloatingControl("");
       return;
     }
 
@@ -96,7 +97,7 @@ export const ControlItem = () => {
 
     setSelection({ type: "none" });
     setLayoutTrackItem(null);
-  }, [activeIds, trackItemsMap, transitionsMap, setLayoutTrackItem]);
+  }, [activeIds, trackItemsMap, transitionsMap, setLayoutTrackItem, setFloatingControl]);
 
   return (
     <div className="w-full flex-none bg-card hidden lg:block">

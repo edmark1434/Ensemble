@@ -5,24 +5,50 @@ import useLayoutStore from "../../store/use-layout-store";
 import useStore from "../../store/use-store";
 import { Label } from "@/components/ui/label";
 import { presets } from "../../player/animated";
-import {groupCaptionItems} from "@/features/editor/control-item/floating-controls/caption-preset-picker";
+import { groupCaptionItems } from "@/features/editor/control-item/floating-controls/caption-preset-picker";
+import { useMixedValue } from "@/features/editor/hooks/use-mixed-value";
 
-const AnimationCaption = () => {
-  const { setFloatingControl, trackItem } = useLayoutStore();
+export function useCaptionGroupIds(ids: string[]) {
   const { trackItemsMap } = useStore();
   const [captionItemIds, setCaptionItemIds] = useState<string[]>([]);
+  const [representativeIds, setRepresentativeIds] = useState<string[]>([]);
 
   useEffect(() => {
     const groupedCaptions = groupCaptionItems(trackItemsMap);
-    const currentGroupItems = groupedCaptions[trackItem?.metadata?.sourceUrl ?? ""];
-    setCaptionItemIds(currentGroupItems?.map((item) => item.id) ?? []);
-  }, [trackItemsMap, trackItem]);
+    const sourceUrls = Array.from(
+      new Set(ids.map((id) => trackItemsMap[id]?.metadata?.sourceUrl).filter(Boolean))
+    );
+    const groups = sourceUrls.map((sourceUrl) => groupedCaptions[sourceUrl] || []);
+    setCaptionItemIds(groups.flat().map((item) => item.id));
+    setRepresentativeIds(groups.map((group) => group[0]?.id).filter(Boolean) as string[]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackItemsMap, JSON.stringify(ids)]);
 
-  const firstItem = trackItemsMap[captionItemIds[0]];
-  const activeAnimationName = firstItem?.animations?.in?.name;
-  const label = activeAnimationName
-    ? (presets[activeAnimationName as keyof typeof presets]?.name ?? activeAnimationName)
-    : "None";
+  return { captionItemIds, representativeIds };
+}
+
+export function useCaptionAnimationSummary(ids: string[]) {
+  const { trackItemsMap } = useStore();
+  const { captionItemIds, representativeIds } = useCaptionGroupIds(ids);
+
+  const { value: animationName, isMixed } = useMixedValue<string>(
+    representativeIds,
+    (item) => item?.animations?.in?.name ?? "none"
+  );
+
+  const label = isMixed
+    ? "Mixed"
+    : animationName && animationName !== "none"
+      ? (presets[animationName as keyof typeof presets]?.name ?? animationName)
+      : "None";
+
+  return { label, captionItemIds };
+}
+
+const AnimationCaption = ({ ids }: { ids?: string[] }) => {
+  const { setFloatingControl, setFloatingControlIds, trackItem } = useLayoutStore();
+  const targetIds = ids && ids.length > 0 ? ids : trackItem?.id ? [trackItem.id] : [];
+  const { label } = useCaptionAnimationSummary(targetIds);
 
   return (
     <div className="flex flex-col gap-3">
@@ -32,7 +58,10 @@ const AnimationCaption = () => {
         <Button
           className="flex w-full items-center justify-between text-sm font-normal"
           variant="outline"
-          onClick={() => setFloatingControl("animation-caption")}
+          onClick={() => {
+            setFloatingControlIds(targetIds);
+            setFloatingControl("animation-caption");
+          }}
         >
           <div className="w-full overflow-hidden text-left">
             <p className="truncate">{label}</p>

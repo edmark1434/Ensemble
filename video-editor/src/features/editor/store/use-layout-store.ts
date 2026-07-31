@@ -19,7 +19,12 @@ const useLayoutStore = create<ILayoutState>((set) => ({
   setShowControlItem: (showControlItem) => set({ showControlItem }),
   setShowToolboxItem: (showToolboxItem) => set({ showToolboxItem }),
   setActiveToolboxItem: (activeToolboxItem) => set({ activeToolboxItem }),
-  setFloatingControl: (floatingControl) => set({ floatingControl }),
+  setFloatingControl: (floatingControl) =>
+    set(
+      floatingControl
+        ? { floatingControl }
+        : { floatingControl, floatingControlIds: [], floatingControlAnimationType: undefined }
+    ),
   setDrawerOpen: (drawerOpen) => set({ drawerOpen }),
   trackItem: null,
   setTrackItem: (trackItem) => set({ trackItem }),
@@ -31,6 +36,11 @@ const useLayoutStore = create<ILayoutState>((set) => ({
   animationPickerInitialTab: "in",
   setAnimationPickerInitialTab: (tab) =>
     set({ animationPickerInitialTab: tab }),
+
+  floatingControlIds: [],
+  floatingControlAnimationType: undefined,
+  setFloatingControlIds: (ids, animationType) =>
+    set({ floatingControlIds: ids, floatingControlAnimationType: animationType }),
 }));
 
 export default useLayoutStore;

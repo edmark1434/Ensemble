@@ -1,13 +1,12 @@
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger
 } from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import useDataState from "../../store/use-data-state";
-import { dispatch } from "@designcombo/events";
-import { EDIT_OBJECT } from "@designcombo/state";
+import { dispatchGroupEdit } from "@/features/editor/utils/dispatch-group-edit";
 import {
   AlignCenter,
   AlignJustify,
@@ -20,19 +19,18 @@ import {
   X, XLineTop
 } from "lucide-react";
 import React, { useEffect, useState } from "react";
-import Opacity from "./opacity";
 import { Input } from "@/components/ui/input";
 import { ITrackItem } from "@designcombo/types";
 import { Label } from "@/components/ui/label";
-import ColorPicker from "@/components/color-picker";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ICompactFont, IFont } from "../../interfaces/editor";
+import { DEFAULT_FONT } from "../../constants/font";
 import useLayoutStore from "../../store/use-layout-store";
 import { useIsLargeScreen } from "@/hooks/use-media-query";
 import {RadioGroup, RadioGroupItem} from "@/components/ui/radio-group";
 import { useResolvedLineHeight } from "../../hooks/use-resolved-line-height";
+import { useMixedValue } from "../../hooks/use-mixed-value";
 import {Slider} from "@/components/ui/slider";
-import { formatColorDisplay } from "@/components/color-picker/helpers";
 import {ColorPickerField} from "@/features/editor/control-item/common/color-picker-field";
 import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
 import {Kbd, KbdGroup} from "@/components/ui/kbd";
@@ -41,6 +39,7 @@ interface TextControlsProps {
   trackItem: ITrackItem & any;
   properties: any;
   selectedFont: ICompactFont;
+  ids?: string[];
   onChangeFontFamily: (font: ICompactFont) => void;
   handleChangeFontStyle: (font: IFont) => void;
   onChangeFontSize: (v: number) => void;
@@ -57,6 +56,7 @@ export const TextControls = ({
   trackItem,
   properties,
   selectedFont,
+  ids,
   onChangeFontFamily,
   handleChangeFontStyle,
   onChangeFontSize,
@@ -68,42 +68,47 @@ export const TextControls = ({
   showFill = true,
   disabled = false,
 }: TextControlsProps) => {
+  const targetIds = ids && ids.length > 0 ? ids : [trackItem.id];
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
         <Label className="font-sans text-sm font-semibold">Typography</Label>
         <div className="flex flex-col gap-2">
           <FontFamily
+            ids={targetIds}
             handleChangeFont={onChangeFontFamily}
             fontFamilyDisplay={properties.fontFamilyDisplay}
           />
 
           <div className="flex gap-2">
             <FontStyle
+              ids={targetIds}
               selectedFont={selectedFont}
               handleChangeFontStyle={handleChangeFontStyle}
             />
-            <FontSize value={properties.fontSize} onChange={onChangeFontSize} />
+            <FontSize ids={targetIds} value={properties.fontSize} onChange={onChangeFontSize} />
           </div>
 
           <div className="flex gap-2">
             <FontLineHeight
               id={trackItem.id}
+              ids={targetIds}
               value={trackItem.details?.lineHeight}
               fontFamily={properties.fontFamily}
               fontSize={properties.fontSize}
             />
-            <FontWordBreak id={trackItem.id} value={trackItem.details?.wordBreak ?? "normal"} />
+            <FontWordBreak id={trackItem.id} ids={targetIds} value={trackItem.details?.wordBreak ?? "normal"} />
           </div>
 
           <div className="flex gap-2">
-            <FontLetterSpacing id={trackItem.id} value={trackItem.details?.letterSpacing} />
-            <FontWordSpacing id={trackItem.id} value={trackItem.details?.wordSpacing} />
+            <FontLetterSpacing id={trackItem.id} ids={targetIds} value={trackItem.details?.letterSpacing} />
+            <FontWordSpacing id={trackItem.id} ids={targetIds} value={trackItem.details?.wordSpacing} />
           </div>
 
           <div className="flex gap-2">
-            <Alignment value={properties.textAlign} onChange={onChangeTextAlign} />
-            <FontCase id={trackItem.id} value={trackItem.details?.textTransform ?? "none"} />
+            <Alignment ids={targetIds} value={properties.textAlign} onChange={onChangeTextAlign} />
+            <FontCase id={trackItem.id} ids={targetIds} value={trackItem.details?.textTransform ?? "none"} />
           </div>
         </div>
       </div>
@@ -112,10 +117,12 @@ export const TextControls = ({
         <Label className="font-sans text-sm font-semibold">Decoration</Label>
         <div className="flex flex-col gap-2">
           <TextDecorationLines
+            ids={targetIds}
             value={properties.textDecorationLines}
             onChange={onChangeTextDecorationLines}
           />
           <TextDecorationColor
+            ids={targetIds}
             value={properties.textDecorationColor}
             onChange={onChangeTextDecorationColor}
             disabled={disabled}
@@ -125,9 +132,10 @@ export const TextControls = ({
 
       {showFill && handleColorChange && (
         <div className="flex flex-col gap-3">
-          <Label className="font-sans text-sm font-semibold">Fill</Label>
+          <Label className="font-sans text-sm font-semibold">Colors</Label>
           <div className="flex flex-col gap-2">
             <FontColor
+              ids={targetIds}
               value={properties.color}
               handleColorChange={handleColorChange}
               disabled={disabled}
@@ -135,6 +143,7 @@ export const TextControls = ({
 
             {handleBackgroundChange && (
               <FontBackground
+                ids={targetIds}
                 value={properties.backgroundColor}
                 handleColorChange={handleBackgroundChange}
                 disabled={disabled}
@@ -148,14 +157,21 @@ export const TextControls = ({
 };
 
 const FontBackground = ({
+  ids,
   value,
   handleColorChange,
   disabled
 }: {
+  ids: string[];
   value: string;
   handleColorChange: (color: string) => void;
   disabled: boolean;
 }) => {
+  const { isMixed } = useMixedValue<string>(
+    ids,
+    (item) => item.details?.backgroundColor ?? "transparent"
+  );
+
   return (
     <div className="flex flex-col gap-2 flex-1">
       <div className="flex flex-1 items-center text-xs text-muted-foreground">
@@ -168,24 +184,32 @@ const FontBackground = ({
         mobileControlType="backgroundColor"
         mobileControlLabel="Background Color"
         disabled={disabled}
+        mixed={isMixed}
       />
     </div>
   );
 };
 
 const FontColor = ({
+  ids,
   value,
   handleColorChange,
   disabled
 }: {
+  ids: string[];
   value: string;
   handleColorChange: (color: string) => void;
   disabled: boolean;
 }) => {
+  const { isMixed } = useMixedValue<string>(
+    ids,
+    (item) => item.details?.color ?? "#ffffff"
+  );
+
   return (
     <div className="flex flex-col gap-2 flex-1">
       <div className="flex flex-1 items-center text-xs text-muted-foreground">
-        Text color
+        Text
       </div>
       <ColorPickerField
         value={value}
@@ -194,36 +218,48 @@ const FontColor = ({
         mobileControlType="color"
         mobileControlLabel="Color"
         disabled={disabled}
+        mixed={isMixed}
       />
     </div>
   );
 };
 
 const FontSize = ({
+  ids,
   value,
   onChange
 }: {
+  ids: string[];
   value: number;
   onChange: (v: number) => void;
 }) => {
-  const [localValue, setLocalValue] = useState<string | number>(value);
+  const { value: groupValue, isMixed } = useMixedValue<number>(
+    ids,
+    (item) => item.details?.fontSize ?? 62
+  );
+  const resolvedValue = groupValue ?? value;
+  const canonicalValue = isMixed ? "Mixed" : String(Math.round(resolvedValue));
+
+  const [localValue, setLocalValue] = useState<string>(canonicalValue);
 
   useEffect(() => {
-    setLocalValue(Math.round(value));
-  }, [value]);
+    setLocalValue(canonicalValue);
+  }, [canonicalValue]);
+
+  const commit = (num: number) => {
+    onChange(num);
+    setLocalValue(String(Math.round(num)));
+  };
 
   const handleBlur = () => {
-    if (localValue !== "") {
-      onChange(Number(localValue));
-    }
+    setLocalValue(canonicalValue);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      if (localValue !== "") {
-        onChange(Number(localValue));
-      }
-    }
+    if (e.key !== "Enter") return;
+    if (localValue === "" || localValue === "Mixed") return;
+    const num = Number(localValue);
+    if (!Number.isNaN(num)) commit(num);
   };
 
   return (
@@ -231,6 +267,9 @@ const FontSize = ({
       <div className="relative w-full">
         <Input
           value={localValue}
+          onFocus={() => {
+            if (localValue === "Mixed") setLocalValue("");
+          }}
           onChange={(e) => {
             const newValue = e.target.value;
             if (
@@ -249,17 +288,24 @@ const FontSize = ({
 };
 
 const FontFamily = ({
+  ids,
   handleChangeFont,
   fontFamilyDisplay
 }: {
+  ids: string[];
   handleChangeFont: (font: ICompactFont) => void;
   fontFamilyDisplay: string;
 }) => {
   const isLargeScreen = useIsLargeScreen();
-  const { setFloatingControl, trackItem, floatingControl } = useLayoutStore();
+  const { trackItem, floatingControl, setFloatingControl, setFloatingControlIds } = useLayoutStore();
   const { compactFonts } = useDataState();
   const [value, setValue] = useState("");
   const [fonts, setFonts] = useState<ICompactFont[]>(compactFonts);
+
+  const { isMixed } = useMixedValue<string>(
+    ids,
+    (item) => item.details?.fontFamily ?? DEFAULT_FONT.postScriptName
+  );
 
   useEffect(() => {
     const filteredFonts = compactFonts.filter((font) =>
@@ -268,6 +314,8 @@ const FontFamily = ({
     setFonts(filteredFonts);
   }, [value, compactFonts]);
 
+  const displayLabel = isMixed ? "Mixed" : fontFamilyDisplay;
+
   return (
     <div className="flex gap-2">
       {isLargeScreen ? (
@@ -275,14 +323,14 @@ const FontFamily = ({
           <Button
             className="flex w-full items-center justify-between text-sm font-normal"
             variant="outline"
-            onClick={() =>
-              setFloatingControl(
-                floatingControl === "font-family-picker" ? "" : "font-family-picker"
-              )
-            }
+            onClick={() => {
+              const next = floatingControl === "font-family-picker" ? "" : "font-family-picker";
+              setFloatingControlIds(next ? ids : []);
+              setFloatingControl(next);
+            }}
           >
             <div className="w-full overflow-hidden text-left">
-              <p className="truncate">{fontFamilyDisplay}</p>
+              <p className="truncate">{displayLabel}</p>
             </div>
             <ChevronDown className="text-muted-foreground" size={14} />
           </Button>
@@ -296,7 +344,7 @@ const FontFamily = ({
                 variant="outline"
               >
                 <div className="w-full overflow-hidden text-left">
-                  <p className="truncate">{fontFamilyDisplay}</p>
+                  <p className="truncate">{displayLabel}</p>
                 </div>
                 <ChevronDown className="text-muted-foreground" size={14} />
               </Button>
@@ -343,13 +391,20 @@ const FontFamily = ({
 };
 
 const FontStyle = ({
+  ids,
   selectedFont,
   handleChangeFontStyle
 }: {
+  ids: string[];
   selectedFont: ICompactFont;
   handleChangeFontStyle: (font: IFont) => void;
 }) => {
   const [open, setOpen] = useState(false);
+
+  const { isMixed } = useMixedValue<string>(
+    ids,
+    (item) => item.details?.fontFamily ?? DEFAULT_FONT.postScriptName
+  );
 
   return (
     <div className="flex gap-2 flex-1">
@@ -361,7 +416,7 @@ const FontStyle = ({
               variant="outline"
             >
               <div className="w-full overflow-hidden text-left">
-                <p className="truncate">{selectedFont.name}</p>
+                <p className="truncate">{isMixed ? "Mixed" : selectedFont.name}</p>
               </div>
               <ChevronDown className="text-muted-foreground" size={14} />
             </Button>
@@ -386,7 +441,7 @@ const FontStyle = ({
                   }}
                 >
                   {styleName}
-                  {styleName === selectedFont.name && (
+                  {!isMixed && styleName === selectedFont.name && (
                     <Check size={14} className="text-muted-foreground" />
                   )}
                 </div>
@@ -405,18 +460,33 @@ const decorationOptions = [
   { value: "overline", label: "Overline", icon: XLineTop }
 ];
 
+function splitTextDecoration(raw: string | undefined): { lines: string; color: string } {
+  const tokens = (raw || "").trim().split(/\s+/).filter(Boolean);
+  const decorationValues = ["underline", "overline", "line-through"];
+  const lines = tokens.filter((t) => decorationValues.includes(t)).join(" ");
+  const color = tokens.find((t) => t.startsWith("#")) ?? "";
+  return { lines, color };
+}
+
 const TextDecorationLines = ({
+  ids,
   value,
   onChange
 }: {
+  ids: string[];
   value: string;
   onChange: (v: string) => void;
 }) => {
+  const { isMixed } = useMixedValue<string>(
+    ids,
+    (item) => splitTextDecoration(item.details?.textDecoration).lines
+  );
+
   const [localValue, setLocalValue] = useState<string>(value);
 
   useEffect(() => {
-    setLocalValue(value);
-  }, [value]);
+    setLocalValue(isMixed ? "" : value);
+  }, [value, isMixed]);
 
   const activeLines = localValue.split(" ").filter(Boolean);
 
@@ -466,14 +536,21 @@ const TextDecorationLines = ({
 };
 
 const TextDecorationColor = ({
+  ids,
   value,
   onChange,
   disabled
 }: {
+  ids: string[];
   value: string;
   onChange: (v: string) => void;
   disabled: boolean;
 }) => {
+  const { isMixed } = useMixedValue<string>(
+    ids,
+    (item) => splitTextDecoration(item.details?.textDecoration).color
+  );
+
   return (
     <div className="flex flex-col gap-2 flex-1">
       <ColorPickerField
@@ -483,25 +560,33 @@ const TextDecorationColor = ({
         mobileControlType="textDecorationColor"
         mobileControlLabel="Decoration Color"
         disabled={disabled}
+        mixed={isMixed}
       />
     </div>
   );
 };
 
 const Alignment = ({
+  ids,
   value,
   onChange
 }: {
+  ids: string[];
   value: string;
   onChange: (v: string) => void;
 }) => {
+  const { isMixed } = useMixedValue<string>(
+    ids,
+    (item) => item.details?.textAlign ?? "left"
+  );
+
   return (
     <div className="flex flex-col gap-2 flex-1">
       <div className="flex flex-1 items-center text-xs text-muted-foreground">
         Align
       </div>
       <RadioGroup
-        value={value}
+        value={isMixed ? "" : value}
         onValueChange={onChange}
         className="grid grid-cols-3 w-full h-9"
       >
@@ -526,9 +611,15 @@ const fontCaseOptions = [
   { value: "lowercase", label: "Lowercase" }
 ];
 
-const FontCase = ({ id, value: initialValue }: { id: string; value: string }) => {
+const FontCase = ({ id, ids, value: initialValue }: { id: string; ids?: string[]; value: string }) => {
+  const targetIds = ids && ids.length > 0 ? ids : [id];
   const [value, setValue] = useState(initialValue ?? "none");
   const [open, setOpen] = useState(false);
+
+  const { isMixed } = useMixedValue<string>(
+    targetIds,
+    (item) => item.details?.textTransform ?? "none"
+  );
 
   useEffect(() => {
     setValue(initialValue ?? "none");
@@ -536,16 +627,12 @@ const FontCase = ({ id, value: initialValue }: { id: string; value: string }) =>
 
   const onChangeFontCase = (v: string) => {
     setValue(v);
-    dispatch(EDIT_OBJECT, {
-      payload: {
-        [id]: {
-          details: {
-            textTransform: v
-          }
-        }
-      }
-    });
+    dispatchGroupEdit(targetIds, { textTransform: v });
   };
+
+  const currentLabel = isMixed
+    ? "Mixed"
+    : fontCaseOptions.find((o) => o.value === value)?.label ?? "Default";
 
   return (
     <div className="flex flex-col gap-2 flex-1">
@@ -560,9 +647,7 @@ const FontCase = ({ id, value: initialValue }: { id: string; value: string }) =>
               variant="outline"
             >
               <div className="w-full overflow-hidden text-left">
-                <p className="truncate">
-                  {fontCaseOptions.find((o) => o.value === value)?.label ?? "Default"}
-                </p>
+                <p className="truncate">{currentLabel}</p>
               </div>
               <ChevronDown className="text-muted-foreground" size={14} />
             </Button>
@@ -583,7 +668,7 @@ const FontCase = ({ id, value: initialValue }: { id: string; value: string }) =>
                   key={index}
                 >
                   {option.label}
-                  {option.value === value && (
+                  {!isMixed && option.value === value && (
                     <Check size={14} className="text-muted-foreground" />
                   )}
                 </div>
@@ -598,76 +683,75 @@ const FontCase = ({ id, value: initialValue }: { id: string; value: string }) =>
 
 const FontLineHeight = ({
   id,
+  ids,
   value,
   fontFamily,
   fontSize
 }: {
   id: string;
+  ids?: string[];
   value: string | number;
   fontFamily?: string;
   fontSize?: number;
 }) => {
-  const [localValue, setLocalValue] = useState<string | number>(
-    (value === "normal" || fontSize === undefined)
-      ? "Auto"
-      : Math.round(Number(value) * fontSize)
+  const targetIds = ids && ids.length > 0 ? ids : [id];
+
+  const { isMixed } = useMixedValue<string | number>(
+    targetIds,
+    (item) => item.details?.lineHeight ?? "normal"
+  );
+  const { isMixed: isFontSizeMixed } = useMixedValue<number>(
+    targetIds,
+    (item) => item.details?.fontSize ?? 62
+  );
+  const { isMixed: isFontFamilyMixed } = useMixedValue<string>(
+    targetIds,
+    (item) => item.details?.fontFamily ?? DEFAULT_FONT.postScriptName
   );
 
-  const onChange = (v: string | number) => {
-    let dispatchValue;
-    if (v === "normal" || fontSize === undefined) {
-      setLocalValue("Auto");
-      dispatchValue = "normal";
-    } else {
-      setLocalValue(Number(v));
-      dispatchValue = Number(v) / fontSize;
-    }
+  const canonicalValue = isMixed
+    ? "Mixed"
+    : (value === "normal" || fontSize === undefined)
+      ? "Auto"
+      : String(Math.round(Number(value) * fontSize));
 
-    dispatch(EDIT_OBJECT, {
-      payload: {
-        [id]: {
-          details: {
-            lineHeight: dispatchValue,
-          }
-        }
-      }
-    });
-  };
+  const [localValue, setLocalValue] = useState<string>(canonicalValue);
 
   useEffect(() => {
-    if (value === "normal" || fontSize === undefined) {
+    setLocalValue(canonicalValue);
+  }, [canonicalValue]);
+
+  const commit = (v: "normal" | number) => {
+    if (v === "normal" || fontSize === undefined) {
+      dispatchGroupEdit(targetIds, { lineHeight: "normal" });
       setLocalValue("Auto");
     } else {
-      const num = Number(value);
-      setLocalValue(Number.isNaN(num) ? "Auto" : Math.round(num * fontSize));
+      dispatchGroupEdit(targetIds, { lineHeight: v / fontSize });
+      setLocalValue(String(Math.round(v)));
     }
-  }, [value]);
+  };
 
   const handleBlur = () => {
-    if (localValue === "") {
-      onChange("normal");
-      return;
-    }
-
-    const num = Number(localValue);
-    if (!Number.isNaN(num)) {
-      onChange(num);
-    }
+    setLocalValue(canonicalValue);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      const num = Number(localValue);
-      if (localValue !== "" && !Number.isNaN(num)) {
-        onChange(num);
-      }
+    if (e.key !== "Enter") return;
+    if (localValue === "Mixed") return;
+    if (localValue === "") {
+      commit("normal");
+      return;
     }
+    const num = Number(localValue);
+    if (!Number.isNaN(num)) commit(num);
   };
 
   const resolvedNormal = useResolvedLineHeight(fontFamily, fontSize);
-  const placeholder = localValue === "" && resolvedNormal !== null
-    ? String(resolvedNormal)
-    : undefined;
+  const canShowResolvedHint = !isMixed && !isFontSizeMixed && !isFontFamilyMixed;
+  const placeholder =
+    localValue === "" && resolvedNormal !== null && canShowResolvedHint
+      ? String(resolvedNormal)
+      : undefined;
 
   return (
     <div className="flex flex-col gap-2 flex-1">
@@ -680,7 +764,7 @@ const FontLineHeight = ({
             value={localValue}
             placeholder={placeholder}
             onFocus={() => {
-              if (localValue === "Auto") setLocalValue("");
+              if (localValue === "Auto" || localValue === "Mixed") setLocalValue("");
             }}
             onChange={(e) => {
               const newValue = e.target.value;
@@ -706,26 +790,28 @@ const wordBreakOptions = [
   { value: "break-all", label: "Break all" }
 ];
 
-const FontWordBreak = ({ id, value }: { id: string; value: string }) => {
+const FontWordBreak = ({ id, ids, value }: { id: string; ids?: string[]; value: string }) => {
+  const targetIds = ids && ids.length > 0 ? ids : [id];
+  const { isMixed } = useMixedValue<string>(
+    targetIds,
+    (item) => item.details?.wordBreak ?? "normal"
+  );
+
   const [localValue, setLocalValue] = useState<string>(value);
   const [open, setOpen] = useState(false);
 
   const onChange = (v: string) => {
     setLocalValue(v);
-    dispatch(EDIT_OBJECT, {
-      payload: {
-        [id]: {
-          details: {
-            wordBreak: v
-          }
-        }
-      }
-    });
+    dispatchGroupEdit(targetIds, { wordBreak: v });
   };
 
   useEffect(() => {
     setLocalValue(value);
   }, [value]);
+
+  const currentLabel = isMixed
+    ? "Mixed"
+    : wordBreakOptions.find((o) => o.value === localValue)?.label ?? "Default";
 
   return (
     <div className="flex flex-col gap-2 flex-1">
@@ -741,9 +827,7 @@ const FontWordBreak = ({ id, value }: { id: string; value: string }) => {
                 variant="outline"
               >
                 <div className="w-full overflow-hidden text-left">
-                  <p className="truncate">
-                    {wordBreakOptions.find((o) => o.value === localValue)?.label ?? "Default"}
-                  </p>
+                  <p className="truncate">{currentLabel}</p>
                 </div>
                 <ChevronDown className="text-muted-foreground" size={14} />
               </Button>
@@ -764,7 +848,7 @@ const FontWordBreak = ({ id, value }: { id: string; value: string }) => {
                     key={index}
                   >
                     {option.label}
-                    {option.value === localValue && (
+                    {!isMixed && option.value === localValue && (
                       <Check size={14} className="text-muted-foreground" />
                     )}
                   </div>
@@ -778,52 +862,48 @@ const FontWordBreak = ({ id, value }: { id: string; value: string }) => {
   );
 };
 
-const FontLetterSpacing = ({ id, value }: { id: string; value: string | number }) => {
-  const [localValue, setLocalValue] = useState<string | number>(
-    value === "normal" ? "Auto" : Math.round(Number(value))
+const FontLetterSpacing = ({ id, ids, value }: { id: string; ids?: string[]; value: string | number }) => {
+  const targetIds = ids && ids.length > 0 ? ids : [id];
+  const { isMixed } = useMixedValue<string | number>(
+    targetIds,
+    (item) => item.details?.letterSpacing ?? "normal"
   );
 
-  const onChange = (v: string | number) => {
-    setLocalValue(v === "normal" ? "Auto" : Number(v));
-    dispatch(EDIT_OBJECT, {
-      payload: {
-        [id]: {
-          details: {
-            letterSpacing: v
-          }
-        }
-      }
-    });
-  };
+  const canonicalValue = isMixed
+    ? "Mixed"
+    : value === "normal"
+      ? "Auto"
+      : String(Math.round(Number(value)));
+
+  const [localValue, setLocalValue] = useState<string>(canonicalValue);
 
   useEffect(() => {
-    if (value === "normal") {
+    setLocalValue(canonicalValue);
+  }, [canonicalValue]);
+
+  const commit = (v: "normal" | number) => {
+    if (v === "normal") {
+      dispatchGroupEdit(targetIds, { letterSpacing: "normal" });
       setLocalValue("Auto");
     } else {
-      const num = Number(value);
-      setLocalValue(Number.isNaN(num) ? "Auto" : Math.round(num));
+      dispatchGroupEdit(targetIds, { letterSpacing: v });
+      setLocalValue(String(Math.round(v)));
     }
-  }, [value]);
+  };
 
   const handleBlur = () => {
-    if (localValue === "") {
-      onChange("normal");
-      return;
-    }
-
-    const num = Number(localValue);
-    if (!Number.isNaN(num)) {
-      onChange(num);
-    }
+    setLocalValue(canonicalValue);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      const num = Number(localValue);
-      if (localValue !== "" && !Number.isNaN(num)) {
-        onChange(num);
-      }
+    if (e.key !== "Enter") return;
+    if (localValue === "Mixed") return;
+    if (localValue === "") {
+      commit("normal");
+      return;
     }
+    const num = Number(localValue);
+    if (!Number.isNaN(num)) commit(num);
   };
 
   return (
@@ -836,15 +916,11 @@ const FontLetterSpacing = ({ id, value }: { id: string; value: string | number }
           <Input
             value={localValue}
             onFocus={() => {
-              if (localValue === "Auto") setLocalValue("");
+              if (localValue === "Auto" || localValue === "Mixed") setLocalValue("");
             }}
             onChange={(e) => {
               const newValue = e.target.value;
-              if (
-                newValue === "" ||
-                newValue === "-" ||
-                !Number.isNaN(Number(newValue))
-              ) {
+              if (newValue === "" || !Number.isNaN(Number(newValue))) {
                 setLocalValue(newValue);
               }
             }}
@@ -857,52 +933,48 @@ const FontLetterSpacing = ({ id, value }: { id: string; value: string | number }
   );
 };
 
-const FontWordSpacing = ({ id, value }: { id: string; value: string | number }) => {
-  const [localValue, setLocalValue] = useState<string | number>(
-    value === "normal" ? "Auto" : Math.round(Number(value))
+const FontWordSpacing = ({ id, ids, value }: { id: string; ids?: string[]; value: string | number }) => {
+  const targetIds = ids && ids.length > 0 ? ids : [id];
+  const { isMixed } = useMixedValue<string | number>(
+    targetIds,
+    (item) => item.details?.wordSpacing ?? "normal"
   );
 
-  const onChange = (v: string | number) => {
-    setLocalValue(v === "normal" ? "Auto" : Number(v));
-    dispatch(EDIT_OBJECT, {
-      payload: {
-        [id]: {
-          details: {
-            wordSpacing: v
-          }
-        }
-      }
-    });
-  };
+  const canonicalValue = isMixed
+    ? "Mixed"
+    : value === "normal"
+      ? "Auto"
+      : String(Math.round(Number(value)));
+
+  const [localValue, setLocalValue] = useState<string>(canonicalValue);
 
   useEffect(() => {
-    if (value === "normal") {
+    setLocalValue(canonicalValue);
+  }, [canonicalValue]);
+
+  const commit = (v: "normal" | number) => {
+    if (v === "normal") {
+      dispatchGroupEdit(targetIds, { wordSpacing: "normal" });
       setLocalValue("Auto");
     } else {
-      const num = Number(value);
-      setLocalValue(Number.isNaN(num) ? "Auto" : Math.round(num));
+      dispatchGroupEdit(targetIds, { wordSpacing: v });
+      setLocalValue(String(Math.round(v)));
     }
-  }, [value]);
+  };
 
   const handleBlur = () => {
-    if (localValue === "") {
-      onChange("normal");
-      return;
-    }
-
-    const num = Number(localValue);
-    if (!Number.isNaN(num)) {
-      onChange(num);
-    }
+    setLocalValue(canonicalValue);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      const num = Number(localValue);
-      if (localValue !== "" && !Number.isNaN(num)) {
-        onChange(num);
-      }
+    if (e.key !== "Enter") return;
+    if (localValue === "Mixed") return;
+    if (localValue === "") {
+      commit("normal");
+      return;
     }
+    const num = Number(localValue);
+    if (!Number.isNaN(num)) commit(num);
   };
 
   return (
@@ -915,15 +987,11 @@ const FontWordSpacing = ({ id, value }: { id: string; value: string | number }) 
           <Input
             value={localValue}
             onFocus={() => {
-              if (localValue === "Auto") setLocalValue("");
+              if (localValue === "Auto" || localValue === "Mixed") setLocalValue("");
             }}
             onChange={(e) => {
               const newValue = e.target.value;
-              if (
-                newValue === "" ||
-                newValue === "-" ||
-                !Number.isNaN(Number(newValue))
-              ) {
+              if (newValue === "" || !Number.isNaN(Number(newValue))) {
                 setLocalValue(newValue);
               }
             }}
@@ -931,66 +999,6 @@ const FontWordSpacing = ({ id, value }: { id: string; value: string | number }) 
             onKeyDown={handleKeyDown}
           />
         </div>
-      </div>
-    </div>
-  );
-};
-
-const BorderRadius = ({ id, value, disabled }: { id: string; value: number; disabled: boolean }) => {
-  const [localValue, setLocalValue] = useState<number>(value * 2);
-
-  const onChange = (v: number) => {
-    dispatch(EDIT_OBJECT, {
-      payload: {
-        [id]: {
-          details: {
-            borderRadius: v / 2
-          }
-        }
-      }
-    });
-  };
-
-  useEffect(() => {
-    setLocalValue(Math.round(value * 2));
-  }, [value]);
-
-  return (
-    <div className="flex flex-col gap-2 flex-1">
-      <div className="flex flex-1 items-center text-xs text-muted-foreground">
-        Corner radius
-      </div>
-      <div
-        className="w-full flex gap-2"
-      >
-        <Input
-          max={100}
-          className="w-15 text-center text-sm"
-          type="number"
-          onChange={(e) => {
-            const newValue = Number(e.target.value);
-            if (newValue >= 0 && newValue <= 100) {
-              setLocalValue(newValue); // Update local state
-              onChange(newValue); // Optionally propagate immediately, or adjust as needed
-            }
-          }}
-          value={localValue} // Use local state for input value
-          disabled={disabled}
-        />
-        <Slider
-          id="opacity"
-          value={[localValue]}
-          onValueChange={(e) => {
-            setLocalValue(e[0]);
-            onChange(e[0]); // propagate immediately on every drag tick
-          }}
-          min={0}
-          max={100}
-          step={1}
-          aria-label="Corner Radius"
-          className="w-full"
-          disabled={disabled}
-        />
       </div>
     </div>
   );

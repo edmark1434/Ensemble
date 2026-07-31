@@ -87,14 +87,14 @@ const useStore = create<ITimelineStore>((set, get) => ({
   },
 
   background: {
-    type: "color",
-    value: "transparent"
+    type: "color" as const,
+    value: "#000000"
   },
   viewTimeline: true,
   setViewTimeline: (viewTimeline) => set({ viewTimeline }),
 
   timeline: null,
-  duration: 1000,
+  duration: 0,
   fps: 30,
   scale: TIMELINE_ZOOM_LEVELS[27],
   scroll: {

@@ -138,7 +138,7 @@ const BasicImage = ({
           {isLocked && (
             <div className="flex gap-2 items-center text-primary text-sm font-normal">
               <Lock size={16} />
-              <span>This element has been locked</span>
+              <span>This item has been locked</span>
             </div>
           )}
           {components

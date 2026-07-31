@@ -17,18 +17,17 @@ import { LazyPresetPreview } from "@/features/editor/control-item/floating-contr
 export const createPresetButtons = (
   filter: (key: string) => boolean,
   type: "in" | "out" | "loop",
-  activeIds: string[],
+  ids: string[],
   animationType: "text" | "media",
   trackItemsMap: any
 ) => {
-  const currentItem = trackItemsMap?.[activeIds[0]];
-  const isNoneSelected = !currentItem?.animations?.[type];
+  const isNoneSelected = ids.every((id) => !trackItemsMap?.[id]?.animations?.[type]);
 
   const noneButton = (
     <div
       key="none"
       className="flex cursor-pointer flex-col gap-2 text-center text-xs text-muted-foreground items-center justify-start"
-      onClick={() => clearAnimation(type, activeIds, trackItemsMap)}
+      onClick={() => clearAnimation(type, ids, trackItemsMap)}
     >
       <div
         className={cn(
@@ -47,28 +46,19 @@ export const createPresetButtons = (
     .map((presetKey) => {
       const preset = presets[presetKey as "scaleIn"];
 
-      if (
-        animationType === "media" &&
-        preset.property?.toLowerCase().includes("text")
-      )
+      if (animationType === "media" && preset.property?.toLowerCase().includes("text"))
         return null;
 
-      let isSelected = false;
-      if (trackItemsMap) {
-        const activeItem = trackItemsMap[activeIds[0]];
-        const animations = activeItem?.animations;
-        isSelected = ["in", "out", "loop"].some(
-          (t) => animations?.[t]?.name === presetKey
-        );
-      }
+      const isSelected = ids.every((id) => {
+        const animations = trackItemsMap?.[id]?.animations;
+        return ["in", "out", "loop"].some((t) => animations?.[t]?.name === presetKey);
+      });
 
       return (
         <div
           key={presetKey}
           className="flex cursor-pointer flex-col gap-2 text-center text-xs text-muted-foreground items-center justify-start"
-          onClick={() =>
-            applyAnimation(presetKey as PresetName, type, activeIds, trackItemsMap)
-          }
+          onClick={() => applyAnimation(presetKey as PresetName, type, ids, trackItemsMap)}
         >
           <div
             className={cn(
@@ -92,140 +82,113 @@ export const createPresetButtons = (
 const applyAnimation = (
   presetName: PresetName,
   type: "in" | "out" | "loop",
-  activeIds: string[],
+  ids: string[],
   trackItemsMap: any
 ) => {
-  if (!activeIds.length) {
+  if (!ids.length) {
     console.warn("No active ID to apply the animation to.");
     return;
   }
-  const presetAnimation: any = presets[presetName];
-  const composition: Animation[] = [presetAnimation];
-  if (presetName.includes("rotate") && presetName.includes("In"))
-    composition.push(presets.scaleIn);
-  else if (presetName.includes("shake") && presetName.includes("In")) {
-    const shakeMovX = trackItemsMap[activeIds[0]].details.width / 6;
-    const shakeMovY = trackItemsMap[activeIds[0]].details.height / 6;
-    composition[0].from = presetName.includes("Horizontal")
-      ? shakeMovX
-      : shakeMovY;
-    composition[0].to = presetName.includes("Horizontal")
-      ? -shakeMovX
-      : -shakeMovY;
-    composition.push({
-      property: "scale",
-      from: 2,
-      to: 1,
-      durationInFrames: 30,
-      ease: Easing.ease,
-      previewUrl: "https://cdn.designcombo.dev/animations/ScaleIn.webp",
-      name: "Scale"
-    });
-  } else if (presetName.includes("shake") && presetName.includes("Out")) {
-    const shakeMovX = trackItemsMap[activeIds[0]].details.width / 6;
-    const shakeMovY = trackItemsMap[activeIds[0]].details.height / 6;
-    composition[0].from = presetName.includes("Horizontal")
-      ? -shakeMovX
-      : -shakeMovY;
-    composition[0].to = presetName.includes("Horizontal")
-      ? shakeMovX
-      : shakeMovY;
-    composition.push({
-      property: "scale",
-      from: 1,
-      to: 2,
-      durationInFrames: 30,
-      ease: Easing.ease,
-      previewUrl: "https://cdn.designcombo.dev/animations/ScaleOut.webp",
-      name: "Scale"
-    });
-  }
-  dispatch(ADD_ANIMATION, {
-    payload: {
-      id: activeIds[0],
-      animations: {
-        [type]: {
-          name: presetName,
-          composition
-        }
-      }
+
+  ids.forEach((id) => {
+    // Spread instead of referencing presets[presetName] directly — the old
+    // code mutated composition[0].from/.to on the shared preset object
+    // itself, corrupting it for every future use of that preset.
+    const presetAnimation: any = { ...presets[presetName] };
+    const composition: Animation[] = [presetAnimation];
+
+    if (presetName.includes("rotate") && presetName.includes("In")) {
+      composition.push(presets.scaleIn);
+    } else if (presetName.includes("shake") && presetName.includes("In")) {
+      const shakeMovX = trackItemsMap[id].details.width / 6;
+      const shakeMovY = trackItemsMap[id].details.height / 6;
+      composition[0].from = presetName.includes("Horizontal") ? shakeMovX : shakeMovY;
+      composition[0].to = presetName.includes("Horizontal") ? -shakeMovX : -shakeMovY;
+      composition.push({
+        property: "scale",
+        from: 2,
+        to: 1,
+        durationInFrames: 30,
+        ease: Easing.ease,
+        previewUrl: "https://cdn.designcombo.dev/animations/ScaleIn.webp",
+        name: "Scale"
+      });
+    } else if (presetName.includes("shake") && presetName.includes("Out")) {
+      const shakeMovX = trackItemsMap[id].details.width / 6;
+      const shakeMovY = trackItemsMap[id].details.height / 6;
+      composition[0].from = presetName.includes("Horizontal") ? -shakeMovX : -shakeMovY;
+      composition[0].to = presetName.includes("Horizontal") ? shakeMovX : shakeMovY;
+      composition.push({
+        property: "scale",
+        from: 1,
+        to: 2,
+        durationInFrames: 30,
+        ease: Easing.ease,
+        previewUrl: "https://cdn.designcombo.dev/animations/ScaleOut.webp",
+        name: "Scale"
+      });
     }
+
+    dispatch(ADD_ANIMATION, {
+      payload: { id, animations: { [type]: { name: presetName, composition } } }
+    });
   });
 };
 
 export const clearAnimation = (
   type: "in" | "out" | "loop",
-  activeIds: string[],
+  ids: string[],
   trackItemsMap: any
 ) => {
-  if (!activeIds.length) {
+  if (!ids.length) {
     console.warn("No active ID to clear the animation from.");
     return;
   }
 
-  dispatch(EDIT_OBJECT, {
-    payload: {
-      [activeIds[0]]: {
-        animations: {
-          [type]: undefined
-        }
-      }
-    }
+  const payload: Record<string, any> = {};
+  ids.forEach((id) => {
+    payload[id] = { animations: { [type]: undefined } };
   });
+
+  dispatch(EDIT_OBJECT, { payload });
 };
 
 export default function AnimationPicker({
-                                          animationType = "media"
-                                        }: {
+  animationType = "media"
+}: {
   animationType?: "text" | "media";
 }) {
+  const { animationPickerInitialTab, floatingControlIds, setFloatingControl } = useLayoutStore();
   const activeIds = useStore((state) => state.activeIds);
-  const currentItem = useStore((state) => state.trackItemsMap[state.activeIds[0]]);
   const trackItemsMap = useStore((state) => state.trackItemsMap);
-  const { animationPickerInitialTab } = useLayoutStore();
+
+  const targetIds = floatingControlIds && floatingControlIds.length > 0 ? floatingControlIds : activeIds;
+  const currentItem = trackItemsMap[targetIds[0]];
+
   const [activeTab, setActiveTab] = useState<"in" | "out" | "loop">(animationPickerInitialTab);
   const hasCurrentTabAnimation = !!currentItem?.animations?.[activeTab];
 
+  const idsKey = targetIds.join(",");
+  const inKey = targetIds.map((id) => trackItemsMap[id]?.animations?.in?.name ?? "none").join(",");
+  const outKey = targetIds.map((id) => trackItemsMap[id]?.animations?.out?.name ?? "none").join(",");
+  const loopKey = targetIds.map((id) => trackItemsMap[id]?.animations?.loop?.name ?? "none").join(",");
+
   const presetInButtons = useMemo(
-    () =>
-      createPresetButtons(
-        (key) => key.includes("In"),
-        "in",
-        activeIds,
-        animationType,
-        trackItemsMap
-      ),
-    [activeIds[0], currentItem?.animations?.in?.name, animationType]
+    () => createPresetButtons((key) => key.includes("In"), "in", targetIds, animationType, trackItemsMap),
+    [idsKey, inKey, animationType]
   );
   const presetOutButtons = useMemo(
-    () =>
-      createPresetButtons(
-        (key) => key.includes("Out"),
-        "out",
-        activeIds,
-        animationType,
-        trackItemsMap
-      ),
-    [activeIds[0], currentItem?.animations?.out?.name, animationType]
+    () => createPresetButtons((key) => key.includes("Out"), "out", targetIds, animationType, trackItemsMap),
+    [idsKey, outKey, animationType]
   );
   const presetLoopButtons = useMemo(
-    () =>
-      createPresetButtons(
-        (key) => key.includes("Loop"),
-        "loop",
-        activeIds,
-        animationType,
-        trackItemsMap
-      ),
-    [activeIds[0], currentItem?.animations?.loop?.name, animationType]
+    () => createPresetButtons((key) => key.includes("Loop"), "loop", targetIds, animationType, trackItemsMap),
+    [idsKey, loopKey, animationType]
   );
 
-  const { setFloatingControl } = useLayoutStore();
   const floatingRef = useRef<HTMLDivElement>(null);
+  useClickOutside(floatingRef as React.RefObject<HTMLElement>, () => setFloatingControl(""));
 
-  useClickOutside(floatingRef as React.RefObject<HTMLElement>, () =>
-    setFloatingControl("")
-  );
   return (
     <div
       ref={floatingRef}
