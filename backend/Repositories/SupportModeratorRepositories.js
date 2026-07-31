@@ -281,7 +281,13 @@ async function getSupportStaffWorkload() {
           AND LOWER(d.status) NOT IN ('resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn')) AS open_disputes
     FROM staff s
     INNER JOIN accounts a ON a.account_id = s.account_id
-    WHERE s.role IN ('Support Moderator', 'Admin')
+    WHERE (
+        LOWER(s.role) = 'support moderator'
+        OR LOWER(s.role) LIKE '%forum%'
+        OR LOWER(s.role) LIKE '%marketplace%'
+        OR LOWER(s.role) LIKE '%jobs%'
+      )
+      AND LOWER(s.role) NOT IN ('admin', 'administrator')
       AND a.deleted_at IS NULL
     ORDER BY open_tickets DESC, open_disputes DESC
   `);

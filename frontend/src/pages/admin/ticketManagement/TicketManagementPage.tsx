@@ -364,6 +364,7 @@ export default function TicketManagementPage() {
             onOpenTicket={setSelectedTicketId}
             showQueue
             showAdminToggle
+            desk="admin"
           />
         )}
         {tab === 'mine' && (
@@ -386,6 +387,8 @@ export default function TicketManagementPage() {
             onOpenTicket={setSelectedTicketId}
             showQueue={false}
             showAdminToggle={false}
+            showAssigneeFilters={false}
+            desk="admin"
             emptyHint={
               myStaffId
                 ? 'No tickets assigned to you. Pick up unassigned tickets from Support tickets.'
@@ -549,6 +552,8 @@ function TicketsTab({
   onOpenTicket,
   showQueue = true,
   showAdminToggle = true,
+  showAssigneeFilters = true,
+  desk = 'admin',
   emptyHint = 'No tickets match this filter.',
 }: {
   title?: string;
@@ -565,6 +570,8 @@ function TicketsTab({
   onOpenTicket: (id: number | string) => void;
   showQueue?: boolean;
   showAdminToggle?: boolean;
+  showAssigneeFilters?: boolean;
+  desk?: 'admin' | 'support';
   emptyHint?: string;
 }) {
   const shortId = (value: string | number | null | undefined) => {
@@ -629,8 +636,10 @@ function TicketsTab({
           channels={channels}
           moderators={moderators}
           accent="rose"
+          desk={desk}
           showQueue={showQueue}
           showAdminToggle={showAdminToggle}
+          showAssigneeFilters={showAssigneeFilters}
           resultCount={tickets.length}
           totalCount={totalCount}
           variant="desk"

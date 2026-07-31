@@ -412,6 +412,7 @@ export default function SupportTicketManagement() {
             onFiltersChange={setTicketFilters}
             onOpenTicket={setSelectedTicketId}
             showQueue
+            showAssigneeFilters
           />
         )}
         {tab === "mine" && (
@@ -433,6 +434,7 @@ export default function SupportTicketManagement() {
             onFiltersChange={setMyFilters}
             onOpenTicket={setSelectedTicketId}
             showQueue={false}
+            showAssigneeFilters={false}
             emptyHint={
               myStaffId
                 ? "No tickets assigned to you. Pick up unassigned tickets from Support tickets."
@@ -595,6 +597,7 @@ function TicketsTab({
   onFiltersChange,
   onOpenTicket,
   showQueue = true,
+  showAssigneeFilters = true,
   emptyHint = "No tickets match this filter.",
 }: {
   title: string;
@@ -615,6 +618,7 @@ function TicketsTab({
   onFiltersChange: (next: TicketFilterState) => void;
   onOpenTicket: (id: number | string) => void;
   showQueue?: boolean;
+  showAssigneeFilters?: boolean;
   emptyHint?: string;
 }) {
   const shortId = (value: string | number | null | undefined) => {
@@ -679,8 +683,10 @@ function TicketsTab({
           channels={channels}
           moderators={moderators}
           accent="sky"
+          desk="support"
           showQueue={showQueue}
           showAdminToggle={false}
+          showAssigneeFilters={showAssigneeFilters}
           resultCount={tickets.length}
           totalCount={totalCount}
           variant="desk"
