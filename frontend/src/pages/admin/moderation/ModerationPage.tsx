@@ -42,10 +42,42 @@ import type {
   ModerationOverview,
 } from './moderationTypes';
 import type { Dispute, UserReport } from '../ticketManagement/ticketTypes';
+import ModeratorDisputeDetailModal from '@/pages/moderator/shared/ModeratorDisputeDetailModal';
 import DisputesTab from './DisputesTab';
 import ReportsTab from './ReportsTab';
 import ListingApprovalsTab from './ListingApprovalsTab';
 import IdentityVerificationTab from './IdentityVerificationTab';
+
+const CLOSED_DISPUTE_STATUSES = new Set([
+  'resolved',
+  'closed',
+  'sanctioned',
+  'dismissed',
+  'withdrawn',
+]);
+
+function disputeToModerationCase(d: Dispute): ModerationCase {
+  return {
+    id: String(d.id),
+    source: 'dispute',
+    type: 'Dispute',
+    priority: d.priority || 'Medium',
+    target: d.title || d.number,
+    targetHandle: d.number,
+    targetType: 'Dispute',
+    reason: d.reason || d.title || 'Dispute case',
+    description: d.reason,
+    referenceNumber: d.number,
+    assignedRole: d.assignee?.role || null,
+    assignedStaffId: d.assignee?.staffId ?? null,
+    assignedStaffName: d.assignee?.name || null,
+    openedAt: d.openedAt,
+    status: d.status,
+    canTakeOver: false,
+    canEdit: true,
+    canDelete: true,
+  };
+}
 
 const STAFF_ROLE_OPTIONS = [
   { value: 'Support Moderator', label: 'Support Moderator' },
@@ -748,7 +780,7 @@ function CasesTab({
   onQueueChange: (queue: CaseQueue) => void;
   onRefresh: () => void;
 }) {
-  type MineCategory = 'all' | 'report' | 'listing' | 'identity';
+  type MineCategory = 'all' | 'dispute' | 'report' | 'listing' | 'identity';
   const [mineCategory, setMineCategory] = useState<MineCategory>('all');
   const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('all');
@@ -763,18 +795,26 @@ function CasesTab({
 
   const myStaffId = staffId != null && staffId !== '' ? String(staffId) : null;
 
-  const myCases = useMemo(
-    () =>
-      myStaffId
-        ? cases.filter(
-            (c) =>
-              c.assignedStaffId != null &&
-              String(c.assignedStaffId) === myStaffId &&
-              (c.source === 'report' || c.source === 'listing' || c.source === 'identity')
-          )
-        : [],
-    [cases, myStaffId]
-  );
+  const myCases = useMemo(() => {
+    if (!myStaffId) return [];
+    const fromQueues = cases.filter(
+      (c) =>
+        c.assignedStaffId != null &&
+        String(c.assignedStaffId) === myStaffId &&
+        (c.source === 'report' || c.source === 'listing' || c.source === 'identity')
+    );
+    const fromDisputes = disputes
+      .filter(
+        (d) =>
+          d.assignee != null &&
+          String(d.assignee.staffId) === myStaffId &&
+          !CLOSED_DISPUTE_STATUSES.has(String(d.status).toLowerCase())
+      )
+      .map(disputeToModerationCase);
+    return [...fromQueues, ...fromDisputes].sort(
+      (a, b) => new Date(b.openedAt || 0).getTime() - new Date(a.openedAt || 0).getTime()
+    );
+  }, [cases, disputes, myStaffId]);
   const myCasesByCategory = useMemo(() => {
     if (mineCategory === 'all') return myCases;
     return myCases.filter((c) => c.source === mineCategory);
@@ -782,6 +822,7 @@ function CasesTab({
   const myCategoryCounts = useMemo(
     () => ({
       all: myCases.length,
+      dispute: myCases.filter((c) => c.source === 'dispute').length,
       report: myCases.filter((c) => c.source === 'report').length,
       listing: myCases.filter((c) => c.source === 'listing').length,
       identity: myCases.filter((c) => c.source === 'identity').length,
@@ -836,6 +877,7 @@ function CasesTab({
   const typeOptions = useMemo(() => {
     if (mineCategory === 'all') {
       return uniqueOptions([
+        'Dispute',
         'Report',
         'Listing review',
         'Identity verification',
@@ -1064,6 +1106,7 @@ function CasesTab({
           {(
             [
               { id: 'all' as const, label: 'All assigned' },
+              { id: 'dispute' as const, label: 'Disputes' },
               { id: 'report' as const, label: 'Reports' },
               { id: 'listing' as const, label: 'Listing approvals' },
               { id: 'identity' as const, label: 'Identity verification' },
@@ -1097,7 +1140,7 @@ function CasesTab({
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search my reports, listings, identity…"
+              placeholder="Search my disputes, reports, listings, identity…"
               className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2 pl-9 pr-3 text-sm text-white outline-none focus:ring-2 focus:ring-rose-500/15"
             />
           </div>
@@ -1147,7 +1190,7 @@ function CasesTab({
             myStaffId
               ? hasFilters
                 ? 'No assigned cases match your filters.'
-                : 'No cases are assigned to you yet. Take over a report, listing, or identity review to see it here.'
+                : 'No cases are assigned to you yet. Take over a dispute, report, listing, or identity review to see it here.'
               : 'Staff session required to show your assigned cases.'
           }
           busyId={busyId || (identityLoading ? selected?.id : null)}
@@ -1168,6 +1211,17 @@ function CasesTab({
           onTakeOver={handleTakeOver}
         />
       </section>
+
+      {selected && mode === 'view' && selected.source === 'dispute' && (
+        <ModeratorDisputeDetailModal
+          disputeId={selected.id}
+          endpointBase="/api/admin/disputes"
+          accent="rose"
+          adminMode
+          onClose={closeModal}
+          onUpdated={onRefresh}
+        />
+      )}
 
       {selected && mode === 'view' && selected.source === 'report' && (
         <ReportCaseDetailModal
