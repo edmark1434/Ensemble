@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Lock, Mic, MicOff, PhoneOff, Video, VideoOff, X } from "lucide-react";
-import useChatState from "../chat_state";
+import useChatState, { formatCallDuration } from "../chat_state";
 import useGlobalState from "@/lib/global_state";
 
 const callAvatarUrl = (key: string | null | undefined, name: string) => {
@@ -132,6 +132,7 @@ export const CallOverlay = () => {
   const [permissionError, setPermissionError] = useState("");
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const remoteIsSpeaking = useIsSpeaking(remoteStream);
 
   useEffect(() => {
@@ -164,6 +165,21 @@ export const CallOverlay = () => {
       )
     );
   }, [localStream]);
+
+  useEffect(() => {
+    if (activeCall?.status !== "active") {
+      setElapsedSeconds(0);
+      return;
+    }
+    const updateDuration = () => {
+      setElapsedSeconds(
+        Math.max(0, Math.floor((Date.now() - activeCall.startedAt) / 1000))
+      );
+    };
+    updateDuration();
+    const interval = window.setInterval(updateDuration, 1000);
+    return () => window.clearInterval(interval);
+  }, [activeCall?.callId, activeCall?.startedAt, activeCall?.status]);
 
   if (!activeCall) return null;
   const isGroupCall = activeCall.conversationType === "group";
@@ -236,6 +252,9 @@ export const CallOverlay = () => {
       return (
         <div className="fixed inset-0 z-[90] flex flex-col bg-black p-3 text-white">
           <CallAudio stream={remoteStream} />
+          <div className="pb-3 text-center text-sm font-medium text-zinc-300">
+            {formatCallDuration(elapsedSeconds)}
+          </div>
           <div className={`grid min-h-0 flex-1 gap-2 ${gridClass}`}>
             <CallVideoTile
               stream={localStream}
@@ -306,6 +325,9 @@ export const CallOverlay = () => {
           <p className="font-semibold">{activeCall.peerName || "Video call"}</p>
           <p className="flex items-center gap-1 text-xs text-zinc-300">
             <Lock className="h-3 w-3" /> Private call
+          </p>
+          <p className="mt-1 text-xs font-medium text-zinc-300">
+            {formatCallDuration(elapsedSeconds)}
           </p>
           {remoteIsSpeaking && (
             <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-400">

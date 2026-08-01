@@ -483,11 +483,32 @@ async function persistCallCard(
   const content =
     outcome === "missed"
       ? "[video-call:missed] Missed video call"
-      : `[video-call:ended] Video call · ${duration} secs`;
+      : `[video-call:ended] Video call · ${formatCallDuration(duration)}`;
   await useChatState
     .getState()
     .sendMessage(conversationId, content)
     .catch(() => undefined);
+}
+
+export function formatCallDuration(totalSeconds: number) {
+  const seconds = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+  return [
+    ...(hours > 0 ? [hours] : []),
+    minutes,
+    remainingSeconds,
+  ]
+    .map((value) => String(value).padStart(2, "0"))
+    .join(":");
+}
+
+export function formatCallCardText(content = "") {
+  const text = content.replace(/^\[video-call:(?:missed|ended)\]\s*/, "");
+  return text.replace(/(\d+)\s+secs?\b/i, (_match, seconds) =>
+    formatCallDuration(Number(seconds))
+  );
 }
 
 const messageTime = (message: Message) =>

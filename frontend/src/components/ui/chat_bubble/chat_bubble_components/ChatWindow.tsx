@@ -23,7 +23,7 @@ import {
   uploadChatAttachment,
   useInboxUploadMedia,
 } from "@/components/ui/inbox/inbox_functions/inbox_upload_image";
-import useChatState, { type ChatTarget } from "../chat_state";
+import useChatState, { formatCallCardText, type ChatTarget } from "../chat_state";
 import { InboxEmojiPicker } from "@/components/ui/inbox/inbox_functions/inbox_emoji_picker";
 import { ChatImagePreview } from "@/components/ui/inbox/inbox_functions/chat_image_preview";
 
@@ -457,10 +457,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                               <div className="flex items-center gap-2 font-semibold">
                                 <Video size={16} />
                                 <span>
-                                  {message.message_content.replace(
-                                    /^\[video-call:(?:missed|ended)\]\s*/,
-                                    ""
-                                  )}
+                                  {formatCallCardText(message.message_content)}
                                 </span>
                               </div>
                               {activeUser?.account_id && (
@@ -616,22 +613,43 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   })}
                   {message.is_edited && " · edited"}
                   {isMe &&
-                    conversation?.conversation_type === "direct" &&
                     String(message._id) === String(latestSeenOwnMessageId) &&
                     (message.read_by || []).some(
                       (reader) => String(reader.account_id) !== currentUserId
                     ) && (
-                    <img
-                      src={
-                        activeUser?.avatarUrl ||
-                        `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                          displayName
-                        )}&background=6366f1&color=fff`
-                      }
-                      alt="Seen by recipient"
-                      title="Seen"
-                      className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-blue-400"
-                    />
+                    <span className="flex -space-x-1" title="Seen">
+                      {Array.from(
+                        new Set(
+                          (message.read_by || [])
+                            .map((reader) => String(reader.account_id))
+                            .filter((accountId) => accountId !== currentUserId)
+                        )
+                      )
+                        .slice(0, 5)
+                        .map((accountId) => {
+                          const avatarKey = conversation?.avatarPayload?.[accountId];
+                          const memberName =
+                            conversation?.members?.find(
+                              (member) => String(member.account_id) === accountId
+                            )?.display_name || `User ${accountId.slice(0, 8)}`;
+                          return (
+                            <img
+                              key={accountId}
+                              src={
+                                avatarKey
+                                  ? chatAttachmentUrl(avatarKey)
+                                  : conversation?.conversation_type === "direct" && activeUser?.avatarUrl
+                                  ? activeUser.avatarUrl
+                                  : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                                      memberName
+                                    )}&background=6366f1&color=fff`
+                              }
+                              alt={`Seen by ${memberName}`}
+                              className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-blue-400"
+                            />
+                          );
+                        })}
+                    </span>
                   )}
                 </div>
               </div>
