@@ -63,6 +63,7 @@ router.get('/forum/tickets/:id', [checkSession, forumModerator], ForumModerator.
 router.patch('/forum/tickets/:id', [checkSession, forumModerator], ForumModerator.patchTicket);
 router.post('/forum/tickets/:id/messages', [checkSession, forumModerator], ForumModerator.postTicketMessage);
 router.get('/forum/reports', [checkSession, forumModerator], ForumModerator.getReports);
+router.get('/forum/reports/:id', [checkSession, forumModerator], ForumModerator.getReport);
 router.patch('/forum/reports/:id', [checkSession, forumModerator], ForumModerator.patchReport);
 router.get('/forum/groups', [checkSession, forumModerator], ForumModerator.getGroups);
 router.patch('/forum/groups/:id', [checkSession, forumModerator], ForumModerator.patchGroup);

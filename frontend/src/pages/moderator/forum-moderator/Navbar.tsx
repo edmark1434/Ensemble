@@ -1,19 +1,17 @@
 import {
   LayoutDashboard,
-  MessageSquare,
+  Flag,
   MessagesSquare,
   Ticket,
   Users,
-  UsersRound,
 } from 'lucide-react';
 import ModeratorNavbar from '../shared/ModeratorNavbar';
 
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, to: '/moderator/forum' },
-  { label: 'Forum Groups', icon: UsersRound, to: '/moderator/forum/groups' },
-  { label: 'Discussions', icon: MessagesSquare, to: '/moderator/forum/discussions' },
-  { label: 'Forum Management', icon: MessageSquare, to: '/moderator/forum/forum-management' },
+  { label: 'Forum Discussion', icon: MessagesSquare, to: '/moderator/forum/forum-discussion' },
   { label: 'Ticket Management', icon: Ticket, to: '/moderator/forum/ticket-management' },
+  { label: 'Reports', icon: Flag, to: '/moderator/forum/reports' },
   { label: 'User & Team', icon: Users, to: '/moderator/forum/user-team' },
 ];
 

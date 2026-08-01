@@ -140,8 +140,16 @@ export default function ModeratorTicketDesk({
     setError("");
     try {
       const res = await api.get(listPath || endpointBase);
-      if (res.data?.success) setTickets(res.data.data || []);
-      else setError("Failed to load tickets");
+      if (res.data?.success) {
+        const rows = (res.data.data || []) as SupportTicket[];
+        // Hard-scope specialist queues so cross-queue tickets never appear in the desk.
+        const allowed = new Set(typeCatalog.map((t) => t.toLowerCase()));
+        setTickets(
+          queueKey === "support"
+            ? rows
+            : rows.filter((t) => allowed.has(String(t.type || t.category || "").toLowerCase()))
+        );
+      } else setError("Failed to load tickets");
     } catch {
       setError("Failed to load tickets");
     } finally {

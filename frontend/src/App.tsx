@@ -85,10 +85,9 @@ import Survey from "@/pages/setup_account/04_Survey.tsx";
 
 import ForumModeratorLayout from './pages/moderator/forum-moderator/Layout'
 import ForumModeratorDashboard from './pages/moderator/forum-moderator/Dashboard'
-import ForumManagement from './pages/moderator/forum-moderator/ForumManagement'
-import ForumGroups from './pages/moderator/forum-moderator/Groups'
-import ForumDiscussions from './pages/moderator/forum-moderator/Discussions'
+import ForumDiscussion from './pages/moderator/forum-moderator/ForumDiscussion'
 import ForumTicketManagement from './pages/moderator/forum-moderator/TicketManagement'
+import ForumReports from './pages/moderator/forum-moderator/Reports'
 import MarketplaceModeratorLayout from './pages/moderator/marketplace-moderator/Layout'
 import MarketplaceModeratorDashboard from './pages/moderator/marketplace-moderator/Dashboard'
 import MarketplaceControl from './pages/moderator/marketplace-moderator/MarketplaceControl'
@@ -255,10 +254,9 @@ function App() {
         {/* Moderator Routes */}
         <Route path='/moderator/forum' element={<ForumModeratorLayout />}>
           <Route index element={<ForumModeratorDashboard />} />
-          <Route path='forum-management' element={<ForumManagement />} />
-          <Route path='groups' element={<ForumGroups />} />
-          <Route path='discussions' element={<ForumDiscussions />} />
+          <Route path='forum-discussion' element={<ForumDiscussion />} />
           <Route path='ticket-management' element={<ForumTicketManagement />} />
+          <Route path='reports' element={<ForumReports />} />
           <Route path='user-team' element={<ModeratorSectionPlaceholder title='USER & TEAM' subtitle='User account management is centralized in the Admin console.' />} />
         </Route>
 

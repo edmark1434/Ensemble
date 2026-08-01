@@ -12,6 +12,7 @@ const {
   updateTicket,
   addTicketMessage,
   updateReport,
+  getReportDetail,
   getViolationsAndRestrictions,
   issueViolation,
   updateAccountRestriction,
@@ -94,6 +95,17 @@ async function getReports(req, res) {
   } catch (err) {
     console.error('Error fetching forum reports:', err);
     res.status(500).json({ success: false, message: 'Failed to load reports' });
+  }
+}
+
+async function getReport(req, res) {
+  try {
+    const data = await getReportDetail(req.params.id);
+    if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching forum report detail:', err);
+    res.status(500).json({ success: false, message: 'Failed to load report' });
   }
 }
 
@@ -223,6 +235,7 @@ module.exports = {
   patchTicket,
   postTicketMessage,
   getReports,
+  getReport,
   patchReport,
   getGroups,
   patchGroup,

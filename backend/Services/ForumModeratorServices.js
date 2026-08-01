@@ -9,6 +9,7 @@ module.exports = {
   updateTicket: tickets.updateTicket,
   addTicketMessage: tickets.addTicketMessage,
   updateReport: tickets.updateReport,
+  getReportDetail: tickets.getReportDetail,
   getViolationsAndRestrictions: restrictions.getViolationsAndRestrictions,
   issueViolation: restrictions.issueViolation,
   updateAccountRestriction: restrictions.updateAccountRestriction,
