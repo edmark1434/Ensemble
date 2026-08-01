@@ -8,7 +8,7 @@ export default function JobsDisputes() {
       deskLabel="Jobs"
       endpointBase="/api/moderator/jobs/disputes"
       overviewEndpoint="/api/moderator/jobs/overview"
-      subtitle="Full dispute queue — view and leave staff replies. Designated handlers manage status and publish to parties."
+      subtitle="View and leave staff replies. Only Support Moderators or Admin can claim, update status, or publish."
     />
   );
 }

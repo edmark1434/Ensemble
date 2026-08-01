@@ -1134,12 +1134,16 @@ function isSupportRole(role) {
   return String(role || '').toLowerCase() === 'support moderator';
 }
 
+/** Dispute handlers only — Support Moderators + Admin. */
 function isDesignatedHandlerRole(role) {
+  return isAdminRole(role) || isSupportRole(role);
+}
+
+/** Ticket/report claim roles — any specialist console + Support + Admin. */
+function isQueueHandlerRole(role) {
   const r = String(role || '').toLowerCase();
-  // Any staff console may claim an unassigned dispute; publish/status still require assignee.
   return (
-    isAdminRole(role) ||
-    isSupportRole(role) ||
+    isDesignatedHandlerRole(role) ||
     r.includes('forum') ||
     r.includes('marketplace') ||
     r.includes('jobs')
@@ -1229,15 +1233,15 @@ function buildDisputePermissions(row, staff, session = null) {
     isAssignee,
     isAdmin,
     canView: true,
-    /** Any staff may post staff-only replies; designated handler publishes / manages case */
+    /** Any staff may post staff-only replies; only Support/Admin handle the case */
     canReply: hasStaffSession,
-    /** Handle approve / status / outcome / publish to parties or public */
-    canAct: isAssignee,
+    /** Approve / status / outcome / publish — Support/Admin assignee only */
+    canAct: Boolean(isAssignee && designated),
     /** Admin may assign Support Moderators without being the handler */
     canAssignOthers: isAdmin,
-    /** Claim an unassigned dispute */
+    /** Claim an unassigned dispute (Support/Admin only) */
     canSelfAssign: Boolean(staffId && unassigned && designated),
-    /** Assign myself to an unassigned dispute */
+    /** Assign myself to an unassigned dispute (Support/Admin only) */
     canAssignMyself: Boolean(staffId && designated && unassigned && !isAssignee),
   };
 }
@@ -1257,7 +1261,7 @@ async function updateDispute(disputeId, patch, staffSession) {
   // --- Assignment actions (allowed without canAct) ---
   if (action === 'self_assign') {
     if (!perms.canSelfAssign && !perms.canAssignMyself) {
-      throw new Error('You can only claim an unassigned dispute when signed in as staff.');
+      throw new Error('Only Support Moderators or Admin can claim disputes.');
     }
     await pool.query(
       `UPDATE disputes
@@ -1281,9 +1285,7 @@ async function updateDispute(disputeId, patch, staffSession) {
       ]);
       if (!target.rows.length) throw new Error('Assignee staff not found.');
       if (!isDesignatedHandlerRole(target.rows[0].role)) {
-        throw new Error(
-          'Disputes can only be assigned to Admin, Support, Forum, Marketplace, or Jobs moderators.'
-        );
+        throw new Error('Disputes can only be assigned to Support Moderators or Admin.');
       }
     }
     await pool.query(
@@ -1428,12 +1430,7 @@ async function getDisputeDetail(disputeId, staffSession = null) {
     WHERE LOWER(s.role) IN (
       'support moderator',
       'admin',
-      'administrator',
-      'jobs n gigs moderator',
-      'jobs moderator',
-      'jobs & gigs moderator',
-      'forum moderator',
-      'marketplace moderator'
+      'administrator'
     )
     ORDER BY s.role, name
   `);
@@ -1602,7 +1599,7 @@ function buildReportPermissions(row, staff, session = null) {
   const assigneeId = normalizeStaffId(row?.assigned_staff_id);
   const isAssignee = Boolean(staffId && assigneeId && staffId === assigneeId);
   const unassigned = !assigneeId;
-  const designated = isDesignatedHandlerRole(role);
+  const designated = isQueueHandlerRole(role);
 
   return {
     staffId: staff?.staff_id != null ? String(staff.staff_id) : sessionStaffId(session),

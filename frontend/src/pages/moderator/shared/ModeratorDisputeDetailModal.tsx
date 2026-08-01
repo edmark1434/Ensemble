@@ -192,11 +192,10 @@ export default function ModeratorDisputeDetailModal({
         assigneeStaffId &&
         myStaffId.toLowerCase() === assigneeStaffId.toLowerCase())
   );
-  const canAct = adminMode ? Boolean(perms?.canAct || alreadyAssignedToMe) : true;
+  const canAct = adminMode ? Boolean(perms?.canAct) : true;
   const canReply = adminMode
     ? Boolean(
-        alreadyAssignedToMe ||
-          perms?.canAct ||
+        perms?.canAct ||
           perms?.canReply ||
           (perms?.canView !== false && perms?.staffId)
       )
@@ -448,10 +447,10 @@ export default function ModeratorDisputeDetailModal({
                     {!perms?.staffId
                       ? "Your login isn’t linked to a staff profile, so assignment is blocked. Re-login as Admin or Support Moderator."
                       : canAssignMyself || canSelfAssign
-                        ? "This dispute needs a handler. Click Assign myself, or choose yourself in Designated handler."
+                        ? "This dispute needs a Support Moderator (or Admin). Click Assign myself to claim it."
                         : canAssignOthers
                           ? "You’re not the handler yet. Pick a Support Moderator in Designated handler, or Assign myself."
-                          : "Assign yourself or pick a handler in Designated handler to unlock handling actions."}
+                          : "Only Support Moderators or Admin can claim and handle disputes. You can still post staff-only replies."}
                   </p>
                 </div>
               </div>
@@ -797,8 +796,8 @@ export default function ModeratorDisputeDetailModal({
             <div className="rounded-xl border border-white/10 bg-[#14151c] p-4">
               {viewOnly && canReply && (
                 <p className="mb-3 rounded-lg border border-sky-500/20 bg-sky-500/5 px-3 py-2 text-xs text-sky-200">
-                  View &amp; reply mode — you can post staff-only replies. Only the designated
-                  handler can change status, outcome, or publish messages to parties / public.
+                  View &amp; reply mode — you can post staff-only replies. Only Support Moderators
+                  or Admin can claim, change status/outcome, or publish messages to parties / public.
                 </p>
               )}
               <textarea

@@ -35,12 +35,12 @@ type Props = {
 
 /**
  * Shared disputes desk for every moderator console.
- * All staff can view + post staff-only replies; designated handlers manage / publish.
+ * All staff can view + post staff-only replies; only Support/Admin claim and handle.
  */
 export default function ModeratorDisputesPage({
   accent = 'sky',
   title = 'Disputes',
-  subtitle = 'View every dispute and leave staff replies. Only the designated handler can publish or change case status.',
+  subtitle = 'View disputes and leave staff replies. Only Support Moderators or Admin can claim a case, change status, or publish to parties.',
   roleLabel,
   endpointBase,
   overviewEndpoint,

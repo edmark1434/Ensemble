@@ -159,11 +159,6 @@ const HANDLER_ROLES = new Set([
   'admin',
   'administrator',
   'support moderator',
-  'jobs n gigs moderator',
-  'jobs moderator',
-  'jobs & gigs moderator',
-  'forum moderator',
-  'marketplace moderator',
 ]);
 
 export type DisputeHandlerOption = {
