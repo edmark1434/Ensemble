@@ -10,7 +10,7 @@ const {
 
 // Jobs & Gigs moderation covers Jobs and Gigs tickets + related disputes.
 const JOBS_TICKET_SCOPE = QUEUE_SCOPES.jobs;
-const JOBS_DISPUTE_ENTITIES = ['job', 'gig', 'contract'];
+const JOBS_DISPUTE_ENTITIES = ['job', 'gig', 'contract', 'feedback'];
 
 async function getJobsTickets({ status } = {}) {
   return fetchScopedTickets({ ...JOBS_TICKET_SCOPE, status });

@@ -487,15 +487,16 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     },
     {
       number: 'DIS-RSLV01',
-      title: 'Feedback dispute after delivery',
-      reason: 'Buyer contested quality rating on a completed gig; parties settled.',
+      title: 'Unfair contract feedback after delivery',
+      reason:
+        'Freelancer disputes a 1-star contract rating as retaliatory and factually inaccurate after milestone acceptance.',
       status: 'closed',
       visibility: 'public',
       priority: 'medium',
       initiatorIdx: 1,
       respondentIdx: 3,
-      entityType: 'job',
-      entityId: 'JOB-8821',
+      entityType: 'feedback',
+      entityId: 'CTR-FEED-8821',
       assigneeId: adminStaffId,
       credits: 2500,
       hold: true,
@@ -504,8 +505,32 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       outcome: 'resolved',
       sanctionType: null,
       sanctionNotes: null,
-      resolutionNotes: 'Partial credit return agreed; rating adjusted.',
+      resolutionNotes: 'Rating adjusted after review; partial credit return agreed.',
       daysAgo: 45,
+    },
+    {
+      // Open unfair-feedback dispute on a completed contract — Admin/Maya can handle.
+      number: 'DIS-FEED01',
+      title: 'Retaliatory feedback on closed contract',
+      reason:
+        'Client left unfair written feedback after accepting the final deliverable; freelancer requests review and rating correction.',
+      status: 'under_review',
+      visibility: 'public',
+      priority: 'high',
+      initiatorIdx: 4,
+      respondentIdx: 0,
+      entityType: 'feedback',
+      entityId: 'CTR-FEED-1102',
+      assigneeId: supportStaffId,
+      credits: 1800,
+      hold: false,
+      approved: true,
+      outcome: null,
+      sanctionType: null,
+      sanctionNotes: null,
+      resolutionNotes: null,
+      daysAgo: 4,
+      chatKey: 'feedback',
     },
     {
       number: 'DIS-DSSM01',
@@ -732,6 +757,37 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
           },
         ]);
       }
+
+      const feedback = disputeByNumber['DIS-FEED01'];
+      if (feedback) {
+        await seedDisputeChatThread(feedback.dispute_id, feedback, supportAccountId, [
+          {
+            body: 'We’re reviewing the contract rating and written feedback. Please keep replies factual.',
+            audience: 'parties',
+            authorRole: 'staff',
+            authorName: 'Maya Reyes',
+            authorType: 'staff',
+            senderId: supportAccountId,
+          },
+          {
+            body: 'The client accepted the final files, then left a 1-star review calling the work incomplete. That is unfair.',
+            audience: 'author_and_staff',
+            authorRole: 'disputer',
+            authorName: 'Disputer',
+            authorType: 'user',
+            senderId: feedback.initiator_account_id,
+          },
+          {
+            body: 'Internal: Check contract acceptance timestamps vs rating created_at before deciding.',
+            audience: 'staff',
+            isInternal: true,
+            authorRole: 'staff',
+            authorName: 'Maya Reyes',
+            authorType: 'staff',
+            senderId: supportAccountId,
+          },
+        ]);
+      }
       console.log('✅ Seeded dispute chat threads in MongoDB');
     } else {
       console.log('ℹ️ MongoDB unavailable — dispute chat threads skipped');
@@ -914,6 +970,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   console.log('   DIS-OPEN01  public + private reply    → middleman chat sample');
   console.log('   DIS-WAIT01  awaiting disputee reply  → prompt message sample');
   console.log('   DIS-REVW01  under review + publish   → private + published party comments');
+  console.log('   DIS-FEED01  unfair feedback (contract) → under review sample');
   console.log('   DIS-SANC01 / DIS-RSLV01 / DIS-DSSM01 → closed outcome samples');
 }
 

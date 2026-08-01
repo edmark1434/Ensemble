@@ -117,6 +117,15 @@ const WORKFLOW_STATUSES = [
 
 const OUTCOME_OPTIONS = ['resolved', 'sanctioned', 'dismissed', 'withdrawn'] as const;
 
+const KNOWN_ENTITY_TYPES = [
+  'Contract',
+  'Feedback',
+  'Job',
+  'Gig',
+  'Marketplace',
+  'Team',
+] as const;
+
 const HANDLER_ROLES = new Set(['admin', 'administrator', 'support moderator']);
 
 export type DisputeHandlerOption = {
@@ -277,7 +286,7 @@ export default function DisputesTab({
   }, [disputes]);
 
   const entityTypes = useMemo(() => {
-    const set = new Set<string>();
+    const set = new Set<string>(KNOWN_ENTITY_TYPES);
     for (const d of disputes) {
       const t = String(d.relatedEntityType || '').trim();
       if (t) set.add(t);
