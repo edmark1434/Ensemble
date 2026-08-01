@@ -563,12 +563,15 @@ export default function ModeratorDisputeDetailModal({
                   className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <option value="">Unassigned</option>
-                  {(canAssignMyself && !canAssignOthers && !canAct
-                    ? detail.assignableStaff.filter(
-                        (s) => String(s.staffId).toLowerCase() === myStaffId.toLowerCase()
-                      )
-                    : detail.assignableStaff
-                  ).map((s) => (
+                  {detail.assignableStaff
+                    .filter((s) => {
+                      if (!myStaffId) return true;
+                      const isMe =
+                        String(s.staffId).toLowerCase() === myStaffId.toLowerCase();
+                      // Keep current handler visible while locked; otherwise use Assign myself.
+                      return !isMe || (assigneeLocked && alreadyAssignedToMe);
+                    })
+                    .map((s) => (
                     <option key={s.staffId} value={String(s.staffId)}>
                       {s.name}
                       {myStaffId && String(s.staffId).toLowerCase() === myStaffId.toLowerCase()

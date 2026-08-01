@@ -280,14 +280,23 @@ export function ReportCaseDetailModal({
                   className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <option value="">Unassigned</option>
-                  {detail.assignableStaff.map((s) => (
-                    <option key={String(s.staffId)} value={String(s.staffId)}>
-                      {s.name} ({s.role})
-                      {myStaffId && String(s.staffId).toLowerCase() === myStaffId.toLowerCase()
-                        ? ' (you)'
-                        : ''}
-                    </option>
-                  ))}
+                  {detail.assignableStaff
+                    .filter((s) => {
+                      if (!myStaffId) return true;
+                      const isMe =
+                        String(s.staffId).toLowerCase() === myStaffId.toLowerCase();
+                      // Keep current handler visible while locked; otherwise use Assign myself.
+                      return !isMe || (assigneeLocked && alreadyAssignedToMe);
+                    })
+                    .map((s) => (
+                      <option key={String(s.staffId)} value={String(s.staffId)}>
+                        {s.name} ({s.role})
+                        {myStaffId &&
+                        String(s.staffId).toLowerCase() === myStaffId.toLowerCase()
+                          ? ' (you)'
+                          : ''}
+                      </option>
+                    ))}
                 </select>
                 {assigneeLocked && (
                   <span className="text-[11px] text-zinc-500">

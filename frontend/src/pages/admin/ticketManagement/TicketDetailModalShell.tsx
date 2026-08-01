@@ -553,14 +553,23 @@ export default function TicketDetailModalShell({
                       className={`${selectCls} disabled:cursor-not-allowed disabled:opacity-60`}
                     >
                       <option value="">Unassigned</option>
-                      {detail.assignableStaff.map((s) => (
-                        <option key={s.staffId} value={s.staffId}>
-                          {s.name} ({s.role})
-                          {myStaffId && String(s.staffId).toLowerCase() === myStaffId.toLowerCase()
-                            ? ' (you)'
-                            : ''}
-                        </option>
-                      ))}
+                      {detail.assignableStaff
+                        .filter((s) => {
+                          if (!myStaffId) return true;
+                          const isMe =
+                            String(s.staffId).toLowerCase() === myStaffId.toLowerCase();
+                          // Keep current handler visible while locked; otherwise use Assign myself.
+                          return !isMe || (assigneeLocked && alreadyAssignedToMe);
+                        })
+                        .map((s) => (
+                          <option key={s.staffId} value={s.staffId}>
+                            {s.name} ({s.role})
+                            {myStaffId &&
+                            String(s.staffId).toLowerCase() === myStaffId.toLowerCase()
+                              ? ' (you)'
+                              : ''}
+                          </option>
+                        ))}
                     </select>
                     {assigneeLocked && (
                       <p className="mt-1 text-[11px] text-zinc-500">
