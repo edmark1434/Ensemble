@@ -203,18 +203,20 @@ async function patchAdminDisputeMessage(req, res) {
 
 async function patchAdminReport(req, res) {
   try {
-    const data = await updateReport(req.params.id, req.body);
+    const data = await updateReport(req.params.id, req.body, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error updating report:', err);
-    res.status(500).json({ success: false, message: 'Failed to update report' });
+    const msg = err.message || 'Failed to update report';
+    const isClient = /assign|already assigned|staff profile|not found/i.test(msg);
+    res.status(isClient ? 400 : 500).json({ success: false, message: msg });
   }
 }
 
 async function getAdminReportDetail(req, res) {
   try {
-    const data = await getReportDetail(req.params.id);
+    const data = await getReportDetail(req.params.id, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {

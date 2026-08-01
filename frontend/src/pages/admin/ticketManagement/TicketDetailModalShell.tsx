@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Loader2, Lock, MessageSquare, Send, ShieldAlert, UserRound, X } from 'lucide-react';
+import { Hand, Loader2, Lock, MessageSquare, Send, ShieldAlert, UserRound, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import type { TicketDetail, TicketMessage } from './ticketTypes';
@@ -243,6 +243,19 @@ export default function TicketDetailModalShell({
 
   const statusOptions = detail?.statuses?.length ? detail.statuses : [...TICKET_STATUS_OPTIONS];
   const priorityOptions = detail?.priorities?.length ? detail.priorities : [...TICKET_PRIORITY_OPTIONS];
+  const perms = detail?.permissions;
+  const myStaffId = perms?.staffId != null ? String(perms.staffId) : '';
+  const ticketAssigneeId =
+    detail?.ticket?.assignee?.staffId != null ? String(detail.ticket.assignee.staffId) : '';
+  const alreadyAssignedToMe = Boolean(
+    perms?.isAssignee ||
+      (myStaffId && ticketAssigneeId && myStaffId.toLowerCase() === ticketAssigneeId.toLowerCase())
+  );
+  const canAssignMyself = Boolean(
+    !alreadyAssignedToMe &&
+      !ticketAssigneeId &&
+      (perms?.canAssignMyself || perms?.canSelfAssign)
+  );
 
   const syncEscalateType = (role: string, preferred?: string) => {
     const opts =
@@ -315,6 +328,20 @@ export default function TicketDetailModalShell({
       onUpdated();
     } catch (err: unknown) {
       showErrorToast(apiErrorMessage(err, 'Failed to update ticket'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const assignMyself = async () => {
+    setSaving(true);
+    try {
+      await api.patch(`${endpointBase}/${ticketId}`, { action: 'self_assign' });
+      showSuccessToast('You are now assigned');
+      await load();
+      onUpdated();
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, 'Failed to assign yourself'));
     } finally {
       setSaving(false);
     }
@@ -504,10 +531,24 @@ export default function TicketDetailModalShell({
                       {detail.assignableStaff.map((s) => (
                         <option key={s.staffId} value={s.staffId}>
                           {s.name} ({s.role})
+                          {myStaffId && String(s.staffId).toLowerCase() === myStaffId.toLowerCase()
+                            ? ' (you)'
+                            : ''}
                         </option>
                       ))}
                     </select>
                   </Field>
+                  {canAssignMyself && (
+                    <button
+                      type="button"
+                      onClick={() => void assignMyself()}
+                      disabled={saving}
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-sky-500/40 bg-sky-500/15 px-4 py-2.5 text-sm font-medium text-sky-100 hover:bg-sky-500/25 disabled:opacity-50"
+                    >
+                      <Hand className="h-4 w-4" />
+                      Assign myself
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => void saveChanges()}

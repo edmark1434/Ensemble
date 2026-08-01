@@ -559,6 +559,17 @@ export default function ModeratorDisputeDetailModal({
                     </option>
                   ))}
                 </select>
+                {canAssignMyself && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void runAction({ action: "self_assign" }, "You are now assigned")}
+                    className={`mt-2 inline-flex w-fit items-center gap-1.5 ${HANDLER_ACTION_BTN} ${HANDLER_TONES.claim}`}
+                  >
+                    <Hand className={HANDLER_ACTION_ICON} />
+                    Assign myself
+                  </button>
+                )}
                 {!canEditHandler && (
                   <span className="text-[11px] text-amber-200/80">
                     {!perms?.staffId
@@ -568,7 +579,7 @@ export default function ModeratorDisputeDetailModal({
                 )}
                 {canAssignMyself && !canAct && (
                   <span className="text-[11px] text-sky-200/70">
-                    Click Assign myself, or pick yourself in this list to become the handler.
+                    Click Assign myself to become the handler — no need to hunt yourself in the list.
                   </span>
                 )}
               </label>

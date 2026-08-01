@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, Loader2, X } from 'lucide-react';
+import { CheckCircle2, Hand, Loader2, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import type { ModerationCase } from './moderationTypes';
+import type { DisputePermissions } from '@/pages/admin/ticketManagement/ticketTypes';
 
 function titleCaseLabel(value: string) {
   return String(value || '')
@@ -46,6 +47,7 @@ type ReportDetailPayload = {
     assignee: { staffId: string | number; name: string } | null;
     createdAt: string | null;
   };
+  permissions?: DisputePermissions;
   assignableStaff: { staffId: string | number; name: string; role: string }[];
 };
 
@@ -147,7 +149,37 @@ export function ReportCaseDetailModal({
     }
   };
 
+  const assignMyself = async () => {
+    setSaving(true);
+    try {
+      const res = await api.patch(`${endpointBase}/${reportId}`, { action: 'self_assign' });
+      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to assign yourself');
+      showSuccessToast('You are now assigned');
+      await load();
+      onUpdated();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        (err instanceof Error ? err.message : 'Failed to assign yourself');
+      showErrorToast(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const report = detail?.report;
+  const perms = detail?.permissions;
+  const myStaffId = perms?.staffId != null ? String(perms.staffId) : '';
+  const reportAssigneeId = report?.assignee?.staffId != null ? String(report.assignee.staffId) : '';
+  const alreadyAssignedToMe = Boolean(
+    perms?.isAssignee ||
+      (myStaffId && reportAssigneeId && myStaffId.toLowerCase() === reportAssigneeId.toLowerCase())
+  );
+  const canAssignMyself = Boolean(
+    !alreadyAssignedToMe &&
+      !reportAssigneeId &&
+      (perms?.canAssignMyself || perms?.canSelfAssign || Boolean(myStaffId && !report?.assignee))
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:pl-[288px]">
@@ -227,11 +259,26 @@ export function ReportCaseDetailModal({
                   {detail.assignableStaff.map((s) => (
                     <option key={String(s.staffId)} value={String(s.staffId)}>
                       {s.name} ({s.role})
+                      {myStaffId && String(s.staffId).toLowerCase() === myStaffId.toLowerCase()
+                        ? ' (you)'
+                        : ''}
                     </option>
                   ))}
                 </select>
               </label>
             </div>
+
+            {canAssignMyself && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void assignMyself()}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-sky-500/40 bg-sky-500/15 px-4 py-2 text-sm font-medium text-sky-100 hover:bg-sky-500/25 disabled:opacity-50"
+              >
+                <Hand className="h-4 w-4" />
+                Assign myself
+              </button>
+            )}
 
             <div className="flex flex-wrap gap-2">
               <button

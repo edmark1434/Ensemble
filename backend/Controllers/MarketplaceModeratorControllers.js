@@ -184,7 +184,7 @@ async function getReports(req, res) {
 
 async function getReport(req, res) {
   try {
-    const data = await getReportDetail(req.params.id);
+    const data = await getReportDetail(req.params.id, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
     if (!isReportTypeInScope(data.report?.targetType, MARKETPLACE_REPORT_TYPES)) {
       return res.status(403).json({ success: false, message: 'Report is outside the marketplace queue' });
@@ -198,17 +198,19 @@ async function getReport(req, res) {
 
 async function patchReport(req, res) {
   try {
-    const existing = await getReportDetail(req.params.id);
+    const existing = await getReportDetail(req.params.id, req.session);
     if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
     if (!isReportTypeInScope(existing.report?.targetType, MARKETPLACE_REPORT_TYPES)) {
       return res.status(403).json({ success: false, message: 'Report is outside the marketplace queue' });
     }
-    const data = await updateReport(req.params.id, req.body);
+    const data = await updateReport(req.params.id, req.body, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error updating marketplace report:', err);
-    res.status(500).json({ success: false, message: 'Failed to update report' });
+    const msg = err.message || 'Failed to update report';
+    const isClient = /assign|already assigned|staff profile|not found/i.test(msg);
+    res.status(isClient ? 400 : 500).json({ success: false, message: msg });
   }
 }
 

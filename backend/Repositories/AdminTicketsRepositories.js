@@ -1135,7 +1135,15 @@ function isSupportRole(role) {
 }
 
 function isDesignatedHandlerRole(role) {
-  return isAdminRole(role) || isSupportRole(role);
+  const r = String(role || '').toLowerCase();
+  // Any staff console may claim an unassigned dispute; publish/status still require assignee.
+  return (
+    isAdminRole(role) ||
+    isSupportRole(role) ||
+    r.includes('forum') ||
+    r.includes('marketplace') ||
+    r.includes('jobs')
+  );
 }
 
 const DISPUTE_WORKFLOW = ['pending_review', 'open', 'awaiting_response', 'under_review', 'closed'];
@@ -1248,8 +1256,8 @@ async function updateDispute(disputeId, patch, staffSession) {
 
   // --- Assignment actions (allowed without canAct) ---
   if (action === 'self_assign') {
-    if (!perms.canSelfAssign) {
-      throw new Error('You can only claim an unassigned dispute as Admin or Support Moderator.');
+    if (!perms.canSelfAssign && !perms.canAssignMyself) {
+      throw new Error('You can only claim an unassigned dispute when signed in as staff.');
     }
     await pool.query(
       `UPDATE disputes
@@ -1273,7 +1281,9 @@ async function updateDispute(disputeId, patch, staffSession) {
       ]);
       if (!target.rows.length) throw new Error('Assignee staff not found.');
       if (!isDesignatedHandlerRole(target.rows[0].role)) {
-        throw new Error('Disputes can only be assigned to Support Moderators or Admin.');
+        throw new Error(
+          'Disputes can only be assigned to Admin, Support, Forum, Marketplace, or Jobs moderators.'
+        );
       }
     }
     await pool.query(
@@ -1421,7 +1431,9 @@ async function getDisputeDetail(disputeId, staffSession = null) {
       'administrator',
       'jobs n gigs moderator',
       'jobs moderator',
-      'jobs & gigs moderator'
+      'jobs & gigs moderator',
+      'forum moderator',
+      'marketplace moderator'
     )
     ORDER BY s.role, name
   `);
@@ -1535,7 +1547,30 @@ async function setDisputeMessageAudience(disputeId, messageId, audience, staffSe
   return getDisputeDetail(disputeId, staffSession);
 }
 
-async function updateReport(reportId, patch) {
+async function updateReport(reportId, patch, staffSession = null) {
+  const action = String(patch?.action || '').toLowerCase().trim();
+  if (action === 'self_assign') {
+    const staff = await resolveDisputeStaffId(staffSession);
+    if (!staff) throw new Error('Could not match your login to a staff profile.');
+
+    const fresh = await pool.query(
+      `SELECT assigned_staff_id FROM reports WHERE report_id = $1 AND deleted_at IS NULL`,
+      [reportId]
+    );
+    if (!fresh.rows.length) return null;
+    if (fresh.rows[0].assigned_staff_id) {
+      throw new Error('This report is already assigned. Pick Unassigned first if you need to reassign.');
+    }
+
+    await pool.query(
+      `UPDATE reports
+       SET assigned_staff_id = $1, updated_at = NOW()
+       WHERE report_id = $2 AND deleted_at IS NULL AND assigned_staff_id IS NULL`,
+      [staff.staff_id, reportId]
+    );
+    return getReportDetail(reportId, staffSession);
+  }
+
   const allowed = ['status', 'priority', 'assigned_staff_id'];
   const sets = [];
   const values = [];
@@ -1557,11 +1592,30 @@ async function updateReport(reportId, patch) {
 
   await pool.query(`UPDATE reports SET ${sets.join(', ')} WHERE report_id = $${idx}`, values);
 
-  const list = await fetchReportsList();
-  return list.find((r) => String(r.id) === String(reportId)) || null;
+  return getReportDetail(reportId, staffSession);
 }
 
-async function getReportDetail(reportId) {
+function buildReportPermissions(row, staff, session = null) {
+  const staffId =
+    normalizeStaffId(staff?.staff_id) || normalizeStaffId(sessionStaffId(session));
+  const role = staff?.role || session?.role || null;
+  const assigneeId = normalizeStaffId(row?.assigned_staff_id);
+  const isAssignee = Boolean(staffId && assigneeId && staffId === assigneeId);
+  const unassigned = !assigneeId;
+  const designated = isDesignatedHandlerRole(role);
+
+  return {
+    staffId: staff?.staff_id != null ? String(staff.staff_id) : sessionStaffId(session),
+    role,
+    isAssignee,
+    canView: true,
+    canAct: isAssignee || (unassigned && designated),
+    canSelfAssign: Boolean(staffId && unassigned && designated),
+    canAssignMyself: Boolean(staffId && designated && unassigned && !isAssignee),
+  };
+}
+
+async function getReportDetail(reportId, staffSession = null) {
   const reportResult = await pool.query(
     `
     SELECT
@@ -1585,6 +1639,8 @@ async function getReportDetail(reportId) {
   );
   if (!reportResult.rows.length) return null;
 
+  const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
+
   const staffResult = await pool.query(`
     SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
     FROM staff s INNER JOIN accounts a ON a.account_id = s.account_id
@@ -1599,6 +1655,7 @@ async function getReportDetail(reportId) {
       reporter_handle: reportResult.rows[0].reporter_handle,
       assignee_name: reportResult.rows[0].assignee_name,
     }),
+    permissions: buildReportPermissions(reportResult.rows[0], staff, staffSession),
     assignableStaff: staffResult.rows.map((s) => ({
       staffId: s.staff_id,
       name: s.name,
