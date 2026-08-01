@@ -103,7 +103,7 @@ export default function SupportModeratorDashboard() {
 
   if (loading) {
     return (
-      <main className="relative z-10 flex min-h-screen items-center justify-center md:ml-72">
+      <main className="relative z-10 flex min-h-screen items-center justify-center md:pl-[260px]">
         <Loader2 className="h-8 w-8 animate-spin text-sky-400" />
       </main>
     );
@@ -111,7 +111,7 @@ export default function SupportModeratorDashboard() {
 
   if (error || !data) {
     return (
-      <main className="relative z-10 flex min-h-screen flex-col items-center justify-center gap-3 md:ml-72">
+      <main className="relative z-10 flex min-h-screen flex-col items-center justify-center gap-3 md:pl-[260px]">
         <p className="text-sm text-zinc-500">Failed to load support overview from the database.</p>
         <button
           type="button"
@@ -129,7 +129,7 @@ export default function SupportModeratorDashboard() {
 
   return (
     <main
-      className="relative z-10 min-h-screen px-6 py-8 md:ml-72 md:px-10"
+      className="relative z-10 min-h-screen px-6 py-8 md:pl-[260px] md:px-10"
       style={{ animation: "fadeIn 420ms ease" }}
     >
       {selectedTicketId != null && (
@@ -425,7 +425,7 @@ export default function SupportModeratorDashboard() {
           title="Recent reports"
           subtitle="Member reports awaiting triage"
           action={
-            <Link to="/moderator/support/user-team" className="text-xs font-medium text-sky-300 hover:underline">
+            <Link to="/moderator/support/reports" className="text-xs font-medium text-sky-300 hover:underline">
               Open reports
             </Link>
           }

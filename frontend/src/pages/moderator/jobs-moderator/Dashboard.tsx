@@ -59,7 +59,7 @@ export default function JobsModeratorDashboard() {
 
   if (loading) {
     return (
-      <main className="relative z-10 flex min-h-screen items-center justify-center md:ml-72">
+      <main className="relative z-10 flex min-h-screen items-center justify-center md:pl-[260px]">
         <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
       </main>
     );
@@ -67,7 +67,7 @@ export default function JobsModeratorDashboard() {
 
   if (error || !data) {
     return (
-      <main className="relative z-10 flex min-h-screen items-center justify-center md:ml-72">
+      <main className="relative z-10 flex min-h-screen items-center justify-center md:pl-[260px]">
         <p className="text-sm text-zinc-500">Failed to load jobs & gigs overview.</p>
       </main>
     );
@@ -76,7 +76,7 @@ export default function JobsModeratorDashboard() {
   const { summary, charts, recentTickets, disputes, alerts } = data;
 
   return (
-    <main className="relative z-10 min-h-screen px-6 py-8 md:ml-72 md:px-10" style={{ animation: "fadeIn 420ms ease" }}>
+    <main className="relative z-10 min-h-screen px-6 py-8 md:pl-[260px] md:px-10" style={{ animation: "fadeIn 420ms ease" }}>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-400">Jobs &amp; Gigs Moderator</p>

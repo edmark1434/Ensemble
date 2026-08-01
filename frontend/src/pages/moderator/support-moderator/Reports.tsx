@@ -1,32 +1,19 @@
 import { useEffect, useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
+import { Link } from "react-router-dom";
 import api from "@/lib/axios";
-import DisputeDesk from "../shared/DisputeDesk";
-import type { Dispute } from "../shared/moderatorTypes";
+import ReportDesk from "../shared/ReportDesk";
+import type { UserReport } from "../shared/moderatorTypes";
 
-export default function SupportDisputes() {
-  const [disputes, setDisputes] = useState<Dispute[]>([]);
-  const [handlers, setHandlers] = useState<{ id: string | number; name: string; role: string }[]>(
-    []
-  );
+export default function SupportReports() {
+  const [reports, setReports] = useState<UserReport[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [disputesRes, overviewRes] = await Promise.all([
-        api.get("/api/moderator/support/disputes"),
-        api.get("/api/moderator/support/overview"),
-      ]);
-      if (disputesRes.data?.success) setDisputes(disputesRes.data.data || []);
-      const workload = overviewRes.data?.data?.staffWorkload || [];
-      setHandlers(
-        workload.map((s: { staffId: string | number; name: string; role: string }) => ({
-          id: s.staffId,
-          name: s.name,
-          role: s.role,
-        }))
-      );
+      const res = await api.get("/api/moderator/support/reports");
+      if (res.data?.success) setReports(res.data.data || []);
     } finally {
       setLoading(false);
     }
@@ -46,10 +33,10 @@ export default function SupportDisputes() {
           <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-400">
             Support Moderator
           </p>
-          <h1 className="text-2xl font-bold text-white">Disputes</h1>
+          <h1 className="text-2xl font-bold text-white">Reports</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Same dispute desk as Admin — workflow status, outcomes on close, advanced filters, and
-            handler assignment.
+            Same report desk as Admin — open queue chips, triage table, and assign / resolve detail
+            modal.
           </p>
         </div>
         <button
@@ -67,16 +54,21 @@ export default function SupportDisputes() {
         </button>
       </div>
 
-      <DisputeDesk
-        disputes={disputes}
-        handlers={handlers}
+      <ReportDesk
+        reports={reports}
         onUpdated={() => void load()}
         accent="sky"
-        endpointBase="/api/moderator/support/disputes"
-        deskMode
-        deskLabel="Support"
+        endpointBase="/api/moderator/support/reports"
         loading={loading}
       />
+
+      <p className="mt-4 text-xs text-zinc-600">
+        Warn, suspend, or ban accounts from{" "}
+        <Link to="/moderator/support/user-team" className="text-sky-300 hover:underline">
+          User &amp; Team
+        </Link>{" "}
+        after reviewing a report.
+      </p>
     </main>
   );
 }

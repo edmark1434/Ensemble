@@ -53,7 +53,7 @@ export default function MarketplaceModeratorDashboard() {
 
   if (loading) {
     return (
-      <main className="relative z-10 flex min-h-screen items-center justify-center md:ml-72">
+      <main className="relative z-10 flex min-h-screen items-center justify-center md:pl-[260px]">
         <Loader2 className="h-8 w-8 animate-spin text-rose-400" />
       </main>
     );
@@ -61,7 +61,7 @@ export default function MarketplaceModeratorDashboard() {
 
   if (error || !data) {
     return (
-      <main className="relative z-10 flex min-h-screen items-center justify-center md:ml-72">
+      <main className="relative z-10 flex min-h-screen items-center justify-center md:pl-[260px]">
         <p className="text-sm text-zinc-500">Failed to load marketplace overview.</p>
       </main>
     );
@@ -70,7 +70,7 @@ export default function MarketplaceModeratorDashboard() {
   const { summary, charts, recentListings, alerts } = data;
 
   return (
-    <main className="relative z-10 min-h-screen px-6 py-8 md:ml-72 md:px-10" style={{ animation: "fadeIn 420ms ease" }}>
+    <main className="relative z-10 min-h-screen px-6 py-8 md:pl-[260px] md:px-10" style={{ animation: "fadeIn 420ms ease" }}>
       <div className="mb-6">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-400">Marketplace Moderator</p>
         <h1 className="text-2xl font-bold text-white">Asset Marketplace Overview</h1>

@@ -197,7 +197,11 @@ export default function SupportTicketManagement() {
       window.location.assign("/moderator/support/disputes");
       return;
     }
-    if (action.tab === "user-team" || action.tab === "reports") {
+    if (action.tab === "reports") {
+      window.location.assign("/moderator/support/reports");
+      return;
+    }
+    if (action.tab === "user-team") {
       window.location.assign("/moderator/support/user-team");
       return;
     }
@@ -277,7 +281,7 @@ export default function SupportTicketManagement() {
 
   if (loading) {
     return (
-      <main className="relative z-10 flex min-h-screen items-center justify-center md:ml-72">
+      <main className="relative z-10 flex min-h-screen items-center justify-center md:pl-[260px]">
         <Loader2 className="h-10 w-10 animate-spin text-sky-400" />
       </main>
     );
@@ -285,7 +289,7 @@ export default function SupportTicketManagement() {
 
   if (error || !data) {
     return (
-      <main className="relative z-10 p-8 md:ml-72">
+      <main className="relative z-10 p-8 md:pl-[260px]">
         <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">
           {error || "Failed to load ticket management data"}
           <button type="button" onClick={() => void load()} className="mt-4 block text-sm underline">
@@ -299,7 +303,7 @@ export default function SupportTicketManagement() {
   const { summary, charts, alerts, staffWorkload } = data;
 
   return (
-    <main className="relative z-10 min-h-screen md:ml-72">
+    <main className="relative z-10 min-h-screen md:pl-[260px]">
       {selectedTicketId != null && (
         <ModeratorTicketDetailModal
           ticketId={selectedTicketId}
@@ -507,7 +511,7 @@ function OverviewTab({
               Disputes
             </Link>
             <Link
-              to="/moderator/support/user-team"
+              to="/moderator/support/reports"
               className="inline-flex w-fit items-center rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-100 hover:bg-amber-500/20"
             >
               Reports

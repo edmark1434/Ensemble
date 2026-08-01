@@ -28,7 +28,7 @@ export default function LogoutButton({ loginPath = STAFF_LOGIN_PATH }: { loginPa
       <button
         type="button"
         onClick={() => setConfirmOpen(true)}
-        className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-300 transition hover:border-red-500/40 hover:bg-red-500/15 hover:text-red-200"
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2.5 text-xs font-medium text-red-300 transition hover:border-red-500/40 hover:bg-red-500/15 hover:text-red-200"
       >
         <LogOut className="h-3.5 w-3.5" />
         Sign out

@@ -29,7 +29,7 @@ export default function MarketplaceControl() {
   const selected = listings.find((l) => l.id === selectedId) || null;
 
   return (
-    <main className="relative z-10 min-h-screen px-6 py-8 md:ml-72 md:px-10" style={{ animation: "fadeIn 420ms ease" }}>
+    <main className="relative z-10 min-h-screen px-6 py-8 md:pl-[260px] md:px-10" style={{ animation: "fadeIn 420ms ease" }}>
       <div className="mb-6">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-400">Marketplace Moderator</p>
         <h1 className="text-2xl font-bold text-white">Marketplace Control</h1>

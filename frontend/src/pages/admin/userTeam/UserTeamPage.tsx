@@ -14,12 +14,18 @@ const TABS: { id: TabId; label: string; icon: typeof Activity }[] = [
   { id: 'users', label: 'Platform users', icon: UserCircle },
 ];
 
-export default function UserTeamPage() {
+type Variant = 'admin' | 'support';
+
+export default function UserTeamPage({ variant = 'admin' }: { variant?: Variant }) {
   const { user } = useGlobalState();
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab') as TabId | null;
   const valid: TabId[] = ['overview', 'teams', 'users'];
   const initialTab = paramTab && valid.includes(paramTab) ? paramTab : 'overview';
+  const isSupport = variant === 'support';
+  const accentLabel = isSupport ? 'text-sky-400/80' : 'text-rose-400/80';
+  const accentTab = isSupport ? 'border-sky-400 text-white' : 'border-rose-400 text-white';
+  const shellPad = 'md:pl-[260px]';
 
   const [tab, setTab] = useState<TabId>(initialTab);
   const [refreshing, setRefreshing] = useState(false);
@@ -48,16 +54,16 @@ export default function UserTeamPage() {
     tab === 'overview' ? overviewPending : tab === 'teams' ? teamsPending : usersPending;
 
   return (
-    <main className="min-h-screen md:pl-[260px]">
+    <main className={`min-h-screen ${shellPad}`}>
       <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#06070c]/90 backdrop-blur-xl">
         <div className="flex flex-col gap-4 px-6 py-4 lg:flex-row lg:items-center lg:justify-between md:px-8">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-rose-400/80">
-              User & team
+            <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${accentLabel}`}>
+              {isSupport ? 'Support Moderator · User & team' : 'User & team'}
             </p>
             <h1 className="text-xl font-bold text-white">Account management</h1>
             <p className="mt-1 text-xs text-zinc-500">
-              Signed in as @{user?.username || 'admin'}
+              Signed in as @{user?.username || (isSupport ? 'support' : 'admin')}
             </p>
           </div>
           <button
@@ -79,7 +85,7 @@ export default function UserTeamPage() {
               onClick={() => switchTab(id)}
               className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition ${
                 tab === id
-                  ? 'border-rose-400 text-white'
+                  ? accentTab
                   : 'border-transparent text-zinc-500 hover:text-zinc-300'
               }`}
             >

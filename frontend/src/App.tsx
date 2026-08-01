@@ -100,7 +100,7 @@ import SupportModeratorDashboard from './pages/moderator/support-moderator/Dashb
 import SupportTicketManagement from './pages/moderator/support-moderator/TicketManagement'
 import SupportDisputes from './pages/moderator/support-moderator/Disputes'
 import SupportUserTeam from './pages/moderator/support-moderator/UserTeam'
-import SupportRestrictions from './pages/moderator/support-moderator/Restrictions'
+import SupportReports from './pages/moderator/support-moderator/Reports'
 import JobsModeratorLayout from './pages/moderator/jobs-moderator/Layout'
 import JobsModeratorDashboard from './pages/moderator/jobs-moderator/Dashboard'
 import JobsGigsControl from './pages/moderator/jobs-moderator/JobsGigsControl'
@@ -277,8 +277,8 @@ function App() {
           <Route index element={<SupportModeratorDashboard />} />
           <Route path='ticket-management' element={<SupportTicketManagement />} />
           <Route path='disputes' element={<SupportDisputes />} />
+          <Route path='reports' element={<SupportReports />} />
           <Route path='user-team' element={<SupportUserTeam />} />
-          <Route path='restrictions' element={<SupportRestrictions />} />
         </Route>
 
         <Route path='/moderator/jobs' element={<JobsModeratorLayout />}>
