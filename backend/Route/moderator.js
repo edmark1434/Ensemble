@@ -34,6 +34,9 @@ router.get('/marketplace/listings/:id', [checkSession, marketplaceModerator], ge
 router.patch('/marketplace/listings/:id', [checkSession, marketplaceModerator], patchListing);
 router.get('/marketplace/users/:accountId/listings', [checkSession, marketplaceModerator], getSellerListings);
 router.get('/marketplace/tickets', [checkSession, marketplaceModerator], getTickets);
+router.get('/marketplace/tickets/:id', [checkSession, marketplaceModerator], getTicket);
+router.patch('/marketplace/tickets/:id', [checkSession, marketplaceModerator], patchTicket);
+router.post('/marketplace/tickets/:id/messages', [checkSession, marketplaceModerator], postTicketMessage);
 router.get('/marketplace/reports', [checkSession, marketplaceModerator], getMarketplaceReports);
 router.get('/marketplace/reports/:id', [checkSession, marketplaceModerator], getMarketplaceReport);
 router.patch('/marketplace/reports/:id', [checkSession, marketplaceModerator], patchMarketplaceReport);

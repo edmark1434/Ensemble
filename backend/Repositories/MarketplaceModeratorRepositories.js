@@ -4,7 +4,11 @@ const { MARKETPLACE_REPORT_TYPES } = require('../lib/reportEnums');
 const {
   fetchScopedTickets,
   scopedTicketCounts,
+  scopedTicketCategoryBreakdown,
   fetchScopedReports,
+  scopedReportCounts,
+  toCategoryChart,
+  ticketStatusChart,
 } = require('./ModeratorSharedRepositories');
 
 function mapListingRow(row) {
@@ -199,8 +203,76 @@ async function getMarketplaceReports({ status } = {}) {
   return fetchScopedReports({ targetTypesIn: [...MARKETPLACE_REPORT_TYPES], status });
 }
 
+async function getMarketplaceReportBreakdown(targetTypesIn) {
+  const params = [targetTypesIn];
+  const result = await pool.query(
+    `
+    SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE LOWER(status) IN ('open', 'pending'))::int AS open_status,
+      COUNT(*) FILTER (WHERE LOWER(status) IN ('in_review', 'in review', 'in_progress', 'in progress'))::int AS in_review,
+      COUNT(*) FILTER (WHERE LOWER(status) IN ('resolved', 'closed'))::int AS resolved,
+      COUNT(*) FILTER (WHERE LOWER(status) = 'dismissed')::int AS dismissed,
+      COUNT(*) FILTER (
+        WHERE LOWER(status) NOT IN ('resolved', 'closed', 'dismissed')
+          AND assigned_staff_id IS NULL
+      )::int AS unassigned,
+      COUNT(*) FILTER (
+        WHERE LOWER(priority) = 'high'
+          AND LOWER(status) NOT IN ('resolved', 'closed', 'dismissed')
+      )::int AS high_priority
+    FROM reports
+    WHERE deleted_at IS NULL
+      AND LOWER(COALESCE(target_type, type)) = ANY($1)
+    `,
+    params
+  );
+  const typeResult = await pool.query(
+    `
+    SELECT LOWER(COALESCE(target_type, type)) AS target_type, COUNT(*)::int AS count
+    FROM reports
+    WHERE deleted_at IS NULL
+      AND LOWER(COALESCE(target_type, type)) = ANY($1)
+    GROUP BY 1
+    ORDER BY count DESC
+    `,
+    params
+  );
+  const c = result.rows[0] || {};
+  return {
+    counts: {
+      total: Number(c.total || 0),
+      openStatus: Number(c.open_status || 0),
+      inReview: Number(c.in_review || 0),
+      resolved: Number(c.resolved || 0),
+      dismissed: Number(c.dismissed || 0),
+      unassigned: Number(c.unassigned || 0),
+      highPriority: Number(c.high_priority || 0),
+      openCount: Number(c.open_status || 0) + Number(c.in_review || 0),
+    },
+    byType: typeResult.rows.map((r) => ({
+      label: String(r.target_type || 'other')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (ch) => ch.toUpperCase()),
+      value: Number(r.count),
+    })),
+  };
+}
+
 async function getMarketplaceOverview() {
-  const [listingCounts, categoryBreakdown, ticketCounts, restrictedCount] = await Promise.all([
+  const marketplaceTypes = [...MARKETPLACE_REPORT_TYPES];
+  const [
+    listingCounts,
+    categoryBreakdown,
+    ticketCounts,
+    categoryRows,
+    reportCounts,
+    reportBreakdown,
+    restrictedCount,
+    tickets,
+    reports,
+    recentListings,
+  ] = await Promise.all([
     pool.query(`
       SELECT
         COUNT(*)::int AS total,
@@ -216,26 +288,39 @@ async function getMarketplaceOverview() {
       FROM marketplace_listings GROUP BY COALESCE(category, 'Uncategorized') ORDER BY count DESC
     `),
     scopedTicketCounts(QUEUE_SCOPES.marketplace),
+    scopedTicketCategoryBreakdown(QUEUE_SCOPES.marketplace),
+    scopedReportCounts({ targetTypesIn: marketplaceTypes }),
+    getMarketplaceReportBreakdown(marketplaceTypes),
     pool.query(`SELECT COUNT(*)::int AS count FROM accounts WHERE LOWER(status) IN ('suspended', 'banned')`),
+    getMarketplaceTickets(),
+    getMarketplaceReports(),
+    fetchListings({ status: 'all' }),
   ]);
 
   const lc = listingCounts.rows[0];
   const tc = ticketCounts;
+  const rc = reportCounts;
+  const rb = reportBreakdown.counts;
 
-  const statusChart = [
+  const listingStatusMix = [
     { label: 'Pending', value: Number(lc.pending), color: '#fbbf24' },
     { label: 'Approved', value: Number(lc.approved), color: '#34d399' },
     { label: 'Rejected', value: Number(lc.rejected), color: '#f87171' },
     { label: 'Delisted', value: Number(lc.delisted), color: '#a1a1aa' },
   ].filter((x) => x.value > 0);
 
-  const categoryChart = categoryBreakdown.rows.map((r, i) => ({
+  const listingCategories = categoryBreakdown.rows.map((r, i) => ({
     label: r.category || 'Uncategorized',
     value: r.count,
-    color: ['#fb7185', '#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#38bdf8'][i % 6],
+    color: ['#f59e0b', '#fb7185', '#a78bfa', '#60a5fa', '#34d399', '#38bdf8'][i % 6],
   }));
 
-  const recentListings = await fetchListings({ status: 'all' });
+  const reportStatusMix = [
+    { label: 'Open', value: rb.openStatus, color: '#f87171' },
+    { label: 'In review', value: rb.inReview, color: '#fbbf24' },
+    { label: 'Resolved', value: rb.resolved, color: '#34d399' },
+    { label: 'Dismissed', value: rb.dismissed, color: '#a1a1aa' },
+  ].filter((x) => x.value > 0);
 
   return {
     lastUpdated: new Date().toISOString(),
@@ -246,40 +331,111 @@ async function getMarketplaceOverview() {
       rejectedListings: Number(lc.rejected),
       delistedListings: Number(lc.delisted),
       approvedCreditValue: Number(lc.approved_credit_value),
-      openTickets: Number(tc.open_count),
+      openTickets: Number(tc.open_count) + Number(tc.in_progress),
       totalTickets: Number(tc.total),
+      unassignedTickets: Number(tc.unassigned),
+      highPriorityTickets: Number(tc.high_priority),
+      awaitingReplyTickets: Number(tc.awaiting_reply),
+      escalatedTickets: Number(tc.escalated),
+      inProgressTickets: Number(tc.in_progress),
+      resolvedTickets: Number(tc.resolved),
+      openReports: Number(rc.open_count),
+      totalReports: Number(rc.total),
+      unassignedReports: rb.unassigned,
+      highPriorityReports: rb.highPriority,
+      resolvedReports: rb.resolved,
       restrictedAccounts: Number(restrictedCount.rows[0].count),
     },
     charts: {
-      listingStatusMix: statusChart,
-      listingCategories: categoryChart,
+      listingStatusMix,
+      listingCategories,
+      ticketStatusMix: ticketStatusChart(tc),
+      ticketCategories: toCategoryChart(categoryRows),
+      reportStatusMix,
+      reportTypes: reportBreakdown.byType.map((row, i) => ({
+        ...row,
+        color: ['#f59e0b', '#fb7185', '#a78bfa', '#60a5fa', '#34d399', '#38bdf8'][i % 6],
+      })),
     },
     recentListings: recentListings.slice(0, 8),
-    alerts: buildMarketplaceAlerts(lc, tc),
+    recentTickets: tickets.slice(0, 10),
+    flaggedReports: reports.slice(0, 10),
+    alerts: buildMarketplaceAlerts(lc, tc, reportBreakdown),
+    dataSources: {
+      tables: ['marketplace_listings', 'tickets', 'reports', 'accounts'],
+      persisted: true,
+    },
   };
 }
 
-function buildMarketplaceAlerts(lc, tc) {
+function buildMarketplaceAlerts(lc, tc, reportBreakdown) {
   const alerts = [];
   const openTickets = Number(tc.open_count) + Number(tc.in_progress || 0);
+  const rb = reportBreakdown?.counts || {};
 
   if (Number(lc.pending) > 0) {
-    alerts.push({ id: 'pending-listings', message: `${lc.pending} listing(s) awaiting review.`, severity: 'warning' });
+    alerts.push({
+      id: 'pending-listings',
+      message: `${lc.pending} listing(s) awaiting review.`,
+      severity: 'warning',
+      action: { tab: 'marketplace-control' },
+    });
   }
   if (Number(tc.unassigned) > 0) {
-    alerts.push({ id: 'unassigned', message: `${tc.unassigned} marketplace ticket(s) have no assignee.`, severity: 'warning' });
+    alerts.push({
+      id: 'unassigned',
+      message: `${tc.unassigned} marketplace ticket(s) have no assignee.`,
+      severity: 'warning',
+      action: { tab: 'ticket-management', ticketFilters: { assignee: 'unassigned' } },
+    });
   }
   if (Number(tc.high_priority) > 0) {
-    alerts.push({ id: 'high-priority', message: `${tc.high_priority} high-priority marketplace ticket(s) need attention.`, severity: 'error' });
+    alerts.push({
+      id: 'high-priority',
+      message: `${tc.high_priority} high-priority marketplace ticket(s) need attention.`,
+      severity: 'error',
+      action: { tab: 'ticket-management', ticketFilters: { priority: 'High' } },
+    });
   }
   if (Number(tc.awaiting_reply) > 0) {
-    alerts.push({ id: 'awaiting-reply', message: `${tc.awaiting_reply} marketplace ticket(s) awaiting a staff reply.`, severity: 'warning' });
+    alerts.push({
+      id: 'awaiting-reply',
+      message: `${tc.awaiting_reply} marketplace ticket(s) awaiting a staff reply.`,
+      severity: 'warning',
+      action: { tab: 'ticket-management' },
+    });
   }
   if (Number(tc.escalated) > 0) {
-    alerts.push({ id: 'escalated', message: `${tc.escalated} escalated marketplace ticket(s) need a handoff.`, severity: 'error' });
+    alerts.push({
+      id: 'escalated',
+      message: `${tc.escalated} escalated marketplace ticket(s) need a handoff.`,
+      severity: 'error',
+      action: { tab: 'ticket-management' },
+    });
+  }
+  if (Number(rb.unassigned) > 0) {
+    alerts.push({
+      id: 'unassigned-reports',
+      message: `${rb.unassigned} marketplace report(s) unassigned.`,
+      severity: 'warning',
+      action: { tab: 'reports' },
+    });
+  }
+  if (Number(rb.highPriority) > 0) {
+    alerts.push({
+      id: 'high-reports',
+      message: `${rb.highPriority} high-priority marketplace report(s) open.`,
+      severity: 'error',
+      action: { tab: 'reports' },
+    });
   }
   if (openTickets > 0) {
-    alerts.push({ id: 'open-tickets', message: `${openTickets} marketplace ticket(s) open.`, severity: 'info' });
+    alerts.push({
+      id: 'open-tickets',
+      message: `${openTickets} marketplace ticket(s) open.`,
+      severity: 'info',
+      action: { tab: 'ticket-management' },
+    });
   }
   if (!alerts.length) {
     alerts.push({ id: 'clear', message: 'Marketplace queue is clear.', severity: 'success' });

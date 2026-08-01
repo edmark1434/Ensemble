@@ -1,4 +1,4 @@
-export type ChartSegment = { label: string; value: number; color?: string };
+import type { ChartSegment, SupportTicket, UserReport } from '@/pages/admin/ticketManagement/ticketTypes';
 
 export type ListingPerson = {
   accountId: number;
@@ -40,6 +40,16 @@ export type MarketplaceTicket = {
   closedAt: string | null;
 };
 
+export type MarketplaceAlert = {
+  id: string;
+  message: string;
+  severity: string;
+  action?: {
+    tab?: string;
+    ticketFilters?: Record<string, string>;
+  };
+};
+
 export type MarketplaceOverview = {
   lastUpdated: string;
   summary: {
@@ -51,14 +61,32 @@ export type MarketplaceOverview = {
     approvedCreditValue: number;
     openTickets: number;
     totalTickets: number;
+    unassignedTickets: number;
+    highPriorityTickets: number;
+    awaitingReplyTickets: number;
+    escalatedTickets: number;
+    inProgressTickets: number;
+    resolvedTickets: number;
+    openReports: number;
+    totalReports: number;
+    unassignedReports: number;
+    highPriorityReports: number;
+    resolvedReports: number;
     restrictedAccounts: number;
   };
   charts: {
     listingStatusMix: ChartSegment[];
     listingCategories: ChartSegment[];
+    ticketStatusMix: ChartSegment[];
+    ticketCategories: ChartSegment[];
+    reportStatusMix: ChartSegment[];
+    reportTypes: ChartSegment[];
   };
   recentListings: MarketplaceListing[];
-  alerts: { id: string; message: string; severity: string }[];
+  recentTickets: SupportTicket[];
+  flaggedReports: UserReport[];
+  alerts: MarketplaceAlert[];
+  dataSources?: { tables: string[]; persisted: boolean };
 };
 
 export type SellerListingSummary = {
