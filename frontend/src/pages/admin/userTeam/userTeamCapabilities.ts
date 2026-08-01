@@ -1,4 +1,4 @@
-export type UserTeamVariant = 'admin' | 'support' | 'forum';
+export type UserTeamVariant = 'admin' | 'support' | 'forum' | 'marketplace';
 
 export type UserTeamCapabilities = {
   variant: UserTeamVariant;
@@ -19,24 +19,29 @@ export type UserTeamCapabilities = {
 };
 
 const FULL_STATUS = ['ban', 'unban', 'suspend', 'unsuspend', 'lock', 'unlock', 'restore'] as const;
-const FORUM_STATUS = ['suspend', 'unsuspend', 'lock', 'unlock'] as const;
+/** Forum + Marketplace: enforce from a report — no ban / restore */
+const LIMITED_STATUS = ['suspend', 'unsuspend', 'lock', 'unlock'] as const;
+
+function limitedEnforcementCaps(variant: 'forum' | 'marketplace'): UserTeamCapabilities {
+  return {
+    variant,
+    showTeamsTab: false,
+    canCredits: false,
+    canVerification: false,
+    canBan: false,
+    canPardon: false,
+    canWarn: true,
+    canSuspend: true,
+    canLock: true,
+    statusActions: new Set(LIMITED_STATUS),
+    bulkActions: new Set(['suspend', 'lock', 'clear']),
+    primaryActions: new Set(['view', 'history', 'export']),
+  };
+}
 
 export function getUserTeamCapabilities(variant: UserTeamVariant = 'admin'): UserTeamCapabilities {
-  if (variant === 'forum') {
-    return {
-      variant,
-      showTeamsTab: false,
-      canCredits: false,
-      canVerification: false,
-      canBan: false,
-      canPardon: false,
-      canWarn: true,
-      canSuspend: true,
-      canLock: true,
-      statusActions: new Set(FORUM_STATUS),
-      bulkActions: new Set(['suspend', 'lock', 'clear']),
-      primaryActions: new Set(['view', 'history', 'export']),
-    };
+  if (variant === 'forum' || variant === 'marketplace') {
+    return limitedEnforcementCaps(variant);
   }
 
   // admin + support: full toolkit

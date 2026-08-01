@@ -94,6 +94,7 @@ import MarketplaceModeratorDashboard from './pages/moderator/marketplace-moderat
 import MarketplaceControl from './pages/moderator/marketplace-moderator/MarketplaceControl'
 import MarketplaceTicketManagement from './pages/moderator/marketplace-moderator/TicketManagement'
 import MarketplaceReports from './pages/moderator/marketplace-moderator/Reports'
+import MarketplaceUserTeam from './pages/moderator/marketplace-moderator/UserTeam'
 import SupportModeratorLayout from './pages/moderator/support-moderator/Layout'
 import SupportModeratorDashboard from './pages/moderator/support-moderator/Dashboard'
 import SupportTicketManagement from './pages/moderator/support-moderator/TicketManagement'
@@ -267,6 +268,7 @@ function App() {
           <Route path='marketplace-control' element={<MarketplaceControl />} />
           <Route path='ticket-management' element={<MarketplaceTicketManagement />} />
           <Route path='reports' element={<MarketplaceReports />} />
+          <Route path='user-team' element={<MarketplaceUserTeam />} />
         </Route>
 
         <Route path='/moderator/support' element={<SupportModeratorLayout />}>

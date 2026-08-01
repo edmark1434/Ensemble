@@ -15,11 +15,12 @@ const {
   postAdminAccountPardon,
 } = require('../Controllers/AdminUserTeamControllers');
 
-/** Admin + Support: full User & Team. Forum: read + limited enforcement. */
+/** Admin + Support: full User & Team. Forum/Marketplace: read + limited enforcement. */
 const requireUserTeamAccess = requireStaffRole([
   'Admin',
   'Support Moderator',
   'Forum Moderator',
+  'Marketplace Moderator',
 ]);
 /** Credits, verification, pardons, team management, ban — Admin/Support only. */
 const requireUserTeamFullWrite = requireStaffRole(['Admin', 'Support Moderator']);

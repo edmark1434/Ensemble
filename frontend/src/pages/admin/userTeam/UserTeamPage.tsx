@@ -37,6 +37,12 @@ const VARIANT_META: Record<
     accentTab: 'border-violet-400 text-white',
     fallbackUser: 'forum',
   },
+  marketplace: {
+    label: 'Marketplace Moderator · User enforcement',
+    accentLabel: 'text-amber-400/80',
+    accentTab: 'border-amber-400 text-white',
+    fallbackUser: 'marketplace',
+  },
 };
 
 export default function UserTeamPage({ variant = 'admin' }: { variant?: UserTeamVariant }) {
@@ -88,11 +94,13 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: UserTeam
               {meta.label}
             </p>
             <h1 className="text-xl font-bold text-white">
-              {variant === 'forum' ? 'Community enforcement' : 'Account management'}
+              {variant === 'forum' || variant === 'marketplace'
+                ? 'Account enforcement'
+                : 'Account management'}
             </h1>
             <p className="mt-1 text-xs text-zinc-500">
               Signed in as @{user?.username || meta.fallbackUser}
-              {variant === 'forum'
+              {variant === 'forum' || variant === 'marketplace'
                 ? ' · Warn, suspend, and lock only — no bans, credits, or team management'
                 : ''}
             </p>
