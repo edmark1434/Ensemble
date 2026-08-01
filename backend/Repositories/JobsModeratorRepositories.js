@@ -4,11 +4,14 @@ const { JOBS_REPORT_TYPES } = require('../lib/reportEnums');
 const {
   fetchScopedTickets,
   scopedTicketCounts,
+  scopedTicketCategoryBreakdown,
   fetchScopedDisputes,
   scopedDisputeCounts,
   fetchScopedReports,
   scopedReportCounts,
   ticketStatusChart,
+  toCategoryChart,
+  CHART_COLORS,
 } = require('./ModeratorSharedRepositories');
 const { fetchStaffWorkload } = require('./AdminTicketsRepositories');
 
@@ -576,11 +579,14 @@ async function getUserJobsHistory(accountId) {
   };
 }
 
-function buildAlerts(tc, dc, reportCounts, postingCounts) {
+function buildAlerts(tc, dc, reportBreakdown, postingCounts, pipelineCounts) {
   const alerts = [];
   const openTickets = Number(tc.open_count) + Number(tc.in_progress);
-  const pendingJobs = Number(postingCounts?.paused_jobs || 0);
+  const pausedJobs = Number(postingCounts?.paused_jobs || 0);
+  const pausedGigs = Number(postingCounts?.paused_gigs || 0);
   const openJobs = Number(postingCounts?.active_jobs || 0);
+  const pendingProposals = Number(pipelineCounts?.pending_proposals || 0);
+  const rb = reportBreakdown?.counts || {};
 
   if (Number(dc.open_count) > 0) {
     alerts.push({
@@ -622,18 +628,34 @@ function buildAlerts(tc, dc, reportCounts, postingCounts) {
       action: { tab: 'ticket-management' },
     });
   }
-  if (Number(reportCounts?.open_count) > 0) {
+  if (Number(rb.openCount) > 0) {
     alerts.push({
       id: 'open-reports',
-      message: `${reportCounts.open_count} job/gig report(s) need review.`,
+      message: `${rb.openCount} job/gig report(s) need review.`,
       severity: 'warning',
       action: { tab: 'reports' },
     });
   }
-  if (pendingJobs > 0) {
+  if (Number(rb.unassigned) > 0) {
     alerts.push({
-      id: 'paused-jobs',
-      message: `${pendingJobs} job posting(s) currently paused.`,
+      id: 'unassigned-reports',
+      message: `${rb.unassigned} job/gig report(s) are unassigned.`,
+      severity: 'warning',
+      action: { tab: 'reports' },
+    });
+  }
+  if (pausedJobs + pausedGigs > 0) {
+    alerts.push({
+      id: 'paused-postings',
+      message: `${pausedJobs + pausedGigs} posting(s) currently paused (${pausedJobs} jobs · ${pausedGigs} gigs).`,
+      severity: 'info',
+      action: { tab: 'control' },
+    });
+  }
+  if (pendingProposals > 0) {
+    alerts.push({
+      id: 'pending-proposals',
+      message: `${pendingProposals} proposal(s) waiting on clients.`,
       severity: 'info',
       action: { tab: 'control' },
     });
@@ -646,7 +668,7 @@ function buildAlerts(tc, dc, reportCounts, postingCounts) {
       action: { tab: 'ticket-management' },
     });
   }
-  if (openJobs > 0 && !alerts.length) {
+  if (openJobs > 0 && alerts.length < 2) {
     alerts.push({
       id: 'active-jobs',
       message: `${openJobs} active job posting(s) on the board.`,
@@ -660,11 +682,70 @@ function buildAlerts(tc, dc, reportCounts, postingCounts) {
   return alerts;
 }
 
+async function getJobsReportBreakdown(targetTypesIn) {
+  const params = [targetTypesIn];
+  const result = await pool.query(
+    `
+    SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE LOWER(status) IN ('open', 'pending'))::int AS open_status,
+      COUNT(*) FILTER (WHERE LOWER(status) IN ('in_review', 'in review', 'in_progress', 'in progress'))::int AS in_review,
+      COUNT(*) FILTER (WHERE LOWER(status) IN ('resolved', 'closed'))::int AS resolved,
+      COUNT(*) FILTER (WHERE LOWER(status) = 'dismissed')::int AS dismissed,
+      COUNT(*) FILTER (
+        WHERE LOWER(status) NOT IN ('resolved', 'closed', 'dismissed')
+          AND assigned_staff_id IS NULL
+      )::int AS unassigned,
+      COUNT(*) FILTER (
+        WHERE LOWER(priority) = 'high'
+          AND LOWER(status) NOT IN ('resolved', 'closed', 'dismissed')
+      )::int AS high_priority
+    FROM reports
+    WHERE deleted_at IS NULL
+      AND LOWER(COALESCE(target_type, type)) = ANY($1)
+    `,
+    params
+  );
+  const typeResult = await pool.query(
+    `
+    SELECT LOWER(COALESCE(target_type, type)) AS target_type, COUNT(*)::int AS count
+    FROM reports
+    WHERE deleted_at IS NULL
+      AND LOWER(COALESCE(target_type, type)) = ANY($1)
+    GROUP BY 1
+    ORDER BY count DESC
+    `,
+    params
+  );
+  const c = result.rows[0] || {};
+  return {
+    counts: {
+      total: Number(c.total || 0),
+      openStatus: Number(c.open_status || 0),
+      inReview: Number(c.in_review || 0),
+      resolved: Number(c.resolved || 0),
+      dismissed: Number(c.dismissed || 0),
+      unassigned: Number(c.unassigned || 0),
+      highPriority: Number(c.high_priority || 0),
+      openCount: Number(c.open_status || 0) + Number(c.in_review || 0),
+    },
+    byType: typeResult.rows.map((r) => ({
+      label: String(r.target_type || 'other')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (ch) => ch.toUpperCase()),
+      value: Number(r.count),
+    })),
+  };
+}
+
 async function getJobsOverview() {
+  const jobsReportTypes = [...JOBS_REPORT_TYPES];
   const [
     ticketCounts,
+    categoryRows,
     disputeCounts,
     reportCounts,
+    reportBreakdown,
     tickets,
     disputes,
     reports,
@@ -672,69 +753,92 @@ async function getJobsOverview() {
     pipelineCounts,
     contractMixResult,
     trendResult,
+    jobCategoryMix,
+    experienceMix,
     recentPostings,
     staffWorkload,
   ] = await Promise.all([
-      scopedTicketCounts(JOBS_TICKET_SCOPE),
-      scopedDisputeCounts({ entityTypesIn: JOBS_DISPUTE_ENTITIES }),
-      scopedReportCounts({ targetTypesIn: [...JOBS_REPORT_TYPES] }),
-      getJobsTickets(),
-      getJobsDisputes(),
-      getJobsReports(),
-      pool.query(`
-        SELECT
-          (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NULL) AS total_jobs,
-          (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NULL AND ${activeStatusSql('status')}) AS active_jobs,
-          (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NULL AND ${pausedStatusSql('status')}) AS paused_jobs,
-          (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NULL AND ${closedStatusSql('status')}) AS closed_jobs,
-          (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NOT NULL) AS archived_jobs,
-          (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NULL) AS total_gigs,
-          (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NULL AND ${activeStatusSql('status')}) AS active_gigs,
-          (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NULL AND ${pausedStatusSql('status')}) AS paused_gigs,
-          (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NULL AND ${closedStatusSql('status')}) AS closed_gigs,
-          (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NOT NULL) AS archived_gigs,
-          (SELECT COUNT(*)::int FROM contracts WHERE LOWER(status) NOT IN ('completed', 'closed', 'cancelled')) AS active_contracts,
-          (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NULL AND created_at >= NOW() - INTERVAL '7 days') AS jobs_this_week,
-          (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NULL AND created_at >= NOW() - INTERVAL '7 days') AS gigs_this_week
-      `),
-      pool.query(`
-        SELECT
-          (SELECT COUNT(*)::int FROM proposals WHERE deleted_at IS NULL) AS total_proposals,
-          (SELECT COUNT(*)::int FROM proposals WHERE deleted_at IS NULL AND LOWER(status) IN ('pending', 'submitted', 'open')) AS pending_proposals,
-          (SELECT COUNT(*)::int FROM gig_requests WHERE deleted_at IS NULL) AS total_gig_requests,
-          (SELECT COUNT(*)::int FROM gig_requests WHERE deleted_at IS NULL AND LOWER(status) IN ('pending', 'submitted', 'open')) AS pending_gig_requests,
-          (SELECT COUNT(*)::int FROM contracts) AS total_contracts,
-          (SELECT COUNT(*)::int FROM contracts WHERE LOWER(status) IN ('completed', 'closed')) AS completed_contracts,
-          (SELECT COALESCE(SUM(w.balance_credits + w.frozen_balance_credits), 0)::bigint
-             FROM escrow_wallets ew JOIN wallets w ON w.wallet_id = ew.wallet_id) AS credits_in_escrow,
-          (SELECT COALESCE(ROUND(AVG(stars_out_of_five)::numeric, 2), 0) FROM ratings WHERE deleted_at IS NULL) AS avg_contract_rating,
-          (SELECT COUNT(*)::int FROM ratings WHERE deleted_at IS NULL) AS total_ratings
-      `),
-      pool.query(`
-        SELECT LOWER(status) AS status, COUNT(*)::int AS count
-        FROM contracts GROUP BY LOWER(status) ORDER BY count DESC
-      `),
-      pool.query(`
-        SELECT day::date AS day,
-          (SELECT COUNT(*)::int FROM jobs j WHERE j.deleted_at IS NULL AND j.created_at::date = day::date) AS jobs,
-          (SELECT COUNT(*)::int FROM gigs g WHERE g.deleted_at IS NULL AND g.created_at::date = day::date) AS gigs
-        FROM generate_series(NOW() - INTERVAL '13 days', NOW(), INTERVAL '1 day') day
-        ORDER BY day
-      `),
-      getJobsGigsPostings({}),
-      fetchStaffWorkload(),
-    ]);
+    scopedTicketCounts(JOBS_TICKET_SCOPE),
+    scopedTicketCategoryBreakdown(JOBS_TICKET_SCOPE),
+    scopedDisputeCounts({ entityTypesIn: JOBS_DISPUTE_ENTITIES }),
+    scopedReportCounts({ targetTypesIn: jobsReportTypes }),
+    getJobsReportBreakdown(jobsReportTypes),
+    getJobsTickets(),
+    getJobsDisputes(),
+    getJobsReports(),
+    pool.query(`
+      SELECT
+        (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NULL) AS total_jobs,
+        (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NULL AND ${activeStatusSql('status')}) AS active_jobs,
+        (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NULL AND ${pausedStatusSql('status')}) AS paused_jobs,
+        (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NULL AND ${closedStatusSql('status')}) AS closed_jobs,
+        (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NOT NULL) AS archived_jobs,
+        (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NULL) AS total_gigs,
+        (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NULL AND ${activeStatusSql('status')}) AS active_gigs,
+        (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NULL AND ${pausedStatusSql('status')}) AS paused_gigs,
+        (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NULL AND ${closedStatusSql('status')}) AS closed_gigs,
+        (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NOT NULL) AS archived_gigs,
+        (SELECT COUNT(*)::int FROM contracts WHERE LOWER(status) NOT IN ('completed', 'closed', 'cancelled')) AS active_contracts,
+        (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NULL AND created_at >= NOW() - INTERVAL '7 days') AS jobs_this_week,
+        (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NULL AND created_at >= NOW() - INTERVAL '7 days') AS gigs_this_week
+    `),
+    pool.query(`
+      SELECT
+        (SELECT COUNT(*)::int FROM proposals WHERE deleted_at IS NULL) AS total_proposals,
+        (SELECT COUNT(*)::int FROM proposals WHERE deleted_at IS NULL AND LOWER(status) IN ('pending', 'submitted', 'open')) AS pending_proposals,
+        (SELECT COUNT(*)::int FROM gig_requests WHERE deleted_at IS NULL) AS total_gig_requests,
+        (SELECT COUNT(*)::int FROM gig_requests WHERE deleted_at IS NULL AND LOWER(status) IN ('pending', 'submitted', 'open')) AS pending_gig_requests,
+        (SELECT COUNT(*)::int FROM contracts) AS total_contracts,
+        (SELECT COUNT(*)::int FROM contracts WHERE LOWER(status) IN ('completed', 'closed')) AS completed_contracts,
+        (SELECT COALESCE(SUM(w.balance_credits + w.frozen_balance_credits), 0)::bigint
+           FROM escrow_wallets ew JOIN wallets w ON w.wallet_id = ew.wallet_id) AS credits_in_escrow,
+        (SELECT COALESCE(ROUND(AVG(stars_out_of_five)::numeric, 2), 0) FROM ratings WHERE deleted_at IS NULL) AS avg_contract_rating,
+        (SELECT COUNT(*)::int FROM ratings WHERE deleted_at IS NULL) AS total_ratings
+    `),
+    pool.query(`
+      SELECT LOWER(status) AS status, COUNT(*)::int AS count
+      FROM contracts GROUP BY LOWER(status) ORDER BY count DESC
+    `),
+    pool.query(`
+      SELECT day::date AS day,
+        (SELECT COUNT(*)::int FROM jobs j WHERE j.deleted_at IS NULL AND j.created_at::date = day::date) AS jobs,
+        (SELECT COUNT(*)::int FROM gigs g WHERE g.deleted_at IS NULL AND g.created_at::date = day::date) AS gigs
+      FROM generate_series(NOW() - INTERVAL '13 days', NOW(), INTERVAL '1 day') day
+      ORDER BY day
+    `),
+    pool.query(`
+      SELECT COALESCE(NULLIF(TRIM(category), ''), 'Uncategorized') AS category, COUNT(*)::int AS count
+      FROM jobs WHERE deleted_at IS NULL
+      GROUP BY 1 ORDER BY count DESC LIMIT 8
+    `),
+    pool.query(`
+      SELECT COALESCE(NULLIF(TRIM(experience_level), ''), 'Unspecified') AS level, COUNT(*)::int AS count
+      FROM jobs WHERE deleted_at IS NULL
+      GROUP BY 1 ORDER BY count DESC
+    `),
+    getJobsGigsPostings({}),
+    fetchStaffWorkload(),
+  ]);
 
   const tc = ticketCounts;
   const dc = disputeCounts;
   const pc = postingCounts.rows[0];
   const pl = pipelineCounts.rows[0];
   const rc = reportCounts;
+  const rb = reportBreakdown.counts;
 
   const disputeStatusMix = [
     { label: 'Open', value: disputes.filter((d) => d.status === 'open').length, color: '#f87171' },
-    { label: 'Under Review', value: disputes.filter((d) => d.status === 'under_review').length, color: '#fbbf24' },
-    { label: 'Resolved', value: disputes.filter((d) => ['resolved', 'closed'].includes(d.status)).length, color: '#34d399' },
+    {
+      label: 'Under Review',
+      value: disputes.filter((d) => d.status === 'under_review').length,
+      color: '#fbbf24',
+    },
+    {
+      label: 'Resolved',
+      value: disputes.filter((d) => ['resolved', 'closed'].includes(d.status)).length,
+      color: '#34d399',
+    },
   ].filter((x) => x.value > 0);
 
   const contractStatusColors = {
@@ -776,6 +880,13 @@ async function getJobsOverview() {
     },
   ].filter((x) => x.value > 0);
 
+  const reportStatusMix = [
+    { label: 'Open', value: rb.openStatus, color: '#f87171' },
+    { label: 'In review', value: rb.inReview, color: '#fbbf24' },
+    { label: 'Resolved', value: rb.resolved, color: '#34d399' },
+    { label: 'Dismissed', value: rb.dismissed, color: '#a1a1aa' },
+  ].filter((x) => x.value > 0);
+
   return {
     lastUpdated: new Date().toISOString(),
     summary: {
@@ -792,6 +903,9 @@ async function getJobsOverview() {
       resolvedTickets: Number(tc.resolved),
       openReports: Number(rc.open_count),
       totalReports: Number(rc.total),
+      unassignedReports: rb.unassigned,
+      highPriorityReports: rb.highPriority,
+      resolvedReports: rb.resolved,
       totalJobs: Number(pc.total_jobs),
       activeJobs: Number(pc.active_jobs),
       pausedJobs: Number(pc.paused_jobs),
@@ -817,25 +931,43 @@ async function getJobsOverview() {
     },
     charts: {
       ticketStatusMix: ticketStatusChart(tc),
+      ticketCategories: toCategoryChart(categoryRows),
       disputeStatusMix,
+      reportStatusMix,
+      reportTypes: reportBreakdown.byType.map((row, i) => ({
+        ...row,
+        color: CHART_COLORS[i % CHART_COLORS.length],
+      })),
       postingsMix: [
         { label: 'Jobs', value: Number(pc.total_jobs), color: '#60a5fa' },
         { label: 'Gigs', value: Number(pc.total_gigs), color: '#34d399' },
       ].filter((x) => x.value > 0),
       postingStatusMix,
       contractStatusMix,
+      jobCategories: jobCategoryMix.rows.map((r, i) => ({
+        label: r.category,
+        value: Number(r.count),
+        color: CHART_COLORS[i % CHART_COLORS.length],
+      })),
+      experienceLevels: experienceMix.rows.map((r, i) => ({
+        label: String(r.level)
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, (ch) => ch.toUpperCase()),
+        value: Number(r.count),
+        color: CHART_COLORS[i % CHART_COLORS.length],
+      })),
       postingTrend: trendResult.rows.map((r) => ({
         day: r.day,
         jobs: Number(r.jobs),
         gigs: Number(r.gigs),
       })),
     },
-    recentTickets: tickets.slice(0, 8),
+    recentTickets: tickets.slice(0, 10),
     recentPostings: recentPostings.slice(0, 8),
     flaggedReports: reports.slice(0, 10),
     disputes: disputes.slice(0, 10),
     staffWorkload,
-    alerts: buildAlerts(tc, dc, rc, pc),
+    alerts: buildAlerts(tc, dc, reportBreakdown, pc, pl),
     dataSources: {
       tables: [
         'tickets',

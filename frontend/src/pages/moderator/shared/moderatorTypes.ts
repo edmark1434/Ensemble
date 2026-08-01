@@ -210,6 +210,9 @@ export type JobsOverview = {
     resolvedTickets: number;
     openReports?: number;
     totalReports?: number;
+    unassignedReports?: number;
+    highPriorityReports?: number;
+    resolvedReports?: number;
     totalJobs: number;
     activeJobs: number;
     pausedJobs?: number;
@@ -235,10 +238,15 @@ export type JobsOverview = {
   };
   charts: {
     ticketStatusMix: ChartSegment[];
+    ticketCategories?: ChartSegment[];
     disputeStatusMix: ChartSegment[];
+    reportStatusMix?: ChartSegment[];
+    reportTypes?: ChartSegment[];
     postingsMix: ChartSegment[];
     postingStatusMix?: ChartSegment[];
     contractStatusMix: ChartSegment[];
+    jobCategories?: ChartSegment[];
+    experienceLevels?: ChartSegment[];
     postingTrend: { day: string; jobs: number; gigs: number }[];
   };
   recentTickets: SupportTicket[];

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
+  Archive,
   Briefcase,
   CheckCircle2,
   Coins,
@@ -13,6 +14,7 @@ import {
   Inbox,
   Loader2,
   Lock,
+  Pause,
   RefreshCw,
   Scale,
   Star,
@@ -24,6 +26,7 @@ import useGlobalState from '@/lib/global_state';
 import {
   ChartCard,
   DonutChart,
+  HorizontalBarChart,
   LineChart,
 } from '@/pages/admin/analytics/components/AnalyticsCharts';
 import { ReportCaseDetailModal } from '@/pages/admin/moderation/CaseDetailModals';
@@ -117,6 +120,9 @@ export default function JobsModeratorDashboard() {
   const { summary, charts, recentTickets, recentPostings, flaggedReports, disputes, alerts } =
     data;
 
+  const pausedPostings = (summary.pausedJobs ?? 0) + (summary.pausedGigs ?? 0);
+  const archivedPostings = (summary.archivedJobs ?? 0) + (summary.archivedGigs ?? 0);
+
   const kpiCards = [
     {
       label: 'Active jobs',
@@ -133,30 +139,30 @@ export default function JobsModeratorDashboard() {
       accent: 'text-violet-300',
     },
     {
-      label: 'Open tickets',
+      label: 'Open jobs & gigs tickets',
       value: summary.openTickets,
-      sub: `${summary.unassignedTickets} unassigned · ${summary.highPriorityTickets ?? 0} high`,
+      sub: `${summary.totalTickets} total · ${summary.inProgressTickets ?? 0} in progress`,
       icon: Ticket,
       accent: 'text-emerald-300',
     },
     {
-      label: 'Open disputes',
-      value: summary.openDisputes,
-      sub: `${summary.creditsAtRisk.toLocaleString()} credits at risk`,
-      icon: Scale,
-      accent: 'text-rose-300',
-    },
-    {
-      label: 'Pending proposals',
-      value: summary.pendingProposals,
-      sub: `${summary.totalProposals} proposals total`,
-      icon: FileText,
+      label: 'Unassigned tickets',
+      value: summary.unassignedTickets,
+      sub: `${summary.awaitingReplyTickets ?? 0} awaiting member reply`,
+      icon: Hand,
       accent: 'text-amber-300',
     },
     {
-      label: 'Open reports',
+      label: 'High priority tickets',
+      value: summary.highPriorityTickets ?? 0,
+      sub: `${summary.escalatedTickets ?? 0} escalated into this queue`,
+      icon: TimerReset,
+      accent: 'text-rose-300',
+    },
+    {
+      label: 'Open jobs & gigs reports',
       value: summary.openReports ?? 0,
-      sub: `${summary.totalReports ?? 0} job/gig reports total`,
+      sub: `${summary.totalReports ?? 0} total · ${summary.unassignedReports ?? 0} unassigned`,
       icon: Flag,
       accent: 'text-fuchsia-300',
     },
@@ -267,10 +273,37 @@ export default function JobsModeratorDashboard() {
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <MiniStat
+            icon={Pause}
+            label="Paused postings"
+            value={pausedPostings}
+            sub={`${summary.pausedJobs ?? 0} jobs · ${summary.pausedGigs ?? 0} gigs`}
+          />
+          <MiniStat
+            icon={Archive}
+            label="Archived"
+            value={archivedPostings}
+            sub="Soft-deleted from board"
+          />
+          <MiniStat
             icon={FileSignature}
             label="Active contracts"
             value={summary.activeContracts}
             sub={`${summary.completedContracts} of ${summary.totalContracts} completed`}
+          />
+          <MiniStat
+            icon={Scale}
+            label="Open disputes"
+            value={summary.openDisputes}
+            sub={`${summary.creditsAtRisk.toLocaleString()} credits at risk`}
+          />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <MiniStat
+            icon={FileText}
+            label="Pending proposals"
+            value={summary.pendingProposals}
+            sub={`${summary.totalProposals} proposals total`}
           />
           <MiniStat
             icon={Inbox}
@@ -337,12 +370,40 @@ export default function JobsModeratorDashboard() {
           </ChartCard>
           <ChartCard>
             <DonutChart
-              title="Tickets by status"
+              title="Jobs & gigs tickets by status"
               segments={charts.ticketStatusMix.map((s) => ({
                 label: s.label,
                 value: s.value,
                 color: s.color || '#34d399',
               }))}
+            />
+          </ChartCard>
+          <ChartCard>
+            <DonutChart
+              title="Jobs & gigs reports by status"
+              segments={(charts.reportStatusMix || []).map((s) => ({
+                label: s.label,
+                value: s.value,
+                color: s.color || '#fb7185',
+              }))}
+            />
+          </ChartCard>
+          <ChartCard>
+            <HorizontalBarChart
+              title="Tickets by type"
+              data={charts.ticketCategories || []}
+            />
+          </ChartCard>
+          <ChartCard>
+            <HorizontalBarChart title="Reports by target" data={charts.reportTypes || []} />
+          </ChartCard>
+          <ChartCard>
+            <HorizontalBarChart title="Jobs by category" data={charts.jobCategories || []} />
+          </ChartCard>
+          <ChartCard>
+            <HorizontalBarChart
+              title="Jobs by experience level"
+              data={charts.experienceLevels || []}
             />
           </ChartCard>
           <ChartCard>
@@ -362,7 +423,9 @@ export default function JobsModeratorDashboard() {
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="font-semibold text-white">Jobs &amp; gigs ticket queue</h2>
-                <p className="mt-1 text-xs text-zinc-600">Click a row to open ticket detail.</p>
+                <p className="mt-1 text-xs text-zinc-600">
+                  Hiring / contract / payment tickets only — click a row to open.
+                </p>
               </div>
               <Link
                 to="/moderator/jobs/ticket-management"
@@ -426,8 +489,10 @@ export default function JobsModeratorDashboard() {
           <section className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="font-semibold text-white">Reports</h2>
-                <p className="mt-1 text-xs text-zinc-600">Job / gig / contract / feedback targets.</p>
+                <h2 className="font-semibold text-white">Jobs &amp; gigs reports</h2>
+                <p className="mt-1 text-xs text-zinc-600">
+                  Job / gig / contract / proposal / feedback targets.
+                </p>
               </div>
               <Link
                 to="/moderator/jobs/reports"
@@ -463,12 +528,14 @@ export default function JobsModeratorDashboard() {
           </section>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 xl:grid-cols-3">
           <section className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="font-semibold text-white">Active disputes</h2>
-                <p className="mt-1 text-xs text-zinc-600">Credits held while cases are open.</p>
+                <p className="mt-1 text-xs text-zinc-600">
+                  Credits held while cases are open — click to review.
+                </p>
               </div>
               <Link
                 to="/moderator/jobs/disputes"
@@ -477,7 +544,7 @@ export default function JobsModeratorDashboard() {
                 Open desk
               </Link>
             </div>
-            <ul className="mt-4 space-y-2">
+            <ul className="mt-4 max-h-[420px] space-y-2 overflow-y-auto">
               {(disputes || []).map((d) => (
                 <li key={String(d.id)}>
                   <button
@@ -502,11 +569,13 @@ export default function JobsModeratorDashboard() {
             </ul>
           </section>
 
-          <section className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+          <section className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 xl:col-span-2">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="font-semibold text-white">Recent postings</h2>
-                <p className="mt-1 text-xs text-zinc-600">Latest jobs and gigs — open Control to moderate.</p>
+                <h2 className="font-semibold text-white">Recent job &amp; gig postings</h2>
+                <p className="mt-1 text-xs text-zinc-600">
+                  Latest board activity — open Control to pause, close, or archive.
+                </p>
               </div>
               <Link
                 to="/moderator/jobs/control"
@@ -516,13 +585,14 @@ export default function JobsModeratorDashboard() {
               </Link>
             </div>
             <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[520px] text-left text-sm">
+              <table className="w-full min-w-[700px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-white/[0.06] text-[10px] uppercase tracking-wide text-zinc-600">
                     <th className="pb-2 pr-4 font-medium">Posting</th>
                     <th className="pb-2 pr-4 font-medium">Author</th>
                     <th className="pb-2 pr-4 font-medium">Pipeline</th>
-                    <th className="pb-2 font-medium">Status</th>
+                    <th className="pb-2 pr-4 font-medium">Status</th>
+                    <th className="pb-2 font-medium">Created</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -542,18 +612,21 @@ export default function JobsModeratorDashboard() {
                       <td className="py-3 pr-4 text-xs">
                         {p.applicantCount} applicants · {p.contractCount} contracts
                       </td>
-                      <td className="py-3">
+                      <td className="py-3 pr-4">
                         <span
                           className={`rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${postingStatusClass(p.status)}`}
                         >
                           {p.status}
                         </span>
                       </td>
+                      <td className="py-3 text-xs text-zinc-500">
+                        {formatDateTime(p.createdAt)}
+                      </td>
                     </tr>
                   ))}
                   {(!recentPostings || recentPostings.length === 0) && (
                     <tr>
-                      <td colSpan={4} className="py-8 text-center text-zinc-500">
+                      <td colSpan={5} className="py-8 text-center text-zinc-500">
                         No postings yet.
                       </td>
                     </tr>
