@@ -3,7 +3,7 @@ import { ChevronDown, Hand, Loader2, Scale, Search, SlidersHorizontal, X } from 
 import ModeratorDisputeDetailModal from '@/pages/moderator/shared/ModeratorDisputeDetailModal';
 import type { Dispute } from '@/pages/admin/ticketManagement/ticketTypes';
 
-type Accent = 'rose' | 'sky';
+type Accent = 'rose' | 'sky' | 'emerald';
 
 const ACCENT = {
   rose: {
@@ -21,6 +21,14 @@ const ACCENT = {
     chip: 'bg-sky-500/15 text-sky-100',
     btn: 'border-sky-500/40 bg-sky-500/15 text-sky-200',
     badge: 'border-sky-500/40 bg-sky-500/10 text-sky-300',
+  },
+  emerald: {
+    icon: 'text-emerald-300',
+    spin: 'text-emerald-400',
+    focus: 'focus:border-emerald-500/40',
+    chip: 'bg-emerald-500/15 text-emerald-100',
+    btn: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200',
+    badge: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300',
   },
 } as const;
 
@@ -147,7 +155,14 @@ const KNOWN_ENTITY_TYPES = [
   'Team',
 ] as const;
 
-const HANDLER_ROLES = new Set(['admin', 'administrator', 'support moderator']);
+const HANDLER_ROLES = new Set([
+  'admin',
+  'administrator',
+  'support moderator',
+  'jobs n gigs moderator',
+  'jobs moderator',
+  'jobs & gigs moderator',
+]);
 
 export type DisputeHandlerOption = {
   staffId: string;

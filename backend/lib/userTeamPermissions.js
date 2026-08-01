@@ -1,6 +1,6 @@
 /**
  * User & Team capability matrix by staff role.
- * Forum + Marketplace: enforce from reports only (warn / suspend / lock + view).
+ * Forum + Marketplace + Jobs & Gigs: enforce from reports only (warn / suspend / lock + view).
  * Admin + Support: full toolkit.
  */
 
@@ -33,8 +33,13 @@ function isMarketplaceModerator(session) {
   return roleOf(session) === 'Marketplace Moderator';
 }
 
+function isJobsModerator(session) {
+  const role = roleOf(session);
+  return role === 'Jobs N Gigs Moderator' || role === 'Jobs Moderator' || role === 'Jobs & Gigs Moderator';
+}
+
 function isLimitedEnforcer(session) {
-  return isForumModerator(session) || isMarketplaceModerator(session);
+  return isForumModerator(session) || isMarketplaceModerator(session) || isJobsModerator(session);
 }
 
 function canAccessUserTeam(session) {
@@ -43,7 +48,8 @@ function canAccessUserTeam(session) {
     role === 'Admin' ||
     role === 'Support Moderator' ||
     role === 'Forum Moderator' ||
-    role === 'Marketplace Moderator'
+    role === 'Marketplace Moderator' ||
+    isJobsModerator(session)
   );
 }
 
@@ -113,5 +119,6 @@ module.exports = {
   isAdminOrSupport,
   isForumModerator,
   isMarketplaceModerator,
+  isJobsModerator,
   isLimitedEnforcer,
 };

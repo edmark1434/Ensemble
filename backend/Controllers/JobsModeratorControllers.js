@@ -7,12 +7,16 @@ const {
   getJobsGigsPostingDetail,
   updateJobsGigsPosting,
   getUserJobsHistory,
+  JOBS_DISPUTE_ENTITIES,
 } = require('../Repositories/JobsModeratorRepositories');
 const {
   getTicketDetail,
   updateTicket,
   addTicketMessage,
   updateDispute,
+  getDisputeDetail,
+  addDisputeMessage,
+  setDisputeMessageAudience,
   getReportDetail,
   updateReport,
 } = require('../Repositories/AdminTicketsRepositories');
@@ -22,6 +26,27 @@ const {
   updateAccountRestriction,
 } = require('../Repositories/ModeratorRepositories');
 const { JOBS_REPORT_TYPES, isReportTypeInScope } = require('../lib/reportEnums');
+
+function normalizeEntityType(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, '');
+}
+
+function isJobsScopedDispute(dispute) {
+  const entity = normalizeEntityType(dispute?.relatedEntityType);
+  return JOBS_DISPUTE_ENTITIES.some((allowed) => normalizeEntityType(allowed) === entity);
+}
+
+async function assertJobsDisputeAccess(disputeId, session) {
+  const data = await getDisputeDetail(disputeId, session);
+  if (!data) return { error: { status: 404, message: 'Dispute not found' } };
+  if (!isJobsScopedDispute(data.dispute)) {
+    return { error: { status: 404, message: 'Dispute not found' } };
+  }
+  return { data };
+}
 
 async function getOverview(req, res) {
   try {
@@ -103,14 +128,85 @@ async function getDisputes(req, res) {
   }
 }
 
+async function getDispute(req, res) {
+  try {
+    const result = await assertJobsDisputeAccess(req.params.id, req.session);
+    if (result.error) {
+      return res.status(result.error.status).json({ success: false, message: result.error.message });
+    }
+    res.status(200).json({ success: true, data: result.data });
+  } catch (err) {
+    console.error('Error fetching jobs dispute detail:', err);
+    res.status(500).json({ success: false, message: 'Failed to load dispute' });
+  }
+}
+
 async function patchDispute(req, res) {
   try {
+    const scoped = await assertJobsDisputeAccess(req.params.id, req.session);
+    if (scoped.error) {
+      return res.status(scoped.error.status).json({ success: false, message: scoped.error.message });
+    }
     const data = await updateDispute(req.params.id, req.body, req.session);
     if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error updating dispute:', err);
     res.status(500).json({ success: false, message: 'Failed to update dispute' });
+  }
+}
+
+async function postDisputeMessage(req, res) {
+  try {
+    const scoped = await assertJobsDisputeAccess(req.params.id, req.session);
+    if (scoped.error) {
+      return res.status(scoped.error.status).json({ success: false, message: scoped.error.message });
+    }
+    const { body, isInternal, audience } = req.body;
+    if (!body?.trim()) {
+      return res.status(400).json({ success: false, message: 'Message body is required' });
+    }
+    const data = await addDisputeMessage(req.params.id, body.trim(), req.session, {
+      isInternal: Boolean(isInternal),
+      audience,
+    });
+    if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error adding dispute message:', err);
+    res.status(500).json({ success: false, message: err.message || 'Failed to add message' });
+  }
+}
+
+async function patchDisputeMessage(req, res) {
+  try {
+    const scoped = await assertJobsDisputeAccess(req.params.id, req.session);
+    if (scoped.error) {
+      return res.status(scoped.error.status).json({ success: false, message: scoped.error.message });
+    }
+    const { audience, publish } = req.body;
+    let nextAudience = audience;
+    if (publish === true) nextAudience = 'parties';
+    if (publish === false) nextAudience = audience || 'author_and_staff';
+    if (!nextAudience) {
+      return res.status(400).json({ success: false, message: 'audience or publish is required' });
+    }
+    const data = await setDisputeMessageAudience(
+      req.params.id,
+      req.params.messageId,
+      nextAudience,
+      req.session
+    );
+    if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error updating dispute message:', err);
+    const msg = err?.message || 'Failed to update message';
+    if (msg.includes('MongoDB')) {
+      return res.status(503).json({ success: false, message: msg });
+    }
+    const isClient = /assign yourself|invalid|not found/i.test(msg);
+    res.status(isClient ? 400 : 500).json({ success: false, message: msg });
   }
 }
 
@@ -242,7 +338,10 @@ module.exports = {
   patchTicket,
   postTicketMessage,
   getDisputes,
+  getDispute,
   patchDispute,
+  postDisputeMessage,
+  patchDisputeMessage,
   getPostings,
   getPosting,
   patchPosting,

@@ -334,9 +334,6 @@ async function seedProjectsAndEditor(ctx) {
 }
 
 async function seedJobsDomain(ctx) {
-  // Disabled by user request to keep Jobs and Proposals clean
-  return { jobs: [], contracts: [] };
-  
   const { users, tags, files } = ctx;
   if (users.length < 4) return null;
 
@@ -349,9 +346,10 @@ async function seedJobsDomain(ctx) {
        rough_deadline, rough_duration_hrs, rough_no_of_revisions,
        rate_credits_min, rate_credits_max, weekly_hrs_max, status, client_account_id
      ) VALUES
-       ($1, $2, 'fixed', 'Intermediate', 1, NOW() + interval '21 days', 40, 2, 1500, 3500, 20, 'open', $3),
-       ($4, $5, 'hourly', 'Expert', 1, NOW() + interval '45 days', 80, 3, 80, 150, 30, 'open', $3),
-       ($6, $7, 'fixed', 'Beginner', 2, NOW() + interval '14 days', 20, 1, 400, 900, 10, 'closed', $8)
+       ($1, $2, 'fixed', 'Intermediate', 1, NOW() + interval '21 days', 40, 2, 1500, 3500, 20, 'Open', $3),
+       ($4, $5, 'hourly', 'Expert', 1, NOW() + interval '45 days', 80, 3, 80, 150, 30, 'Open', $3),
+       ($6, $7, 'fixed', 'Beginner', 2, NOW() + interval '14 days', 20, 1, 400, 900, 10, 'Closed', $8),
+       ($9, $10, 'fixed', 'Intermediate', 1, NOW() + interval '30 days', 35, 2, 1200, 2800, 15, 'Paused', $3)
      RETURNING job_id, title, status`,
     [
       cap('Edit product launch video', 50),
@@ -362,6 +360,8 @@ async function seedJobsDomain(ctx) {
       cap('Social media short pack', 50),
       'Create 5 vertical shorts from existing footage.',
       users[2].account_id,
+      cap('Brand documentary assembly', 50),
+      'Assemble a 8–10 minute brand documentary from existing interview footage. Needs pacing notes and temp score.',
     ]
   );
   const jobs = jobRes.rows;
@@ -971,4 +971,5 @@ async function seedDomainExamples(userAccountIds, staffByRole) {
 
 module.exports = {
   seedDomainExamples,
+  seedJobsDomain,
 };

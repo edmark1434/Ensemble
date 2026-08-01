@@ -97,7 +97,14 @@ router.get('/jobs/reports', [checkSession, jobsModerator], JobsModerator.getRepo
 router.get('/jobs/reports/:id', [checkSession, jobsModerator], JobsModerator.getReport);
 router.patch('/jobs/reports/:id', [checkSession, jobsModerator], JobsModerator.patchReport);
 router.get('/jobs/disputes', [checkSession, jobsModerator], JobsModerator.getDisputes);
+router.get('/jobs/disputes/:id', [checkSession, jobsModerator], JobsModerator.getDispute);
 router.patch('/jobs/disputes/:id', [checkSession, jobsModerator], JobsModerator.patchDispute);
+router.post('/jobs/disputes/:id/messages', [checkSession, jobsModerator], JobsModerator.postDisputeMessage);
+router.patch(
+  '/jobs/disputes/:id/messages/:messageId',
+  [checkSession, jobsModerator],
+  JobsModerator.patchDisputeMessage
+);
 router.get('/jobs/postings', [checkSession, jobsModerator], JobsModerator.getPostings);
 router.get('/jobs/postings/:type/:id', [checkSession, jobsModerator], JobsModerator.getPosting);
 router.patch('/jobs/postings/:type/:id', [checkSession, jobsModerator], JobsModerator.patchPosting);

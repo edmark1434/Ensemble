@@ -107,6 +107,7 @@ import JobsGigsControl from './pages/moderator/jobs-moderator/JobsGigsControl'
 import JobsTicketManagement from './pages/moderator/jobs-moderator/TicketManagement'
 import JobsDisputes from './pages/moderator/jobs-moderator/Disputes'
 import JobsReports from './pages/moderator/jobs-moderator/Reports'
+import JobsUserTeam from './pages/moderator/jobs-moderator/UserTeam'
 import RouteMiddleware from './lib/RouteMiddleware'
 import StaffMiddleware from './lib/StaffMiddleware'
 
@@ -285,6 +286,7 @@ function App() {
           <Route path='ticket-management' element={<JobsTicketManagement />} />
           <Route path='disputes' element={<JobsDisputes />} />
           <Route path='reports' element={<JobsReports />} />
+          <Route path='user-team' element={<JobsUserTeam />} />
         </Route>
       </Route>
       </Routes>

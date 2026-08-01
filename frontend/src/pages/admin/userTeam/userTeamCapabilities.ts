@@ -1,4 +1,4 @@
-export type UserTeamVariant = 'admin' | 'support' | 'forum' | 'marketplace';
+export type UserTeamVariant = 'admin' | 'support' | 'forum' | 'marketplace' | 'jobs';
 
 export type UserTeamCapabilities = {
   variant: UserTeamVariant;
@@ -19,10 +19,12 @@ export type UserTeamCapabilities = {
 };
 
 const FULL_STATUS = ['ban', 'unban', 'suspend', 'unsuspend', 'lock', 'unlock', 'restore'] as const;
-/** Forum + Marketplace: enforce from a report — no ban / restore */
+/** Specialist mods: enforce from a report — no ban / restore */
 const LIMITED_STATUS = ['suspend', 'unsuspend', 'lock', 'unlock'] as const;
 
-function limitedEnforcementCaps(variant: 'forum' | 'marketplace'): UserTeamCapabilities {
+function limitedEnforcementCaps(
+  variant: 'forum' | 'marketplace' | 'jobs'
+): UserTeamCapabilities {
   return {
     variant,
     showTeamsTab: false,
@@ -40,11 +42,10 @@ function limitedEnforcementCaps(variant: 'forum' | 'marketplace'): UserTeamCapab
 }
 
 export function getUserTeamCapabilities(variant: UserTeamVariant = 'admin'): UserTeamCapabilities {
-  if (variant === 'forum' || variant === 'marketplace') {
+  if (variant === 'forum' || variant === 'marketplace' || variant === 'jobs') {
     return limitedEnforcementCaps(variant);
   }
 
-  // admin + support: full toolkit
   return {
     variant,
     showTeamsTab: true,

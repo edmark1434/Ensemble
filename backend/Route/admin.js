@@ -21,6 +21,7 @@ const requireUserTeamAccess = requireStaffRole([
   'Support Moderator',
   'Forum Moderator',
   'Marketplace Moderator',
+  'Jobs N Gigs Moderator',
 ]);
 /** Credits, verification, pardons, team management, ban — Admin/Support only. */
 const requireUserTeamFullWrite = requireStaffRole(['Admin', 'Support Moderator']);

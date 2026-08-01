@@ -7,12 +7,50 @@ const {
   fetchScopedDisputes,
   scopedDisputeCounts,
   fetchScopedReports,
+  scopedReportCounts,
   ticketStatusChart,
 } = require('./ModeratorSharedRepositories');
+const { fetchStaffWorkload } = require('./AdminTicketsRepositories');
 
 // Jobs & Gigs moderation covers Jobs and Gigs tickets + related disputes.
 const JOBS_TICKET_SCOPE = QUEUE_SCOPES.jobs;
 const JOBS_DISPUTE_ENTITIES = ['job', 'gig', 'contract', 'feedback'];
+
+/** Canonical moderator statuses: active | paused | closed | archived */
+function normalizePostingStatus(rawStatus, deletedAt) {
+  if (deletedAt) return 'archived';
+  const s = String(rawStatus || '')
+    .trim()
+    .toLowerCase();
+  if (s === 'open' || s === 'active') return 'active';
+  if (s === 'paused' || s === 'pause') return 'paused';
+  if (s === 'closed' || s === 'close') return 'closed';
+  if (s === 'archived') return 'archived';
+  return s || 'active';
+}
+
+/** Persist jobs with user-facing Title Case; gigs keep lowercase. */
+function dbStatusForWrite(type, canonical) {
+  const next = String(canonical || '').toLowerCase();
+  if (type === 'job') {
+    if (next === 'active') return 'Open';
+    if (next === 'paused') return 'Paused';
+    if (next === 'closed') return 'Closed';
+  }
+  return next;
+}
+
+function activeStatusSql(column = 'status') {
+  return `LOWER(${column}) IN ('active', 'open')`;
+}
+
+function pausedStatusSql(column = 'status') {
+  return `LOWER(${column}) IN ('paused', 'pause')`;
+}
+
+function closedStatusSql(column = 'status') {
+  return `LOWER(${column}) IN ('closed', 'close')`;
+}
 
 async function getJobsTickets({ status } = {}) {
   return fetchScopedTickets({ ...JOBS_TICKET_SCOPE, status });
@@ -33,7 +71,7 @@ function mapPostingRow(row) {
     type: row.post_type,
     title: row.title,
     description: row.description,
-    status: row.deleted_at ? 'archived' : row.status,
+    status: normalizePostingStatus(row.status, row.deleted_at),
     paymentType: row.payment_type,
     experienceLevel: row.experience_level,
     rateCreditsMin: row.rate_min === null ? null : Number(row.rate_min),
@@ -66,6 +104,12 @@ async function getJobsGigsPostings({ type, status, search } = {}) {
   if (status && status !== 'all') {
     if (status === 'archived') {
       filters.push('p.deleted_at IS NOT NULL');
+    } else if (status === 'active') {
+      filters.push(`(${activeStatusSql('p.status')}) AND p.deleted_at IS NULL`);
+    } else if (status === 'paused') {
+      filters.push(`(${pausedStatusSql('p.status')}) AND p.deleted_at IS NULL`);
+    } else if (status === 'closed') {
+      filters.push(`(${closedStatusSql('p.status')}) AND p.deleted_at IS NULL`);
     } else {
       params.push(String(status).toLowerCase());
       filters.push(`LOWER(p.status) = $${params.length} AND p.deleted_at IS NULL`);
@@ -203,7 +247,7 @@ async function getJobsGigsPostingDetail(type, id) {
       postNumber: `J-${String(j.job_id).slice(0, 8).toUpperCase()}`,
       title: j.title,
       description: j.description,
-      status: j.deleted_at ? 'archived' : j.status,
+      status: normalizePostingStatus(j.status, j.deleted_at),
       paymentType: j.payment_type,
       experienceLevel: j.experience_level,
       noOfHires: Number(j.no_of_hires),
@@ -327,7 +371,7 @@ async function getJobsGigsPostingDetail(type, id) {
       postNumber: `G-${String(g.gig_id).slice(0, 8).toUpperCase()}`,
       title: g.title,
       description: g.description,
-      status: g.deleted_at ? 'archived' : g.status,
+      status: normalizePostingStatus(g.status, g.deleted_at),
       paymentType: g.payment_type,
       noOfConcurrentMax: Number(g.no_of_concurrent_max),
       createdAt: g.created_at,
@@ -400,14 +444,14 @@ async function updateJobsGigsPosting(type, id, { status }) {
   if (next === 'archived') {
     await pool.query(`UPDATE ${table} SET deleted_at = NOW(), updated_at = NOW() WHERE ${idColumn} = $1`, [id]);
   } else {
+    const dbStatus = dbStatusForWrite(type, next);
     await pool.query(
       `UPDATE ${table} SET status = $1, deleted_at = NULL, updated_at = NOW() WHERE ${idColumn} = $2`,
-      [next, id]
+      [dbStatus, id]
     );
   }
 
-  const postings = await getJobsGigsPostings({ type });
-  return postings.find((p) => String(p.id) === String(id)) || null;
+  return getJobsGigsPostingDetail(type, id);
 }
 
 // Full jobs/gigs/contracts history for one user account.
@@ -491,7 +535,7 @@ async function getUserJobsHistory(accountId) {
     jobs: jobsResult.rows.map((r) => ({
       id: r.job_id,
       title: r.title,
-      status: r.deleted_at ? 'archived' : r.status,
+      status: normalizePostingStatus(r.status, r.deleted_at),
       paymentType: r.payment_type,
       rateCreditsMin: Number(r.rate_credits_min),
       rateCreditsMax: Number(r.rate_credits_max),
@@ -500,7 +544,7 @@ async function getUserJobsHistory(accountId) {
     gigs: gigsResult.rows.map((r) => ({
       id: r.gig_id,
       title: r.title,
-      status: r.deleted_at ? 'archived' : r.status,
+      status: normalizePostingStatus(r.status, r.deleted_at),
       paymentType: r.payment_type,
       createdAt: r.created_at,
     })),
@@ -532,31 +576,83 @@ async function getUserJobsHistory(accountId) {
   };
 }
 
-function buildAlerts(tc, dc) {
+function buildAlerts(tc, dc, reportCounts, postingCounts) {
   const alerts = [];
   const openTickets = Number(tc.open_count) + Number(tc.in_progress);
+  const pendingJobs = Number(postingCounts?.paused_jobs || 0);
+  const openJobs = Number(postingCounts?.active_jobs || 0);
 
   if (Number(dc.open_count) > 0) {
     alerts.push({
       id: 'open-disputes',
       message: `${dc.open_count} job/gig dispute(s) open — ${Number(dc.credits_at_risk).toLocaleString()} credits at risk.`,
       severity: 'error',
+      action: { tab: 'disputes' },
     });
   }
   if (Number(tc.unassigned) > 0) {
-    alerts.push({ id: 'unassigned', message: `${tc.unassigned} job/gig ticket(s) have no assignee.`, severity: 'warning' });
+    alerts.push({
+      id: 'unassigned',
+      message: `${tc.unassigned} job/gig ticket(s) have no assignee.`,
+      severity: 'warning',
+      action: { tab: 'ticket-management', ticketFilters: { assignee: 'unassigned' } },
+    });
   }
   if (Number(tc.high_priority) > 0) {
-    alerts.push({ id: 'high-priority', message: `${tc.high_priority} high-priority job/gig ticket(s) need attention.`, severity: 'error' });
+    alerts.push({
+      id: 'high-priority',
+      message: `${tc.high_priority} high-priority job/gig ticket(s) need attention.`,
+      severity: 'error',
+      action: { tab: 'ticket-management', ticketFilters: { priority: 'High' } },
+    });
   }
   if (Number(tc.awaiting_reply) > 0) {
-    alerts.push({ id: 'awaiting-reply', message: `${tc.awaiting_reply} job/gig ticket(s) awaiting a staff reply.`, severity: 'warning' });
+    alerts.push({
+      id: 'awaiting-reply',
+      message: `${tc.awaiting_reply} job/gig ticket(s) awaiting a staff reply.`,
+      severity: 'warning',
+      action: { tab: 'ticket-management' },
+    });
   }
   if (Number(tc.escalated) > 0) {
-    alerts.push({ id: 'escalated', message: `${tc.escalated} escalated job/gig ticket(s) need a handoff.`, severity: 'error' });
+    alerts.push({
+      id: 'escalated',
+      message: `${tc.escalated} escalated job/gig ticket(s) need a handoff.`,
+      severity: 'error',
+      action: { tab: 'ticket-management' },
+    });
+  }
+  if (Number(reportCounts?.open_count) > 0) {
+    alerts.push({
+      id: 'open-reports',
+      message: `${reportCounts.open_count} job/gig report(s) need review.`,
+      severity: 'warning',
+      action: { tab: 'reports' },
+    });
+  }
+  if (pendingJobs > 0) {
+    alerts.push({
+      id: 'paused-jobs',
+      message: `${pendingJobs} job posting(s) currently paused.`,
+      severity: 'info',
+      action: { tab: 'control' },
+    });
   }
   if (openTickets > 0) {
-    alerts.push({ id: 'open-tickets', message: `${openTickets} job/gig ticket(s) open.`, severity: 'info' });
+    alerts.push({
+      id: 'open-tickets',
+      message: `${openTickets} job/gig ticket(s) open.`,
+      severity: 'info',
+      action: { tab: 'ticket-management' },
+    });
+  }
+  if (openJobs > 0 && !alerts.length) {
+    alerts.push({
+      id: 'active-jobs',
+      message: `${openJobs} active job posting(s) on the board.`,
+      severity: 'info',
+      action: { tab: 'control' },
+    });
   }
   if (!alerts.length) {
     alerts.push({ id: 'clear', message: 'Jobs & Gigs queues are clear.', severity: 'success' });
@@ -565,18 +661,38 @@ function buildAlerts(tc, dc) {
 }
 
 async function getJobsOverview() {
-  const [ticketCounts, disputeCounts, tickets, disputes, postingCounts, pipelineCounts, contractMixResult, trendResult] =
-    await Promise.all([
+  const [
+    ticketCounts,
+    disputeCounts,
+    reportCounts,
+    tickets,
+    disputes,
+    reports,
+    postingCounts,
+    pipelineCounts,
+    contractMixResult,
+    trendResult,
+    recentPostings,
+    staffWorkload,
+  ] = await Promise.all([
       scopedTicketCounts(JOBS_TICKET_SCOPE),
       scopedDisputeCounts({ entityTypesIn: JOBS_DISPUTE_ENTITIES }),
+      scopedReportCounts({ targetTypesIn: [...JOBS_REPORT_TYPES] }),
       getJobsTickets(),
       getJobsDisputes(),
+      getJobsReports(),
       pool.query(`
         SELECT
           (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NULL) AS total_jobs,
-          (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NULL AND LOWER(status) = 'active') AS active_jobs,
+          (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NULL AND ${activeStatusSql('status')}) AS active_jobs,
+          (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NULL AND ${pausedStatusSql('status')}) AS paused_jobs,
+          (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NULL AND ${closedStatusSql('status')}) AS closed_jobs,
+          (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NOT NULL) AS archived_jobs,
           (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NULL) AS total_gigs,
-          (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NULL AND LOWER(status) = 'active') AS active_gigs,
+          (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NULL AND ${activeStatusSql('status')}) AS active_gigs,
+          (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NULL AND ${pausedStatusSql('status')}) AS paused_gigs,
+          (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NULL AND ${closedStatusSql('status')}) AS closed_gigs,
+          (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NOT NULL) AS archived_gigs,
           (SELECT COUNT(*)::int FROM contracts WHERE LOWER(status) NOT IN ('completed', 'closed', 'cancelled')) AS active_contracts,
           (SELECT COUNT(*)::int FROM jobs WHERE deleted_at IS NULL AND created_at >= NOW() - INTERVAL '7 days') AS jobs_this_week,
           (SELECT COUNT(*)::int FROM gigs WHERE deleted_at IS NULL AND created_at >= NOW() - INTERVAL '7 days') AS gigs_this_week
@@ -605,12 +721,15 @@ async function getJobsOverview() {
         FROM generate_series(NOW() - INTERVAL '13 days', NOW(), INTERVAL '1 day') day
         ORDER BY day
       `),
+      getJobsGigsPostings({}),
+      fetchStaffWorkload(),
     ]);
 
   const tc = ticketCounts;
   const dc = disputeCounts;
   const pc = postingCounts.rows[0];
   const pl = pipelineCounts.rows[0];
+  const rc = reportCounts;
 
   const disputeStatusMix = [
     { label: 'Open', value: disputes.filter((d) => d.status === 'open').length, color: '#f87171' },
@@ -634,20 +753,55 @@ async function getJobsOverview() {
     color: contractStatusColors[r.status] || '#71717a',
   }));
 
+  const postingStatusMix = [
+    {
+      label: 'Active',
+      value: Number(pc.active_jobs) + Number(pc.active_gigs),
+      color: '#34d399',
+    },
+    {
+      label: 'Paused',
+      value: Number(pc.paused_jobs) + Number(pc.paused_gigs),
+      color: '#fbbf24',
+    },
+    {
+      label: 'Closed',
+      value: Number(pc.closed_jobs) + Number(pc.closed_gigs),
+      color: '#a1a1aa',
+    },
+    {
+      label: 'Archived',
+      value: Number(pc.archived_jobs) + Number(pc.archived_gigs),
+      color: '#f87171',
+    },
+  ].filter((x) => x.value > 0);
+
   return {
     lastUpdated: new Date().toISOString(),
     summary: {
       openTickets: Number(tc.open_count) + Number(tc.in_progress),
       totalTickets: Number(tc.total),
       unassignedTickets: Number(tc.unassigned),
+      highPriorityTickets: Number(tc.high_priority),
+      awaitingReplyTickets: Number(tc.awaiting_reply),
+      escalatedTickets: Number(tc.escalated),
+      inProgressTickets: Number(tc.in_progress),
       openDisputes: Number(dc.open_count),
       totalDisputes: Number(dc.total),
       creditsAtRisk: Number(dc.credits_at_risk),
       resolvedTickets: Number(tc.resolved),
+      openReports: Number(rc.open_count),
+      totalReports: Number(rc.total),
       totalJobs: Number(pc.total_jobs),
       activeJobs: Number(pc.active_jobs),
+      pausedJobs: Number(pc.paused_jobs),
+      closedJobs: Number(pc.closed_jobs),
+      archivedJobs: Number(pc.archived_jobs),
       totalGigs: Number(pc.total_gigs),
       activeGigs: Number(pc.active_gigs),
+      pausedGigs: Number(pc.paused_gigs),
+      closedGigs: Number(pc.closed_gigs),
+      archivedGigs: Number(pc.archived_gigs),
       activeContracts: Number(pc.active_contracts),
       jobsThisWeek: Number(pc.jobs_this_week),
       gigsThisWeek: Number(pc.gigs_this_week),
@@ -668,6 +822,7 @@ async function getJobsOverview() {
         { label: 'Jobs', value: Number(pc.total_jobs), color: '#60a5fa' },
         { label: 'Gigs', value: Number(pc.total_gigs), color: '#34d399' },
       ].filter((x) => x.value > 0),
+      postingStatusMix,
       contractStatusMix,
       postingTrend: trendResult.rows.map((r) => ({
         day: r.day,
@@ -676,12 +831,16 @@ async function getJobsOverview() {
       })),
     },
     recentTickets: tickets.slice(0, 8),
+    recentPostings: recentPostings.slice(0, 8),
+    flaggedReports: reports.slice(0, 10),
     disputes: disputes.slice(0, 10),
-    alerts: buildAlerts(tc, dc),
+    staffWorkload,
+    alerts: buildAlerts(tc, dc, rc, pc),
     dataSources: {
       tables: [
         'tickets',
         'disputes',
+        'reports',
         'jobs',
         'gigs',
         'proposals',
@@ -704,4 +863,5 @@ module.exports = {
   getJobsGigsPostingDetail,
   updateJobsGigsPosting,
   getUserJobsHistory,
+  JOBS_DISPUTE_ENTITIES,
 };

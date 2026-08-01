@@ -1412,7 +1412,14 @@ async function getDisputeDetail(disputeId, staffSession = null) {
   const staffResult = await pool.query(`
     SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
     FROM staff s INNER JOIN accounts a ON a.account_id = s.account_id
-    WHERE LOWER(s.role) IN ('support moderator', 'admin', 'administrator')
+    WHERE LOWER(s.role) IN (
+      'support moderator',
+      'admin',
+      'administrator',
+      'jobs n gigs moderator',
+      'jobs moderator',
+      'jobs & gigs moderator'
+    )
     ORDER BY s.role, name
   `);
 
@@ -1605,4 +1612,5 @@ module.exports = {
   fetchReportsList,
   updateReport,
   getReportDetail,
+  fetchStaffWorkload,
 };
