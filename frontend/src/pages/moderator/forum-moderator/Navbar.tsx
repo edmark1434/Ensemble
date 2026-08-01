@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   Flag,
   MessagesSquare,
+  Scale,
   Ticket,
   Users,
 } from 'lucide-react';
@@ -11,6 +12,7 @@ const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, to: '/moderator/forum' },
   { label: 'Forum Discussion', icon: MessagesSquare, to: '/moderator/forum/forum-discussion' },
   { label: 'Ticket Management', icon: Ticket, to: '/moderator/forum/ticket-management' },
+  { label: 'Disputes', icon: Scale, to: '/moderator/forum/disputes' },
   { label: 'Reports', icon: Flag, to: '/moderator/forum/reports' },
   { label: 'User & Team', icon: Users, to: '/moderator/forum/user-team' },
 ];

@@ -64,7 +64,8 @@ async function getJobsReports({ status } = {}) {
 }
 
 async function getJobsDisputes({ status } = {}) {
-  return fetchScopedDisputes({ entityTypesIn: JOBS_DISPUTE_ENTITIES, status });
+  // All moderators can view the full dispute queue (reply-only unless assigned).
+  return fetchScopedDisputes({ status });
 }
 
 function mapPostingRow(row) {

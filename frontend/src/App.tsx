@@ -89,12 +89,14 @@ import ForumDiscussion from './pages/moderator/forum-moderator/ForumDiscussion'
 import ForumTicketManagement from './pages/moderator/forum-moderator/TicketManagement'
 import ForumReports from './pages/moderator/forum-moderator/Reports'
 import ForumUserTeam from './pages/moderator/forum-moderator/UserTeam'
+import ForumDisputes from './pages/moderator/forum-moderator/Disputes'
 import MarketplaceModeratorLayout from './pages/moderator/marketplace-moderator/Layout'
 import MarketplaceModeratorDashboard from './pages/moderator/marketplace-moderator/Dashboard'
 import MarketplaceControl from './pages/moderator/marketplace-moderator/MarketplaceControl'
 import MarketplaceTicketManagement from './pages/moderator/marketplace-moderator/TicketManagement'
 import MarketplaceReports from './pages/moderator/marketplace-moderator/Reports'
 import MarketplaceUserTeam from './pages/moderator/marketplace-moderator/UserTeam'
+import MarketplaceDisputes from './pages/moderator/marketplace-moderator/Disputes'
 import SupportModeratorLayout from './pages/moderator/support-moderator/Layout'
 import SupportModeratorDashboard from './pages/moderator/support-moderator/Dashboard'
 import SupportTicketManagement from './pages/moderator/support-moderator/TicketManagement'
@@ -260,6 +262,7 @@ function App() {
           <Route index element={<ForumModeratorDashboard />} />
           <Route path='forum-discussion' element={<ForumDiscussion />} />
           <Route path='ticket-management' element={<ForumTicketManagement />} />
+          <Route path='disputes' element={<ForumDisputes />} />
           <Route path='reports' element={<ForumReports />} />
           <Route path='user-team' element={<ForumUserTeam />} />
         </Route>
@@ -268,6 +271,7 @@ function App() {
           <Route index element={<MarketplaceModeratorDashboard />} />
           <Route path='marketplace-control' element={<MarketplaceControl />} />
           <Route path='ticket-management' element={<MarketplaceTicketManagement />} />
+          <Route path='disputes' element={<MarketplaceDisputes />} />
           <Route path='reports' element={<MarketplaceReports />} />
           <Route path='user-team' element={<MarketplaceUserTeam />} />
         </Route>

@@ -193,6 +193,14 @@ export default function ModeratorDisputeDetailModal({
         myStaffId.toLowerCase() === assigneeStaffId.toLowerCase())
   );
   const canAct = adminMode ? Boolean(perms?.canAct || alreadyAssignedToMe) : true;
+  const canReply = adminMode
+    ? Boolean(
+        alreadyAssignedToMe ||
+          perms?.canAct ||
+          perms?.canReply ||
+          (perms?.canView !== false && perms?.staffId)
+      )
+    : true;
   const canAssignOthers = adminMode ? Boolean(perms?.canAssignOthers) : true;
   const canSelfAssign = adminMode
     ? Boolean(perms?.canSelfAssign && !alreadyAssignedToMe)
@@ -314,28 +322,37 @@ export default function ModeratorDisputeDetailModal({
     if (!message.trim()) return;
     setSaving(true);
     try {
-      const audience = audienceFromPrefs(visibilityPrefs, internalNote);
+      // Non-handlers may only post staff-visible replies; assignee publishes later.
+      const audience = canAct
+        ? audienceFromPrefs(visibilityPrefs, internalNote)
+        : "staff";
       await api.post(`${endpointBase}/${disputeId}/messages`, {
         body: message.trim(),
-        isInternal: internalNote || audience === "staff",
-        visibleToParties: audience === "parties" || audience === "public",
-        visibleToPublic: audience === "public",
+        isInternal: !canAct || internalNote || audience === "staff",
+        visibleToParties: canAct && (audience === "parties" || audience === "public"),
+        visibleToPublic: canAct && audience === "public",
         audience,
-        audiences: [
-          ...(internalNote || audience === "staff" ? (["staff"] as const) : []),
-          ...(visibilityPrefs.parties || visibilityPrefs.public ? (["parties"] as const) : []),
-          ...(visibilityPrefs.public ? (["public"] as const) : []),
-        ],
+        audiences: canAct
+          ? [
+              ...(internalNote || audience === "staff" ? (["staff"] as const) : []),
+              ...(visibilityPrefs.parties || visibilityPrefs.public
+                ? (["parties"] as const)
+                : []),
+              ...(visibilityPrefs.public ? (["public"] as const) : []),
+            ]
+          : (["staff"] as const),
       });
       setMessage("");
       showSuccessToast(
-        audience === "public"
-          ? "Message posted (visible to the public)"
-          : audience === "parties"
-            ? "Message posted (visible to parties)"
-            : internalNote
-              ? "Internal note added"
-              : "Message sent"
+        !canAct
+          ? "Staff reply posted — handler can publish when ready"
+          : audience === "public"
+            ? "Message posted (visible to the public)"
+            : audience === "parties"
+              ? "Message posted (visible to parties)"
+              : internalNote
+                ? "Internal note added"
+                : "Message sent"
       );
       await load();
       onUpdated();
@@ -767,16 +784,24 @@ export default function ModeratorDisputeDetailModal({
             </div>
 
             <div className="rounded-xl border border-white/10 bg-[#14151c] p-4">
+              {viewOnly && canReply && (
+                <p className="mb-3 rounded-lg border border-sky-500/20 bg-sky-500/5 px-3 py-2 text-xs text-sky-200">
+                  View &amp; reply mode — you can post staff-only replies. Only the designated
+                  handler can change status, outcome, or publish messages to parties / public.
+                </p>
+              )}
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={3}
                 placeholder={
-                  viewOnly
-                    ? "Assign yourself before posting…"
-                    : "Write a message to discuss this dispute…"
+                  !canReply
+                    ? "You cannot reply on this dispute…"
+                    : viewOnly
+                      ? "Write a staff-only reply (handler publishes if needed)…"
+                      : "Write a message to discuss this dispute…"
                 }
-                disabled={detail.chatAvailable === false || viewOnly}
+                disabled={detail.chatAvailable === false || !canReply}
                 className="w-full resize-none rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none disabled:opacity-50"
               />
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
@@ -784,20 +809,20 @@ export default function ModeratorDisputeDetailModal({
                   <label className="flex items-center gap-2">
                     <input
                       type="checkbox"
-                      checked={internalNote}
+                      checked={viewOnly ? true : internalNote}
                       onChange={(e) => setInternalNote(e.target.checked)}
-                      disabled={detail.chatAvailable === false || viewOnly}
+                      disabled={detail.chatAvailable === false || !canReply || viewOnly}
                     />
                     Internal note (staff only)
                   </label>
-                  {adminMode && (
+                  {adminMode && canAct && (
                     <>
                       <label className="flex items-center gap-2">
                         <input
                           type="checkbox"
                           checked={visibilityPrefs.parties}
                           onChange={(e) => updateVisibilityPref("parties", e.target.checked)}
-                          disabled={detail.chatAvailable === false || viewOnly || internalNote}
+                          disabled={detail.chatAvailable === false || internalNote}
                         />
                         Visible to parties
                       </label>
@@ -806,7 +831,7 @@ export default function ModeratorDisputeDetailModal({
                           type="checkbox"
                           checked={visibilityPrefs.public}
                           onChange={(e) => updateVisibilityPref("public", e.target.checked)}
-                          disabled={detail.chatAvailable === false || viewOnly || internalNote}
+                          disabled={detail.chatAvailable === false || internalNote}
                         />
                         Visible to the public
                       </label>
@@ -816,7 +841,7 @@ export default function ModeratorDisputeDetailModal({
                 <button
                   type="button"
                   onClick={() => void sendMessage()}
-                  disabled={saving || !message.trim() || detail.chatAvailable === false || viewOnly}
+                  disabled={saving || !message.trim() || detail.chatAvailable === false || !canReply}
                   className="rounded-lg bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/15 disabled:opacity-50"
                 >
                   Send

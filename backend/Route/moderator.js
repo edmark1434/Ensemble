@@ -17,6 +17,11 @@ const {
   getReports: getMarketplaceReports,
   getReport: getMarketplaceReport,
   patchReport: patchMarketplaceReport,
+  getDisputes: getMarketplaceDisputes,
+  getDispute: getMarketplaceDispute,
+  patchDispute: patchMarketplaceDispute,
+  postDisputeMessage: postMarketplaceDisputeMessage,
+  patchDisputeMessage: patchMarketplaceDisputeMessage,
 } = require('../Controllers/MarketplaceModeratorControllers');
 const SupportModerator = require('../Controllers/SupportModeratorControllers');
 const ForumModerator = require('../Controllers/ForumModeratorControllers');
@@ -40,6 +45,19 @@ router.post('/marketplace/tickets/:id/messages', [checkSession, marketplaceModer
 router.get('/marketplace/reports', [checkSession, marketplaceModerator], getMarketplaceReports);
 router.get('/marketplace/reports/:id', [checkSession, marketplaceModerator], getMarketplaceReport);
 router.patch('/marketplace/reports/:id', [checkSession, marketplaceModerator], patchMarketplaceReport);
+router.get('/marketplace/disputes', [checkSession, marketplaceModerator], getMarketplaceDisputes);
+router.get('/marketplace/disputes/:id', [checkSession, marketplaceModerator], getMarketplaceDispute);
+router.patch('/marketplace/disputes/:id', [checkSession, marketplaceModerator], patchMarketplaceDispute);
+router.post(
+  '/marketplace/disputes/:id/messages',
+  [checkSession, marketplaceModerator],
+  postMarketplaceDisputeMessage
+);
+router.patch(
+  '/marketplace/disputes/:id/messages/:messageId',
+  [checkSession, marketplaceModerator],
+  patchMarketplaceDisputeMessage
+);
 
 router.get('/tickets/:id', [checkSession, marketplaceModerator], getTicket);
 router.patch('/tickets/:id', [checkSession, marketplaceModerator], patchTicket);
@@ -76,6 +94,15 @@ router.post('/forum/tickets/:id/messages', [checkSession, forumModerator], Forum
 router.get('/forum/reports', [checkSession, forumModerator], ForumModerator.getReports);
 router.get('/forum/reports/:id', [checkSession, forumModerator], ForumModerator.getReport);
 router.patch('/forum/reports/:id', [checkSession, forumModerator], ForumModerator.patchReport);
+router.get('/forum/disputes', [checkSession, forumModerator], ForumModerator.getDisputes);
+router.get('/forum/disputes/:id', [checkSession, forumModerator], ForumModerator.getDispute);
+router.patch('/forum/disputes/:id', [checkSession, forumModerator], ForumModerator.patchDispute);
+router.post('/forum/disputes/:id/messages', [checkSession, forumModerator], ForumModerator.postDisputeMessage);
+router.patch(
+  '/forum/disputes/:id/messages/:messageId',
+  [checkSession, forumModerator],
+  ForumModerator.patchDisputeMessage
+);
 router.get('/forum/groups', [checkSession, forumModerator], ForumModerator.getGroups);
 router.patch('/forum/groups/:id', [checkSession, forumModerator], ForumModerator.patchGroup);
 router.patch('/forum/groups/:id/members/:memberId', [checkSession, forumModerator], ForumModerator.patchGroupMember);

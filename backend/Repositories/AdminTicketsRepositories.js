@@ -1213,6 +1213,7 @@ function buildDisputePermissions(row, staff, session = null) {
   const isAdmin = isAdminRole(role);
   const unassigned = !assigneeId;
   const designated = isDesignatedHandlerRole(role);
+  const hasStaffSession = Boolean(staffId || staff?.staff_id || sessionStaffId(session));
 
   return {
     staffId: staff?.staff_id != null ? String(staff.staff_id) : sessionStaffId(session),
@@ -1220,7 +1221,9 @@ function buildDisputePermissions(row, staff, session = null) {
     isAssignee,
     isAdmin,
     canView: true,
-    /** Handle approve / status / outcome / messages / publish */
+    /** Any staff may post staff-only replies; designated handler publishes / manages case */
+    canReply: hasStaffSession,
+    /** Handle approve / status / outcome / publish to parties or public */
     canAct: isAssignee,
     /** Admin may assign Support Moderators without being the handler */
     canAssignOthers: isAdmin,
@@ -1466,12 +1469,14 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
   if (!row) return null;
 
   const perms = buildDisputePermissions(row, staff, staffSession);
-  if (!perms.canAct) {
-    throw new Error('Assign yourself to this dispute before posting messages.');
+  if (!perms.canReply && !perms.canAct) {
+    throw new Error('You do not have permission to reply on this dispute.');
   }
 
-  const isInternal = Boolean(options.isInternal);
-  const audience =
+  // Non-handlers may only post staff-visible replies; designated handler publishes.
+  const mayPublish = Boolean(perms.canAct);
+  let isInternal = Boolean(options.isInternal);
+  let audience =
     options.audience ||
     (isInternal
       ? 'staff'
@@ -1481,10 +1486,15 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
           ? 'parties'
           : 'staff');
 
+  if (!mayPublish) {
+    audience = 'staff';
+    isInternal = true;
+  }
+
   const chatId = await ensureDisputeChat(disputeId, row);
-  const audiences = Array.isArray(options.audiences)
+  const audiences = mayPublish && Array.isArray(options.audiences)
     ? options.audiences.map((a) => String(a).toLowerCase())
-    : null;
+    : ['staff'];
   await createDisputeMessage({
     chatId,
     body,

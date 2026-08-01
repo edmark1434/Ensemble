@@ -66,6 +66,7 @@ export type DisputePermissions = {
   isAssignee?: boolean;
   isAdmin?: boolean;
   canView?: boolean;
+  canReply?: boolean;
   canAct?: boolean;
   canAssignOthers?: boolean;
   canSelfAssign?: boolean;
