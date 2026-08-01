@@ -47,6 +47,7 @@ export type MarketplaceOverview = {
     pendingListings: number;
     approvedListings: number;
     rejectedListings: number;
+    delistedListings: number;
     approvedCreditValue: number;
     openTickets: number;
     totalTickets: number;
@@ -58,6 +59,35 @@ export type MarketplaceOverview = {
   };
   recentListings: MarketplaceListing[];
   alerts: { id: string; message: string; severity: string }[];
+};
+
+export type SellerListingSummary = {
+  id: number;
+  number: string;
+  title: string;
+  category: string | null;
+  priceCredits: number;
+  status: MarketplaceListing['status'];
+  createdAt: string;
+  updatedAt: string;
+  reviewedAt: string | null;
+};
+
+export type SellerListingsHistory = {
+  account: {
+    accountId: number;
+    name: string;
+    handle: string;
+    status: string;
+  };
+  counts: {
+    total: number;
+    pending: number;
+    approved: number;
+    rejected: number;
+    delisted: number;
+  };
+  listings: SellerListingSummary[];
 };
 
 export type Violation = {

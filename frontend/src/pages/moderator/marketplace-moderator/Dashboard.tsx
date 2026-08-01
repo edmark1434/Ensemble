@@ -133,7 +133,9 @@ export default function MarketplaceModeratorDashboard() {
                           ? "bg-emerald-500/15 text-emerald-300"
                           : l.status === "rejected"
                             ? "bg-red-500/15 text-red-300"
-                            : "bg-amber-500/15 text-amber-300"
+                            : l.status === "delisted"
+                              ? "bg-zinc-500/15 text-zinc-300"
+                              : "bg-amber-500/15 text-amber-300"
                       }`}
                     >
                       {l.status}

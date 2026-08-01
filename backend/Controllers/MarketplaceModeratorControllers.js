@@ -2,6 +2,7 @@ const {
   getMarketplaceOverview,
   getMarketplaceListings,
   getMarketplaceListingDetail,
+  getSellerMarketplaceListings,
   reviewMarketplaceListing,
   getMarketplaceTickets,
   getMarketplaceReports,
@@ -32,7 +33,11 @@ async function getOverview(req, res) {
 
 async function getListings(req, res) {
   try {
-    const data = await getMarketplaceListings({ status: req.query.status });
+    const data = await getMarketplaceListings({
+      status: req.query.status,
+      search: req.query.search,
+      category: req.query.category,
+    });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching marketplace listings:', err);
@@ -48,6 +53,17 @@ async function getListingDetail(req, res) {
   } catch (err) {
     console.error('Error fetching listing detail:', err);
     res.status(500).json({ success: false, message: 'Failed to load listing' });
+  }
+}
+
+async function getSellerListings(req, res) {
+  try {
+    const data = await getSellerMarketplaceListings(req.params.accountId);
+    if (!data) return res.status(404).json({ success: false, message: 'Account not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching seller listings:', err);
+    res.status(500).json({ success: false, message: 'Failed to load seller listings' });
   }
 }
 
@@ -200,6 +216,7 @@ module.exports = {
   getOverview,
   getListings,
   getListingDetail,
+  getSellerListings,
   patchListing,
   getTickets,
   getTicket,

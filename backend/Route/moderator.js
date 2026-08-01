@@ -5,6 +5,7 @@ const {
   getOverview,
   getListings,
   getListingDetail,
+  getSellerListings,
   patchListing,
   getTickets,
   getTicket,
@@ -31,6 +32,7 @@ router.get('/marketplace/overview', [checkSession, marketplaceModerator], getOve
 router.get('/marketplace/listings', [checkSession, marketplaceModerator], getListings);
 router.get('/marketplace/listings/:id', [checkSession, marketplaceModerator], getListingDetail);
 router.patch('/marketplace/listings/:id', [checkSession, marketplaceModerator], patchListing);
+router.get('/marketplace/users/:accountId/listings', [checkSession, marketplaceModerator], getSellerListings);
 router.get('/marketplace/tickets', [checkSession, marketplaceModerator], getTickets);
 router.get('/marketplace/reports', [checkSession, marketplaceModerator], getMarketplaceReports);
 router.get('/marketplace/reports/:id', [checkSession, marketplaceModerator], getMarketplaceReport);

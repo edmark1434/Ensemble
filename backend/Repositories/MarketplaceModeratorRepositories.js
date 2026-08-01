@@ -32,44 +32,147 @@ function mapListingRow(row) {
   };
 }
 
-async function fetchListings(status) {
+const LISTING_SELECT = `
+  SELECT
+    l.*,
+    COALESCE(sa.display_name, su.first_name || ' ' || su.last_name) AS submitter_name,
+    sa.handle AS submitter_handle,
+    COALESCE(ra.display_name, rs.first_name || ' ' || rs.last_name) AS reviewer_name
+  FROM marketplace_listings l
+  LEFT JOIN accounts sa ON sa.account_id = l.submitted_by_account_id
+  LEFT JOIN users su ON su.account_id = sa.account_id
+  LEFT JOIN staff rs ON rs.staff_id = l.reviewed_by_staff_id
+  LEFT JOIN accounts ra ON ra.account_id = rs.account_id
+`;
+
+async function fetchListings({ status, search, category } = {}) {
   const params = [];
-  let where = '';
+  const clauses = [];
+
   if (status && status !== 'all') {
     params.push(status);
-    where = `WHERE l.status = $${params.length}`;
+    clauses.push(`l.status = $${params.length}`);
   }
+
+  if (category && category !== 'all') {
+    params.push(category);
+    clauses.push(`COALESCE(l.category, 'Uncategorized') = $${params.length}`);
+  }
+
+  if (search && String(search).trim()) {
+    const q = `%${String(search).trim().toLowerCase()}%`;
+    params.push(q);
+    const i = params.length;
+    clauses.push(`(
+      LOWER(l.title) LIKE $${i}
+      OR LOWER(l.listing_number) LIKE $${i}
+      OR LOWER(COALESCE(sa.handle, '')) LIKE $${i}
+      OR LOWER(COALESCE(sa.display_name, '')) LIKE $${i}
+      OR LOWER(COALESCE(su.first_name || ' ' || su.last_name, '')) LIKE $${i}
+    )`);
+  }
+
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
 
   const result = await pool.query(
     `
-    SELECT
-      l.*,
-      COALESCE(sa.display_name, su.first_name || ' ' || su.last_name) AS submitter_name,
-      sa.handle AS submitter_handle,
-      COALESCE(ra.display_name, rs.first_name || ' ' || rs.last_name) AS reviewer_name
-    FROM marketplace_listings l
-    LEFT JOIN accounts sa ON sa.account_id = l.submitted_by_account_id
-    LEFT JOIN users su ON su.account_id = sa.account_id
-    LEFT JOIN staff rs ON rs.staff_id = l.reviewed_by_staff_id
-    LEFT JOIN accounts ra ON ra.account_id = rs.account_id
+    ${LISTING_SELECT}
     ${where}
     ORDER BY
       CASE l.status WHEN 'pending' THEN 0 ELSE 1 END,
       l.created_at DESC
-    LIMIT 50
+    LIMIT 100
     `,
     params
   );
   return result.rows.map(mapListingRow);
 }
 
-async function getMarketplaceListings({ status } = {}) {
-  return fetchListings(status);
+async function getMarketplaceListings({ status, search, category } = {}) {
+  return fetchListings({ status, search, category });
 }
 
 async function getMarketplaceListingDetail(listingId) {
-  const listings = await fetchListings('all');
-  return listings.find((l) => String(l.id) === String(listingId)) || null;
+  const result = await pool.query(
+    `
+    ${LISTING_SELECT}
+    WHERE l.listing_id = $1
+    LIMIT 1
+    `,
+    [listingId]
+  );
+  if (!result.rows[0]) return null;
+  return mapListingRow(result.rows[0]);
+}
+
+async function getSellerMarketplaceListings(accountId) {
+  const accountResult = await pool.query(
+    `
+    SELECT
+      a.account_id,
+      a.handle,
+      a.status,
+      COALESCE(a.display_name, u.first_name || ' ' || u.last_name, 'Unknown') AS name
+    FROM accounts a
+    LEFT JOIN users u ON u.account_id = a.account_id
+    WHERE a.account_id = $1
+    LIMIT 1
+    `,
+    [accountId]
+  );
+  if (!accountResult.rows[0]) return null;
+
+  const listingsResult = await pool.query(
+    `
+    SELECT
+      listing_id,
+      listing_number,
+      title,
+      category,
+      price_credits,
+      status,
+      created_at,
+      updated_at,
+      reviewed_at
+    FROM marketplace_listings
+    WHERE submitted_by_account_id = $1
+    ORDER BY created_at DESC
+    LIMIT 100
+    `,
+    [accountId]
+  );
+
+  const account = accountResult.rows[0];
+  const listings = listingsResult.rows.map((row) => ({
+    id: row.listing_id,
+    number: row.listing_number,
+    title: row.title,
+    category: row.category,
+    priceCredits: Number(row.price_credits || 0),
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    reviewedAt: row.reviewed_at,
+  }));
+
+  const counts = {
+    total: listings.length,
+    pending: listings.filter((l) => l.status === 'pending').length,
+    approved: listings.filter((l) => l.status === 'approved').length,
+    rejected: listings.filter((l) => l.status === 'rejected').length,
+    delisted: listings.filter((l) => l.status === 'delisted').length,
+  };
+
+  return {
+    account: {
+      accountId: account.account_id,
+      name: account.name,
+      handle: account.handle || '—',
+      status: account.status || 'active',
+    },
+    counts,
+    listings,
+  };
 }
 
 async function reviewMarketplaceListing(listingId, { status, rejectionReason }, staffSession) {
@@ -104,12 +207,13 @@ async function getMarketplaceOverview() {
         COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
         COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,
         COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected,
+        COUNT(*) FILTER (WHERE status = 'delisted')::int AS delisted,
         COALESCE(SUM(price_credits) FILTER (WHERE status = 'approved'), 0)::int AS approved_credit_value
       FROM marketplace_listings
     `),
     pool.query(`
-      SELECT category, COUNT(*)::int AS count
-      FROM marketplace_listings GROUP BY category ORDER BY count DESC
+      SELECT COALESCE(category, 'Uncategorized') AS category, COUNT(*)::int AS count
+      FROM marketplace_listings GROUP BY COALESCE(category, 'Uncategorized') ORDER BY count DESC
     `),
     scopedTicketCounts(QUEUE_SCOPES.marketplace),
     pool.query(`SELECT COUNT(*)::int AS count FROM accounts WHERE LOWER(status) IN ('suspended', 'banned')`),
@@ -122,6 +226,7 @@ async function getMarketplaceOverview() {
     { label: 'Pending', value: Number(lc.pending), color: '#fbbf24' },
     { label: 'Approved', value: Number(lc.approved), color: '#34d399' },
     { label: 'Rejected', value: Number(lc.rejected), color: '#f87171' },
+    { label: 'Delisted', value: Number(lc.delisted), color: '#a1a1aa' },
   ].filter((x) => x.value > 0);
 
   const categoryChart = categoryBreakdown.rows.map((r, i) => ({
@@ -130,7 +235,7 @@ async function getMarketplaceOverview() {
     color: ['#fb7185', '#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#38bdf8'][i % 6],
   }));
 
-  const recentListings = await fetchListings('all');
+  const recentListings = await fetchListings({ status: 'all' });
 
   return {
     lastUpdated: new Date().toISOString(),
@@ -139,6 +244,7 @@ async function getMarketplaceOverview() {
       pendingListings: Number(lc.pending),
       approvedListings: Number(lc.approved),
       rejectedListings: Number(lc.rejected),
+      delistedListings: Number(lc.delisted),
       approvedCreditValue: Number(lc.approved_credit_value),
       openTickets: Number(tc.open_count),
       totalTickets: Number(tc.total),
@@ -185,6 +291,7 @@ module.exports = {
   getMarketplaceOverview,
   getMarketplaceListings,
   getMarketplaceListingDetail,
+  getSellerMarketplaceListings,
   reviewMarketplaceListing,
   getMarketplaceTickets,
   getMarketplaceReports,
