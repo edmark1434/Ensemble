@@ -565,9 +565,7 @@ async function getModerationOverview(staffSession = null) {
       .query(`
         SELECT COUNT(*)::int AS open_disputes
         FROM disputes
-        WHERE LOWER(COALESCE(status, 'open')) NOT IN (
-          'resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn'
-        )
+        WHERE LOWER(COALESCE(status, 'open')) <> 'closed'
       `)
       .catch(() => ({ rows: [{ open_disputes: 0 }] })),
     pool
@@ -664,7 +662,7 @@ async function getModerationOverview(staffSession = null) {
             (d) =>
               d.assignee &&
               String(d.assignee.staffId).toLowerCase() === String(currentStaffId).toLowerCase() &&
-              !['resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn'].includes(
+              !['closed'].includes(
                 String(d.status || '').toLowerCase()
               )
           ).length

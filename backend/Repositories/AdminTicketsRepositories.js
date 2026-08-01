@@ -226,7 +226,7 @@ async function createSupportTicket(input, session = null) {
 }
 
 function mapDisputeRow(row) {
-  const closedStatuses = ['resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn'];
+  const closedStatuses = ['closed'];
   return {
     id: row.dispute_id,
     number: row.dispute_number,
@@ -355,9 +355,19 @@ async function getTicketsOverview(staffSession = null) {
         COUNT(*) FILTER (WHERE LOWER(status) = 'open')::int AS open_only,
         COUNT(*) FILTER (WHERE LOWER(status) = 'awaiting_response')::int AS awaiting_response,
         COUNT(*) FILTER (WHERE LOWER(status) = 'under_review')::int AS under_review,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'sanctioned')::int AS sanctioned,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'dismissed')::int AS dismissed,
-        COUNT(*) FILTER (WHERE LOWER(status) IN ('resolved', 'closed', 'withdrawn'))::int AS resolved,
+        COUNT(*) FILTER (WHERE LOWER(status) = 'closed')::int AS closed,
+        COUNT(*) FILTER (
+          WHERE LOWER(status) = 'closed' AND LOWER(COALESCE(outcome, '')) = 'sanctioned'
+        )::int AS sanctioned,
+        COUNT(*) FILTER (
+          WHERE LOWER(status) = 'closed' AND LOWER(COALESCE(outcome, '')) = 'dismissed'
+        )::int AS dismissed,
+        COUNT(*) FILTER (
+          WHERE LOWER(status) = 'closed' AND LOWER(COALESCE(outcome, 'resolved')) = 'resolved'
+        )::int AS resolved,
+        COUNT(*) FILTER (
+          WHERE LOWER(status) = 'closed' AND LOWER(COALESCE(outcome, '')) = 'withdrawn'
+        )::int AS withdrawn,
         COUNT(*) FILTER (
           WHERE LOWER(status) IN ('pending_review', 'open', 'awaiting_response', 'under_review')
         )::int AS open_count,
@@ -466,12 +476,13 @@ async function getTicketsOverview(staffSession = null) {
       openByPriority: priorityChart,
       disputeStatusMix: [
         { label: 'Pending Review', value: Number(dc.pending_review || 0), color: '#fb7185' },
-        { label: 'Open', value: Number(dc.open_count) - Number(dc.pending_review || 0) - Number(dc.awaiting_response || 0), color: '#f87171' },
+        { label: 'Open', value: Number(dc.open_only || 0), color: '#f87171' },
         { label: 'Awaiting Response', value: Number(dc.awaiting_response || 0), color: '#f59e0b' },
         { label: 'Under Review', value: Number(dc.under_review), color: '#fbbf24' },
-        { label: 'Sanctioned', value: Number(dc.sanctioned || 0), color: '#a78bfa' },
-        { label: 'Dismissed', value: Number(dc.dismissed || 0), color: '#94a3b8' },
-        { label: 'Resolved', value: Number(dc.resolved) - Number(dc.sanctioned || 0) - Number(dc.dismissed || 0), color: '#34d399' },
+        { label: 'Closed · Resolved', value: Number(dc.resolved || 0), color: '#34d399' },
+        { label: 'Closed · Sanctioned', value: Number(dc.sanctioned || 0), color: '#a78bfa' },
+        { label: 'Closed · Dismissed', value: Number(dc.dismissed || 0), color: '#94a3b8' },
+        { label: 'Closed · Withdrawn', value: Number(dc.withdrawn || 0), color: '#64748b' },
       ].filter((x) => x.value > 0),
     },
     types,
@@ -655,7 +666,7 @@ async function fetchStaffWorkload() {
           AND t.status NOT IN ('Resolved', 'Closed')) AS open_tickets,
       (SELECT COUNT(*)::int FROM disputes d
         WHERE d.assigned_staff_id = s.staff_id
-          AND LOWER(d.status) NOT IN ('resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn')) AS open_disputes,
+          AND LOWER(d.status) <> 'closed') AS open_disputes,
       (SELECT COUNT(*)::int FROM reports r
         WHERE r.assigned_staff_id = s.staff_id AND LOWER(r.status) = 'open' AND r.deleted_at IS NULL) AS open_reports
     FROM staff s
@@ -1127,7 +1138,42 @@ function isDesignatedHandlerRole(role) {
   return isAdminRole(role) || isSupportRole(role);
 }
 
-const DISPUTE_CLOSED = ['resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn'];
+const DISPUTE_WORKFLOW = ['pending_review', 'open', 'awaiting_response', 'under_review', 'closed'];
+const DISPUTE_OUTCOMES = ['resolved', 'sanctioned', 'dismissed', 'withdrawn'];
+const DISPUTE_LEGACY_CLOSED_STATUS = ['resolved', 'sanctioned', 'dismissed', 'withdrawn'];
+
+function normalizeDisputeStatusAndOutcome(patch) {
+  const next = { ...patch };
+  if (next.status != null) {
+    let status = String(next.status).toLowerCase().trim();
+    if (DISPUTE_LEGACY_CLOSED_STATUS.includes(status)) {
+      if (next.outcome === undefined || next.outcome === null || next.outcome === '') {
+        next.outcome = status;
+      }
+      status = 'closed';
+    }
+    if (!DISPUTE_WORKFLOW.includes(status)) {
+      throw new Error(
+        `Invalid dispute status "${next.status}". Use: ${DISPUTE_WORKFLOW.join(', ')}.`
+      );
+    }
+    next.status = status;
+  }
+  if (next.outcome != null && next.outcome !== '') {
+    const outcome = String(next.outcome).toLowerCase().trim();
+    if (!DISPUTE_OUTCOMES.includes(outcome)) {
+      throw new Error(
+        `Invalid dispute outcome "${next.outcome}". Use: ${DISPUTE_OUTCOMES.join(', ')}.`
+      );
+    }
+    next.outcome = outcome;
+    if (next.status === undefined) next.status = 'closed';
+  }
+  if (next.status === 'closed') {
+    if (!next.outcome) next.outcome = 'resolved';
+  }
+  return next;
+}
 
 async function loadDisputeRow(disputeId) {
   const result = await pool.query(
@@ -1266,7 +1312,7 @@ async function updateDispute(disputeId, patch, staffSession) {
     if (!actPerms.canAct) throw new Error('Assign yourself to this dispute before dismissing.');
     await pool.query(
       `UPDATE disputes
-       SET status = 'dismissed',
+       SET status = 'closed',
            outcome = 'dismissed',
            visibility = COALESCE(NULLIF(visibility, 'pending'), 'public'),
            approved_at = COALESCE(approved_at, NOW()),
@@ -1285,6 +1331,7 @@ async function updateDispute(disputeId, patch, staffSession) {
     throw new Error('View only — assign yourself to this dispute to make changes.');
   }
 
+  const normalized = normalizeDisputeStatusAndOutcome(patch);
   const allowed = [
     'status',
     'priority',
@@ -1299,24 +1346,38 @@ async function updateDispute(disputeId, patch, staffSession) {
   let idx = 1;
 
   for (const key of allowed) {
-    if (patch[key] !== undefined) {
+    if (normalized[key] !== undefined) {
       sets.push(`${key} = $${idx}`);
-      values.push(patch[key]);
+      values.push(normalized[key]);
       idx += 1;
     }
   }
 
-  if (patch.assigned_staff_id !== undefined && actPerms.canAct) {
+  // Reopening clears outcome / sanctions
+  if (normalized.status && normalized.status !== 'closed') {
+    if (normalized.outcome === undefined) {
+      sets.push(`outcome = NULL`);
+    }
+    if (normalized.sanction_type === undefined) {
+      sets.push(`sanction_type = NULL`);
+    }
+    if (normalized.sanction_notes === undefined) {
+      sets.push(`sanction_notes = NULL`);
+    }
+    sets.push(`resolved_at = NULL`);
+  }
+
+  if (normalized.assigned_staff_id !== undefined && actPerms.canAct) {
     // Assignee can leave unassigned only if admin; otherwise keep
-    if (actPerms.isAdmin || patch.assigned_staff_id) {
+    if (actPerms.isAdmin || normalized.assigned_staff_id) {
       sets.push(`assigned_staff_id = $${idx}`);
-      values.push(patch.assigned_staff_id || null);
+      values.push(normalized.assigned_staff_id || null);
       idx += 1;
     }
   }
 
-  if (patch.status) {
-    const status = String(patch.status).toLowerCase();
+  if (normalized.status) {
+    const status = String(normalized.status).toLowerCase();
     if (status === 'open' && String(refreshed.visibility || '') === 'pending') {
       sets.push(`visibility = 'public'`);
       sets.push(`approved_at = COALESCE(approved_at, NOW())`);
@@ -1324,24 +1385,11 @@ async function updateDispute(disputeId, patch, staffSession) {
       values.push(staff.staff_id);
       idx += 1;
     }
-    if (DISPUTE_CLOSED.includes(status)) {
-      sets.push(`resolved_at = NOW()`);
-      if (patch.outcome === undefined && !refreshed.outcome) {
-        sets.push(`outcome = $${idx}`);
-        values.push(status === 'closed' ? 'resolved' : status);
-        idx += 1;
-      }
-    }
-  }
-
-  if (patch.outcome) {
-    const outcome = String(patch.outcome).toLowerCase();
-    if (DISPUTE_CLOSED.includes(outcome) && patch.status === undefined) {
-      sets.push(`status = $${idx}`);
-      values.push(outcome);
-      idx += 1;
+    if (status === 'closed') {
       sets.push(`resolved_at = NOW()`);
     }
+  } else if (normalized.outcome) {
+    sets.push(`resolved_at = NOW()`);
   }
 
   if (!sets.length) {

@@ -45,13 +45,7 @@ import ListingApprovalsTab from './ListingApprovalsTab';
 import IdentityVerificationTab from './IdentityVerificationTab';
 import MyCasesTab from './MyCasesTab';
 
-const CLOSED_DISPUTE_STATUSES = new Set([
-  'resolved',
-  'closed',
-  'sanctioned',
-  'dismissed',
-  'withdrawn',
-]);
+const CLOSED_DISPUTE_STATUSES = new Set(['closed']);
 
 function disputeToModerationCase(d: Dispute): ModerationCase {
   return {
@@ -361,6 +355,7 @@ export default function ModerationPage() {
             cases={data.pendingCases}
             disputes={(data.disputes || []) as Dispute[]}
             reports={(data.reports || []) as UserReport[]}
+            handlers={data.moderatorRoster}
             staffId={data.currentStaffId ?? user?.staffId ?? user?.staff_id ?? null}
             queue={caseQueue}
             onQueueChange={switchCaseQueue}
@@ -764,6 +759,7 @@ function CasesTab({
   cases,
   disputes,
   reports,
+  handlers = [],
   staffId,
   queue,
   onQueueChange,
@@ -772,9 +768,10 @@ function CasesTab({
   cases: ModerationCase[];
   disputes: Dispute[];
   reports: UserReport[];
+  handlers?: ModerationOverview['moderatorRoster'];
   staffId?: string | number | null;
   queue: CaseQueue;
-  onQueueChange: (queue: CaseQueue) => void;
+  onQueueChange: (q: CaseQueue) => void;
   onRefresh: () => void;
 }) {
   const myStaffId = staffId != null && staffId !== '' ? String(staffId) : null;
@@ -811,7 +808,7 @@ function CasesTab({
     () =>
       disputes.filter(
         (d) =>
-          !['resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn'].includes(
+          !['closed'].includes(
             String(d.status).toLowerCase()
           )
       ).length,
@@ -893,7 +890,9 @@ function CasesTab({
       {queue === 'mine' && (
         <MyCasesTab cases={myCases} currentStaffId={myStaffId} onUpdated={onRefresh} />
       )}
-      {queue === 'disputes' && <DisputesTab disputes={disputes} onUpdated={onRefresh} />}
+      {queue === 'disputes' && (
+        <DisputesTab disputes={disputes} handlers={handlers} onUpdated={onRefresh} />
+      )}
       {queue === 'reports' && <ReportsTab reports={reports} onUpdated={onRefresh} />}
       {queue === 'listings' && (
         <ListingApprovalsTab

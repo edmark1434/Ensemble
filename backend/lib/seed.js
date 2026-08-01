@@ -468,7 +468,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       number: 'DIS-SANC01',
       title: 'Repeated late delivery pattern',
       reason: 'Buyer documented three late milestones on the same seller within 30 days.',
-      status: 'sanctioned',
+      status: 'closed',
       visibility: 'public',
       priority: 'high',
       initiatorIdx: 7,
@@ -489,7 +489,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       number: 'DIS-RSLV01',
       title: 'Feedback dispute after delivery',
       reason: 'Buyer contested quality rating on a completed gig; parties settled.',
-      status: 'resolved',
+      status: 'closed',
       visibility: 'public',
       priority: 'medium',
       initiatorIdx: 1,
@@ -511,7 +511,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       number: 'DIS-DSSM01',
       title: 'Refund window expired',
       reason: 'Buyer requested a refund outside the marketplace refund window.',
-      status: 'dismissed',
+      status: 'closed',
       visibility: 'public',
       priority: 'low',
       initiatorIdx: 8,
@@ -600,7 +600,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         d.sanctionType,
         d.sanctionNotes,
         d.entityType || 'general',
-        ['resolved', 'sanctioned', 'dismissed', 'withdrawn', 'closed'].includes(d.status)
+        ['closed'].includes(d.status)
           ? new Date(Date.now() - (d.daysAgo - 1) * 86400000)
           : null,
       ]

@@ -5,7 +5,7 @@ import ModeratorDisputeDetailModal from "../shared/ModeratorDisputeDetailModal";
 import { PriorityBadge, StatusBadge, titleCaseWords } from "../shared/ui";
 import type { Dispute } from "../shared/moderatorTypes";
 
-const STATUS_FILTERS = ["all", "open", "under_review", "resolved", "closed"] as const;
+const STATUS_FILTERS = ["all", "open", "under_review", "closed"] as const;
 
 function relativeTime(value: string | null | undefined) {
   if (!value) return "—";

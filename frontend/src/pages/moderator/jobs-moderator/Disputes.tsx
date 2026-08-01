@@ -5,7 +5,7 @@ import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts"
 import type { Dispute } from "../shared/moderatorTypes";
 import { PriorityBadge } from "../shared/ui";
 
-const STATUS_OPTIONS = ["open", "under_review", "resolved", "closed"];
+const STATUS_OPTIONS = ["open", "under_review", "closed"];
 
 function titleCaseLabel(value: string) {
   return String(value || "")
@@ -39,7 +39,9 @@ export default function JobsDisputes() {
   const updateStatus = async (dispute: Dispute, status: string) => {
     setSavingId(dispute.id);
     try {
-      await api.patch(`/api/moderator/jobs/disputes/${dispute.id}`, { status });
+      const payload: { status: string; outcome?: string } = { status };
+      if (status === "closed") payload.outcome = "resolved";
+      await api.patch(`/api/moderator/jobs/disputes/${dispute.id}`, payload);
       showSuccessToast(`Dispute ${dispute.number} marked ${titleCaseLabel(status)}`);
       await load();
     } catch {

@@ -30,9 +30,15 @@ function statusClass(status: string) {
   if (s === 'awaiting response' || s === 'under review') {
     return 'bg-amber-500/15 text-amber-200 border-amber-500/25';
   }
-  if (s === 'sanctioned') return 'bg-violet-500/15 text-violet-200 border-violet-500/25';
-  if (s === 'dismissed' || s === 'withdrawn') return 'bg-zinc-500/15 text-zinc-300 border-white/10';
-  if (s === 'resolved' || s === 'closed') return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25';
+  if (s === 'closed') return 'bg-zinc-500/15 text-zinc-200 border-white/15';
+  return 'bg-zinc-500/15 text-zinc-300 border-white/10';
+}
+
+function outcomeClass(outcome: string) {
+  const o = outcome.toLowerCase();
+  if (o === 'sanctioned') return 'bg-violet-500/15 text-violet-200 border-violet-500/25';
+  if (o === 'dismissed' || o === 'withdrawn') return 'bg-zinc-500/15 text-zinc-300 border-white/10';
+  if (o === 'resolved') return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25';
   return 'bg-zinc-500/15 text-zinc-300 border-white/10';
 }
 
@@ -58,9 +64,19 @@ type StatusFilter =
   | 'under_review'
   | 'closed';
 
+type WorkflowStatusFilter =
+  | 'all'
+  | 'pending_review'
+  | 'open'
+  | 'awaiting_response'
+  | 'under_review'
+  | 'closed';
+
+type OutcomeFilter = 'all' | 'resolved' | 'sanctioned' | 'dismissed' | 'withdrawn';
 type PriorityFilter = 'all' | 'high' | 'medium' | 'low';
 type VisibilityFilter = 'all' | 'pending' | 'parties' | 'public';
-type AssigneeFilter = 'all' | 'unassigned' | 'assigned';
+type AssigneeFilter = 'all' | 'unassigned' | 'assigned' | string; // string = staffId
+
 type FlagFilter = 'all' | 'credit_hold';
 type SortKey =
   | 'opened_desc'
@@ -70,6 +86,8 @@ type SortKey =
   | 'priority_desc';
 
 type AdvancedFilters = {
+  status: WorkflowStatusFilter;
+  outcome: OutcomeFilter;
   priority: PriorityFilter;
   visibility: VisibilityFilter;
   assignee: AssigneeFilter;
@@ -79,6 +97,8 @@ type AdvancedFilters = {
 };
 
 const DEFAULT_ADVANCED: AdvancedFilters = {
+  status: 'all',
+  outcome: 'all',
   priority: 'all',
   visibility: 'all',
   assignee: 'all',
@@ -87,7 +107,25 @@ const DEFAULT_ADVANCED: AdvancedFilters = {
   sort: 'opened_desc',
 };
 
-const CLOSED = new Set(['resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn']);
+const WORKFLOW_STATUSES = [
+  'pending_review',
+  'open',
+  'awaiting_response',
+  'under_review',
+  'closed',
+] as const;
+
+const OUTCOME_OPTIONS = ['resolved', 'sanctioned', 'dismissed', 'withdrawn'] as const;
+
+const HANDLER_ROLES = new Set(['admin', 'administrator', 'support moderator']);
+
+export type DisputeHandlerOption = {
+  staffId: string;
+  name: string;
+  role: string;
+};
+
+const CLOSED = new Set(['closed']);
 const PRIORITY_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
 
 const selectCls =
@@ -102,8 +140,14 @@ function FilterField({ label, children }: { label: string; children: ReactNode }
   );
 }
 
+function isClosedStatus(status: string) {
+  return CLOSED.has(String(status || '').toLowerCase());
+}
+
 function countActiveAdvanced(filters: AdvancedFilters) {
   let n = 0;
+  if (filters.status !== 'all') n += 1;
+  if (filters.outcome !== 'all') n += 1;
   if (filters.priority !== 'all') n += 1;
   if (filters.visibility !== 'all') n += 1;
   if (filters.assignee !== 'all') n += 1;
@@ -115,9 +159,11 @@ function countActiveAdvanced(filters: AdvancedFilters) {
 
 export default function DisputesTab({
   disputes,
+  handlers = [],
   onUpdated,
 }: {
   disputes: Dispute[];
+  handlers?: { id: string | number; name: string; role: string }[];
   onUpdated: () => void;
 }) {
   const [search, setSearch] = useState('');
@@ -125,17 +171,109 @@ export default function DisputesTab({
   const [advanced, setAdvanced] = useState<AdvancedFilters>(DEFAULT_ADVANCED);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | number | null>(null);
+  const [handlerSearch, setHandlerSearch] = useState('');
+
+  const handlerOptions = useMemo(() => {
+    const byId = new Map<string, DisputeHandlerOption>();
+
+    for (const h of handlers) {
+      const role = String(h.role || '').toLowerCase();
+      if (!HANDLER_ROLES.has(role)) continue;
+      const staffId = String(h.id);
+      if (!staffId) continue;
+      byId.set(staffId.toLowerCase(), {
+        staffId,
+        name: h.name || 'Staff',
+        role: h.role || 'Staff',
+      });
+    }
+
+    // Include anyone already assigned on disputes (in case roster is incomplete)
+    for (const d of disputes) {
+      if (!d.assignee?.staffId) continue;
+      const staffId = String(d.assignee.staffId);
+      const key = staffId.toLowerCase();
+      if (byId.has(key)) continue;
+      byId.set(key, {
+        staffId,
+        name: d.assignee.name || 'Staff',
+        role: d.assignee.role || 'Staff',
+      });
+    }
+
+    return [...byId.values()].sort((a, b) => {
+      const roleCmp = a.role.localeCompare(b.role);
+      if (roleCmp !== 0) return roleCmp;
+      return a.name.localeCompare(b.name);
+    });
+  }, [handlers, disputes]);
+
+  const filteredHandlers = useMemo(() => {
+    const q = handlerSearch.trim().toLowerCase();
+    const selectedId =
+      advanced.assignee !== 'all' &&
+      advanced.assignee !== 'unassigned' &&
+      advanced.assignee !== 'assigned'
+        ? String(advanced.assignee).toLowerCase()
+        : null;
+
+    let list = handlerOptions;
+    if (q) {
+      list = handlerOptions.filter(
+        (h) =>
+          h.name.toLowerCase().includes(q) ||
+          h.role.toLowerCase().includes(q) ||
+          h.staffId.toLowerCase().includes(q) ||
+          (selectedId != null && h.staffId.toLowerCase() === selectedId)
+      );
+    }
+    return list;
+  }, [handlerOptions, handlerSearch, advanced.assignee]);
 
   const counts = useMemo(() => {
-    const openQueue = disputes.filter((d) => !CLOSED.has(String(d.status).toLowerCase())).length;
+    const openQueue = disputes.filter((d) => !isClosedStatus(d.status)).length;
     const pending = disputes.filter((d) => String(d.status).toLowerCase() === 'pending_review').length;
+    const open = disputes.filter((d) => String(d.status).toLowerCase() === 'open').length;
+    const awaiting = disputes.filter(
+      (d) => String(d.status).toLowerCase() === 'awaiting_response'
+    ).length;
+    const underReview = disputes.filter(
+      (d) => String(d.status).toLowerCase() === 'under_review'
+    ).length;
+    const closed = disputes.filter((d) => isClosedStatus(d.status)).length;
     const unassigned = disputes.filter(
-      (d) => !d.assignee && !CLOSED.has(String(d.status).toLowerCase())
+      (d) => !d.assignee && !isClosedStatus(d.status)
     ).length;
     const credits = disputes
-      .filter((d) => !CLOSED.has(String(d.status).toLowerCase()))
+      .filter((d) => !isClosedStatus(d.status))
       .reduce((sum, d) => sum + Number(d.creditAmount || 0), 0);
-    return { openQueue, pending, unassigned, credits, total: disputes.length };
+    const outcomes = {
+      resolved: disputes.filter(
+        (d) =>
+          isClosedStatus(d.status) && String(d.outcome || 'resolved').toLowerCase() === 'resolved'
+      ).length,
+      sanctioned: disputes.filter(
+        (d) => isClosedStatus(d.status) && String(d.outcome || '').toLowerCase() === 'sanctioned'
+      ).length,
+      dismissed: disputes.filter(
+        (d) => isClosedStatus(d.status) && String(d.outcome || '').toLowerCase() === 'dismissed'
+      ).length,
+      withdrawn: disputes.filter(
+        (d) => isClosedStatus(d.status) && String(d.outcome || '').toLowerCase() === 'withdrawn'
+      ).length,
+    };
+    return {
+      openQueue,
+      pending,
+      open,
+      awaiting,
+      underReview,
+      closed,
+      unassigned,
+      credits,
+      outcomes,
+      total: disputes.length,
+    };
   }, [disputes]);
 
   const entityTypes = useMemo(() => {
@@ -153,8 +291,11 @@ export default function DisputesTab({
     const q = search.trim().toLowerCase();
     const list = disputes.filter((d) => {
       const status = String(d.status).toLowerCase();
-      if (statusFilter === 'open_queue' && CLOSED.has(status)) return false;
-      if (statusFilter === 'closed' && !CLOSED.has(status)) return false;
+      const outcome = String(d.outcome || '').toLowerCase();
+
+      // Quick status chips (workflow)
+      if (statusFilter === 'open_queue' && isClosedStatus(status)) return false;
+      if (statusFilter === 'closed' && !isClosedStatus(status)) return false;
       if (
         statusFilter !== 'all' &&
         statusFilter !== 'open_queue' &&
@@ -162,6 +303,16 @@ export default function DisputesTab({
         status !== statusFilter
       ) {
         return false;
+      }
+
+      // Advanced: workflow status (refines further when chip is All / Open queue / Closed)
+      if (advanced.status !== 'all' && status !== advanced.status) return false;
+
+      // Advanced: outcome (closed decisions only)
+      if (advanced.outcome !== 'all') {
+        if (!isClosedStatus(status)) return false;
+        const effectiveOutcome = outcome || 'resolved';
+        if (effectiveOutcome !== advanced.outcome) return false;
       }
 
       if (advanced.priority !== 'all' && String(d.priority).toLowerCase() !== advanced.priority) {
@@ -175,6 +326,18 @@ export default function DisputesTab({
       }
       if (advanced.assignee === 'unassigned' && d.assignee) return false;
       if (advanced.assignee === 'assigned' && !d.assignee) return false;
+      if (
+        advanced.assignee !== 'all' &&
+        advanced.assignee !== 'unassigned' &&
+        advanced.assignee !== 'assigned'
+      ) {
+        if (
+          !d.assignee ||
+          String(d.assignee.staffId).toLowerCase() !== String(advanced.assignee).toLowerCase()
+        ) {
+          return false;
+        }
+      }
       if (
         advanced.entityType !== 'all' &&
         String(d.relatedEntityType || '').toLowerCase() !== advanced.entityType.toLowerCase()
@@ -194,6 +357,7 @@ export default function DisputesTab({
         d.respondent?.username,
         d.assignee?.name,
         d.status,
+        d.outcome,
         d.visibility,
         d.relatedEntityType,
         d.relatedEntityId,
@@ -229,22 +393,63 @@ export default function DisputesTab({
   const statusChips: { id: StatusFilter; label: string; count?: number }[] = [
     { id: 'open_queue', label: 'Open queue', count: counts.openQueue },
     { id: 'pending_review', label: 'Pending review', count: counts.pending },
-    { id: 'open', label: 'Open' },
-    { id: 'awaiting_response', label: 'Awaiting reply' },
-    { id: 'under_review', label: 'Under review' },
-    { id: 'closed', label: 'Closed' },
+    { id: 'open', label: 'Open', count: counts.open },
+    { id: 'awaiting_response', label: 'Awaiting reply', count: counts.awaiting },
+    { id: 'under_review', label: 'Under review', count: counts.underReview },
+    { id: 'closed', label: 'Closed', count: counts.closed },
     { id: 'all', label: 'All', count: counts.total },
   ];
 
   const patchAdvanced = (partial: Partial<AdvancedFilters>) => {
-    setAdvanced((prev) => ({ ...prev, ...partial }));
+    setAdvanced((prev) => {
+      const next = { ...prev, ...partial };
+      if (partial.outcome && partial.outcome !== 'all') {
+        next.status = 'closed';
+      }
+      if (partial.status && partial.status !== 'all' && partial.status !== 'closed') {
+        next.outcome = 'all';
+      }
+      return next;
+    });
+
+    if (partial.outcome && partial.outcome !== 'all') {
+      setStatusFilter('closed');
+    } else if (partial.status === 'closed') {
+      setStatusFilter('closed');
+    } else if (
+      partial.status === 'pending_review' ||
+      partial.status === 'open' ||
+      partial.status === 'awaiting_response' ||
+      partial.status === 'under_review'
+    ) {
+      setStatusFilter(partial.status);
+    }
   };
 
-  const clearAdvanced = () => setAdvanced(DEFAULT_ADVANCED);
+  const clearAdvanced = () => {
+    setAdvanced(DEFAULT_ADVANCED);
+    setHandlerSearch('');
+  };
+
+  const onChipClick = (id: StatusFilter) => {
+    setStatusFilter(id);
+    // Keep advanced status in sync when picking a specific workflow chip
+    if (id === 'pending_review' || id === 'open' || id === 'awaiting_response' || id === 'under_review') {
+      setAdvanced((prev) => ({ ...prev, status: id, outcome: 'all' }));
+    } else if (id === 'closed') {
+      setAdvanced((prev) => ({ ...prev, status: 'closed' }));
+    } else if (id === 'open_queue' || id === 'all') {
+      setAdvanced((prev) => ({
+        ...prev,
+        status: 'all',
+        ...(id === 'open_queue' ? { outcome: 'all' } : {}),
+      }));
+    }
+  };
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard label="Open disputes" value={counts.openQueue} sub="Active resolution queue" />
         <SummaryCard
           label="Credits at risk"
@@ -252,6 +457,11 @@ export default function DisputesTab({
           sub="Across open cases"
         />
         <SummaryCard label="Unassigned" value={counts.unassigned} sub="Need a designated handler" />
+        <SummaryCard
+          label="Closed"
+          value={counts.closed}
+          sub={`${counts.outcomes.resolved} resolved · ${counts.outcomes.sanctioned} sanctioned`}
+        />
       </div>
 
       <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0f1016]">
@@ -262,8 +472,8 @@ export default function DisputesTab({
               <h2 className="text-sm font-semibold text-white">Dispute desk</h2>
             </div>
             <p className="mt-1 text-xs text-zinc-500">
-              Approve filings, assign Support Moderators, publish party replies, and close outcomes.
-              Handling is view-only until you assign yourself.
+              Workflow status for the queue; set an outcome only when closing. Assign yourself before
+              handling.
             </p>
           </div>
           <div className="relative w-full max-w-sm">
@@ -271,7 +481,7 @@ export default function DisputesTab({
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search number, party, title…"
+              placeholder="Search number, party, title, outcome…"
               className="w-full rounded-xl border border-white/[0.08] bg-[#14151c] py-2.5 pl-9 pr-3 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-rose-500/40"
             />
           </div>
@@ -282,7 +492,7 @@ export default function DisputesTab({
             <button
               key={f.id}
               type="button"
-              onClick={() => setStatusFilter(f.id)}
+              onClick={() => onChipClick(f.id)}
               className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
                 statusFilter === f.id
                   ? 'bg-rose-500/15 text-rose-100'
@@ -341,6 +551,48 @@ export default function DisputesTab({
           {advancedOpen && (
             <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <FilterField label="Status">
+                  <select
+                    value={advanced.status}
+                    onChange={(e) =>
+                      patchAdvanced({ status: e.target.value as WorkflowStatusFilter })
+                    }
+                    className={selectCls}
+                  >
+                    <option value="all">All statuses</option>
+                    {WORKFLOW_STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {titleCase(s)}
+                      </option>
+                    ))}
+                  </select>
+                </FilterField>
+
+                <FilterField label="Outcome">
+                  <select
+                    value={advanced.outcome}
+                    onChange={(e) => patchAdvanced({ outcome: e.target.value as OutcomeFilter })}
+                    className={selectCls}
+                    disabled={advanced.status !== 'all' && advanced.status !== 'closed'}
+                  >
+                    <option value="all">All outcomes</option>
+                    {OUTCOME_OPTIONS.map((o) => (
+                      <option key={o} value={o}>
+                        {titleCase(o)}
+                        {o === 'resolved' ? ` (${counts.outcomes.resolved})` : ''}
+                        {o === 'sanctioned' ? ` (${counts.outcomes.sanctioned})` : ''}
+                        {o === 'dismissed' ? ` (${counts.outcomes.dismissed})` : ''}
+                        {o === 'withdrawn' ? ` (${counts.outcomes.withdrawn})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {advanced.status !== 'all' && advanced.status !== 'closed' && (
+                    <span className="text-[10px] text-zinc-600">
+                      Outcome applies to closed disputes only.
+                    </span>
+                  )}
+                </FilterField>
+
                 <FilterField label="Priority">
                   <select
                     value={advanced.priority}
@@ -370,15 +622,31 @@ export default function DisputesTab({
                 </FilterField>
 
                 <FilterField label="Handler">
-                  <select
-                    value={advanced.assignee}
-                    onChange={(e) => patchAdvanced({ assignee: e.target.value as AssigneeFilter })}
-                    className={selectCls}
-                  >
-                    <option value="all">All handlers</option>
-                    <option value="unassigned">Unassigned</option>
-                    <option value="assigned">Assigned</option>
-                  </select>
+                  <div className="space-y-1.5">
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600" />
+                      <input
+                        value={handlerSearch}
+                        onChange={(e) => setHandlerSearch(e.target.value)}
+                        placeholder="Search admins & support…"
+                        className="w-full rounded-lg border border-white/10 bg-[#0f1016] py-2 pl-8 pr-2 text-xs text-white outline-none placeholder:text-zinc-600"
+                      />
+                    </div>
+                    <select
+                      value={advanced.assignee}
+                      onChange={(e) => patchAdvanced({ assignee: e.target.value as AssigneeFilter })}
+                      className={selectCls}
+                    >
+                      <option value="all">All handlers</option>
+                      <option value="unassigned">Unassigned</option>
+                      <option value="assigned">Assigned (anyone)</option>
+                      {filteredHandlers.map((h) => (
+                        <option key={h.staffId} value={h.staffId}>
+                          {h.name} ({h.role})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </FilterField>
 
                 <FilterField label="Entity type">
@@ -426,79 +694,95 @@ export default function DisputesTab({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left text-sm">
+          <table className="w-full min-w-[980px] text-left text-sm">
             <thead>
               <tr className="border-b border-white/[0.06] text-[11px] uppercase tracking-wide text-zinc-500">
                 <th className="px-5 py-3 font-medium">Dispute</th>
                 <th className="px-4 py-3 font-medium">Parties</th>
                 <th className="px-4 py-3 font-medium">Credits</th>
                 <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Outcome</th>
                 <th className="px-4 py-3 font-medium">Visibility</th>
                 <th className="px-4 py-3 font-medium">Handler</th>
                 <th className="px-5 py-3 font-medium">Opened</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((d) => (
-                <tr
-                  key={String(d.id)}
-                  onClick={() => setSelectedId(d.id)}
-                  className="cursor-pointer border-b border-white/[0.04] transition hover:bg-white/[0.03]"
-                >
-                  <td className="px-5 py-3.5">
-                    <p className="font-medium text-white">{d.number}</p>
-                    <p className="mt-0.5 line-clamp-1 text-xs text-zinc-500">{d.title}</p>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <p className="text-zinc-200">@{d.initiator.username}</p>
-                    <p className="text-xs text-zinc-500">vs @{d.respondent.username}</p>
-                  </td>
-                  <td className="px-4 py-3.5 tabular-nums text-zinc-300">
-                    {Number(d.creditAmount || 0).toLocaleString()}
-                    {d.creditHold && (
-                      <span className="mt-0.5 block text-[10px] text-amber-300/80">
-                        Hold {d.creditHold.status}
+              {filtered.map((d) => {
+                const closed = isClosedStatus(d.status);
+                const outcome = closed ? String(d.outcome || 'resolved').toLowerCase() : '';
+                return (
+                  <tr
+                    key={String(d.id)}
+                    onClick={() => setSelectedId(d.id)}
+                    className="cursor-pointer border-b border-white/[0.04] transition hover:bg-white/[0.03]"
+                  >
+                    <td className="px-5 py-3.5">
+                      <p className="font-medium text-white">{d.number}</p>
+                      <p className="mt-0.5 line-clamp-1 text-xs text-zinc-500">{d.title}</p>
+                      <span
+                        className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] ${priorityClass(d.priority)}`}
+                      >
+                        {titleCase(d.priority)}
                       </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <span
-                      className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${statusClass(d.status)}`}
-                    >
-                      {titleCase(d.status)}
-                    </span>
-                    <span
-                      className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] ${priorityClass(d.priority)}`}
-                    >
-                      {titleCase(d.priority)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <span
-                      className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${visibilityClass(d.visibility || 'pending')}`}
-                    >
-                      {titleCase(d.visibility || 'pending')}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5 text-zinc-300">
-                    {d.assignee ? (
-                      <>
-                        <p>{d.assignee.name}</p>
-                        <p className="text-[11px] text-zinc-500">{d.assignee.role}</p>
-                      </>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-amber-200/90">
-                        <Hand className="h-3.5 w-3.5" />
-                        Unassigned
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <p className="text-zinc-200">@{d.initiator.username}</p>
+                      <p className="text-xs text-zinc-500">vs @{d.respondent.username}</p>
+                    </td>
+                    <td className="px-4 py-3.5 tabular-nums text-zinc-300">
+                      {Number(d.creditAmount || 0).toLocaleString()}
+                      {d.creditHold && (
+                        <span className="mt-0.5 block text-[10px] text-amber-300/80">
+                          Hold {d.creditHold.status}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span
+                        className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${statusClass(d.status)}`}
+                      >
+                        {titleCase(d.status)}
                       </span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3.5 text-xs text-zinc-500">{formatDateTime(d.openedAt)}</td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      {closed && outcome ? (
+                        <span
+                          className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${outcomeClass(outcome)}`}
+                        >
+                          {titleCase(outcome)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-zinc-600">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span
+                        className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${visibilityClass(d.visibility || 'pending')}`}
+                      >
+                        {titleCase(d.visibility || 'pending')}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-zinc-300">
+                      {d.assignee ? (
+                        <>
+                          <p>{d.assignee.name}</p>
+                          <p className="text-[11px] text-zinc-500">{d.assignee.role}</p>
+                        </>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-amber-200/90">
+                          <Hand className="h-3.5 w-3.5" />
+                          Unassigned
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3.5 text-xs text-zinc-500">{formatDateTime(d.openedAt)}</td>
+                  </tr>
+                );
+              })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center text-sm text-zinc-500">
+                  <td colSpan={8} className="px-5 py-16 text-center text-sm text-zinc-500">
                     No disputes match this filter.
                   </td>
                 </tr>

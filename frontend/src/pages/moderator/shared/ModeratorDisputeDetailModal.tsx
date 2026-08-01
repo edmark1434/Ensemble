@@ -107,15 +107,16 @@ const STATUS_OPTIONS = [
   "open",
   "awaiting_response",
   "under_review",
-  "resolved",
-  "sanctioned",
-  "dismissed",
-  "withdrawn",
   "closed",
 ];
 
 const OUTCOME_OPTIONS = ["resolved", "sanctioned", "dismissed", "withdrawn"];
 const SANCTION_OPTIONS = ["warn", "mute", "suspend", "ban", "credit_adjustment", "listing_removal"];
+const CLOSED_STATUS = "closed";
+
+function isDisputeClosed(status: string) {
+  return String(status || "").toLowerCase() === CLOSED_STATUS;
+}
 
 /**
  * Dispute detail modal with discussion thread.
@@ -270,22 +271,40 @@ export default function ModeratorDisputeDetailModal({
       );
       return;
     }
+    const nextStatus = overrideStatus || status;
     const payload: Record<string, unknown> = {
-      status: overrideStatus || status,
+      status: nextStatus,
       priority,
       resolution_notes: resolutionNotes || null,
     };
     if (adminMode) {
-      if (outcome) payload.outcome = outcome;
-      if (sanctionType) payload.sanction_type = sanctionType;
-      payload.sanction_notes = sanctionNotes || null;
+      if (isDisputeClosed(nextStatus)) {
+        payload.outcome = outcome || "resolved";
+        if (sanctionType) payload.sanction_type = sanctionType;
+        payload.sanction_notes = sanctionNotes || null;
+      } else {
+        payload.outcome = null;
+        payload.sanction_type = null;
+        payload.sanction_notes = null;
+      }
       if (canAssignOthers || canAct) {
         payload.assigned_staff_id = assigneeId ? assigneeId : null;
       }
     } else {
+      if (isDisputeClosed(nextStatus) && !outcome) {
+        payload.outcome = "resolved";
+      } else if (outcome) {
+        payload.outcome = outcome;
+      }
       payload.assigned_staff_id = assigneeId ? assigneeId : null;
     }
-    await runAction(payload, overrideStatus === "resolved" ? "Dispute resolved" : "Dispute updated");
+    const closing = isDisputeClosed(nextStatus);
+    await runAction(
+      payload,
+      closing
+        ? `Dispute closed (${titleCaseLabel(String(payload.outcome || "resolved"))})`
+        : "Dispute updated"
+    );
   };
 
   const sendMessage = async () => {
@@ -460,7 +479,17 @@ export default function ModeratorDisputeDetailModal({
                 Status
                 <select
                   value={status}
-                  onChange={(e) => setStatus(e.target.value)}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setStatus(next);
+                    if (isDisputeClosed(next)) {
+                      setOutcome((prev) => prev || "resolved");
+                    } else {
+                      setOutcome("");
+                      setSanctionType("");
+                      setSanctionNotes("");
+                    }
+                  }}
                   disabled={viewOnly}
                   className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:opacity-50"
                 >
@@ -531,8 +560,18 @@ export default function ModeratorDisputeDetailModal({
                   Outcome
                   <select
                     value={outcome}
-                    onChange={(e) => setOutcome(e.target.value)}
-                    disabled={viewOnly}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setOutcome(next);
+                      if (next) {
+                        setStatus(CLOSED_STATUS);
+                      }
+                      if (next !== "sanctioned") {
+                        setSanctionType("");
+                        setSanctionNotes("");
+                      }
+                    }}
+                    disabled={viewOnly || !isDisputeClosed(status)}
                     className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:opacity-50"
                   >
                     <option value="">—</option>
@@ -542,6 +581,11 @@ export default function ModeratorDisputeDetailModal({
                       </option>
                     ))}
                   </select>
+                  {!isDisputeClosed(status) && (
+                    <span className="text-[11px] text-zinc-600">
+                      Set status to Closed to choose an outcome.
+                    </span>
+                  )}
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-zinc-500">
                   Sanction type
@@ -623,10 +667,10 @@ export default function ModeratorDisputeDetailModal({
                       : "Save dispute changes"}
                 </button>
               )}
-              {canAct && !["resolved", "closed", "sanctioned", "dismissed", "withdrawn"].includes(toApiToken(dispute.status)) && (
+              {canAct && !isDisputeClosed(toApiToken(dispute.status)) && (
                 <button
                   type="button"
-                  onClick={() => void saveChanges("resolved")}
+                  onClick={() => void saveChanges(CLOSED_STATUS)}
                   disabled={saving}
                   className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
                 >

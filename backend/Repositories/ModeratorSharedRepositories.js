@@ -108,7 +108,7 @@ function mapReportRow(row) {
 }
 
 function mapDisputeRow(row) {
-  const closedStatuses = ['resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn'];
+  const closedStatuses = ['closed'];
   return {
     id: row.dispute_id,
     number: row.dispute_number,
