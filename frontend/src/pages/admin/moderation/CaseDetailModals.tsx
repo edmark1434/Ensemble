@@ -53,10 +53,14 @@ export function ReportCaseDetailModal({
   reportId,
   onClose,
   onUpdated,
+  endpointBase = '/api/admin/reports',
+  accent = 'rose',
 }: {
   reportId: string | number;
   onClose: () => void;
   onUpdated: () => void;
+  endpointBase?: string;
+  accent?: 'rose' | 'sky' | 'violet' | 'emerald';
 }) {
   const [detail, setDetail] = useState<ReportDetailPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -65,10 +69,35 @@ export function ReportCaseDetailModal({
   const [priority, setPriority] = useState('medium');
   const [assigneeId, setAssigneeId] = useState('');
 
+  const accentLabel =
+    accent === 'sky'
+      ? 'text-sky-400'
+      : accent === 'violet'
+        ? 'text-violet-400'
+        : accent === 'emerald'
+          ? 'text-emerald-400'
+          : 'text-rose-400';
+  const accentSpin =
+    accent === 'sky'
+      ? 'text-sky-400'
+      : accent === 'violet'
+        ? 'text-violet-400'
+        : accent === 'emerald'
+          ? 'text-emerald-400'
+          : 'text-rose-400';
+  const accentBtn =
+    accent === 'sky'
+      ? 'bg-sky-500/90 hover:bg-sky-500'
+      : accent === 'violet'
+        ? 'bg-violet-500/90 hover:bg-violet-500'
+        : accent === 'emerald'
+          ? 'bg-emerald-500/90 hover:bg-emerald-500'
+          : 'bg-rose-500/90 hover:bg-rose-500';
+
   const load = async () => {
     setLoading(true);
     try {
-      const res = await api.get(`/api/admin/reports/${reportId}`);
+      const res = await api.get(`${endpointBase}/${reportId}`);
       if (!res.data?.success) throw new Error(res.data?.message || 'Failed to load report');
       const data = res.data.data as ReportDetailPayload;
       setDetail(data);
@@ -85,12 +114,12 @@ export function ReportCaseDetailModal({
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportId]);
+  }, [reportId, endpointBase]);
 
   const save = async (overrideStatus?: string) => {
     setSaving(true);
     try {
-      const res = await api.patch(`/api/admin/reports/${reportId}`, {
+      const res = await api.patch(`${endpointBase}/${reportId}`, {
         status: overrideStatus || status,
         priority,
         assigned_staff_id: assigneeId || null,
@@ -115,12 +144,12 @@ export function ReportCaseDetailModal({
   const report = detail?.report;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:pl-[260px]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:pl-[288px]">
       <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
       <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/[0.1] bg-[#0f1016] shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-rose-400">Report detail</p>
+            <p className={`text-[10px] font-semibold uppercase tracking-wide ${accentLabel}`}>Report detail</p>
             <h2 className="text-lg font-bold text-white">{report?.number || 'Report'}</h2>
           </div>
           <button
@@ -134,7 +163,7 @@ export function ReportCaseDetailModal({
 
         {loading ? (
           <div className="flex flex-1 items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-rose-400" />
+            <Loader2 className={`h-8 w-8 animate-spin ${accentSpin}`} />
           </div>
         ) : detail && report ? (
           <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
@@ -203,7 +232,7 @@ export function ReportCaseDetailModal({
                 type="button"
                 disabled={saving}
                 onClick={() => void save()}
-                className="rounded-xl bg-rose-500/90 px-4 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-50"
+                className={`rounded-xl px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${accentBtn}`}
               >
                 Save report changes
               </button>

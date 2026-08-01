@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Coins, Loader2, RefreshCw, Scale, Search } from "lucide-react";
+import { Coins, Hand, Loader2, RefreshCw, Scale, Search } from "lucide-react";
 import api from "@/lib/axios";
 import ModeratorDisputeDetailModal from "../shared/ModeratorDisputeDetailModal";
 import { PriorityBadge, StatusBadge, titleCaseWords } from "../shared/ui";
@@ -20,19 +20,12 @@ function relativeTime(value: string | null | undefined) {
   return new Date(value).toLocaleDateString();
 }
 
-function SummaryChip({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number | string;
-  tone: string;
-}) {
+function SummaryCard({ label, value, sub }: { label: string; value: string | number; sub: string }) {
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-[#14151c] px-4 py-3">
-      <p className={`text-lg font-bold leading-tight ${tone}`}>{value}</p>
-      <p className="text-[11px] text-zinc-500">{label}</p>
+    <div className="rounded-2xl border border-white/[0.08] bg-[#14151c] px-4 py-4">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tabular-nums text-white">{value}</p>
+      <p className="mt-1 text-xs text-zinc-500">{sub}</p>
     </div>
   );
 }
@@ -78,15 +71,32 @@ export default function SupportDisputes() {
       total: disputes.length,
       open: open.length,
       credits: open.reduce((acc, d) => acc + (d.creditAmount || 0), 0),
-      unassigned: disputes.filter((d) => !d.assignee && (d.status === "open" || d.status === "under_review")).length,
+      unassigned: disputes.filter(
+        (d) => !d.assignee && (d.status === "open" || d.status === "under_review")
+      ).length,
     };
   }, [disputes]);
 
   return (
-    <main className="relative z-10 min-h-screen px-6 py-8 md:ml-72 md:px-10" style={{ animation: "fadeIn 420ms ease" }}>
+    <main
+      className="relative z-10 min-h-screen px-6 py-8 md:ml-72 md:px-10"
+      style={{ animation: "fadeIn 420ms ease" }}
+    >
+      {selectedId !== null && (
+        <ModeratorDisputeDetailModal
+          disputeId={selectedId}
+          endpointBase="/api/moderator/support/disputes"
+          accent="sky"
+          onClose={() => setSelectedId(null)}
+          onUpdated={() => void load()}
+        />
+      )}
+
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-400">Support Moderator</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-400">
+            Support Moderator
+          </p>
           <h1 className="text-2xl font-bold text-white">Disputes</h1>
           <p className="mt-1 text-sm text-zinc-500">
             Open a dispute to discuss it in Mongo chat, assign a handler, and resolve it with notes.
@@ -103,36 +113,64 @@ export default function SupportDisputes() {
         </button>
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <SummaryChip label="In view" value={summary.total} tone="text-white" />
-        <SummaryChip label="Open / Under Review" value={summary.open} tone="text-sky-300" />
-        <SummaryChip label="Credits at risk (view)" value={summary.credits.toLocaleString()} tone="text-amber-300" />
-        <SummaryChip label="Unassigned open" value={summary.unassigned} tone="text-red-300" />
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <SummaryCard label="In view" value={summary.total} sub="Matching current filters" />
+        <SummaryCard label="Open / under review" value={summary.open} sub="Active cases" />
+        <SummaryCard
+          label="Credits at risk"
+          value={summary.credits.toLocaleString()}
+          sub="Held in open disputes"
+        />
+        <SummaryCard label="Unassigned open" value={summary.unassigned} sub="Need a handler" />
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-white/[0.08] bg-[#14151c] px-4 py-3">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search title, number, party…"
-            className="w-72 rounded-lg border border-white/10 bg-[#0f1016] py-2 pl-9 pr-3 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-sky-500/40"
-          />
+      <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0f1016]">
+        <div className="flex flex-col gap-4 border-b border-white/[0.06] px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Scale className="h-4 w-4 text-sky-300" />
+              <h2 className="text-sm font-semibold text-white">Dispute desk</h2>
+            </div>
+            <p className="mt-1 text-xs text-zinc-500">
+              Click a row to open chat, assign staff, and resolve with notes.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full max-w-sm">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search title, number, party…"
+                className="w-full rounded-xl border border-white/[0.08] bg-[#14151c] py-2.5 pl-9 pr-3 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-sky-500/40"
+              />
+            </div>
+            {entityTypes.length > 1 && (
+              <select
+                value={entityType}
+                onChange={(e) => setEntityType(e.target.value)}
+                className="rounded-xl border border-white/[0.08] bg-[#14151c] px-3 py-2.5 text-xs text-zinc-300 outline-none"
+              >
+                {entityTypes.map((e) => (
+                  <option key={e} value={e}>
+                    {e === "all" ? "All entities" : e}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
 
-        <div className="h-6 w-px bg-white/[0.06]" />
-
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex gap-1 overflow-x-auto border-b border-white/[0.06] px-3 py-2">
           {STATUS_FILTERS.map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => setStatus(s)}
-              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+              className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
                 status === s
-                  ? "border-sky-500/40 bg-sky-500/10 text-sky-300"
-                  : "border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white"
+                  ? "bg-sky-500/15 text-sky-100"
+                  : "text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300"
               }`}
             >
               {titleCaseWords(s)}
@@ -140,110 +178,92 @@ export default function SupportDisputes() {
           ))}
         </div>
 
-        {entityTypes.length > 1 && (
-          <>
-            <div className="h-6 w-px bg-white/[0.06]" />
-            <select
-              value={entityType}
-              onChange={(e) => setEntityType(e.target.value)}
-              className="rounded-lg border border-white/10 bg-[#0f1016] px-3 py-1.5 text-xs text-zinc-300 outline-none"
-            >
-              {entityTypes.map((e) => (
-                <option key={e} value={e}>
-                  {e === "all" ? "All entities" : e}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
-      </div>
-
-      <div className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-sky-400" />
-          </div>
-        ) : disputes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.03] text-zinc-600">
-              <Scale className="h-7 w-7" />
-            </span>
-            <div>
-              <p className="text-sm font-medium text-zinc-400">No disputes in this view</p>
-              <p className="mt-0.5 text-xs text-zinc-600">Try clearing search or switching filters.</p>
+        <div className="overflow-x-auto">
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-6 w-6 animate-spin text-sky-400" />
             </div>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
+          ) : (
             <table className="w-full min-w-[980px] text-left text-sm">
               <thead>
-                <tr className="text-[10px] uppercase tracking-wide text-zinc-500">
-                  <th className="pb-3">Dispute</th>
-                  <th className="pb-3">Title</th>
-                  <th className="pb-3">Parties</th>
-                  <th className="pb-3">Entity</th>
-                  <th className="pb-3">Credits</th>
-                  <th className="pb-3">Priority</th>
-                  <th className="pb-3">Status</th>
-                  <th className="pb-3">Assignee</th>
-                  <th className="pb-3">Opened</th>
+                <tr className="border-b border-white/[0.06] text-[11px] uppercase tracking-wide text-zinc-500">
+                  <th className="px-5 py-3 font-medium">Dispute</th>
+                  <th className="px-4 py-3 font-medium">Title</th>
+                  <th className="px-4 py-3 font-medium">Parties</th>
+                  <th className="px-4 py-3 font-medium">Entity</th>
+                  <th className="px-4 py-3 font-medium">Credits</th>
+                  <th className="px-4 py-3 font-medium">Priority</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Assignee</th>
+                  <th className="px-5 py-3 font-medium">Opened</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody>
                 {disputes.map((d) => (
                   <tr
                     key={d.id}
                     onClick={() => setSelectedId(d.id)}
-                    className="cursor-pointer transition hover:bg-white/[0.03]"
+                    className="cursor-pointer border-b border-white/[0.04] transition hover:bg-white/[0.03]"
                   >
-                    <td className="py-3 font-mono text-[11px] text-zinc-400">{d.number}</td>
-                    <td className="max-w-[220px] py-3">
+                    <td className="px-5 py-3.5 font-mono text-[11px] text-zinc-400">{d.number}</td>
+                    <td className="max-w-[220px] px-4 py-3.5">
                       <p className="truncate font-medium text-zinc-200">{d.title}</p>
                       {d.reason && <p className="truncate text-[10px] text-zinc-600">{d.reason}</p>}
                     </td>
-                    <td className="py-3 text-zinc-400">
+                    <td className="px-4 py-3.5 text-zinc-400">
                       <p>@{d.initiator.username}</p>
                       <p className="text-[10px] text-zinc-600">vs @{d.respondent.username}</p>
                     </td>
-                    <td className="py-3 text-zinc-400">
+                    <td className="px-4 py-3.5 text-zinc-400">
                       <span className="capitalize">{d.relatedEntityType || "—"}</span>
                       {d.relatedEntityId ? (
-                        <p className="max-w-[120px] truncate font-mono text-[10px] text-zinc-600">{d.relatedEntityId}</p>
+                        <p className="max-w-[120px] truncate font-mono text-[10px] text-zinc-600">
+                          {d.relatedEntityId}
+                        </p>
                       ) : null}
                     </td>
-                    <td className="py-3">
+                    <td className="px-4 py-3.5">
                       <span className="inline-flex items-center gap-1 text-amber-300/90">
                         <Coins className="h-3.5 w-3.5" />
                         {d.creditAmount.toLocaleString()}
                       </span>
                     </td>
-                    <td className="py-3">
+                    <td className="px-4 py-3.5">
                       <PriorityBadge priority={d.priority} />
                     </td>
-                    <td className="py-3">
+                    <td className="px-4 py-3.5">
                       <StatusBadge status={d.status} />
                     </td>
-                    <td className="py-3 text-zinc-400">{d.assignee?.name || <span className="text-amber-300/80">Unassigned</span>}</td>
-                    <td className="py-3 text-xs text-zinc-500" title={new Date(d.openedAt).toLocaleString()}>
+                    <td className="px-4 py-3.5 text-zinc-300">
+                      {d.assignee ? (
+                        d.assignee.name
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-amber-200/90">
+                          <Hand className="h-3.5 w-3.5" />
+                          Unassigned
+                        </span>
+                      )}
+                    </td>
+                    <td
+                      className="px-5 py-3.5 text-xs text-zinc-500"
+                      title={new Date(d.openedAt).toLocaleString()}
+                    >
                       {relativeTime(d.openedAt)}
                     </td>
                   </tr>
                 ))}
+                {disputes.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="px-5 py-16 text-center text-sm text-zinc-500">
+                      No disputes match this filter.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
-          </div>
-        )}
-      </div>
-
-      {selectedId !== null && (
-        <ModeratorDisputeDetailModal
-          disputeId={selectedId}
-          endpointBase="/api/moderator/support/disputes"
-          accent="sky"
-          onClose={() => setSelectedId(null)}
-          onUpdated={() => void load()}
-        />
-      )}
+          )}
+        </div>
+      </section>
     </main>
   );
 }

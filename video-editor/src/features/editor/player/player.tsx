@@ -12,7 +12,7 @@ const CHECKERBOARD_STYLE: React.CSSProperties = {
 
 const Player = () => {
   const playerRef = useRef<PlayerRef>(null);
-  const { setPlayerRef, duration, fps, size } = useStore();
+  const { setPlayerRef, duration, fps, size, muted } = useStore();
 
   useEffect(() => {
     setPlayerRef(playerRef as React.RefObject<PlayerRef>);
@@ -34,6 +34,7 @@ const Player = () => {
         className="h-full w-full"
         fps={fps}
         overflowVisible
+        initialVolume={muted ? 0 : 1}
         // controls={true}
       />
     </div>

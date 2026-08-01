@@ -19,7 +19,15 @@ export type DisputeDetail = {
   assignableStaff: { staffId: number | string; name: string; role: string }[];
 };
 
-export type Alert = { id: string; message: string; severity: string };
+export type Alert = {
+  id: string;
+  message: string;
+  severity: string;
+  action?: {
+    tab?: string;
+    ticketFilters?: Record<string, string>;
+  };
+};
 
 export type StaffWorkloadLite = {
   staffId: number | string;
@@ -27,6 +35,7 @@ export type StaffWorkloadLite = {
   role: string;
   openTickets: number;
   openReports: number;
+  openDisputes?: number;
   totalOpen: number;
 };
 
@@ -43,7 +52,7 @@ export type SupportOverview = {
     openDisputes: number;
     totalDisputes: number;
     creditsAtRisk: number;
-    chatWaiting: number;
+    awaitingReplyTickets: number;
     slaCompliancePercent: number;
     ticketsThisWeek: number;
     messagesThisWeek: number;
@@ -54,15 +63,20 @@ export type SupportOverview = {
   charts: {
     ticketStatusMix: ChartSegment[];
     ticketCategories: ChartSegment[];
+    ticketTypes?: ChartSegment[];
     priorityMix: ChartSegment[];
+    openByPriority?: ChartSegment[];
     disputeStatusMix: ChartSegment[];
     activityTrend: { day: string; tickets: number; messages: number }[];
   };
+  tickets?: SupportTicket[];
   recentTickets: SupportTicket[];
   recentDisputes: Dispute[];
   recentReports: UserReport[];
   ticketLog: TicketActivity[];
+  recentActivity?: TicketActivity[];
   staffWorkload: StaffWorkloadLite[];
+  currentStaffId?: string | number | null;
   alerts: Alert[];
   dataSources: { tables: string[]; persisted: boolean };
 };

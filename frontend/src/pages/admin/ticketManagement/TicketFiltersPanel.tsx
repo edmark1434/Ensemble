@@ -1,21 +1,19 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { ChevronDown, Search, Shield, SlidersHorizontal, X } from 'lucide-react';
 import {
-  ESCALATE_ROLE_OPTIONS,
-  TICKET_PRIORITY_OPTIONS,
-  TICKET_STATUS_OPTIONS,
-  TICKET_TYPE_GROUPS,
-} from './ticketTypes';
-import {
   countActiveTicketFilters,
   DEFAULT_TICKET_FILTERS,
-  TICKET_QUEUE_OPTIONS,
+  escalateRoleFilterOptions,
+  filterModeratorsForDesk,
+  queueOptionsForDesk,
   TICKET_SORT_OPTIONS,
   typesForQueue,
+  type TicketDesk,
   type TicketFilterState,
   type TicketQueueFilter,
   type TicketSortKey,
 } from './ticketFilterUtils';
+import { TICKET_PRIORITY_OPTIONS, TICKET_STATUS_OPTIONS, TICKET_TYPE_GROUPS } from './ticketTypes';
 
 const selectCls =
   'w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none focus:border-white/25';
@@ -80,8 +78,11 @@ export default function TicketFiltersPanel({
   channels,
   moderators = [],
   accent = 'rose',
+  desk = 'admin',
   showQueue = true,
   showAdminToggle = false,
+  showAssigneeFilters = true,
+  includeAdminQueue,
   resultCount,
   totalCount,
   variant = 'panel',
@@ -94,8 +95,14 @@ export default function TicketFiltersPanel({
   channels?: string[];
   moderators?: ModeratorOption[];
   accent?: Accent;
+  /** Which desk is using filters — drives Admin vs Support option sets */
+  desk?: TicketDesk;
   showQueue?: boolean;
   showAdminToggle?: boolean;
+  /** Hide assignee status / staff picker (e.g. My tickets) */
+  showAssigneeFilters?: boolean;
+  /** Admin desk Support tickets tab: omit Admin queue (use My tickets instead) */
+  includeAdminQueue?: boolean;
   resultCount?: number;
   totalCount?: number;
   /** `desk` embeds into a moderation-style panel (chips + collapsible advanced). */
@@ -106,30 +113,52 @@ export default function TicketFiltersPanel({
   const [moderatorSearch, setModeratorSearch] = useState('');
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const active = countActiveTicketFilters(filters);
+  const allowAdminQueue = includeAdminQueue ?? desk === 'admin';
+  const queueChoices = queueOptionsForDesk(desk, allowAdminQueue);
+  const escalateRoles = escalateRoleFilterOptions(desk);
+  const deskModerators = useMemo(
+    () => filterModeratorsForDesk(moderators, desk),
+    [moderators, desk]
+  );
+
   const typeChoices =
-    filters.queue === 'all'
+    filters.queue === 'all' || filters.queue === 'Admin'
       ? ticketTypes?.length
         ? ticketTypes
         : [...TICKET_TYPE_GROUPS.flatMap((g) => g.types)]
       : [...typesForQueue(filters.queue)];
 
-  const channelChoices = channels?.length ? channels : ['web', 'chat', 'email', 'in_app'];
+  const channelChoices = channels?.length ? channels : ['web', 'email', 'in_app'];
 
   const filteredMods = useMemo(() => {
     const q = moderatorSearch.trim().toLowerCase();
-    if (!q) return moderators;
-    return moderators.filter(
+    if (!q) return deskModerators;
+    return deskModerators.filter(
       (m) =>
         m.name.toLowerCase().includes(q) ||
         m.role.toLowerCase().includes(q) ||
         String(m.staffId).toLowerCase().includes(q)
     );
-  }, [moderators, moderatorSearch]);
+  }, [deskModerators, moderatorSearch]);
 
-  const patch = (partial: Partial<TicketFilterState>) => onChange({ ...filters, ...partial });
+  const patch = (partial: Partial<TicketFilterState>) => {
+    const next = { ...filters, ...partial };
+    if (desk === 'support') {
+      next.adminTicketsOnly = false;
+      if (next.queue === 'Admin') next.queue = 'all';
+      if (escalateRoleFilterOptions('support').every((r) => r !== next.escalatedToRole) && next.escalatedToRole !== 'all') {
+        next.escalatedToRole = 'all';
+      }
+    }
+    onChange(next);
+  };
   const clear = () => {
     setModeratorSearch('');
-    onChange({ ...DEFAULT_TICKET_FILTERS });
+    onChange({
+      ...DEFAULT_TICKET_FILTERS,
+      // Keep open_only default when My tickets cleared with that preset via parent — parent owns defaults
+      adminTicketsOnly: false,
+    });
   };
 
   const activeQuick = ((): QuickChipId => {
@@ -256,14 +285,21 @@ export default function TicketFiltersPanel({
               const queue = e.target.value as TicketQueueFilter;
               const allowed = typesForQueue(queue);
               const type =
-                filters.type !== 'all' && !(allowed as readonly string[]).includes(filters.type)
+                filters.type !== 'all' &&
+                queue !== 'Admin' &&
+                queue !== 'all' &&
+                !(allowed as readonly string[]).includes(filters.type)
                   ? 'all'
                   : filters.type;
-              patch({ queue, type });
+              patch({
+                queue,
+                type,
+                ...(queue === 'Admin' ? { adminTicketsOnly: true } : {}),
+              });
             }}
             className={selectCls}
           >
-            {TICKET_QUEUE_OPTIONS.map((q) => (
+            {queueChoices.map((q) => (
               <option key={q.value} value={q.value}>
                 {q.label}
               </option>
@@ -275,7 +311,7 @@ export default function TicketFiltersPanel({
       <Field label="Type">
         <select value={filters.type} onChange={(e) => patch({ type: e.target.value })} className={selectCls}>
           <option value="all">All Types</option>
-          {filters.queue === 'all'
+          {filters.queue === 'all' || filters.queue === 'Admin'
             ? TICKET_TYPE_GROUPS.map((group) => (
                 <optgroup key={group.label} label={group.label}>
                   {group.types
@@ -295,53 +331,57 @@ export default function TicketFiltersPanel({
         </select>
       </Field>
 
-      <Field label="Assignee Status">
-        <select
-          value={filters.assignee}
-          onChange={(e) =>
-            patch({
-              assignee: e.target.value as TicketFilterState['assignee'],
-              assigneeStaffId: e.target.value === 'unassigned' ? 'all' : filters.assigneeStaffId,
-            })
-          }
-          className={selectCls}
-        >
-          <option value="all">Anyone</option>
-          <option value="assigned">Assigned</option>
-          <option value="unassigned">Unassigned</option>
-        </select>
-      </Field>
-
-      <Field label="Moderator / Assignee">
-        <div className="space-y-1.5">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600" />
-            <input
-              value={moderatorSearch}
-              onChange={(e) => setModeratorSearch(e.target.value)}
-              placeholder="Search moderators…"
-                className="w-full rounded-lg border border-white/10 bg-[#0f1016] py-2 pl-8 pr-2 text-xs text-white outline-none placeholder:text-zinc-600"
-            />
-          </div>
+      {showAssigneeFilters && (
+        <Field label="Assignee Status">
           <select
-            value={filters.assigneeStaffId}
+            value={filters.assignee}
             onChange={(e) =>
               patch({
-                assigneeStaffId: e.target.value,
-                assignee: e.target.value === 'all' ? filters.assignee : 'assigned',
+                assignee: e.target.value as TicketFilterState['assignee'],
+                assigneeStaffId: e.target.value === 'unassigned' ? 'all' : filters.assigneeStaffId,
               })
             }
             className={selectCls}
           >
-            <option value="all">All Moderators</option>
-            {filteredMods.map((m) => (
-              <option key={String(m.staffId)} value={String(m.staffId)}>
-                {m.name} ({m.role})
-              </option>
-            ))}
+            <option value="all">Anyone</option>
+            <option value="assigned">Assigned</option>
+            <option value="unassigned">Unassigned</option>
           </select>
-        </div>
-      </Field>
+        </Field>
+      )}
+
+      {showAssigneeFilters && (
+        <Field label={desk === 'admin' ? 'Staff / Assignee' : 'Moderator / Assignee'}>
+          <div className="space-y-1.5">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-600" />
+              <input
+                value={moderatorSearch}
+                onChange={(e) => setModeratorSearch(e.target.value)}
+                placeholder={desk === 'admin' ? 'Search staff…' : 'Search moderators…'}
+                className="w-full rounded-lg border border-white/10 bg-[#0f1016] py-2 pl-8 pr-2 text-xs text-white outline-none placeholder:text-zinc-600"
+              />
+            </div>
+            <select
+              value={filters.assigneeStaffId}
+              onChange={(e) =>
+                patch({
+                  assigneeStaffId: e.target.value,
+                  assignee: e.target.value === 'all' ? filters.assignee : 'assigned',
+                })
+              }
+              className={selectCls}
+            >
+              <option value="all">{desk === 'admin' ? 'All Staff' : 'All Moderators'}</option>
+              {filteredMods.map((m) => (
+                <option key={String(m.staffId)} value={String(m.staffId)}>
+                  {m.name} ({m.role})
+                </option>
+              ))}
+            </select>
+          </div>
+        </Field>
+      )}
 
       <Field label="Escalated To">
         <select
@@ -350,7 +390,7 @@ export default function TicketFiltersPanel({
           className={selectCls}
         >
           <option value="all">Any Queue</option>
-          {ESCALATE_ROLE_OPTIONS.map((r) => (
+          {escalateRoles.map((r) => (
             <option key={r} value={r}>
               {r}
             </option>
@@ -402,18 +442,25 @@ export default function TicketFiltersPanel({
             Showing <span className="text-zinc-300">{resultCount}</span> of {totalCount}
           </span>
         )}
-        {showAdminToggle && (
+        {showAdminToggle && desk === 'admin' && allowAdminQueue && (
           <button
             type="button"
-            onClick={() => patch({ adminTicketsOnly: !filters.adminTicketsOnly })}
+            onClick={() =>
+              patch({
+                adminTicketsOnly: !filters.adminTicketsOnly,
+                queue: !filters.adminTicketsOnly ? 'Admin' : filters.queue === 'Admin' ? 'all' : filters.queue,
+              })
+            }
             className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
-              filters.adminTicketsOnly
+              filters.adminTicketsOnly || filters.queue === 'Admin'
                 ? ACCENT_BTN[accent]
                 : 'border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white'
             }`}
           >
             <Shield className="h-3.5 w-3.5" />
-            {filters.adminTicketsOnly ? 'Showing Admin Tickets' : 'Show Admin Tickets'}
+            {filters.adminTicketsOnly || filters.queue === 'Admin'
+              ? 'Showing Admin Tickets'
+              : 'Show Admin Tickets'}
           </button>
         )}
         {active > 0 && (

@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Hand,
+  Inbox,
   LayoutGrid,
   Loader2,
   RefreshCw,
@@ -25,16 +26,18 @@ import {
   DEFAULT_TICKET_FILTERS,
   filterTickets,
   formatEscalatedLabel,
+  isAdminTicket,
   type TicketFilterState,
 } from './ticketFilterUtils';
 import type { SupportTicket, TicketsOverview } from './ticketTypes';
 import { TICKET_TYPE_OPTIONS } from './ticketTypes';
 
-type TabId = 'overview' | 'tickets' | 'assignments';
+type TabId = 'overview' | 'tickets' | 'mine' | 'assignments';
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutGrid }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
   { id: 'tickets', label: 'Support tickets', icon: Ticket },
+  { id: 'mine', label: 'My tickets', icon: Inbox },
   { id: 'assignments', label: 'Assignments', icon: UserCog },
 ];
 
@@ -95,7 +98,7 @@ export default function TicketManagementPage() {
   const { user } = useGlobalState();
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab') as TabId | null;
-  const valid: TabId[] = ['overview', 'tickets', 'assignments'];
+  const valid: TabId[] = ['overview', 'tickets', 'mine', 'assignments'];
   const initialTab = paramTab && valid.includes(paramTab) ? paramTab : 'overview';
 
   const [data, setData] = useState<TicketsOverview | null>(null);
@@ -105,6 +108,10 @@ export default function TicketManagementPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState<number | string | null>(null);
   const [ticketFilters, setTicketFilters] = useState<TicketFilterState>(DEFAULT_TICKET_FILTERS);
+  const [myFilters, setMyFilters] = useState<TicketFilterState>({
+    ...DEFAULT_TICKET_FILTERS,
+    flag: 'open_only',
+  });
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -152,13 +159,69 @@ export default function TicketManagementPage() {
         ...(action.ticketFilters as Partial<TicketFilterState>),
       });
     }
-    switchTab(action.tab as TabId);
+    if (action.tab === 'mine' || action.tab === 'my-tickets') {
+      switchTab('mine');
+      return;
+    }
+    if (valid.includes(action.tab as TabId)) switchTab(action.tab as TabId);
   };
 
+  const allTickets = useMemo(() => data?.tickets || [], [data]);
+
+  const myStaffId = useMemo(() => {
+    const fromOverview = data?.currentStaffId;
+    const fromUser = user?.staffId ?? user?.staff_id ?? null;
+    const id = fromOverview ?? fromUser;
+    return id != null && id !== '' ? String(id) : null;
+  }, [data?.currentStaffId, user]);
+
+  const myTickets = useMemo(() => {
+    return allTickets.filter((t) => {
+      const assignedToMe =
+        Boolean(myStaffId) &&
+        t.assignee?.staffId != null &&
+        String(t.assignee.staffId).toLowerCase() === myStaffId!.toLowerCase();
+      if (assignedToMe) return true;
+      // Escalated to Admin and still unassigned — visible in every Admin's My tickets to claim
+      const toAdmin = String(t.escalatedToRole || '').toLowerCase();
+      if ((toAdmin === 'admin' || toAdmin === 'administrator') && !t.assignee) return true;
+      return false;
+    });
+  }, [allTickets, myStaffId]);
+
   const filteredTickets = useMemo(() => {
-    if (!data) return [];
-    return filterTickets(data.tickets, ticketFilters);
-  }, [data, ticketFilters]);
+    // Support tickets tab no longer surfaces Admin-only views — keep those on My tickets
+    const filters: TicketFilterState = {
+      ...ticketFilters,
+      adminTicketsOnly: false,
+      queue: ticketFilters.queue === 'Admin' ? 'all' : ticketFilters.queue,
+    };
+    return filterTickets(allTickets, filters);
+  }, [allTickets, ticketFilters]);
+
+  const filteredMyTickets = useMemo(
+    () => filterTickets(myTickets, myFilters),
+    [myTickets, myFilters]
+  );
+
+  const mySummary = useMemo(() => {
+    const open = myTickets.filter((t) => t.status === 'Open' || t.status === 'In Progress');
+    const unassignedAdmin = myTickets.filter((t) => !t.assignee && isAdminTicket(t)).length;
+    return {
+      openTickets: open.length,
+      unassignedTickets: unassignedAdmin,
+      highPriorityTickets: open.filter((t) => String(t.priority).toLowerCase() === 'high').length,
+      awaitingReplyTickets: myTickets.filter((t) => t.waitingForResponse).length,
+      totalTickets: myTickets.length,
+      openDisputes: 0,
+      totalDisputes: 0,
+      creditsAtRisk: 0,
+      openReports: 0,
+      totalReports: 0,
+      avgResolutionHours: 0,
+      slaCompliancePercent: 0,
+    };
+  }, [myTickets]);
 
   const ticketTypes = useMemo(() => {
     if (!data) return [...TICKET_TYPE_OPTIONS];
@@ -172,10 +235,10 @@ export default function TicketManagementPage() {
   const ticketChannels = useMemo(() => {
     if (!data) return ['web', 'chat', 'email', 'in_app'];
     const fromData = [
-      ...new Set(data.tickets.map((t) => String(t.channel || 'web').toLowerCase()).filter(Boolean)),
+      ...new Set(allTickets.map((t) => String(t.channel || 'web').toLowerCase()).filter(Boolean)),
     ];
     return fromData.length ? fromData.sort() : ['web', 'chat', 'email', 'in_app'];
-  }, [data]);
+  }, [data, allTickets]);
 
   if (loading) {
     return (
@@ -295,9 +358,11 @@ export default function TicketManagementPage() {
         )}
         {tab === 'tickets' && (
           <TicketsTab
+            title="Ticket desk"
+            subtitle="Triage support tickets, assign handlers, escalate to moderator queues, and reply to members."
             tickets={filteredTickets}
-            allTickets={data.tickets}
-            totalCount={data.tickets.length}
+            allTickets={allTickets}
+            totalCount={allTickets.length}
             summary={summary}
             ticketTypes={ticketTypes}
             channels={ticketChannels}
@@ -309,6 +374,40 @@ export default function TicketManagementPage() {
             filters={ticketFilters}
             onFiltersChange={setTicketFilters}
             onOpenTicket={setSelectedTicketId}
+            showQueue
+            showAdminToggle={false}
+            includeAdminQueue={false}
+            desk="admin"
+          />
+        )}
+        {tab === 'mine' && (
+          <TicketsTab
+            title="My tickets"
+            subtitle="Your assigned tickets, plus unassigned tickets escalated to Admin."
+            tickets={filteredMyTickets}
+            allTickets={myTickets}
+            totalCount={myTickets.length}
+            summary={mySummary}
+            ticketTypes={ticketTypes}
+            channels={ticketChannels}
+            moderators={data.staffWorkload.map((s) => ({
+              staffId: s.staffId,
+              name: s.name,
+              role: s.role,
+            }))}
+            filters={myFilters}
+            onFiltersChange={setMyFilters}
+            onOpenTicket={setSelectedTicketId}
+            showQueue={false}
+            showAdminToggle={false}
+            includeAdminQueue={false}
+            showAssigneeFilters={false}
+            desk="admin"
+            emptyHint={
+              myStaffId
+                ? 'No tickets assigned to you, and no unassigned Admin escalations waiting.'
+                : 'Could not resolve your staff profile. Re-login and try again.'
+            }
           />
         )}
         {tab === 'assignments' && <AssignmentsTab workload={staffWorkload} />}
@@ -453,6 +552,8 @@ function OverviewTab({
 }
 
 function TicketsTab({
+  title = 'Ticket desk',
+  subtitle = 'Triage support tickets, assign handlers, escalate to moderator queues, and reply to members.',
   tickets,
   allTickets,
   totalCount,
@@ -463,7 +564,15 @@ function TicketsTab({
   filters,
   onFiltersChange,
   onOpenTicket,
+  showQueue = true,
+  showAdminToggle = true,
+  showAssigneeFilters = true,
+  includeAdminQueue = true,
+  desk = 'admin',
+  emptyHint = 'No tickets match this filter.',
 }: {
+  title?: string;
+  subtitle?: string;
   tickets: SupportTicket[];
   allTickets: SupportTicket[];
   totalCount: number;
@@ -474,6 +583,12 @@ function TicketsTab({
   filters: TicketFilterState;
   onFiltersChange: (next: TicketFilterState) => void;
   onOpenTicket: (id: number | string) => void;
+  showQueue?: boolean;
+  showAdminToggle?: boolean;
+  showAssigneeFilters?: boolean;
+  includeAdminQueue?: boolean;
+  desk?: 'admin' | 'support';
+  emptyHint?: string;
 }) {
   const shortId = (value: string | number | null | undefined) => {
     if (value == null || value === '') return '—';
@@ -515,12 +630,9 @@ function TicketsTab({
           <div>
             <div className="flex items-center gap-2">
               <Ticket className="h-4 w-4 text-rose-300" />
-              <h2 className="text-sm font-semibold text-white">Ticket desk</h2>
+              <h2 className="text-sm font-semibold text-white">{title}</h2>
             </div>
-            <p className="mt-1 text-xs text-zinc-500">
-              Triage support tickets, assign handlers, escalate to moderator queues, and reply to
-              members.
-            </p>
+            <p className="mt-1 text-xs text-zinc-500">{subtitle}</p>
           </div>
           <div className="relative w-full max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
@@ -540,8 +652,11 @@ function TicketsTab({
           channels={channels}
           moderators={moderators}
           accent="rose"
-          showQueue
-          showAdminToggle
+          desk={desk}
+          showQueue={showQueue}
+          showAdminToggle={showAdminToggle}
+          showAssigneeFilters={showAssigneeFilters}
+          includeAdminQueue={includeAdminQueue}
           resultCount={tickets.length}
           totalCount={totalCount}
           variant="desk"
@@ -632,7 +747,7 @@ function TicketsTab({
               {tickets.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-5 py-16 text-center text-sm text-zinc-500">
-                    No tickets match this filter.
+                    {emptyHint}
                   </td>
                 </tr>
               )}

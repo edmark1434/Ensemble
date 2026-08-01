@@ -14,6 +14,7 @@ export default function TicketDetailModal({
       ticketId={ticketId}
       endpointBase="/api/admin/tickets"
       accent="rose"
+      allowEscalateToAdmin={false}
       onClose={onClose}
       onUpdated={onUpdated}
     />

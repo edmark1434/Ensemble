@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Loader2, Lock, MessageSquare, Send, UserRound, X } from 'lucide-react';
+import { Loader2, Lock, MessageSquare, Send, ShieldAlert, UserRound, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import type { TicketDetail, TicketMessage } from './ticketTypes';
@@ -11,6 +11,18 @@ import {
   TICKET_PRIORITY_OPTIONS,
 } from './ticketTypes';
 import { formatEscalatedLabel } from './ticketFilterUtils';
+
+function apiErrorMessage(err: unknown, fallback: string) {
+  return (
+    (err as { response?: { data?: { message?: string } } })?.response?.data?.message || fallback
+  );
+}
+
+const HANDLER_ACTION_BTN =
+  'inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm disabled:opacity-50';
+const HANDLER_ACTION_ICON = 'h-4 w-4 shrink-0';
+const ADMIN_ESCALATE_BTN =
+  'border-violet-500/30 bg-violet-500/10 text-violet-200 hover:bg-violet-500/20';
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '—';
@@ -184,6 +196,7 @@ export default function TicketDetailModalShell({
   endpointBase,
   accent = 'rose',
   allowEscalate = true,
+  allowEscalateToAdmin = true,
   onClose,
   onUpdated,
 }: {
@@ -191,6 +204,8 @@ export default function TicketDetailModalShell({
   endpointBase: string;
   accent?: keyof typeof ACCENT;
   allowEscalate?: boolean;
+  /** Moderators can hand off to Admin; Admin desk hides this (already Admin). */
+  allowEscalateToAdmin?: boolean;
   onClose: () => void;
   onUpdated: () => void;
 }) {
@@ -207,11 +222,18 @@ export default function TicketDetailModalShell({
   const [escalateRole, setEscalateRole] = useState<string>('Support Moderator');
   const [escalateType, setEscalateType] = useState<string>('');
   const [confirmEscalate, setConfirmEscalate] = useState(false);
+  const [confirmEscalateAdmin, setConfirmEscalateAdmin] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
 
-  const escalateRoles = detail?.escalateRoles?.length
+  const isAdminQueue = (role: string) => {
+    const r = String(role || '').toLowerCase();
+    return r === 'admin' || r === 'administrator';
+  };
+
+  const escalateRoles = (detail?.escalateRoles?.length
     ? detail.escalateRoles
-    : [...ESCALATE_ROLE_OPTIONS];
+    : [...ESCALATE_ROLE_OPTIONS]
+  ).filter((r) => !isAdminQueue(r));
 
   const escalateTypeOptions = useMemo(() => {
     const fromApi = detail?.escalateByRole?.[escalateRole];
@@ -254,8 +276,9 @@ export default function TicketDetailModalShell({
           data.typeDetails?.find((d) => d.label === t)?.queueRole ||
           Object.entries(data.escalateByRole || {}).find(([, types]) => types.includes(t))?.[0] ||
           'Support Moderator';
-        setEscalateRole(ownerRole);
-        const opts = data.escalateByRole?.[ownerRole] || escalateTypesForRole(ownerRole);
+        const modRole = isAdminQueue(ownerRole) ? 'Support Moderator' : ownerRole;
+        setEscalateRole(modRole);
+        const opts = data.escalateByRole?.[modRole] || escalateTypesForRole(modRole);
         setEscalateType(opts.includes(t) ? t : opts[0] || '');
       }
     } catch {
@@ -290,35 +313,57 @@ export default function TicketDetailModalShell({
       showSuccessToast('Ticket updated');
       await load();
       onUpdated();
-    } catch {
-      showErrorToast('Failed to update ticket');
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, 'Failed to update ticket'));
     } finally {
       setSaving(false);
     }
   };
 
-  const escalateTo = async () => {
-    if (!escalateType.trim() || !escalateTypeOptions.includes(escalateType)) {
+  const escalateTo = async (role: string, type: string, closeAfter = false) => {
+    if (!type.trim()) {
+      showErrorToast('Pick a ticket type allowed for this queue');
+      return;
+    }
+    const allowed =
+      detail?.escalateByRole?.[role]?.length
+        ? detail.escalateByRole[role]
+        : escalateTypesForRole(role);
+    if (!allowed.includes(type)) {
       showErrorToast('Pick a ticket type allowed for this queue');
       return;
     }
     setConfirmEscalate(false);
+    setConfirmEscalateAdmin(false);
     setSaving(true);
     try {
       await api.patch(`${endpointBase}/${ticketId}`, {
         status: 'In Progress',
-        assigned_role: escalateRole,
-        type: escalateType,
+        assigned_role: role,
+        type,
         handled_by_staff_id: null,
       });
-      showSuccessToast(`Escalated to ${escalateRole} as ${escalateType}`);
-      await load();
+      showSuccessToast(`Escalated to ${role} as ${type}`);
       onUpdated();
-    } catch {
-      showErrorToast('Failed to escalate ticket');
+      if (closeAfter) {
+        onClose();
+        return;
+      }
+      await load();
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, 'Failed to escalate ticket'));
     } finally {
       setSaving(false);
     }
+  };
+
+  const escalateToAdmin = async () => {
+    const adminTypes =
+      detail?.escalateByRole?.Admin ||
+      detail?.escalateByRole?.Administrator ||
+      escalateTypesForRole('Admin');
+    const type = adminTypes.includes(currentType) ? currentType : adminTypes[0] || currentType;
+    await escalateTo('Admin', type, true);
   };
 
   const sendReply = async () => {
@@ -333,8 +378,8 @@ export default function TicketDetailModalShell({
       showSuccessToast(internalNote ? 'Internal note added' : 'Reply sent');
       await load();
       onUpdated();
-    } catch {
-      showErrorToast('Failed to send message');
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, 'Failed to send message'));
     } finally {
       setSaving(false);
     }
@@ -478,50 +523,67 @@ export default function TicketDetailModalShell({
                     <div>
                       <p className="text-[10px] font-semibold tracking-wide text-amber-200/80">Escalate</p>
                       <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
-                        Pick a moderator queue, then choose the correct type for that desk. Example: created as Forums but
-                        it is Subscriptions and Plans → Support Moderator + Subscriptions and Plans.
+                        {allowEscalateToAdmin
+                          ? 'Hand off to Admin, or move to the correct moderator queue and type. Escalating unassigns you automatically.'
+                          : 'Move this ticket to the correct moderator queue and type when it belongs on another desk. Escalating unassigns you automatically.'}
                       </p>
                     </div>
-                    <Field label="Moderator Queue">
-                      <select
-                        value={escalateRole}
-                        onChange={(e) => onEscalateRoleChange(e.target.value)}
-                        className={`${selectCls} border-amber-500/25 text-amber-100`}
+                    {allowEscalateToAdmin && (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => setConfirmEscalateAdmin(true)}
+                        className={`${HANDLER_ACTION_BTN} ${ADMIN_ESCALATE_BTN} w-full justify-center`}
                       >
-                        {escalateRoles.map((r) => (
-                          <option key={r} value={r}>
-                            {r}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field
-                      label="Type"
-                      hint={
-                        escalateTypeMeta?.description ||
-                        `${escalateTypeOptions.length} type${escalateTypeOptions.length === 1 ? '' : 's'} for ${escalateRole}`
-                      }
-                    >
-                      <select
-                        value={escalateType}
-                        onChange={(e) => setEscalateType(e.target.value)}
-                        className={`${selectCls} border-amber-500/25 text-amber-100`}
-                      >
-                        {escalateTypeOptions.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmEscalate(true)}
-                      disabled={saving || !escalateType.trim() || !escalateTypeOptions.includes(escalateType)}
-                      className="w-full rounded-xl border border-amber-500/40 px-4 py-2.5 text-sm font-medium text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
-                    >
-                      Escalate as {escalateType || '…'}
-                    </button>
+                        <ShieldAlert className={HANDLER_ACTION_ICON} />
+                        Escalate to Admin
+                      </button>
+                    )}
+                    <div className={allowEscalateToAdmin ? 'border-t border-white/5 pt-3' : undefined}>
+                      <p className="mb-2 text-[11px] font-medium text-zinc-500">Escalate to moderator</p>
+                      <div className="space-y-3">
+                        <Field label="Moderator Queue">
+                          <select
+                            value={escalateRole}
+                            onChange={(e) => onEscalateRoleChange(e.target.value)}
+                            className={`${selectCls} border-amber-500/25 text-amber-100`}
+                          >
+                            {escalateRoles.map((r) => (
+                              <option key={r} value={r}>
+                                {r}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field
+                          label="Type"
+                          hint={
+                            escalateTypeMeta?.description ||
+                            `${escalateTypeOptions.length} type${escalateTypeOptions.length === 1 ? '' : 's'} for ${escalateRole}`
+                          }
+                        >
+                          <select
+                            value={escalateType}
+                            onChange={(e) => setEscalateType(e.target.value)}
+                            className={`${selectCls} border-amber-500/25 text-amber-100`}
+                          >
+                            {escalateTypeOptions.map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmEscalate(true)}
+                          disabled={saving || !escalateType.trim() || !escalateTypeOptions.includes(escalateType)}
+                          className="w-full rounded-xl border border-amber-500/40 px-4 py-2.5 text-sm font-medium text-amber-100 hover:bg-amber-500/10 disabled:opacity-50"
+                        >
+                          Escalate as {escalateType || '…'}
+                        </button>
+                      </div>
+                    </div>
                   </section>
                 )}
               </div>
@@ -615,7 +677,8 @@ export default function TicketDetailModalShell({
                 Type: <span className="text-amber-100">{escalateType}</span>
               </p>
               <p className="mt-2 text-xs text-zinc-500">
-                Assignee will be cleared. Type changes only through escalate.
+                You will be unassigned. Type changes only through escalate.
+                {isAdminQueue(escalateRole) ? ' Support Moderators will no longer see this ticket.' : ''}
               </p>
               <div className="mt-5 flex flex-wrap justify-end gap-2">
                 <button
@@ -628,11 +691,41 @@ export default function TicketDetailModalShell({
                 </button>
                 <button
                   type="button"
-                  onClick={() => void escalateTo()}
+                  onClick={() => void escalateTo(escalateRole, escalateType, isAdminQueue(escalateRole))}
                   disabled={saving}
                   className="rounded-xl border border-amber-500/40 bg-amber-500/15 px-4 py-2 text-sm font-medium text-amber-100 hover:bg-amber-500/25 disabled:opacity-50"
                 >
                   {saving ? 'Escalating…' : 'Confirm Escalate'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {confirmEscalateAdmin && allowEscalateToAdmin && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-md rounded-2xl border border-violet-500/30 bg-[#14151c] p-5 shadow-2xl">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-200/80">Escalate to Admin</p>
+              <h3 className="mt-2 text-lg font-semibold text-white">Hand this ticket to Admin?</h3>
+              <p className="mt-2 text-sm text-zinc-400">
+                The ticket becomes an Admin ticket and you are unassigned. Support Moderators will no longer see it.
+              </p>
+              <div className="mt-5 flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmEscalateAdmin(false)}
+                  disabled={saving}
+                  className="rounded-xl border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:bg-white/5"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void escalateToAdmin()}
+                  disabled={saving}
+                  className="rounded-xl border border-violet-500/40 bg-violet-500/15 px-4 py-2 text-sm font-medium text-violet-100 hover:bg-violet-500/25 disabled:opacity-50"
+                >
+                  {saving ? 'Escalating…' : 'Confirm escalate to Admin'}
                 </button>
               </div>
             </div>
