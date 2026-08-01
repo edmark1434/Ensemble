@@ -266,18 +266,6 @@ function mapDisputeRow(row) {
           type: row.hold_type || 'Dispute Hold',
         }
       : null,
-    takeoverRequestedByStaffId: row.takeover_requested_by_staff_id || null,
-    takeoverRequestedAt: row.takeover_requested_at || null,
-    takeoverRequestNote: row.takeover_request_note || null,
-    takeoverRequester: row.takeover_requester_staff_id
-      ? {
-          staffId: row.takeover_requester_staff_id,
-          name: row.takeover_requester_name || 'Staff',
-          role: row.takeover_requester_role || null,
-        }
-      : row.takeover_requested_by_staff_id
-        ? { staffId: row.takeover_requested_by_staff_id, name: 'Staff', role: null }
-        : null,
     openedAt: row.opened_at,
     updatedAt: row.updated_at,
     resolvedAt: row.resolved_at,
@@ -620,10 +608,7 @@ async function fetchDisputesList() {
       st.role AS assignee_role,
       ct.status AS hold_status,
       ct.amount_credits AS hold_amount,
-      ct.type AS hold_type,
-      tr.staff_id AS takeover_requester_staff_id,
-      COALESCE(tra.display_name, tr.first_name || ' ' || tr.last_name) AS takeover_requester_name,
-      tr.role AS takeover_requester_role
+      ct.type AS hold_type
     FROM disputes d
     LEFT JOIN accounts ia ON ia.account_id = d.initiator_account_id
     LEFT JOIN users iu ON iu.account_id = ia.account_id
@@ -632,8 +617,6 @@ async function fetchDisputesList() {
     LEFT JOIN staff st ON st.staff_id = d.assigned_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
     LEFT JOIN credit_transactions ct ON ct.credit_transaction_id = d.related_credit_transaction_id
-    LEFT JOIN staff tr ON tr.staff_id = d.takeover_requested_by_staff_id
-    LEFT JOIN accounts tra ON tra.account_id = tr.account_id
     ORDER BY d.opened_at DESC
     LIMIT 80
   `);
@@ -795,10 +778,7 @@ async function getTicketDetail(ticketId, staffSession = null) {
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
       st.role AS assignee_role,
       COALESCE(ea.display_name, es.first_name || ' ' || es.last_name) AS escalated_by_name,
-      es.role AS escalated_by_role,
-      tr.staff_id AS takeover_requester_staff_id,
-      COALESCE(tra.display_name, tr.first_name || ' ' || tr.last_name) AS takeover_requester_name,
-      tr.role AS takeover_requester_role
+      es.role AS escalated_by_role
     FROM tickets t
     LEFT JOIN accounts ra ON ra.account_id = t.account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id
@@ -806,8 +786,6 @@ async function getTicketDetail(ticketId, staffSession = null) {
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
     LEFT JOIN staff es ON es.staff_id = t.escalated_by_staff_id
     LEFT JOIN accounts ea ON ea.account_id = es.account_id
-    LEFT JOIN staff tr ON tr.staff_id = t.takeover_requested_by_staff_id
-    LEFT JOIN accounts tra ON tra.account_id = tr.account_id
     WHERE t.ticket_id = $1 AND t.deleted_at IS NULL
     `,
     [ticketId]
@@ -969,10 +947,6 @@ async function updateTicket(ticketId, patch, staffSession) {
     if (patch.handled_by_staff_id === undefined) {
       patch.handled_by_staff_id = null;
     }
-    sets.push(`takeover_requested_by_staff_id = NULL`);
-    sets.push(`takeover_requested_at = NULL`);
-    sets.push(`takeover_request_note = NULL`);
-    sets.push(`takeover_mode = NULL`);
   }
 
   if (patch.status !== undefined) {
@@ -1168,10 +1142,7 @@ async function loadDisputeRow(disputeId) {
       st.role AS assignee_role,
       ct.status AS hold_status,
       ct.amount_credits AS hold_amount,
-      ct.type AS hold_type,
-      tr.staff_id AS takeover_requester_staff_id,
-      COALESCE(tra.display_name, tr.first_name || ' ' || tr.last_name) AS takeover_requester_name,
-      tr.role AS takeover_requester_role
+      ct.type AS hold_type
     FROM disputes d
     LEFT JOIN accounts ia ON ia.account_id = d.initiator_account_id
     LEFT JOIN users iu ON iu.account_id = ia.account_id
@@ -1180,8 +1151,6 @@ async function loadDisputeRow(disputeId) {
     LEFT JOIN staff st ON st.staff_id = d.assigned_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
     LEFT JOIN credit_transactions ct ON ct.credit_transaction_id = d.related_credit_transaction_id
-    LEFT JOIN staff tr ON tr.staff_id = d.takeover_requested_by_staff_id
-    LEFT JOIN accounts tra ON tra.account_id = tr.account_id
     WHERE d.dispute_id = $1
     `,
     [disputeId]
@@ -1194,7 +1163,6 @@ function buildDisputePermissions(row, staff, session = null) {
     normalizeStaffId(staff?.staff_id) || normalizeStaffId(sessionStaffId(session));
   const role = staff?.role || session?.role || null;
   const assigneeId = normalizeStaffId(row?.assigned_staff_id);
-  const requesterId = normalizeStaffId(row?.takeover_requested_by_staff_id);
   const isAssignee = Boolean(staffId && assigneeId && staffId === assigneeId);
   const isAdmin = isAdminRole(role);
   const unassigned = !assigneeId;
@@ -1212,23 +1180,8 @@ function buildDisputePermissions(row, staff, session = null) {
     canAssignOthers: isAdmin,
     /** Claim an unassigned dispute */
     canSelfAssign: Boolean(staffId && unassigned && designated),
-    /**
-     * Assign myself: claim if unassigned, or Admin force-takeover if someone else owns it.
-     */
-    canAssignMyself: Boolean(
-      staffId && designated && !isAssignee && (unassigned || isAdmin)
-    ),
-    /** Ask to take over when someone else owns it */
-    canRequestTakeover: Boolean(staffId && assigneeId && !isAssignee && designated),
-    /** Admin force-claim when someone else owns it */
-    canForceTakeover: Boolean(staffId && isAdmin && assigneeId && !isAssignee),
-    /** Current assignee (or admin) can grant a pending takeover request */
-    canAcceptTakeover: Boolean(
-      staffId &&
-        requesterId &&
-        ((isAssignee && requesterId !== staffId) || (isAdmin && requesterId !== assigneeId))
-    ),
-    canCancelTakeoverRequest: Boolean(staffId && requesterId && staffId === requesterId),
+    /** Assign myself to an unassigned dispute */
+    canAssignMyself: Boolean(staffId && designated && unassigned && !isAssignee),
   };
 }
 
@@ -1244,113 +1197,17 @@ async function updateDispute(disputeId, patch, staffSession) {
   const perms = buildDisputePermissions(row, staff, staffSession);
   const action = String(patch.action || '').toLowerCase().trim();
 
-  // --- Assignment / takeover actions (allowed without canAct) ---
+  // --- Assignment actions (allowed without canAct) ---
   if (action === 'self_assign') {
-    if (!perms.canSelfAssign && !(perms.canAssignMyself && perms.canForceTakeover)) {
+    if (!perms.canSelfAssign) {
       throw new Error('You can only claim an unassigned dispute as Admin or Support Moderator.');
     }
-    // Admin "Assign myself" on an already-assigned dispute = force takeover
-    if (!perms.canSelfAssign && perms.canForceTakeover) {
-      await pool.query(
-        `UPDATE disputes
-         SET assigned_staff_id = $1,
-             handled_by_staff_id = COALESCE(handled_by_staff_id, $1),
-             takeover_requested_by_staff_id = NULL,
-             takeover_requested_at = NULL,
-             takeover_request_note = NULL,
-             updated_at = NOW()
-         WHERE dispute_id = $2`,
-        [staff.staff_id, disputeId]
-      );
-      return getDisputeDetail(disputeId, staffSession);
-    }
     await pool.query(
       `UPDATE disputes
        SET assigned_staff_id = $1,
-           takeover_requested_by_staff_id = NULL,
-           takeover_requested_at = NULL,
-           takeover_request_note = NULL,
            updated_at = NOW()
        WHERE dispute_id = $2`,
       [staff.staff_id, disputeId]
-    );
-    return getDisputeDetail(disputeId, staffSession);
-  }
-
-  if (action === 'request_takeover') {
-    if (!perms.canRequestTakeover) {
-      throw new Error('You cannot request takeover for this dispute.');
-    }
-    await pool.query(
-      `UPDATE disputes
-       SET takeover_requested_by_staff_id = $1,
-           takeover_requested_at = NOW(),
-           takeover_request_note = $2,
-           updated_at = NOW()
-       WHERE dispute_id = $3`,
-      [staff.staff_id, patch.takeover_request_note || patch.note || null, disputeId]
-    );
-    return getDisputeDetail(disputeId, staffSession);
-  }
-
-  if (action === 'cancel_takeover_request') {
-    if (!perms.canCancelTakeoverRequest) {
-      throw new Error('Only the requester can cancel this takeover request.');
-    }
-    await pool.query(
-      `UPDATE disputes
-       SET takeover_requested_by_staff_id = NULL,
-           takeover_requested_at = NULL,
-           takeover_request_note = NULL,
-           updated_at = NOW()
-       WHERE dispute_id = $1`,
-      [disputeId]
-    );
-    return getDisputeDetail(disputeId, staffSession);
-  }
-
-  if (action === 'takeover') {
-    // Admin force-takeover onto self
-    if (!perms.canForceTakeover && !(perms.isAdmin && !row.assigned_staff_id)) {
-      if (perms.canSelfAssign) {
-        // fall through handled above; if assigned to other, must be admin
-      }
-      if (!perms.isAdmin) {
-        throw new Error('Only Admin can force-takeover a dispute. Request takeover instead.');
-      }
-      if (perms.isAssignee) {
-        throw new Error('You already own this dispute.');
-      }
-    }
-    await pool.query(
-      `UPDATE disputes
-       SET assigned_staff_id = $1,
-           handled_by_staff_id = COALESCE(handled_by_staff_id, $1),
-           takeover_requested_by_staff_id = NULL,
-           takeover_requested_at = NULL,
-           takeover_request_note = NULL,
-           updated_at = NOW()
-       WHERE dispute_id = $2`,
-      [staff.staff_id, disputeId]
-    );
-    return getDisputeDetail(disputeId, staffSession);
-  }
-
-  if (action === 'accept_takeover') {
-    if (!perms.canAcceptTakeover) {
-      throw new Error('You cannot accept this takeover request.');
-    }
-    const toStaffId = row.takeover_requested_by_staff_id;
-    await pool.query(
-      `UPDATE disputes
-       SET assigned_staff_id = $1,
-           handled_by_staff_id = COALESCE(handled_by_staff_id, $1),
-           takeover_requested_by_staff_id = NULL,
-           takeover_requested_at = NULL,
-           takeover_request_note = NULL,
-           updated_at = NOW()
-       WHERE dispute_id = $2`,
-      [toStaffId, disputeId]
     );
     return getDisputeDetail(disputeId, staffSession);
   }
@@ -1373,9 +1230,6 @@ async function updateDispute(disputeId, patch, staffSession) {
     await pool.query(
       `UPDATE disputes
        SET assigned_staff_id = $1,
-           takeover_requested_by_staff_id = NULL,
-           takeover_requested_at = NULL,
-           takeover_request_note = NULL,
            updated_at = NOW()
        WHERE dispute_id = $2`,
       [nextAssignee || null, disputeId]

@@ -222,7 +222,7 @@ async function fetchPendingCasesFromDb() {
       assignedStaffName: r.assigned_staff_name || null,
       openedAt: r.created_at,
       status: titleCaseStatus(r.status || 'Open'),
-      canTakeOver: true,
+      canAssignMyself: true,
       canEdit: true,
       canDelete: true,
     });
@@ -246,7 +246,7 @@ async function fetchPendingCasesFromDb() {
       assignedStaffName: l.assigned_staff_name || null,
       openedAt: l.created_at,
       status: 'Open',
-      canTakeOver: true,
+      canAssignMyself: true,
       canEdit: true,
       canDelete: true,
     });
@@ -272,7 +272,7 @@ async function fetchPendingCasesFromDb() {
       assignedStaffName: u.assigned_staff_name || null,
       openedAt: u.created_at,
       status: 'Open',
-      canTakeOver: true,
+      canAssignMyself: true,
       canEdit: true,
       canDelete: false,
     });
@@ -1005,12 +1005,12 @@ async function deletePendingCase(caseId, body, session) {
   throw new Error(`Cannot delete ${source} cases from this queue — resolve or update them instead`);
 }
 
-async function takeOverPendingCase(caseId, body, session) {
+async function assignMyselfToPendingCase(caseId, body, session) {
   const { source, id } = resolveCaseRef(caseId, body?.source);
   const staffId = await resolveSessionStaffId(session);
   if (!staffId) {
     throw new Error(
-      'Could not match your admin login to a staff profile. Sign out and sign back in to the Admin portal, then try take-over again.'
+      'Could not match your admin login to a staff profile. Sign out and sign back in to the Admin portal, then try again.'
     );
   }
 
@@ -1100,12 +1100,12 @@ async function takeOverPendingCase(caseId, body, session) {
     return { id, source, assignedStaffId: staffId, accountId, status: 'Open' };
   }
 
-  throw new Error(`Take over is not available for ${source} cases`);
+  throw new Error(`Assign myself is not available for ${source} cases`);
 }
 
 module.exports = {
   getModerationOverview,
   updatePendingCase,
   deletePendingCase,
-  takeOverPendingCase,
+  assignMyselfToPendingCase,
 };

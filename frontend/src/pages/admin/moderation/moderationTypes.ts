@@ -16,7 +16,7 @@ export type ModerationCase = {
   assignedStaffName?: string | null;
   openedAt: string | null;
   status: string;
-  canTakeOver?: boolean;
+  canAssignMyself?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
 };

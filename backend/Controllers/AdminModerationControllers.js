@@ -2,7 +2,7 @@ const {
   getModerationOverview,
   updatePendingCase,
   deletePendingCase,
-  takeOverPendingCase,
+  assignMyselfToPendingCase,
 } = require('../Repositories/AdminModerationRepositories');
 
 async function getAdminModerationOverview(req, res) {
@@ -35,13 +35,13 @@ async function deleteAdminModerationCase(req, res) {
   }
 }
 
-async function postAdminModerationCaseTakeOver(req, res) {
+async function postAdminModerationCaseAssignMyself(req, res) {
   try {
-    const data = await takeOverPendingCase(req.params.id, req.body || {}, req.session);
+    const data = await assignMyselfToPendingCase(req.params.id, req.body || {}, req.session);
     res.status(200).json({ success: true, data, message: 'Case assigned to you' });
   } catch (err) {
-    console.error('Error taking over moderation case:', err);
-    res.status(400).json({ success: false, message: err.message || 'Failed to take over case' });
+    console.error('Error assigning moderation case:', err);
+    res.status(400).json({ success: false, message: err.message || 'Failed to assign case' });
   }
 }
 
@@ -49,5 +49,5 @@ module.exports = {
   getAdminModerationOverview,
   patchAdminModerationCase,
   deleteAdminModerationCase,
-  postAdminModerationCaseTakeOver,
+  postAdminModerationCaseAssignMyself,
 };

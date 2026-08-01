@@ -70,7 +70,7 @@ function disputeToModerationCase(d: Dispute): ModerationCase {
     assignedStaffName: d.assignee?.name || null,
     openedAt: d.openedAt,
     status: d.status,
-    canTakeOver: false,
+    canAssignMyself: false,
     canEdit: true,
     canDelete: true,
   };
@@ -984,7 +984,7 @@ function CasesTableBody({
   currentStaffId,
   onView,
   onDelete,
-  onTakeOver,
+  onAssignMyself,
 }: {
   cases: ModerationCase[];
   emptyLabel?: string;
@@ -992,9 +992,9 @@ function CasesTableBody({
   currentStaffId?: string | null;
   onView?: (c: ModerationCase) => void;
   onDelete?: (c: ModerationCase) => void;
-  onTakeOver?: (c: ModerationCase) => void;
+  onAssignMyself?: (c: ModerationCase) => void;
 }) {
-  const showActions = Boolean(onView || onDelete || onTakeOver);
+  const showActions = Boolean(onView || onDelete || onAssignMyself);
   const colSpan = showActions ? 7 : 6;
   const isMine = (c: ModerationCase) =>
     currentStaffId != null &&
@@ -1057,12 +1057,12 @@ function CasesTableBody({
                         <Eye className="h-4 w-4" />
                       </button>
                     )}
-                    {onTakeOver && c.canTakeOver && !isMine(c) && (
+                    {onAssignMyself && c.canAssignMyself && !isMine(c) && (
                       <button
                         type="button"
-                        title="Take over"
+                        title="Assign myself"
                         disabled={busyId === c.id}
-                        onClick={() => onTakeOver(c)}
+                        onClick={() => onAssignMyself(c)}
                         className="rounded-lg p-2 text-zinc-400 hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-40"
                       >
                         {busyId === c.id ? (

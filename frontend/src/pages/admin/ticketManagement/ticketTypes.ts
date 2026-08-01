@@ -70,10 +70,6 @@ export type DisputePermissions = {
   canAssignOthers?: boolean;
   canSelfAssign?: boolean;
   canAssignMyself?: boolean;
-  canRequestTakeover?: boolean;
-  canForceTakeover?: boolean;
-  canAcceptTakeover?: boolean;
-  canCancelTakeoverRequest?: boolean;
 };
 
 export type TicketPermissions = {
@@ -109,10 +105,6 @@ export type Dispute = {
   sanctionNotes?: string | null;
   relatedCreditTransactionId?: number | string | null;
   creditHold?: DisputeCreditHold | null;
-  takeoverRequestedByStaffId?: number | string | null;
-  takeoverRequestedAt?: string | null;
-  takeoverRequestNote?: string | null;
-  takeoverRequester?: TicketAssignee | null;
   openedAt: string;
   updatedAt: string;
   resolvedAt: string | null;

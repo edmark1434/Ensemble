@@ -19,7 +19,7 @@ function isTicketHandlerRole(role) {
   );
 }
 
-/** Basic ticket assignment permissions (no takeover flows). */
+/** Basic ticket assignment permissions. */
 function buildTicketPermissions(row, staff, sessionStaffId = null) {
   const staffId = normalizeStaffId(staff?.staff_id) || normalizeStaffId(sessionStaffId);
   const role = staff?.role || null;

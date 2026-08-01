@@ -21,7 +21,7 @@ const {
   getAdminModerationOverview,
   patchAdminModerationCase,
   deleteAdminModerationCase,
-  postAdminModerationCaseTakeOver,
+  postAdminModerationCaseAssignMyself,
 } = require('../Controllers/AdminModerationControllers');
 const { getAdminAnalyticsOverview } = require('../Controllers/AdminAnalyticsControllers');
 const {
@@ -64,7 +64,7 @@ router.get('/economy/wallets/:walletId', [checkSession, requireAdmin], getAdminW
 router.get('/moderation-overview', [checkSession, requireAdmin], getAdminModerationOverview);
 router.patch('/moderation/cases/:id', [checkSession, requireAdmin], patchAdminModerationCase);
 router.delete('/moderation/cases/:id', [checkSession, requireAdmin], deleteAdminModerationCase);
-router.post('/moderation/cases/:id/take-over', [checkSession, requireAdmin], postAdminModerationCaseTakeOver);
+router.post('/moderation/cases/:id/assign-myself', [checkSession, requireAdmin], postAdminModerationCaseAssignMyself);
 router.get('/analytics-overview', [checkSession, requireAdmin], getAdminAnalyticsOverview);
 router.get('/tickets-overview', [checkSession, requireAdmin], getAdminTicketsOverview);
 router.post('/tickets', [checkSession, requireAdmin], createAdminTicket);

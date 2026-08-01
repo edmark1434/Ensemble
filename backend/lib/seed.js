@@ -420,8 +420,8 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       chatKey: 'review',
     },
     {
-      // Assigned to Maya; Admin has requested takeover — open as Admin to Accept / Force takeover.
-      number: 'DIS-TAKE01',
+      // Assigned to Maya — Admin is view-only until Designated handler reassign / Assign myself when free.
+      number: 'DIS-OPEN02',
       title: 'Escrow release stalled after revision',
       reason: 'Buyer asked for revisions after approving the milestone; seller wants escrow released.',
       status: 'open',
@@ -430,7 +430,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       initiatorIdx: 0,
       respondentIdx: 4,
       entityType: 'contract',
-      entityId: 'CTR-TAKE-01',
+      entityId: 'CTR-OPEN-02',
       assigneeId: supportStaffId,
       credits: 6500,
       hold: true,
@@ -440,12 +440,10 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       sanctionNotes: null,
       resolutionNotes: null,
       daysAgo: 3,
-      takeoverByStaffId: adminStaffId,
-      takeoverNote: 'Need Admin review — credits at risk and both parties escalated in chat.',
-      chatKey: 'takeover',
+      chatKey: 'open2',
     },
     {
-      // Pending but already with Support — Admin is view-only until self-assign / takeover.
+      // Pending but already with Support — Admin is view-only until self-assign / reassign.
       number: 'DIS-PEND02',
       title: 'Unauthorized account credit transfer',
       reason: 'User claims credits were moved from their wallet without consent after a shared-team dispute.',
@@ -573,14 +571,12 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         related_entity_type, related_entity_id, assigned_staff_id,
         credit_amount_involved, opened_at, resolution_notes,
         approved_at, approved_by_staff_id, outcome, sanction_type, sanction_notes,
-        takeover_requested_by_staff_id, takeover_requested_at, takeover_request_note,
         type, by_account_id, for_account_id, resolved_at
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
         NOW() - ($13 || ' days')::interval, $14,
         $15, $16, $17, $18, $19,
-        $20, $21, $22,
-        $23, $7, $8, $24
+        $20, $7, $8, $21
       )
       RETURNING dispute_id, dispute_number, initiator_account_id, respondent_account_id`,
       [
@@ -603,9 +599,6 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         d.outcome,
         d.sanctionType,
         d.sanctionNotes,
-        d.takeoverByStaffId || null,
-        d.takeoverByStaffId ? new Date(Date.now() - 6 * 3600000) : null,
-        d.takeoverNote || null,
         d.entityType || 'general',
         ['resolved', 'sanctioned', 'dismissed', 'withdrawn', 'closed'].includes(d.status)
           ? new Date(Date.now() - (d.daysAgo - 1) * 86400000)
@@ -628,7 +621,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       const open = disputeByNumber['DIS-OPEN01'];
       const wait = disputeByNumber['DIS-WAIT01'];
       const review = disputeByNumber['DIS-REVW01'];
-      const takeover = disputeByNumber['DIS-TAKE01'];
+      const open2 = disputeByNumber['DIS-OPEN02'];
 
       if (open) {
         await seedDisputeChatThread(open.dispute_id, open, supportAccountId, [
@@ -710,8 +703,8 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         ]);
       }
 
-      if (takeover) {
-        await seedDisputeChatThread(takeover.dispute_id, takeover, supportAccountId, [
+      if (open2) {
+        await seedDisputeChatThread(open2.dispute_id, open2, supportAccountId, [
           {
             body: 'Case is public. Please keep replies private until I publish them to the other party.',
             audience: 'parties',
@@ -726,10 +719,10 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
             authorRole: 'disputer',
             authorName: 'Disputer',
             authorType: 'user',
-            senderId: takeover.initiator_account_id,
+            senderId: open2.initiator_account_id,
           },
           {
-            body: 'Internal: Admin requested takeover — keep hold in place until handoff.',
+            body: 'Internal: Keep hold in place until both parties agree on the revision scope.',
             audience: 'staff',
             isInternal: true,
             authorRole: 'staff',
@@ -916,8 +909,8 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   console.log(`✅ Seeded ${tickets.length} tickets, ${disputes.length} disputes, ${reports.length} reports`);
   console.log('   Demo disputes:');
   console.log('   DIS-PEND01  pending + unassigned     → Admin/Maya: Assign myself, then Approve');
-  console.log('   DIS-PEND02  pending + Maya owns      → Admin: view-only / Force takeover / assign');
-  console.log('   DIS-TAKE01  public + takeover req    → Admin: Accept takeover or Force takeover');
+  console.log('   DIS-PEND02  pending + Maya owns      → Admin: view-only / reassign via Designated handler');
+  console.log('   DIS-OPEN02  public + Maya owns       → Admin: view-only / reassign via Designated handler');
   console.log('   DIS-OPEN01  public + private reply    → middleman chat sample');
   console.log('   DIS-WAIT01  awaiting disputee reply  → prompt message sample');
   console.log('   DIS-REVW01  under review + publish   → private + published party comments');

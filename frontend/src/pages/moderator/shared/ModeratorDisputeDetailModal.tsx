@@ -93,15 +93,12 @@ const ACCENT_BTN: Record<Accent, string> = {
   rose: "bg-rose-500/90 hover:bg-rose-500",
 };
 
-/** Shared chrome for assign / takeover actions (same icon + layout everywhere). */
+/** Shared chrome for assign actions (same icon + layout everywhere). */
 const HANDLER_ACTION_BTN =
   "inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm disabled:opacity-50";
 const HANDLER_ACTION_ICON = "h-4 w-4 shrink-0";
 const HANDLER_TONES = {
   claim: "border-sky-500/30 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20",
-  request: "border-amber-500/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20",
-  force: "border-rose-500/30 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20",
-  accept: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20",
   cancel: "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10",
 } as const;
 
@@ -123,7 +120,7 @@ const SANCTION_OPTIONS = ["warn", "mute", "suspend", "ban", "credit_adjustment",
 /**
  * Dispute detail modal with discussion thread.
  * `endpointBase` e.g. "/api/admin/disputes" or "/api/moderator/support/disputes".
- * `adminMode` enables assign / takeover / publish / view-only gating.
+ * `adminMode` enables assign / publish / view-only gating.
  */
 export default function ModeratorDisputeDetailModal({
   disputeId,
@@ -153,7 +150,6 @@ export default function ModeratorDisputeDetailModal({
   const [outcome, setOutcome] = useState("");
   const [sanctionType, setSanctionType] = useState("");
   const [sanctionNotes, setSanctionNotes] = useState("");
-  const [takeoverNote, setTakeoverNote] = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -198,13 +194,10 @@ export default function ModeratorDisputeDetailModal({
     ? Boolean(perms?.canSelfAssign && !alreadyAssignedToMe)
     : false;
   const canAssignMyself = adminMode
-    ? Boolean(
-        !alreadyAssignedToMe &&
-          (perms?.canAssignMyself || perms?.canSelfAssign || perms?.canForceTakeover)
-      )
+    ? Boolean(!alreadyAssignedToMe && (perms?.canAssignMyself || perms?.canSelfAssign) && !assigneeStaffId)
     : false;
   const viewOnly = adminMode && !canAct;
-  /** Handler dropdown: assignee, Admin assigning others, or claiming / taking over */
+  /** Handler dropdown: assignee, Admin assigning others, or claiming an unassigned case */
   const canEditHandler =
     !adminMode || canAssignOthers || canAct || canSelfAssign || canAssignMyself;
 
@@ -419,22 +412,7 @@ export default function ModeratorDisputeDetailModal({
                         ? "This dispute needs a handler. Click Assign myself, or choose yourself in Designated handler."
                         : canAssignOthers
                           ? "You’re not the handler yet. Pick a Support Moderator in Designated handler, or Assign myself."
-                          : "Assign yourself (if unassigned) or request takeover to unlock handling actions."}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {adminMode && dispute.takeoverRequester && (
-              <div className="flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-sm text-amber-100">
-                <Hand className="mt-0.5 h-4 w-4 shrink-0" />
-                <div>
-                  <p className="font-medium">Takeover requested by {dispute.takeoverRequester.name}</p>
-                  {dispute.takeoverRequestNote && (
-                    <p className="mt-1 text-xs text-amber-200/80">{dispute.takeoverRequestNote}</p>
-                  )}
-                  <p className="mt-1 text-[11px] text-amber-200/60">
-                    {formatDateTime(dispute.takeoverRequestedAt)}
+                          : "Assign yourself or pick a handler in Designated handler to unlock handling actions."}
                   </p>
                 </div>
               </div>
@@ -451,65 +429,6 @@ export default function ModeratorDisputeDetailModal({
                   >
                     <Hand className={HANDLER_ACTION_ICON} />
                     Assign myself
-                  </button>
-                )}
-                {perms?.canForceTakeover && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void runAction({ action: "takeover" }, "Takeover complete")}
-                    className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.force}`}
-                  >
-                    <Hand className={HANDLER_ACTION_ICON} />
-                    Force takeover
-                  </button>
-                )}
-                {perms?.canRequestTakeover && (
-                  <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
-                    <input
-                      value={takeoverNote}
-                      onChange={(e) => setTakeoverNote(e.target.value)}
-                      placeholder="Optional note for takeover request"
-                      className="flex-1 rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
-                    />
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() =>
-                        void runAction(
-                          { action: "request_takeover", note: takeoverNote || null },
-                          "Takeover requested"
-                        )
-                      }
-                      className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.request}`}
-                    >
-                      <Hand className={HANDLER_ACTION_ICON} />
-                      Request takeover
-                    </button>
-                  </div>
-                )}
-                {perms?.canCancelTakeoverRequest && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() =>
-                      void runAction({ action: "cancel_takeover_request" }, "Takeover request cancelled")
-                    }
-                    className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.cancel}`}
-                  >
-                    <Hand className={HANDLER_ACTION_ICON} />
-                    Cancel my takeover request
-                  </button>
-                )}
-                {perms?.canAcceptTakeover && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void runAction({ action: "accept_takeover" }, "Takeover accepted")}
-                    className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.accept}`}
-                  >
-                    <Hand className={HANDLER_ACTION_ICON} />
-                    Accept takeover request
                   </button>
                 )}
                 {canAct && toApiToken(dispute.status) === "pending_review" && (
@@ -595,9 +514,7 @@ export default function ModeratorDisputeDetailModal({
                   <span className="text-[11px] text-amber-200/80">
                     {!perms?.staffId
                       ? "Your session isn’t linked to a staff profile — re-login as Admin or Support Moderator."
-                      : perms?.canRequestTakeover
-                        ? "Someone else is handling this — use Request takeover above, or ask an Admin to reassign."
-                        : "You can’t change the handler on this dispute."}
+                      : "You can’t change the handler on this dispute."}
                   </span>
                 )}
                 {canAssignMyself && !canAct && (

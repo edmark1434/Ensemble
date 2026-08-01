@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Hand, Loader2, Scale, Search } from 'lucide-react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { ChevronDown, Hand, Loader2, Scale, Search, SlidersHorizontal, X } from 'lucide-react';
 import ModeratorDisputeDetailModal from '@/pages/moderator/shared/ModeratorDisputeDetailModal';
 import type { Dispute } from '../ticketManagement/ticketTypes';
 
@@ -58,7 +58,60 @@ type StatusFilter =
   | 'under_review'
   | 'closed';
 
+type PriorityFilter = 'all' | 'high' | 'medium' | 'low';
+type VisibilityFilter = 'all' | 'pending' | 'parties' | 'public';
+type AssigneeFilter = 'all' | 'unassigned' | 'assigned';
+type FlagFilter = 'all' | 'credit_hold';
+type SortKey =
+  | 'opened_desc'
+  | 'opened_asc'
+  | 'updated_desc'
+  | 'credits_desc'
+  | 'priority_desc';
+
+type AdvancedFilters = {
+  priority: PriorityFilter;
+  visibility: VisibilityFilter;
+  assignee: AssigneeFilter;
+  entityType: string;
+  flag: FlagFilter;
+  sort: SortKey;
+};
+
+const DEFAULT_ADVANCED: AdvancedFilters = {
+  priority: 'all',
+  visibility: 'all',
+  assignee: 'all',
+  entityType: 'all',
+  flag: 'all',
+  sort: 'opened_desc',
+};
+
 const CLOSED = new Set(['resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn']);
+const PRIORITY_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 };
+
+const selectCls =
+  'w-full rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none focus:border-rose-500/40';
+
+function FilterField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="flex min-w-0 flex-col gap-1">
+      <span className="text-[11px] font-medium text-zinc-500">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function countActiveAdvanced(filters: AdvancedFilters) {
+  let n = 0;
+  if (filters.priority !== 'all') n += 1;
+  if (filters.visibility !== 'all') n += 1;
+  if (filters.assignee !== 'all') n += 1;
+  if (filters.entityType !== 'all') n += 1;
+  if (filters.flag !== 'all') n += 1;
+  if (filters.sort !== 'opened_desc') n += 1;
+  return n;
+}
 
 export default function DisputesTab({
   disputes,
@@ -69,24 +122,36 @@ export default function DisputesTab({
 }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('open_queue');
+  const [advanced, setAdvanced] = useState<AdvancedFilters>(DEFAULT_ADVANCED);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | number | null>(null);
 
   const counts = useMemo(() => {
     const openQueue = disputes.filter((d) => !CLOSED.has(String(d.status).toLowerCase())).length;
     const pending = disputes.filter((d) => String(d.status).toLowerCase() === 'pending_review').length;
-    const takeover = disputes.filter((d) => Boolean(d.takeoverRequestedByStaffId)).length;
     const unassigned = disputes.filter(
       (d) => !d.assignee && !CLOSED.has(String(d.status).toLowerCase())
     ).length;
     const credits = disputes
       .filter((d) => !CLOSED.has(String(d.status).toLowerCase()))
       .reduce((sum, d) => sum + Number(d.creditAmount || 0), 0);
-    return { openQueue, pending, takeover, unassigned, credits, total: disputes.length };
+    return { openQueue, pending, unassigned, credits, total: disputes.length };
   }, [disputes]);
+
+  const entityTypes = useMemo(() => {
+    const set = new Set<string>();
+    for (const d of disputes) {
+      const t = String(d.relatedEntityType || '').trim();
+      if (t) set.add(t);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [disputes]);
+
+  const activeAdvanced = countActiveAdvanced(advanced);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return disputes.filter((d) => {
+    const list = disputes.filter((d) => {
       const status = String(d.status).toLowerCase();
       if (statusFilter === 'open_queue' && CLOSED.has(status)) return false;
       if (statusFilter === 'closed' && !CLOSED.has(status)) return false;
@@ -98,6 +163,26 @@ export default function DisputesTab({
       ) {
         return false;
       }
+
+      if (advanced.priority !== 'all' && String(d.priority).toLowerCase() !== advanced.priority) {
+        return false;
+      }
+      if (
+        advanced.visibility !== 'all' &&
+        String(d.visibility || 'pending').toLowerCase() !== advanced.visibility
+      ) {
+        return false;
+      }
+      if (advanced.assignee === 'unassigned' && d.assignee) return false;
+      if (advanced.assignee === 'assigned' && !d.assignee) return false;
+      if (
+        advanced.entityType !== 'all' &&
+        String(d.relatedEntityType || '').toLowerCase() !== advanced.entityType.toLowerCase()
+      ) {
+        return false;
+      }
+      if (advanced.flag === 'credit_hold' && !d.creditHold) return false;
+
       if (!q) return true;
       const hay = [
         d.number,
@@ -110,15 +195,38 @@ export default function DisputesTab({
         d.assignee?.name,
         d.status,
         d.visibility,
+        d.relatedEntityType,
+        d.relatedEntityId,
       ]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [disputes, search, statusFilter]);
 
-  const filters: { id: StatusFilter; label: string; count?: number }[] = [
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      if (advanced.sort === 'opened_asc') {
+        return new Date(a.openedAt).getTime() - new Date(b.openedAt).getTime();
+      }
+      if (advanced.sort === 'updated_desc') {
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      }
+      if (advanced.sort === 'credits_desc') {
+        return Number(b.creditAmount || 0) - Number(a.creditAmount || 0);
+      }
+      if (advanced.sort === 'priority_desc') {
+        const diff =
+          (PRIORITY_RANK[String(b.priority).toLowerCase()] || 0) -
+          (PRIORITY_RANK[String(a.priority).toLowerCase()] || 0);
+        if (diff !== 0) return diff;
+      }
+      return new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime();
+    });
+    return sorted;
+  }, [disputes, search, statusFilter, advanced]);
+
+  const statusChips: { id: StatusFilter; label: string; count?: number }[] = [
     { id: 'open_queue', label: 'Open queue', count: counts.openQueue },
     { id: 'pending_review', label: 'Pending review', count: counts.pending },
     { id: 'open', label: 'Open' },
@@ -128,9 +236,15 @@ export default function DisputesTab({
     { id: 'all', label: 'All', count: counts.total },
   ];
 
+  const patchAdvanced = (partial: Partial<AdvancedFilters>) => {
+    setAdvanced((prev) => ({ ...prev, ...partial }));
+  };
+
+  const clearAdvanced = () => setAdvanced(DEFAULT_ADVANCED);
+
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <SummaryCard label="Open disputes" value={counts.openQueue} sub="Active resolution queue" />
         <SummaryCard
           label="Credits at risk"
@@ -138,7 +252,6 @@ export default function DisputesTab({
           sub="Across open cases"
         />
         <SummaryCard label="Unassigned" value={counts.unassigned} sub="Need a designated handler" />
-        <SummaryCard label="Takeover requests" value={counts.takeover} sub="Awaiting accept / force" />
       </div>
 
       <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0f1016]">
@@ -165,7 +278,7 @@ export default function DisputesTab({
         </div>
 
         <div className="flex gap-1 overflow-x-auto border-b border-white/[0.06] px-3 py-2">
-          {filters.map((f) => (
+          {statusChips.map((f) => (
             <button
               key={f.id}
               type="button"
@@ -184,8 +297,136 @@ export default function DisputesTab({
           ))}
         </div>
 
+        <div className="space-y-3 border-b border-white/[0.06] px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setAdvancedOpen((o) => !o)}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+                  advancedOpen || activeAdvanced > 0
+                    ? 'border-rose-500/40 bg-rose-500/15 text-rose-200'
+                    : 'border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Advanced filters
+                <ChevronDown
+                  className={`h-3.5 w-3.5 transition ${advancedOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+              {activeAdvanced > 0 && (
+                <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-[10px] font-medium text-rose-300">
+                  {activeAdvanced} active
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+              <span>
+                Showing <span className="text-zinc-300">{filtered.length}</span> of {disputes.length}
+              </span>
+              {activeAdvanced > 0 && (
+                <button
+                  type="button"
+                  onClick={clearAdvanced}
+                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-zinc-400 hover:bg-white/5 hover:text-white"
+                >
+                  <X className="h-3 w-3" />
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+
+          {advancedOpen && (
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <FilterField label="Priority">
+                  <select
+                    value={advanced.priority}
+                    onChange={(e) => patchAdvanced({ priority: e.target.value as PriorityFilter })}
+                    className={selectCls}
+                  >
+                    <option value="all">All priorities</option>
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </FilterField>
+
+                <FilterField label="Visibility">
+                  <select
+                    value={advanced.visibility}
+                    onChange={(e) =>
+                      patchAdvanced({ visibility: e.target.value as VisibilityFilter })
+                    }
+                    className={selectCls}
+                  >
+                    <option value="all">All visibility</option>
+                    <option value="pending">Pending</option>
+                    <option value="parties">Parties</option>
+                    <option value="public">Public</option>
+                  </select>
+                </FilterField>
+
+                <FilterField label="Handler">
+                  <select
+                    value={advanced.assignee}
+                    onChange={(e) => patchAdvanced({ assignee: e.target.value as AssigneeFilter })}
+                    className={selectCls}
+                  >
+                    <option value="all">All handlers</option>
+                    <option value="unassigned">Unassigned</option>
+                    <option value="assigned">Assigned</option>
+                  </select>
+                </FilterField>
+
+                <FilterField label="Entity type">
+                  <select
+                    value={advanced.entityType}
+                    onChange={(e) => patchAdvanced({ entityType: e.target.value })}
+                    className={selectCls}
+                  >
+                    <option value="all">All entities</option>
+                    {entityTypes.map((t) => (
+                      <option key={t} value={t}>
+                        {titleCase(t)}
+                      </option>
+                    ))}
+                  </select>
+                </FilterField>
+
+                <FilterField label="Flags">
+                  <select
+                    value={advanced.flag}
+                    onChange={(e) => patchAdvanced({ flag: e.target.value as FlagFilter })}
+                    className={selectCls}
+                  >
+                    <option value="all">All flags</option>
+                    <option value="credit_hold">Has credit hold</option>
+                  </select>
+                </FilterField>
+
+                <FilterField label="Sort">
+                  <select
+                    value={advanced.sort}
+                    onChange={(e) => patchAdvanced({ sort: e.target.value as SortKey })}
+                    className={selectCls}
+                  >
+                    <option value="opened_desc">Opened (newest)</option>
+                    <option value="opened_asc">Opened (oldest)</option>
+                    <option value="updated_desc">Recently updated</option>
+                    <option value="credits_desc">Credits (high → low)</option>
+                    <option value="priority_desc">Priority (high → low)</option>
+                  </select>
+                </FilterField>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-left text-sm">
+          <table className="w-full min-w-[900px] text-left text-sm">
             <thead>
               <tr className="border-b border-white/[0.06] text-[11px] uppercase tracking-wide text-zinc-500">
                 <th className="px-5 py-3 font-medium">Dispute</th>
@@ -194,8 +435,7 @@ export default function DisputesTab({
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Visibility</th>
                 <th className="px-4 py-3 font-medium">Handler</th>
-                <th className="px-4 py-3 font-medium">Opened</th>
-                <th className="px-5 py-3 font-medium text-right">Flags</th>
+                <th className="px-5 py-3 font-medium">Opened</th>
               </tr>
             </thead>
             <tbody>
@@ -253,22 +493,12 @@ export default function DisputesTab({
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3.5 text-xs text-zinc-500">{formatDateTime(d.openedAt)}</td>
-                  <td className="px-5 py-3.5 text-right">
-                    {d.takeoverRequestedByStaffId ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-100">
-                        <Hand className="h-3.5 w-3.5" />
-                        Takeover
-                      </span>
-                    ) : (
-                      <span className="text-xs text-zinc-600">—</span>
-                    )}
-                  </td>
+                  <td className="px-5 py-3.5 text-xs text-zinc-500">{formatDateTime(d.openedAt)}</td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-5 py-16 text-center text-sm text-zinc-500">
+                  <td colSpan={7} className="px-5 py-16 text-center text-sm text-zinc-500">
                     No disputes match this filter.
                   </td>
                 </tr>
