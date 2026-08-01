@@ -19,12 +19,127 @@ const {
   TICKET_TYPES,
   TICKET_STATUSES,
   TICKET_PRIORITIES,
+  FORUM_TYPES,
+  MARKETPLACE_TYPES,
+  JOBS_TYPES,
+  SUPPORT_TYPES,
   normalizeTicketType,
   normalizeTicketStatus,
   normalizeTicketPriority,
   isClosedStatus,
 } = require('../lib/ticketEnums');
 const { mapTicketRow } = require('./ModeratorSharedRepositories');
+const {
+  FORUM_REPORT_TYPES,
+  MARKETPLACE_REPORT_TYPES,
+  JOBS_REPORT_TYPES,
+  isReportTypeInScope,
+} = require('../lib/reportEnums');
+
+/** Staff roles that may appear in assignee pickers, keyed by desk / queue. */
+const ASSIGNABLE_ROLES_BY_QUEUE = Object.freeze({
+  jobs: ['Jobs N Gigs Moderator', 'Jobs Moderator', 'Jobs & Gigs Moderator'],
+  marketplace: ['Marketplace Moderator'],
+  forum: ['Forum Moderator', 'Forums Moderator'],
+  forums: ['Forum Moderator', 'Forums Moderator'],
+  support: ['Support Moderator'],
+  disputes: ['Support Moderator', 'Admin', 'Administrator'],
+  admin: [
+    'Admin',
+    'Administrator',
+    'Support Moderator',
+    'Forum Moderator',
+    'Forums Moderator',
+    'Marketplace Moderator',
+    'Jobs N Gigs Moderator',
+    'Jobs Moderator',
+    'Jobs & Gigs Moderator',
+  ],
+});
+
+function normalizeQueueKey(queueKey) {
+  const q = String(queueKey || '')
+    .trim()
+    .toLowerCase();
+  if (q === 'forums') return 'forum';
+  if (q === 'jobs' || q === 'jobs-gigs' || q === 'job') return 'jobs';
+  if (q === 'marketplace' || q === 'market') return 'marketplace';
+  if (q === 'forum') return 'forum';
+  if (q === 'support') return 'support';
+  if (q === 'disputes' || q === 'dispute') return 'disputes';
+  if (q === 'admin' || q === 'administrator') return 'admin';
+  return q || 'admin';
+}
+
+function assignableRolesForQueue(queueKey) {
+  const key = normalizeQueueKey(queueKey);
+  return ASSIGNABLE_ROLES_BY_QUEUE[key] || ASSIGNABLE_ROLES_BY_QUEUE.admin;
+}
+
+function inferTicketAssignableQueue(ticketType) {
+  const type = normalizeTicketType(ticketType) || String(ticketType || '').trim();
+  if (FORUM_TYPES.includes(type)) return 'forum';
+  if (MARKETPLACE_TYPES.includes(type)) return 'marketplace';
+  if (JOBS_TYPES.includes(type)) return 'jobs';
+  if (SUPPORT_TYPES.includes(type)) return 'support';
+  return 'admin';
+}
+
+function inferReportAssignableQueue(targetType) {
+  if (isReportTypeInScope(targetType, FORUM_REPORT_TYPES)) return 'forum';
+  if (isReportTypeInScope(targetType, MARKETPLACE_REPORT_TYPES)) return 'marketplace';
+  if (isReportTypeInScope(targetType, JOBS_REPORT_TYPES)) return 'jobs';
+  return 'support';
+}
+
+function roleAllowedForQueue(role, queueKey) {
+  const allowed = assignableRolesForQueue(queueKey).map((r) => r.toLowerCase());
+  return allowed.includes(String(role || '').toLowerCase());
+}
+
+async function fetchAssignableStaffForQueue(queueKey, { includeStaffId = null } = {}) {
+  const roles = assignableRolesForQueue(queueKey);
+  const roleList = roles.map((r) => r.toLowerCase());
+  const params = [roleList];
+  let includeSql = '';
+  if (includeStaffId != null && includeStaffId !== '') {
+    params.push(String(includeStaffId));
+    includeSql = ` OR s.staff_id::text = $${params.length}`;
+  }
+
+  const result = await pool.query(
+    `
+    SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
+    FROM staff s
+    INNER JOIN accounts a ON a.account_id = s.account_id
+    WHERE a.deleted_at IS NULL
+      AND (
+        LOWER(s.role) = ANY($1)
+        ${includeSql}
+      )
+    ORDER BY s.role, name
+    `,
+    params
+  );
+  return result.rows.map((s) => ({
+    staffId: s.staff_id,
+    name: s.name,
+    role: s.role,
+  }));
+}
+
+async function assertStaffAssignableToQueue(staffId, queueKey) {
+  const result = await pool.query(`SELECT role FROM staff WHERE staff_id = $1`, [staffId]);
+  if (!result.rows.length) {
+    throw new Error('Staff member not found.');
+  }
+  if (!roleAllowedForQueue(result.rows[0].role, queueKey)) {
+    const label = normalizeQueueKey(queueKey);
+    throw new Error(
+      `That staff member is not part of the ${label} moderator queue for this case.`
+    );
+  }
+}
 
 /** Prefer DB catalog (migration 109); fall back to ticketEnums.js */
 async function getTicketCatalog() {
@@ -777,7 +892,7 @@ function mapMongoTicketMessage(m) {
   };
 }
 
-async function getTicketDetail(ticketId, staffSession = null) {
+async function getTicketDetail(ticketId, staffSession = null, options = {}) {
   const ticketResult = await pool.query(
     `
     SELECT
@@ -803,12 +918,11 @@ async function getTicketDetail(ticketId, staffSession = null) {
   );
   if (!ticketResult.rows.length) return null;
 
-  const staffResult = await pool.query(`
-    SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
-    FROM staff s INNER JOIN accounts a ON a.account_id = s.account_id
-    WHERE a.deleted_at IS NULL
-    ORDER BY s.role, name
-  `);
+  const row = ticketResult.rows[0];
+  const queueKey = options.assignableQueue || inferTicketAssignableQueue(row.type);
+  const assignableStaff = await fetchAssignableStaffForQueue(queueKey, {
+    includeStaffId: row.handled_by_staff_id,
+  });
 
   let messages = [];
   let chatId = null;
@@ -828,7 +942,6 @@ async function getTicketDetail(ticketId, staffSession = null) {
     chatAvailable = false;
   }
 
-  const row = ticketResult.rows[0];
   const catalog = await getTicketCatalog();
   const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
   const { buildTicketPermissions } = require('./TicketAssignmentHelpers');
@@ -858,11 +971,8 @@ async function getTicketDetail(ticketId, staffSession = null) {
     escalateByRole: catalog.escalateByRole,
     escalateRoles: catalog.escalateRoles,
     permissions: buildTicketPermissions(row, staff, sessionStaffId(staffSession)),
-    assignableStaff: staffResult.rows.map((s) => ({
-      staffId: s.staff_id,
-      name: s.name,
-      role: s.role,
-    })),
+    assignableQueue: normalizeQueueKey(queueKey),
+    assignableStaff,
   };
 }
 
@@ -1026,6 +1136,15 @@ async function updateTicket(ticketId, patch, staffSession) {
       if (!ticketPerms.isAdmin) {
         throw new Error('Use Assign myself to claim an unassigned ticket.');
       }
+    }
+
+    if (nextNorm && !patch.assigned_role) {
+      const typeRow = await pool.query(
+        `SELECT type FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+        [ticketId]
+      );
+      const queueKey = inferTicketAssignableQueue(typeRow.rows[0]?.type);
+      await assertStaffAssignableToQueue(nextAssignee, queueKey);
     }
 
     sets.push(`handled_by_staff_id = $${idx}`);
@@ -1500,17 +1619,9 @@ async function getDisputeDetail(disputeId, staffSession = null) {
 
   const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
   const permissions = buildDisputePermissions(row, staff, staffSession);
-
-  const staffResult = await pool.query(`
-    SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
-    FROM staff s INNER JOIN accounts a ON a.account_id = s.account_id
-    WHERE LOWER(s.role) IN (
-      'support moderator',
-      'admin',
-      'administrator'
-    )
-    ORDER BY s.role, name
-  `);
+  const assignableStaff = await fetchAssignableStaffForQueue('disputes', {
+    includeStaffId: row.assigned_staff_id || row.handled_by_staff_id,
+  });
 
   let messages = [];
   let chatId = null;
@@ -1532,11 +1643,8 @@ async function getDisputeDetail(disputeId, staffSession = null) {
     chatId,
     chatAvailable,
     permissions,
-    assignableStaff: staffResult.rows.map((s) => ({
-      staffId: s.staff_id,
-      name: s.name,
-      role: s.role,
-    })),
+    assignableQueue: 'disputes',
+    assignableStaff,
   };
 }
 
@@ -1687,6 +1795,14 @@ async function updateReport(reportId, patch, staffSession = null) {
         'This report already has a handler. They must release the case before it can be reassigned.'
       );
     }
+    if (nextNorm && !curNorm) {
+      const typeRow = await pool.query(
+        `SELECT target_type FROM reports WHERE report_id = $1 AND deleted_at IS NULL`,
+        [reportId]
+      );
+      const queueKey = inferReportAssignableQueue(typeRow.rows[0]?.target_type);
+      await assertStaffAssignableToQueue(patch.assigned_staff_id, queueKey);
+    }
   }
 
   const allowed = ['status', 'priority', 'assigned_staff_id'];
@@ -1743,7 +1859,7 @@ function buildReportPermissions(row, staff, session = null) {
   };
 }
 
-async function getReportDetail(reportId, staffSession = null) {
+async function getReportDetail(reportId, staffSession = null, options = {}) {
   const reportResult = await pool.query(
     `
     SELECT
@@ -1767,28 +1883,23 @@ async function getReportDetail(reportId, staffSession = null) {
   );
   if (!reportResult.rows.length) return null;
 
+  const row = reportResult.rows[0];
   const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
-
-  const staffResult = await pool.query(`
-    SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
-    FROM staff s INNER JOIN accounts a ON a.account_id = s.account_id
-    WHERE a.deleted_at IS NULL
-    ORDER BY s.role
-  `);
+  const queueKey = options.assignableQueue || inferReportAssignableQueue(row.target_type);
+  const assignableStaff = await fetchAssignableStaffForQueue(queueKey, {
+    includeStaffId: row.assigned_staff_id,
+  });
 
   return {
     report: mapReportRow({
-      ...reportResult.rows[0],
-      reporter_name: reportResult.rows[0].reporter_name,
-      reporter_handle: reportResult.rows[0].reporter_handle,
-      assignee_name: reportResult.rows[0].assignee_name,
+      ...row,
+      reporter_name: row.reporter_name,
+      reporter_handle: row.reporter_handle,
+      assignee_name: row.assignee_name,
     }),
-    permissions: buildReportPermissions(reportResult.rows[0], staff, staffSession),
-    assignableStaff: staffResult.rows.map((s) => ({
-      staffId: s.staff_id,
-      name: s.name,
-      role: s.role,
-    })),
+    permissions: buildReportPermissions(row, staff, staffSession),
+    assignableQueue: normalizeQueueKey(queueKey),
+    assignableStaff,
   };
 }
 
