@@ -51,7 +51,8 @@ import ProposalsIncomingPage from "@/pages/user/6_job_market/job_proposals/propo
 import ProposalsSentPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_sent_page.tsx";
 import ProposalsCreatePage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_create_page.tsx";
 import ProposalsEditPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_edit_page.tsx";
-import ProposalsViewDetailsPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details.tsx";
+import ProposalsViewDetailsAsApplicant from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_applicant";
+import ProposalsViewDetailsAsAuthor from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author";
 
 import GigMarketplace from "@/pages/user/7_gigs/Gig_Posting/main.tsx";
 import {CreateGigWizard} from "@/pages/user/7_gigs/Gig_Posting/CreateGigWizard.tsx";
@@ -220,8 +221,8 @@ function App() {
           <Route path='/jobs/edit/:id' element={<JobEditPostPage />} />
           <Route path='/jobs/:id/make-proposal' element={<ProposalsCreatePage />} />
           <Route path='/jobs/proposals/edit/:proposalId' element={<ProposalsEditPage />} />
-          <Route path='/jobs/proposals/incoming/:jobPostId/:proposalId' element={<ProposalsViewDetailsPage />} />
-          <Route path='/jobs/proposals/sent/:jobPostId/:proposalId' element={<ProposalsViewDetailsPage />} />
+          <Route path='/jobs/proposals/received/:proposalId' element={<ProposalsViewDetailsAsAuthor />} />
+          <Route path='/jobs/proposals/sent/:proposalId' element={<ProposalsViewDetailsAsApplicant />} />
 
           <Route path='/gigs'>
             <Route index element={<GigMarketplace />} />

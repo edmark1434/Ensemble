@@ -40,6 +40,29 @@ async function ensurePasswordHashColumnCapacity() {
     }
   }
 }
+async function seedDefaultTOS() {
+  // 1. Seed Default TOS
+  await pool.query(`
+    INSERT INTO terms_of_service (
+      terms_id, terms_title, terms_description, terms_type, is_default
+    ) VALUES 
+    (
+      '00000000-0000-0000-0000-000000000001',
+      'Standard Platform TOS',
+      '1. All deliverables remain property of the creator until final milestone payout.\\n2. Source files delivered upon project completion.\\n3. Communication conducted via platform inbox.\\n4. Additional revisions outside milestone quotas billed at agreed additional work rate.',
+      'jobs',
+      TRUE
+    ),
+    (
+      '00000000-0000-0000-0000-000000000002',
+      'Strict IP Transfer TOS',
+      '1. Full IP transfer granted immediately upon each milestone approval.\\n2. Raw media and project files transferred after step sign-off.\\n3. Non-disclosure agreement applies to all unreleased media.',
+      'jobs',
+      TRUE
+    )
+    ON CONFLICT (terms_id) DO NOTHING;
+  `);
+}
 
 async function resetSeedTables() {
   // Prefer clearing portal + auth + demo domain tables. CASCADE handles FKs.
@@ -1131,6 +1154,7 @@ async function seed() {
     await seedMarketplaceListings(userAccountIds, staffByRole);
     await seedTeams(userAccountIds);
     await seedDomainExamples(userAccountIds, staffByRole);
+    await seedDefaultTOS();
 
     console.log('');
     console.log('🔑 Staff login (password: staff123):');

@@ -1,6 +1,7 @@
 // Services/FileServices.js
 const {
-    getAllProfileFilesRepositories
+    getAllProfileFilesRepositories,
+    createFileRepository
 } = require('../Repositories/FileRepositories');
 const crypto = require("crypto");
 const { PutObjectCommand } = require("@aws-sdk/client-s3");
@@ -197,9 +198,14 @@ function getUploadConfig() {
     };
 }
 
+async function registerFileService(name, path, mimeType, sizeBytes) {
+    return await createFileRepository(name, path, mimeType, sizeBytes);
+}
+
 module.exports = {
     getAllProfileFilesServices,
     generateUploadUrl,
     uploadFileToS3,
-    getUploadConfig
+    getUploadConfig,
+    registerFileService
 };

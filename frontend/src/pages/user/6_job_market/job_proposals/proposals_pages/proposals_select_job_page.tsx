@@ -2,8 +2,9 @@ import React from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { motion } from "framer-motion";
 import { ClipboardList, ChevronRight, Calendar, CircleDollarSign } from "lucide-react";
-import { sampleJobs } from "../../job_datasets";
 import type { ProposalsMainContext } from "../proposals_main";
+import { useJobs } from "@/hooks/useJobs";
+import useGlobalState from "@/lib/global_state";
 
 export const SelectJobCardSkeleton: React.FC = () => (
   <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/40 overflow-hidden animate-pulse space-y-4 flex flex-col justify-between">
@@ -39,12 +40,46 @@ export const ProposalsSelectJobPage: React.FC = () => {
   const navigate = useNavigate();
   const { searchQuery, loading = false } = useOutletContext<ProposalsMainContext>();
 
-  // Filter only the user's own active job posts
-  const myJobPosts = sampleJobs.filter(
+  const userInfo = useGlobalState((state) => state.user);
+  const { fetchJobs } = useJobs();
+  const [myJobPosts, setMyJobPosts] = React.useState<any[]>([]);
+  const [isFetching, setIsFetching] = React.useState(true);
+
+  React.useEffect(() => {
+    const loadJobs = async () => {
+      try {
+        const jobs = await fetchJobs();
+        const userJobs = jobs
+          .filter((j: any) => j.client_account_id === userInfo?.account_id)
+          .map((j: any) => ({
+            id: j.job_id,
+            title: j.title,
+            category: j.category,
+            difficulty: j.experience_level,
+            status: j.status,
+            priceRange: `${j.rate_credits_min?.toLocaleString() || 0} ~ ${j.rate_credits_max?.toLocaleString() || 0}`,
+            applicantsCount: Number(j.applicant_count || 0),
+            postedAt: new Date(j.created_at).toLocaleDateString(),
+            thumbnail: j.thumbnail_path 
+              ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${j.thumbnail_path}` 
+              : "/placeholder.svg"
+          }));
+        setMyJobPosts(userJobs);
+      } catch (err) {
+        console.error("Failed to load user jobs", err);
+      } finally {
+        setIsFetching(false);
+      }
+    };
+    if (userInfo?.account_id) {
+      loadJobs();
+    }
+  }, [fetchJobs, userInfo?.account_id]);
+
+  const filteredJobs = myJobPosts.filter(
     (j) =>
-      j.isOwnPost &&
-      (j.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        j.category.toLowerCase().includes(searchQuery.toLowerCase()))
+      j.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      j.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -57,23 +92,23 @@ export const ProposalsSelectJobPage: React.FC = () => {
           </p>
         </div>
         <span className="text-xs font-semibold text-zinc-400 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 self-start sm:self-auto">
-          {loading ? "Loading..." : `${myJobPosts.length} Active Listings`}
+          {isFetching || loading ? "Loading..." : `${filteredJobs.length} Active Listings`}
         </span>
       </div>
 
-      {loading ? (
+      {isFetching || loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {[1, 2, 3, 4].map((i) => (
             <SelectJobCardSkeleton key={i} />
           ))}
         </div>
-      ) : myJobPosts.length === 0 ? (
+      ) : filteredJobs.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-12 text-center">
           <p className="text-sm text-zinc-400 font-medium">No job postings found matching your search.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {myJobPosts.map((job) => (
+          {filteredJobs.map((job) => (
             <motion.div
               key={job.id}
               whileHover={{ y: -3 }}

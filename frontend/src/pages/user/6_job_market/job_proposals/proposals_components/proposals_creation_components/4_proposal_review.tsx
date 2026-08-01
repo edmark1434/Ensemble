@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, CircleDollarSign, Layers, FileText, Percent, RefreshCcw } from "lucide-react";
+import { Check, CircleDollarSign, Layers, FileText, Percent, RefreshCcw, Send } from "lucide-react";
 import type { Job } from "../../../job_components/job_lists";
 import type { Milestone } from "./3_proposal_milestones";
 
@@ -13,6 +13,7 @@ interface ProposalReviewProps {
   onEditStep: (step: number) => void;
   onBack: () => void;
   onSubmit: () => void;
+  isSubmitting?: boolean;
 }
 
 export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
@@ -25,6 +26,7 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
   onEditStep,
   onBack,
   onSubmit,
+  isSubmitting
 }) => {
   const totalBid = parseInt(bidAmount || "0");
   const count = milestones.length || 1;
@@ -123,9 +125,10 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
         <button
           type="button"
           onClick={onSubmit}
-          className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-2.5 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20"
+          disabled={isSubmitting}
+          className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold text-white transition focus:outline-none shadow-lg ${isSubmitting ? 'bg-blue-500/50 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'}`}
         >
-          <Check className="h-3.5 w-3.5" /> Submit Official Proposal
+          {isSubmitting ? 'Submitting...' : 'Confirm & Submit Proposal'} <Send className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>

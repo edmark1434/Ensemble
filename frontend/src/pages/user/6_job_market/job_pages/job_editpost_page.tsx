@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, type FormEvent, type ChangeEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Save, X, ChevronDown, Check, CircleDollarSign, Briefcase, Lock, Image as ImageIcon } from "lucide-react";
+import { ArrowLeft, Save, X, ChevronDown, Check, CircleDollarSign, Briefcase, Lock, Image as ImageIcon, Info } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
+import { useJobs } from "@/hooks/useJobs";
 import PopupConfirmReturn from "../job_components/job_popups/popup_confirm_return";
 import CreationSuccess from "../job_components/job_creation_components/4_creation_success";
 import { categories, difficulties } from "../job_components/job_creation_components/1_create_coreinfo";
@@ -114,7 +115,11 @@ export const JobEditPostPage: React.FC = () => {
   // Thumbnail States
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const { fetchJobs, updateJob, uploadAttachment } = useJobs();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Read-only baseline state holders
   const [priceRange, setPriceRange] = useState("");
@@ -128,39 +133,30 @@ export const JobEditPostPage: React.FC = () => {
   const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
-    // Mock pre-fill data based on current ID or sample fallback
-    const mockJob: Job = {
-      id: id || "JP001",
-      title: "Wedding Video Edit - Romantic Style",
-      description: "Looking for an experienced editor to create a 10-minute wedding highlight reel. Must be proficient in color grading and narrative storytelling.",
-      status: "Open",
-      category: "Events",
-      difficulty: "Intermediate",
-      priceRange: "₱28,000 ~ ₱36,000",
-      minBudget: 28000,
-      postedBy: "John Paul Mahilom",
-      postedAt: "Oct 24, 2026 • 2:30 PM",
-      timeAgo: "Posted 2 hours ago",
-      clientRating: 4.5,
-      ratingCount: 12,
-      positionsNeeded: 3,
-      applicantsCount: 28,
-      timeline: "3-5 Days",
-      thumbnail: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80",
-      skills: ["Multi-cam Editing", "Color Grading", "DaVinci Resolve", "Audio Sync"],
-      isOwnPost: true,
+    const loadData = async () => {
+      if (!id) return;
+      try {
+        const data = await fetchJobs();
+        // Since fetchJobs returns backend structure, we map it or use raw
+        const found = data.find((j: any) => j.job_id === id);
+        if (found) {
+          setTitle(found.title);
+          setDescription(found.description);
+          setCategory(found.category);
+          setDifficulty(found.experience_level || "Intermediate");
+          setSkills(found.tags || []);
+          setPriceRange(`₱${found.rate_credits_min?.toLocaleString() || 0} ~ ₱${found.rate_credits_max?.toLocaleString() || 0}`);
+          setPositionsNeeded(found.no_of_hires || 1);
+          if (found.thumbnail_path) {
+            setPreviewUrl(`${import.meta.env.VITE_CLOUDFRONT_URL}/${found.thumbnail_path}`);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load job for editing", err);
+      }
     };
-
-    setInitialJob(mockJob);
-    setTitle(mockJob.title);
-    setDescription(mockJob.description);
-    setCategory(mockJob.category);
-    setDifficulty(mockJob.difficulty);
-    setSkills(mockJob.skills || []);
-    setPreviewUrl(mockJob.thumbnail);
-    setPriceRange(mockJob.priceRange);
-    setPositionsNeeded(mockJob.positionsNeeded);
-  }, [id]);
+    loadData();
+  }, [id, fetchJobs]);
 
   // Thumbnail Handlers
   const processFile = (file: File) => {
@@ -170,6 +166,7 @@ export const JobEditPostPage: React.FC = () => {
     }
     const localUrl = URL.createObjectURL(file);
     setPreviewUrl(localUrl);
+    setThumbnailFile(file);
     setIsDirty(true);
   };
 
@@ -246,30 +243,35 @@ export const JobEditPostPage: React.FC = () => {
     return Object.keys(stepErrors).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validate()) return;
+    setIsSubmitting(true);
 
-    const formattedUpdatedDate = new Date().toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "numeric",
-    });
+    try {
+      let fileId;
+      if (thumbnailFile) {
+        fileId = await uploadAttachment(thumbnailFile, "jobs");
+      }
 
-    const updatedPayload = {
-      ...initialJob,
-      title,
-      description,
-      category,
-      difficulty,
-      skills,
-      thumbnail: previewUrl,
-      updatedAt: `Updated ${formattedUpdatedDate}`,
-    };
+      const updatedPayload = {
+        title,
+        description,
+        category,
+        experience_level: difficulty,
+        tags: skills,
+        file_id: thumbnailFile ? fileId : undefined,
+      };
 
-    console.log("Saving Updated Job Post Data:", updatedPayload);
-    setIsSuccessOpen(true);
+      if (!id) throw new Error("Job ID missing");
+
+      await updateJob(id, updatedPayload);
+      setIsSuccessOpen(true);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "Failed to update job post");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -340,6 +342,19 @@ export const JobEditPostPage: React.FC = () => {
                 </span>
                 <span className="font-bold text-white">{positionsNeeded} Slots</span>
               </div>
+            </div>
+          </div>
+
+          {/* Read-Only Explanation Alert */}
+          <div className="flex items-start gap-2.5 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3.5 mb-2 shadow-inner mt-1">
+            <div className="mt-0.5 rounded-full bg-blue-500/20 p-1 text-blue-400 shrink-0 shadow-[0_0_10px_rgba(59,130,246,0.3)]">
+              <Info className="h-3.5 w-3.5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-blue-300">Why are these locked?</p>
+              <p className="text-[11px] text-blue-200/70 mt-1 leading-relaxed">
+                Budget pools and available positions cannot be modified after a job is posted. This prevents disputes and ensures consistency for freelancers who have already submitted or are currently drafting proposals based on your original terms.
+              </p>
             </div>
           </div>
 
@@ -511,9 +526,10 @@ export const JobEditPostPage: React.FC = () => {
             <button
               type="button"
               onClick={handleSave}
-              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-2.5 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 focus:outline-none"
+              disabled={isSubmitting}
+              className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold text-white transition focus:outline-none shadow-lg ${isSubmitting ? 'bg-blue-500/50 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'}`}
             >
-              <Save className="h-3.5 w-3.5" /> Save Changes
+              {isSubmitting ? 'Saving...' : 'Save Changes'} <Save className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>

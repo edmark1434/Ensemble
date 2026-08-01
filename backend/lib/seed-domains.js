@@ -334,6 +334,9 @@ async function seedProjectsAndEditor(ctx) {
 }
 
 async function seedJobsDomain(ctx) {
+  // Disabled by user request to keep Jobs and Proposals clean
+  return { jobs: [], contracts: [] };
+  
   const { users, tags, files } = ctx;
   if (users.length < 4) return null;
 

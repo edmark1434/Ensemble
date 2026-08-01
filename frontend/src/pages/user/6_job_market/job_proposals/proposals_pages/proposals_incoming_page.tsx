@@ -2,8 +2,7 @@ import React, { useState } from "react";
 import { useOutletContext, useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Briefcase, ExternalLink } from "lucide-react";
 import ProposalsList, { type ProposalStatus } from "../proposals_components/proposals_list";
-import { sampleIncomingProposals } from "../proposals_datasets";
-import { sampleJobs } from "../../job_datasets";
+import { useJobs } from "@/hooks/useJobs";
 import type { ProposalsMainContext } from "../proposals_main";
 
 export const ProposalsIncomingPage: React.FC = () => {
@@ -23,10 +22,45 @@ export const ProposalsIncomingPage: React.FC = () => {
     viewType,
   } = useOutletContext<ProposalsMainContext>();
 
-  const [proposals, setProposals] = useState(sampleIncomingProposals);
+  const [proposals, setProposals] = useState<any[]>([]);
+  const [targetJob, setTargetJob] = useState<any>(null);
+  const { fetchProposalsByJob, fetchJobs } = useJobs();
 
-  // Find job details
-  const targetJob = sampleJobs.find((j) => j.id === jobPostId);
+  React.useEffect(() => {
+    const loadData = async () => {
+      if (!jobPostId) return;
+      try {
+        const fetchedProposals = await fetchProposalsByJob(jobPostId);
+        const mapped = fetchedProposals.map((p: any) => ({
+          id: p.proposal_id,
+          jobId: p.job_id,
+          jobTitle: p.job_title || "Unknown Job",
+          jobCategory: p.job_category || "Uncategorized",
+          partyName: p.freelancer_name || p.freelancer_handle || "Unknown",
+          partyAvatar: p.freelancer_avatar_path ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${p.freelancer_avatar_path}` : undefined,
+          bidAmount: parseFloat(p.rate_credits) || 0,
+          additionalWorkRate: parseFloat(p.revision_price_credits) || 0,
+          status: p.status,
+          submittedAt: new Date(p.created_at).toLocaleDateString(),
+          coverLetter: p.letter || "",
+          rejectionReason: p.reject_reason,
+          milestones: p.milestones || [],
+          type: "incoming"
+        }));
+        setProposals(mapped);
+
+        // Fetch job details to display title
+        const jobs = await fetchJobs();
+        const found = jobs.find((j: any) => j.job_id === jobPostId);
+        if (found) {
+          setTargetJob({ title: found.title });
+        }
+      } catch (err) {
+        console.error("Failed to load incoming proposals", err);
+      }
+    };
+    loadData();
+  }, [jobPostId, fetchProposalsByJob, fetchJobs]);
 
   const handleUpdateStatus = (
     id: string,
@@ -118,6 +152,13 @@ export const ProposalsIncomingPage: React.FC = () => {
         <span className="text-xs font-semibold text-zinc-400 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 shrink-0">
           {filtered.length} Total Applicants
         </span>
+      </div>
+
+      <div className="flex items-center justify-between border-b border-white/5 pb-2 mt-4">
+        <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+          Received Proposal Applications ({filtered.length})
+        </h2>
+        <span className="text-xs text-zinc-400 font-mono">Incoming</span>
       </div>
 
       <ProposalsList

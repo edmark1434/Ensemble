@@ -14,6 +14,22 @@ async function getAllProfileFilesRepositories() {
 
 
 
+async function createFileRepository(name, path, mime_type, size_bytes) {
+    try {
+        const query = `
+            INSERT INTO files (name, path, mime_type, size_bytes)
+            VALUES ($1, $2, $3, $4)
+            RETURNING file_id
+        `;
+        const { rows } = await pool.query(query, [name, path, mime_type, size_bytes]);
+        return rows[0].file_id;
+    } catch (err) {
+        console.error('Error creating file:', err);
+        throw err;
+    }
+}
+
 module.exports = {
-    getAllProfileFilesRepositories
+    getAllProfileFilesRepositories,
+    createFileRepository
 }
