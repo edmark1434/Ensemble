@@ -14,6 +14,7 @@ export interface Job {
   priceRange: string;
   minBudget: number;
   postedBy: string;
+  clientAvatar?: string;
   postedAt: string;
   updatedAt?: string;
   timeAgo: string;
@@ -21,6 +22,7 @@ export interface Job {
   ratingCount: number;
   positionsNeeded: number;
   applicantsCount: number;
+  savesCount: number;
   timeline: string;
   thumbnail: string;
   skills?: string[];
@@ -83,6 +85,7 @@ export const JobCardSkeleton: React.FC<{ viewType?: ViewType }> = ({ viewType = 
           </div>
           <div className="flex gap-2">
             <div className="h-5 w-28 rounded bg-white/5" />
+            <div className="h-5 w-20 rounded bg-white/5" />
             <div className="h-5 w-20 rounded bg-white/5" />
           </div>
         </div>
@@ -203,11 +206,12 @@ const JobList: React.FC<JobListProps> = ({
                       )}
                       <button
                         onClick={(e) => onToggleSave(e, job.id)}
-                        className={`p-1.5 rounded-full bg-black/50 backdrop-blur-sm transition-colors ${
+                        className={`p-1.5 rounded-full bg-black/50 backdrop-blur-sm transition-colors flex items-center gap-1 ${
                           job.isSaved ? "text-yellow-500" : "text-zinc-400 hover:text-white"
                         }`}
                       >
                         <Bookmark className={`h-4 w-4 ${job.isSaved ? "fill-current" : ""}`} />
+                        <span className="text-[10px] font-bold">{job.savesCount}</span>
                       </button>
                     </div>
                   </div>
@@ -216,7 +220,7 @@ const JobList: React.FC<JobListProps> = ({
                   <div className="flex flex-wrap items-center gap-1.5 mb-2">
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
-                        job.status === "Open"
+                        job.status?.toLowerCase() === "open"
                           ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                           : "bg-red-500/10 text-red-400 border-red-500/20"
                       }`}
@@ -244,12 +248,15 @@ const JobList: React.FC<JobListProps> = ({
                   </p>
                 </div>
 
-                {/* Footer showing Relative Time */}
                 <div className="pt-3 border-t border-white/5 flex items-center justify-between text-[11px] text-zinc-400 font-medium">
                   <div className="flex items-center gap-1.5 truncate">
-                    <div className="h-5 w-5 shrink-0 rounded-full bg-zinc-800 flex items-center justify-center text-[9px] text-white font-bold border border-white/10">
-                      {job.postedBy.charAt(0)}
-                    </div>
+                    {job.clientAvatar ? (
+                      <img src={job.clientAvatar} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover border border-white/10" />
+                    ) : (
+                      <div className="h-5 w-5 shrink-0 rounded-full bg-zinc-800 flex items-center justify-center text-[9px] text-white font-bold border border-white/10">
+                        {job.postedBy.charAt(0)}
+                      </div>
+                    )}
                     <span className="truncate text-zinc-300 font-semibold">{job.postedBy}</span>
                   </div>
 
@@ -293,7 +300,7 @@ const JobList: React.FC<JobListProps> = ({
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
-                          job.status === "Open"
+                          job.status?.toLowerCase() === "open"
                             ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                             : "bg-red-500/10 text-red-400 border-red-500/20"
                         }`}
@@ -329,9 +336,10 @@ const JobList: React.FC<JobListProps> = ({
                       )}
                       <button
                         onClick={(e) => onToggleSave(e, job.id)}
-                        className={`transition-colors ${job.isSaved ? "text-yellow-500" : "text-zinc-600 hover:text-white"}`}
+                        className={`transition-colors flex items-center gap-1 ${job.isSaved ? "text-yellow-500" : "text-zinc-600 hover:text-white"}`}
                       >
                         <Bookmark className={`h-5 w-5 ${job.isSaved ? "fill-current" : ""}`} />
+                        <span className="text-xs font-bold">{job.savesCount}</span>
                       </button>
                     </div>
                   </div>
@@ -367,12 +375,15 @@ const JobList: React.FC<JobListProps> = ({
                   <p className="text-[11px] text-zinc-500 font-medium mb-1">{job.timeAgo}</p>
                 </div>
 
-                {/* Footer */}
                 <div className="mt-2 pt-4 border-t border-white/5 flex flex-wrap items-center justify-between text-[10px] text-zinc-400 gap-3">
                   <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] text-white font-bold border border-white/10 overflow-hidden">
-                      {job.postedBy.charAt(0)}
-                    </div>
+                    {job.clientAvatar ? (
+                      <img src={job.clientAvatar} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover border border-white/10" />
+                    ) : (
+                      <div className="h-6 w-6 shrink-0 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] text-white font-bold border border-white/10 overflow-hidden">
+                        {job.postedBy.charAt(0)}
+                      </div>
+                    )}
                     <div className="text-left leading-tight">
                       <p className="text-xs font-bold text-zinc-300">{job.postedBy}</p>
                       <div className="flex items-center gap-1 text-[10px] text-zinc-400">
@@ -388,6 +399,9 @@ const JobList: React.FC<JobListProps> = ({
                     </span>
                     <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
                       {job.applicantsCount} applicants
+                    </span>
+                    <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
+                      {job.savesCount} saves
                     </span>
                     <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5 flex items-center gap-1">
                       <Clock className="h-3 w-3 text-zinc-500" /> {job.timeline}

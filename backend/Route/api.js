@@ -16,6 +16,7 @@ const verificationRoutes = require('./verification');
 const ticketRoutes = require('./ticket');
 const notificationRoutes = require('./notification');
 const jobRoutes = require('./job');
+const termsRoutes = require('./terms');
 const { getAllCountriesController,
     getAllPlacesController
 } = require('../Controllers/SystemControllers')
@@ -36,6 +37,8 @@ router.use('/verification', verificationRoutes);
 router.use('/tickets', ticketRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/jobs', jobRoutes);
+router.use('/terms-of-service', termsRoutes);
+
 router.get('/countries', getAllCountriesController);
 router.get('/places', getAllPlacesController);
 module.exports = router;

@@ -161,9 +161,13 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
               {/* Client Profile Card */}
               <div className="p-3.5 rounded-xl border border-white/5 bg-white/[0.02] flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="h-8 w-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs text-white font-bold border border-white/10 shrink-0">
-                    {selectedJob.postedBy.charAt(0)}
-                  </div>
+                  {selectedJob.clientAvatar ? (
+                    <img src={selectedJob.clientAvatar} alt="" className="h-8 w-8 rounded-full object-cover border border-white/10 shrink-0" />
+                  ) : (
+                    <div className="h-8 w-8 rounded-full bg-zinc-800 flex items-center justify-center text-xs text-white font-bold border border-white/10 shrink-0">
+                      {selectedJob.postedBy.charAt(0)}
+                    </div>
+                  )}
                   <div className="text-left min-w-0">
                     <p className="text-[9px] uppercase text-zinc-500 font-bold tracking-wider">
                       Project Client

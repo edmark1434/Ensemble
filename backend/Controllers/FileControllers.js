@@ -2,7 +2,8 @@
 const {
     getAllProfileFilesServices,
     generateUploadUrl,
-    uploadFileToS3
+    uploadFileToS3,
+    registerFileService
 } = require('../Services/FileServices');
 
 async function getAllProfileFilesController(req, res) {
@@ -130,8 +131,27 @@ async function uploadFileToS3Controller(req, res) {
     }
 }
 
+async function registerFileController(req, res) {
+    try {
+        const userId = req.user?.account_id;
+        if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+        const { name, path, mimeType, sizeBytes } = req.body;
+        if (!name || !path) {
+            return res.status(400).json({ success: false, message: 'Missing name or path' });
+        }
+
+        const fileId = await registerFileService(name, path, mimeType, sizeBytes);
+        res.status(200).json({ success: true, fileId });
+    } catch (err) {
+        console.error('Error in registerFileController:', err);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+}
+
 module.exports = {
     getAllProfileFilesController,
     generateUploadUrlController,
-    uploadFileToS3Controller
+    uploadFileToS3Controller,
+    registerFileController
 };

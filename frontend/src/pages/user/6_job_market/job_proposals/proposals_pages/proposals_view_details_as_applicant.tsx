@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -23,16 +23,21 @@ import {
   UserCheck2,
 } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
+import { useJobs } from "@/hooks/useJobs";
 
 import { sampleIncomingProposals, sampleSentProposals } from "../proposals_datasets";
 import { sampleJobs } from "../../job_datasets";
 import type { ProposalItemData, ProposalStatus } from "../proposals_components/proposals_list";
 
-export const ProposalsViewDetailsPage: React.FC = () => {
-  const { jobPostId, proposalId } = useParams<{ jobPostId: string; proposalId: string }>();
+export const ProposalsViewDetailsAsApplicant: React.FC = () => {
+  const { proposalId } = useParams<{ proposalId: string }>();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const { fetchProposalById, withdrawProposal, loading } = useJobs();
 
   const [proposal, setProposal] = useState<ProposalItemData | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
 
   // Decision Modal States
   const [isShortlistModalOpen, setIsShortlistModalOpen] = useState(false);
@@ -42,18 +47,67 @@ export const ProposalsViewDetailsPage: React.FC = () => {
   const [rejectionReason, setRejectionReason] = useState("");
 
   const [isAcceptConfirmOpen, setIsAcceptConfirmOpen] = useState(false);
+  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
 
   useEffect(() => {
-    const found =
-      sampleIncomingProposals.find((p) => p.id === proposalId) ||
-      sampleSentProposals.find((p) => p.id === proposalId);
+    const loadProposal = async () => {
+      if (!proposalId) return;
+      setIsInitializing(true);
+      try {
+        const isIncoming = false;
+        const p = await fetchProposalById(proposalId);
+        
+        if (p) {
+          setProposal({
+            id: p.proposal_id,
+            jobId: p.job_id,
+            jobTitle: p.job_title || "Unknown Job",
+            partyName: (isIncoming ? p.freelancer_name || p.freelancer_handle : p.client_name || p.client_handle) || "Unknown",
+            clientName: p.client_name || p.client_handle || "Unknown Client",
+            clientAvatar: p.client_avatar_path ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${p.client_avatar_path}` : undefined,
+            freelancerName: p.freelancer_name || p.freelancer_handle || "Unknown Freelancer",
+            freelancerAvatar: p.freelancer_avatar_path ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${p.freelancer_avatar_path}` : undefined,
+            rating: 5.0, // Default since we don't fetch real rating yet
+            bidAmount: parseFloat(p.rate_credits) || 0,
+            additionalWorkRate: parseFloat(p.revision_price_credits) || 0,
+            coverLetter: p.letter || "",
+            tosContent: p.terms_content || "No terms content available",
+            tosTitle: p.terms_title || "Standard Terms",
+            tosDescription: p.terms_type || "No description provided",
+            submittedAt: new Date(p.created_at).toLocaleDateString(),
+            submittedAgo: "Recently",
+            jobPostedAt: p.job_created_at ? new Date(p.job_created_at).toLocaleDateString() : "N/A",
+            status: p.status,
+            type: isIncoming ? "incoming" : "sent",
+            rejectionReason: p.reject_reason,
+            milestones: (p.milestones || [])
+              .filter((m: any) => m && m.id)
+              .map((m: any) => ({
+                id: m.id,
+                name: m.name,
+                description: m.description,
+                hours: parseFloat(m.hours) || 0,
+                revisions: parseInt(m.revisions, 10) || 0
+            }))
+          });
+        } else {
+          setDebugInfo({ 
+            error: "Not found", 
+            searchId: proposalId,
+          });
+        }
+      } catch (err) {
+        console.error("Failed to load proposal details", err);
+        setDebugInfo({ error: "Fetch failed", message: String(err) });
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+    loadProposal();
+  }, [proposalId, pathname]);
 
-    if (found) {
-      setProposal(found);
-    }
-  }, [proposalId]);
-
-  const targetJob = sampleJobs.find((j) => j.id === (proposal?.jobId || jobPostId));
+  const targetJob = sampleJobs.find((j) => j.id === proposal?.jobId);
 
   const handleConfirmShortlist = () => {
     if (!shortlistMessage.trim()) return;
@@ -130,6 +184,21 @@ export const ProposalsViewDetailsPage: React.FC = () => {
     setIsAcceptConfirmOpen(false);
   };
 
+  const handleWithdrawProposal = async () => {
+    if (!proposalId) return;
+    setIsWithdrawing(true);
+    try {
+      await withdrawProposal(proposalId);
+      navigate("/jobs/proposals/sent");
+    } catch (err) {
+      console.error("Failed to withdraw proposal", err);
+      // Fallback/Silent error handle for now
+    } finally {
+      setIsWithdrawing(false);
+      setIsWithdrawModalOpen(false);
+    }
+  };
+
   const handleViewProfile = (userName: string) => {
     navigate(`/profile/${encodeURIComponent(userName)}`);
   };
@@ -143,14 +212,30 @@ export const ProposalsViewDetailsPage: React.FC = () => {
     }
   };
 
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-[#080a12] text-white flex items-center justify-center p-6">
+        <div className="text-center space-y-3">
+          <div className="h-8 w-8 rounded-full border-4 border-blue-500/20 border-t-blue-500 animate-spin mx-auto" />
+          <p className="text-sm text-zinc-400 font-medium animate-pulse">Loading proposal details...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!proposal) {
     return (
       <div className="min-h-screen bg-[#080a12] text-white flex items-center justify-center p-6">
         <div className="text-center space-y-3">
           <p className="text-sm text-zinc-400 font-medium">Proposal application not found.</p>
+          {debugInfo && (
+             <div className="text-xs text-red-400 mt-2 p-2 bg-red-500/10 rounded">
+                Debug: {JSON.stringify(debugInfo)}
+             </div>
+          )}
           <button
             onClick={() => navigate("/jobs/proposals")}
-            className="px-4 py-2 rounded-xl bg-blue-500 text-xs font-bold text-white hover:bg-blue-600 transition"
+            className="px-4 py-2 mt-4 rounded-xl bg-blue-500 text-xs font-bold text-white hover:bg-blue-600 transition"
           >
             Return to Proposals Overview
           </button>
@@ -159,8 +244,8 @@ export const ProposalsViewDetailsPage: React.FC = () => {
     );
   }
 
-  const jobAuthorName = targetJob?.postedBy || "Job Client";
-  const proposerName = proposal.partyName;
+  const jobAuthorName = proposal.clientName || "Job Client";
+  const proposerName = proposal.freelancerName || "Applicant";
 
   const milestonePayout = Math.floor(
     proposal.bidAmount / (proposal.milestones.length || 1)
@@ -222,9 +307,17 @@ export const ProposalsViewDetailsPage: React.FC = () => {
               {/* 1. APPLICANT (PROPOSER) AT TOP */}
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 pb-5">
                 <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="h-12 w-12 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-lg font-bold shrink-0">
-                    {proposerName[0]}
-                  </div>
+                  {proposal.freelancerAvatar ? (
+                    <img
+                      src={proposal.freelancerAvatar}
+                      alt={proposerName}
+                      className="h-12 w-12 rounded-full border border-emerald-500/20 object-cover shrink-0"
+                    />
+                  ) : (
+                    <div className="h-12 w-12 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-lg font-bold shrink-0">
+                      {proposerName[0]}
+                    </div>
+                  )}
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <h1 className="text-lg font-bold text-white tracking-tight truncate">
@@ -250,7 +343,7 @@ export const ProposalsViewDetailsPage: React.FC = () => {
                   className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-zinc-300 hover:text-white transition shrink-0"
                 >
                   <User className="h-3.5 w-3.5 text-emerald-400" />
-                  <span>{proposal.type === "sent" ? "View Your Profile" : "View Freelancer Profile"}</span>
+                  <span>{proposal.type === "sent" ? "View Your Profile" : "View Applicant Profile"}</span>
                 </button>
               </div>
 
@@ -308,9 +401,17 @@ export const ProposalsViewDetailsPage: React.FC = () => {
                 {/* Author Info Embedded Inside Job Post Card */}
                 <div className="p-3 rounded-xl border border-white/5 bg-white/[0.01] flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="h-7 w-7 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-xs font-bold shrink-0">
-                      {jobAuthorName[0]}
-                    </div>
+                    {proposal.clientAvatar ? (
+                      <img
+                        src={proposal.clientAvatar}
+                        alt={jobAuthorName}
+                        className="h-7 w-7 rounded-full border border-blue-500/20 object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="h-7 w-7 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-xs font-bold shrink-0">
+                        {jobAuthorName[0]}
+                      </div>
+                    )}
                     <div className="min-w-0">
                       <span className="text-[10px] font-bold text-zinc-500 uppercase block">Job Author</span>
                       <h4 className="text-xs font-bold text-white truncate">{jobAuthorName}</h4>
@@ -322,7 +423,7 @@ export const ProposalsViewDetailsPage: React.FC = () => {
                     className="px-2.5 py-1 text-[10px] font-semibold text-zinc-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 transition shrink-0 flex items-center gap-1"
                   >
                     <User className="h-3 w-3 text-blue-400" />
-                    <span>{proposal.type === "incoming" ? "Your Profile" : "Client Profile"}</span>
+                    <span>{proposal.type === "incoming" ? "View Your Profile" : "View Client Profile"}</span>
                   </button>
                 </div>
 
@@ -332,7 +433,7 @@ export const ProposalsViewDetailsPage: React.FC = () => {
                     <span className="text-zinc-500 flex items-center gap-1">
                       <Calendar className="h-3 w-3 text-zinc-500" /> Job Posted Date:
                     </span>
-                    <strong className="text-zinc-300 font-mono">{targetJob?.postedAt || "N/A"} ({targetJob?.timeAgo || ""})</strong>
+                    <strong className="text-zinc-300 font-mono">{proposal.jobPostedAt}</strong>
                   </div>
 
                   <div className="flex items-center justify-between">
@@ -434,10 +535,20 @@ export const ProposalsViewDetailsPage: React.FC = () => {
             </div>
 
             {/* SECTION 4: Terms of Service */}
-            <div className="rounded-3xl border border-white/10 bg-[#0d0f1a]/80 p-6 backdrop-blur-xl shadow-2xl space-y-3">
-              <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                <FileText className="h-4 w-4 text-blue-400" /> Proposed Terms of Service (TOS)
-              </h3>
+            <div className="rounded-3xl border border-white/10 bg-[#0d0f1a]/80 p-6 backdrop-blur-xl shadow-2xl space-y-4">
+              <div className="flex items-center gap-3 pb-3 border-b border-white/5">
+                <div className="h-10 w-10 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white tracking-wider">
+                    {proposal.tosTitle}
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">
+                    {proposal.tosDescription}
+                  </p>
+                </div>
+              </div>
               <div className="p-4 rounded-2xl border border-white/5 bg-white/[0.01] text-xs text-zinc-400 font-mono leading-relaxed whitespace-pre-line">
                 {proposal.tosContent}
               </div>
@@ -469,51 +580,26 @@ export const ProposalsViewDetailsPage: React.FC = () => {
           {proposal.type === "incoming" && (
             <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
 
-              {/* Option 1: PENDING STATE -> Reject or Shortlist */}
+              {/* Option 1: PENDING STATE -> Chat */}
               {proposal.status === "Pending" && (
                 <>
-                  {/* Expandable Reject Button */}
+                  {/* Expandable Withdraw Button */}
                   <button
-                    onClick={() => setIsRejectModalOpen(true)}
-                    className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-xs font-bold text-red-400 transition-all duration-300 hover:bg-red-500/20 hover:shadow-lg hover:shadow-red-500/10"
+                    onClick={() => setIsWithdrawModalOpen(true)}
+                    className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-400 transition-all duration-300 hover:bg-red-500/20 hover:shadow-lg hover:shadow-red-500/10"
                   >
                     <XCircle className="h-4 w-4 shrink-0" />
-                    <span className="whitespace-nowrap max-w-[45px] transition-all duration-300 group-hover:max-w-[150px]">
-                      <span className="inline group-hover:hidden">Reject</span>
-                      <span className="hidden group-hover:inline">Reject Proposal</span>
-                    </span>
-                  </button>
-
-                  {/* Expandable Shortlist Button */}
-                  <button
-                    onClick={() => setIsShortlistModalOpen(true)}
-                    className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2.5 text-xs font-bold text-blue-400 transition-all duration-300 hover:bg-blue-500/20 hover:shadow-lg hover:shadow-blue-500/10"
-                  >
-                    <UserCheck className="h-4 w-4 shrink-0" />
-                    <span className="whitespace-nowrap max-w-[60px] transition-all duration-300 group-hover:max-w-[160px]">
-                      <span className="inline group-hover:hidden">Shortlist</span>
-                      <span className="hidden group-hover:inline">Mark as Shortlist</span>
+                    <span className="whitespace-nowrap max-w-[65px] transition-all duration-300 group-hover:max-w-[150px]">
+                      <span className="inline group-hover:hidden">Withdraw</span>
+                      <span className="hidden group-hover:inline">Withdraw Proposal</span>
                     </span>
                   </button>
                 </>
               )}
 
-              {/* Option 2: SHORTLISTED STATE -> Reject, Accept, or Chat */}
+              {/* Option 2: SHORTLISTED STATE -> Chat, Withdraw */}
               {proposal.status === "Shortlisted" && (
                 <>
-                  {/* Expandable Reject Button */}
-                  <button
-                    onClick={() => setIsRejectModalOpen(true)}
-                    className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-xs font-bold text-red-400 transition-all duration-300 hover:bg-red-500/20 hover:shadow-lg hover:shadow-red-500/10"
-                  >
-                    <XCircle className="h-4 w-4 shrink-0" />
-                    <span className="whitespace-nowrap max-w-[45px] transition-all duration-300 group-hover:max-w-[150px]">
-                      <span className="inline group-hover:hidden">Reject</span>
-                      <span className="hidden group-hover:inline">Reject Proposal</span>
-                    </span>
-                  </button>
-
-                  {/* Expandable Chat Button */}
                   <button
                     onClick={() =>
                       navigate(`/inbox?user=${encodeURIComponent(proposal.partyName)}`)
@@ -527,15 +613,15 @@ export const ProposalsViewDetailsPage: React.FC = () => {
                     </span>
                   </button>
 
-                  {/* Expandable Accept Button */}
+                  {/* Expandable Withdraw Button */}
                   <button
-                    onClick={() => setIsAcceptConfirmOpen(true)}
-                    className="group relative flex items-center gap-2 overflow-hidden rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-bold text-white transition-all duration-300 hover:bg-emerald-600 hover:shadow-lg hover:shadow-emerald-500/20"
+                    onClick={() => setIsWithdrawModalOpen(true)}
+                    className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-400 transition-all duration-300 hover:bg-red-500/20 hover:shadow-lg hover:shadow-red-500/10"
                   >
-                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    <span className="whitespace-nowrap max-w-[50px] transition-all duration-300 group-hover:max-w-[220px]">
-                      <span className="inline group-hover:hidden">Accept</span>
-                      <span className="hidden group-hover:inline">Accept Proposal & Form Contract</span>
+                    <XCircle className="h-4 w-4 shrink-0" />
+                    <span className="whitespace-nowrap max-w-[65px] transition-all duration-300 group-hover:max-w-[150px]">
+                      <span className="inline group-hover:hidden">Withdraw</span>
+                      <span className="hidden group-hover:inline">Withdraw Proposal</span>
                     </span>
                   </button>
                 </>
@@ -548,109 +634,31 @@ export const ProposalsViewDetailsPage: React.FC = () => {
               )}
             </div>
           )}
+
+          {/* Actions Bar for Freelancer (Applicant) */}
+          {proposal.type === "sent" && proposal.status === "Pending" && (
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setIsWithdrawModalOpen(true)}
+                className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-400 transition-all duration-300 hover:bg-red-500/20 hover:shadow-lg hover:shadow-red-500/10"
+              >
+                <XCircle className="h-4 w-4 shrink-0" />
+                <span className="whitespace-nowrap max-w-[65px] transition-all duration-300 group-hover:max-w-[150px]">
+                  <span className="inline group-hover:hidden">Withdraw</span>
+                  <span className="hidden group-hover:inline">Withdraw Proposal</span>
+                </span>
+              </button>
+            </div>
+          )}
         </div>
 
       </motion.div>
 
       {/* POPUP MODALS */}
 
-      {/* 1. SHORTLIST MODAL */}
+      {/* 4. WITHDRAW MODAL */}
       <AnimatePresence>
-        {isShortlistModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0d0f1a] p-6 shadow-2xl space-y-4 text-left"
-            >
-              <div className="space-y-1">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <UserCheck className="h-4 w-4 text-blue-400" /> Shortlist Candidate
-                </h3>
-                <p className="text-xs text-zinc-400">
-                  Send a direct discussion message to <strong className="text-white">{proposal.partyName}</strong> before shortlisting.
-                </p>
-              </div>
-
-              <textarea
-                rows={4}
-                placeholder="Hi! We loved your proposal and milestone breakdown. Let's discuss timeline specifics..."
-                value={shortlistMessage}
-                onChange={(e) => setShortlistMessage(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white outline-none focus:border-blue-500/50 transition resize-y"
-              />
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  onClick={() => setIsShortlistModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-white/10 text-xs font-bold text-zinc-400 hover:text-white transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleConfirmShortlist}
-                  disabled={!shortlistMessage.trim()}
-                  className="px-4 py-2 rounded-xl bg-blue-500 text-xs font-bold text-white hover:bg-blue-600 disabled:opacity-50 transition shadow-lg shadow-blue-500/20"
-                >
-                  Send & Shortlist
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* 2. REJECT MODAL */}
-      <AnimatePresence>
-        {isRejectModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0d0f1a] p-6 shadow-2xl space-y-4 text-left"
-            >
-              <div className="space-y-1">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <XCircle className="h-4 w-4 text-red-400" /> Reject Proposal
-                </h3>
-                <p className="text-xs text-zinc-400">
-                  Provide a brief rejection rationale for <strong className="text-white">{proposal.partyName}</strong>.
-                </p>
-              </div>
-
-              <textarea
-                rows={3}
-                placeholder="e.g., Target timeline does not match our launch date..."
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white outline-none focus:border-red-500/50 transition resize-y"
-              />
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  onClick={() => setIsRejectModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-white/10 text-xs font-bold text-zinc-400 hover:text-white transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleConfirmReject}
-                  disabled={!rejectionReason.trim()}
-                  className="px-4 py-2 rounded-xl bg-red-500 text-xs font-bold text-white hover:bg-red-600 disabled:opacity-50 transition shadow-lg shadow-red-500/20"
-                >
-                  Confirm Rejection
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* 3. ACCEPT CONFIRMATION MODAL */}
-      <AnimatePresence>
-        {isAcceptConfirmOpen && (
+        {isWithdrawModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
@@ -660,37 +668,38 @@ export const ProposalsViewDetailsPage: React.FC = () => {
             >
               <div className="space-y-2">
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400" /> Confirm Proposal Acceptance
+                  <XCircle className="h-4 w-4 text-red-400" /> Withdraw Proposal
                 </h3>
                 <p className="text-xs text-zinc-300 leading-relaxed">
-                  Are you sure you want to accept this proposal by <strong className="text-white">{proposal.partyName}</strong>?
+                  Are you sure you want to withdraw this proposal?
                 </p>
                 <p className="text-[11px] text-zinc-400 bg-white/5 p-3 rounded-xl border border-white/5">
-                  Accepting will automatically form a binding escrow contract for <strong>₱{proposal.bidAmount.toLocaleString()}</strong> across {proposal.milestones.length} milestone phases.
+                  Withdrawing your proposal will permanently cancel it and remove it from the client's inbox. This action cannot be undone.
                 </p>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
                 <button
-                  onClick={() => setIsAcceptConfirmOpen(false)}
+                  onClick={() => setIsWithdrawModalOpen(false)}
+                  disabled={isWithdrawing}
                   className="px-4 py-2 rounded-xl border border-white/10 text-xs font-bold text-zinc-400 hover:text-white transition"
                 >
-                  Go Back
+                  Keep Proposal
                 </button>
                 <button
-                  onClick={handleConfirmAccept}
-                  className="px-5 py-2 rounded-xl bg-emerald-500 text-xs font-bold text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20"
+                  onClick={handleWithdrawProposal}
+                  disabled={isWithdrawing}
+                  className="px-5 py-2 rounded-xl bg-red-500 text-xs font-bold text-white hover:bg-red-600 transition shadow-lg shadow-red-500/20 disabled:opacity-50"
                 >
-                  Yes, Form Contract
+                  {isWithdrawing ? "Withdrawing..." : "Yes, Withdraw"}
                 </button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
-
     </div>
   );
 };
 
-export default ProposalsViewDetailsPage;
+export default ProposalsViewDetailsAsApplicant;

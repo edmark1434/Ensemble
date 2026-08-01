@@ -29,6 +29,7 @@ interface CreateReviewProps {
   onEditStep: (step: number) => void;
   onBack: () => void;
   onSubmit: () => void;
+  isSubmitting?: boolean;
 }
 
 interface CustomSelectProps {
@@ -144,6 +145,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
   onEditStep,
   onBack,
   onSubmit,
+  isSubmitting,
 }) => {
   const clearError = (key: string) => {
     setErrors((prev) => {
@@ -289,8 +291,13 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
       {/* Navigation Footer */}
       <div className="pt-4 border-t border-white/5 flex gap-2.5">
         <button type="button" onClick={onBack} className="px-4 py-2.5 rounded-xl border border-white/10 text-zinc-400 font-bold hover:text-white transition text-xs focus:outline-none">Go Back</button>
-        <button type="button" onClick={handlePublishClick} className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-2.5 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 focus:outline-none">
-          <Check className="h-3.5 w-3.5" /> Deploy Active Job Post
+        <button
+          type="button"
+          onClick={handlePublishClick}
+          disabled={isSubmitting}
+          className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold text-white transition focus:outline-none shadow-lg ${isSubmitting ? 'bg-blue-500/50 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'}`}
+        >
+          {isSubmitting ? 'Submitting...' : 'Deploy Active Job Post'} <Check className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>

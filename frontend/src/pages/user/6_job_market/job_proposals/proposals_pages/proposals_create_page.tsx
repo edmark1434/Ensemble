@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import ShapeGrid from "@/components/ui/ShapeGrid";
+import { useJobs } from "@/hooks/useJobs";
 
 // Sub-components & Wizard Steps
 import ProposalCreateHeader from "../proposals_components/proposals_creation_components/proposal_create_header";
@@ -23,6 +24,9 @@ const ProposalsCreatePage: React.FC = () => {
   const [job, setJob] = useState<Job | null>(null);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const { createProposal, fetchJobs } = useJobs();
 
   // Step 1: Pitch & Pricing States
   const [bidAmount, setBidAmount] = useState("");
@@ -54,13 +58,45 @@ const ProposalsCreatePage: React.FC = () => {
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   useEffect(() => {
-    if (id) {
-      const found = sampleJobs.find((j) => j.id === id);
-      if (found) {
-        setJob(found);
+    const loadJob = async () => {
+      try {
+        const fetchedJobs = await fetchJobs();
+        const found = fetchedJobs.find((j: any) => j.job_id === id);
+        if (found) {
+          setJob({
+            id: found.job_id,
+            title: found.title,
+            description: found.description,
+            status: found.status,
+            category: found.category,
+            difficulty: found.experience_level,
+            priceRange: `${found.rate_credits_min?.toLocaleString() || 0} ~ ${found.rate_credits_max?.toLocaleString() || 0}`,
+            minBudget: found.rate_credits_min || 0,
+            maxBudget: found.rate_credits_max || 0,
+            postedBy: found.client_name || found.client_handle || "Unknown",
+            clientAvatar: found.client_avatar_path ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${found.client_avatar_path}` : undefined,
+            postedAt: new Date(found.created_at).toLocaleString(),
+            timeAgo: "Recently", // Simplified
+            clientRating: 5.0,
+            ratingCount: 0,
+            positionsNeeded: found.no_of_hires || 1,
+            applicantsCount: Number(found.applicant_count || 0),
+            savesCount: Number(found.saves_count || 0),
+            timeline: `${found.timeline_min}-${found.timeline_max} Days`,
+            thumbnail: found.thumbnail_path ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${found.thumbnail_path}` : "/placeholder.svg",
+            skills: found.tags || [],
+            isSaved: found.is_saved || false,
+            isOwnPost: false // Ignore for proposal creation
+          });
+        }
+      } catch (err) {
+        console.error("Failed to load job for proposal", err);
       }
+    };
+    if (id) {
+      loadJob();
     }
-  }, [id]);
+  }, [id, fetchJobs]);
 
   const hasUnsavedChanges = Boolean(bidAmount || coverLetter);
 
@@ -78,6 +114,8 @@ const ProposalsCreatePage: React.FC = () => {
 
     if (!bidAmount || rawBid <= 0) {
       stepErrors.bidAmount = "A valid bid amount is required.";
+    } else if (job && (rawBid < job.minBudget || rawBid > job.maxBudget)) {
+      stepErrors.bidAmount = `Your bid must be between ₱${job.minBudget.toLocaleString()} and ₱${job.maxBudget.toLocaleString()}.`;
     }
     if (!coverLetter.trim() || coverLetter.length < 50) {
       stepErrors.coverLetter = "Cover pitch must be at least 50 characters long.";
@@ -105,18 +143,35 @@ const ProposalsCreatePage: React.FC = () => {
     setCurrentSlide(4);
   };
 
-  const handleSubmit = () => {
-    const payload = {
-      jobId: id,
-      bidAmount: parseInt(bidAmount),
-      additionalWorkRate,
-      coverLetter,
-      tosContent,
-      milestones,
-    };
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    try {
+      if (!id) throw new Error("Job ID is missing.");
+      
+      const payload = {
+        job_id: id,
+        rate_credits: parseInt(bidAmount),
+        revision_price_credits: additionalWorkRate,
+        letter: coverLetter,
+        tos_title: sampleTosTemplates.find(t => t.id === selectedTosId)?.name || "Custom Terms",
+        tos_content: tosContent,
+        terms_id: null,  
+        milestones: milestones.map(m => ({
+          title: m.name,
+          description: m.description,
+          est_hrs: m.hours,
+          max_rev: m.revisions
+        })),
+      };
 
-    console.log("Submitting Final Proposal:", payload);
-    setIsSuccessOpen(true);
+      await createProposal(id, payload);
+      setIsSuccessOpen(true);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "Failed to submit proposal.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -210,6 +265,7 @@ const ProposalsCreatePage: React.FC = () => {
                   onEditStep={setCurrentSlide}
                   onBack={() => setCurrentSlide(3)}
                   onSubmit={handleSubmit}
+                  isSubmitting={isSubmitting}
                 />
               </motion.div>
             )}

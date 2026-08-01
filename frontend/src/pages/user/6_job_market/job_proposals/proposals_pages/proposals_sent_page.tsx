@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useOutletContext } from "react-router-dom";
 import ProposalsList, {
   type ProposalStatus,
 } from "../proposals_components/proposals_list";
 import { sampleSentProposals } from "../proposals_datasets";
 import type { ProposalsMainContext } from "../proposals_main";
+import { useJobs } from "@/hooks/useJobs";
 
 export const ProposalsSentPage: React.FC = () => {
   const {
@@ -20,7 +21,36 @@ export const ProposalsSentPage: React.FC = () => {
     viewType,
   } = useOutletContext<ProposalsMainContext>();
 
-  const [proposals, setProposals] = useState(sampleSentProposals);
+  const [proposals, setProposals] = useState<any[]>([]);
+  const { fetchSentProposals } = useJobs();
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const fetched = await fetchSentProposals();
+        const mapped = fetched.map((p: any) => ({
+          id: p.proposal_id,
+          jobId: p.job_id,
+          jobTitle: p.job_title || "Unknown Job",
+          jobCategory: p.job_category || "Uncategorized",
+          partyName: p.client_name || p.client_handle || "Unknown",
+          partyAvatar: p.client_avatar_path ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${p.client_avatar_path}` : undefined,
+          bidAmount: parseFloat(p.rate_credits) || 0,
+          additionalWorkRate: parseFloat(p.revision_price_credits) || 0,
+          status: p.status,
+          submittedAt: new Date(p.created_at).toLocaleDateString(),
+          coverLetter: p.letter || "",
+          rejectionReason: p.reject_reason,
+          milestones: p.milestones || [],
+          type: "sent"
+        }));
+        setProposals(mapped);
+      } catch (err) {
+        console.error("Failed to load sent proposals", err);
+      }
+    };
+    loadData();
+  }, [fetchSentProposals]);
 
   const handleUpdateStatus = (
     id: string,

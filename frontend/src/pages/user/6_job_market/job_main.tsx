@@ -9,13 +9,29 @@ import JobCategories from "./job_components/job_categories";
 import JobFilters from "./job_components/job_filters";
 import JobListViewType from "./job_components/job_list_viewtype";
 import JobViewDetails from "./job_components/job_viewdetails";
-// import UtilScrollTop from "../../../components/utility/util_scroll_top.tsx";
 import PopupReportJob from "./job_components/job_popups/popup_report_job";
 import type { ViewType } from "./job_components/job_list_viewtype";
+import { useJobs } from "@/hooks/useJobs";
+import useGlobalState from "@/lib/global_state";
 
 // Datasets & Types
 import { sampleJobs, sampleCategories } from "./job_datasets";
 import type { Job } from "./job_components/job_lists";
+
+function getTimeAgo(date: Date) {
+  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+  let interval = seconds / 31536000;
+  if (interval > 1) return Math.floor(interval) + " years ago";
+  interval = seconds / 2592000;
+  if (interval > 1) return Math.floor(interval) + " months ago";
+  interval = seconds / 86400;
+  if (interval > 1) return Math.floor(interval) + " days ago";
+  interval = seconds / 3600;
+  if (interval > 1) return Math.floor(interval) + " hours ago";
+  interval = seconds / 60;
+  if (interval > 1) return Math.floor(interval) + " mins ago";
+  return "Just now";
+}
 
 export interface JobMainContext {
   jobsList: Job[];
@@ -54,12 +70,14 @@ const JobMain: React.FC = () => {
   const location = useLocation();
   const { id } = useParams();
 
+  const { fetchJobs, toggleSaveJob: toggleSaveJobApi } = useJobs();
+  const userInfo = useGlobalState((state) => state.user);
   const [loading, setLoading] = useState(true);
   const [viewType, setViewType] = useState<ViewType>("list");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [activeCategoryFilter, setActiveCategoryFilter] = useState("All");
-  const [jobsList, setJobsList] = useState<Job[]>(sampleJobs);
+  const [jobsList, setJobsList] = useState<Job[]>([]);
 
   // Popup Report State
   const [reportingJob, setReportingJob] = useState<Job | null>(null);
@@ -74,9 +92,52 @@ const JobMain: React.FC = () => {
   const [ratingSort, setRatingSort] = useState<boolean>(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 800);
-    return () => clearTimeout(timer);
-  }, []);
+    const loadJobs = async () => {
+      setLoading(true);
+      try {
+        const fetchedJobs = await fetchJobs();
+        
+        if (!Array.isArray(fetchedJobs)) return;
+
+        // Backend is_saved handles the saved status per account
+        const mappedJobs = fetchedJobs.map((j: any) => ({
+          id: j.job_id,
+          title: j.title,
+          description: j.description,
+          status: j.status,
+          category: j.category,
+          difficulty: j.experience_level,
+          priceRange: `${j.rate_credits_min?.toLocaleString() || 0} ~ ${j.rate_credits_max?.toLocaleString() || 0}`,
+          minBudget: j.rate_credits_min || 0,
+          maxBudget: j.rate_credits_max || 0,
+          postedBy: j.client_name || j.client_handle || "Unknown",
+          clientAvatar: j.client_avatar_path
+            ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${j.client_avatar_path}`
+            : undefined,
+          postedAt: new Date(j.created_at).toLocaleString(),
+          timeAgo: getTimeAgo(new Date(j.created_at)),
+          clientRating: 5.0,
+          ratingCount: 0,
+          positionsNeeded: j.no_of_hires || 1,
+          applicantsCount: Number(j.applicant_count || 0),
+          savesCount: Number(j.saves_count || 0),
+          timeline: `${j.timeline_min}-${j.timeline_max} Days`,
+          thumbnail: j.thumbnail_path 
+             ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${j.thumbnail_path}`
+             : "/placeholder.svg",
+          skills: j.tags || [],
+          isSaved: j.is_saved || false,
+          isOwnPost: userInfo?.account_id === j.client_account_id
+        }));
+        setJobsList(mappedJobs);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadJobs();
+  }, [fetchJobs, userInfo?.account_id]);
 
   useEffect(() => {
     if (id) {
@@ -87,11 +148,41 @@ const JobMain: React.FC = () => {
     }
   }, [id, jobsList]);
 
-  const toggleSaveJob = (e: React.MouseEvent, jobId: string) => {
+  const toggleSaveJob = async (e: React.MouseEvent, jobId: string) => {
     e.stopPropagation();
-    setJobsList((prev) =>
-      prev.map((job) => (job.id === jobId ? { ...job, isSaved: !job.isSaved } : job))
-    );
+    
+    // Optimistic UI update
+    setJobsList((prev) => {
+      return prev.map((job) => {
+        if (job.id === jobId) {
+          return {
+            ...job,
+            isSaved: !job.isSaved,
+            savesCount: job.isSaved ? job.savesCount - 1 : job.savesCount + 1
+          };
+        }
+        return job;
+      });
+    });
+
+    try {
+      await toggleSaveJobApi(jobId);
+    } catch (err) {
+      console.error("Failed to toggle save", err);
+      // Revert on failure (simplified)
+      setJobsList((prev) => {
+        return prev.map((job) => {
+          if (job.id === jobId) {
+            return {
+              ...job,
+              isSaved: !job.isSaved,
+              savesCount: job.isSaved ? job.savesCount - 1 : job.savesCount + 1
+            };
+          }
+          return job;
+        });
+      });
+    }
   };
 
   const handleReportJob = (job: Job) => {
@@ -114,6 +205,23 @@ const JobMain: React.FC = () => {
     setPosSort(null);
     setRatingSort(false);
   };
+
+  const dynamicCategories = useMemo(() => {
+    const counts: Record<string, number> = {};
+    jobsList.forEach((job) => {
+      if (job.category) {
+        counts[job.category] = (counts[job.category] || 0) + 1;
+      }
+    });
+    const catArray = Object.keys(counts).map((name) => ({
+      label: name,
+      count: counts[name],
+    }));
+    return [
+      { label: "All", count: jobsList.length },
+      ...catArray.sort((a, b) => b.count - a.count),
+    ];
+  }, [jobsList]);
 
   const filteredJobs = useMemo(() => {
     const result = jobsList.filter((job) => {
@@ -193,7 +301,7 @@ const JobMain: React.FC = () => {
             ) : (
               <>
                 <JobCategories
-                  categories={sampleCategories}
+                  categories={dynamicCategories}
                   activeCategory={activeCategoryFilter}
                   onCategoryChange={setActiveCategoryFilter}
                 />
