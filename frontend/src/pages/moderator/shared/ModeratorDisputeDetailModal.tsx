@@ -128,6 +128,7 @@ export default function ModeratorDisputeDetailModal({
   endpointBase,
   accent = "sky",
   adminMode = false,
+  deskLabel,
   onClose,
   onUpdated,
 }: {
@@ -135,6 +136,8 @@ export default function ModeratorDisputeDetailModal({
   endpointBase: string;
   accent?: Accent;
   adminMode?: boolean;
+  /** Shown in header when adminMode is on (e.g. Admin / Support). */
+  deskLabel?: string;
   onClose: () => void;
   onUpdated: () => void;
 }) {
@@ -377,7 +380,7 @@ export default function ModeratorDisputeDetailModal({
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
           <div>
             <p className={`text-[10px] font-semibold uppercase tracking-wide ${accentSpinner(accent)}`}>
-              Dispute detail{adminMode ? " · Admin" : ""}
+              Dispute detail{adminMode ? ` · ${deskLabel || "Staff"}` : ""}
             </p>
             <h2 className="text-lg font-bold text-white">{dispute?.number || "Dispute"}</h2>
           </div>

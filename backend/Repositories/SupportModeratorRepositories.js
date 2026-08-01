@@ -182,7 +182,10 @@ async function getSupportDisputes({ status, search, entityType } = {}) {
       COALESCE(ra.display_name, ru.first_name || ' ' || ru.last_name) AS respondent_name,
       ra.handle AS respondent_handle,
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
-      st.role AS assignee_role
+      st.role AS assignee_role,
+      ct.status AS hold_status,
+      ct.amount_credits AS hold_amount,
+      ct.type AS hold_type
     FROM disputes d
     LEFT JOIN accounts ia ON ia.account_id = d.initiator_account_id
     LEFT JOIN users iu ON iu.account_id = ia.account_id
@@ -190,11 +193,12 @@ async function getSupportDisputes({ status, search, entityType } = {}) {
     LEFT JOIN users ru ON ru.account_id = ra.account_id
     LEFT JOIN staff st ON st.staff_id = d.assigned_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
+    LEFT JOIN credit_transactions ct ON ct.credit_transaction_id = d.related_credit_transaction_id
     WHERE ${where.join(' AND ')}
     ORDER BY
       CASE LOWER(d.priority) WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
       COALESCE(d.opened_at, d.created_at) DESC
-    LIMIT 100
+    LIMIT 200
     `,
     params
   );
