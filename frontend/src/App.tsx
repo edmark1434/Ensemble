@@ -89,12 +89,10 @@ import ForumManagement from './pages/moderator/forum-moderator/ForumManagement'
 import ForumGroups from './pages/moderator/forum-moderator/Groups'
 import ForumDiscussions from './pages/moderator/forum-moderator/Discussions'
 import ForumTicketManagement from './pages/moderator/forum-moderator/TicketManagement'
-import ForumRestrictions from './pages/moderator/forum-moderator/Restrictions'
 import MarketplaceModeratorLayout from './pages/moderator/marketplace-moderator/Layout'
 import MarketplaceModeratorDashboard from './pages/moderator/marketplace-moderator/Dashboard'
 import MarketplaceControl from './pages/moderator/marketplace-moderator/MarketplaceControl'
 import MarketplaceTicketManagement from './pages/moderator/marketplace-moderator/TicketManagement'
-import MarketplaceRestrictions from './pages/moderator/marketplace-moderator/Restrictions'
 import SupportModeratorLayout from './pages/moderator/support-moderator/Layout'
 import SupportModeratorDashboard from './pages/moderator/support-moderator/Dashboard'
 import SupportTicketManagement from './pages/moderator/support-moderator/TicketManagement'
@@ -106,7 +104,6 @@ import JobsModeratorDashboard from './pages/moderator/jobs-moderator/Dashboard'
 import JobsGigsControl from './pages/moderator/jobs-moderator/JobsGigsControl'
 import JobsTicketManagement from './pages/moderator/jobs-moderator/TicketManagement'
 import JobsDisputes from './pages/moderator/jobs-moderator/Disputes'
-import JobsRestrictions from './pages/moderator/jobs-moderator/Restrictions'
 import ModeratorSectionPlaceholder from './pages/moderator/SectionPlaceholder'
 import RouteMiddleware from './lib/RouteMiddleware'
 import StaffMiddleware from './lib/StaffMiddleware'
@@ -262,7 +259,6 @@ function App() {
           <Route path='groups' element={<ForumGroups />} />
           <Route path='discussions' element={<ForumDiscussions />} />
           <Route path='ticket-management' element={<ForumTicketManagement />} />
-          <Route path='restrictions' element={<ForumRestrictions />} />
           <Route path='user-team' element={<ModeratorSectionPlaceholder title='USER & TEAM' subtitle='User account management is centralized in the Admin console.' />} />
         </Route>
 
@@ -270,7 +266,6 @@ function App() {
           <Route index element={<MarketplaceModeratorDashboard />} />
           <Route path='marketplace-control' element={<MarketplaceControl />} />
           <Route path='ticket-management' element={<MarketplaceTicketManagement />} />
-          <Route path='restrictions' element={<MarketplaceRestrictions />} />
         </Route>
 
         <Route path='/moderator/support' element={<SupportModeratorLayout />}>
@@ -286,7 +281,6 @@ function App() {
           <Route path='control' element={<JobsGigsControl />} />
           <Route path='ticket-management' element={<JobsTicketManagement />} />
           <Route path='disputes' element={<JobsDisputes />} />
-          <Route path='restrictions' element={<JobsRestrictions />} />
         </Route>
       </Route>
       </Routes>

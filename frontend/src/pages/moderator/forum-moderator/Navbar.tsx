@@ -2,7 +2,6 @@ import {
   LayoutDashboard,
   MessageSquare,
   MessagesSquare,
-  ShieldAlert,
   Ticket,
   Users,
   UsersRound,
@@ -15,7 +14,6 @@ const navItems = [
   { label: 'Discussions', icon: MessagesSquare, to: '/moderator/forum/discussions' },
   { label: 'Forum Management', icon: MessageSquare, to: '/moderator/forum/forum-management' },
   { label: 'Ticket Management', icon: Ticket, to: '/moderator/forum/ticket-management' },
-  { label: 'Restrictions', icon: ShieldAlert, to: '/moderator/forum/restrictions' },
   { label: 'User & Team', icon: Users, to: '/moderator/forum/user-team' },
 ];
 
