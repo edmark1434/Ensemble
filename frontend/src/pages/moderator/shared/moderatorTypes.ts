@@ -87,9 +87,30 @@ export type ForumContentStats =
       available: true;
       totalGroups: number;
       activeGroups: number;
+      inactiveGroups?: number;
       totalDiscussions: number;
       removedDiscussions: number;
+      lockedDiscussions?: number;
+      stickyDiscussions?: number;
       totalComments: number;
+      recentGroups?: {
+        id: string;
+        name: string;
+        status: string;
+        memberCount: number;
+        createdAt: string | null;
+      }[];
+      recentDiscussions?: {
+        id: string;
+        title: string;
+        groupId: string | null;
+        groupName: string | null;
+        commentCount: number;
+        status: string;
+        isLocked: boolean;
+        isSticky: boolean;
+        updatedAt: string | null;
+      }[];
     };
 
 export type ForumOverview = {
@@ -98,14 +119,23 @@ export type ForumOverview = {
     openTickets: number;
     totalTickets: number;
     unassignedTickets: number;
+    highPriorityTickets?: number;
+    awaitingReplyTickets?: number;
+    escalatedTickets?: number;
+    inProgressTickets?: number;
     flaggedContent: number;
     totalReports: number;
+    unassignedReports?: number;
+    highPriorityReports?: number;
     resolvedTickets: number;
+    resolvedReports?: number;
   };
   forumContent: ForumContentStats;
   charts: {
     ticketStatusMix: ChartSegment[];
     ticketCategories: ChartSegment[];
+    reportStatusMix?: ChartSegment[];
+    reportTypes?: ChartSegment[];
   };
   recentTickets: SupportTicket[];
   flaggedReports: UserReport[];
