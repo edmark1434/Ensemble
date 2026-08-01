@@ -19,7 +19,7 @@ import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
 
 import type { Inbox, Message } from "./inbox_dataset";
-import useChatState from "../chat_bubble/chat_state";
+import useChatState, { formatCallCardText } from "../chat_bubble/chat_state";
 
 import { InboxTab } from "./inbox_components/inbox_tab";
 import { InboxSearch } from "./inbox_components/inbox_search";
@@ -629,10 +629,7 @@ const InboxMain = () => {
     const isCallCard = /^\[video-call:(?:missed|ended)\]/.test(
       message.message_content || ""
     );
-    const callCardText = message.message_content.replace(
-      /^\[video-call:(?:missed|ended)\]\s*/,
-      ""
-    );
+    const callCardText = formatCallCardText(message.message_content);
 
     const previousMessage = index > 0 ? visibleMessages[index - 1] : undefined;
     const showTime = shouldDisplayTimestamp(
@@ -649,6 +646,26 @@ const InboxMain = () => {
       : undefined;
     const isGroupMessage =
       selectedConversation?.conversation_type === "group";
+    const groupSeenAvatars = isGroupMessage
+      ? Array.from(
+          new Set(
+            (message.read_by || [])
+              .map((reader) => String(reader.account_id))
+              .filter((accountId) => accountId !== currentUserId)
+          )
+        ).map((accountId) => {
+          const profile = profiles[accountId];
+          const avatar = profile?.avatar_preset_url;
+          if (avatar && /^https?:\/\//i.test(avatar)) return avatar;
+          if (avatar) {
+            const base = String(import.meta.env.VITE_CLOUDFRONT_URL || "").replace(/\/$/, "");
+            if (base) return `${base}/${avatar.replace(/^\/+/, "")}`;
+          }
+          return `https://ui-avatars.com/api/?name=${encodeURIComponent(
+            profile?.name || `User ${accountId.slice(0, 8)}`
+          )}&background=6366f1&color=fff`;
+        })
+      : [];
     const senderProfile = profiles[String(message.sender_id)];
     const senderName = isSender
       ? "You"
@@ -859,6 +876,14 @@ const InboxMain = () => {
                       String(message._id) === String(latestSeenOwnMessageId) &&
                       isSeen
                         ? recipientAvatar
+                        : undefined
+                    }
+                    recipientAvatars={
+                      isSender &&
+                      isGroupMessage &&
+                      String(message._id) === String(latestSeenOwnMessageId) &&
+                      isSeen
+                        ? groupSeenAvatars
                         : undefined
                     }
                   />
