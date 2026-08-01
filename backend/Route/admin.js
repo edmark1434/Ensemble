@@ -15,8 +15,14 @@ const {
   postAdminAccountPardon,
 } = require('../Controllers/AdminUserTeamControllers');
 
-/** Admin + Support Moderator share User & Team account management. */
-const requireUserTeamAccess = requireStaffRole(['Admin', 'Support Moderator']);
+/** Admin + Support: full User & Team. Forum: read + limited enforcement. */
+const requireUserTeamAccess = requireStaffRole([
+  'Admin',
+  'Support Moderator',
+  'Forum Moderator',
+]);
+/** Credits, verification, pardons, team management, ban — Admin/Support only. */
+const requireUserTeamFullWrite = requireStaffRole(['Admin', 'Support Moderator']);
 const {
   getAdminEconomyOverview,
   getAdminWalletDetail,
@@ -54,15 +60,15 @@ router.get('/staff/roles', [checkSession, requireAdmin], getAdminStaffRoles);
 router.post('/staff', [checkSession, requireAdmin], createAdminStaff);
 router.patch('/staff/:staffId', [checkSession, requireAdmin], patchAdminStaff);
 router.delete('/staff/:staffId', [checkSession, requireAdmin], deleteAdminStaff);
-router.get('/teams-management', [checkSession, requireUserTeamAccess], getAdminTeamsManagement);
+router.get('/teams-management', [checkSession, requireUserTeamFullWrite], getAdminTeamsManagement);
 router.get('/users-management', [checkSession, requireUserTeamAccess], getAdminUsersManagement);
 router.get('/user-team-overview', [checkSession, requireUserTeamAccess], getAdminUserTeamOverview);
 router.patch('/accounts/:accountId/status', [checkSession, requireUserTeamAccess], patchAdminAccountStatus);
-router.patch('/accounts/:accountId/verification', [checkSession, requireUserTeamAccess], patchAdminAccountVerification);
-router.post('/accounts/:accountId/credits/adjust', [checkSession, requireUserTeamAccess], postAdminAccountCreditAdjust);
-router.post('/accounts/:accountId/credits/freeze', [checkSession, requireUserTeamAccess], postAdminAccountCreditFreeze);
+router.patch('/accounts/:accountId/verification', [checkSession, requireUserTeamFullWrite], patchAdminAccountVerification);
+router.post('/accounts/:accountId/credits/adjust', [checkSession, requireUserTeamFullWrite], postAdminAccountCreditAdjust);
+router.post('/accounts/:accountId/credits/freeze', [checkSession, requireUserTeamFullWrite], postAdminAccountCreditFreeze);
 router.post('/accounts/:accountId/warn', [checkSession, requireUserTeamAccess], postAdminAccountWarn);
-router.post('/accounts/:accountId/pardon', [checkSession, requireUserTeamAccess], postAdminAccountPardon);
+router.post('/accounts/:accountId/pardon', [checkSession, requireUserTeamFullWrite], postAdminAccountPardon);
 router.get('/economy-overview', [checkSession, requireAdmin], getAdminEconomyOverview);
 router.get('/economy/wallets/:walletId', [checkSession, requireAdmin], getAdminWalletDetail);
 router.get('/moderation-overview', [checkSession, requireAdmin], getAdminModerationOverview);

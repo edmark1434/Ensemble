@@ -11,6 +11,7 @@ type OverviewData = {
     totalActive: number;
     totalPendingVerification: number;
     totalSuspended: number;
+    totalBanned?: number;
     totalVerifiedBusinesses: number;
   };
   userStats: {
@@ -18,6 +19,7 @@ type OverviewData = {
     totalActive: number;
     totalPendingVerification: number;
     totalSuspended: number;
+    totalBanned?: number;
     totalVerified: number;
   };
   totals: {
@@ -61,6 +63,8 @@ type UserTeamOverviewTabProps = {
   onStatsLoaded?: (pending: number) => void;
   onGoUsers?: () => void;
   onGoTeams?: () => void;
+  /** When false, hide team KPIs / team breakdown (forum enforcement desk). */
+  showTeams?: boolean;
 };
 
 export default function UserTeamOverviewTab({
@@ -68,6 +72,7 @@ export default function UserTeamOverviewTab({
   onStatsLoaded,
   onGoUsers,
   onGoTeams,
+  showTeams = true,
 }: UserTeamOverviewTabProps) {
   const [data, setData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,14 +84,18 @@ export default function UserTeamOverviewTab({
         const res = await api.get('/api/admin/user-team-overview');
         if (res.data?.success) {
           setData(res.data.data);
-          onStatsLoaded?.(res.data.data.totals.combinedPending);
+          onStatsLoaded?.(
+            showTeams
+              ? res.data.data.totals.combinedPending
+              : res.data.data.userStats.totalPendingVerification
+          );
         }
       } finally {
         setLoading(false);
       }
     };
     void load();
-  }, [refreshToken, onStatsLoaded]);
+  }, [refreshToken, onStatsLoaded, showTeams]);
 
   if (loading) {
     return <p className="py-12 text-center text-sm text-zinc-500">Loading overview…</p>;
@@ -97,6 +106,8 @@ export default function UserTeamOverviewTab({
   }
 
   const v = data.verificationBreakdown;
+  const userBanned = data.userStats.totalBanned ?? 0;
+  const teamBanned = data.teamStats.totalBanned ?? 0;
 
   return (
     <div className="space-y-6">
@@ -122,20 +133,49 @@ export default function UserTeamOverviewTab({
         ))}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div
+        className={`grid gap-3 sm:grid-cols-2 ${showTeams ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}
+      >
         {[
-          { label: 'Platform users', value: data.totals.users, sub: `${data.totals.activeUsers} active`, icon: UserCircle },
-          { label: 'Production teams', value: data.totals.teams, sub: `${data.totals.activeTeams} active`, icon: Users },
-          { label: 'Pending verification', value: data.totals.combinedPending, sub: 'Users + teams', icon: AlertTriangle },
-          { label: 'Verified users', value: data.userStats.totalVerified, sub: `${data.teamStats.totalVerifiedBusinesses} verified teams`, icon: CheckCircle2 },
+          {
+            label: 'Platform users',
+            value: data.totals.users,
+            sub: `${data.totals.activeUsers} active`,
+            icon: UserCircle,
+          },
+          ...(showTeams
+            ? [
+                {
+                  label: 'Production teams',
+                  value: data.totals.teams,
+                  sub: `${data.totals.activeTeams} active`,
+                  icon: Users,
+                },
+              ]
+            : []),
+          {
+            label: showTeams ? 'Pending verification' : 'Users pending verification',
+            value: showTeams
+              ? data.totals.combinedPending
+              : data.userStats.totalPendingVerification,
+            sub: showTeams ? 'Users + teams' : 'Identity review queue',
+            icon: AlertTriangle,
+          },
+          {
+            label: 'Verified users',
+            value: data.userStats.totalVerified,
+            sub: showTeams
+              ? `${data.teamStats.totalVerifiedBusinesses} verified teams`
+              : `${data.userStats.totalActive} active now`,
+            icon: CheckCircle2,
+          },
         ].map(({ label, value, sub, icon: Icon }) => (
-          <div
-            key={label}
-            className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5"
-          >
+          <div key={label} className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                  {label}
+                </p>
                 <p className="mt-2 text-3xl font-bold text-white">{value}</p>
                 <p className="mt-1 text-xs text-zinc-500">{sub}</p>
               </div>
@@ -146,32 +186,66 @@ export default function UserTeamOverviewTab({
       </div>
 
       <StatCards
-        cards={[
-          [
-            { label: 'Users suspended', value: data.userStats.totalSuspended },
-            { label: 'Users banned', value: data.userStats.totalBanned },
-          ],
-          [
-            { label: 'Teams suspended', value: data.teamStats.totalSuspended },
-            { label: 'Teams banned', value: data.teamStats.totalBanned },
-          ],
-          [
-            { label: 'User verifications pending', value: data.userStats.totalPendingVerification },
-            { label: 'Team verifications pending', value: data.teamStats.totalPendingVerification },
-          ],
-          [
-            { label: 'Fully verified users', value: v.verified },
-            { label: 'Partially verified', value: v.partial },
-          ],
-        ]}
+        cards={
+          showTeams
+            ? [
+                [
+                  { label: 'Users suspended', value: data.userStats.totalSuspended },
+                  { label: 'Users banned', value: userBanned },
+                ],
+                [
+                  { label: 'Teams suspended', value: data.teamStats.totalSuspended },
+                  { label: 'Teams banned', value: teamBanned },
+                ],
+                [
+                  {
+                    label: 'User verifications pending',
+                    value: data.userStats.totalPendingVerification,
+                  },
+                  {
+                    label: 'Team verifications pending',
+                    value: data.teamStats.totalPendingVerification,
+                  },
+                ],
+                [
+                  { label: 'Fully verified users', value: v.verified },
+                  { label: 'Partially verified', value: v.partial },
+                ],
+              ]
+            : [
+                [
+                  { label: 'Users suspended', value: data.userStats.totalSuspended },
+                  { label: 'Users banned', value: userBanned },
+                ],
+                [
+                  { label: 'Users active', value: data.userStats.totalActive },
+                  {
+                    label: 'Pending verification',
+                    value: data.userStats.totalPendingVerification,
+                  },
+                ],
+                [
+                  { label: 'Fully verified', value: v.verified },
+                  { label: 'Partially verified', value: v.partial },
+                ],
+                [
+                  { label: 'Unverified', value: v.unverified },
+                  { label: 'Pending identity', value: v.pending },
+                ],
+              ]
+        }
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className={`grid gap-6 ${showTeams ? 'lg:grid-cols-2' : ''}`}>
         <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-white">User status breakdown</h2>
             {onGoUsers && (
-              <button type="button" onClick={onGoUsers} className="text-xs text-rose-400 hover:underline">
+              <button
+                type="button"
+                onClick={onGoUsers}
+                className="text-xs text-rose-400 hover:underline"
+              >
                 View all users →
               </button>
             )}
@@ -194,7 +268,8 @@ export default function UserTeamOverviewTab({
                 Partial <span className="float-right font-bold text-amber-300">{v.partial}</span>
               </li>
               <li className="rounded-lg bg-white/[0.03] px-3 py-2">
-                Unverified <span className="float-right font-bold text-zinc-300">{v.unverified}</span>
+                Unverified{' '}
+                <span className="float-right font-bold text-zinc-300">{v.unverified}</span>
               </li>
               <li className="rounded-lg bg-white/[0.03] px-3 py-2">
                 Pending <span className="float-right font-bold text-zinc-300">{v.pending}</span>
@@ -203,37 +278,43 @@ export default function UserTeamOverviewTab({
           </div>
         </section>
 
-        <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-white">Team status breakdown</h2>
-            {onGoTeams && (
-              <button type="button" onClick={onGoTeams} className="text-xs text-rose-400 hover:underline">
-                View all teams →
-              </button>
-            )}
-          </div>
-          <ul className="mt-4 space-y-2">
-            {data.statusBreakdown.teams.map((r) => (
-              <li key={r.label} className="flex justify-between text-sm">
-                <span className="text-zinc-400">{r.label}</span>
-                <span className="font-semibold text-white">{r.count}</span>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-4 border-t border-white/[0.06] pt-4">
-            <p className="text-[10px] uppercase text-zinc-600">Spotlight teams</p>
-            <ul className="mt-2 space-y-2">
-              {data.spotlightTeams.map((t) => (
-                <li key={t.id} className="rounded-lg bg-white/[0.03] px-3 py-2 text-sm">
-                  <p className="font-medium text-white">{t.name}</p>
-                  <p className="text-xs text-zinc-500">
-                    {t.leaderName} · {t.memberCount} members · {t.verificationStatus}
-                  </p>
+        {showTeams && (
+          <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-white">Team status breakdown</h2>
+              {onGoTeams && (
+                <button
+                  type="button"
+                  onClick={onGoTeams}
+                  className="text-xs text-rose-400 hover:underline"
+                >
+                  View all teams →
+                </button>
+              )}
+            </div>
+            <ul className="mt-4 space-y-2">
+              {data.statusBreakdown.teams.map((r) => (
+                <li key={r.label} className="flex justify-between text-sm">
+                  <span className="text-zinc-400">{r.label}</span>
+                  <span className="font-semibold text-white">{r.count}</span>
                 </li>
               ))}
             </ul>
-          </div>
-        </section>
+            <div className="mt-4 border-t border-white/[0.06] pt-4">
+              <p className="text-[10px] uppercase text-zinc-600">Spotlight teams</p>
+              <ul className="mt-2 space-y-2">
+                {data.spotlightTeams.map((t) => (
+                  <li key={t.id} className="rounded-lg bg-white/[0.03] px-3 py-2 text-sm">
+                    <p className="font-medium text-white">{t.name}</p>
+                    <p className="text-xs text-zinc-500">
+                      {t.leaderName} · {t.memberCount} members · {t.verificationStatus}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        )}
       </div>
 
       <section className="rounded-2xl border border-white/[0.08] bg-[#14151c] p-5">

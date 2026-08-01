@@ -1,30 +1,56 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Activity, RefreshCw, UserCircle, Users } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import useGlobalState from '@/lib/global_state';
 import TeamsTab from './TeamsTab';
 import UsersTab from './UsersTab';
 import UserTeamOverviewTab from './UserTeamOverviewTab';
+import { getUserTeamCapabilities, type UserTeamVariant } from './userTeamCapabilities';
 
 type TabId = 'overview' | 'teams' | 'users';
 
-const TABS: { id: TabId; label: string; icon: typeof Activity }[] = [
+const ALL_TABS: { id: TabId; label: string; icon: typeof Activity }[] = [
   { id: 'overview', label: 'Overview', icon: Activity },
   { id: 'teams', label: 'Team accounts', icon: Users },
   { id: 'users', label: 'Platform users', icon: UserCircle },
 ];
 
-type Variant = 'admin' | 'support';
+const VARIANT_META: Record<
+  UserTeamVariant,
+  { label: string; accentLabel: string; accentTab: string; fallbackUser: string }
+> = {
+  admin: {
+    label: 'User & team',
+    accentLabel: 'text-rose-400/80',
+    accentTab: 'border-rose-400 text-white',
+    fallbackUser: 'admin',
+  },
+  support: {
+    label: 'Support Moderator · User & team',
+    accentLabel: 'text-sky-400/80',
+    accentTab: 'border-sky-400 text-white',
+    fallbackUser: 'support',
+  },
+  forum: {
+    label: 'Forum Moderator · User enforcement',
+    accentLabel: 'text-violet-400/80',
+    accentTab: 'border-violet-400 text-white',
+    fallbackUser: 'forum',
+  },
+};
 
-export default function UserTeamPage({ variant = 'admin' }: { variant?: Variant }) {
+export default function UserTeamPage({ variant = 'admin' }: { variant?: UserTeamVariant }) {
   const { user } = useGlobalState();
+  const caps = useMemo(() => getUserTeamCapabilities(variant), [variant]);
+  const meta = VARIANT_META[variant];
   const [searchParams, setSearchParams] = useSearchParams();
   const paramTab = searchParams.get('tab') as TabId | null;
-  const valid: TabId[] = ['overview', 'teams', 'users'];
+  const tabs = useMemo(
+    () => ALL_TABS.filter((t) => (t.id === 'teams' ? caps.showTeamsTab : true)),
+    [caps.showTeamsTab]
+  );
+  const valid = useMemo(() => tabs.map((t) => t.id), [tabs]);
   const initialTab = paramTab && valid.includes(paramTab) ? paramTab : 'overview';
-  const isSupport = variant === 'support';
-  const accentLabel = isSupport ? 'text-sky-400/80' : 'text-rose-400/80';
-  const accentTab = isSupport ? 'border-sky-400 text-white' : 'border-rose-400 text-white';
   const shellPad = 'md:pl-[260px]';
 
   const [tab, setTab] = useState<TabId>(initialTab);
@@ -36,8 +62,8 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: Variant 
 
   useEffect(() => {
     if (paramTab && valid.includes(paramTab)) setTab(paramTab);
-    else if (!paramTab) setTab('overview');
-  }, [paramTab]);
+    else if (!paramTab || !valid.includes(paramTab as TabId)) setTab('overview');
+  }, [paramTab, valid]);
 
   const switchTab = (id: TabId) => {
     setTab(id);
@@ -58,12 +84,17 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: Variant 
       <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#06070c]/90 backdrop-blur-xl">
         <div className="flex flex-col gap-4 px-6 py-4 lg:flex-row lg:items-center lg:justify-between md:px-8">
           <div>
-            <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${accentLabel}`}>
-              {isSupport ? 'Support Moderator · User & team' : 'User & team'}
+            <p className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${meta.accentLabel}`}>
+              {meta.label}
             </p>
-            <h1 className="text-xl font-bold text-white">Account management</h1>
+            <h1 className="text-xl font-bold text-white">
+              {variant === 'forum' ? 'Community enforcement' : 'Account management'}
+            </h1>
             <p className="mt-1 text-xs text-zinc-500">
-              Signed in as @{user?.username || (isSupport ? 'support' : 'admin')}
+              Signed in as @{user?.username || meta.fallbackUser}
+              {variant === 'forum'
+                ? ' · Warn, suspend, and lock only — no bans, credits, or team management'
+                : ''}
             </p>
           </div>
           <button
@@ -78,14 +109,14 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: Variant 
         </div>
 
         <div className="flex gap-1 overflow-x-auto px-4 pb-0 md:px-6">
-          {TABS.map(({ id, label, icon: Icon }) => (
+          {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
               onClick={() => switchTab(id)}
               className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition ${
                 tab === id
-                  ? accentTab
+                  ? meta.accentTab
                   : 'border-transparent text-zinc-500 hover:text-zinc-300'
               }`}
             >
@@ -112,14 +143,19 @@ export default function UserTeamPage({ variant = 'admin' }: { variant?: Variant 
             refreshToken={refreshToken}
             onStatsLoaded={setOverviewPending}
             onGoUsers={() => switchTab('users')}
-            onGoTeams={() => switchTab('teams')}
+            onGoTeams={caps.showTeamsTab ? () => switchTab('teams') : undefined}
+            showTeams={caps.showTeamsTab}
           />
         )}
-        {tab === 'teams' && (
+        {tab === 'teams' && caps.showTeamsTab && (
           <TeamsTab refreshToken={refreshToken} onStatsLoaded={setTeamsPending} />
         )}
         {tab === 'users' && (
-          <UsersTab refreshToken={refreshToken} onStatsLoaded={setUsersPending} />
+          <UsersTab
+            refreshToken={refreshToken}
+            onStatsLoaded={setUsersPending}
+            capabilities={caps}
+          />
         )}
       </div>
     </main>
