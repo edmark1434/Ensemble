@@ -71,6 +71,7 @@ export type DisputePermissions = {
   canAssignOthers?: boolean;
   canSelfAssign?: boolean;
   canAssignMyself?: boolean;
+  canRelease?: boolean;
 };
 
 export type TicketPermissions = {
@@ -83,6 +84,7 @@ export type TicketPermissions = {
   canAssignOthers?: boolean;
   canSelfAssign?: boolean;
   canAssignMyself?: boolean;
+  canRelease?: boolean;
 };
 
 export type Dispute = {

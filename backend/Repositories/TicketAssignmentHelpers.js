@@ -36,9 +36,12 @@ function buildTicketPermissions(row, staff, sessionStaffId = null) {
     isAdmin,
     canView: true,
     canAct: isAssignee || (unassigned && designated),
-    canAssignOthers: isAdmin || isAssignee,
+    /** Pick a handler from the list only while the case is open */
+    canAssignOthers: Boolean(isAdmin && unassigned),
     canSelfAssign: Boolean(staffId && unassigned && designated),
-    canAssignMyself: Boolean(staffId && designated && !isAssignee && (unassigned || isAdmin)),
+    canAssignMyself: Boolean(staffId && designated && unassigned && !isAssignee),
+    /** Current handler may step down so someone else can claim */
+    canRelease: isAssignee,
   };
 }
 

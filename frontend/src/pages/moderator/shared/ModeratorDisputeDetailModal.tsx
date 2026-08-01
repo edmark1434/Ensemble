@@ -99,6 +99,7 @@ const HANDLER_ACTION_BTN =
 const HANDLER_ACTION_ICON = "h-4 w-4 shrink-0";
 const HANDLER_TONES = {
   claim: "border-sky-500/30 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20",
+  release: "border-amber-500/40 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20",
   cancel: "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10",
 } as const;
 
@@ -200,17 +201,21 @@ export default function ModeratorDisputeDetailModal({
           (perms?.canView !== false && perms?.staffId)
       )
     : true;
-  const canAssignOthers = adminMode ? Boolean(perms?.canAssignOthers) : true;
+  const canAssignOthers = adminMode ? Boolean(perms?.canAssignOthers) : false;
   const canSelfAssign = adminMode
     ? Boolean(perms?.canSelfAssign && !alreadyAssignedToMe)
     : false;
   const canAssignMyself = adminMode
     ? Boolean(!alreadyAssignedToMe && (perms?.canAssignMyself || perms?.canSelfAssign) && !assigneeStaffId)
     : false;
+  const canRelease = adminMode
+    ? Boolean(perms?.canRelease || (alreadyAssignedToMe && perms?.canAct))
+    : false;
   const viewOnly = adminMode && !canAct;
-  /** Handler dropdown: assignee, Admin assigning others, or claiming an unassigned case */
+  const assigneeLocked = Boolean(assigneeStaffId);
+  /** Handler dropdown: only while unassigned */
   const canEditHandler =
-    !adminMode || canAssignOthers || canAct || canSelfAssign || canAssignMyself;
+    !adminMode || ((!assigneeLocked && (canAssignOthers || canSelfAssign || canAssignMyself)));
 
   const updateVisibilityPref = (key: keyof VisibilityPrefs, checked: boolean) => {
     setVisibilityPrefs((prev) => {
@@ -239,7 +244,7 @@ export default function ModeratorDisputeDetailModal({
 
   const onHandlerChange = async (next: string) => {
     setAssigneeId(next);
-    if (!adminMode) return;
+    if (!adminMode || assigneeLocked) return;
 
     // Claim unassigned dispute by picking yourself
     if (
@@ -253,7 +258,7 @@ export default function ModeratorDisputeDetailModal({
       return;
     }
 
-    // Admin may reassign without being the handler
+    // Admin may designate a handler only while unassigned
     if (canAssignOthers && !canAct) {
       await runAction(
         { assigned_staff_id: next ? next : null },
@@ -274,7 +279,7 @@ export default function ModeratorDisputeDetailModal({
       await runAction({ action: "self_assign" }, "You are now assigned");
       return;
     }
-    if (adminMode && viewOnly && canAssignOthers) {
+    if (adminMode && viewOnly && canAssignOthers && !assigneeLocked) {
       await runAction(
         { assigned_staff_id: assigneeId ? assigneeId : null },
         "Assignment updated"
@@ -297,7 +302,8 @@ export default function ModeratorDisputeDetailModal({
         payload.sanction_type = null;
         payload.sanction_notes = null;
       }
-      if (canAssignOthers || canAct) {
+      // Do not change handler while locked — use Release case / Assign myself.
+      if (!assigneeLocked && (canAssignOthers || canAssignMyself)) {
         payload.assigned_staff_id = assigneeId ? assigneeId : null;
       }
     } else {
@@ -306,7 +312,6 @@ export default function ModeratorDisputeDetailModal({
       } else if (outcome) {
         payload.outcome = outcome;
       }
-      payload.assigned_staff_id = assigneeId ? assigneeId : null;
     }
     const closing = isDisputeClosed(nextStatus);
     await runAction(
@@ -469,6 +474,21 @@ export default function ModeratorDisputeDetailModal({
                     Assign myself
                   </button>
                 )}
+                {canRelease && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() =>
+                      void runAction(
+                        { action: "release" },
+                        "Case released — another Support Moderator can claim it"
+                      )
+                    }
+                    className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.release}`}
+                  >
+                    Release case
+                  </button>
+                )}
                 {canAct && toApiToken(dispute.status) === "pending_review" && (
                   <>
                     <button
@@ -539,7 +559,7 @@ export default function ModeratorDisputeDetailModal({
                 <select
                   value={assigneeId}
                   onChange={(e) => void onHandlerChange(e.target.value)}
-                  disabled={!canEditHandler || saving}
+                  disabled={!canEditHandler || saving || assigneeLocked}
                   className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <option value="">Unassigned</option>
@@ -558,6 +578,12 @@ export default function ModeratorDisputeDetailModal({
                     </option>
                   ))}
                 </select>
+                {assigneeLocked && (
+                  <span className="text-[11px] text-zinc-500">
+                    Handler is locked. The assigned Support Moderator must release the case before
+                    someone else can claim it.
+                  </span>
+                )}
                 {canAssignMyself && (
                   <button
                     type="button"
@@ -569,7 +595,22 @@ export default function ModeratorDisputeDetailModal({
                     Assign myself
                   </button>
                 )}
-                {!canEditHandler && (
+                {canRelease && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() =>
+                      void runAction(
+                        { action: "release" },
+                        "Case released — another Support Moderator can claim it"
+                      )
+                    }
+                    className={`mt-2 inline-flex w-fit items-center gap-1.5 ${HANDLER_ACTION_BTN} ${HANDLER_TONES.release}`}
+                  >
+                    Release case
+                  </button>
+                )}
+                {!canEditHandler && !assigneeLocked && (
                   <span className="text-[11px] text-amber-200/80">
                     {!perms?.staffId
                       ? "Your session isn’t linked to a staff profile — re-login as Admin or Support Moderator."

@@ -256,6 +256,8 @@ export default function TicketDetailModalShell({
       !ticketAssigneeId &&
       (perms?.canAssignMyself || perms?.canSelfAssign)
   );
+  const canRelease = Boolean(alreadyAssignedToMe || perms?.canRelease || perms?.isAssignee);
+  const assigneeLocked = Boolean(ticketAssigneeId);
 
   const syncEscalateType = (role: string, preferred?: string) => {
     const opts =
@@ -318,11 +320,15 @@ export default function TicketDetailModalShell({
   const saveChanges = async () => {
     setSaving(true);
     try {
-      await api.patch(`${endpointBase}/${ticketId}`, {
+      const payload: Record<string, unknown> = {
         status,
         priority,
-        handled_by_staff_id: assigneeId ? assigneeId : null,
-      });
+      };
+      // Only set handler while unassigned (or keep current); locked cases use Release case.
+      if (!assigneeLocked) {
+        payload.handled_by_staff_id = assigneeId ? assigneeId : null;
+      }
+      await api.patch(`${endpointBase}/${ticketId}`, payload);
       showSuccessToast('Ticket updated');
       await load();
       onUpdated();
@@ -342,6 +348,20 @@ export default function TicketDetailModalShell({
       onUpdated();
     } catch (err: unknown) {
       showErrorToast(apiErrorMessage(err, 'Failed to assign yourself'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const releaseCase = async () => {
+    setSaving(true);
+    try {
+      await api.patch(`${endpointBase}/${ticketId}`, { action: 'release' });
+      showSuccessToast('Case released — another moderator can claim it');
+      await load();
+      onUpdated();
+    } catch (err: unknown) {
+      showErrorToast(apiErrorMessage(err, 'Failed to release case'));
     } finally {
       setSaving(false);
     }
@@ -526,7 +546,12 @@ export default function TicketDetailModalShell({
                     </select>
                   </Field>
                   <Field label="Assignee">
-                    <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} className={selectCls}>
+                    <select
+                      value={assigneeId}
+                      onChange={(e) => setAssigneeId(e.target.value)}
+                      disabled={assigneeLocked}
+                      className={`${selectCls} disabled:cursor-not-allowed disabled:opacity-60`}
+                    >
                       <option value="">Unassigned</option>
                       {detail.assignableStaff.map((s) => (
                         <option key={s.staffId} value={s.staffId}>
@@ -537,6 +562,12 @@ export default function TicketDetailModalShell({
                         </option>
                       ))}
                     </select>
+                    {assigneeLocked && (
+                      <p className="mt-1 text-[11px] text-zinc-500">
+                        Handler is locked. The assigned moderator must release the case before it can
+                        be claimed by someone else.
+                      </p>
+                    )}
                   </Field>
                   {canAssignMyself && (
                     <button
@@ -547,6 +578,16 @@ export default function TicketDetailModalShell({
                     >
                       <Hand className="h-4 w-4" />
                       Assign myself
+                    </button>
+                  )}
+                  {canRelease && (
+                    <button
+                      type="button"
+                      onClick={() => void releaseCase()}
+                      disabled={saving}
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-100 hover:bg-amber-500/20 disabled:opacity-50"
+                    >
+                      Release case
                     </button>
                   )}
                   <button
