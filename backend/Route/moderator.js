@@ -13,6 +13,9 @@ const {
   getRestrictions,
   postViolation,
   patchRestriction,
+  getReports: getMarketplaceReports,
+  getReport: getMarketplaceReport,
+  patchReport: patchMarketplaceReport,
 } = require('../Controllers/MarketplaceModeratorControllers');
 const SupportModerator = require('../Controllers/SupportModeratorControllers');
 const ForumModerator = require('../Controllers/ForumModeratorControllers');
@@ -29,6 +32,9 @@ router.get('/marketplace/listings', [checkSession, marketplaceModerator], getLis
 router.get('/marketplace/listings/:id', [checkSession, marketplaceModerator], getListingDetail);
 router.patch('/marketplace/listings/:id', [checkSession, marketplaceModerator], patchListing);
 router.get('/marketplace/tickets', [checkSession, marketplaceModerator], getTickets);
+router.get('/marketplace/reports', [checkSession, marketplaceModerator], getMarketplaceReports);
+router.get('/marketplace/reports/:id', [checkSession, marketplaceModerator], getMarketplaceReport);
+router.patch('/marketplace/reports/:id', [checkSession, marketplaceModerator], patchMarketplaceReport);
 
 router.get('/tickets/:id', [checkSession, marketplaceModerator], getTicket);
 router.patch('/tickets/:id', [checkSession, marketplaceModerator], patchTicket);
@@ -82,6 +88,9 @@ router.get('/jobs/tickets', [checkSession, jobsModerator], JobsModerator.getTick
 router.get('/jobs/tickets/:id', [checkSession, jobsModerator], JobsModerator.getTicket);
 router.patch('/jobs/tickets/:id', [checkSession, jobsModerator], JobsModerator.patchTicket);
 router.post('/jobs/tickets/:id/messages', [checkSession, jobsModerator], JobsModerator.postTicketMessage);
+router.get('/jobs/reports', [checkSession, jobsModerator], JobsModerator.getReports);
+router.get('/jobs/reports/:id', [checkSession, jobsModerator], JobsModerator.getReport);
+router.patch('/jobs/reports/:id', [checkSession, jobsModerator], JobsModerator.patchReport);
 router.get('/jobs/disputes', [checkSession, jobsModerator], JobsModerator.getDisputes);
 router.patch('/jobs/disputes/:id', [checkSession, jobsModerator], JobsModerator.patchDispute);
 router.get('/jobs/postings', [checkSession, jobsModerator], JobsModerator.getPostings);

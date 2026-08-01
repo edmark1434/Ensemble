@@ -11,6 +11,7 @@ const {
   ticketStatusChart,
 } = require('./ModeratorSharedRepositories');
 const { QUEUE_SCOPES } = require('../lib/ticketEnums');
+const { FORUM_REPORT_TYPES } = require('../lib/reportEnums');
 
 function forumDb() {
   const client = getMongoClient();
@@ -44,14 +45,13 @@ async function lookupHandles(ids) {
 }
 
 // Forum moderation covers Forums tickets and reports about forum content.
-const FORUM_REPORT_TYPES = ['discussion', 'comment', 'post', 'forum', 'thread', 'group', 'member'];
 
 async function getForumTickets({ status } = {}) {
   return fetchScopedTickets({ ...FORUM_TICKET_SCOPE, status });
 }
 
 async function getForumReports({ status } = {}) {
-  return fetchScopedReports({ targetTypesIn: FORUM_REPORT_TYPES, status });
+  return fetchScopedReports({ targetTypesIn: [...FORUM_REPORT_TYPES], status });
 }
 
 // ─── Forum content moderation (MongoDB) ─────────────────────────────────

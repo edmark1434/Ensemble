@@ -1,6 +1,7 @@
 const {
   getJobsOverview,
   getJobsTickets,
+  getJobsReports,
   getJobsDisputes,
   getJobsGigsPostings,
   getJobsGigsPostingDetail,
@@ -12,12 +13,15 @@ const {
   updateTicket,
   addTicketMessage,
   updateDispute,
+  getReportDetail,
+  updateReport,
 } = require('../Repositories/AdminTicketsRepositories');
 const {
   getViolationsAndRestrictions,
   issueViolation,
   updateAccountRestriction,
 } = require('../Repositories/ModeratorRepositories');
+const { JOBS_REPORT_TYPES, isReportTypeInScope } = require('../lib/reportEnums');
 
 async function getOverview(req, res) {
   try {
@@ -191,6 +195,46 @@ async function patchRestriction(req, res) {
   }
 }
 
+async function getReports(req, res) {
+  try {
+    const data = await getJobsReports({ status: req.query.status });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching jobs reports:', err);
+    res.status(500).json({ success: false, message: 'Failed to load reports' });
+  }
+}
+
+async function getReport(req, res) {
+  try {
+    const data = await getReportDetail(req.params.id);
+    if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
+    if (!isReportTypeInScope(data.report?.targetType, JOBS_REPORT_TYPES)) {
+      return res.status(403).json({ success: false, message: 'Report is outside the jobs & gigs queue' });
+    }
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching jobs report detail:', err);
+    res.status(500).json({ success: false, message: 'Failed to load report' });
+  }
+}
+
+async function patchReport(req, res) {
+  try {
+    const existing = await getReportDetail(req.params.id);
+    if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
+    if (!isReportTypeInScope(existing.report?.targetType, JOBS_REPORT_TYPES)) {
+      return res.status(403).json({ success: false, message: 'Report is outside the jobs & gigs queue' });
+    }
+    const data = await updateReport(req.params.id, req.body);
+    if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error updating jobs report:', err);
+    res.status(500).json({ success: false, message: 'Failed to update report' });
+  }
+}
+
 module.exports = {
   getOverview,
   getTickets,
@@ -206,4 +250,7 @@ module.exports = {
   getRestrictions,
   postViolation,
   patchRestriction,
+  getReports,
+  getReport,
+  patchReport,
 };

@@ -4,17 +4,21 @@ const {
   getMarketplaceListingDetail,
   reviewMarketplaceListing,
   getMarketplaceTickets,
+  getMarketplaceReports,
 } = require('../Repositories/MarketplaceModeratorRepositories');
 const {
   getTicketDetail,
   updateTicket,
   addTicketMessage,
+  getReportDetail,
+  updateReport,
 } = require('../Repositories/AdminTicketsRepositories');
 const {
   getViolationsAndRestrictions,
   issueViolation,
   updateAccountRestriction,
 } = require('../Repositories/ModeratorRepositories');
+const { MARKETPLACE_REPORT_TYPES, isReportTypeInScope } = require('../lib/reportEnums');
 
 async function getOverview(req, res) {
   try {
@@ -152,6 +156,46 @@ async function patchRestriction(req, res) {
   }
 }
 
+async function getReports(req, res) {
+  try {
+    const data = await getMarketplaceReports({ status: req.query.status });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching marketplace reports:', err);
+    res.status(500).json({ success: false, message: 'Failed to load reports' });
+  }
+}
+
+async function getReport(req, res) {
+  try {
+    const data = await getReportDetail(req.params.id);
+    if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
+    if (!isReportTypeInScope(data.report?.targetType, MARKETPLACE_REPORT_TYPES)) {
+      return res.status(403).json({ success: false, message: 'Report is outside the marketplace queue' });
+    }
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching marketplace report detail:', err);
+    res.status(500).json({ success: false, message: 'Failed to load report' });
+  }
+}
+
+async function patchReport(req, res) {
+  try {
+    const existing = await getReportDetail(req.params.id);
+    if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
+    if (!isReportTypeInScope(existing.report?.targetType, MARKETPLACE_REPORT_TYPES)) {
+      return res.status(403).json({ success: false, message: 'Report is outside the marketplace queue' });
+    }
+    const data = await updateReport(req.params.id, req.body);
+    if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error updating marketplace report:', err);
+    res.status(500).json({ success: false, message: 'Failed to update report' });
+  }
+}
+
 module.exports = {
   getOverview,
   getListings,
@@ -164,4 +208,7 @@ module.exports = {
   getRestrictions,
   postViolation,
   patchRestriction,
+  getReports,
+  getReport,
+  patchReport,
 };

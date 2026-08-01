@@ -60,7 +60,7 @@ export function ReportCaseDetailModal({
   onClose: () => void;
   onUpdated: () => void;
   endpointBase?: string;
-  accent?: 'rose' | 'sky' | 'violet' | 'emerald';
+  accent?: 'rose' | 'sky' | 'violet' | 'emerald' | 'amber';
 }) {
   const [detail, setDetail] = useState<ReportDetailPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,7 +76,9 @@ export function ReportCaseDetailModal({
         ? 'text-violet-400'
         : accent === 'emerald'
           ? 'text-emerald-400'
-          : 'text-rose-400';
+          : accent === 'amber'
+            ? 'text-amber-400'
+            : 'text-rose-400';
   const accentSpin =
     accent === 'sky'
       ? 'text-sky-400'
@@ -84,7 +86,9 @@ export function ReportCaseDetailModal({
         ? 'text-violet-400'
         : accent === 'emerald'
           ? 'text-emerald-400'
-          : 'text-rose-400';
+          : accent === 'amber'
+            ? 'text-amber-400'
+            : 'text-rose-400';
   const accentBtn =
     accent === 'sky'
       ? 'bg-sky-500/90 hover:bg-sky-500'
@@ -92,7 +96,9 @@ export function ReportCaseDetailModal({
         ? 'bg-violet-500/90 hover:bg-violet-500'
         : accent === 'emerald'
           ? 'bg-emerald-500/90 hover:bg-emerald-500'
-          : 'bg-rose-500/90 hover:bg-rose-500';
+          : accent === 'amber'
+            ? 'bg-amber-500/90 hover:bg-amber-500'
+            : 'bg-rose-500/90 hover:bg-rose-500';
 
   const load = async () => {
     setLoading(true);

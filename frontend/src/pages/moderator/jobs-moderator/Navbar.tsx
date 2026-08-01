@@ -1,4 +1,4 @@
-import { Briefcase, LayoutDashboard, Scale, Ticket } from 'lucide-react';
+import { Briefcase, Flag, LayoutDashboard, Scale, Ticket } from 'lucide-react';
 import ModeratorNavbar from '../shared/ModeratorNavbar';
 
 const navItems = [
@@ -6,6 +6,7 @@ const navItems = [
   { label: 'Jobs & Gigs Control', icon: Briefcase, to: '/moderator/jobs/control' },
   { label: 'Ticket Management', icon: Ticket, to: '/moderator/jobs/ticket-management' },
   { label: 'Disputes', icon: Scale, to: '/moderator/jobs/disputes' },
+  { label: 'Reports', icon: Flag, to: '/moderator/jobs/reports' },
 ];
 
 const JobsModeratorNavbar = () => (

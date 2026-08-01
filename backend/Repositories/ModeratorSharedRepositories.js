@@ -312,7 +312,7 @@ async function fetchScopedReports({ targetTypesIn, status } = {}) {
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
     ${whereSql}
     ORDER BY r.created_at DESC
-    LIMIT 40
+    LIMIT 200
     `,
     params
   );

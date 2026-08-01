@@ -1,6 +1,11 @@
 const { pool } = require('../lib/database');
 const { QUEUE_SCOPES } = require('../lib/ticketEnums');
-const { fetchScopedTickets, scopedTicketCounts } = require('./ModeratorSharedRepositories');
+const { MARKETPLACE_REPORT_TYPES } = require('../lib/reportEnums');
+const {
+  fetchScopedTickets,
+  scopedTicketCounts,
+  fetchScopedReports,
+} = require('./ModeratorSharedRepositories');
 
 function mapListingRow(row) {
   return {
@@ -85,6 +90,10 @@ async function reviewMarketplaceListing(listingId, { status, rejectionReason }, 
 
 async function getMarketplaceTickets() {
   return fetchScopedTickets(QUEUE_SCOPES.marketplace);
+}
+
+async function getMarketplaceReports({ status } = {}) {
+  return fetchScopedReports({ targetTypesIn: [...MARKETPLACE_REPORT_TYPES], status });
 }
 
 async function getMarketplaceOverview() {
@@ -178,4 +187,5 @@ module.exports = {
   getMarketplaceListingDetail,
   reviewMarketplaceListing,
   getMarketplaceTickets,
+  getMarketplaceReports,
 };

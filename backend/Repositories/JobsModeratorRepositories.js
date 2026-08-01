@@ -1,10 +1,12 @@
 const { pool } = require('../lib/database');
 const { QUEUE_SCOPES } = require('../lib/ticketEnums');
+const { JOBS_REPORT_TYPES } = require('../lib/reportEnums');
 const {
   fetchScopedTickets,
   scopedTicketCounts,
   fetchScopedDisputes,
   scopedDisputeCounts,
+  fetchScopedReports,
   ticketStatusChart,
 } = require('./ModeratorSharedRepositories');
 
@@ -14,6 +16,10 @@ const JOBS_DISPUTE_ENTITIES = ['job', 'gig', 'contract', 'feedback'];
 
 async function getJobsTickets({ status } = {}) {
   return fetchScopedTickets({ ...JOBS_TICKET_SCOPE, status });
+}
+
+async function getJobsReports({ status } = {}) {
+  return fetchScopedReports({ targetTypesIn: [...JOBS_REPORT_TYPES], status });
 }
 
 async function getJobsDisputes({ status } = {}) {
@@ -692,6 +698,7 @@ async function getJobsOverview() {
 module.exports = {
   getJobsOverview,
   getJobsTickets,
+  getJobsReports,
   getJobsDisputes,
   getJobsGigsPostings,
   getJobsGigsPostingDetail,

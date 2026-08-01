@@ -18,6 +18,7 @@ const {
   updateAccountRestriction,
   setForumGroupMemberBan,
 } = require('../Services/ForumModeratorServices');
+const { FORUM_REPORT_TYPES, isReportTypeInScope } = require('../lib/reportEnums');
 async function getOverview(req, res) {
   try {
     const data = await getForumOverview();
@@ -102,6 +103,9 @@ async function getReport(req, res) {
   try {
     const data = await getReportDetail(req.params.id);
     if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
+    if (!isReportTypeInScope(data.report?.targetType, FORUM_REPORT_TYPES)) {
+      return res.status(403).json({ success: false, message: 'Report is outside the forum queue' });
+    }
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching forum report detail:', err);
@@ -111,6 +115,11 @@ async function getReport(req, res) {
 
 async function patchReport(req, res) {
   try {
+    const existing = await getReportDetail(req.params.id);
+    if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
+    if (!isReportTypeInScope(existing.report?.targetType, FORUM_REPORT_TYPES)) {
+      return res.status(403).json({ success: false, message: 'Report is outside the forum queue' });
+    }
     const data = await updateReport(req.params.id, req.body);
     if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
     res.status(200).json({ success: true, data });

@@ -3,7 +3,7 @@ import { FileWarning, Hand, Loader2, Search } from 'lucide-react';
 import { ReportCaseDetailModal } from '@/pages/admin/moderation/CaseDetailModals';
 import type { UserReport } from '@/pages/admin/ticketManagement/ticketTypes';
 
-type Accent = 'rose' | 'sky';
+type Accent = 'rose' | 'sky' | 'violet' | 'emerald' | 'amber';
 
 const ACCENT = {
   rose: {
@@ -17,6 +17,24 @@ const ACCENT = {
     spin: 'text-sky-400',
     focus: 'focus:border-sky-500/40',
     chip: 'bg-sky-500/15 text-sky-100',
+  },
+  violet: {
+    icon: 'text-violet-300',
+    spin: 'text-violet-400',
+    focus: 'focus:border-violet-500/40',
+    chip: 'bg-violet-500/15 text-violet-100',
+  },
+  emerald: {
+    icon: 'text-emerald-300',
+    spin: 'text-emerald-400',
+    focus: 'focus:border-emerald-500/40',
+    chip: 'bg-emerald-500/15 text-emerald-100',
+  },
+  amber: {
+    icon: 'text-amber-300',
+    spin: 'text-amber-400',
+    focus: 'focus:border-amber-500/40',
+    chip: 'bg-amber-500/15 text-amber-100',
   },
 } as const;
 

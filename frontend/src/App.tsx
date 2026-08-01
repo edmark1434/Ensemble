@@ -92,6 +92,7 @@ import MarketplaceModeratorLayout from './pages/moderator/marketplace-moderator/
 import MarketplaceModeratorDashboard from './pages/moderator/marketplace-moderator/Dashboard'
 import MarketplaceControl from './pages/moderator/marketplace-moderator/MarketplaceControl'
 import MarketplaceTicketManagement from './pages/moderator/marketplace-moderator/TicketManagement'
+import MarketplaceReports from './pages/moderator/marketplace-moderator/Reports'
 import SupportModeratorLayout from './pages/moderator/support-moderator/Layout'
 import SupportModeratorDashboard from './pages/moderator/support-moderator/Dashboard'
 import SupportTicketManagement from './pages/moderator/support-moderator/TicketManagement'
@@ -103,6 +104,7 @@ import JobsModeratorDashboard from './pages/moderator/jobs-moderator/Dashboard'
 import JobsGigsControl from './pages/moderator/jobs-moderator/JobsGigsControl'
 import JobsTicketManagement from './pages/moderator/jobs-moderator/TicketManagement'
 import JobsDisputes from './pages/moderator/jobs-moderator/Disputes'
+import JobsReports from './pages/moderator/jobs-moderator/Reports'
 import ModeratorSectionPlaceholder from './pages/moderator/SectionPlaceholder'
 import RouteMiddleware from './lib/RouteMiddleware'
 import StaffMiddleware from './lib/StaffMiddleware'
@@ -264,6 +266,7 @@ function App() {
           <Route index element={<MarketplaceModeratorDashboard />} />
           <Route path='marketplace-control' element={<MarketplaceControl />} />
           <Route path='ticket-management' element={<MarketplaceTicketManagement />} />
+          <Route path='reports' element={<MarketplaceReports />} />
         </Route>
 
         <Route path='/moderator/support' element={<SupportModeratorLayout />}>
@@ -279,6 +282,7 @@ function App() {
           <Route path='control' element={<JobsGigsControl />} />
           <Route path='ticket-management' element={<JobsTicketManagement />} />
           <Route path='disputes' element={<JobsDisputes />} />
+          <Route path='reports' element={<JobsReports />} />
         </Route>
       </Route>
       </Routes>

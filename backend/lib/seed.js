@@ -309,50 +309,127 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   const jobsStaffId = staffByRole['Jobs N Gigs Moderator'] || staffByRole['Jobs Moderator'] || supportStaffId;
   const forumStaffId = staffByRole['Forum Moderator'] || supportStaffId;
 
-  const reports = [
-    ['RPT-10001', userAccountIds[0], 'member', 'u-3', '@noisy_creator', 'Harassment', 'Repeated hostile messages in forum thread.', 'open', 'high'],
-    ['RPT-10002', userAccountIds[2], 'group', 'fg-12', 'Design Critique Hub', 'Spam', 'Group flooded with promotional links.', 'in_review', 'medium'],
-    ['RPT-10003', userAccountIds[4], 'team', 'team-2', 'Graphitee', 'Impersonation', 'Member posing as official support.', 'open', 'high'],
-    ['RPT-10004', userAccountIds[1], 'member', 'u-7', '@seller_x', 'Scam', 'Marketplace listing never delivered after payment.', 'resolved', 'high'],
-    ['RPT-10005', userAccountIds[5], 'discussion', 'd-44', 'Late delivery thread', 'Other', 'Misleading project timeline claims.', 'open', 'low'],
-    ['RPT-10006', userAccountIds[3], 'member', 'u-2', '@quiet_dev', 'Harassment', 'Off-platform threats referenced in chat.', 'open', 'high'],
+  // Platform report samples for every staff desk.
+  // Specialist queues filter by target_type; Support + Admin see all.
+  // Tuple: [number, reporterIdx, targetType, targetId, targetLabel, reason, description, status, priority, prefix, assigneeRole]
+  const reportBlueprints = [
+    // ── Forum queue ──────────────────────────────────────────────────────
+    [0, 'member', 'u-forum-01', '@noisy_creator', 'Harassment', 'Repeated hostile messages in a critique thread after feedback.', 'open', 'high', 'forum', null],
+    [2, 'group', 'fg-12', 'Design Critique Hub', 'Spam', 'Group flooded with promotional invite links.', 'in_review', 'medium', 'forum', 'Forum Moderator'],
+    [5, 'discussion', 'd-44', 'Late delivery thread', 'Misinformation', 'Discussion spreads false claims about another editor.', 'open', 'low', 'forum', null],
+    [3, 'member', 'u-forum-02', '@quiet_dev', 'Harassment', 'Threats referenced in forum chat and DMs.', 'open', 'high', 'forum', 'Forum Moderator'],
+    [1, 'comment', 'cmt-901', 'Reply on Showcase #18', 'Hate speech', 'Comment insults another member with slurs.', 'open', 'high', 'forum', null],
+    [4, 'post', 'post-220', 'Weekly reel dump', 'Spam', 'Same promotional post pasted across three groups.', 'dismissed', 'medium', 'forum', 'Admin'],
+    [0, 'thread', 'thr-77', 'Client rate debate', 'Other', 'Off-topic personal attacks derailing the thread.', 'resolved', 'low', 'forum', 'Forum Moderator'],
+
+    // ── Marketplace queue ────────────────────────────────────────────────
+    [1, 'listing', 'LST-204', 'Neon LUT Pack', 'Scam', 'Buyer paid credits but never received the asset files.', 'open', 'high', 'marketplace', null],
+    [4, 'seller', 'u-9', '@asset_booth', 'Copyright', 'Seller reuploads stolen marketplace packs as originals.', 'in_review', 'high', 'marketplace', 'Marketplace Moderator'],
+    [2, 'listing', 'LST-318', 'Cinematic SFX Bundle', 'Misleading', 'Preview audio does not match delivered files.', 'open', 'medium', 'marketplace', null],
+    [5, 'purchase', 'ORD-8821', 'Order #8821', 'Non-delivery', 'Purchase stuck in pending delivery for 9 days.', 'open', 'high', 'marketplace', 'Marketplace Moderator'],
+    [3, 'asset', 'AST-55', 'Grain Overlay Pack v2', 'Quality', 'Corrupt zip and missing license file after download.', 'resolved', 'medium', 'marketplace', 'Admin'],
+    [0, 'marketplace', 'mkt-policy', 'Marketplace policy', 'Other', 'General complaint about fake “verified seller” badges.', 'dismissed', 'low', 'marketplace', 'Support Moderator'],
+
+    // ── Jobs & Gigs queue ────────────────────────────────────────────────
+    [0, 'job', 'JOB-118', 'Need motion editor ASAP', 'Inappropriate', 'Job post includes abusive requirements and contact spam.', 'open', 'medium', 'jobs', null],
+    [2, 'gig', 'GIG-55', 'Thumbnail design in 24h', 'Misleading', 'Gig promises impossible delivery and uses fake samples.', 'open', 'high', 'jobs', 'Jobs N Gigs Moderator'],
+    [1, 'contract', 'CTR-440', 'Wedding film contract', 'Harassment', 'Client left hostile comments after milestone rejection.', 'in_review', 'high', 'jobs', null],
+    [4, 'application', 'APP-903', 'Proposal on JOB-90', 'Spam', 'Applicant mass-sent identical proposals with phishing links.', 'open', 'medium', 'jobs', 'Jobs N Gigs Moderator'],
+    [5, 'gig', 'GIG-201', 'Color grade overnight', 'Scam', 'Gig asks for off-platform payment before starting.', 'open', 'high', 'jobs', null],
+    [3, 'feedback', 'FB-66', 'Unfair feedback on CTR-12', 'Other', 'Reported as retaliatory 1-star after a resolved dispute.', 'resolved', 'low', 'jobs', 'Admin'],
+
+    // ── Support / Admin cross-cutting (not in specialist scopes) ─────────
+    [4, 'team', 'team-2', 'Graphitee', 'Impersonation', 'Member posing as official Ensemble support in team chat.', 'open', 'high', 'support', 'Support Moderator'],
+    [1, 'account', 'acc-user-7', '@seller_x', 'Account abuse', 'Multiple ban-evasion accounts linked to the same person.', 'in_review', 'high', 'support', 'Admin'],
+    [2, 'profile', 'prof-18', '@mirror_edit', 'Impersonation', 'Profile photo and bio copy a known creator brand.', 'open', 'medium', 'support', null],
+    [0, 'team', 'team-9', 'Nightshift Collective', 'Harassment', 'Team owner bullying members after leaving a contract.', 'open', 'high', 'support', 'Support Moderator'],
+    [5, 'account', 'acc-user-3', '@alt_spam', 'Spam', 'Account used only to mass-DM promotional links.', 'resolved', 'medium', 'support', 'Admin'],
   ];
+
+  const assigneeByRole = {
+    Admin: adminStaffId,
+    'Support Moderator': supportStaffId,
+    'Forum Moderator': forumStaffId,
+    'Marketplace Moderator': marketplaceStaffId,
+    'Jobs N Gigs Moderator': jobsStaffId,
+    'Jobs Moderator': jobsStaffId,
+  };
+
+  const reports = reportBlueprints.map((row, i) => {
+    const [
+      reporterIdx,
+      targetType,
+      targetId,
+      targetLabel,
+      reason,
+      description,
+      status,
+      priority,
+      prefix,
+      assigneeRole,
+    ] = row;
+    return {
+      number: `RPT-${String(10001 + i).padStart(5, '0')}`,
+      reporterAccountId: userAccountIds[reporterIdx % userAccountIds.length],
+      targetAccountId: userAccountIds[(reporterIdx + 2) % userAccountIds.length],
+      targetType,
+      targetId,
+      targetLabel,
+      reason,
+      description,
+      status,
+      priority,
+      prefix,
+      assigneeId:
+        status === 'resolved' || status === 'dismissed'
+          ? assigneeByRole[assigneeRole] || adminStaffId
+          : assigneeRole
+            ? assigneeByRole[assigneeRole] || null
+            : null,
+    };
+  });
 
   const reportIds = [];
   for (let i = 0; i < reports.length; i++) {
     const r = reports[i];
-    const targetAccountId = userAccountIds[(i + 1) % userAccountIds.length];
     const res = await pool.query(
       `INSERT INTO reports (
         report_number, by_account_id, for_account_id,
         target_type, target_id, target_label,
         reason, description, status, priority, assigned_staff_id, created_at,
-        type, reference_table, reference_prefix, reference_id, is_created_by_bot
+        type, reference_table, reference_prefix, reference_id, is_created_by_bot,
+        resolved_at
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
         NOW() - ($12 || ' hours')::interval,
-        $4, $4, $13, $14, false
+        $4, $4, $13, $14, false,
+        $15
       )
       RETURNING report_id`,
       [
-        r[0],
-        r[1],
-        targetAccountId,
-        r[2],
-        r[3],
-        r[4],
-        r[5],
-        r[6],
-        r[7],
-        r[8],
-        r[7] === 'resolved' ? adminStaffId : supportStaffId,
-        String(faker.number.int({ min: 2, max: 120 })),
-        String(r[3] || 'id').slice(0, 50),
-        String(r[3] || 'unknown').slice(0, 50),
+        r.number,
+        r.reporterAccountId,
+        r.targetAccountId,
+        r.targetType,
+        r.targetId,
+        r.targetLabel,
+        r.reason,
+        r.description,
+        r.status,
+        r.priority,
+        r.assigneeId,
+        String(4 + i * 3),
+        r.prefix,
+        String(r.targetId).slice(0, 50),
+        r.status === 'resolved' || r.status === 'dismissed' ? new Date() : null,
       ]
     );
     reportIds.push(res.rows[0].report_id);
   }
+
+  console.log(
+    `✅ Seeded ${reports.length} reports (forum / marketplace / jobs / support+admin samples)`
+  );
 
   const disputes = [
     {
@@ -826,7 +903,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     ['TKT-50003', 'Credits missing after package purchase', 'Credit Top-ups', 'High', 'Open', 'web', userAccountIds[4], adminStaffId, null, disputeByNumber['DIS-OPEN01']?.dispute_id || null, 'staff', null],
     ['TKT-50004', 'Forum group ownership transfer', 'Forums', 'Medium', 'In Progress', 'web', userAccountIds[2], forumStaffId, reportIds[1], null, 'user', null],
     ['TKT-50005', 'How to invite team members?', 'Other', 'Low', 'Resolved', 'web', userAccountIds[6], supportStaffId, null, null, 'staff', null],
-    ['TKT-50006', 'Marketplace listing rejected', 'Asset Marketplace', 'Medium', 'Open', 'web', userAccountIds[7], marketplaceStaffId, reportIds[2], null, 'user', null],
+    ['TKT-50006', 'Marketplace listing rejected', 'Asset Marketplace', 'Medium', 'Open', 'web', userAccountIds[7], marketplaceStaffId, reportIds[7], null, 'user', null],
     ['TKT-50007', 'Two-factor not receiving codes', 'Account Verification', 'High', 'Open', 'web', userAccountIds[1], null, null, null, 'user', null],
     ['TKT-50008', 'Dispute escalation request', 'Contracts and Milestones', 'High', 'In Progress', 'web', userAccountIds[5], null, null, disputeByNumber['DIS-21126']?.dispute_id || null, 'user', 'Jobs N Gigs Moderator'],
     ['TKT-50009', 'Asset purchase never delivered', 'Asset Marketplace', 'High', 'In Progress', 'web', userAccountIds[9], marketplaceStaffId, null, null, 'staff', null],
@@ -1198,7 +1275,10 @@ async function seed() {
         ]
       );
     }
-    await pool.query(`INSERT INTO wallets (type, balance_credits) VALUES ('platform wallets', 1000000)`);
+    await pool.query(
+      `INSERT INTO wallets (type, status, balance_credits, frozen_balance_credits)
+       VALUES ('platform wallets', 'active', 1000000, 0)`
+    );
     await ensureDefaultSettings();
     await seedTicketsAndDisputes(userAccountIds, staffByRole);
     await seedMarketplaceListings(userAccountIds, staffByRole);
