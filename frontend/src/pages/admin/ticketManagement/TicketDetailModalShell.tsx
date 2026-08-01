@@ -187,6 +187,18 @@ function Field({
 const selectCls =
   'rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none focus:border-white/25';
 
+function statusButtonClass(label: string, active: boolean) {
+  const s = label.toLowerCase().replace(/_/g, ' ');
+  if (!active) {
+    return 'border-white/10 bg-transparent text-zinc-400 hover:border-white/20 hover:bg-white/[0.04] hover:text-zinc-200';
+  }
+  if (s === 'open') return 'border-red-500/40 bg-red-500/20 text-red-200';
+  if (s === 'in progress') return 'border-amber-500/40 bg-amber-500/20 text-amber-200';
+  if (s === 'resolved') return 'border-emerald-500/40 bg-emerald-500/20 text-emerald-200';
+  if (s === 'closed') return 'border-zinc-500/40 bg-zinc-500/25 text-zinc-200';
+  return 'border-white/25 bg-white/10 text-white';
+}
+
 /**
  * Shared ticket detail shell — left meta / right conversation.
  * Used by admin and all moderator desks.
@@ -197,6 +209,7 @@ export default function TicketDetailModalShell({
   accent = 'rose',
   allowEscalate = true,
   allowEscalateToAdmin = true,
+  statusControl = 'buttons',
   onClose,
   onUpdated,
 }: {
@@ -206,6 +219,8 @@ export default function TicketDetailModalShell({
   allowEscalate?: boolean;
   /** Moderators can hand off to Admin; Admin desk hides this (already Admin). */
   allowEscalateToAdmin?: boolean;
+  /** `buttons` = segmented status pills (default); `select` = dropdown. */
+  statusControl?: 'select' | 'buttons';
   onClose: () => void;
   onUpdated: () => void;
 }) {
@@ -528,13 +543,42 @@ export default function TicketDetailModalShell({
                     <p className="mt-1.5 text-[11px] text-zinc-600">Type can only change when escalating.</p>
                   </div>
                   <Field label="Status">
-                    <select value={status} onChange={(e) => setStatus(e.target.value)} className={selectCls}>
-                      {statusOptions.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
+                    {statusControl === 'buttons' ? (
+                      <div
+                        className="flex flex-wrap gap-1.5"
+                        role="group"
+                        aria-label="Ticket status"
+                      >
+                        {statusOptions.map((s) => {
+                          const active =
+                            status.toLowerCase().replace(/_/g, ' ') ===
+                            s.toLowerCase().replace(/_/g, ' ');
+                          return (
+                            <button
+                              key={s}
+                              type="button"
+                              onClick={() => setStatus(s)}
+                              aria-pressed={active}
+                              className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${statusButtonClass(s, active)}`}
+                            >
+                              {s}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <select
+                        value={status}
+                        onChange={(e) => setStatus(e.target.value)}
+                        className={selectCls}
+                      >
+                        {statusOptions.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </Field>
                   <Field label="Priority">
                     <select value={priority} onChange={(e) => setPriority(e.target.value)} className={selectCls}>

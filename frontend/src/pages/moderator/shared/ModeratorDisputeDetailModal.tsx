@@ -119,6 +119,21 @@ function isDisputeClosed(status: string) {
   return String(status || "").toLowerCase() === CLOSED_STATUS;
 }
 
+function statusButtonClass(label: string, active: boolean) {
+  const s = String(label || "")
+    .toLowerCase()
+    .replace(/[_-]+/g, " ");
+  if (!active) {
+    return "border-white/10 bg-transparent text-zinc-400 hover:border-white/20 hover:bg-white/[0.04] hover:text-zinc-200 disabled:opacity-40";
+  }
+  if (s === "pending review") return "border-violet-500/40 bg-violet-500/20 text-violet-200";
+  if (s === "open") return "border-red-500/40 bg-red-500/20 text-red-200";
+  if (s === "awaiting response") return "border-sky-500/40 bg-sky-500/20 text-sky-200";
+  if (s === "under review") return "border-amber-500/40 bg-amber-500/20 text-amber-200";
+  if (s === "closed") return "border-zinc-500/40 bg-zinc-500/25 text-zinc-200";
+  return "border-white/25 bg-white/10 text-white";
+}
+
 /**
  * Dispute detail modal with discussion thread.
  * `endpointBase` e.g. "/api/admin/disputes" or "/api/moderator/support/disputes".
@@ -514,31 +529,35 @@ export default function ModeratorDisputeDetailModal({
             )}
 
             <div className="grid gap-3 sm:grid-cols-3">
-              <label className="flex flex-col gap-1 text-xs text-zinc-500">
+              <div className="flex flex-col gap-1.5 text-xs text-zinc-500 sm:col-span-3">
                 Status
-                <select
-                  value={status}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    setStatus(next);
-                    if (isDisputeClosed(next)) {
-                      setOutcome((prev) => prev || "resolved");
-                    } else {
-                      setOutcome("");
-                      setSanctionType("");
-                      setSanctionNotes("");
-                    }
-                  }}
-                  disabled={viewOnly}
-                  className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:opacity-50"
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {titleCaseLabel(s)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Dispute status">
+                  {STATUS_OPTIONS.map((s) => {
+                    const active = toApiToken(status) === s;
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        disabled={viewOnly}
+                        aria-pressed={active}
+                        onClick={() => {
+                          setStatus(s);
+                          if (isDisputeClosed(s)) {
+                            setOutcome((prev) => prev || "resolved");
+                          } else {
+                            setOutcome("");
+                            setSanctionType("");
+                            setSanctionNotes("");
+                          }
+                        }}
+                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed ${statusButtonClass(s, active)}`}
+                      >
+                        {titleCaseLabel(s)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <label className="flex flex-col gap-1 text-xs text-zinc-500">
                 Priority
                 <select
@@ -554,7 +573,7 @@ export default function ModeratorDisputeDetailModal({
                   ))}
                 </select>
               </label>
-              <label className="flex flex-col gap-1 text-xs text-zinc-500">
+              <label className="flex flex-col gap-1 text-xs text-zinc-500 sm:col-span-2">
                 Designated handler
                 <select
                   value={assigneeId}
