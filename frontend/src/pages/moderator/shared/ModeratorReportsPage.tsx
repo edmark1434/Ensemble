@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import api from '@/lib/axios';
-import ReportDesk from '../shared/ReportDesk';
-import type { UserReport } from '../shared/moderatorTypes';
+import ReportDesk from './ReportDesk';
+import type { UserReport } from './moderatorTypes';
 
 type Accent = 'rose' | 'sky' | 'violet' | 'emerald' | 'amber';
 
@@ -20,13 +20,18 @@ export default function ModeratorReportsPage({
   subtitle,
   endpointBase,
   accent,
+  deskLabel,
 }: {
   roleLabel: string;
   subtitle: string;
   endpointBase: string;
   accent: Accent;
+  deskLabel?: string;
 }) {
   const [reports, setReports] = useState<UserReport[]>([]);
+  const [handlers, setHandlers] = useState<{ id: string | number; name: string; role?: string }[]>(
+    []
+  );
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
@@ -34,6 +39,23 @@ export default function ModeratorReportsPage({
     try {
       const res = await api.get(endpointBase);
       if (res.data?.success) setReports(res.data.data || []);
+
+      const overviewPath = endpointBase.replace(/\/reports\/?$/, '/overview');
+      try {
+        const overview = await api.get(overviewPath);
+        const workload = overview.data?.data?.staffWorkload || [];
+        if (Array.isArray(workload) && workload.length) {
+          setHandlers(
+            workload.map((s: { staffId: string | number; name: string; role?: string }) => ({
+              id: s.staffId,
+              name: s.name,
+              role: s.role,
+            }))
+          );
+        }
+      } catch {
+        // Overview may not expose workload; assignees still derived from report rows.
+      }
     } finally {
       setLoading(false);
     }
@@ -51,7 +73,9 @@ export default function ModeratorReportsPage({
     >
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className={`text-[11px] font-semibold uppercase tracking-wide ${ACCENT_LABEL[accent] || ACCENT_LABEL.sky}`}>
+          <p
+            className={`text-[11px] font-semibold uppercase tracking-wide ${ACCENT_LABEL[accent] || ACCENT_LABEL.sky}`}
+          >
             {roleLabel}
           </p>
           <h1 className="text-2xl font-bold text-white">Reports</h1>
@@ -78,6 +102,8 @@ export default function ModeratorReportsPage({
         accent={accent}
         endpointBase={endpointBase}
         loading={loading}
+        handlers={handlers}
+        deskLabel={deskLabel}
       />
     </main>
   );

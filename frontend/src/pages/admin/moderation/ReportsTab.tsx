@@ -4,9 +4,11 @@ import type { UserReport } from '../ticketManagement/ticketTypes';
 export default function ReportsTab({
   reports,
   onUpdated,
+  handlers = [],
 }: {
   reports: UserReport[];
   onUpdated: () => void;
+  handlers?: { id: string | number; name: string; role?: string }[];
 }) {
   return (
     <ReportDesk
@@ -14,6 +16,8 @@ export default function ReportsTab({
       onUpdated={onUpdated}
       accent="rose"
       endpointBase="/api/admin/reports"
+      deskLabel="Admin"
+      handlers={handlers}
     />
   );
 }

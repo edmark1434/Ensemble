@@ -4,9 +4,10 @@ export default function JobsReports() {
   return (
     <ModeratorReportsPage
       roleLabel="Jobs & Gigs Moderator"
-      subtitle="Jobs & gigs-only queue — jobs, gigs, contracts, and related posting reports (all cases in this queue, assigned or not)."
+      subtitle="Jobs & gigs-only queue with search, advanced filters, and triage columns."
       endpointBase="/api/moderator/jobs/reports"
       accent="emerald"
+      deskLabel="Jobs"
     />
   );
 }

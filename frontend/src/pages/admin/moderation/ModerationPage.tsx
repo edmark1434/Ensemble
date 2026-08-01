@@ -893,7 +893,17 @@ function CasesTab({
       {queue === 'disputes' && (
         <DisputesTab disputes={disputes} handlers={handlers} onUpdated={onRefresh} />
       )}
-      {queue === 'reports' && <ReportsTab reports={reports} onUpdated={onRefresh} />}
+      {queue === 'reports' && (
+        <ReportsTab
+          reports={reports}
+          handlers={(handlers || []).map((h) => ({
+            id: h.id,
+            name: h.name,
+            role: h.role,
+          }))}
+          onUpdated={onRefresh}
+        />
+      )}
       {queue === 'listings' && (
         <ListingApprovalsTab
           cases={listingCases}

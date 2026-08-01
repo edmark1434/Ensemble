@@ -4,9 +4,10 @@ export default function MarketplaceReports() {
   return (
     <ModeratorReportsPage
       roleLabel="Marketplace Moderator"
-      subtitle="Marketplace-only queue — listings, sellers, purchases, and related marketplace reports (all cases in this queue, assigned or not)."
+      subtitle="Marketplace-only queue with search, advanced filters, and triage columns."
       endpointBase="/api/moderator/marketplace/reports"
       accent="amber"
+      deskLabel="Marketplace"
     />
   );
 }
