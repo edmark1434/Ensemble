@@ -65,6 +65,229 @@ async function seedDefaultTOS() {
   `);
 }
 
+async function seedSampleJobs(userAccountIds) {
+  if (userAccountIds.length === 0) return;
+  const clientAccountId = userAccountIds[0];
+
+  const sampleJobs = [
+    {
+      id: "JP001",
+      title: "Wedding Video Edit - Romantic Style",
+      description: "Looking for an experienced editor to create a 10-minute wedding highlight reel. Must be proficient in color grading and narrative storytelling. Raw footage provided is around 50GB in 4K.\\n\\nRequirements:\\n• Advanced Multi-cam editing\\n• Dynamic Audio syncing & sound design\\n• High-end cinematic color grading matching log profiles.",
+      status: "Open",
+      category: "Events",
+      difficulty: "Intermediate",
+      priceRange: "28,000 ~ 36,000",
+      minBudget: 28000,
+      positionsNeeded: 3,
+      timeline: "3-5 Days",
+      thumbnail: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80",
+      skills: ["Multi-cam Editing", "Color Grading", "DaVinci Resolve", "Audio Sync"],
+    },
+    {
+      id: "JP002",
+      title: "YouTube Channel Intro Animation",
+      description: "Need a 10-second animated intro for a tech review channel. Should include clean typography, slick sound effects, and source project delivery file formats.",
+      status: "Open",
+      category: "YouTube",
+      difficulty: "Beginner",
+      priceRange: "12,000 ~ 14,000",
+      minBudget: 12000,
+      positionsNeeded: 1,
+      timeline: "1-3 Days",
+      thumbnail: "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?auto=format&fit=crop&w=600&q=80",
+      skills: ["After Effects", "Motion Graphics", "Sound Design", "Typography"],
+    },
+    {
+      id: "JP003",
+      title: "Corporate Brand Identity Video",
+      description: "Seeking a professional video creator to craft a high-end promotional commercial sequence highlighting global enterprise logistics infrastructure updates.",
+      status: "Open",
+      category: "Corporate",
+      difficulty: "Expert",
+      priceRange: "45,000 ~ 60,000",
+      minBudget: 45000,
+      positionsNeeded: 2,
+      timeline: "1-2 Weeks",
+      thumbnail: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=600&q=80",
+      skills: ["Premiere Pro", "Branding", "Commercial Edit", "4K Rendering"],
+    },
+    {
+      id: "JP004",
+      title: "TikTok & Reels Content Repurposing",
+      description: "Looking for an editor to turn long-form podcast episodes into engaging short-form vertical videos for TikTok and Instagram Reels. Captions, hook framing, and quick transitions required.",
+      status: "Open",
+      category: "Social",
+      difficulty: "Intermediate",
+      priceRange: "15,000 ~ 20,000",
+      minBudget: 15000,
+      positionsNeeded: 2,
+      timeline: "5-7 Days",
+      thumbnail: "https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0?auto=format&fit=crop&w=600&q=80",
+      skills: ["Short-form Video", "CapCut", "Subtitles & Captions", "Social Media"],
+    },
+    {
+      id: "JP005",
+      title: "E-Commerce Product Commercial Edit",
+      description: "Editing footage for 3 sleek 30-second product ads for an upcoming smartwatch release. Must add motion graphics callouts for product specs and energetic music sync.",
+      status: "Open",
+      category: "Corporate",
+      difficulty: "Intermediate",
+      priceRange: "22,000 ~ 30,000",
+      minBudget: 22000,
+      positionsNeeded: 1,
+      timeline: "3-5 Days",
+      thumbnail: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80",
+      skills: ["Product Ads", "Motion Callouts", "Sound Sync", "Color Correction"],
+    },
+    {
+      id: "JP006",
+      title: "Music Video Color Grading & VAX Effects",
+      description: "Need an expert colorist and VFX artist to grade an indie alt-rock music video. Dark moody tones, grain pass, and subtle neon light glows required.",
+      status: "Open",
+      category: "Events",
+      difficulty: "Expert",
+      priceRange: "35,000 ~ 50,000",
+      minBudget: 35000,
+      positionsNeeded: 1,
+      timeline: "1 Week",
+      thumbnail: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80",
+      skills: ["VFX", "DaVinci Resolve", "Colorist", "Glow Effects"],
+    },
+    {
+      id: "JP007",
+      title: "Gaming Channel Montage Edit",
+      description: "Looking for an editor to create a fast-paced 5-minute Valorant highlights video with meme edits, sound effects, and clean 60fps slow-motion velocity curve syncing.",
+      status: "Closed",
+      category: "YouTube",
+      difficulty: "Beginner",
+      priceRange: "8,000 ~ 10,000",
+      minBudget: 8000,
+      positionsNeeded: 1,
+      timeline: "1-2 Days",
+      thumbnail: "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80",
+      skills: ["Velocity Sync", "Gaming Montage", "Sound SFX", "Meme Edits"],
+    },
+    {
+      id: "JP008",
+      title: "Real Estate Property Walkthrough",
+      description: "Editing drone footage and interior camera pans for a luxury beachfront villa listing in Bantayan. Require smooth speed ramps and minimalist lower thirds.",
+      status: "Open",
+      category: "Corporate",
+      difficulty: "Intermediate",
+      priceRange: "18,000 ~ 25,000",
+      minBudget: 18000,
+      positionsNeeded: 2,
+      timeline: "2-4 Days",
+      thumbnail: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=600&q=80",
+      skills: ["Drone Footage", "Speed Ramping", "Lower Thirds", "Real Estate"],
+    },
+    {
+      id: "JP009",
+      title: "Documentary Short Film Audio Cleanup",
+      description: "Seeking a sound engineer/editor to clean up noisy dialogue tracks from a street documentary recorded outdoors. Wind noise reduction and audio mastering required.",
+      status: "Open",
+      category: "Events",
+      difficulty: "Expert",
+      priceRange: "30,000 ~ 40,000",
+      minBudget: 30000,
+      positionsNeeded: 1,
+      timeline: "1 Week",
+      thumbnail: "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&w=600&q=80",
+      skills: ["Audio Cleanup", "iZotope RX", "Noise Reduction", "Audio Mastering"],
+    },
+    {
+      id: "JP10",
+      title: "Fitness App Workout Demo Videos",
+      description: "Editing a series of 15 short exercise instruction clips. Requires side-by-side timer overlays, muscle target highlights, and royalty-free background music sync.",
+      status: "Open",
+      category: "Social",
+      difficulty: "Beginner",
+      priceRange: "10,000 ~ 15,000",
+      minBudget: 10000,
+      positionsNeeded: 3,
+      timeline: "3-5 Days",
+      thumbnail: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=600&q=80",
+      skills: ["Timer Overlay", "Batch Editing", "Video Trimming", "Fitness Edits"],
+    }
+  ];
+
+  for (const job of sampleJobs) {
+    const minBudget = job.minBudget || 0;
+    let maxBudget = minBudget;
+    if (job.priceRange) {
+      const parts = job.priceRange.split('~');
+      if (parts.length > 1) {
+        maxBudget = parseInt(parts[1].replace(/,/g, '').trim()) || minBudget;
+      } else {
+        maxBudget = parseInt(parts[0].replace(/,/g, '').trim()) || minBudget;
+      }
+    }
+
+    let timelineMin = 1;
+    let timelineMax = 5;
+    if (job.timeline.includes('Days')) {
+       const parts = job.timeline.replace('Days', '').trim().split('-');
+       timelineMin = parseInt(parts[0]) || 1;
+       timelineMax = parseInt(parts[1]) || 5;
+    } else if (job.timeline.includes('Week')) {
+       timelineMin = 7;
+       timelineMax = 14;
+    }
+
+    // 1. Insert job
+    const jobRes = await pool.query(
+      `INSERT INTO jobs (
+        client_account_id, title, description, category, payment_type, experience_level,
+        no_of_hires, rate_credits_min, rate_credits_max, timeline_min, timeline_max,
+        status, rough_deadline, rough_no_of_revisions, posted_as
+      ) VALUES ($1, $2, $3, $4, 'fixed', $5, $6, $7, $8, $9, $10, $11, NOW() + interval '14 days', 0, 'self')
+      RETURNING job_id`,
+      [
+        clientAccountId,
+        job.title,
+        job.description,
+        job.category,
+        job.difficulty,
+        job.positionsNeeded,
+        minBudget,
+        maxBudget,
+        timelineMin,
+        timelineMax,
+        job.status
+      ]
+    );
+    const jobId = jobRes.rows[0].job_id;
+
+    // 2. Insert thumbnail file and link
+    if (job.thumbnail) {
+      const fileRes = await pool.query(
+        `INSERT INTO files (name, path, mime_type, size_bytes) VALUES ($1, $2, 'image/jpeg', 0) RETURNING file_id`,
+        ['thumbnail.jpg', job.thumbnail]
+      );
+      await pool.query(
+        `INSERT INTO job_attachments (job_id, file_id, index) VALUES ($1, $2, 0)`,
+        [jobId, fileRes.rows[0].file_id]
+      );
+    }
+
+    // 3. Insert tags and link
+    if (job.skills) {
+      for (const tag of job.skills) {
+        let tagId;
+        const existingTag = await pool.query(`SELECT tag_id FROM tags WHERE LOWER(name) = LOWER($1)`, [tag]);
+        if (existingTag.rows.length > 0) {
+          tagId = existingTag.rows[0].tag_id;
+        } else {
+          const newTag = await pool.query(`INSERT INTO tags (name) VALUES ($1) RETURNING tag_id`, [tag]);
+          tagId = newTag.rows[0].tag_id;
+        }
+        await pool.query(`INSERT INTO job_tags (job_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [jobId, tagId]);
+      }
+    }
+  }
+}
+
 async function resetSeedTables() {
   // Prefer clearing portal + auth + demo domain tables. CASCADE handles FKs.
   // Keep migration catalogs (plans, tags, surveys, ticket_*_catalog, files/system_files).
@@ -1289,6 +1512,7 @@ async function seed() {
     await seedTeams(userAccountIds);
     await seedDomainExamples(userAccountIds, staffByRole);
     await seedDefaultTOS();
+    await seedSampleJobs(userAccountIds);
 
     console.log('');
     console.log('🔑 Staff login (password: staff123):');

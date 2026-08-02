@@ -334,6 +334,7 @@ async function seedProjectsAndEditor(ctx) {
 }
 
 async function seedJobsDomain(ctx) {
+  return { jobs: [], contracts: [] };
   const { users, tags, files } = ctx;
   if (users.length < 4) return null;
 
