@@ -208,29 +208,31 @@ export default function ModeratorDisputeDetailModal({
         assigneeStaffId &&
         myStaffId.toLowerCase() === assigneeStaffId.toLowerCase())
   );
-  const canAct = adminMode ? Boolean(perms?.canAct) : true;
+  const canAct = adminMode ? Boolean(perms?.canAct || perms?.isAdmin) : true;
   const canReply = adminMode
     ? Boolean(
         perms?.canAct ||
           perms?.canReply ||
+          perms?.isAdmin ||
           (perms?.canView !== false && perms?.staffId)
       )
     : true;
-  const canAssignOthers = adminMode ? Boolean(perms?.canAssignOthers) : false;
+  const canAssignOthers = adminMode ? Boolean(perms?.canAssignOthers || perms?.isAdmin) : false;
   const canSelfAssign = adminMode
     ? Boolean(perms?.canSelfAssign && !alreadyAssignedToMe)
     : false;
   const canAssignMyself = adminMode
-    ? Boolean(!alreadyAssignedToMe && (perms?.canAssignMyself || perms?.canSelfAssign) && !assigneeStaffId)
+    ? Boolean(!alreadyAssignedToMe && (perms?.canAssignMyself || perms?.canSelfAssign))
     : false;
   const canRelease = adminMode
-    ? Boolean(perms?.canRelease || (alreadyAssignedToMe && perms?.canAct))
+    ? Boolean(perms?.canRelease || alreadyAssignedToMe || (perms?.isAdmin && Boolean(assigneeStaffId)))
     : false;
   const viewOnly = adminMode && !canAct;
-  const assigneeLocked = Boolean(assigneeStaffId);
-  /** Handler dropdown: only while unassigned */
+  const assigneeLocked =
+    Boolean(assigneeStaffId) && !(canAssignOthers || Boolean(perms?.isAdmin));
+  /** Handler dropdown: unlocked while unassigned, or Admin override */
   const canEditHandler =
-    !adminMode || ((!assigneeLocked && (canAssignOthers || canSelfAssign || canAssignMyself)));
+    !adminMode || canAssignOthers || canSelfAssign || canAssignMyself || !assigneeLocked;
 
   const updateVisibilityPref = (key: keyof VisibilityPrefs, checked: boolean) => {
     setVisibilityPrefs((prev) => {
@@ -273,8 +275,8 @@ export default function ModeratorDisputeDetailModal({
       return;
     }
 
-    // Admin may designate a handler only while unassigned
-    if (canAssignOthers && !canAct) {
+    // Admin may designate or reassign a handler anytime
+    if (canAssignOthers) {
       await runAction(
         { assigned_staff_id: next ? next : null },
         next ? "Handler assigned" : "Handler cleared"
@@ -317,8 +319,10 @@ export default function ModeratorDisputeDetailModal({
         payload.sanction_type = null;
         payload.sanction_notes = null;
       }
-      // Do not change handler while locked — use Release case / Assign myself.
+      // Admin may change handler anytime; others use Release / Assign myself while locked.
       if (!assigneeLocked && (canAssignOthers || canAssignMyself)) {
+        payload.assigned_staff_id = assigneeId ? assigneeId : null;
+      } else if (canAssignOthers) {
         payload.assigned_staff_id = assigneeId ? assigneeId : null;
       }
     } else {
@@ -604,6 +608,11 @@ export default function ModeratorDisputeDetailModal({
                   <span className="text-[11px] text-zinc-500">
                     Handler is locked. The assigned Support Moderator must release the case before
                     someone else can claim it.
+                  </span>
+                )}
+                {!assigneeLocked && assigneeStaffId && canAssignOthers && (
+                  <span className="text-[11px] text-violet-300/80">
+                    Admin override: you can reassign this dispute without a release.
                   </span>
                 )}
                 {canAssignMyself && (

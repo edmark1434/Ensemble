@@ -148,7 +148,7 @@ export function ReportCaseDetailModal({
         status: overrideStatus || status,
         priority,
       };
-      if (!assigneeLocked) {
+      if (!assigneeLocked || perms?.canAssignOthers || perms?.isAdmin) {
         payload.assigned_staff_id = assigneeId || null;
       }
       const res = await api.patch(`${endpointBase}/${reportId}`, payload);
@@ -215,11 +215,11 @@ export function ReportCaseDetailModal({
   );
   const canAssignMyself = Boolean(
     !alreadyAssignedToMe &&
-      !reportAssigneeId &&
       (perms?.canAssignMyself || perms?.canSelfAssign || Boolean(myStaffId && !report?.assignee))
   );
   const canRelease = Boolean(alreadyAssignedToMe || perms?.canRelease || perms?.isAssignee);
-  const assigneeLocked = Boolean(reportAssigneeId);
+  const assigneeLocked =
+    Boolean(reportAssigneeId) && !Boolean(perms?.canAssignOthers || perms?.isAdmin);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:pl-[288px]">
@@ -324,6 +324,11 @@ export function ReportCaseDetailModal({
                   <span className="text-[11px] text-zinc-500">
                     Handler is locked. The assigned moderator must release the case before someone
                     else can claim it.
+                  </span>
+                )}
+                {!assigneeLocked && reportAssigneeId && (perms?.canAssignOthers || perms?.isAdmin) && (
+                  <span className="text-[11px] text-violet-300/80">
+                    Admin override: you can reassign this report without a release.
                   </span>
                 )}
               </label>

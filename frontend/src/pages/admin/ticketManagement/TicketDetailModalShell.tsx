@@ -268,11 +268,13 @@ export default function TicketDetailModalShell({
   );
   const canAssignMyself = Boolean(
     !alreadyAssignedToMe &&
-      !ticketAssigneeId &&
       (perms?.canAssignMyself || perms?.canSelfAssign)
   );
   const canRelease = Boolean(alreadyAssignedToMe || perms?.canRelease || perms?.isAssignee);
-  const assigneeLocked = Boolean(ticketAssigneeId);
+  const canEscalate = Boolean(perms?.canEscalate || alreadyAssignedToMe || perms?.isAdmin);
+  const isAdmin = Boolean(perms?.isAdmin);
+  /** Locked for non-admins once someone is assigned; Admin may reassign anytime */
+  const assigneeLocked = Boolean(ticketAssigneeId) && !Boolean(perms?.canAssignOthers || isAdmin);
 
   const syncEscalateType = (role: string, preferred?: string) => {
     const opts =
@@ -339,8 +341,8 @@ export default function TicketDetailModalShell({
         status,
         priority,
       };
-      // Only set handler while unassigned (or keep current); locked cases use Release case.
-      if (!assigneeLocked) {
+      // Only set handler while unlocked (or Admin override via canAssignOthers).
+      if (!assigneeLocked || perms?.canAssignOthers || perms?.isAdmin) {
         payload.handled_by_staff_id = assigneeId ? assigneeId : null;
       }
       await api.patch(`${endpointBase}/${ticketId}`, payload);
@@ -621,6 +623,11 @@ export default function TicketDetailModalShell({
                         be claimed by someone else.
                       </p>
                     )}
+                    {!assigneeLocked && ticketAssigneeId && (perms?.canAssignOthers || isAdmin) && (
+                      <p className="mt-1 text-[11px] text-violet-300/80">
+                        Admin override: you can reassign this ticket without a release.
+                      </p>
+                    )}
                   </Field>
                   {canAssignMyself && (
                     <button
@@ -653,7 +660,7 @@ export default function TicketDetailModalShell({
                   </button>
                 </section>
 
-                {allowEscalate && (
+                {allowEscalate && canEscalate && (
                   <section className="space-y-3 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4">
                     <div>
                       <p className="text-[10px] font-semibold tracking-wide text-amber-200/80">Escalate</p>
@@ -719,6 +726,16 @@ export default function TicketDetailModalShell({
                         </button>
                       </div>
                     </div>
+                  </section>
+                )}
+                {allowEscalate && !canEscalate && (
+                  <section className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+                    <p className="text-[10px] font-semibold tracking-wide text-zinc-500">Escalate</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+                      {ticketAssigneeId
+                        ? 'Only the assigned moderator can escalate this ticket.'
+                        : 'Assign yourself to this ticket before escalating it.'}
+                    </p>
                   </section>
                 )}
               </div>
