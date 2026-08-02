@@ -378,7 +378,7 @@ function mapDisputeRow(row) {
           transactionId: row.related_credit_transaction_id,
           status: row.hold_status,
           amount: Number(row.hold_amount ?? row.credit_amount_involved ?? 0),
-          type: row.hold_type || 'Dispute Hold',
+          type: row.hold_type || 'Escrow Hold',
         }
       : null,
     openedAt: row.opened_at,

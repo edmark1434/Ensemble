@@ -4,6 +4,7 @@ import { showSuccessToast } from '@/components/utility/toast.ts';
 import BulkActionsMenu from '../userTeam/components/BulkActionsMenu';
 import TableFilterBar, { uniqueOptions } from '../userTeam/components/TableFilterBar';
 import type { AuditEntry } from './creditEconomyTypes';
+import { CREDIT_TRANSACTION_TYPES } from './creditEconomyTypes';
 
 const AUDIT_BULK_ITEMS = [
   { id: 'export', label: 'Export selected JSON', section: 'Tools' },
@@ -49,7 +50,10 @@ export default function AuditTab({ entries, onViewWallet }: AuditTabProps) {
   const [sortBy, setSortBy] = useState('newest');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const typeOptions = useMemo(() => uniqueOptions(entries.map((e) => e.type)), [entries]);
+  const typeOptions = useMemo(
+    () => CREDIT_TRANSACTION_TYPES.map((t) => ({ value: t.toLowerCase(), label: t })),
+    []
+  );
   const accountTypeOptions = useMemo(
     () => uniqueOptions(entries.map((e) => e.accountType)),
     [entries]

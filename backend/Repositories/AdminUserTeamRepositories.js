@@ -1,4 +1,5 @@
 const { pool } = require('../lib/database');
+const { CREDIT_TRANSACTION_TYPE } = require('../lib/creditTransactionEnums');
 
 function normalizeStatus(status) {
   if (!status) return 'Pending';
@@ -943,7 +944,7 @@ async function updateAccountVerification(accountId, action, staffId, options = {
   };
 }
 
-async function adjustAccountCredits(accountId, amount, note, staffId) {
+async function adjustAccountCredits(accountId, amount, _note, staffId) {
   await assertAccountExists(accountId);
   const delta = Number(amount);
   if (!Number.isFinite(delta) || delta === 0) throw new Error('Credit amount must be a non-zero number');
@@ -959,13 +960,13 @@ async function adjustAccountCredits(accountId, amount, note, staffId) {
     wallet.wallet_id,
   ]);
 
-  const txType = note?.trim() || (delta > 0 ? 'Admin credit grant' : 'Admin credit deduction');
+  // Admin grants/deductions are always Fund Transfer (note is UI-only for now).
   await pool.query(
     `
     INSERT INTO credit_transactions (type, amount_credits, status, source_wallet_id, destination_wallet_id)
     VALUES ($1, $2, 'completed', $3, $3)
     `,
-    [txType, Math.abs(delta), wallet.wallet_id]
+    [CREDIT_TRANSACTION_TYPE.FUND_TRANSFER, Math.abs(delta), wallet.wallet_id]
   );
 
   return {
@@ -997,9 +998,9 @@ async function freezeAccountCredits(accountId, freeze = true) {
     await pool.query(
       `
       INSERT INTO credit_transactions (type, amount_credits, status, source_wallet_id, destination_wallet_id)
-      VALUES ('Credit freeze', $1, 'completed', $2, $2)
+      VALUES ($1, $2, 'completed', $3, $3)
       `,
-      [balance, wallet.wallet_id]
+      [CREDIT_TRANSACTION_TYPE.ESCROW_HOLD, balance, wallet.wallet_id]
     );
     return {
       accountId,
@@ -1021,9 +1022,9 @@ async function freezeAccountCredits(accountId, freeze = true) {
   await pool.query(
     `
     INSERT INTO credit_transactions (type, amount_credits, status, source_wallet_id, destination_wallet_id)
-    VALUES ('Credit unfreeze', $1, 'completed', $2, $2)
+    VALUES ($1, $2, 'completed', $3, $3)
     `,
-    [frozen, wallet.wallet_id]
+    [CREDIT_TRANSACTION_TYPE.ESCROW_RELEASE, frozen, wallet.wallet_id]
   );
   return {
     accountId,

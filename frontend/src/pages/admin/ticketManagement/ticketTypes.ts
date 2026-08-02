@@ -57,7 +57,7 @@ export type DisputeCreditHold = {
   transactionId: number | string | null;
   status: string;
   amount: number;
-  type: string;
+  type: string; // CREDIT_TRANSACTION.type, e.g. Escrow Hold
 };
 
 export type DisputePermissions = {
