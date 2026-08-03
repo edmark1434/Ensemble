@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { processUpload, type UploadCallbacks } from "@/utils/upload-service";
+import useStore from "./use-store";
 
 interface UploadFile {
   id: string;
@@ -10,6 +11,9 @@ interface UploadFile {
   status?: "pending" | "uploading" | "uploaded" | "failed";
   progress?: number;
   error?: string;
+  fileName?: string;
+  name?: string;
+  details?: { width?: number; height?: number; duration?: number };
 }
 
 interface IUploadStore {
@@ -42,6 +46,8 @@ interface IUploadStore {
   removeUpload: (id: string) => void;
   uploads: any[];
   setUploads: (uploads: any[] | ((prev: any[]) => any[])) => void;
+
+  updateUploadFileName: (id: string, fileName: string) => void;
 }
 
 const useUploadStore = create<IUploadStore>()(
@@ -91,8 +97,11 @@ const useUploadStore = create<IUploadStore>()(
           updateUploadProgress,
           setUploadStatus,
           removeUpload,
-          setUploads
+          setUploads,
+          updateUploadFileName
         } = get();
+
+        const { userId, projectId } = useStore.getState();
 
         // Move pending uploads to active with 'uploading' status
         if (pendingUploads.length > 0) {
@@ -116,13 +125,14 @@ const useUploadStore = create<IUploadStore>()(
           onProgress: (uploadId, progress) => {
             updateUploadProgress(uploadId, progress);
           },
+          onFileNameResolved: (uploadId, fileName) => {
+            updateUploadFileName(uploadId, fileName);
+          },
           onStatus: (uploadId, status, error) => {
             setUploadStatus(uploadId, status, error);
             if (status === "uploaded") {
-              // Remove from active uploads after a delay to show final status
               setTimeout(() => removeUpload(uploadId), 3000);
             } else if (status === "failed") {
-              // Remove from active uploads after a delay to show final status
               setTimeout(() => removeUpload(uploadId), 3000);
             }
           }
@@ -136,7 +146,9 @@ const useUploadStore = create<IUploadStore>()(
           processUpload(
             upload.id,
             { file: upload.file, url: upload.url },
-            callbacks
+            callbacks,
+            userId,
+            projectId
           )
             .then((uploadData) => {
               // Add the complete upload data to the uploads array
@@ -182,11 +194,18 @@ const useUploadStore = create<IUploadStore>()(
             typeof uploads === "function"
               ? (uploads as (prev: any[]) => any[])(state.uploads)
               : uploads
-        }))
+        })),
+
+      updateUploadFileName: (id: string, fileName: string) =>
+        set((state) => ({
+          activeUploads: state.activeUploads.map((u) =>
+            u.id === id ? { ...u, fileName } : u
+          )
+        })),
     }),
     {
       name: "upload-store",
-      partialize: (state) => ({ uploads: state.uploads })
+      partialize: (state) => ({})
     }
   )
 );

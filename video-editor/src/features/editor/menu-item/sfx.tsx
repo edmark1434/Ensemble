@@ -1,6 +1,6 @@
 "use client";
 import React, {useState, useEffect, useCallback, useRef, useMemo} from "react";
-import {Search, Loader2, Music2, Pause, Play} from "lucide-react";
+import {Search, Loader2, Music2, Pause, Play, Music} from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { debounce } from "lodash";
 import { Button } from "@/components/ui/button";
@@ -155,7 +155,7 @@ export function SFX() {
           </div>
         ) : uniqueResults.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
-            <Music2 size={32} className="opacity-50" />
+            <Music size={32} className="opacity-50" />
             <span className="text-sm">No music found</span>
           </div>
         ) : (

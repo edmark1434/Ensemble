@@ -11,10 +11,10 @@ import { Button } from "@/components/ui/button";
 import {Search, Loader2, PlusIcon} from "lucide-react";
 import { usePexelsImages } from "@/hooks/use-pexels-images";
 import { ImageLoading } from "@/components/ui/image-loading";
-import {useMasonryColumns} from "@/features/editor/hooks/use-masonry-columns";
 import {getCurrentTime} from "@/features/editor/utils/time";
 import {normalizeDimensionsToCanvas} from "@/features/editor/utils/dimensions";
 import useStore from "../store/use-store";
+import {useMasonryRows} from "@/features/editor/hooks/use-masonry-rows";
 
 const buildNormalizedImagePayload = (image: Partial<IImage>): Partial<IImage> => {
   const details = image.details;
@@ -40,15 +40,22 @@ const buildNormalizedImagePayload = (image: Partial<IImage>): Partial<IImage> =>
   };
 };
 
+// Row height band for the masonry grid. Rows solve to somewhere in this
+// range so they stretch to fill the container width exactly (no ragged
+// right edge). Set MIN and MAX to the same value for a truly fixed row
+// height instead - rows will then leave a gap on the right rather than
+// stretch, but will never overflow either way.
+const TARGET_ROW_HEIGHT = 140;
+const MIN_ROW_HEIGHT = 120;
+const MAX_ROW_HEIGHT = 999999;
+const GAP = 8;
+
 export const Images = () => {
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
   const [searchQuery, setSearchQuery] = useState("");
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
-
-  const COLUMN_WIDTH = 120;
-  const GAP = 8;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -145,7 +152,13 @@ export const Images = () => {
       name: image.name
     }
   }));
-  const columns = useMasonryColumns(displayImages, COLUMN_WIDTH, containerWidth, GAP);
+
+  const rows = useMasonryRows(displayImages, containerWidth, {
+    gap: GAP,
+    targetRowHeight: TARGET_ROW_HEIGHT,
+    minRowHeight: MIN_ROW_HEIGHT,
+    maxRowHeight: MAX_ROW_HEIGHT
+  });
 
   return (
     <div className="flex h-full w-full flex-col min-h-0 overflow-hidden">
@@ -193,16 +206,21 @@ export const Images = () => {
       )}
 
       <ScrollArea className="flex-1 px-4 h-full">
-        <div ref={containerRef} className="flex gap-2 max-h-full">
-          {columns.map((columnItems, colIndex) => (
-            <div key={colIndex} className="flex flex-1 flex-col gap-2 min-w-0">
-              {columnItems.map((image, i) => (
-                <ImageItem
-                  key={`${image.id}-${colIndex}-${i}`}
-                  image={image}
-                  shouldDisplayPreview={!isDraggingOverTimeline}
-                  handleAddImage={handleAddImage}
-                />
+        <div ref={containerRef} className="flex flex-col gap-2">
+          {rows.map((row, rowIndex) => (
+            <div key={rowIndex} className="flex gap-2" style={{ height: row.height }}>
+              {row.items.map(({ item: image, width }, i) => (
+                <div
+                  key={`${image.id}-${rowIndex}-${i}`}
+                  className="h-full"
+                  style={{ width, height: row.height }}
+                >
+                  <ImageItem
+                    image={image}
+                    shouldDisplayPreview={!isDraggingOverTimeline}
+                    handleAddImage={handleAddImage}
+                  />
+                </div>
               ))}
             </div>
           ))}
@@ -221,17 +239,14 @@ export const Images = () => {
 };
 
 const ImageItem = ({
-  handleAddImage,
-  image,
-  shouldDisplayPreview
-}: {
+                     handleAddImage,
+                     image,
+                     shouldDisplayPreview
+                   }: {
   handleAddImage: (payload: Partial<IImage>) => void;
   image: Partial<IImage>;
   shouldDisplayPreview: boolean;
 }) => {
-  const width = (image.details as any)?.width;
-  const height = (image.details as any)?.height;
-
   const normalizedImage = useMemo(
     () => buildNormalizedImagePayload(image),
     [image]
@@ -259,13 +274,12 @@ const ImageItem = ({
         onClick={() =>
           handleAddImage(image)
         }
-        className="relative flex w-full items-center justify-center overflow-hidden cursor-pointer group rounded-md"
+        className="relative flex w-full h-full items-center justify-center overflow-hidden cursor-pointer group rounded-md"
       >
         <img
           draggable={false}
           src={image.preview}
-          style={{ aspectRatio: width && height ? `${width} / ${height}` : undefined }}
-          className="w-full rounded-md object-cover"
+          className="w-full h-full rounded-md object-cover"
           alt="Visual content"
         />
         <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">

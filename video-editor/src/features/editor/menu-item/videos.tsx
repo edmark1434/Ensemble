@@ -11,10 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Search, Loader2, PlusIcon } from "lucide-react";
 import { usePexelsVideos } from "@/hooks/use-pexels-videos";
 import { ImageLoading } from "@/components/ui/image-loading";
-import {useMasonryColumns} from "@/features/editor/hooks/use-masonry-columns";
 import {getCurrentTime} from "@/features/editor/utils/time";
-import {normalizeDimensionsToCanvas} from "@/features/editor/utils/dimensions";
 import useStore from "../store/use-store";
+import {useMasonryRows} from "@/features/editor/hooks/use-masonry-rows";
 
 // Shared by both click-to-add and drag-to-add: scales the raw video
 // dimensions to fit the canvas and centers left/top accordingly.
@@ -35,15 +34,22 @@ const buildNormalizedVideoPayload = (video: Partial<IVideo>): Partial<IVideo> =>
   };
 };
 
+// Row height band for the masonry grid. Rows solve to somewhere in this
+// range so they stretch to fill the container width exactly (no ragged
+// right edge). Set MIN and MAX to the same value for a truly fixed row
+// height instead - rows will then leave a gap on the right rather than
+// stretch, but will never overflow either way.
+const TARGET_ROW_HEIGHT = 140;
+const MIN_ROW_HEIGHT = 120;
+const MAX_ROW_HEIGHT = 999999;
+const GAP = 8;
+
 export const Videos = () => {
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
   const [searchQuery, setSearchQuery] = useState("");
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
-
-  const COLUMN_WIDTH = 120;
-  const GAP = 8;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -142,10 +148,16 @@ export const Videos = () => {
       name: video.name
     }
   }));
-  const columns = useMasonryColumns(displayVideos, COLUMN_WIDTH, containerWidth, GAP);
+
+  const rows = useMasonryRows(displayVideos, containerWidth, {
+    gap: GAP,
+    targetRowHeight: TARGET_ROW_HEIGHT,
+    minRowHeight: MIN_ROW_HEIGHT,
+    maxRowHeight: MAX_ROW_HEIGHT
+  });
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex h-full w-full flex-col min-h-0 overflow-hidden">
       <div className="flex items-center gap-2 p-4">
         <div className="relative flex-1">
           <Button
@@ -189,17 +201,22 @@ export const Videos = () => {
         </div>
       )}
 
-      <ScrollArea className="flex-1 px-4 max-h-full">
-        <div ref={containerRef} className="flex gap-2 max-h-full">
-          {columns.map((columnItems, colIndex) => (
-            <div key={colIndex} className="flex flex-1 flex-col gap-2 min-w-0">
-              {columnItems.map((video, i) => (
-                <VideoItem
-                  key={`${video.id}-${colIndex}-${i}`}
-                  video={video}
-                  shouldDisplayPreview={!isDraggingOverTimeline}
-                  handleAddVideo={handleAddVideo}
-                />
+      <ScrollArea className="flex-1 px-4 h-full">
+        <div ref={containerRef} className="flex flex-col gap-2">
+          {rows.map((row, rowIndex) => (
+            <div key={rowIndex} className="flex gap-2" style={{ height: row.height }}>
+              {row.items.map(({ item: video, width }, i) => (
+                <div
+                  key={`${video.id}-${rowIndex}-${i}`}
+                  className="h-full"
+                  style={{ width, height: row.height }}
+                >
+                  <VideoItem
+                    video={video}
+                    shouldDisplayPreview={!isDraggingOverTimeline}
+                    handleAddVideo={handleAddVideo}
+                  />
+                </div>
               ))}
             </div>
           ))}
@@ -239,9 +256,6 @@ const VideoItem = ({
   video: Partial<IVideo>;
   shouldDisplayPreview: boolean;
 }) => {
-  const width = (video.details as any)?.width;
-  const height = (video.details as any)?.height;
-
   const normalizedVideo = useMemo(
     () => buildNormalizedVideoPayload({
       ...video,
@@ -281,13 +295,12 @@ const VideoItem = ({
             }
           })
         }
-        className="relative flex w-full items-center justify-center overflow-hidden group cursor-pointer rounded-md"
+        className="relative flex w-full h-full items-center justify-center overflow-hidden group cursor-pointer rounded-md"
       >
         <img
           draggable={false}
           src={video.preview}
-          style={{ aspectRatio: width && height ? `${width} / ${height}` : undefined }}
-          className="w-full rounded-md object-cover"
+          className="w-full h-full rounded-md object-cover"
           alt="Video preview"
         />
         {/* Play button overlay */}

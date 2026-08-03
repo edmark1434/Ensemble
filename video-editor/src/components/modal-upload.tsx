@@ -2,11 +2,10 @@ import React, { use, useEffect, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle
 } from "./ui/dialog";
-import { FileIcon, UploadIcon, X } from "lucide-react";
+import {FileIcon, Music, Plus, UploadIcon, X} from "lucide-react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { motion, AnimatePresence } from "framer-motion";
@@ -14,6 +13,8 @@ import clsx from "clsx";
 import useUploadStore from "@/features/editor/store/use-upload-store";
 import axios from "axios";
 import { Input } from "./ui/input";
+import {useIsMediumScreen} from "@/hooks/use-media-query";
+import {cn} from "@/lib/utils";
 type ModalUploadProps = {
   type?: string;
 };
@@ -36,6 +37,17 @@ export const extractVideoThumbnail = (file: File) => {
     video.onerror = () => resolve("");
   });
 };
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(2)} KB`;
+  const mb = kb / 1024;
+  if (mb < 1024) return `${mb.toFixed(2)} MB`;
+  const gb = mb / 1024;
+  return `${gb.toFixed(2)} GB`;
+};
+
 const ModalUpload: React.FC<ModalUploadProps> = ({ type = "all" }) => {
   const {
     setShowUploadModal,
@@ -175,14 +187,14 @@ const ModalUpload: React.FC<ModalUploadProps> = ({ type = "all" }) => {
     // Prepare UploadFile object for URL if present
     const urlUploads = videoUrl.trim()
       ? [
-          {
-            id: crypto.randomUUID(),
-            url: videoUrl.trim(),
-            type: "url",
-            status: "pending" as const,
-            progress: 0
-          }
-        ]
+        {
+          id: crypto.randomUUID(),
+          url: videoUrl.trim(),
+          type: "url",
+          status: "pending" as const,
+          progress: 0
+        }
+      ]
       : [];
 
     // Add to pending uploads
@@ -212,135 +224,158 @@ const ModalUpload: React.FC<ModalUploadProps> = ({ type = "all" }) => {
     setFiles([]);
   }, [showUploadModal]);
 
+  const isMediumScreen = useIsMediumScreen();
+
   return (
     <div>
       <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="text-md">Upload media</DialogTitle>
+        <DialogContent
+          className={cn(
+            "border bg-card px-2 py-8 gap-6 overflow-hidden",
+            files.length === 0 ? "sm:max-w-lg" : "sm:max-w-6xl"
+          )}
+        >
+          <DialogHeader className="px-6 -mt-0.75">
+            <DialogTitle className="text-md font-semibold">Upload</DialogTitle>
           </DialogHeader>
-          <div className="space-y-6">
-            <label className="flex flex-col gap-2">
-              <input
-                type="file"
-                accept={getAcceptType()}
-                onChange={handleFileChange}
-                multiple
-                ref={fileInputRef}
-                style={{ display: "none" }}
-              />
+          <div className="flex w-full">
+            <div className="space-y-6 px-6 flex-1">
+              <label className="flex flex-col gap-2">
+                <input
+                  type="file"
+                  accept={getAcceptType()}
+                  onChange={handleFileChange}
+                  multiple
+                  ref={fileInputRef}
+                  style={{ display: "none" }}
+                />
 
-              <div
-                className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                  isDragOver
-                    ? "border-primary bg-primary/10"
-                    : "border border-border hover:border-muted-foreground/50"
-                }`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                <UploadIcon className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground mb-2">
-                  Drag and drop files here, or
-                </p>
-                <Button onClick={triggerFileInput} variant="outline" size="sm">
-                  browse files
-                </Button>
+                <div
+                  className={`h-56 flex items-center justify-center gap-4 border-dashed rounded-md p-4transition-colors ${
+                    isDragOver
+                      ? "border-primary bg-primary/10"
+                      : "border border-border hover:border-muted-foreground/50"
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
+                  <Button
+                    className="flex h-9 gap-2 cursor-pointer"
+                    variant="default"
+                    size={isMediumScreen ? "sm" : "icon"}
+                    onClick={triggerFileInput}
+                  >
+                    <span className="hidden md:block">Browse files</span>
+                  </Button>
+
+                  <div className="flex flex-col gap-px">
+                    <p className="text-sm text-muted-foreground/70">
+                      or drag and drop files here
+                    </p>
+                  </div>
+                </div>
+              </label>
+
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-1 items-center text-xs text-muted-foreground">
+                  or paste a media link:
+                </div>
+                <Input
+                  type="text"
+                  placeholder="https://..."
+                  value={videoUrl}
+                  onChange={(e) => setVideoUrl(e.target.value)}
+                />
               </div>
-            </label>
+            </div>
 
             {files.length > 0 && (
-              <div className="flex flex-col gap-2 mt-2">
-                <span className="text-xs text-muted-foreground">
+              <div className="flex flex-col gap-4 px-6 pl-3  flex-1">
+                <span className="text-sm text-muted-foreground">
                   Selected files:
                 </span>
-                <ScrollArea className="max-h-48">
+                <ScrollArea className="max-h-67.75">
                   <AnimatePresence initial={false}>
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-3">
                       {files.map((file) => (
-                        <motion.div
-                          key={file.id}
-                          className="relative flex flex-col items-center p-1.5 sm:p-2 border rounded shadow-sm w-full"
-                          initial={{ opacity: 0, scale: 0.8 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.8 }}
-                          transition={{
-                            type: "spring",
-                            stiffness: 300,
-                            damping: 30
-                          }}
-                          layout
-                        >
-                          <div className="w-full flex justify-between items-center">
-                            <div className="flex flex-1 gap-1 sm:gap-1.5 md:gap-2  items-center">
-                              <div className="w-5 h-5 sm:w-6 sm:h-6 md:w-8 md:h-8 flex items-center justify-center">
+                        // <motion.div
+                        //   key={file.id}
+                        //   className="relative flex flex-col items-center rounded shadow-sm w-full"
+                        //   initial={{ opacity: 0, scale: 0.8 }}
+                        //   animate={{ opacity: 1, scale: 1 }}
+                        //   exit={{ opacity: 0, scale: 0.8 }}
+                        //   transition={{
+                        //     type: "spring",
+                        //     stiffness: 300,
+                        //     damping: 30
+                        //   }}
+                        //   layout
+                        // >
+                          <div
+                            key={file.id}
+                            className="w-full flex justify-between items-center gap-2 pl-1"
+                          >
+                            <Button
+                              variant={"ghost"}
+                              onClick={() =>
+                                file.file &&
+                                handleRemoveFile(file.id, file.file)
+                              }
+                              size={"icon"}
+                              className="cursor-pointer w-4 h-4 text-muted-foreground hover:opacity-100! hover:bg-transparent! hover:text-foreground!"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+
+                            <div className="flex flex-1 gap-1 sm:gap-1.5 md:gap-2 items-center">
+                              <div className="w-5 h-5 sm:w-6 sm:h-6 md:w-12 md:h-12 flex items-center justify-center">
                                 {file.file?.type.startsWith("image/") ? (
                                   <img
                                     src={URL.createObjectURL(file.file)}
                                     alt={file.file.name}
-                                    className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 object-cover rounded border"
+                                    className="h-5 w-5 sm:h-6 sm:w-6 md:h-12 md:w-12 object-cover rounded border"
                                   />
                                 ) : file.file?.type.startsWith("video/") &&
-                                  videoThumbnails[file.file.name] ? (
+                                videoThumbnails[file.file.name] ? (
                                   <img
                                     src={videoThumbnails[file.file.name]}
                                     alt={`${file.file.name} thumbnail`}
-                                    className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 object-cover rounded border"
+                                    className="h-5 w-5 sm:h-6 sm:w-6 md:h-12 md:w-12 object-cover rounded border"
                                   />
+                                ) : file.file?.type.startsWith("audio/") ? (
+                                  <div className="h-5 w-5 sm:h-6 md:h-12 md:w-12 flex items-center justify-center rounded border bg-muted">
+                                    <Music className="ml-0.5 h-2.5 w-2.5 sm:h-3 sm:w-3 md:h-5 md:w-5 text-foreground" />
+                                  </div>
                                 ) : (
-                                  <div className="h-5 w-5 sm:h-6 md:h-8 md:w-8 flex items-center justify-center rounded border bg-muted">
-                                    <FileIcon className="h-2.5 w-2.5 sm:h-3 sm:w-3 md:h-4 md:w-4 text-foreground" />
+                                  <div className="h-5 w-5 sm:h-6 md:h-12 md:w-12 flex items-center justify-center rounded border bg-muted">
+                                    <FileIcon className="ml-0.5 h-2.5 w-2.5 sm:h-3 sm:w-3 md:h-5 md:w-5 text-foreground" />
                                   </div>
                                 )}
                               </div>
 
                               <div>
                                 <div
-                                  className="w-full truncate text-xs text-muted-foreground max-w-80"
+                                  className="w-full truncate text-sm font-semibold max-w-80"
                                   title={file.file?.name ?? ""}
                                 >
                                   {file.file?.name ?? ""}
                                 </div>
-                                <div
-                                  className={clsx(
-                                    "text-[9px] sm:text-[10px] text-gray-400"
-                                  )}
-                                >
-                                  {file.file
-                                    ? `${(file.file.size / 1024).toFixed(2)} KB`
-                                    : ""}
+                                <div className={clsx("text-[11px] text-muted-foreground")}>
+                                  {file.file ? formatFileSize(file.file.size) : ""}
                                 </div>
                               </div>
                             </div>
-                            <Button
-                              variant={"outline"}
-                              onClick={() =>
-                                file.file &&
-                                handleRemoveFile(file.id, file.file)
-                              }
-                              size={"icon"}
-                              className="cursor-pointer"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
                           </div>
-                        </motion.div>
+                        // </motion.div>
                       ))}
                     </div>
                   </AnimatePresence>
                 </ScrollArea>
               </div>
             )}
-
-            <Input
-              type="text"
-              placeholder="Paste media link https://..."
-              value={videoUrl}
-              onChange={(e) => setVideoUrl(e.target.value)}
-            />
           </div>
-          <DialogFooter>
+          <div className="flex items-center justify-end gap-2 px-6">
             <Button variant="outline" onClick={() => setShowUploadModal(false)}>
               Cancel
             </Button>
@@ -350,7 +385,7 @@ const ModalUpload: React.FC<ModalUploadProps> = ({ type = "all" }) => {
             >
               Upload
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

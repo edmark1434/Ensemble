@@ -67,6 +67,9 @@ interface ITimelineStore {
 
   projectName: string;
   setProjectName: (name: string) => void;
+
+  userId: string;
+  projectId: string;
 }
 
 export interface IMarker {
@@ -180,6 +183,9 @@ const useStore = create<ITimelineStore>((set, get) => ({
 
   projectName: "My Project",
   setProjectName: (name: string) => set({ projectName: name }),
+
+  userId: "dev-user-id",
+  projectId: "dev-project-id"
 }));
 
 export default useStore;
