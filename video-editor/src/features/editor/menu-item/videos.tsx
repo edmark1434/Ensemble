@@ -248,10 +248,10 @@ export const Videos = () => {
 };
 
 const VideoItem = ({
-                     handleAddVideo,
-                     video,
-                     shouldDisplayPreview
-                   }: {
+  handleAddVideo,
+  video,
+  shouldDisplayPreview
+}: {
   handleAddVideo: (payload: Partial<IVideo>) => void;
   video: Partial<IVideo>;
   shouldDisplayPreview: boolean;

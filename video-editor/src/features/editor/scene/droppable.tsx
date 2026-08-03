@@ -22,10 +22,21 @@ interface DroppableAreaProps {
   className?: string;
   style?: React.CSSProperties;
   onDragStateChange?: (isDragging: boolean) => void;
+  onFilesDropped?: (files: File[]) => void;
   id?: string;
 }
 
-const useDragAndDrop = (onDragStateChange?: (isDragging: boolean) => void) => {
+// A native OS file drag reports its types as ["Files"] (no actual file
+// data is readable until drop) - distinct from the internal drag system
+// below, which smuggles its whole payload through `types[0]` as a JSON
+// string. Check this first so we never try to JSON.parse "Files".
+const isNativeFileDrag = (e: React.DragEvent<HTMLDivElement>): boolean =>
+  Array.from(e.dataTransfer?.types || []).includes("Files");
+
+const useDragAndDrop = (
+  onDragStateChange?: (isDragging: boolean) => void,
+  onFilesDropped?: (files: File[]) => void
+) => {
   const [isPointerInside, setIsPointerInside] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
@@ -70,6 +81,14 @@ const useDragAndDrop = (onDragStateChange?: (isDragging: boolean) => void) => {
   const onDragEnter = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
+
+      if (isNativeFileDrag(e)) {
+        setIsDraggingOver(true);
+        setIsPointerInside(true);
+        onDragStateChange?.(true);
+        return;
+      }
+
       try {
         const draggedDataString = e.dataTransfer?.types[0] as string;
         if (!draggedDataString) return;
@@ -105,6 +124,14 @@ const useDragAndDrop = (onDragStateChange?: (isDragging: boolean) => void) => {
       setIsDraggingOver(false);
       onDragStateChange?.(false);
 
+      if (isNativeFileDrag(e)) {
+        const files = Array.from(e.dataTransfer.files || []);
+        if (files.length > 0) {
+          onFilesDropped?.(files);
+        }
+        return;
+      }
+
       try {
         const draggedDataString = e.dataTransfer?.types[0] as string;
         const draggedData = JSON.parse(
@@ -115,7 +142,7 @@ const useDragAndDrop = (onDragStateChange?: (isDragging: boolean) => void) => {
         console.error("Error parsing dropped data:", error);
       }
     },
-    [isDraggingOver, onDragStateChange, handleDrop]
+    [isDraggingOver, onDragStateChange, handleDrop, onFilesDropped]
   );
 
   const onDragLeave = useCallback(
@@ -138,10 +165,11 @@ export const DroppableArea: React.FC<DroppableAreaProps> = ({
   className,
   style,
   onDragStateChange,
+  onFilesDropped,
   id
 }) => {
   const { onDragEnter, onDragOver, onDrop, onDragLeave } =
-    useDragAndDrop(onDragStateChange);
+    useDragAndDrop(onDragStateChange, onFilesDropped);
 
   return (
     <div

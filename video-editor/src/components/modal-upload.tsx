@@ -253,7 +253,7 @@ const ModalUpload: React.FC<ModalUploadProps> = ({ type = "all" }) => {
                 <div
                   className={`h-56 flex items-center justify-center gap-4 border-dashed rounded-md p-4transition-colors ${
                     isDragOver
-                      ? "border-primary bg-primary/10"
+                      ? "border border-primary bg-primary/10"
                       : "border border-border hover:border-muted-foreground/50"
                   }`}
                   onDragOver={handleDragOver}
@@ -278,7 +278,7 @@ const ModalUpload: React.FC<ModalUploadProps> = ({ type = "all" }) => {
               </label>
 
               <div className="flex flex-col gap-2">
-                <div className="flex flex-1 items-center text-xs text-muted-foreground">
+                <div className="flex flex-1 items-center text-sm text-muted-foreground">
                   or paste a media link:
                 </div>
                 <Input
@@ -295,7 +295,7 @@ const ModalUpload: React.FC<ModalUploadProps> = ({ type = "all" }) => {
                 <span className="text-sm text-muted-foreground">
                   Selected files:
                 </span>
-                <ScrollArea className="max-h-67.75">
+                <ScrollArea className="max-h-69">
                   <AnimatePresence initial={false}>
                     <div className="flex flex-col gap-3">
                       {files.map((file) => (

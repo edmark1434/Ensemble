@@ -239,10 +239,10 @@ export const Images = () => {
 };
 
 const ImageItem = ({
-                     handleAddImage,
-                     image,
-                     shouldDisplayPreview
-                   }: {
+  handleAddImage,
+  image,
+  shouldDisplayPreview
+}: {
   handleAddImage: (payload: Partial<IImage>) => void;
   image: Partial<IImage>;
   shouldDisplayPreview: boolean;

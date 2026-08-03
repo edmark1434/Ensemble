@@ -28,6 +28,7 @@ import { getCurrentTime } from "@/features/editor/utils/time";
 import { normalizeDimensionsToCanvas } from "@/features/editor/utils/dimensions";
 import { useMasonryRows } from "@/features/editor/hooks/use-masonry-rows";
 import {resolveUniqueFileNameFromTaken} from "@/utils/filename";
+import useFileDropUpload from "@/features/editor/hooks/use-file-drop-upload";
 
 // Mirrors buildNormalizedImagePayload in Images.tsx
 const buildNormalizedImagePayload = (image: any) => {
@@ -213,10 +214,10 @@ const MIN_ROW_HEIGHT = 120;
 const MAX_ROW_HEIGHT = 999999;
 
 const UploadImageItem = ({
-                           item,
-                           onAdd,
-                           shouldDisplayPreview
-                         }: {
+  item,
+  onAdd,
+  shouldDisplayPreview
+}: {
   item: any;
   onAdd: (payload: any) => void;
   shouldDisplayPreview: boolean;
@@ -342,10 +343,10 @@ const UploadImageItem = ({
 };
 
 const UploadVideoItem = ({
-                           item,
-                           onAdd,
-                           shouldDisplayPreview
-                         }: {
+  item,
+  onAdd,
+  shouldDisplayPreview
+}: {
   item: any;
   onAdd: (payload: any) => void;
   shouldDisplayPreview: boolean;
@@ -505,12 +506,12 @@ const UploadVideoItem = ({
 };
 
 const UploadAudioItem = ({
-                           item,
-                           onAdd,
-                           playingId,
-                           setPlayingId,
-                           shouldDisplayPreview
-                         }: {
+  item,
+  onAdd,
+  playingId,
+  setPlayingId,
+  shouldDisplayPreview
+}: {
   item: any;
   onAdd: (payload: any) => void;
   playingId: string | null;
@@ -584,13 +585,15 @@ const UploadAudioItem = ({
         size="icon"
         variant="ghost"
         className={`h-8 w-8 rounded-full bg-black/10 dark:bg-white/5 hover:bg-black/15 dark:hover:bg-white/10 shrink-0 ${
-          !isReady && !isError ? "opacity-50" : ""
+          !isReady && !isError ? "opacity-50 animate-spin" : ""
         }`}
         onClick={togglePlay}
         disabled={!isReady}
       >
         {isError ? (
           <AlertCircle className="size-4 text-red-400" />
+        ) : !isReady ? (
+          <Loader2 className="size-4 text-current" />
         ) : isPlaying ? (
           <Pause className="size-4 fill-current" />
         ) : (
@@ -670,10 +673,10 @@ const UploadAudioItem = ({
 // Mirrors Images.tsx's body exactly: own containerRef + ResizeObserver +
 // useMasonryRows, not shared with any other tab.
 const UploadImagesGrid = ({
-                            items,
-                            onAdd,
-                            shouldDisplayPreview
-                          }: {
+  items,
+  onAdd,
+  shouldDisplayPreview
+}: {
   items: any[];
   onAdd: (payload: any) => void;
   shouldDisplayPreview: boolean;
@@ -729,10 +732,10 @@ const UploadImagesGrid = ({
 
 // Mirrors Videos.tsx's body exactly.
 const UploadVideosGrid = ({
-                            items,
-                            onAdd,
-                            shouldDisplayPreview
-                          }: {
+  items,
+  onAdd,
+  shouldDisplayPreview
+}: {
   items: any[];
   onAdd: (payload: any) => void;
   shouldDisplayPreview: boolean;
@@ -792,12 +795,35 @@ export const Uploads = () => {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
   const queryClient = useQueryClient();
+  const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } =
+    useFileDropUpload();
+
+  const [activeTab, setActiveTab] = useState<"videos" | "images" | "audio">("videos");
+  const seenUploadIdsRef = useRef<Set<string>>(new Set());
 
   const { data = [], isLoading, isError } = useQuery({
     queryKey: ["media-assets", projectId],
     queryFn: () => axios.get(`/api/media-assets?projectId=${projectId}`).then((r) => r.data.uploads),
     enabled: !!projectId
   });
+
+  // Whenever a new upload lands in pending/active (i.e. its loading state
+  // starts showing up in the grid below), jump to the tab matching its
+  // media type. Only reacts to genuinely new ids, so progress ticks on
+  // uploads already in flight don't keep yanking the tab back.
+  useEffect(() => {
+    const current = [...pendingUploads, ...activeUploads];
+    const newOnes = current.filter((u) => !seenUploadIdsRef.current.has(u.id));
+
+    if (newOnes.length > 0) {
+      const kind = getUploadKind(newOnes[0]);
+      if (kind === "video") setActiveTab("videos");
+      else if (kind === "image") setActiveTab("images");
+      else if (kind === "audio") setActiveTab("audio");
+    }
+
+    seenUploadIdsRef.current = new Set(current.map((u) => u.id));
+  }, [pendingUploads, activeUploads]);
 
   // Client-side dimension probes for images that haven't hit the DB yet,
   // keyed by upload id, so the masonry grid can size them correctly.
@@ -1050,8 +1076,18 @@ export const Uploads = () => {
   const noUploads = images.length === 0 && videos.length === 0 && audios.length === 0;
 
   return (
-    <div className="flex h-full w-full flex-col min-h-0 overflow-hidden">
+    <div
+      className="relative flex h-full w-full flex-col min-h-0 overflow-hidden"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <ModalUpload />
+
+      {isDragOver && (
+        <div className="pointer-events-none absolute inset-2 z-10 rounded-md border border-dashed border-primary bg-primary/10" />
+      )}
 
       <div className="flex items-center justify-center p-4">
         <Button
@@ -1069,7 +1105,11 @@ export const Uploads = () => {
           <span className="text-sm">No uploads yet</span>
         </div>
       ) : (
-        <Tabs defaultValue="videos" className="w-full flex-1 min-h-0 flex flex-col">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as "videos" | "images" | "audio")}
+          className="w-full flex-1 min-h-0 flex flex-col"
+        >
           <TabsList className="h-9 mx-4 w-[calc(100%-32px)]">
             <TabsTrigger value="videos">Videos</TabsTrigger>
             <TabsTrigger value="images">Images</TabsTrigger>
