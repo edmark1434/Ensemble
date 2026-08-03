@@ -18,6 +18,8 @@ async function getCreditTransactionsByAccountId(accountId) {
             ct.destination_wallet_id,
             ct.reference_table,
             ct.reference_id,
+            source_wallet.type AS source_wallet_type,
+            destination_wallet.type AS destination_wallet_type,
             EXISTS (
                 SELECT 1
                 FROM account_transaction_wallets atw
@@ -29,6 +31,10 @@ async function getCreditTransactionsByAccountId(accountId) {
                 WHERE atw.wallet_id = ct.destination_wallet_id
             ) AS destination_owned
         FROM credit_transactions ct
+        INNER JOIN wallets source_wallet
+            ON source_wallet.wallet_id = ct.source_wallet_id
+        INNER JOIN wallets destination_wallet
+            ON destination_wallet.wallet_id = ct.destination_wallet_id
         WHERE EXISTS (
             SELECT 1
             FROM account_transaction_wallets atw

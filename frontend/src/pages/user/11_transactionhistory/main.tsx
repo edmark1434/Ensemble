@@ -18,7 +18,7 @@ import { useNavigate } from "react-router-dom";
 import api from "@/lib/axios";
 import UserHeader from "@/components/nav/user_header";
 
-const CREDIT_TYPES = [
+const TRANSACTION_CATEGORIES = [
   "Fund Transfer",
   "Credit Purchase",
   "Escrow Hold",
@@ -54,6 +54,7 @@ interface CreditTransaction {
   feeTransactionId: string | null;
   referenceTable: string | null;
   referenceId: string | null;
+  isCreditPurchase: boolean;
 }
 
 interface CreditTransactionsResponse {
@@ -73,6 +74,10 @@ function credits(value: number) {
 
 function displayType(type: string) {
   return TYPE_DISPLAY_LABELS[type] || type || "Unknown";
+}
+
+function transactionCategory(transaction: CreditTransaction) {
+  return transaction.isCreditPurchase ? "Credit Purchase" : transaction.type;
 }
 
 function shortId(value: string) {
@@ -172,9 +177,9 @@ export const TransactionHistoryMain = () => {
   }, [loadTransactions]);
 
   const types = useMemo(() => {
-    const found = new Set(transactions.map((transaction) => transaction.type));
-    const unknown = [...found].filter((type) => !CREDIT_TYPES.includes(type as typeof CREDIT_TYPES[number]));
-    return [...CREDIT_TYPES, ...unknown.sort((a, b) => a.localeCompare(b))];
+    const found = new Set(transactions.map(transactionCategory));
+    const unknown = [...found].filter((type) => !TRANSACTION_CATEGORIES.includes(type as typeof TRANSACTION_CATEGORIES[number]));
+    return [...TRANSACTION_CATEGORIES, ...unknown.sort((a, b) => a.localeCompare(b))];
   }, [transactions]);
 
   const creditTypes = useMemo(
@@ -191,13 +196,13 @@ export const TransactionHistoryMain = () => {
     () => {
       if (activeMainTab === "Summary") return [];
       if (STANDALONE_TYPES.includes(activeMainTab)) {
-        return transactions.filter((transaction) => transaction.type === activeMainTab);
+        return transactions.filter((transaction) => transactionCategory(transaction) === activeMainTab);
       }
       const groupTypes = activeMainTab === "Assets" ? assetTypes : creditTypes;
       const allLabel = activeMainTab === "Assets" ? "All Assets" : "All Credits";
       return activeChildTab === allLabel
-        ? transactions.filter((transaction) => groupTypes.includes(transaction.type))
-        : transactions.filter((transaction) => transaction.type === activeChildTab);
+        ? transactions.filter((transaction) => groupTypes.includes(transactionCategory(transaction)))
+        : transactions.filter((transaction) => transactionCategory(transaction) === activeChildTab);
     },
     [activeChildTab, activeMainTab, assetTypes, creditTypes, transactions],
   );
@@ -219,7 +224,7 @@ export const TransactionHistoryMain = () => {
   ), [transactions]);
 
   const typeTotals = useMemo(() => types.map((type) => {
-    const matching = transactions.filter((transaction) => transaction.type === type);
+    const matching = transactions.filter((transaction) => transactionCategory(transaction) === type);
     return {
       type,
       count: matching.length,
@@ -280,9 +285,10 @@ export const TransactionHistoryMain = () => {
               {(["Summary", "Credits", "Assets", "Fund Transfer", "Fee"] as MainTab[]).map((tab) => {
                 const isActive = activeMainTab === tab;
                 const count = tab === "Summary" ? null : transactions.filter((transaction) => {
-                  if (tab === "Assets") return ASSET_TYPES.includes(transaction.type);
-                  if (tab === "Credits") return !ASSET_TYPES.includes(transaction.type) && !STANDALONE_TYPES.includes(transaction.type);
-                  return transaction.type === tab;
+                  const category = transactionCategory(transaction);
+                  if (tab === "Assets") return ASSET_TYPES.includes(category);
+                  if (tab === "Credits") return !ASSET_TYPES.includes(category) && !STANDALONE_TYPES.includes(category);
+                  return category === tab;
                 }).length;
                 const TabIcon = tab === "Summary" ? LayoutDashboard : tab === "Assets" ? ShoppingBag : CircleDollarSign;
                 return (
@@ -318,10 +324,10 @@ export const TransactionHistoryMain = () => {
                   const count = tab.startsWith("All ")
                     ? transactions.filter((transaction) => (
                       activeMainTab === "Assets"
-                        ? ASSET_TYPES.includes(transaction.type)
-                        : !ASSET_TYPES.includes(transaction.type) && !STANDALONE_TYPES.includes(transaction.type)
+                        ? ASSET_TYPES.includes(transactionCategory(transaction))
+                        : !ASSET_TYPES.includes(transactionCategory(transaction)) && !STANDALONE_TYPES.includes(transactionCategory(transaction))
                     )).length
-                    : transactions.filter((transaction) => transaction.type === tab).length;
+                    : transactions.filter((transaction) => transactionCategory(transaction) === tab).length;
                   return (
                     <button
                       key={tab}
@@ -433,7 +439,7 @@ export const TransactionHistoryMain = () => {
                           key={transaction.id}
                           tabIndex={0}
                           role="button"
-                          aria-label={`View details for ${displayType(transaction.type)} transaction`}
+                          aria-label={`View details for ${displayType(transactionCategory(transaction))} transaction`}
                           onClick={() => setSelectedTransaction(transaction)}
                           onKeyDown={(event) => {
                             if (event.key === "Enter" || event.key === " ") {
@@ -446,7 +452,7 @@ export const TransactionHistoryMain = () => {
                           <td className="whitespace-nowrap px-5 py-4 text-xs text-zinc-400">
                             {validDate ? createdAt.toLocaleString() : "—"}
                           </td>
-                          <td className="px-5 py-4 font-semibold text-zinc-100">{displayType(transaction.type)}</td>
+                          <td className="px-5 py-4 font-semibold text-zinc-100">{displayType(transactionCategory(transaction))}</td>
                           <td className="px-5 py-4">
                             <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${meta.color}`}>
                               <DirectionIcon className="h-4 w-4" aria-hidden="true" /> {meta.label}
@@ -515,7 +521,7 @@ export const TransactionHistoryMain = () => {
             <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-white/10 bg-[#0d0f1a]/95 p-5 backdrop-blur-md">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-400">Transaction details</p>
-                <h2 id="transaction-detail-title" className="mt-1 text-xl font-bold text-white">{displayType(selectedTransaction.type)}</h2>
+                <h2 id="transaction-detail-title" className="mt-1 text-xl font-bold text-white">{displayType(transactionCategory(selectedTransaction))}</h2>
               </div>
               <button
                 type="button"
@@ -542,7 +548,7 @@ export const TransactionHistoryMain = () => {
                 <DetailItem label="Direction" value={directionMeta[selectedTransaction.direction].label} />
                 <DetailItem label="Date and time" value={Number.isFinite(new Date(selectedTransaction.createdAt).getTime()) ? new Date(selectedTransaction.createdAt).toLocaleString() : "—"} />
                 <DetailItem label="Transaction ID" value={selectedTransaction.id} mono />
-                <DetailItem label="Transaction type" value={displayType(selectedTransaction.type)} />
+                <DetailItem label="Transaction type" value={displayType(transactionCategory(selectedTransaction))} />
                 <DetailItem label="Source wallet ID" value={selectedTransaction.sourceWalletId} mono />
                 <DetailItem label="Destination wallet ID" value={selectedTransaction.destinationWalletId} mono />
                 <DetailItem label="Fee transaction ID" value={selectedTransaction.feeTransactionId || "—"} mono />

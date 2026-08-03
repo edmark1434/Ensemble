@@ -88,6 +88,10 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 10) 
             a.handle,
             f.path AS avatar_preset_url
          FROM accounts a
+         INNER JOIN (
+            SELECT DISTINCT account_id
+            FROM users
+         ) u ON u.account_id = a.account_id
          LEFT JOIN files f ON f.file_id = a.avatar_file_id
          WHERE a.type = 'User'
            AND LOWER(a.status) = 'active'

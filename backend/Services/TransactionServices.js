@@ -9,7 +9,7 @@ function getDirection(row) {
 
 const TYPE_LABELS = {
     fund_transfer: 'Fund Transfer',
-    credit_purchase: 'Credit Purchase',
+    credit_purchase: 'Fund Transfer',
     escrow_hold: 'Escrow Hold',
     escrow_release: 'Escrow Release',
     escrow_refund: 'Escrow Refund',
@@ -27,15 +27,21 @@ function normalizeType(type) {
 }
 
 function mapTransaction(row) {
+    const type = normalizeType(row.type);
+    const sourceIsPlatform = String(row.source_wallet_type).toLowerCase() === 'platform wallets';
+    const destinationIsPlatform = String(row.destination_wallet_type).toLowerCase() === 'platform wallets';
     return {
         id: row.credit_transaction_id,
-        type: normalizeType(row.type),
+        type,
+        isCreditPurchase: type === 'Fund Transfer'
+            && sourceIsPlatform
+            && row.destination_owned,
         amountCredits: Math.abs(Number(row.amount_credits)),
         status: row.status,
         createdAt: row.created_at,
         direction: getDirection(row),
-        sourceWalletId: row.source_wallet_id,
-        destinationWalletId: row.destination_wallet_id,
+        sourceWalletId: sourceIsPlatform ? 'Platform' : row.source_wallet_id,
+        destinationWalletId: destinationIsPlatform ? 'Platform' : row.destination_wallet_id,
         feeTransactionId: row.fee_transaction_id,
         referenceTable: row.reference_table,
         referenceId: row.reference_id,
