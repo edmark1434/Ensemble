@@ -1,605 +1,560 @@
-import React, { useState, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Calendar,
-  TrendingUp,
-  TrendingDown,
-  CreditCard,
-  Tag,
-  ShoppingBag,
-  Hourglass,
+  ArrowDownLeft,
+  ArrowLeftRight,
+  ArrowUpRight,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
-  HelpCircle,
-  Plus,
-  ArrowUpRight,
-  ArrowRight,
-  Layers,
-  Briefcase,
-  Megaphone
+  CircleDollarSign,
+  LayoutDashboard,
+  List,
+  LoaderCircle,
+  RefreshCw,
+  ShieldCheck,
+  ShoppingBag,
+  X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import api from "@/lib/axios";
 import UserHeader from "@/components/nav/user_header";
 
-// --- STRUCTURAL TYPES ---
-type TransactionType = "Summary" | "Credit Purchases" | "Sales & Earnings" | "Purchases" | "Pending Credits";
-type EarningsSubTab = "All" | "From Assets" | "From Jobs" | "From Gigs";
-type DateRangeType = "Past Day" | "Past 7 Days" | "Past 30 Days" | "Past Year";
-type RowLimitType = 10 | 25 | 50;
+const CREDIT_TYPES = [
+  "Fund Transfer",
+  "Credit Purchase",
+  "Escrow Hold",
+  "Escrow Release",
+  "Escrow Refund",
+  "Asset Purchase",
+  "Asset Refund",
+  "Fee",
+] as const;
 
-// ========================================================
-// 📊 SINGLE SOURCE OF TRUTH (CONNECTED LEDGER MATRIX)
-// ========================================================
-
-const sampleCreditPurchases = [
-  { id: "TX-CP01", date: "2026-06-22", package: "Pro Studio Bundle", paymentMethod: "GCash", credits: 5000.00, amount: "₱5,000.00" },
-  { id: "TX-CP02", date: "2026-06-15", package: "Starter Pack", paymentMethod: "Maya", credits: 1500.00, amount: "₱1,500.00" },
-  { id: "TX-CP03", date: "2026-05-20", package: "Enterprise Tier Credits", paymentMethod: "Credit Card", credits: 20000.00, amount: "₱19,000.00" },
-];
-
-const samplePurchases = [
-  { id: "TX-PR01", date: "2026-06-21", assetName: "3D Blender Studio Room Model", seller: "Nexus Design Studio", credits: 15600.00 },
-  { id: "TX-PR02", date: "2026-06-10", assetName: "Lo-Fi Beats Extended Audio Asset", seller: "Alpha Developers Lab", credits: 4400.00 },
-];
-
-const samplePendingCredits = [
-  { id: "TX-PC01", date: "2026-06-23", originType: "Job", source: "Escrow Contract - Wedding Video Milestone 1", project: "Wedding Video Edit", credits: 10000.00 },
-  { id: "TX-PC02", date: "2026-06-18", originType: "Gig", source: "Asset Sale Escrow - Premium UI Kit Hold", project: "E-Commerce Figma Kit", credits: 2500.00 },
-];
-
-const sampleEarningsItems = [
-  { id: "TX-ER01", date: "2026-06-23", source: "Jobs", title: "Wedding Video Editing Contract", customer: "Edmark Talingting", credits: 35000.00 },
-  { id: "TX-ER02", date: "2026-06-20", source: "Gigs", title: "Tech Channel Intro Sequence", customer: "Jodeci Pacibe", credits: 12500.00 },
-  { id: "TX-ER03", date: "2026-06-19", source: "Assets", title: "Cinematic LUT Pack v2", customer: "Dave Almeda", credits: 2500.00 },
-];
-
-// --- TAB EXPLANATIONS FOR TOOLTIPS ---
-const tabExplanations: Record<TransactionType, string> = {
-  Summary: "An aggregate overview breaking down your overall incoming gains vs outgoing debits.",
-  "Credit Purchases": "A detailed history of direct credit token bundles you purchased using legal tender gateways.",
-  "Sales & Earnings": "Revenue streams split safely between asset products, milestone contract roles, and short gig fulfillments.",
-  Purchases: "Debited financial items mapping external plugin models and assets you bought using your account credits.",
-  "Pending Credits": "Secure escrow funds locked temporarily during milestone reviews or safety clearance holds."
+const TYPE_DISPLAY_LABELS: Record<string, string> = {
+  "Escrow Hold": "Credits On Hold",
+  "Escrow Release": "Credits Released",
+  "Escrow Refund": "Credits Refunded",
 };
 
-// --- BRAND CREDIT VALUE DISPLAY (No background/borders) ---
-interface CreditValueProps {
-  amount: number;
-  prefix?: string;
-  className?: string;
-  colorClass?: string;
+type Direction = "incoming" | "outgoing" | "internal";
+type RowLimit = 10 | 25 | 50;
+type MainTab = "Summary" | "Credits" | "Assets" | "Fund Transfer" | "Fee";
+
+const ASSET_TYPES = ["Asset Purchase", "Asset Refund"];
+const STANDALONE_TYPES = ["Fund Transfer", "Fee"];
+
+interface CreditTransaction {
+  id: string;
+  type: string;
+  amountCredits: number;
+  status: string;
+  createdAt: string;
+  direction: Direction;
+  sourceWalletId: string;
+  destinationWalletId: string;
+  feeTransactionId: string | null;
+  referenceTable: string | null;
+  referenceId: string | null;
 }
 
-const CreditValue: React.FC<CreditValueProps> = ({ amount, prefix = "", className = "", colorClass = "text-[#f2e29f]" }) => {
-  return (
-    <div className={`inline-flex items-center gap-1.5 font-bold select-none ${colorClass} ${className}`}>
-      <div className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 border-[#b48924] text-[9px] font-black text-[#f2e29f]">
-        $
-      </div>
-      <span className="font-sans font-semibold tracking-wide">
-        {prefix}{amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-      </span>
-    </div>
-  );
+interface CreditTransactionsResponse {
+  success: boolean;
+  transactions: CreditTransaction[];
+}
+
+const directionMeta: Record<Direction, { label: string; icon: typeof ArrowDownLeft; color: string }> = {
+  incoming: { label: "Incoming", icon: ArrowDownLeft, color: "text-emerald-300" },
+  outgoing: { label: "Outgoing", icon: ArrowUpRight, color: "text-rose-300" },
+  internal: { label: "Internal", icon: ArrowLeftRight, color: "text-blue-300" },
 };
 
-export const TransactionHistoryMain: React.FC = () => {
-  const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TransactionType>("Summary");
-  const [earningsSubTab, setEarningsSubTab] = useState<EarningsSubTab>("All");
-  const [dateRange, setDateRange] = useState<DateRangeType>("Past 30 Days");
+function credits(value: number) {
+  return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
 
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [rowsPerPage, setRowsPerPage] = useState<RowLimitType>(10);
+function displayType(type: string) {
+  return TYPE_DISPLAY_LABELS[type] || type || "Unknown";
+}
 
-  const handleTabChange = (tab: TransactionType) => {
-    setActiveTab(tab);
-    setEarningsSubTab("All");
-    setCurrentPage(1);
-  };
+function shortId(value: string) {
+  return value.length > 13 ? `${value.slice(0, 8)}…${value.slice(-4)}` : value;
+}
 
-  // ========================================================
-  // 🧮 DYNAMIC MATHEMATICS MATRIX PIPELINE
-  // ========================================================
-  const totals = useMemo(() => {
-    // 1. Core Tab Aggregations
-    const creditPurchasesTotal = sampleCreditPurchases.reduce((acc, curr) => acc + curr.credits, 0);
-    const purchasesTotal = samplePurchases.reduce((acc, curr) => acc + curr.credits, 0);
-    const pendingTotal = samplePendingCredits.reduce((acc, curr) => acc + curr.credits, 0);
+function formatStatus(value: string) {
+  return value.trim().replace(/[_-]+/g, " ") || "Unknown";
+}
 
-    // 2. Sales & Earnings Category Splits
-    const jobsEarned = sampleEarningsItems.filter(i => i.source === "Jobs").reduce((acc, c) => acc + c.credits, 0);
-    const gigsEarned = sampleEarningsItems.filter(i => i.source === "Gigs").reduce((acc, c) => acc + c.credits, 0);
-    const assetsEarned = sampleEarningsItems.filter(i => i.source === "Assets").reduce((acc, c) => acc + c.credits, 0);
-    const totalEarnedCombined = jobsEarned + gigsEarned + assetsEarned;
+function statusClasses(status: string) {
+  const value = status.toLowerCase();
+  if (value === "completed") return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
+  if (["failed", "cancelled", "canceled"].includes(value)) return "border-rose-500/20 bg-rose-500/10 text-rose-300";
+  if (["refunded", "released"].includes(value)) return "border-blue-500/20 bg-blue-500/10 text-blue-300";
+  return "border-amber-500/20 bg-amber-500/10 text-amber-200";
+}
 
-    // 3. Platform Fee Formula Calculation (e.g., Exactly 20% of Gross Earnings matching your image ratio)
-    const platformFeeCalculated = totalEarnedCombined * 0.20;
-    const netEarningsCalculated = totalEarnedCombined - platformFeeCalculated;
+function isCompleted(status: string) {
+  return status.toLowerCase() === "completed";
+}
 
-    // 4. Global Interconnected Totals
-    const globalIncomingTotal = creditPurchasesTotal + totalEarnedCombined + pendingTotal;
-    const globalOutgoingTotal = purchasesTotal + platformFeeCalculated;
-
-    return {
-      creditPurchases: creditPurchasesTotal,
-      sales: totalEarnedCombined,
-      payouts: 0,
-      pending: pendingTotal,
-      incomingTotal: globalIncomingTotal,
-      outgoingPurchases: purchasesTotal,
-      platformFee: platformFeeCalculated,
-      outgoingTotal: globalOutgoingTotal,
-
-      // Sales Tab Specific Breakdowns
-      jobs: jobsEarned,
-      gigs: gigsEarned,
-      assets: assetsEarned,
-      totalEarned: totalEarnedCombined,
-      netEarnings: netEarningsCalculated
-    };
-  }, []);
-
-  const filteredEarningsItems = useMemo(() => {
-    if (earningsSubTab === "All") return sampleEarningsItems;
-    const sourceKey = earningsSubTab === "From Assets" ? "Assets" : earningsSubTab === "From Jobs" ? "Jobs" : "Gigs";
-    return sampleEarningsItems.filter(i => i.source === sourceKey);
-  }, [earningsSubTab]);
-
-  // --- INTERACTIVE PAGINATION CONTROLS ---
-  const renderPaginationControls = (totalItems: number) => {
-    const totalPages = Math.ceil(totalItems / rowsPerPage) || 1;
-
-    return (
-      <div className="mt-4 pt-4 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-medium text-zinc-400">
-        <div className="flex items-center gap-2">
-          <span>Rows per page:</span>
-          <div className="relative">
-            <select
-              value={rowsPerPage}
-              onChange={(e) => { setRowsPerPage(Number(e.target.value) as RowLimitType); setCurrentPage(1); }}
-              className="appearance-none bg-white/5 border border-white/10 rounded-lg pl-3 pr-8 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/50 cursor-pointer"
-            >
-              <option value={10} className="bg-[#0d0f1a]">10</option>
-              <option value={25} className="bg-[#0d0f1a]">25</option>
-              <option value={50} className="bg-[#0d0f1a]">50</option>
-            </select>
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500 pointer-events-none" />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <span className="font-mono">Page {currentPage} of {totalPages}</span>
-          <div className="flex gap-1">
-            <button
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              className="p-2 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-white/5 transition"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <button
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              className="p-2 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-white/5 transition"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
+function CreditAmount({ transaction }: { transaction: CreditTransaction }) {
+  const sign = transaction.direction === "incoming" ? "+" : transaction.direction === "outgoing" ? "−" : "";
+  const color = transaction.direction === "incoming"
+    ? "text-emerald-300"
+    : transaction.direction === "outgoing"
+      ? "text-rose-300"
+      : "text-blue-300";
 
   return (
-    <div className="w-full min-h-screen bg-[#080a12] text-white overflow-x-hidden">
-      <UserHeader pageTitle="Transaction History" credits={1250} />
+    <span className={`inline-flex items-center gap-1.5 font-semibold tabular-nums ${color}`}>
+      <CircleDollarSign className="h-4 w-4" aria-hidden="true" />
+      {sign}{credits(transaction.amountCredits)}
+    </span>
+  );
+}
 
-      <div className="mx-auto max-w-7xl p-6 md:p-8 w-full">
+function SummaryCard({
+  label,
+  value,
+  detail,
+  color,
+}: {
+  label: string;
+  value: number;
+  detail: string;
+  color: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/70 p-5 shadow-xl">
+      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
+      <p className={`mt-3 flex items-center gap-2 text-2xl font-bold tabular-nums ${color}`}>
+        <CircleDollarSign className="h-5 w-5" aria-hidden="true" />
+        {credits(value)}
+      </p>
+      <p className="mt-2 text-xs text-zinc-500">{detail}</p>
+    </div>
+  );
+}
 
-        {/* Header Title Grid Row */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+function DetailItem({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="rounded-xl border border-white/5 bg-white/[0.025] p-3.5">
+      <dt className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-600">{label}</dt>
+      <dd className={`mt-1.5 break-all text-sm text-zinc-200 ${mono ? "font-mono text-xs" : ""}`}>{value || "—"}</dd>
+    </div>
+  );
+}
+
+export const TransactionHistoryMain = () => {
+  const navigate = useNavigate();
+  const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeMainTab, setActiveMainTab] = useState<MainTab>("Summary");
+  const [activeChildTab, setActiveChildTab] = useState("All Credits");
+  const [selectedTransaction, setSelectedTransaction] = useState<CreditTransaction | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState<RowLimit>(10);
+
+  const loadTransactions = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.get<CreditTransactionsResponse>("/api/transactions/credits");
+      setTransactions(Array.isArray(response.data.transactions) ? response.data.transactions : []);
+    } catch {
+      setError("We couldn't load your credit history. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTransactions();
+  }, [loadTransactions]);
+
+  const types = useMemo(() => {
+    const found = new Set(transactions.map((transaction) => transaction.type));
+    const unknown = [...found].filter((type) => !CREDIT_TYPES.includes(type as typeof CREDIT_TYPES[number]));
+    return [...CREDIT_TYPES, ...unknown.sort((a, b) => a.localeCompare(b))];
+  }, [transactions]);
+
+  const creditTypes = useMemo(
+    () => types.filter((type) => !ASSET_TYPES.includes(type) && !STANDALONE_TYPES.includes(type)),
+    [types],
+  );
+
+  const assetTypes = useMemo(
+    () => types.filter((type) => ASSET_TYPES.includes(type)),
+    [types],
+  );
+
+  const tabTransactions = useMemo(
+    () => {
+      if (activeMainTab === "Summary") return [];
+      if (STANDALONE_TYPES.includes(activeMainTab)) {
+        return transactions.filter((transaction) => transaction.type === activeMainTab);
+      }
+      const groupTypes = activeMainTab === "Assets" ? assetTypes : creditTypes;
+      const allLabel = activeMainTab === "Assets" ? "All Assets" : "All Credits";
+      return activeChildTab === allLabel
+        ? transactions.filter((transaction) => groupTypes.includes(transaction.type))
+        : transactions.filter((transaction) => transaction.type === activeChildTab);
+    },
+    [activeChildTab, activeMainTab, assetTypes, creditTypes, transactions],
+  );
+
+  const totals = useMemo(() => transactions.reduce(
+    (result, transaction) => {
+      if (isCompleted(transaction.status) && transaction.direction === "incoming") {
+        result.incoming += transaction.amountCredits;
+      }
+      if (isCompleted(transaction.status) && transaction.direction === "outgoing") {
+        result.outgoing += transaction.amountCredits;
+      }
+      if (transaction.type === "Escrow Hold" && !isCompleted(transaction.status)) {
+        result.held += transaction.amountCredits;
+      }
+      return result;
+    },
+    { incoming: 0, outgoing: 0, held: 0 },
+  ), [transactions]);
+
+  const typeTotals = useMemo(() => types.map((type) => {
+    const matching = transactions.filter((transaction) => transaction.type === type);
+    return {
+      type,
+      count: matching.length,
+      credits: matching.reduce((sum, transaction) => sum + transaction.amountCredits, 0),
+    };
+  }), [transactions, types]);
+
+  const totalPages = Math.max(1, Math.ceil(tabTransactions.length / rowsPerPage));
+  const page = Math.min(currentPage, totalPages);
+  const visibleTransactions = tabTransactions.slice((page - 1) * rowsPerPage, page * rowsPerPage);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeChildTab, activeMainTab, rowsPerPage]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    if (!selectedTransaction) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedTransaction(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [selectedTransaction]);
+
+  return (
+    <div className="min-h-screen w-full overflow-x-hidden bg-[#080a12] text-white">
+      <UserHeader pageTitle="Transaction History" />
+
+      <main className="mx-auto w-full max-w-7xl p-5 md:p-8">
+        <div className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end">
           <div>
-            <h1 className="text-2xl font-bold mb-1">Financial Ledgers</h1>
-            <p className="text-xs text-zinc-400">Monitor credit operational flows, platform asset purchases, and escrow timelines.</p>
-          </div>
-
-          {/* Date Selector Filter */}
-          <div className="flex items-center gap-3 self-start md:self-auto">
-            <div className="relative">
-              <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-              <select
-                value={dateRange}
-                onChange={(e) => setDateRange(e.target.value as DateRangeType)}
-                className="appearance-none bg-[#0d0f1a]/60 border border-white/10 rounded-full pl-10 pr-10 py-2.5 text-xs text-white font-bold tracking-wide focus:outline-none focus:border-blue-500/50 cursor-pointer backdrop-blur-sm"
-              >
-                {["Past Day", "Past 7 Days", "Past 30 Days", "Past Year"].map((range) => (
-                  <option key={range} value={range} className="bg-[#0d0f1a] text-white">{range}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500 pointer-events-none" />
+            <div className="mb-2 flex items-center gap-2 text-blue-400">
+              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Account ledger</span>
             </div>
+            <h1 className="text-2xl font-bold">Credit transaction history</h1>
+            <p className="mt-1 max-w-2xl text-sm text-zinc-400">
+              Review purchases, transfers, held credits, releases, refunds, and fees in one ledger.
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={() => navigate("/credits")}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+          >
+            <CircleDollarSign className="h-4 w-4" aria-hidden="true" />
+            Purchase credits
+          </button>
         </div>
 
-        {/* Workspace Primary Tabs Segment Controls */}
-        <div className="mb-6 flex flex-wrap gap-1 border-b border-white/10">
-          {(["Summary", "Credit Purchases", "Sales & Earnings", "Purchases", "Pending Credits"] as TransactionType[]).map((tab) => {
-            const icons: Record<TransactionType, React.ReactNode> = {
-              Summary: <TrendingUp className="h-4 w-4" />,
-              "Credit Purchases": <CreditCard className="h-4 w-4" />,
-              "Sales & Earnings": <Tag className="h-4 w-4" />,
-              Purchases: <ShoppingBag className="h-4 w-4" />,
-              "Pending Credits": <Hourglass className="h-4 w-4" />
-            };
-            return (
-              <div
-                key={tab}
-                className={`group/tab relative flex items-center gap-2 px-5 py-3 text-xs md:text-sm font-medium transition-all border-b-2 tracking-wide cursor-pointer ${
-                  activeTab === tab 
-                    ? "text-blue-400 border-blue-500 bg-blue-500/5" 
-                    : "text-zinc-400 border-transparent hover:text-white"
-                }`}
-                onClick={() => handleTabChange(tab)}
-              >
-                {icons[tab]}
-                <span>{tab}</span>
-
-                {/* Help Info Icon Trigger Tooltips */}
-                <div className="relative group/help inline-block text-zinc-500 hover:text-zinc-300 transition-colors ml-1 p-0.5">
-                  <HelpCircle className="h-3.5 w-3.5" />
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/help:block w-48 rounded-lg border border-white/10 bg-[#0d0f1a] p-2.5 shadow-2xl z-50 pointer-events-none animate-fade-in text-center">
-                    <p className="text-[11px] font-medium leading-normal normal-case text-zinc-300">
-                      {tabExplanations[tab]}
-                    </p>
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-[#0d0f1a]" />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* ======================================================== */}
-        {/* VIEW INTERFACE LAYOUT 1: SUMMARY TAB                     */}
-        {/* ======================================================== */}
-        {activeTab === "Summary" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start animate-fade-in">
-            <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-6 backdrop-blur-sm shadow-xl space-y-6">
-              <div className="flex items-center gap-2 border-b border-white/5 pb-3">
-                <div className="p-2 rounded-lg bg-green-500/10 text-green-400"><TrendingUp className="h-5 w-5" /></div>
-                <div>
-                  <h3 className="text-base font-bold text-white">Incoming Credits Summary</h3>
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono">{dateRange}</p>
-                </div>
-              </div>
-              <div className="space-y-4 text-sm">
-                <div className="flex justify-between items-center bg-white/[0.01] border border-white/5 p-3.5 rounded-xl">
-                  <span className="text-zinc-400">Credit Purchases</span>
-                  <CreditValue amount={totals.creditPurchases} prefix="+" />
-                </div>
-                <div className="flex justify-between items-center bg-white/[0.01] border border-white/5 p-3.5 rounded-xl">
-                  <span className="text-zinc-400">Sales & Platform Earnings</span>
-                  <CreditValue amount={totals.sales} prefix="+" />
-                </div>
-                <div className="flex justify-between items-center bg-white/[0.01] border border-white/5 p-3.5 rounded-xl opacity-50">
-                  <span className="text-zinc-400">Pending Escrow Credits</span>
-                  <CreditValue amount={totals.pending} prefix="~" />
-                </div>
-                <div className="pt-4 border-t border-white/10 flex justify-between items-center">
-                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Total Incoming Context</span>
-                  <CreditValue amount={totals.incomingTotal} prefix="+" className="scale-110 original-origin" />
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-6 backdrop-blur-sm shadow-xl space-y-6">
-              <div className="flex items-center gap-2 border-b border-white/5 pb-3">
-                <div className="p-2 rounded-lg bg-red-500/10 text-red-400"><TrendingDown className="h-5 w-5" /></div>
-                <div>
-                  <h3 className="text-base font-bold text-white">Outgoing Credits Summary</h3>
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono">{dateRange}</p>
-                </div>
-              </div>
-              <div className="space-y-4 text-sm">
-                <div className="flex justify-between items-center bg-white/[0.01] border border-white/5 p-3.5 rounded-xl">
-                  <span className="text-zinc-400">Marketplace Asset Purchases</span>
-                  <CreditValue amount={totals.outgoingPurchases} prefix="-" />
-                </div>
-                <div className="flex justify-between items-center bg-white/[0.01] border border-white/5 p-3.5 rounded-xl">
-                  <span className="text-zinc-400">System Platform Fee Deductions</span>
-                  <CreditValue amount={totals.platformFee} prefix="-" colorClass="text-red-400" />
-                </div>
-                <div className="pt-[78px] border-t border-white/10 flex justify-between items-center">
-                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Total Outgoing Debit</span>
-                  <CreditValue amount={totals.outgoingTotal} prefix="-" className="scale-110 original-origin" />
-                </div>
-              </div>
+        <section className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 shadow-2xl">
+          <div className="border-b border-white/10 p-3" role="tablist" aria-label="Transaction views">
+            <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-5">
+              {(["Summary", "Credits", "Assets", "Fund Transfer", "Fee"] as MainTab[]).map((tab) => {
+                const isActive = activeMainTab === tab;
+                const count = tab === "Summary" ? null : transactions.filter((transaction) => {
+                  if (tab === "Assets") return ASSET_TYPES.includes(transaction.type);
+                  if (tab === "Credits") return !ASSET_TYPES.includes(transaction.type) && !STANDALONE_TYPES.includes(transaction.type);
+                  return transaction.type === tab;
+                }).length;
+                const TabIcon = tab === "Summary" ? LayoutDashboard : tab === "Assets" ? ShoppingBag : CircleDollarSign;
+                return (
+                  <button
+                    key={tab}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => {
+                      setActiveMainTab(tab);
+                      if (tab === "Credits") setActiveChildTab("All Credits");
+                      if (tab === "Assets") setActiveChildTab("All Assets");
+                    }}
+                    className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isActive ? "border-blue-500/40 bg-blue-500/10 text-blue-300" : "border-transparent text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-200"}`}
+                  >
+                    <TabIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                    {tab}
+                    {count !== null && <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-zinc-500">{count}</span>}
+                  </button>
+                );
+              })}
             </div>
           </div>
-        )}
 
-        {/* ======================================================== */}
-        {/* VIEW INTERFACE LAYOUT 2: CREDIT PURCHASES TAB             */}
-        {/* ======================================================== */}
-        {activeTab === "Credit Purchases" && (
-          <div className="space-y-4 animate-fade-in">
-            <div className="p-4 rounded-xl border border-white/5 bg-white/[0.02] flex justify-between items-center gap-4">
-              <div className="flex flex-col">
-                <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">Total Acquired Credits Ledger</span>
-                <div className="mt-1"><CreditValue amount={totals.creditPurchases} /></div>
+          {(activeMainTab === "Credits" || activeMainTab === "Assets") && (
+            <div className="border-b border-white/10 bg-white/[0.015] p-3" role="tablist" aria-label={`${activeMainTab} transaction types`}>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  activeMainTab === "Assets" ? "All Assets" : "All Credits",
+                  ...(activeMainTab === "Assets" ? assetTypes : creditTypes),
+                ].map((tab) => {
+                  const isActive = activeChildTab === tab;
+                  const count = tab.startsWith("All ")
+                    ? transactions.filter((transaction) => (
+                      activeMainTab === "Assets"
+                        ? ASSET_TYPES.includes(transaction.type)
+                        : !ASSET_TYPES.includes(transaction.type) && !STANDALONE_TYPES.includes(transaction.type)
+                    )).length
+                    : transactions.filter((transaction) => transaction.type === tab).length;
+                  return (
+                    <button
+                      key={tab}
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      onClick={() => setActiveChildTab(tab)}
+                      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isActive ? "border-blue-500/40 bg-blue-500/10 text-blue-300" : "border-white/5 text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-200"}`}
+                    >
+                      <List className="h-3.5 w-3.5" aria-hidden="true" />
+                      {tab.startsWith("All ") ? tab : displayType(tab)}
+                      <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-zinc-500">{count}</span>
+                    </button>
+                  );
+                })}
               </div>
-              <button onClick={() => navigate("/credits")} className="flex items-center gap-1.5 rounded-xl bg-blue-500 px-5 py-2.5 text-xs font-bold text-white transition hover:bg-blue-600 focus:outline-none">
-                <Plus className="h-3.5 w-3.5" /> Purchase Credits
+            </div>
+          )}
+
+          {loading && (
+            <div className="flex min-h-72 flex-col items-center justify-center gap-3 text-zinc-400" role="status">
+              <LoaderCircle className="h-7 w-7 animate-spin text-blue-400" aria-hidden="true" />
+              <p className="text-sm">Loading your credit ledger…</p>
+            </div>
+          )}
+
+          {!loading && error && (
+            <div className="flex min-h-72 flex-col items-center justify-center gap-4 px-5 text-center" role="alert">
+              <p className="text-sm text-rose-200">{error}</p>
+              <button type="button" onClick={() => void loadTransactions()} className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm font-bold text-blue-200 hover:bg-blue-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                <RefreshCw className="h-4 w-4" aria-hidden="true" /> Retry
               </button>
             </div>
-            <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#0d0f1a]/40">
-              <table className="w-full text-left text-xs md:text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-white/10 bg-white/[0.02] text-zinc-400 text-[10px] font-bold uppercase tracking-widest">
-                    <th className="p-4">Transaction ID</th>
-                    <th className="p-4">Date Stamp</th>
-                    <th className="p-4">Credit Package Info</th>
-                    <th className="p-4">Gateway Method</th>
-                    <th className="p-4 text-right">Value Credits</th>
-                    <th className="p-4 text-right">Fiat Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 font-medium text-zinc-300">
-                  {sampleCreditPurchases.map((row) => (
-                    <tr key={row.id} className="hover:bg-white/[0.01] transition-colors">
-                      <td className="p-4 font-mono text-zinc-500">{row.id}</td>
-                      <td className="p-4 text-zinc-400">{row.date}</td>
-                      <td className="p-4 font-bold text-white">{row.package}</td>
-                      <td className="p-4"><span className="px-2 py-0.5 rounded bg-white/5 border border-white/5 text-[11px] font-semibold text-zinc-400">{row.paymentMethod}</span></td>
-                      <td className="p-4 text-right"><CreditValue amount={row.credits} prefix="+" /></td>
-                      <td className="p-4 text-right font-mono text-zinc-400">{row.amount}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {renderPaginationControls(sampleCreditPurchases.length)}
-          </div>
-        )}
+          )}
 
-        {/* ======================================================== */}
-        {/* VIEW INTERFACE LAYOUT 3: SALES & EARNINGS TAB             */}
-        {/* ======================================================== */}
-        {activeTab === "Sales & Earnings" && (
-          <div className="space-y-6 animate-fade-in">
-            {/* Sub-tab ribbon matrix trigger strip */}
-            <div className="flex gap-1 border-b border-white/5 pb-2">
-              {(["All", "From Assets", "From Jobs", "From Gigs"] as EarningsSubTab[]).map((sub) => (
-                <button
-                  key={sub}
-                  onClick={() => { setEarningsSubTab(sub); setCurrentPage(1); }}
-                  className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-                    earningsSubTab === sub
-                      ? "bg-white/10 text-white"
-                      : "text-zinc-500 hover:text-zinc-300"
-                  }`}
-                >
-                  {sub}
-                </button>
-              ))}
-            </div>
+          {!loading && !error && activeMainTab === "Summary" && (
+            <div className="space-y-6 p-5 md:p-6">
+              <section aria-label="Credit summary" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <SummaryCard label="Settled incoming" value={totals.incoming} detail="Completed incoming transactions" color="text-emerald-300" />
+                <SummaryCard label="Settled outgoing" value={totals.outgoing} detail="Completed outgoing transactions" color="text-rose-300" />
+                <SummaryCard label="Credits on hold" value={totals.held} detail="Credits currently waiting for release or refund" color="text-amber-200" />
+              </section>
 
-            {/* Split Grid Layout mimicking Summary Page parameters */}
-            {earningsSubTab === "All" ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start animate-fade-in">
-
-                {/* Column Left: Incoming Revenue Tracker */}
-                <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-6 backdrop-blur-sm shadow-xl space-y-6">
-                  <div className="flex items-center gap-2 border-b border-white/5 pb-3">
-                    <div className="p-2 rounded-lg bg-green-500/10 text-green-400"><TrendingUp className="h-5 w-5" /></div>
-                    <div>
-                      <h3 className="text-base font-bold text-white">Incoming Revenue Summary</h3>
-                      <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono">{dateRange}</p>
-                    </div>
-                  </div>
-                  <div className="space-y-4 text-sm">
-                    <div className="flex justify-between items-center bg-white/[0.01] border border-white/5 p-3.5 rounded-xl">
-                      <span className="text-zinc-400">From Jobs</span>
-                      <CreditValue amount={totals.jobs} prefix="+" />
-                    </div>
-                    <div className="flex justify-between items-center bg-white/[0.01] border border-white/5 p-3.5 rounded-xl">
-                      <span className="text-zinc-400">From Gigs</span>
-                      <CreditValue amount={totals.gigs} prefix="+" />
-                    </div>
-                    <div className="flex justify-between items-center bg-white/[0.01] border border-white/5 p-3.5 rounded-xl">
-                      <span className="text-zinc-400">From Assets</span>
-                      <CreditValue amount={totals.assets} prefix="+" />
-                    </div>
-                    <div className="pt-4 border-t border-white/10 flex justify-between items-center">
-                      <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Total Gross Earnings</span>
-                      <CreditValue amount={totals.totalEarned} prefix="+" className="scale-110 original-origin" />
-                    </div>
-                  </div>
+              <section aria-labelledby="activity-breakdown-title" className="rounded-2xl border border-white/10 bg-white/[0.015]">
+                <div className="border-b border-white/10 px-5 py-4">
+                  <h2 id="activity-breakdown-title" className="font-semibold text-zinc-100">Activity by transaction type</h2>
+                  <p className="mt-1 text-xs text-zinc-500">All-time transaction volume in your account ledger.</p>
                 </div>
-
-                {/* Column Right: Outgoing System Deductions */}
-                <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-6 backdrop-blur-sm shadow-xl space-y-6">
-                  <div className="flex items-center gap-2 border-b border-white/5 pb-3">
-                    <div className="p-2 rounded-lg bg-red-500/10 text-red-400"><TrendingDown className="h-5 w-5" /></div>
-                    <div>
-                      <h3 className="text-base font-bold text-white">Outgoing Revenue Deductions</h3>
-                      <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono">{dateRange}</p>
-                    </div>
-                  </div>
-                  <div className="space-y-4 text-sm">
-                    <div className="flex justify-between items-center bg-white/[0.01] border border-white/5 p-3.5 rounded-xl">
-                      <span className="text-zinc-400">Platform System Fee</span>
-                      <CreditValue amount={totals.platformFee} prefix="-" colorClass="text-red-400" />
-                    </div>
-                    <div className="pt-[140px] border-t border-white/10 flex justify-between items-center font-bold">
-                      <span className="text-white">Your Net Earnings</span>
-                      <CreditValue amount={totals.netEarnings} className="scale-110 original-origin" />
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            ) : (
-              /* Sliced Sub-tab Records Lists */
-              <div className="space-y-4">
-                <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#0d0f1a]/40">
-                  <table className="w-full text-left text-xs md:text-sm border-collapse">
-                    <thead>
-                      <tr className="border-b border-white/10 bg-white/[0.02] text-zinc-400 text-[10px] font-bold uppercase tracking-widest">
-                        <th className="p-4">Transaction ID</th>
-                        <th className="p-4">Date Stamp</th>
-                        <th className="p-4">Source Category</th>
-                        <th className="p-4">Item/Project Scope</th>
-                        <th className="p-4">Client/Buyer Entity</th>
-                        <th className="p-4 text-right">Revenue Allocation</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5 font-medium text-zinc-300">
-                      {filteredEarningsItems.map((row) => {
-                        const icons: Record<string, React.ReactNode> = {
-                          Assets: <Layers className="h-3.5 w-3.5 text-blue-400" />,
-                          Jobs: <Briefcase className="h-3.5 w-3.5 text-green-400" />,
-                          Gigs: <Megaphone className="h-3.5 w-3.5 text-purple-400" />
-                        };
-                        return (
-                          <tr key={row.id} className="hover:bg-white/[0.01] transition-colors">
-                            <td className="p-4 font-mono text-zinc-500">{row.id}</td>
-                            <td className="p-4 text-zinc-400">{row.date}</td>
-                            <td className="p-4">
-                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/5 text-[11px] text-zinc-300 border border-white/5">
-                                {icons[row.source]} {row.source}
-                              </span>
-                            </td>
-                            <td className="p-4 font-bold text-white">{row.title}</td>
-                            <td className="p-4 text-zinc-400">{row.customer}</td>
-                            <td className="p-4 text-right"><CreditValue amount={row.credits} prefix="+" /></td>
-                          </tr>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4">
+                  {typeTotals.map((item) => (
+                    <button
+                      key={item.type}
+                      type="button"
+                      onClick={() => {
+                        setActiveMainTab(
+                          STANDALONE_TYPES.includes(item.type)
+                            ? item.type as MainTab
+                            : ASSET_TYPES.includes(item.type) ? "Assets" : "Credits",
                         );
-                      })}
-                    </tbody>
-                  </table>
+                        setActiveChildTab(item.type);
+                      }}
+                      className="border-b border-white/5 p-4 text-left transition hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:border-r"
+                    >
+                      <span className="text-xs font-semibold text-zinc-300">{displayType(item.type)}</span>
+                      <span className="mt-3 flex items-end justify-between gap-3">
+                        <span className="text-xl font-bold tabular-nums text-white">{credits(item.credits)}</span>
+                        <span className="text-[10px] uppercase tracking-wide text-zinc-600">{item.count} entries</span>
+                      </span>
+                    </button>
+                  ))}
                 </div>
-                {renderPaginationControls(filteredEarningsItems.length)}
-              </div>
-            )}
-          </div>
-        )}
+              </section>
+            </div>
+          )}
 
-        {/* ======================================================== */}
-        {/* VIEW INTERFACE LAYOUT 4: ASSET PURCHASES TAB             */}
-        {/* ======================================================== */}
-        {activeTab === "Purchases" && (
-          <div className="space-y-4 animate-fade-in">
-            <div className="p-4 rounded-xl border border-white/5 bg-white/[0.02] flex justify-between items-center gap-4">
-              <div className="flex flex-col">
-                <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">Total Cost of Account Investments</span>
-                <div className="mt-1"><CreditValue amount={totals.outgoingPurchases} prefix="-" /></div>
+          {!loading && !error && activeMainTab !== "Summary" && tabTransactions.length === 0 && (
+            <div className="flex min-h-72 flex-col items-center justify-center gap-3 px-5 text-center">
+              <CircleDollarSign className="h-9 w-9 text-zinc-700" aria-hidden="true" />
+              <div>
+                <p className="font-semibold text-zinc-200">No transactions found</p>
+                <p className="mt-1 text-sm text-zinc-500">There are no entries in this transaction tab yet.</p>
               </div>
-              <button onClick={() => navigate("/assets")} className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-xs font-bold text-zinc-300 transition hover:bg-white/10 hover:text-white focus:outline-none">
-                Browse Library <ArrowUpRight className="h-3.5 w-3.5 text-zinc-400" />
+            </div>
+          )}
+
+          {!loading && !error && activeMainTab !== "Summary" && tabTransactions.length > 0 && (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[960px] border-collapse text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 bg-white/[0.02] text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">
+                      <th className="px-5 py-3.5">Date & time</th>
+                      <th className="px-5 py-3.5">Type</th>
+                      <th className="px-5 py-3.5">Direction</th>
+                      <th className="px-5 py-3.5 text-right">Credits</th>
+                      <th className="px-5 py-3.5">Status</th>
+                      <th className="px-5 py-3.5">Reference</th>
+                      <th className="px-5 py-3.5">Transaction ID</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {visibleTransactions.map((transaction) => {
+                      const meta = directionMeta[transaction.direction];
+                      const DirectionIcon = meta.icon;
+                      const createdAt = new Date(transaction.createdAt);
+                      const validDate = Number.isFinite(createdAt.getTime());
+                      return (
+                        <tr
+                          key={transaction.id}
+                          tabIndex={0}
+                          role="button"
+                          aria-label={`View details for ${displayType(transaction.type)} transaction`}
+                          onClick={() => setSelectedTransaction(transaction)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              setSelectedTransaction(transaction);
+                            }
+                          }}
+                          className="cursor-pointer transition hover:bg-white/[0.04] focus-visible:bg-blue-500/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+                        >
+                          <td className="whitespace-nowrap px-5 py-4 text-xs text-zinc-400">
+                            {validDate ? createdAt.toLocaleString() : "—"}
+                          </td>
+                          <td className="px-5 py-4 font-semibold text-zinc-100">{displayType(transaction.type)}</td>
+                          <td className="px-5 py-4">
+                            <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${meta.color}`}>
+                              <DirectionIcon className="h-4 w-4" aria-hidden="true" /> {meta.label}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-right"><CreditAmount transaction={transaction} /></td>
+                          <td className="px-5 py-4">
+                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${statusClasses(transaction.status)}`}>
+                              {formatStatus(transaction.status)}
+                            </span>
+                          </td>
+                          <td className="max-w-52 px-5 py-4 text-xs text-zinc-400">
+                            {transaction.referenceTable || transaction.referenceId ? (
+                              <div title={transaction.referenceId || undefined}>
+                                <p className="capitalize text-zinc-300">{transaction.referenceTable?.replace(/_/g, " ") || "Reference"}</p>
+                                <p className="mt-0.5 font-mono text-[10px] text-zinc-600">{transaction.referenceId ? shortId(transaction.referenceId) : "—"}</p>
+                              </div>
+                            ) : "—"}
+                          </td>
+                          <td className="px-5 py-4 font-mono text-xs text-zinc-500" title={transaction.id}>{shortId(transaction.id)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex flex-col items-center justify-between gap-4 border-t border-white/10 p-4 text-xs text-zinc-400 sm:flex-row">
+                <label className="flex items-center gap-2">
+                  <span>Rows per page</span>
+                  <select value={rowsPerPage} onChange={(event) => setRowsPerPage(Number(event.target.value) as RowLimit)} className="rounded-lg border border-white/10 bg-[#151722] px-2 py-1.5 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                    <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option>
+                  </select>
+                </label>
+                <div className="flex items-center gap-4">
+                  <span>{tabTransactions.length} result{tabTransactions.length === 1 ? "" : "s"} · Page {page} of {totalPages}</span>
+                  <div className="flex gap-1">
+                    <button type="button" aria-label="Previous page" disabled={page === 1} onClick={() => setCurrentPage((value) => Math.max(1, value - 1))} className="rounded-lg border border-white/10 bg-white/5 p-2 text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-30">
+                      <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <button type="button" aria-label="Next page" disabled={page === totalPages} onClick={() => setCurrentPage((value) => Math.min(totalPages, value + 1))} className="rounded-lg border border-white/10 bg-white/5 p-2 text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-30">
+                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </section>
+      </main>
+
+      {selectedTransaction && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setSelectedTransaction(null);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="transaction-detail-title"
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/10 bg-[#0d0f1a] shadow-2xl"
+          >
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-white/10 bg-[#0d0f1a]/95 p-5 backdrop-blur-md">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-400">Transaction details</p>
+                <h2 id="transaction-detail-title" className="mt-1 text-xl font-bold text-white">{displayType(selectedTransaction.type)}</h2>
+              </div>
+              <button
+                type="button"
+                aria-label="Close transaction details"
+                onClick={() => setSelectedTransaction(null)}
+                className="rounded-lg border border-white/10 bg-white/5 p-2 text-zinc-400 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
-            <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#0d0f1a]/40">
-              <table className="w-full text-left text-xs md:text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-white/10 bg-white/[0.02] text-zinc-400 text-[10px] font-bold uppercase tracking-widest">
-                    <th className="p-4">Transaction ID</th>
-                    <th className="p-4">Date Stamp</th>
-                    <th className="p-4">Acquired Digital Asset</th>
-                    <th className="p-4">Vendor Creator</th>
-                    <th className="p-4 text-right">Cost Value</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 font-medium text-zinc-300">
-                  {samplePurchases.map((row) => (
-                    <tr key={row.id} className="hover:bg-white/[0.01] transition-colors">
-                      <td className="p-4 font-mono text-zinc-500">{row.id}</td>
-                      <td className="p-4 text-zinc-400">{row.date}</td>
-                      <td className="p-4 font-bold text-white">{row.assetName}</td>
-                      <td className="p-4 text-zinc-400">{row.seller}</td>
-                      <td className="p-4 text-right"><CreditValue amount={row.credits} prefix="-" /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+            <div className="p-5">
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.025] p-4">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-600">Credit amount</p>
+                  <div className="mt-2 text-xl"><CreditAmount transaction={selectedTransaction} /></div>
+                </div>
+                <span className={`inline-flex rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide ${statusClasses(selectedTransaction.status)}`}>
+                  {formatStatus(selectedTransaction.status)}
+                </span>
+              </div>
+
+              <dl className="grid gap-3 sm:grid-cols-2">
+                <DetailItem label="Direction" value={directionMeta[selectedTransaction.direction].label} />
+                <DetailItem label="Date and time" value={Number.isFinite(new Date(selectedTransaction.createdAt).getTime()) ? new Date(selectedTransaction.createdAt).toLocaleString() : "—"} />
+                <DetailItem label="Transaction ID" value={selectedTransaction.id} mono />
+                <DetailItem label="Transaction type" value={displayType(selectedTransaction.type)} />
+                <DetailItem label="Source wallet ID" value={selectedTransaction.sourceWalletId} mono />
+                <DetailItem label="Destination wallet ID" value={selectedTransaction.destinationWalletId} mono />
+                <DetailItem label="Fee transaction ID" value={selectedTransaction.feeTransactionId || "—"} mono />
+                <DetailItem label="Reference table" value={selectedTransaction.referenceTable?.replace(/_/g, " ") || "—"} />
+                <div className="sm:col-span-2">
+                  <DetailItem label="Reference ID" value={selectedTransaction.referenceId || "—"} mono />
+                </div>
+              </dl>
             </div>
-            {renderPaginationControls(samplePurchases.length)}
-          </div>
-        )}
-
-        {/* ======================================================== */}
-        {/* VIEW INTERFACE LAYOUT 5: PENDING ESCROW METRICS         */}
-        {/* ======================================================== */}
-        {activeTab === "Pending Credits" && (
-          <div className="space-y-4 animate-fade-in">
-            <div className="p-4 rounded-xl border border-white/5 bg-white/[0.02] flex justify-between items-center">
-              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">Total Funds Escrowed Pool (Awaiting Payout)</span>
-              <CreditValue amount={totals.pending} />
-            </div>
-            <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#0d0f1a]/40">
-              <table className="w-full text-left text-xs md:text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-white/10 bg-white/[0.02] text-zinc-400 text-[10px] font-bold uppercase tracking-widest">
-                    <th className="p-4">Escrow ID</th>
-                    <th className="p-4">Inception Date</th>
-                    <th className="p-4">Origin Type</th>
-                    <th className="p-4">Source Origin Ledger</th>
-                    <th className="p-4">Linked Project Scope</th>
-                    <th className="p-4 text-right">Held Credits</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 font-medium text-zinc-300">
-                  {samplePendingCredits.map((row) => (
-                    <tr key={row.id} className="hover:bg-white/[0.01] transition-colors">
-                      <td className="p-4 font-mono text-zinc-500">{row.id}</td>
-                      <td className="p-4 text-zinc-400">{row.date}</td>
-
-                      {/* Dynamic Origin Badges (Job vs Gig) */}
-                      <td className="p-4">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold uppercase border ${
-                          row.originType === "Job" 
-                            ? "bg-green-500/10 text-green-400 border-green-500/20" 
-                            : "bg-purple-500/10 text-purple-400 border-purple-500/20"
-                        }`}>
-                          {row.originType === "Job" ? <Briefcase className="h-2.5 w-2.5" /> : <Megaphone className="h-2.5 w-2.5" />}
-                          {row.originType}
-                        </span>
-                      </td>
-
-                      <td className="p-4 text-zinc-400 normal-case">{row.source}</td>
-                      <td className="p-4">
-                        <button onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold tracking-normal text-zinc-300 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer shadow-sm">
-                          <span>{row.project}</span>
-                          <ArrowRight className="h-3.5 w-3.5 text-zinc-500" />
-                        </button>
-                      </td>
-                      <td className="p-4 text-right"><CreditValue amount={row.credits} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {renderPaginationControls(samplePendingCredits.length)}
-          </div>
-        )}
-
-      </div>
-
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .original-origin { transform-origin: left center; }
-        
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(4px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in {
-          animation: fadeIn 0.2s ease-out forwards;
-        }
-      `}</style>
+          </section>
+        </div>
+      )}
     </div>
   );
 };
