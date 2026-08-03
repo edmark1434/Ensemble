@@ -57,7 +57,7 @@ export type DisputeCreditHold = {
   transactionId: number | string | null;
   status: string;
   amount: number;
-  type: string;
+  type: string; // CREDIT_TRANSACTION.type, e.g. Escrow Hold
 };
 
 export type DisputePermissions = {
@@ -71,6 +71,7 @@ export type DisputePermissions = {
   canAssignOthers?: boolean;
   canSelfAssign?: boolean;
   canAssignMyself?: boolean;
+  canRelease?: boolean;
 };
 
 export type TicketPermissions = {
@@ -83,6 +84,8 @@ export type TicketPermissions = {
   canAssignOthers?: boolean;
   canSelfAssign?: boolean;
   canAssignMyself?: boolean;
+  canRelease?: boolean;
+  canEscalate?: boolean;
 };
 
 export type Dispute = {

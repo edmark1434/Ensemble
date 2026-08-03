@@ -93,6 +93,7 @@ export default function ModeratorTicketDesk({
   listPath,
   accent = "sky",
   queueKey = "support",
+  statusControl = "buttons",
 }: {
   title?: string;
   subtitle?: string;
@@ -101,6 +102,7 @@ export default function ModeratorTicketDesk({
   listPath?: string;
   accent?: Accent;
   queueKey?: keyof typeof QUEUE_TYPES;
+  statusControl?: "select" | "buttons";
 }) {
   const [searchParams] = useSearchParams();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
@@ -241,6 +243,7 @@ export default function ModeratorTicketDesk({
           ticketId={selectedId}
           endpointBase={endpointBase}
           accent={accent}
+          statusControl={statusControl}
           onClose={() => setSelectedId(null)}
           onUpdated={() => void load(true)}
         />

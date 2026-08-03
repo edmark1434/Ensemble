@@ -99,6 +99,7 @@ const HANDLER_ACTION_BTN =
 const HANDLER_ACTION_ICON = "h-4 w-4 shrink-0";
 const HANDLER_TONES = {
   claim: "border-sky-500/30 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20",
+  release: "border-amber-500/40 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20",
   cancel: "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10",
 } as const;
 
@@ -116,6 +117,21 @@ const CLOSED_STATUS = "closed";
 
 function isDisputeClosed(status: string) {
   return String(status || "").toLowerCase() === CLOSED_STATUS;
+}
+
+function statusButtonClass(label: string, active: boolean) {
+  const s = String(label || "")
+    .toLowerCase()
+    .replace(/[_-]+/g, " ");
+  if (!active) {
+    return "border-white/10 bg-transparent text-zinc-400 hover:border-white/20 hover:bg-white/[0.04] hover:text-zinc-200 disabled:opacity-40";
+  }
+  if (s === "pending review") return "border-violet-500/40 bg-violet-500/20 text-violet-200";
+  if (s === "open") return "border-red-500/40 bg-red-500/20 text-red-200";
+  if (s === "awaiting response") return "border-sky-500/40 bg-sky-500/20 text-sky-200";
+  if (s === "under review") return "border-amber-500/40 bg-amber-500/20 text-amber-200";
+  if (s === "closed") return "border-zinc-500/40 bg-zinc-500/25 text-zinc-200";
+  return "border-white/25 bg-white/10 text-white";
 }
 
 /**
@@ -192,25 +208,31 @@ export default function ModeratorDisputeDetailModal({
         assigneeStaffId &&
         myStaffId.toLowerCase() === assigneeStaffId.toLowerCase())
   );
-  const canAct = adminMode ? Boolean(perms?.canAct) : true;
+  const canAct = adminMode ? Boolean(perms?.canAct || perms?.isAdmin) : true;
   const canReply = adminMode
     ? Boolean(
         perms?.canAct ||
           perms?.canReply ||
+          perms?.isAdmin ||
           (perms?.canView !== false && perms?.staffId)
       )
     : true;
-  const canAssignOthers = adminMode ? Boolean(perms?.canAssignOthers) : true;
+  const canAssignOthers = adminMode ? Boolean(perms?.canAssignOthers || perms?.isAdmin) : false;
   const canSelfAssign = adminMode
     ? Boolean(perms?.canSelfAssign && !alreadyAssignedToMe)
     : false;
   const canAssignMyself = adminMode
-    ? Boolean(!alreadyAssignedToMe && (perms?.canAssignMyself || perms?.canSelfAssign) && !assigneeStaffId)
+    ? Boolean(!alreadyAssignedToMe && (perms?.canAssignMyself || perms?.canSelfAssign))
+    : false;
+  const canRelease = adminMode
+    ? Boolean(perms?.canRelease || alreadyAssignedToMe || (perms?.isAdmin && Boolean(assigneeStaffId)))
     : false;
   const viewOnly = adminMode && !canAct;
-  /** Handler dropdown: assignee, Admin assigning others, or claiming an unassigned case */
+  const assigneeLocked =
+    Boolean(assigneeStaffId) && !(canAssignOthers || Boolean(perms?.isAdmin));
+  /** Handler dropdown: unlocked while unassigned, or Admin override */
   const canEditHandler =
-    !adminMode || canAssignOthers || canAct || canSelfAssign || canAssignMyself;
+    !adminMode || canAssignOthers || canSelfAssign || canAssignMyself || !assigneeLocked;
 
   const updateVisibilityPref = (key: keyof VisibilityPrefs, checked: boolean) => {
     setVisibilityPrefs((prev) => {
@@ -239,7 +261,7 @@ export default function ModeratorDisputeDetailModal({
 
   const onHandlerChange = async (next: string) => {
     setAssigneeId(next);
-    if (!adminMode) return;
+    if (!adminMode || assigneeLocked) return;
 
     // Claim unassigned dispute by picking yourself
     if (
@@ -253,8 +275,8 @@ export default function ModeratorDisputeDetailModal({
       return;
     }
 
-    // Admin may reassign without being the handler
-    if (canAssignOthers && !canAct) {
+    // Admin may designate or reassign a handler anytime
+    if (canAssignOthers) {
       await runAction(
         { assigned_staff_id: next ? next : null },
         next ? "Handler assigned" : "Handler cleared"
@@ -274,7 +296,7 @@ export default function ModeratorDisputeDetailModal({
       await runAction({ action: "self_assign" }, "You are now assigned");
       return;
     }
-    if (adminMode && viewOnly && canAssignOthers) {
+    if (adminMode && viewOnly && canAssignOthers && !assigneeLocked) {
       await runAction(
         { assigned_staff_id: assigneeId ? assigneeId : null },
         "Assignment updated"
@@ -297,7 +319,10 @@ export default function ModeratorDisputeDetailModal({
         payload.sanction_type = null;
         payload.sanction_notes = null;
       }
-      if (canAssignOthers || canAct) {
+      // Admin may change handler anytime; others use Release / Assign myself while locked.
+      if (!assigneeLocked && (canAssignOthers || canAssignMyself)) {
+        payload.assigned_staff_id = assigneeId ? assigneeId : null;
+      } else if (canAssignOthers) {
         payload.assigned_staff_id = assigneeId ? assigneeId : null;
       }
     } else {
@@ -306,7 +331,6 @@ export default function ModeratorDisputeDetailModal({
       } else if (outcome) {
         payload.outcome = outcome;
       }
-      payload.assigned_staff_id = assigneeId ? assigneeId : null;
     }
     const closing = isDisputeClosed(nextStatus);
     await runAction(
@@ -469,6 +493,21 @@ export default function ModeratorDisputeDetailModal({
                     Assign myself
                   </button>
                 )}
+                {canRelease && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() =>
+                      void runAction(
+                        { action: "release" },
+                        "Case released — another Support Moderator can claim it"
+                      )
+                    }
+                    className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.release}`}
+                  >
+                    Release case
+                  </button>
+                )}
                 {canAct && toApiToken(dispute.status) === "pending_review" && (
                   <>
                     <button
@@ -494,31 +533,35 @@ export default function ModeratorDisputeDetailModal({
             )}
 
             <div className="grid gap-3 sm:grid-cols-3">
-              <label className="flex flex-col gap-1 text-xs text-zinc-500">
+              <div className="flex flex-col gap-1.5 text-xs text-zinc-500 sm:col-span-3">
                 Status
-                <select
-                  value={status}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    setStatus(next);
-                    if (isDisputeClosed(next)) {
-                      setOutcome((prev) => prev || "resolved");
-                    } else {
-                      setOutcome("");
-                      setSanctionType("");
-                      setSanctionNotes("");
-                    }
-                  }}
-                  disabled={viewOnly}
-                  className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:opacity-50"
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {titleCaseLabel(s)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Dispute status">
+                  {STATUS_OPTIONS.map((s) => {
+                    const active = toApiToken(status) === s;
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        disabled={viewOnly}
+                        aria-pressed={active}
+                        onClick={() => {
+                          setStatus(s);
+                          if (isDisputeClosed(s)) {
+                            setOutcome((prev) => prev || "resolved");
+                          } else {
+                            setOutcome("");
+                            setSanctionType("");
+                            setSanctionNotes("");
+                          }
+                        }}
+                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed ${statusButtonClass(s, active)}`}
+                      >
+                        {titleCaseLabel(s)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <label className="flex flex-col gap-1 text-xs text-zinc-500">
                 Priority
                 <select
@@ -534,21 +577,24 @@ export default function ModeratorDisputeDetailModal({
                   ))}
                 </select>
               </label>
-              <label className="flex flex-col gap-1 text-xs text-zinc-500">
+              <label className="flex flex-col gap-1 text-xs text-zinc-500 sm:col-span-2">
                 Designated handler
                 <select
                   value={assigneeId}
                   onChange={(e) => void onHandlerChange(e.target.value)}
-                  disabled={!canEditHandler || saving}
+                  disabled={!canEditHandler || saving || assigneeLocked}
                   className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <option value="">Unassigned</option>
-                  {(canAssignMyself && !canAssignOthers && !canAct
-                    ? detail.assignableStaff.filter(
-                        (s) => String(s.staffId).toLowerCase() === myStaffId.toLowerCase()
-                      )
-                    : detail.assignableStaff
-                  ).map((s) => (
+                  {detail.assignableStaff
+                    .filter((s) => {
+                      if (!myStaffId) return true;
+                      const isMe =
+                        String(s.staffId).toLowerCase() === myStaffId.toLowerCase();
+                      // Keep current handler visible while locked; otherwise use Assign myself.
+                      return !isMe || (assigneeLocked && alreadyAssignedToMe);
+                    })
+                    .map((s) => (
                     <option key={s.staffId} value={String(s.staffId)}>
                       {s.name}
                       {myStaffId && String(s.staffId).toLowerCase() === myStaffId.toLowerCase()
@@ -558,6 +604,17 @@ export default function ModeratorDisputeDetailModal({
                     </option>
                   ))}
                 </select>
+                {assigneeLocked && (
+                  <span className="text-[11px] text-zinc-500">
+                    Handler is locked. The assigned Support Moderator must release the case before
+                    someone else can claim it.
+                  </span>
+                )}
+                {!assigneeLocked && assigneeStaffId && canAssignOthers && (
+                  <span className="text-[11px] text-violet-300/80">
+                    Admin override: you can reassign this dispute without a release.
+                  </span>
+                )}
                 {canAssignMyself && (
                   <button
                     type="button"
@@ -569,7 +626,22 @@ export default function ModeratorDisputeDetailModal({
                     Assign myself
                   </button>
                 )}
-                {!canEditHandler && (
+                {canRelease && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() =>
+                      void runAction(
+                        { action: "release" },
+                        "Case released — another Support Moderator can claim it"
+                      )
+                    }
+                    className={`mt-2 inline-flex w-fit items-center gap-1.5 ${HANDLER_ACTION_BTN} ${HANDLER_TONES.release}`}
+                  >
+                    Release case
+                  </button>
+                )}
+                {!canEditHandler && !assigneeLocked && (
                   <span className="text-[11px] text-amber-200/80">
                     {!perms?.staffId
                       ? "Your session isn’t linked to a staff profile — re-login as Admin or Support Moderator."

@@ -9,6 +9,7 @@ const {
 } = require('../Repositories/InboxRepositories');
 const { CONVERSATION_TYPE: DISPUTE_CHAT_TYPE } = require('../Repositories/DisputeChatRepositories');
 const { seedDomainExamples } = require('./seed-domains');
+const { CREDIT_TRANSACTION_TYPES, CREDIT_TRANSACTION_TYPE } = require('./creditTransactionEnums');
 
 function cap(value, max) {
   if (value == null) return value;
@@ -173,7 +174,7 @@ async function ensurePlatformWalletId() {
   return created.rows[0].wallet_id;
 }
 
-/** Freeze credits on the respondent wallet and link a Dispute Hold transaction. */
+/** Freeze credits on the respondent wallet and link an Escrow Hold transaction. */
 async function seedDisputeCreditHold(disputeId, respondentAccountId, amount, status = 'held') {
   const walletId = await getAccountWalletId(respondentAccountId);
   const platformWalletId = await ensurePlatformWalletId();
@@ -193,9 +194,9 @@ async function seedDisputeCreditHold(disputeId, respondentAccountId, amount, sta
   const tx = await pool.query(
     `INSERT INTO credit_transactions (
        type, amount_credits, status, source_wallet_id, destination_wallet_id, related_dispute_id
-     ) VALUES ('Dispute Hold', $1, $2, $3, $4, $5)
+     ) VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING credit_transaction_id`,
-    [amount, status, walletId, platformWalletId, disputeId]
+    [CREDIT_TRANSACTION_TYPE.ESCROW_HOLD, amount, status, walletId, platformWalletId, disputeId]
   );
   const txId = tx.rows[0].credit_transaction_id;
   await pool.query(
@@ -1131,8 +1132,9 @@ async function seedTeams(userAccountIds) {
     );
   }
 
-  // Seed a few user wallet balances + credit transactions for economy audit
-  for (let i = 0; i < Math.min(5, users.length); i++) {
+  // Seed user wallet balances + one of each CREDIT_TRANSACTION type for economy audit
+  const sampleTxTypes = [...CREDIT_TRANSACTION_TYPES];
+  for (let i = 0; i < Math.min(sampleTxTypes.length, users.length); i++) {
     const balance = faker.number.int({ min: 100, max: 5000 });
     const walletRes = await pool.query(
       `SELECT w.wallet_id
@@ -1154,10 +1156,12 @@ async function seedTeams(userAccountIds) {
       `SELECT wallet_id FROM wallets WHERE type = 'platform wallets' LIMIT 1`
     );
     const otherWalletId = platformWallet.rows[0]?.wallet_id || walletId;
+    const txType = sampleTxTypes[i];
+    const amount = faker.number.int({ min: 50, max: Math.max(50, Math.floor(balance / 2)) });
     await pool.query(
       `INSERT INTO credit_transactions (type, amount_credits, status, source_wallet_id, destination_wallet_id)
-       VALUES ('Credit Adjustment', $1, 'completed', $2, $3)`,
-      [balance, otherWalletId, walletId]
+       VALUES ($1, $2, 'completed', $3, $4)`,
+      [txType, amount, otherWalletId, walletId]
     );
   }
 

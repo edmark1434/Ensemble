@@ -19,7 +19,7 @@ function isTicketHandlerRole(role) {
   );
 }
 
-/** Basic ticket assignment permissions. */
+/** Basic ticket assignment permissions. Admin may override locks and escalate. */
 function buildTicketPermissions(row, staff, sessionStaffId = null) {
   const staffId = normalizeStaffId(staff?.staff_id) || normalizeStaffId(sessionStaffId);
   const role = staff?.role || null;
@@ -35,10 +35,15 @@ function buildTicketPermissions(row, staff, sessionStaffId = null) {
     isAssignee,
     isAdmin,
     canView: true,
-    canAct: isAssignee || (unassigned && designated),
-    canAssignOthers: isAdmin || isAssignee,
-    canSelfAssign: Boolean(staffId && unassigned && designated),
+    canAct: Boolean(isAdmin || isAssignee || (unassigned && designated)),
+    /** Admin may pick / reassign handlers at any time */
+    canAssignOthers: Boolean(isAdmin),
+    canSelfAssign: Boolean(staffId && designated && !isAssignee && (unassigned || isAdmin)),
     canAssignMyself: Boolean(staffId && designated && !isAssignee && (unassigned || isAdmin)),
+    /** Current handler or Admin may release */
+    canRelease: Boolean(isAssignee || (isAdmin && Boolean(assigneeId))),
+    /** Escalate only when you own the ticket; Admin may always escalate */
+    canEscalate: Boolean(isAssignee || isAdmin),
   };
 }
 

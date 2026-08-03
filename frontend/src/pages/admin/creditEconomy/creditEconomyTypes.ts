@@ -1,6 +1,6 @@
 export type WalletTransaction = {
   id: string;
-  type: string;
+  type: CreditTransactionType | string;
   amount: number;
   label: string;
   timeAgo: string;
@@ -9,6 +9,19 @@ export type WalletTransaction = {
   reversible: boolean;
   status: string;
 };
+
+/** Canonical CREDIT_TRANSACTION.type values. */
+export const CREDIT_TRANSACTION_TYPES = [
+  'Fund Transfer',
+  'Escrow Hold',
+  'Escrow Release',
+  'Escrow Refund',
+  'Asset Purchase',
+  'Asset Refund',
+  'Fee',
+] as const;
+
+export type CreditTransactionType = (typeof CREDIT_TRANSACTION_TYPES)[number];
 
 export type EconomyWallet = {
   id: number | string;
@@ -37,7 +50,7 @@ export type AuditEntry = {
   accountType: string;
   status: string;
   creditAmount: number;
-  type: string;
+  type: CreditTransactionType | string;
   transactionStatus: string;
   timestamp: string;
   walletId: string;

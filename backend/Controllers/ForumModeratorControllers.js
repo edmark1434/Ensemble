@@ -41,7 +41,7 @@ async function getTickets(req, res) {
 
 async function getTicket(req, res) {
   try {
-    const data = await getTicketDetail(req.params.id, req.session);
+    const data = await getTicketDetail(req.params.id, req.session, { assignableQueue: 'forum' });
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -101,7 +101,7 @@ async function getReports(req, res) {
 
 async function getReport(req, res) {
   try {
-    const data = await getReportDetail(req.params.id, req.session);
+    const data = await getReportDetail(req.params.id, req.session, { assignableQueue: 'forum' });
     if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
     if (!isReportTypeInScope(data.report?.targetType, FORUM_REPORT_TYPES)) {
       return res.status(403).json({ success: false, message: 'Report is outside the forum queue' });
@@ -115,7 +115,7 @@ async function getReport(req, res) {
 
 async function patchReport(req, res) {
   try {
-    const existing = await getReportDetail(req.params.id, req.session);
+    const existing = await getReportDetail(req.params.id, req.session, { assignableQueue: 'forum' });
     if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
     if (!isReportTypeInScope(existing.report?.targetType, FORUM_REPORT_TYPES)) {
       return res.status(403).json({ success: false, message: 'Report is outside the forum queue' });
