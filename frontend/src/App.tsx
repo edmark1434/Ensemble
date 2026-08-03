@@ -51,7 +51,8 @@ import ProposalsIncomingPage from "@/pages/user/6_job_market/job_proposals/propo
 import ProposalsSentPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_sent_page.tsx";
 import ProposalsCreatePage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_create_page.tsx";
 import ProposalsEditPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_edit_page.tsx";
-import ProposalsViewDetailsPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details.tsx";
+import ProposalsViewDetailsAsApplicant from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_applicant";
+import ProposalsViewDetailsAsAuthor from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author";
 
 import GigMarketplace from "@/pages/user/7_gigs/Gig_Posting/main.tsx";
 import {CreateGigWizard} from "@/pages/user/7_gigs/Gig_Posting/CreateGigWizard.tsx";
@@ -84,29 +85,31 @@ import Survey from "@/pages/setup_account/04_Survey.tsx";
 
 import ForumModeratorLayout from './pages/moderator/forum-moderator/Layout'
 import ForumModeratorDashboard from './pages/moderator/forum-moderator/Dashboard'
-import ForumManagement from './pages/moderator/forum-moderator/ForumManagement'
-import ForumGroups from './pages/moderator/forum-moderator/Groups'
-import ForumDiscussions from './pages/moderator/forum-moderator/Discussions'
+import ForumDiscussion from './pages/moderator/forum-moderator/ForumDiscussion'
 import ForumTicketManagement from './pages/moderator/forum-moderator/TicketManagement'
-import ForumRestrictions from './pages/moderator/forum-moderator/Restrictions'
+import ForumReports from './pages/moderator/forum-moderator/Reports'
+import ForumUserTeam from './pages/moderator/forum-moderator/UserTeam'
+import ForumDisputes from './pages/moderator/forum-moderator/Disputes'
 import MarketplaceModeratorLayout from './pages/moderator/marketplace-moderator/Layout'
 import MarketplaceModeratorDashboard from './pages/moderator/marketplace-moderator/Dashboard'
 import MarketplaceControl from './pages/moderator/marketplace-moderator/MarketplaceControl'
 import MarketplaceTicketManagement from './pages/moderator/marketplace-moderator/TicketManagement'
-import MarketplaceRestrictions from './pages/moderator/marketplace-moderator/Restrictions'
+import MarketplaceReports from './pages/moderator/marketplace-moderator/Reports'
+import MarketplaceUserTeam from './pages/moderator/marketplace-moderator/UserTeam'
+import MarketplaceDisputes from './pages/moderator/marketplace-moderator/Disputes'
 import SupportModeratorLayout from './pages/moderator/support-moderator/Layout'
 import SupportModeratorDashboard from './pages/moderator/support-moderator/Dashboard'
 import SupportTicketManagement from './pages/moderator/support-moderator/TicketManagement'
 import SupportDisputes from './pages/moderator/support-moderator/Disputes'
 import SupportUserTeam from './pages/moderator/support-moderator/UserTeam'
-import SupportRestrictions from './pages/moderator/support-moderator/Restrictions'
+import SupportReports from './pages/moderator/support-moderator/Reports'
 import JobsModeratorLayout from './pages/moderator/jobs-moderator/Layout'
 import JobsModeratorDashboard from './pages/moderator/jobs-moderator/Dashboard'
 import JobsGigsControl from './pages/moderator/jobs-moderator/JobsGigsControl'
 import JobsTicketManagement from './pages/moderator/jobs-moderator/TicketManagement'
 import JobsDisputes from './pages/moderator/jobs-moderator/Disputes'
-import JobsRestrictions from './pages/moderator/jobs-moderator/Restrictions'
-import ModeratorSectionPlaceholder from './pages/moderator/SectionPlaceholder'
+import JobsReports from './pages/moderator/jobs-moderator/Reports'
+import JobsUserTeam from './pages/moderator/jobs-moderator/UserTeam'
 import RouteMiddleware from './lib/RouteMiddleware'
 import StaffMiddleware from './lib/StaffMiddleware'
 
@@ -220,8 +223,8 @@ function App() {
           <Route path='/jobs/edit/:id' element={<JobEditPostPage />} />
           <Route path='/jobs/:id/make-proposal' element={<ProposalsCreatePage />} />
           <Route path='/jobs/proposals/edit/:proposalId' element={<ProposalsEditPage />} />
-          <Route path='/jobs/proposals/incoming/:jobPostId/:proposalId' element={<ProposalsViewDetailsPage />} />
-          <Route path='/jobs/proposals/sent/:jobPostId/:proposalId' element={<ProposalsViewDetailsPage />} />
+          <Route path='/jobs/proposals/received/:proposalId' element={<ProposalsViewDetailsAsAuthor />} />
+          <Route path='/jobs/proposals/sent/:proposalId' element={<ProposalsViewDetailsAsApplicant />} />
 
           <Route path='/gigs'>
             <Route index element={<GigMarketplace />} />
@@ -257,27 +260,28 @@ function App() {
         {/* Moderator Routes */}
         <Route path='/moderator/forum' element={<ForumModeratorLayout />}>
           <Route index element={<ForumModeratorDashboard />} />
-          <Route path='forum-management' element={<ForumManagement />} />
-          <Route path='groups' element={<ForumGroups />} />
-          <Route path='discussions' element={<ForumDiscussions />} />
+          <Route path='forum-discussion' element={<ForumDiscussion />} />
           <Route path='ticket-management' element={<ForumTicketManagement />} />
-          <Route path='restrictions' element={<ForumRestrictions />} />
-          <Route path='user-team' element={<ModeratorSectionPlaceholder title='USER & TEAM' subtitle='User account management is centralized in the Admin console.' />} />
+          <Route path='disputes' element={<ForumDisputes />} />
+          <Route path='reports' element={<ForumReports />} />
+          <Route path='user-team' element={<ForumUserTeam />} />
         </Route>
 
         <Route path='/moderator/marketplace' element={<MarketplaceModeratorLayout />}>
           <Route index element={<MarketplaceModeratorDashboard />} />
           <Route path='marketplace-control' element={<MarketplaceControl />} />
           <Route path='ticket-management' element={<MarketplaceTicketManagement />} />
-          <Route path='restrictions' element={<MarketplaceRestrictions />} />
+          <Route path='disputes' element={<MarketplaceDisputes />} />
+          <Route path='reports' element={<MarketplaceReports />} />
+          <Route path='user-team' element={<MarketplaceUserTeam />} />
         </Route>
 
         <Route path='/moderator/support' element={<SupportModeratorLayout />}>
           <Route index element={<SupportModeratorDashboard />} />
           <Route path='ticket-management' element={<SupportTicketManagement />} />
           <Route path='disputes' element={<SupportDisputes />} />
+          <Route path='reports' element={<SupportReports />} />
           <Route path='user-team' element={<SupportUserTeam />} />
-          <Route path='restrictions' element={<SupportRestrictions />} />
         </Route>
 
         <Route path='/moderator/jobs' element={<JobsModeratorLayout />}>
@@ -285,7 +289,8 @@ function App() {
           <Route path='control' element={<JobsGigsControl />} />
           <Route path='ticket-management' element={<JobsTicketManagement />} />
           <Route path='disputes' element={<JobsDisputes />} />
-          <Route path='restrictions' element={<JobsRestrictions />} />
+          <Route path='reports' element={<JobsReports />} />
+          <Route path='user-team' element={<JobsUserTeam />} />
         </Route>
       </Route>
       </Routes>

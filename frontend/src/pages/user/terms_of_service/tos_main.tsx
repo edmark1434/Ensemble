@@ -3,26 +3,7 @@ import React, { useState, useEffect } from "react";
 import UserHeader from "@/components/nav/user_header";
 import { Plus, FileText, ChevronDown, Trash2, Edit3 } from "lucide-react";
 
-export interface TosTemplate {
-  id: string;
-  terms_title: string;
-  terms_content: string; // List of terms/clauses
-}
-
-const DEFAULT_TOS_TEMPLATES: TosTemplate[] = [
-  {
-    id: "tos-1",
-    terms_title: "Standard Platform TOS",
-    terms_content:
-      "1. All deliverables remain property of the creator until final milestone payout.\n2. Source files delivered upon project completion.\n3. Communication conducted via platform inbox.\n4. Additional revisions outside milestone quotas billed at agreed additional work rate.",
-  },
-  {
-    id: "tos-2",
-    terms_title: "Strict IP Transfer TOS",
-    terms_content:
-      "1. Full IP transfer granted immediately upon each milestone approval.\n2. Raw media and project files transferred after step sign-off.\n3. Non-disclosure agreement applies to all unreleased media.",
-  },
-];
+import { useTerms, type TosTemplate } from "@/hooks/useTerms";
 
 // ============================================================================
 // SKELETON COMPONENT FOR LOADING STATE
@@ -79,68 +60,75 @@ const TosSkeletonLoader: React.FC = () => (
 // MAIN COMPONENT
 // ============================================================================
 export const TosMain: React.FC = () => {
-  const [loading, setLoading] = useState(true);
-  const [tosList, setTosList] = useState<TosTemplate[]>(DEFAULT_TOS_TEMPLATES);
-  const [expandedId, setExpandedId] = useState<string | null>("tos-1");
+  const { terms: tosList, loading, error, fetchTerms, createTerms, updateTerms, deleteTerms } = useTerms();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Form State
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isEditingDefault, setIsEditingDefault] = useState(false);
 
-  // Simulate smooth page loading delay
+  // Fetch terms on mount
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 600);
-    return () => clearTimeout(timer);
-  }, []);
+    fetchTerms();
+  }, [fetchTerms]);
+
+  // Set default expanded item once loaded
+  useEffect(() => {
+    if (tosList.length > 0 && !expandedId) {
+      setExpandedId(tosList[0].id);
+    }
+  }, [tosList, expandedId]);
 
   // Handle Save / Update TOS
-  const handleSaveTOS = (e: React.FormEvent) => {
+  const handleSaveTOS = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !content.trim()) return;
 
-    if (editingId) {
-      // Update existing item
-      setTosList((prev) =>
-        prev.map((item) =>
-          item.id === editingId
-            ? { ...item, terms_title: title.trim(), terms_content: content.trim() }
-            : item
-        )
-      );
-      setEditingId(null);
-    } else {
-      // Create new item
-      const newTos: TosTemplate = {
-        id: `tos-${Date.now()}`,
-        terms_title: title.trim(),
-        terms_content: content.trim(),
-      };
-      setTosList((prev) => [newTos, ...prev]);
-      setExpandedId(newTos.id);
+    try {
+      if (editingId && !isEditingDefault) {
+        // Update existing user template
+        const updated = await updateTerms(editingId, { terms_title: title.trim(), terms_content: content.trim() });
+        setExpandedId(updated.id);
+        setEditingId(null);
+      } else {
+        // Create new template (or clone default)
+        const created = await createTerms({ terms_title: title.trim(), terms_content: content.trim() });
+        setExpandedId(created.id);
+        setEditingId(null);
+        setIsEditingDefault(false);
+      }
+      setTitle("");
+      setContent("");
+    } catch (err) {
+      console.error("Failed to save TOS", err);
     }
-
-    setTitle("");
-    setContent("");
   };
 
   // Populate form for editing
   const handleEdit = (tos: TosTemplate) => {
     setEditingId(tos.id);
+    setIsEditingDefault(tos.is_default);
     setTitle(tos.terms_title);
     setContent(tos.terms_content);
     setExpandedId(tos.id);
   };
 
   // Delete template
-  const handleDelete = (id: string, e: React.MouseEvent) => {
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setTosList((prev) => prev.filter((item) => item.id !== id));
-    if (expandedId === id) setExpandedId(null);
+    try {
+      await deleteTerms(id);
+      if (expandedId === id) setExpandedId(null);
+    } catch (err) {
+      console.error("Failed to delete TOS", err);
+    }
   };
 
   const handleCancelEdit = () => {
     setEditingId(null);
+    setIsEditingDefault(false);
     setTitle("");
     setContent("");
   };
@@ -290,18 +278,20 @@ export const TosMain: React.FC = () => {
                                 handleEdit(tos);
                               }}
                               className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
-                              title="Edit Template"
+                              title={tos.is_default ? "Clone & Edit Template" : "Edit Template"}
                             >
                               <Edit3 className="h-3.5 w-3.5" />
                             </button>
-                            <button
-                              type="button"
-                              onClick={(e) => handleDelete(tos.id, e)}
-                              className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-zinc-400 transition hover:bg-red-500/20 hover:text-red-400"
-                              title="Delete Template"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            {!tos.is_default && (
+                              <button
+                                type="button"
+                                onClick={(e) => handleDelete(tos.id, e)}
+                                className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-zinc-400 transition hover:bg-red-500/20 hover:text-red-400"
+                                title="Delete Template"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                             <ChevronDown
                               className={`h-4 w-4 text-zinc-400 transition-transform duration-300 ${
                                 isExpanded ? "rotate-180 text-white" : ""

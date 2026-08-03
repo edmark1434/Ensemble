@@ -29,6 +29,7 @@ interface InboxTimeOfMessageProps {
   isSender?: boolean;
   status?: "sent" | "seen";
   recipientAvatar?: string; // Optional: render mini avatar if seen
+  recipientAvatars?: string[];
 }
 
 export const InboxTimeOfMessage: React.FC<InboxTimeOfMessageProps> = ({
@@ -36,6 +37,7 @@ export const InboxTimeOfMessage: React.FC<InboxTimeOfMessageProps> = ({
   isSender = false,
   status,
   recipientAvatar,
+  recipientAvatars = [],
 }) => {
   if (!timestamp) return null;
 
@@ -54,13 +56,19 @@ export const InboxTimeOfMessage: React.FC<InboxTimeOfMessageProps> = ({
       {isSender && status && (
         <span className="flex items-center ml-0.5">
           {status === "seen" ? (
-            recipientAvatar ? (
-              <img
-                src={recipientAvatar}
-                alt="Seen"
-                className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-blue-500"
-                title="Seen"
-              />
+            recipientAvatars.length || recipientAvatar ? (
+              <span className="flex -space-x-1" title={`Seen by ${recipientAvatars.length || 1}`}>
+                {(recipientAvatars.length ? recipientAvatars : [recipientAvatar!])
+                  .slice(0, 5)
+                  .map((avatar, index) => (
+                    <img
+                      key={`${avatar}-${index}`}
+                      src={avatar}
+                      alt="Seen"
+                      className="h-3.5 w-3.5 rounded-full object-cover ring-1 ring-blue-500"
+                    />
+                  ))}
+              </span>
             ) : (
               <CheckCheck
                 className="h-3.5 w-3.5 text-blue-400"

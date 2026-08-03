@@ -2,19 +2,24 @@ const {
   getMarketplaceOverview,
   getMarketplaceListings,
   getMarketplaceListingDetail,
+  getSellerMarketplaceListings,
   reviewMarketplaceListing,
   getMarketplaceTickets,
+  getMarketplaceReports,
 } = require('../Repositories/MarketplaceModeratorRepositories');
 const {
   getTicketDetail,
   updateTicket,
   addTicketMessage,
+  getReportDetail,
+  updateReport,
 } = require('../Repositories/AdminTicketsRepositories');
 const {
   getViolationsAndRestrictions,
   issueViolation,
   updateAccountRestriction,
 } = require('../Repositories/ModeratorRepositories');
+const { MARKETPLACE_REPORT_TYPES, isReportTypeInScope } = require('../lib/reportEnums');
 
 async function getOverview(req, res) {
   try {
@@ -28,7 +33,11 @@ async function getOverview(req, res) {
 
 async function getListings(req, res) {
   try {
-    const data = await getMarketplaceListings({ status: req.query.status });
+    const data = await getMarketplaceListings({
+      status: req.query.status,
+      search: req.query.search,
+      category: req.query.category,
+    });
     res.status(200).json({ success: true, data });
   } catch (err) {
     console.error('Error fetching marketplace listings:', err);
@@ -44,6 +53,17 @@ async function getListingDetail(req, res) {
   } catch (err) {
     console.error('Error fetching listing detail:', err);
     res.status(500).json({ success: false, message: 'Failed to load listing' });
+  }
+}
+
+async function getSellerListings(req, res) {
+  try {
+    const data = await getSellerMarketplaceListings(req.params.accountId);
+    if (!data) return res.status(404).json({ success: false, message: 'Account not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching seller listings:', err);
+    res.status(500).json({ success: false, message: 'Failed to load seller listings' });
   }
 }
 
@@ -70,7 +90,7 @@ async function getTickets(req, res) {
 
 async function getTicket(req, res) {
   try {
-    const data = await getTicketDetail(req.params.id, req.session);
+    const data = await getTicketDetail(req.params.id, req.session, { assignableQueue: 'marketplace' });
     if (!data) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -152,10 +172,146 @@ async function patchRestriction(req, res) {
   }
 }
 
+async function getReports(req, res) {
+  try {
+    const data = await getMarketplaceReports({ status: req.query.status });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching marketplace reports:', err);
+    res.status(500).json({ success: false, message: 'Failed to load reports' });
+  }
+}
+
+async function getReport(req, res) {
+  try {
+    const data = await getReportDetail(req.params.id, req.session, { assignableQueue: 'marketplace' });
+    if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
+    if (!isReportTypeInScope(data.report?.targetType, MARKETPLACE_REPORT_TYPES)) {
+      return res.status(403).json({ success: false, message: 'Report is outside the marketplace queue' });
+    }
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching marketplace report detail:', err);
+    res.status(500).json({ success: false, message: 'Failed to load report' });
+  }
+}
+
+async function patchReport(req, res) {
+  try {
+    const existing = await getReportDetail(req.params.id, req.session, { assignableQueue: 'marketplace' });
+    if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
+    if (!isReportTypeInScope(existing.report?.targetType, MARKETPLACE_REPORT_TYPES)) {
+      return res.status(403).json({ success: false, message: 'Report is outside the marketplace queue' });
+    }
+    const data = await updateReport(req.params.id, req.body, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Report not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error updating marketplace report:', err);
+    const msg = err.message || 'Failed to update report';
+    const isClient = /assign|already assigned|staff profile|not found/i.test(msg);
+    res.status(isClient ? 400 : 500).json({ success: false, message: msg });
+  }
+}
+
+async function getDisputes(req, res) {
+  try {
+    const { fetchScopedDisputes } = require('../Repositories/ModeratorSharedRepositories');
+    const data = await fetchScopedDisputes({ status: req.query.status });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching marketplace disputes:', err);
+    res.status(500).json({ success: false, message: 'Failed to load disputes' });
+  }
+}
+
+async function getDispute(req, res) {
+  try {
+    const { getDisputeDetail } = require('../Repositories/AdminTicketsRepositories');
+    const data = await getDisputeDetail(req.params.id, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching marketplace dispute detail:', err);
+    res.status(500).json({ success: false, message: 'Failed to load dispute' });
+  }
+}
+
+async function patchDispute(req, res) {
+  try {
+    const { updateDispute } = require('../Repositories/AdminTicketsRepositories');
+    const data = await updateDispute(req.params.id, req.body, req.session);
+    if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error updating dispute:', err);
+    const msg = err.message || 'Failed to update dispute';
+    const isClient =
+      /assign yourself|view only|cannot|only admin|only the requester|not found|invalid/i.test(msg);
+    res.status(isClient ? 400 : 500).json({ success: false, message: msg });
+  }
+}
+
+async function postDisputeMessage(req, res) {
+  try {
+    const { addDisputeMessage } = require('../Repositories/AdminTicketsRepositories');
+    const { body, isInternal, audience, visibleToParties, visibleToPublic } = req.body;
+    if (!body?.trim()) {
+      return res.status(400).json({ success: false, message: 'Message body is required' });
+    }
+    const data = await addDisputeMessage(req.params.id, body.trim(), req.session, {
+      isInternal: Boolean(isInternal),
+      audience,
+      visibleToParties: Boolean(visibleToParties),
+      visibleToPublic: Boolean(visibleToPublic),
+    });
+    if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error adding dispute message:', err);
+    const msg = err?.message || 'Failed to add message';
+    if (msg.includes('MongoDB')) {
+      return res.status(503).json({ success: false, message: msg });
+    }
+    const isClient = /permission|assign yourself|view only|could not match/i.test(msg);
+    res.status(isClient ? 400 : 500).json({ success: false, message: msg });
+  }
+}
+
+async function patchDisputeMessage(req, res) {
+  try {
+    const { setDisputeMessageAudience } = require('../Repositories/AdminTicketsRepositories');
+    const { audience, publish } = req.body;
+    let nextAudience = audience;
+    if (publish === true) nextAudience = 'parties';
+    if (publish === false) nextAudience = audience || 'author_and_staff';
+    if (!nextAudience) {
+      return res.status(400).json({ success: false, message: 'audience or publish is required' });
+    }
+    const data = await setDisputeMessageAudience(
+      req.params.id,
+      req.params.messageId,
+      nextAudience,
+      req.session
+    );
+    if (!data) return res.status(404).json({ success: false, message: 'Dispute not found' });
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error updating dispute message:', err);
+    const msg = err?.message || 'Failed to update message';
+    if (msg.includes('MongoDB')) {
+      return res.status(503).json({ success: false, message: msg });
+    }
+    const isClient = /assign yourself|invalid|not found|permission/i.test(msg);
+    res.status(isClient ? 400 : 500).json({ success: false, message: msg });
+  }
+}
+
 module.exports = {
   getOverview,
   getListings,
   getListingDetail,
+  getSellerListings,
   patchListing,
   getTickets,
   getTicket,
@@ -164,4 +320,12 @@ module.exports = {
   getRestrictions,
   postViolation,
   patchRestriction,
+  getReports,
+  getReport,
+  patchReport,
+  getDisputes,
+  getDispute,
+  patchDispute,
+  postDisputeMessage,
+  patchDisputeMessage,
 };

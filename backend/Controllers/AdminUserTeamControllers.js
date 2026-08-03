@@ -9,6 +9,7 @@ const {
   warnAccount,
   pardonAccount,
 } = require('../Repositories/AdminUserTeamRepositories');
+const { assertStatusActionAllowed } = require('../lib/userTeamPermissions');
 
 function staffIdFromSession(session) {
   return session?.staffId || session?.staff_id || null;
@@ -51,11 +52,13 @@ async function patchAdminAccountStatus(req, res) {
     if (!accountId || !action) {
       return res.status(400).json({ success: false, message: 'accountId and action are required' });
     }
+    assertStatusActionAllowed(req.session, action);
     const data = await updateAccountStatus(accountId, action);
     res.status(200).json({ success: true, data, message: `Account set to ${data.status}` });
   } catch (err) {
     console.error('Error updating account status:', err);
-    res.status(400).json({ success: false, message: err.message || 'Failed to update account status' });
+    const code = err.statusCode === 403 ? 403 : 400;
+    res.status(code).json({ success: false, message: err.message || 'Failed to update account status' });
   }
 }
 

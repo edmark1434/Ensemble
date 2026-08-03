@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, Loader2, X } from 'lucide-react';
+import { CheckCircle2, Hand, Loader2, X } from 'lucide-react';
 import api from '@/lib/axios';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import type { ModerationCase } from './moderationTypes';
+import type { DisputePermissions } from '@/pages/admin/ticketManagement/ticketTypes';
 
 function titleCaseLabel(value: string) {
   return String(value || '')
@@ -13,6 +14,23 @@ function titleCaseLabel(value: string) {
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
     .join(' ');
 }
+
+function statusButtonClass(label: string, active: boolean) {
+  const s = String(label || '')
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ');
+  if (!active) {
+    return 'border-white/10 bg-transparent text-zinc-400 hover:border-white/20 hover:bg-white/[0.04] hover:text-zinc-200';
+  }
+  if (s === 'open') return 'border-red-500/40 bg-red-500/20 text-red-200';
+  if (s === 'in progress') return 'border-amber-500/40 bg-amber-500/20 text-amber-200';
+  if (s === 'resolved') return 'border-emerald-500/40 bg-emerald-500/20 text-emerald-200';
+  if (s === 'dismissed') return 'border-violet-500/40 bg-violet-500/20 text-violet-200';
+  if (s === 'closed') return 'border-zinc-500/40 bg-zinc-500/25 text-zinc-200';
+  return 'border-white/25 bg-white/10 text-white';
+}
+
+const REPORT_STATUS_OPTIONS = ['open', 'in_progress', 'resolved', 'dismissed', 'closed'] as const;
 
 function toApiToken(value: string) {
   return String(value || '')
@@ -46,6 +64,7 @@ type ReportDetailPayload = {
     assignee: { staffId: string | number; name: string } | null;
     createdAt: string | null;
   };
+  permissions?: DisputePermissions;
   assignableStaff: { staffId: string | number; name: string; role: string }[];
 };
 
@@ -60,7 +79,7 @@ export function ReportCaseDetailModal({
   onClose: () => void;
   onUpdated: () => void;
   endpointBase?: string;
-  accent?: 'rose' | 'sky' | 'violet' | 'emerald';
+  accent?: 'rose' | 'sky' | 'violet' | 'emerald' | 'amber';
 }) {
   const [detail, setDetail] = useState<ReportDetailPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,7 +95,9 @@ export function ReportCaseDetailModal({
         ? 'text-violet-400'
         : accent === 'emerald'
           ? 'text-emerald-400'
-          : 'text-rose-400';
+          : accent === 'amber'
+            ? 'text-amber-400'
+            : 'text-rose-400';
   const accentSpin =
     accent === 'sky'
       ? 'text-sky-400'
@@ -84,7 +105,9 @@ export function ReportCaseDetailModal({
         ? 'text-violet-400'
         : accent === 'emerald'
           ? 'text-emerald-400'
-          : 'text-rose-400';
+          : accent === 'amber'
+            ? 'text-amber-400'
+            : 'text-rose-400';
   const accentBtn =
     accent === 'sky'
       ? 'bg-sky-500/90 hover:bg-sky-500'
@@ -92,7 +115,9 @@ export function ReportCaseDetailModal({
         ? 'bg-violet-500/90 hover:bg-violet-500'
         : accent === 'emerald'
           ? 'bg-emerald-500/90 hover:bg-emerald-500'
-          : 'bg-rose-500/90 hover:bg-rose-500';
+          : accent === 'amber'
+            ? 'bg-amber-500/90 hover:bg-amber-500'
+            : 'bg-rose-500/90 hover:bg-rose-500';
 
   const load = async () => {
     setLoading(true);
@@ -119,11 +144,14 @@ export function ReportCaseDetailModal({
   const save = async (overrideStatus?: string) => {
     setSaving(true);
     try {
-      const res = await api.patch(`${endpointBase}/${reportId}`, {
+      const payload: Record<string, unknown> = {
         status: overrideStatus || status,
         priority,
-        assigned_staff_id: assigneeId || null,
-      });
+      };
+      if (!assigneeLocked || perms?.canAssignOthers || perms?.isAdmin) {
+        payload.assigned_staff_id = assigneeId || null;
+      }
+      const res = await api.patch(`${endpointBase}/${reportId}`, payload);
       if (!res.data?.success) throw new Error(res.data?.message || 'Failed to update report');
       showSuccessToast(
         overrideStatus === 'resolved'
@@ -141,7 +169,57 @@ export function ReportCaseDetailModal({
     }
   };
 
+  const assignMyself = async () => {
+    setSaving(true);
+    try {
+      const res = await api.patch(`${endpointBase}/${reportId}`, { action: 'self_assign' });
+      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to assign yourself');
+      showSuccessToast('You are now assigned');
+      await load();
+      onUpdated();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        (err instanceof Error ? err.message : 'Failed to assign yourself');
+      showErrorToast(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const releaseCase = async () => {
+    setSaving(true);
+    try {
+      const res = await api.patch(`${endpointBase}/${reportId}`, { action: 'release' });
+      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to release case');
+      showSuccessToast('Case released — another moderator can claim it');
+      await load();
+      onUpdated();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        (err instanceof Error ? err.message : 'Failed to release case');
+      showErrorToast(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const report = detail?.report;
+  const perms = detail?.permissions;
+  const myStaffId = perms?.staffId != null ? String(perms.staffId) : '';
+  const reportAssigneeId = report?.assignee?.staffId != null ? String(report.assignee.staffId) : '';
+  const alreadyAssignedToMe = Boolean(
+    perms?.isAssignee ||
+      (myStaffId && reportAssigneeId && myStaffId.toLowerCase() === reportAssigneeId.toLowerCase())
+  );
+  const canAssignMyself = Boolean(
+    !alreadyAssignedToMe &&
+      (perms?.canAssignMyself || perms?.canSelfAssign || Boolean(myStaffId && !report?.assignee))
+  );
+  const canRelease = Boolean(alreadyAssignedToMe || perms?.canRelease || perms?.isAssignee);
+  const assigneeLocked =
+    Boolean(reportAssigneeId) && !Boolean(perms?.canAssignOthers || perms?.isAdmin);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:pl-[288px]">
@@ -182,20 +260,25 @@ export function ReportCaseDetailModal({
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
-              <label className="flex flex-col gap-1 text-xs text-zinc-500">
+              <div className="flex flex-col gap-1.5 text-xs text-zinc-500 sm:col-span-3">
                 Status
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
-                >
-                  {['open', 'in_progress', 'resolved', 'dismissed', 'closed'].map((s) => (
-                    <option key={s} value={s}>
-                      {titleCaseLabel(s)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Report status">
+                  {REPORT_STATUS_OPTIONS.map((s) => {
+                    const active = toApiToken(status) === s;
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setStatus(s)}
+                        aria-pressed={active}
+                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${statusButtonClass(s, active)}`}
+                      >
+                        {titleCaseLabel(s)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <label className="flex flex-col gap-1 text-xs text-zinc-500">
                 Priority
                 <select
@@ -210,22 +293,68 @@ export function ReportCaseDetailModal({
                   ))}
                 </select>
               </label>
-              <label className="flex flex-col gap-1 text-xs text-zinc-500">
+              <label className="flex flex-col gap-1 text-xs text-zinc-500 sm:col-span-2">
                 Assignee
                 <select
                   value={assigneeId}
                   onChange={(e) => setAssigneeId(e.target.value)}
-                  className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
+                  disabled={assigneeLocked}
+                  className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <option value="">Unassigned</option>
-                  {detail.assignableStaff.map((s) => (
-                    <option key={String(s.staffId)} value={String(s.staffId)}>
-                      {s.name} ({s.role})
-                    </option>
-                  ))}
+                  {detail.assignableStaff
+                    .filter((s) => {
+                      if (!myStaffId) return true;
+                      const isMe =
+                        String(s.staffId).toLowerCase() === myStaffId.toLowerCase();
+                      // Keep current handler visible while locked; otherwise use Assign myself.
+                      return !isMe || (assigneeLocked && alreadyAssignedToMe);
+                    })
+                    .map((s) => (
+                      <option key={String(s.staffId)} value={String(s.staffId)}>
+                        {s.name} ({s.role})
+                        {myStaffId &&
+                        String(s.staffId).toLowerCase() === myStaffId.toLowerCase()
+                          ? ' (you)'
+                          : ''}
+                      </option>
+                    ))}
                 </select>
+                {assigneeLocked && (
+                  <span className="text-[11px] text-zinc-500">
+                    Handler is locked. The assigned moderator must release the case before someone
+                    else can claim it.
+                  </span>
+                )}
+                {!assigneeLocked && reportAssigneeId && (perms?.canAssignOthers || perms?.isAdmin) && (
+                  <span className="text-[11px] text-violet-300/80">
+                    Admin override: you can reassign this report without a release.
+                  </span>
+                )}
               </label>
             </div>
+
+            {canAssignMyself && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void assignMyself()}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-sky-500/40 bg-sky-500/15 px-4 py-2 text-sm font-medium text-sky-100 hover:bg-sky-500/25 disabled:opacity-50"
+              >
+                <Hand className="h-4 w-4" />
+                Assign myself
+              </button>
+            )}
+            {canRelease && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void releaseCase()}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-100 hover:bg-amber-500/20 disabled:opacity-50"
+              >
+                Release case
+              </button>
+            )}
 
             <div className="flex flex-wrap gap-2">
               <button

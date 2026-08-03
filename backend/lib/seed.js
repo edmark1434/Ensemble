@@ -9,6 +9,7 @@ const {
 } = require('../Repositories/InboxRepositories');
 const { CONVERSATION_TYPE: DISPUTE_CHAT_TYPE } = require('../Repositories/DisputeChatRepositories');
 const { seedDomainExamples } = require('./seed-domains');
+const { CREDIT_TRANSACTION_TYPES, CREDIT_TRANSACTION_TYPE } = require('./creditTransactionEnums');
 
 function cap(value, max) {
   if (value == null) return value;
@@ -39,6 +40,29 @@ async function ensurePasswordHashColumnCapacity() {
       console.log(`ℹ️ Updated ${tableName}.password_hash to TEXT for bcrypt compatibility`);
     }
   }
+}
+async function seedDefaultTOS() {
+  // 1. Seed Default TOS
+  await pool.query(`
+    INSERT INTO terms_of_service (
+      terms_id, terms_title, terms_description, terms_type, is_default
+    ) VALUES 
+    (
+      '00000000-0000-0000-0000-000000000001',
+      'Standard Platform TOS',
+      '1. All deliverables remain property of the creator until final milestone payout.\\n2. Source files delivered upon project completion.\\n3. Communication conducted via platform inbox.\\n4. Additional revisions outside milestone quotas billed at agreed additional work rate.',
+      'jobs',
+      TRUE
+    ),
+    (
+      '00000000-0000-0000-0000-000000000002',
+      'Strict IP Transfer TOS',
+      '1. Full IP transfer granted immediately upon each milestone approval.\\n2. Raw media and project files transferred after step sign-off.\\n3. Non-disclosure agreement applies to all unreleased media.',
+      'jobs',
+      TRUE
+    )
+    ON CONFLICT (terms_id) DO NOTHING;
+  `);
 }
 
 async function resetSeedTables() {
@@ -150,7 +174,7 @@ async function ensurePlatformWalletId() {
   return created.rows[0].wallet_id;
 }
 
-/** Freeze credits on the respondent wallet and link a Dispute Hold transaction. */
+/** Freeze credits on the respondent wallet and link an Escrow Hold transaction. */
 async function seedDisputeCreditHold(disputeId, respondentAccountId, amount, status = 'held') {
   const walletId = await getAccountWalletId(respondentAccountId);
   const platformWalletId = await ensurePlatformWalletId();
@@ -170,9 +194,9 @@ async function seedDisputeCreditHold(disputeId, respondentAccountId, amount, sta
   const tx = await pool.query(
     `INSERT INTO credit_transactions (
        type, amount_credits, status, source_wallet_id, destination_wallet_id, related_dispute_id
-     ) VALUES ('Dispute Hold', $1, $2, $3, $4, $5)
+     ) VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING credit_transaction_id`,
-    [amount, status, walletId, platformWalletId, disputeId]
+    [CREDIT_TRANSACTION_TYPE.ESCROW_HOLD, amount, status, walletId, platformWalletId, disputeId]
   );
   const txId = tx.rows[0].credit_transaction_id;
   await pool.query(
@@ -286,50 +310,127 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   const jobsStaffId = staffByRole['Jobs N Gigs Moderator'] || staffByRole['Jobs Moderator'] || supportStaffId;
   const forumStaffId = staffByRole['Forum Moderator'] || supportStaffId;
 
-  const reports = [
-    ['RPT-10001', userAccountIds[0], 'member', 'u-3', '@noisy_creator', 'Harassment', 'Repeated hostile messages in forum thread.', 'open', 'high'],
-    ['RPT-10002', userAccountIds[2], 'group', 'fg-12', 'Design Critique Hub', 'Spam', 'Group flooded with promotional links.', 'in_review', 'medium'],
-    ['RPT-10003', userAccountIds[4], 'team', 'team-2', 'Graphitee', 'Impersonation', 'Member posing as official support.', 'open', 'high'],
-    ['RPT-10004', userAccountIds[1], 'member', 'u-7', '@seller_x', 'Scam', 'Marketplace listing never delivered after payment.', 'resolved', 'high'],
-    ['RPT-10005', userAccountIds[5], 'discussion', 'd-44', 'Late delivery thread', 'Other', 'Misleading project timeline claims.', 'open', 'low'],
-    ['RPT-10006', userAccountIds[3], 'member', 'u-2', '@quiet_dev', 'Harassment', 'Off-platform threats referenced in chat.', 'open', 'high'],
+  // Platform report samples for every staff desk.
+  // Specialist queues filter by target_type; Support + Admin see all.
+  // Tuple: [number, reporterIdx, targetType, targetId, targetLabel, reason, description, status, priority, prefix, assigneeRole]
+  const reportBlueprints = [
+    // ── Forum queue ──────────────────────────────────────────────────────
+    [0, 'member', 'u-forum-01', '@noisy_creator', 'Harassment', 'Repeated hostile messages in a critique thread after feedback.', 'open', 'high', 'forum', null],
+    [2, 'group', 'fg-12', 'Design Critique Hub', 'Spam', 'Group flooded with promotional invite links.', 'in_review', 'medium', 'forum', 'Forum Moderator'],
+    [5, 'discussion', 'd-44', 'Late delivery thread', 'Misinformation', 'Discussion spreads false claims about another editor.', 'open', 'low', 'forum', null],
+    [3, 'member', 'u-forum-02', '@quiet_dev', 'Harassment', 'Threats referenced in forum chat and DMs.', 'open', 'high', 'forum', 'Forum Moderator'],
+    [1, 'comment', 'cmt-901', 'Reply on Showcase #18', 'Hate speech', 'Comment insults another member with slurs.', 'open', 'high', 'forum', null],
+    [4, 'post', 'post-220', 'Weekly reel dump', 'Spam', 'Same promotional post pasted across three groups.', 'dismissed', 'medium', 'forum', 'Admin'],
+    [0, 'thread', 'thr-77', 'Client rate debate', 'Other', 'Off-topic personal attacks derailing the thread.', 'resolved', 'low', 'forum', 'Forum Moderator'],
+
+    // ── Marketplace queue ────────────────────────────────────────────────
+    [1, 'listing', 'LST-204', 'Neon LUT Pack', 'Scam', 'Buyer paid credits but never received the asset files.', 'open', 'high', 'marketplace', null],
+    [4, 'seller', 'u-9', '@asset_booth', 'Copyright', 'Seller reuploads stolen marketplace packs as originals.', 'in_review', 'high', 'marketplace', 'Marketplace Moderator'],
+    [2, 'listing', 'LST-318', 'Cinematic SFX Bundle', 'Misleading', 'Preview audio does not match delivered files.', 'open', 'medium', 'marketplace', null],
+    [5, 'purchase', 'ORD-8821', 'Order #8821', 'Non-delivery', 'Purchase stuck in pending delivery for 9 days.', 'open', 'high', 'marketplace', 'Marketplace Moderator'],
+    [3, 'asset', 'AST-55', 'Grain Overlay Pack v2', 'Quality', 'Corrupt zip and missing license file after download.', 'resolved', 'medium', 'marketplace', 'Admin'],
+    [0, 'marketplace', 'mkt-policy', 'Marketplace policy', 'Other', 'General complaint about fake “verified seller” badges.', 'dismissed', 'low', 'marketplace', 'Support Moderator'],
+
+    // ── Jobs & Gigs queue ────────────────────────────────────────────────
+    [0, 'job', 'JOB-118', 'Need motion editor ASAP', 'Inappropriate', 'Job post includes abusive requirements and contact spam.', 'open', 'medium', 'jobs', null],
+    [2, 'gig', 'GIG-55', 'Thumbnail design in 24h', 'Misleading', 'Gig promises impossible delivery and uses fake samples.', 'open', 'high', 'jobs', 'Jobs N Gigs Moderator'],
+    [1, 'contract', 'CTR-440', 'Wedding film contract', 'Harassment', 'Client left hostile comments after milestone rejection.', 'in_review', 'high', 'jobs', null],
+    [4, 'application', 'APP-903', 'Proposal on JOB-90', 'Spam', 'Applicant mass-sent identical proposals with phishing links.', 'open', 'medium', 'jobs', 'Jobs N Gigs Moderator'],
+    [5, 'gig', 'GIG-201', 'Color grade overnight', 'Scam', 'Gig asks for off-platform payment before starting.', 'open', 'high', 'jobs', null],
+    [3, 'feedback', 'FB-66', 'Unfair feedback on CTR-12', 'Other', 'Reported as retaliatory 1-star after a resolved dispute.', 'resolved', 'low', 'jobs', 'Admin'],
+
+    // ── Support / Admin cross-cutting (not in specialist scopes) ─────────
+    [4, 'team', 'team-2', 'Graphitee', 'Impersonation', 'Member posing as official Ensemble support in team chat.', 'open', 'high', 'support', 'Support Moderator'],
+    [1, 'account', 'acc-user-7', '@seller_x', 'Account abuse', 'Multiple ban-evasion accounts linked to the same person.', 'in_review', 'high', 'support', 'Admin'],
+    [2, 'profile', 'prof-18', '@mirror_edit', 'Impersonation', 'Profile photo and bio copy a known creator brand.', 'open', 'medium', 'support', null],
+    [0, 'team', 'team-9', 'Nightshift Collective', 'Harassment', 'Team owner bullying members after leaving a contract.', 'open', 'high', 'support', 'Support Moderator'],
+    [5, 'account', 'acc-user-3', '@alt_spam', 'Spam', 'Account used only to mass-DM promotional links.', 'resolved', 'medium', 'support', 'Admin'],
   ];
+
+  const assigneeByRole = {
+    Admin: adminStaffId,
+    'Support Moderator': supportStaffId,
+    'Forum Moderator': forumStaffId,
+    'Marketplace Moderator': marketplaceStaffId,
+    'Jobs N Gigs Moderator': jobsStaffId,
+    'Jobs Moderator': jobsStaffId,
+  };
+
+  const reports = reportBlueprints.map((row, i) => {
+    const [
+      reporterIdx,
+      targetType,
+      targetId,
+      targetLabel,
+      reason,
+      description,
+      status,
+      priority,
+      prefix,
+      assigneeRole,
+    ] = row;
+    return {
+      number: `RPT-${String(10001 + i).padStart(5, '0')}`,
+      reporterAccountId: userAccountIds[reporterIdx % userAccountIds.length],
+      targetAccountId: userAccountIds[(reporterIdx + 2) % userAccountIds.length],
+      targetType,
+      targetId,
+      targetLabel,
+      reason,
+      description,
+      status,
+      priority,
+      prefix,
+      assigneeId:
+        status === 'resolved' || status === 'dismissed'
+          ? assigneeByRole[assigneeRole] || adminStaffId
+          : assigneeRole
+            ? assigneeByRole[assigneeRole] || null
+            : null,
+    };
+  });
 
   const reportIds = [];
   for (let i = 0; i < reports.length; i++) {
     const r = reports[i];
-    const targetAccountId = userAccountIds[(i + 1) % userAccountIds.length];
     const res = await pool.query(
       `INSERT INTO reports (
         report_number, by_account_id, for_account_id,
         target_type, target_id, target_label,
         reason, description, status, priority, assigned_staff_id, created_at,
-        type, reference_table, reference_prefix, reference_id, is_created_by_bot
+        type, reference_table, reference_prefix, reference_id, is_created_by_bot,
+        resolved_at
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
         NOW() - ($12 || ' hours')::interval,
-        $4, $4, $13, $14, false
+        $4, $4, $13, $14, false,
+        $15
       )
       RETURNING report_id`,
       [
-        r[0],
-        r[1],
-        targetAccountId,
-        r[2],
-        r[3],
-        r[4],
-        r[5],
-        r[6],
-        r[7],
-        r[8],
-        r[7] === 'resolved' ? adminStaffId : supportStaffId,
-        String(faker.number.int({ min: 2, max: 120 })),
-        String(r[3] || 'id').slice(0, 50),
-        String(r[3] || 'unknown').slice(0, 50),
+        r.number,
+        r.reporterAccountId,
+        r.targetAccountId,
+        r.targetType,
+        r.targetId,
+        r.targetLabel,
+        r.reason,
+        r.description,
+        r.status,
+        r.priority,
+        r.assigneeId,
+        String(4 + i * 3),
+        r.prefix,
+        String(r.targetId).slice(0, 50),
+        r.status === 'resolved' || r.status === 'dismissed' ? new Date() : null,
       ]
     );
     reportIds.push(res.rows[0].report_id);
   }
+
+  console.log(
+    `✅ Seeded ${reports.length} reports (forum / marketplace / jobs / support+admin samples)`
+  );
 
   const disputes = [
     {
@@ -420,8 +521,8 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       chatKey: 'review',
     },
     {
-      // Assigned to Maya; Admin has requested takeover — open as Admin to Accept / Force takeover.
-      number: 'DIS-TAKE01',
+      // Assigned to Maya — Admin is view-only until Designated handler reassign / Assign myself when free.
+      number: 'DIS-OPEN02',
       title: 'Escrow release stalled after revision',
       reason: 'Buyer asked for revisions after approving the milestone; seller wants escrow released.',
       status: 'open',
@@ -430,7 +531,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       initiatorIdx: 0,
       respondentIdx: 4,
       entityType: 'contract',
-      entityId: 'CTR-TAKE-01',
+      entityId: 'CTR-OPEN-02',
       assigneeId: supportStaffId,
       credits: 6500,
       hold: true,
@@ -440,12 +541,10 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       sanctionNotes: null,
       resolutionNotes: null,
       daysAgo: 3,
-      takeoverByStaffId: adminStaffId,
-      takeoverNote: 'Need Admin review — credits at risk and both parties escalated in chat.',
-      chatKey: 'takeover',
+      chatKey: 'open2',
     },
     {
-      // Pending but already with Support — Admin is view-only until self-assign / takeover.
+      // Pending but already with Support — Admin is view-only until self-assign / reassign.
       number: 'DIS-PEND02',
       title: 'Unauthorized account credit transfer',
       reason: 'User claims credits were moved from their wallet without consent after a shared-team dispute.',
@@ -470,7 +569,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       number: 'DIS-SANC01',
       title: 'Repeated late delivery pattern',
       reason: 'Buyer documented three late milestones on the same seller within 30 days.',
-      status: 'sanctioned',
+      status: 'closed',
       visibility: 'public',
       priority: 'high',
       initiatorIdx: 7,
@@ -489,15 +588,16 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     },
     {
       number: 'DIS-RSLV01',
-      title: 'Feedback dispute after delivery',
-      reason: 'Buyer contested quality rating on a completed gig; parties settled.',
-      status: 'resolved',
+      title: 'Unfair contract feedback after delivery',
+      reason:
+        'Freelancer disputes a 1-star contract rating as retaliatory and factually inaccurate after milestone acceptance.',
+      status: 'closed',
       visibility: 'public',
       priority: 'medium',
       initiatorIdx: 1,
       respondentIdx: 3,
-      entityType: 'job',
-      entityId: 'JOB-8821',
+      entityType: 'feedback',
+      entityId: 'CTR-FEED-8821',
       assigneeId: adminStaffId,
       credits: 2500,
       hold: true,
@@ -506,14 +606,38 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       outcome: 'resolved',
       sanctionType: null,
       sanctionNotes: null,
-      resolutionNotes: 'Partial credit return agreed; rating adjusted.',
+      resolutionNotes: 'Rating adjusted after review; partial credit return agreed.',
       daysAgo: 45,
+    },
+    {
+      // Open unfair-feedback dispute on a completed contract — Admin/Maya can handle.
+      number: 'DIS-FEED01',
+      title: 'Retaliatory feedback on closed contract',
+      reason:
+        'Client left unfair written feedback after accepting the final deliverable; freelancer requests review and rating correction.',
+      status: 'under_review',
+      visibility: 'public',
+      priority: 'high',
+      initiatorIdx: 4,
+      respondentIdx: 0,
+      entityType: 'feedback',
+      entityId: 'CTR-FEED-1102',
+      assigneeId: supportStaffId,
+      credits: 1800,
+      hold: false,
+      approved: true,
+      outcome: null,
+      sanctionType: null,
+      sanctionNotes: null,
+      resolutionNotes: null,
+      daysAgo: 4,
+      chatKey: 'feedback',
     },
     {
       number: 'DIS-DSSM01',
       title: 'Refund window expired',
       reason: 'Buyer requested a refund outside the marketplace refund window.',
-      status: 'dismissed',
+      status: 'closed',
       visibility: 'public',
       priority: 'low',
       initiatorIdx: 8,
@@ -573,14 +697,12 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         related_entity_type, related_entity_id, assigned_staff_id,
         credit_amount_involved, opened_at, resolution_notes,
         approved_at, approved_by_staff_id, outcome, sanction_type, sanction_notes,
-        takeover_requested_by_staff_id, takeover_requested_at, takeover_request_note,
         type, by_account_id, for_account_id, resolved_at
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
         NOW() - ($13 || ' days')::interval, $14,
         $15, $16, $17, $18, $19,
-        $20, $21, $22,
-        $23, $7, $8, $24
+        $20, $7, $8, $21
       )
       RETURNING dispute_id, dispute_number, initiator_account_id, respondent_account_id`,
       [
@@ -603,11 +725,8 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         d.outcome,
         d.sanctionType,
         d.sanctionNotes,
-        d.takeoverByStaffId || null,
-        d.takeoverByStaffId ? new Date(Date.now() - 6 * 3600000) : null,
-        d.takeoverNote || null,
         d.entityType || 'general',
-        ['resolved', 'sanctioned', 'dismissed', 'withdrawn', 'closed'].includes(d.status)
+        ['closed'].includes(d.status)
           ? new Date(Date.now() - (d.daysAgo - 1) * 86400000)
           : null,
       ]
@@ -628,7 +747,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
       const open = disputeByNumber['DIS-OPEN01'];
       const wait = disputeByNumber['DIS-WAIT01'];
       const review = disputeByNumber['DIS-REVW01'];
-      const takeover = disputeByNumber['DIS-TAKE01'];
+      const open2 = disputeByNumber['DIS-OPEN02'];
 
       if (open) {
         await seedDisputeChatThread(open.dispute_id, open, supportAccountId, [
@@ -710,8 +829,8 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
         ]);
       }
 
-      if (takeover) {
-        await seedDisputeChatThread(takeover.dispute_id, takeover, supportAccountId, [
+      if (open2) {
+        await seedDisputeChatThread(open2.dispute_id, open2, supportAccountId, [
           {
             body: 'Case is public. Please keep replies private until I publish them to the other party.',
             audience: 'parties',
@@ -726,10 +845,41 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
             authorRole: 'disputer',
             authorName: 'Disputer',
             authorType: 'user',
-            senderId: takeover.initiator_account_id,
+            senderId: open2.initiator_account_id,
           },
           {
-            body: 'Internal: Admin requested takeover — keep hold in place until handoff.',
+            body: 'Internal: Keep hold in place until both parties agree on the revision scope.',
+            audience: 'staff',
+            isInternal: true,
+            authorRole: 'staff',
+            authorName: 'Maya Reyes',
+            authorType: 'staff',
+            senderId: supportAccountId,
+          },
+        ]);
+      }
+
+      const feedback = disputeByNumber['DIS-FEED01'];
+      if (feedback) {
+        await seedDisputeChatThread(feedback.dispute_id, feedback, supportAccountId, [
+          {
+            body: 'We’re reviewing the contract rating and written feedback. Please keep replies factual.',
+            audience: 'parties',
+            authorRole: 'staff',
+            authorName: 'Maya Reyes',
+            authorType: 'staff',
+            senderId: supportAccountId,
+          },
+          {
+            body: 'The client accepted the final files, then left a 1-star review calling the work incomplete. That is unfair.',
+            audience: 'author_and_staff',
+            authorRole: 'disputer',
+            authorName: 'Disputer',
+            authorType: 'user',
+            senderId: feedback.initiator_account_id,
+          },
+          {
+            body: 'Internal: Check contract acceptance timestamps vs rating created_at before deciding.',
             audience: 'staff',
             isInternal: true,
             authorRole: 'staff',
@@ -754,7 +904,7 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
     ['TKT-50003', 'Credits missing after package purchase', 'Credit Top-ups', 'High', 'Open', 'web', userAccountIds[4], adminStaffId, null, disputeByNumber['DIS-OPEN01']?.dispute_id || null, 'staff', null],
     ['TKT-50004', 'Forum group ownership transfer', 'Forums', 'Medium', 'In Progress', 'web', userAccountIds[2], forumStaffId, reportIds[1], null, 'user', null],
     ['TKT-50005', 'How to invite team members?', 'Other', 'Low', 'Resolved', 'web', userAccountIds[6], supportStaffId, null, null, 'staff', null],
-    ['TKT-50006', 'Marketplace listing rejected', 'Asset Marketplace', 'Medium', 'Open', 'web', userAccountIds[7], marketplaceStaffId, reportIds[2], null, 'user', null],
+    ['TKT-50006', 'Marketplace listing rejected', 'Asset Marketplace', 'Medium', 'Open', 'web', userAccountIds[7], marketplaceStaffId, reportIds[7], null, 'user', null],
     ['TKT-50007', 'Two-factor not receiving codes', 'Account Verification', 'High', 'Open', 'web', userAccountIds[1], null, null, null, 'user', null],
     ['TKT-50008', 'Dispute escalation request', 'Contracts and Milestones', 'High', 'In Progress', 'web', userAccountIds[5], null, null, disputeByNumber['DIS-21126']?.dispute_id || null, 'user', 'Jobs N Gigs Moderator'],
     ['TKT-50009', 'Asset purchase never delivered', 'Asset Marketplace', 'High', 'In Progress', 'web', userAccountIds[9], marketplaceStaffId, null, null, 'staff', null],
@@ -916,11 +1066,12 @@ async function seedTicketsAndDisputes(userAccountIds, staffByRole) {
   console.log(`✅ Seeded ${tickets.length} tickets, ${disputes.length} disputes, ${reports.length} reports`);
   console.log('   Demo disputes:');
   console.log('   DIS-PEND01  pending + unassigned     → Admin/Maya: Assign myself, then Approve');
-  console.log('   DIS-PEND02  pending + Maya owns      → Admin: view-only / Force takeover / assign');
-  console.log('   DIS-TAKE01  public + takeover req    → Admin: Accept takeover or Force takeover');
+  console.log('   DIS-PEND02  pending + Maya owns      → Admin: view-only / reassign via Designated handler');
+  console.log('   DIS-OPEN02  public + Maya owns       → Admin: view-only / reassign via Designated handler');
   console.log('   DIS-OPEN01  public + private reply    → middleman chat sample');
   console.log('   DIS-WAIT01  awaiting disputee reply  → prompt message sample');
   console.log('   DIS-REVW01  under review + publish   → private + published party comments');
+  console.log('   DIS-FEED01  unfair feedback (contract) → under review sample');
   console.log('   DIS-SANC01 / DIS-RSLV01 / DIS-DSSM01 → closed outcome samples');
 }
 
@@ -981,8 +1132,9 @@ async function seedTeams(userAccountIds) {
     );
   }
 
-  // Seed a few user wallet balances + credit transactions for economy audit
-  for (let i = 0; i < Math.min(5, users.length); i++) {
+  // Seed user wallet balances + one of each CREDIT_TRANSACTION type for economy audit
+  const sampleTxTypes = [...CREDIT_TRANSACTION_TYPES];
+  for (let i = 0; i < Math.min(sampleTxTypes.length, users.length); i++) {
     const balance = faker.number.int({ min: 100, max: 5000 });
     const walletRes = await pool.query(
       `SELECT w.wallet_id
@@ -1004,10 +1156,12 @@ async function seedTeams(userAccountIds) {
       `SELECT wallet_id FROM wallets WHERE type = 'platform wallets' LIMIT 1`
     );
     const otherWalletId = platformWallet.rows[0]?.wallet_id || walletId;
+    const txType = sampleTxTypes[i];
+    const amount = faker.number.int({ min: 50, max: Math.max(50, Math.floor(balance / 2)) });
     await pool.query(
       `INSERT INTO credit_transactions (type, amount_credits, status, source_wallet_id, destination_wallet_id)
-       VALUES ('Credit Adjustment', $1, 'completed', $2, $3)`,
-      [balance, otherWalletId, walletId]
+       VALUES ($1, $2, 'completed', $3, $4)`,
+      [txType, amount, otherWalletId, walletId]
     );
   }
 
@@ -1125,12 +1279,16 @@ async function seed() {
         ]
       );
     }
-    await pool.query(`INSERT INTO wallets (type, balance_credits) VALUES ('platform wallets', 1000000)`);
+    await pool.query(
+      `INSERT INTO wallets (type, status, balance_credits, frozen_balance_credits)
+       VALUES ('platform wallets', 'active', 1000000, 0)`
+    );
     await ensureDefaultSettings();
     await seedTicketsAndDisputes(userAccountIds, staffByRole);
     await seedMarketplaceListings(userAccountIds, staffByRole);
     await seedTeams(userAccountIds);
     await seedDomainExamples(userAccountIds, staffByRole);
+    await seedDefaultTOS();
 
     console.log('');
     console.log('🔑 Staff login (password: staff123):');

@@ -57,7 +57,7 @@ export type DisputeCreditHold = {
   transactionId: number | string | null;
   status: string;
   amount: number;
-  type: string;
+  type: string; // CREDIT_TRANSACTION.type, e.g. Escrow Hold
 };
 
 export type DisputePermissions = {
@@ -66,14 +66,12 @@ export type DisputePermissions = {
   isAssignee?: boolean;
   isAdmin?: boolean;
   canView?: boolean;
+  canReply?: boolean;
   canAct?: boolean;
   canAssignOthers?: boolean;
   canSelfAssign?: boolean;
   canAssignMyself?: boolean;
-  canRequestTakeover?: boolean;
-  canForceTakeover?: boolean;
-  canAcceptTakeover?: boolean;
-  canCancelTakeoverRequest?: boolean;
+  canRelease?: boolean;
 };
 
 export type TicketPermissions = {
@@ -86,6 +84,8 @@ export type TicketPermissions = {
   canAssignOthers?: boolean;
   canSelfAssign?: boolean;
   canAssignMyself?: boolean;
+  canRelease?: boolean;
+  canEscalate?: boolean;
 };
 
 export type Dispute = {
@@ -109,10 +109,6 @@ export type Dispute = {
   sanctionNotes?: string | null;
   relatedCreditTransactionId?: number | string | null;
   creditHold?: DisputeCreditHold | null;
-  takeoverRequestedByStaffId?: number | string | null;
-  takeoverRequestedAt?: string | null;
-  takeoverRequestNote?: string | null;
-  takeoverRequester?: TicketAssignee | null;
   openedAt: string;
   updatedAt: string;
   resolvedAt: string | null;

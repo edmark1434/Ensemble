@@ -5,6 +5,7 @@ const {
   getOverview,
   getListings,
   getListingDetail,
+  getSellerListings,
   patchListing,
   getTickets,
   getTicket,
@@ -13,6 +14,14 @@ const {
   getRestrictions,
   postViolation,
   patchRestriction,
+  getReports: getMarketplaceReports,
+  getReport: getMarketplaceReport,
+  patchReport: patchMarketplaceReport,
+  getDisputes: getMarketplaceDisputes,
+  getDispute: getMarketplaceDispute,
+  patchDispute: patchMarketplaceDispute,
+  postDisputeMessage: postMarketplaceDisputeMessage,
+  patchDisputeMessage: patchMarketplaceDisputeMessage,
 } = require('../Controllers/MarketplaceModeratorControllers');
 const SupportModerator = require('../Controllers/SupportModeratorControllers');
 const ForumModerator = require('../Controllers/ForumModeratorControllers');
@@ -28,7 +37,27 @@ router.get('/marketplace/overview', [checkSession, marketplaceModerator], getOve
 router.get('/marketplace/listings', [checkSession, marketplaceModerator], getListings);
 router.get('/marketplace/listings/:id', [checkSession, marketplaceModerator], getListingDetail);
 router.patch('/marketplace/listings/:id', [checkSession, marketplaceModerator], patchListing);
+router.get('/marketplace/users/:accountId/listings', [checkSession, marketplaceModerator], getSellerListings);
 router.get('/marketplace/tickets', [checkSession, marketplaceModerator], getTickets);
+router.get('/marketplace/tickets/:id', [checkSession, marketplaceModerator], getTicket);
+router.patch('/marketplace/tickets/:id', [checkSession, marketplaceModerator], patchTicket);
+router.post('/marketplace/tickets/:id/messages', [checkSession, marketplaceModerator], postTicketMessage);
+router.get('/marketplace/reports', [checkSession, marketplaceModerator], getMarketplaceReports);
+router.get('/marketplace/reports/:id', [checkSession, marketplaceModerator], getMarketplaceReport);
+router.patch('/marketplace/reports/:id', [checkSession, marketplaceModerator], patchMarketplaceReport);
+router.get('/marketplace/disputes', [checkSession, marketplaceModerator], getMarketplaceDisputes);
+router.get('/marketplace/disputes/:id', [checkSession, marketplaceModerator], getMarketplaceDispute);
+router.patch('/marketplace/disputes/:id', [checkSession, marketplaceModerator], patchMarketplaceDispute);
+router.post(
+  '/marketplace/disputes/:id/messages',
+  [checkSession, marketplaceModerator],
+  postMarketplaceDisputeMessage
+);
+router.patch(
+  '/marketplace/disputes/:id/messages/:messageId',
+  [checkSession, marketplaceModerator],
+  patchMarketplaceDisputeMessage
+);
 
 router.get('/tickets/:id', [checkSession, marketplaceModerator], getTicket);
 router.patch('/tickets/:id', [checkSession, marketplaceModerator], patchTicket);
@@ -63,7 +92,17 @@ router.get('/forum/tickets/:id', [checkSession, forumModerator], ForumModerator.
 router.patch('/forum/tickets/:id', [checkSession, forumModerator], ForumModerator.patchTicket);
 router.post('/forum/tickets/:id/messages', [checkSession, forumModerator], ForumModerator.postTicketMessage);
 router.get('/forum/reports', [checkSession, forumModerator], ForumModerator.getReports);
+router.get('/forum/reports/:id', [checkSession, forumModerator], ForumModerator.getReport);
 router.patch('/forum/reports/:id', [checkSession, forumModerator], ForumModerator.patchReport);
+router.get('/forum/disputes', [checkSession, forumModerator], ForumModerator.getDisputes);
+router.get('/forum/disputes/:id', [checkSession, forumModerator], ForumModerator.getDispute);
+router.patch('/forum/disputes/:id', [checkSession, forumModerator], ForumModerator.patchDispute);
+router.post('/forum/disputes/:id/messages', [checkSession, forumModerator], ForumModerator.postDisputeMessage);
+router.patch(
+  '/forum/disputes/:id/messages/:messageId',
+  [checkSession, forumModerator],
+  ForumModerator.patchDisputeMessage
+);
 router.get('/forum/groups', [checkSession, forumModerator], ForumModerator.getGroups);
 router.patch('/forum/groups/:id', [checkSession, forumModerator], ForumModerator.patchGroup);
 router.patch('/forum/groups/:id/members/:memberId', [checkSession, forumModerator], ForumModerator.patchGroupMember);
@@ -81,8 +120,18 @@ router.get('/jobs/tickets', [checkSession, jobsModerator], JobsModerator.getTick
 router.get('/jobs/tickets/:id', [checkSession, jobsModerator], JobsModerator.getTicket);
 router.patch('/jobs/tickets/:id', [checkSession, jobsModerator], JobsModerator.patchTicket);
 router.post('/jobs/tickets/:id/messages', [checkSession, jobsModerator], JobsModerator.postTicketMessage);
+router.get('/jobs/reports', [checkSession, jobsModerator], JobsModerator.getReports);
+router.get('/jobs/reports/:id', [checkSession, jobsModerator], JobsModerator.getReport);
+router.patch('/jobs/reports/:id', [checkSession, jobsModerator], JobsModerator.patchReport);
 router.get('/jobs/disputes', [checkSession, jobsModerator], JobsModerator.getDisputes);
+router.get('/jobs/disputes/:id', [checkSession, jobsModerator], JobsModerator.getDispute);
 router.patch('/jobs/disputes/:id', [checkSession, jobsModerator], JobsModerator.patchDispute);
+router.post('/jobs/disputes/:id/messages', [checkSession, jobsModerator], JobsModerator.postDisputeMessage);
+router.patch(
+  '/jobs/disputes/:id/messages/:messageId',
+  [checkSession, jobsModerator],
+  JobsModerator.patchDisputeMessage
+);
 router.get('/jobs/postings', [checkSession, jobsModerator], JobsModerator.getPostings);
 router.get('/jobs/postings/:type/:id', [checkSession, jobsModerator], JobsModerator.getPosting);
 router.patch('/jobs/postings/:type/:id', [checkSession, jobsModerator], JobsModerator.patchPosting);

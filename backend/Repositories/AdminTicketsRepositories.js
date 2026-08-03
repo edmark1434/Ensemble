@@ -19,12 +19,127 @@ const {
   TICKET_TYPES,
   TICKET_STATUSES,
   TICKET_PRIORITIES,
+  FORUM_TYPES,
+  MARKETPLACE_TYPES,
+  JOBS_TYPES,
+  SUPPORT_TYPES,
   normalizeTicketType,
   normalizeTicketStatus,
   normalizeTicketPriority,
   isClosedStatus,
 } = require('../lib/ticketEnums');
 const { mapTicketRow } = require('./ModeratorSharedRepositories');
+const {
+  FORUM_REPORT_TYPES,
+  MARKETPLACE_REPORT_TYPES,
+  JOBS_REPORT_TYPES,
+  isReportTypeInScope,
+} = require('../lib/reportEnums');
+
+/** Staff roles that may appear in assignee pickers, keyed by desk / queue. */
+const ASSIGNABLE_ROLES_BY_QUEUE = Object.freeze({
+  jobs: ['Jobs N Gigs Moderator', 'Jobs Moderator', 'Jobs & Gigs Moderator'],
+  marketplace: ['Marketplace Moderator'],
+  forum: ['Forum Moderator', 'Forums Moderator'],
+  forums: ['Forum Moderator', 'Forums Moderator'],
+  support: ['Support Moderator'],
+  disputes: ['Support Moderator', 'Admin', 'Administrator'],
+  admin: [
+    'Admin',
+    'Administrator',
+    'Support Moderator',
+    'Forum Moderator',
+    'Forums Moderator',
+    'Marketplace Moderator',
+    'Jobs N Gigs Moderator',
+    'Jobs Moderator',
+    'Jobs & Gigs Moderator',
+  ],
+});
+
+function normalizeQueueKey(queueKey) {
+  const q = String(queueKey || '')
+    .trim()
+    .toLowerCase();
+  if (q === 'forums') return 'forum';
+  if (q === 'jobs' || q === 'jobs-gigs' || q === 'job') return 'jobs';
+  if (q === 'marketplace' || q === 'market') return 'marketplace';
+  if (q === 'forum') return 'forum';
+  if (q === 'support') return 'support';
+  if (q === 'disputes' || q === 'dispute') return 'disputes';
+  if (q === 'admin' || q === 'administrator') return 'admin';
+  return q || 'admin';
+}
+
+function assignableRolesForQueue(queueKey) {
+  const key = normalizeQueueKey(queueKey);
+  return ASSIGNABLE_ROLES_BY_QUEUE[key] || ASSIGNABLE_ROLES_BY_QUEUE.admin;
+}
+
+function inferTicketAssignableQueue(ticketType) {
+  const type = normalizeTicketType(ticketType) || String(ticketType || '').trim();
+  if (FORUM_TYPES.includes(type)) return 'forum';
+  if (MARKETPLACE_TYPES.includes(type)) return 'marketplace';
+  if (JOBS_TYPES.includes(type)) return 'jobs';
+  if (SUPPORT_TYPES.includes(type)) return 'support';
+  return 'admin';
+}
+
+function inferReportAssignableQueue(targetType) {
+  if (isReportTypeInScope(targetType, FORUM_REPORT_TYPES)) return 'forum';
+  if (isReportTypeInScope(targetType, MARKETPLACE_REPORT_TYPES)) return 'marketplace';
+  if (isReportTypeInScope(targetType, JOBS_REPORT_TYPES)) return 'jobs';
+  return 'support';
+}
+
+function roleAllowedForQueue(role, queueKey) {
+  const allowed = assignableRolesForQueue(queueKey).map((r) => r.toLowerCase());
+  return allowed.includes(String(role || '').toLowerCase());
+}
+
+async function fetchAssignableStaffForQueue(queueKey, { includeStaffId = null } = {}) {
+  const roles = assignableRolesForQueue(queueKey);
+  const roleList = roles.map((r) => r.toLowerCase());
+  const params = [roleList];
+  let includeSql = '';
+  if (includeStaffId != null && includeStaffId !== '') {
+    params.push(String(includeStaffId));
+    includeSql = ` OR s.staff_id::text = $${params.length}`;
+  }
+
+  const result = await pool.query(
+    `
+    SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
+    FROM staff s
+    INNER JOIN accounts a ON a.account_id = s.account_id
+    WHERE a.deleted_at IS NULL
+      AND (
+        LOWER(s.role) = ANY($1)
+        ${includeSql}
+      )
+    ORDER BY s.role, name
+    `,
+    params
+  );
+  return result.rows.map((s) => ({
+    staffId: s.staff_id,
+    name: s.name,
+    role: s.role,
+  }));
+}
+
+async function assertStaffAssignableToQueue(staffId, queueKey) {
+  const result = await pool.query(`SELECT role FROM staff WHERE staff_id = $1`, [staffId]);
+  if (!result.rows.length) {
+    throw new Error('Staff member not found.');
+  }
+  if (!roleAllowedForQueue(result.rows[0].role, queueKey)) {
+    const label = normalizeQueueKey(queueKey);
+    throw new Error(
+      `That staff member is not part of the ${label} moderator queue for this case.`
+    );
+  }
+}
 
 /** Prefer DB catalog (migration 109); fall back to ticketEnums.js */
 async function getTicketCatalog() {
@@ -226,7 +341,7 @@ async function createSupportTicket(input, session = null) {
 }
 
 function mapDisputeRow(row) {
-  const closedStatuses = ['resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn'];
+  const closedStatuses = ['closed'];
   return {
     id: row.dispute_id,
     number: row.dispute_number,
@@ -263,21 +378,9 @@ function mapDisputeRow(row) {
           transactionId: row.related_credit_transaction_id,
           status: row.hold_status,
           amount: Number(row.hold_amount ?? row.credit_amount_involved ?? 0),
-          type: row.hold_type || 'Dispute Hold',
+          type: row.hold_type || 'Escrow Hold',
         }
       : null,
-    takeoverRequestedByStaffId: row.takeover_requested_by_staff_id || null,
-    takeoverRequestedAt: row.takeover_requested_at || null,
-    takeoverRequestNote: row.takeover_request_note || null,
-    takeoverRequester: row.takeover_requester_staff_id
-      ? {
-          staffId: row.takeover_requester_staff_id,
-          name: row.takeover_requester_name || 'Staff',
-          role: row.takeover_requester_role || null,
-        }
-      : row.takeover_requested_by_staff_id
-        ? { staffId: row.takeover_requested_by_staff_id, name: 'Staff', role: null }
-        : null,
     openedAt: row.opened_at,
     updatedAt: row.updated_at,
     resolvedAt: row.resolved_at,
@@ -367,9 +470,19 @@ async function getTicketsOverview(staffSession = null) {
         COUNT(*) FILTER (WHERE LOWER(status) = 'open')::int AS open_only,
         COUNT(*) FILTER (WHERE LOWER(status) = 'awaiting_response')::int AS awaiting_response,
         COUNT(*) FILTER (WHERE LOWER(status) = 'under_review')::int AS under_review,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'sanctioned')::int AS sanctioned,
-        COUNT(*) FILTER (WHERE LOWER(status) = 'dismissed')::int AS dismissed,
-        COUNT(*) FILTER (WHERE LOWER(status) IN ('resolved', 'closed', 'withdrawn'))::int AS resolved,
+        COUNT(*) FILTER (WHERE LOWER(status) = 'closed')::int AS closed,
+        COUNT(*) FILTER (
+          WHERE LOWER(status) = 'closed' AND LOWER(COALESCE(outcome, '')) = 'sanctioned'
+        )::int AS sanctioned,
+        COUNT(*) FILTER (
+          WHERE LOWER(status) = 'closed' AND LOWER(COALESCE(outcome, '')) = 'dismissed'
+        )::int AS dismissed,
+        COUNT(*) FILTER (
+          WHERE LOWER(status) = 'closed' AND LOWER(COALESCE(outcome, 'resolved')) = 'resolved'
+        )::int AS resolved,
+        COUNT(*) FILTER (
+          WHERE LOWER(status) = 'closed' AND LOWER(COALESCE(outcome, '')) = 'withdrawn'
+        )::int AS withdrawn,
         COUNT(*) FILTER (
           WHERE LOWER(status) IN ('pending_review', 'open', 'awaiting_response', 'under_review')
         )::int AS open_count,
@@ -478,12 +591,13 @@ async function getTicketsOverview(staffSession = null) {
       openByPriority: priorityChart,
       disputeStatusMix: [
         { label: 'Pending Review', value: Number(dc.pending_review || 0), color: '#fb7185' },
-        { label: 'Open', value: Number(dc.open_count) - Number(dc.pending_review || 0) - Number(dc.awaiting_response || 0), color: '#f87171' },
+        { label: 'Open', value: Number(dc.open_only || 0), color: '#f87171' },
         { label: 'Awaiting Response', value: Number(dc.awaiting_response || 0), color: '#f59e0b' },
         { label: 'Under Review', value: Number(dc.under_review), color: '#fbbf24' },
-        { label: 'Sanctioned', value: Number(dc.sanctioned || 0), color: '#a78bfa' },
-        { label: 'Dismissed', value: Number(dc.dismissed || 0), color: '#94a3b8' },
-        { label: 'Resolved', value: Number(dc.resolved) - Number(dc.sanctioned || 0) - Number(dc.dismissed || 0), color: '#34d399' },
+        { label: 'Closed · Resolved', value: Number(dc.resolved || 0), color: '#34d399' },
+        { label: 'Closed · Sanctioned', value: Number(dc.sanctioned || 0), color: '#a78bfa' },
+        { label: 'Closed · Dismissed', value: Number(dc.dismissed || 0), color: '#94a3b8' },
+        { label: 'Closed · Withdrawn', value: Number(dc.withdrawn || 0), color: '#64748b' },
       ].filter((x) => x.value > 0),
     },
     types,
@@ -620,10 +734,7 @@ async function fetchDisputesList() {
       st.role AS assignee_role,
       ct.status AS hold_status,
       ct.amount_credits AS hold_amount,
-      ct.type AS hold_type,
-      tr.staff_id AS takeover_requester_staff_id,
-      COALESCE(tra.display_name, tr.first_name || ' ' || tr.last_name) AS takeover_requester_name,
-      tr.role AS takeover_requester_role
+      ct.type AS hold_type
     FROM disputes d
     LEFT JOIN accounts ia ON ia.account_id = d.initiator_account_id
     LEFT JOIN users iu ON iu.account_id = ia.account_id
@@ -632,8 +743,6 @@ async function fetchDisputesList() {
     LEFT JOIN staff st ON st.staff_id = d.assigned_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
     LEFT JOIN credit_transactions ct ON ct.credit_transaction_id = d.related_credit_transaction_id
-    LEFT JOIN staff tr ON tr.staff_id = d.takeover_requested_by_staff_id
-    LEFT JOIN accounts tra ON tra.account_id = tr.account_id
     ORDER BY d.opened_at DESC
     LIMIT 80
   `);
@@ -672,7 +781,7 @@ async function fetchStaffWorkload() {
           AND t.status NOT IN ('Resolved', 'Closed')) AS open_tickets,
       (SELECT COUNT(*)::int FROM disputes d
         WHERE d.assigned_staff_id = s.staff_id
-          AND LOWER(d.status) NOT IN ('resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn')) AS open_disputes,
+          AND LOWER(d.status) <> 'closed') AS open_disputes,
       (SELECT COUNT(*)::int FROM reports r
         WHERE r.assigned_staff_id = s.staff_id AND LOWER(r.status) = 'open' AND r.deleted_at IS NULL) AS open_reports
     FROM staff s
@@ -783,7 +892,7 @@ function mapMongoTicketMessage(m) {
   };
 }
 
-async function getTicketDetail(ticketId, staffSession = null) {
+async function getTicketDetail(ticketId, staffSession = null, options = {}) {
   const ticketResult = await pool.query(
     `
     SELECT
@@ -795,10 +904,7 @@ async function getTicketDetail(ticketId, staffSession = null) {
       COALESCE(sa.display_name, st.first_name || ' ' || st.last_name) AS assignee_name,
       st.role AS assignee_role,
       COALESCE(ea.display_name, es.first_name || ' ' || es.last_name) AS escalated_by_name,
-      es.role AS escalated_by_role,
-      tr.staff_id AS takeover_requester_staff_id,
-      COALESCE(tra.display_name, tr.first_name || ' ' || tr.last_name) AS takeover_requester_name,
-      tr.role AS takeover_requester_role
+      es.role AS escalated_by_role
     FROM tickets t
     LEFT JOIN accounts ra ON ra.account_id = t.account_id
     LEFT JOIN users ru ON ru.account_id = ra.account_id
@@ -806,20 +912,17 @@ async function getTicketDetail(ticketId, staffSession = null) {
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
     LEFT JOIN staff es ON es.staff_id = t.escalated_by_staff_id
     LEFT JOIN accounts ea ON ea.account_id = es.account_id
-    LEFT JOIN staff tr ON tr.staff_id = t.takeover_requested_by_staff_id
-    LEFT JOIN accounts tra ON tra.account_id = tr.account_id
     WHERE t.ticket_id = $1 AND t.deleted_at IS NULL
     `,
     [ticketId]
   );
   if (!ticketResult.rows.length) return null;
 
-  const staffResult = await pool.query(`
-    SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
-    FROM staff s INNER JOIN accounts a ON a.account_id = s.account_id
-    WHERE a.deleted_at IS NULL
-    ORDER BY s.role, name
-  `);
+  const row = ticketResult.rows[0];
+  const queueKey = options.assignableQueue || inferTicketAssignableQueue(row.type);
+  const assignableStaff = await fetchAssignableStaffForQueue(queueKey, {
+    includeStaffId: row.handled_by_staff_id,
+  });
 
   let messages = [];
   let chatId = null;
@@ -839,7 +942,6 @@ async function getTicketDetail(ticketId, staffSession = null) {
     chatAvailable = false;
   }
 
-  const row = ticketResult.rows[0];
   const catalog = await getTicketCatalog();
   const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
   const { buildTicketPermissions } = require('./TicketAssignmentHelpers');
@@ -869,11 +971,8 @@ async function getTicketDetail(ticketId, staffSession = null) {
     escalateByRole: catalog.escalateByRole,
     escalateRoles: catalog.escalateRoles,
     permissions: buildTicketPermissions(row, staff, sessionStaffId(staffSession)),
-    assignableStaff: staffResult.rows.map((s) => ({
-      staffId: s.staff_id,
-      name: s.name,
-      role: s.role,
-    })),
+    assignableQueue: normalizeQueueKey(queueKey),
+    assignableStaff,
   };
 }
 
@@ -897,17 +996,32 @@ async function applyTicketAssignmentAction(ticketId, patch, staffSession) {
     if (!perms.canAssignMyself && !perms.canSelfAssign) {
       throw new Error('You cannot assign this ticket to yourself.');
     }
-    if (row.handled_by_staff_id && perms.isAdmin && !perms.isAssignee) {
+    if (row.handled_by_staff_id && !perms.isAdmin) {
+      throw new Error('This ticket already has a handler. They must release the case first.');
+    }
+    await pool.query(
+      `UPDATE tickets SET handled_by_staff_id = $1, updated_at = NOW()
+       WHERE ticket_id = $2 AND deleted_at IS NULL`,
+      [staff.staff_id, ticketId]
+    );
+    return getTicketDetail(ticketId, staffSession);
+  }
+
+  if (action === 'release' || action === 'self_unassign') {
+    if (!perms.canRelease && !perms.isAssignee) {
+      throw new Error('Only the current handler can release this case.');
+    }
+    if (perms.isAdmin && !perms.isAssignee) {
       await pool.query(
-        `UPDATE tickets SET handled_by_staff_id = $1, updated_at = NOW()
-         WHERE ticket_id = $2 AND deleted_at IS NULL`,
-        [staff.staff_id, ticketId]
+        `UPDATE tickets SET handled_by_staff_id = NULL, updated_at = NOW()
+         WHERE ticket_id = $1 AND deleted_at IS NULL`,
+        [ticketId]
       );
     } else {
       await pool.query(
-        `UPDATE tickets SET handled_by_staff_id = $1, updated_at = NOW()
-         WHERE ticket_id = $2 AND deleted_at IS NULL AND handled_by_staff_id IS NULL`,
-        [staff.staff_id, ticketId]
+        `UPDATE tickets SET handled_by_staff_id = NULL, updated_at = NOW()
+         WHERE ticket_id = $1 AND deleted_at IS NULL AND handled_by_staff_id = $2`,
+        [ticketId, staff.staff_id]
       );
     }
     return getTicketDetail(ticketId, staffSession);
@@ -933,6 +1047,20 @@ async function updateTicket(ticketId, patch, staffSession) {
     patch.type = patch.category;
   }
 
+  const currentRow = await pool.query(
+    `SELECT handled_by_staff_id FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+    [ticketId]
+  );
+  if (!currentRow.rows.length) return null;
+  const currentAssignee = currentRow.rows[0].handled_by_staff_id;
+  const { buildTicketPermissions } = require('./TicketAssignmentHelpers');
+  const staff = await resolveDisputeStaffId(staffSession);
+  const ticketPerms = buildTicketPermissions(
+    currentRow.rows[0],
+    staff,
+    sessionStaffId(staffSession)
+  );
+
   if (patch.assigned_role) {
     const catalog = await getTicketCatalog();
     const allowed =
@@ -955,6 +1083,15 @@ async function updateTicket(ticketId, patch, staffSession) {
     }
     patch.type = normalized;
 
+    // Escalating clears the handler — only the assigned moderator (or Admin override).
+    if (!ticketPerms.canEscalate) {
+      throw new Error(
+        ticketPerms.isAdmin
+          ? 'You cannot escalate this ticket.'
+          : 'Only the assigned moderator can escalate this ticket. Assign yourself first.'
+      );
+    }
+
     sets.push(`escalated_to_role = $${idx}`);
     values.push(patch.assigned_role);
     idx += 1;
@@ -969,10 +1106,6 @@ async function updateTicket(ticketId, patch, staffSession) {
     if (patch.handled_by_staff_id === undefined) {
       patch.handled_by_staff_id = null;
     }
-    sets.push(`takeover_requested_by_staff_id = NULL`);
-    sets.push(`takeover_requested_at = NULL`);
-    sets.push(`takeover_request_note = NULL`);
-    sets.push(`takeover_mode = NULL`);
   }
 
   if (patch.status !== undefined) {
@@ -994,10 +1127,40 @@ async function updateTicket(ticketId, patch, staffSession) {
     idx += 1;
   }
   if (patch.handled_by_staff_id !== undefined) {
+    const nextAssignee =
+      patch.handled_by_staff_id === null || patch.handled_by_staff_id === ''
+        ? null
+        : patch.handled_by_staff_id;
+    const nextNorm = normalizeStaffId(nextAssignee);
+    const curNorm = normalizeStaffId(currentAssignee);
+
+    if (curNorm && nextNorm !== curNorm) {
+      // Locked while assigned — handler must Release case (or escalate). Admin may override.
+      if (!patch.assigned_role && !ticketPerms.isAdmin && !ticketPerms.canAssignOthers) {
+        throw new Error(
+          'This ticket already has a handler. They must release the case before it can be reassigned.'
+        );
+      }
+    }
+
+    if (!curNorm && nextNorm && !ticketPerms.canAssignOthers && !ticketPerms.canAssignMyself) {
+      // Claiming should use Assign myself; Admin may still pick someone when open.
+      if (!ticketPerms.isAdmin) {
+        throw new Error('Use Assign myself to claim an unassigned ticket.');
+      }
+    }
+
+    if (nextNorm && !patch.assigned_role) {
+      const typeRow = await pool.query(
+        `SELECT type FROM tickets WHERE ticket_id = $1 AND deleted_at IS NULL`,
+        [ticketId]
+      );
+      const queueKey = inferTicketAssignableQueue(typeRow.rows[0]?.type);
+      await assertStaffAssignableToQueue(nextAssignee, queueKey);
+    }
+
     sets.push(`handled_by_staff_id = $${idx}`);
-    values.push(patch.handled_by_staff_id === null || patch.handled_by_staff_id === ''
-      ? null
-      : patch.handled_by_staff_id);
+    values.push(nextAssignee);
     idx += 1;
   }
 
@@ -1149,11 +1312,58 @@ function isSupportRole(role) {
   return String(role || '').toLowerCase() === 'support moderator';
 }
 
+/** Dispute handlers only — Support Moderators + Admin. */
 function isDesignatedHandlerRole(role) {
   return isAdminRole(role) || isSupportRole(role);
 }
 
-const DISPUTE_CLOSED = ['resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn'];
+/** Ticket/report claim roles — any specialist console + Support + Admin. */
+function isQueueHandlerRole(role) {
+  const r = String(role || '').toLowerCase();
+  return (
+    isDesignatedHandlerRole(role) ||
+    r.includes('forum') ||
+    r.includes('marketplace') ||
+    r.includes('jobs')
+  );
+}
+
+const DISPUTE_WORKFLOW = ['pending_review', 'open', 'awaiting_response', 'under_review', 'closed'];
+const DISPUTE_OUTCOMES = ['resolved', 'sanctioned', 'dismissed', 'withdrawn'];
+const DISPUTE_LEGACY_CLOSED_STATUS = ['resolved', 'sanctioned', 'dismissed', 'withdrawn'];
+
+function normalizeDisputeStatusAndOutcome(patch) {
+  const next = { ...patch };
+  if (next.status != null) {
+    let status = String(next.status).toLowerCase().trim();
+    if (DISPUTE_LEGACY_CLOSED_STATUS.includes(status)) {
+      if (next.outcome === undefined || next.outcome === null || next.outcome === '') {
+        next.outcome = status;
+      }
+      status = 'closed';
+    }
+    if (!DISPUTE_WORKFLOW.includes(status)) {
+      throw new Error(
+        `Invalid dispute status "${next.status}". Use: ${DISPUTE_WORKFLOW.join(', ')}.`
+      );
+    }
+    next.status = status;
+  }
+  if (next.outcome != null && next.outcome !== '') {
+    const outcome = String(next.outcome).toLowerCase().trim();
+    if (!DISPUTE_OUTCOMES.includes(outcome)) {
+      throw new Error(
+        `Invalid dispute outcome "${next.outcome}". Use: ${DISPUTE_OUTCOMES.join(', ')}.`
+      );
+    }
+    next.outcome = outcome;
+    if (next.status === undefined) next.status = 'closed';
+  }
+  if (next.status === 'closed') {
+    if (!next.outcome) next.outcome = 'resolved';
+  }
+  return next;
+}
 
 async function loadDisputeRow(disputeId) {
   const result = await pool.query(
@@ -1168,10 +1378,7 @@ async function loadDisputeRow(disputeId) {
       st.role AS assignee_role,
       ct.status AS hold_status,
       ct.amount_credits AS hold_amount,
-      ct.type AS hold_type,
-      tr.staff_id AS takeover_requester_staff_id,
-      COALESCE(tra.display_name, tr.first_name || ' ' || tr.last_name) AS takeover_requester_name,
-      tr.role AS takeover_requester_role
+      ct.type AS hold_type
     FROM disputes d
     LEFT JOIN accounts ia ON ia.account_id = d.initiator_account_id
     LEFT JOIN users iu ON iu.account_id = ia.account_id
@@ -1180,8 +1387,6 @@ async function loadDisputeRow(disputeId) {
     LEFT JOIN staff st ON st.staff_id = d.assigned_staff_id
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
     LEFT JOIN credit_transactions ct ON ct.credit_transaction_id = d.related_credit_transaction_id
-    LEFT JOIN staff tr ON tr.staff_id = d.takeover_requested_by_staff_id
-    LEFT JOIN accounts tra ON tra.account_id = tr.account_id
     WHERE d.dispute_id = $1
     `,
     [disputeId]
@@ -1194,11 +1399,11 @@ function buildDisputePermissions(row, staff, session = null) {
     normalizeStaffId(staff?.staff_id) || normalizeStaffId(sessionStaffId(session));
   const role = staff?.role || session?.role || null;
   const assigneeId = normalizeStaffId(row?.assigned_staff_id);
-  const requesterId = normalizeStaffId(row?.takeover_requested_by_staff_id);
   const isAssignee = Boolean(staffId && assigneeId && staffId === assigneeId);
   const isAdmin = isAdminRole(role);
   const unassigned = !assigneeId;
   const designated = isDesignatedHandlerRole(role);
+  const hasStaffSession = Boolean(staffId || staff?.staff_id || sessionStaffId(session));
 
   return {
     staffId: staff?.staff_id != null ? String(staff.staff_id) : sessionStaffId(session),
@@ -1206,29 +1411,17 @@ function buildDisputePermissions(row, staff, session = null) {
     isAssignee,
     isAdmin,
     canView: true,
-    /** Handle approve / status / outcome / messages / publish */
-    canAct: isAssignee,
-    /** Admin may assign Support Moderators without being the handler */
-    canAssignOthers: isAdmin,
-    /** Claim an unassigned dispute */
-    canSelfAssign: Boolean(staffId && unassigned && designated),
-    /**
-     * Assign myself: claim if unassigned, or Admin force-takeover if someone else owns it.
-     */
-    canAssignMyself: Boolean(
-      staffId && designated && !isAssignee && (unassigned || isAdmin)
-    ),
-    /** Ask to take over when someone else owns it */
-    canRequestTakeover: Boolean(staffId && assigneeId && !isAssignee && designated),
-    /** Admin force-claim when someone else owns it */
-    canForceTakeover: Boolean(staffId && isAdmin && assigneeId && !isAssignee),
-    /** Current assignee (or admin) can grant a pending takeover request */
-    canAcceptTakeover: Boolean(
-      staffId &&
-        requesterId &&
-        ((isAssignee && requesterId !== staffId) || (isAdmin && requesterId !== assigneeId))
-    ),
-    canCancelTakeoverRequest: Boolean(staffId && requesterId && staffId === requesterId),
+    /** Any staff may post staff-only replies; only Support/Admin handle the case */
+    canReply: hasStaffSession,
+    /** Approve / status / outcome / publish — assignee, or Admin override */
+    canAct: Boolean(isAdmin || (isAssignee && designated)),
+    /** Admin may pick / reassign Support handlers at any time */
+    canAssignOthers: Boolean(isAdmin),
+    /** Claim (Support/Admin); Admin may take over an assigned dispute */
+    canSelfAssign: Boolean(staffId && designated && !isAssignee && (unassigned || isAdmin)),
+    canAssignMyself: Boolean(staffId && designated && !isAssignee && (unassigned || isAdmin)),
+    /** Current handler or Admin may release */
+    canRelease: Boolean((isAssignee && designated) || (isAdmin && Boolean(assigneeId))),
   };
 }
 
@@ -1244,143 +1437,87 @@ async function updateDispute(disputeId, patch, staffSession) {
   const perms = buildDisputePermissions(row, staff, staffSession);
   const action = String(patch.action || '').toLowerCase().trim();
 
-  // --- Assignment / takeover actions (allowed without canAct) ---
+  // --- Assignment actions (allowed without canAct) ---
   if (action === 'self_assign') {
-    if (!perms.canSelfAssign && !(perms.canAssignMyself && perms.canForceTakeover)) {
-      throw new Error('You can only claim an unassigned dispute as Admin or Support Moderator.');
+    if (!perms.canSelfAssign && !perms.canAssignMyself) {
+      throw new Error('Only Support Moderators or Admin can claim disputes.');
     }
-    // Admin "Assign myself" on an already-assigned dispute = force takeover
-    if (!perms.canSelfAssign && perms.canForceTakeover) {
+    if (row.assigned_staff_id && !perms.isAdmin) {
+      throw new Error('This dispute already has a handler. They must release the case first.');
+    }
+    await pool.query(
+      `UPDATE disputes
+       SET assigned_staff_id = $1,
+           updated_at = NOW()
+       WHERE dispute_id = $2`,
+      [staff.staff_id, disputeId]
+    );
+    return getDisputeDetail(disputeId, staffSession);
+  }
+
+  if (action === 'release' || action === 'self_unassign') {
+    if (!perms.canRelease && !perms.isAssignee) {
+      throw new Error('Only the current handler can release this case.');
+    }
+    if (perms.isAdmin && !perms.isAssignee) {
+      await pool.query(
+        `UPDATE disputes
+         SET assigned_staff_id = NULL,
+             updated_at = NOW()
+         WHERE dispute_id = $1`,
+        [disputeId]
+      );
+    } else {
+      await pool.query(
+        `UPDATE disputes
+         SET assigned_staff_id = NULL,
+             updated_at = NOW()
+         WHERE dispute_id = $1 AND assigned_staff_id = $2`,
+        [disputeId, staff.staff_id]
+      );
+    }
+    return getDisputeDetail(disputeId, staffSession);
+  }
+
+  // Admin may designate / reassign Support handlers (override lock)
+  if (patch.assigned_staff_id !== undefined && !action) {
+    const nextAssignee =
+      patch.assigned_staff_id === null || patch.assigned_staff_id === ''
+        ? null
+        : patch.assigned_staff_id;
+    const nextNorm = normalizeStaffId(nextAssignee);
+    const curNorm = normalizeStaffId(row.assigned_staff_id);
+
+    if (curNorm && nextNorm !== curNorm && !perms.canAssignOthers) {
+      throw new Error(
+        'This dispute already has a handler. They must release the case before it can be reassigned.'
+      );
+    }
+
+    if (nextNorm !== curNorm) {
+      if (!perms.canAssignOthers && !(perms.canAssignMyself && !curNorm && nextNorm === normalizeStaffId(staff.staff_id))) {
+        throw new Error(
+          'Use Assign myself to claim an unassigned dispute, or ask Admin to designate a handler.'
+        );
+      }
+      if (nextNorm) {
+        const target = await pool.query(`SELECT staff_id, role FROM staff WHERE staff_id::text = $1`, [
+          String(nextAssignee),
+        ]);
+        if (!target.rows.length) throw new Error('Assignee staff not found.');
+        if (!isDesignatedHandlerRole(target.rows[0].role)) {
+          throw new Error('Disputes can only be assigned to Support Moderators or Admin.');
+        }
+      }
       await pool.query(
         `UPDATE disputes
          SET assigned_staff_id = $1,
-             handled_by_staff_id = COALESCE(handled_by_staff_id, $1),
-             takeover_requested_by_staff_id = NULL,
-             takeover_requested_at = NULL,
-             takeover_request_note = NULL,
              updated_at = NOW()
          WHERE dispute_id = $2`,
-        [staff.staff_id, disputeId]
+        [nextAssignee, disputeId]
       );
-      return getDisputeDetail(disputeId, staffSession);
     }
-    await pool.query(
-      `UPDATE disputes
-       SET assigned_staff_id = $1,
-           takeover_requested_by_staff_id = NULL,
-           takeover_requested_at = NULL,
-           takeover_request_note = NULL,
-           updated_at = NOW()
-       WHERE dispute_id = $2`,
-      [staff.staff_id, disputeId]
-    );
-    return getDisputeDetail(disputeId, staffSession);
-  }
 
-  if (action === 'request_takeover') {
-    if (!perms.canRequestTakeover) {
-      throw new Error('You cannot request takeover for this dispute.');
-    }
-    await pool.query(
-      `UPDATE disputes
-       SET takeover_requested_by_staff_id = $1,
-           takeover_requested_at = NOW(),
-           takeover_request_note = $2,
-           updated_at = NOW()
-       WHERE dispute_id = $3`,
-      [staff.staff_id, patch.takeover_request_note || patch.note || null, disputeId]
-    );
-    return getDisputeDetail(disputeId, staffSession);
-  }
-
-  if (action === 'cancel_takeover_request') {
-    if (!perms.canCancelTakeoverRequest) {
-      throw new Error('Only the requester can cancel this takeover request.');
-    }
-    await pool.query(
-      `UPDATE disputes
-       SET takeover_requested_by_staff_id = NULL,
-           takeover_requested_at = NULL,
-           takeover_request_note = NULL,
-           updated_at = NOW()
-       WHERE dispute_id = $1`,
-      [disputeId]
-    );
-    return getDisputeDetail(disputeId, staffSession);
-  }
-
-  if (action === 'takeover') {
-    // Admin force-takeover onto self
-    if (!perms.canForceTakeover && !(perms.isAdmin && !row.assigned_staff_id)) {
-      if (perms.canSelfAssign) {
-        // fall through handled above; if assigned to other, must be admin
-      }
-      if (!perms.isAdmin) {
-        throw new Error('Only Admin can force-takeover a dispute. Request takeover instead.');
-      }
-      if (perms.isAssignee) {
-        throw new Error('You already own this dispute.');
-      }
-    }
-    await pool.query(
-      `UPDATE disputes
-       SET assigned_staff_id = $1,
-           handled_by_staff_id = COALESCE(handled_by_staff_id, $1),
-           takeover_requested_by_staff_id = NULL,
-           takeover_requested_at = NULL,
-           takeover_request_note = NULL,
-           updated_at = NOW()
-       WHERE dispute_id = $2`,
-      [staff.staff_id, disputeId]
-    );
-    return getDisputeDetail(disputeId, staffSession);
-  }
-
-  if (action === 'accept_takeover') {
-    if (!perms.canAcceptTakeover) {
-      throw new Error('You cannot accept this takeover request.');
-    }
-    const toStaffId = row.takeover_requested_by_staff_id;
-    await pool.query(
-      `UPDATE disputes
-       SET assigned_staff_id = $1,
-           handled_by_staff_id = COALESCE(handled_by_staff_id, $1),
-           takeover_requested_by_staff_id = NULL,
-           takeover_requested_at = NULL,
-           takeover_request_note = NULL,
-           updated_at = NOW()
-       WHERE dispute_id = $2`,
-      [toStaffId, disputeId]
-    );
-    return getDisputeDetail(disputeId, staffSession);
-  }
-
-  // Admin assigns a Support Moderator (allowed without being assignee)
-  if (patch.assigned_staff_id !== undefined && !action) {
-    if (!perms.canAssignOthers && !perms.canAct) {
-      throw new Error('Only Admin can assign disputes to Support Moderators, or the assignee can update assignment.');
-    }
-    const nextAssignee = patch.assigned_staff_id;
-    if (nextAssignee) {
-      const target = await pool.query(`SELECT staff_id, role FROM staff WHERE staff_id::text = $1`, [
-        String(nextAssignee),
-      ]);
-      if (!target.rows.length) throw new Error('Assignee staff not found.');
-      if (!isDesignatedHandlerRole(target.rows[0].role)) {
-        throw new Error('Disputes can only be assigned to Support Moderators or Admin.');
-      }
-    }
-    await pool.query(
-      `UPDATE disputes
-       SET assigned_staff_id = $1,
-           takeover_requested_by_staff_id = NULL,
-           takeover_requested_at = NULL,
-           takeover_request_note = NULL,
-           updated_at = NOW()
-       WHERE dispute_id = $2`,
-      [nextAssignee || null, disputeId]
-    );
-    // If only assigning, return early unless other fields present
     const otherKeys = Object.keys(patch).filter(
       (k) => !['assigned_staff_id', 'action'].includes(k)
     );
@@ -1412,7 +1549,7 @@ async function updateDispute(disputeId, patch, staffSession) {
     if (!actPerms.canAct) throw new Error('Assign yourself to this dispute before dismissing.');
     await pool.query(
       `UPDATE disputes
-       SET status = 'dismissed',
+       SET status = 'closed',
            outcome = 'dismissed',
            visibility = COALESCE(NULLIF(visibility, 'pending'), 'public'),
            approved_at = COALESCE(approved_at, NOW()),
@@ -1431,6 +1568,7 @@ async function updateDispute(disputeId, patch, staffSession) {
     throw new Error('View only — assign yourself to this dispute to make changes.');
   }
 
+  const normalized = normalizeDisputeStatusAndOutcome(patch);
   const allowed = [
     'status',
     'priority',
@@ -1445,24 +1583,40 @@ async function updateDispute(disputeId, patch, staffSession) {
   let idx = 1;
 
   for (const key of allowed) {
-    if (patch[key] !== undefined) {
+    if (normalized[key] !== undefined) {
       sets.push(`${key} = $${idx}`);
-      values.push(patch[key]);
+      values.push(normalized[key]);
       idx += 1;
     }
   }
 
-  if (patch.assigned_staff_id !== undefined && actPerms.canAct) {
-    // Assignee can leave unassigned only if admin; otherwise keep
-    if (actPerms.isAdmin || patch.assigned_staff_id) {
-      sets.push(`assigned_staff_id = $${idx}`);
-      values.push(patch.assigned_staff_id || null);
-      idx += 1;
+  // Reopening clears outcome / sanctions
+  if (normalized.status && normalized.status !== 'closed') {
+    if (normalized.outcome === undefined) {
+      sets.push(`outcome = NULL`);
+    }
+    if (normalized.sanction_type === undefined) {
+      sets.push(`sanction_type = NULL`);
+    }
+    if (normalized.sanction_notes === undefined) {
+      sets.push(`sanction_notes = NULL`);
+    }
+    sets.push(`resolved_at = NULL`);
+  }
+
+  if (normalized.assigned_staff_id !== undefined && (actPerms.canAct || actPerms.canAssignOthers)) {
+    // Non-admin assignment changes while locked go through Release case — ignore here.
+    const nextNorm = normalizeStaffId(normalized.assigned_staff_id);
+    const curNorm = normalizeStaffId(refreshed.assigned_staff_id);
+    if (curNorm && nextNorm !== curNorm && !actPerms.canAssignOthers) {
+      throw new Error(
+        'This dispute already has a handler. They must release the case before it can be reassigned.'
+      );
     }
   }
 
-  if (patch.status) {
-    const status = String(patch.status).toLowerCase();
+  if (normalized.status) {
+    const status = String(normalized.status).toLowerCase();
     if (status === 'open' && String(refreshed.visibility || '') === 'pending') {
       sets.push(`visibility = 'public'`);
       sets.push(`approved_at = COALESCE(approved_at, NOW())`);
@@ -1470,24 +1624,11 @@ async function updateDispute(disputeId, patch, staffSession) {
       values.push(staff.staff_id);
       idx += 1;
     }
-    if (DISPUTE_CLOSED.includes(status)) {
-      sets.push(`resolved_at = NOW()`);
-      if (patch.outcome === undefined && !refreshed.outcome) {
-        sets.push(`outcome = $${idx}`);
-        values.push(status === 'closed' ? 'resolved' : status);
-        idx += 1;
-      }
-    }
-  }
-
-  if (patch.outcome) {
-    const outcome = String(patch.outcome).toLowerCase();
-    if (DISPUTE_CLOSED.includes(outcome) && patch.status === undefined) {
-      sets.push(`status = $${idx}`);
-      values.push(outcome);
-      idx += 1;
+    if (status === 'closed') {
       sets.push(`resolved_at = NOW()`);
     }
+  } else if (normalized.outcome) {
+    sets.push(`resolved_at = NOW()`);
   }
 
   if (!sets.length) {
@@ -1506,13 +1647,9 @@ async function getDisputeDetail(disputeId, staffSession = null) {
 
   const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
   const permissions = buildDisputePermissions(row, staff, staffSession);
-
-  const staffResult = await pool.query(`
-    SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
-    FROM staff s INNER JOIN accounts a ON a.account_id = s.account_id
-    WHERE LOWER(s.role) IN ('support moderator', 'admin', 'administrator')
-    ORDER BY s.role, name
-  `);
+  const assignableStaff = await fetchAssignableStaffForQueue('disputes', {
+    includeStaffId: row.assigned_staff_id || row.handled_by_staff_id,
+  });
 
   let messages = [];
   let chatId = null;
@@ -1534,11 +1671,8 @@ async function getDisputeDetail(disputeId, staffSession = null) {
     chatId,
     chatAvailable,
     permissions,
-    assignableStaff: staffResult.rows.map((s) => ({
-      staffId: s.staff_id,
-      name: s.name,
-      role: s.role,
-    })),
+    assignableQueue: 'disputes',
+    assignableStaff,
   };
 }
 
@@ -1557,12 +1691,14 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
   if (!row) return null;
 
   const perms = buildDisputePermissions(row, staff, staffSession);
-  if (!perms.canAct) {
-    throw new Error('Assign yourself to this dispute before posting messages.');
+  if (!perms.canReply && !perms.canAct) {
+    throw new Error('You do not have permission to reply on this dispute.');
   }
 
-  const isInternal = Boolean(options.isInternal);
-  const audience =
+  // Non-handlers may only post staff-visible replies; designated handler publishes.
+  const mayPublish = Boolean(perms.canAct);
+  let isInternal = Boolean(options.isInternal);
+  let audience =
     options.audience ||
     (isInternal
       ? 'staff'
@@ -1572,10 +1708,15 @@ async function addDisputeMessage(disputeId, body, staffSession, options = {}) {
           ? 'parties'
           : 'staff');
 
+  if (!mayPublish) {
+    audience = 'staff';
+    isInternal = true;
+  }
+
   const chatId = await ensureDisputeChat(disputeId, row);
-  const audiences = Array.isArray(options.audiences)
+  const audiences = mayPublish && Array.isArray(options.audiences)
     ? options.audiences.map((a) => String(a).toLowerCase())
-    : null;
+    : ['staff'];
   await createDisputeMessage({
     chatId,
     body,
@@ -1616,7 +1757,97 @@ async function setDisputeMessageAudience(disputeId, messageId, audience, staffSe
   return getDisputeDetail(disputeId, staffSession);
 }
 
-async function updateReport(reportId, patch) {
+async function updateReport(reportId, patch, staffSession = null) {
+  const action = String(patch?.action || '').toLowerCase().trim();
+  if (action === 'self_assign') {
+    const staff = await resolveDisputeStaffId(staffSession);
+    if (!staff) throw new Error('Could not match your login to a staff profile.');
+
+    const fresh = await pool.query(
+      `SELECT assigned_staff_id FROM reports WHERE report_id = $1 AND deleted_at IS NULL`,
+      [reportId]
+    );
+    if (!fresh.rows.length) return null;
+    const perms = buildReportPermissions(fresh.rows[0], staff, staffSession);
+    if (!perms.canAssignMyself && !perms.canSelfAssign) {
+      throw new Error('You cannot assign this report to yourself.');
+    }
+    if (fresh.rows[0].assigned_staff_id && !perms.isAdmin) {
+      throw new Error('This report already has a handler. They must release the case first.');
+    }
+
+    await pool.query(
+      `UPDATE reports
+       SET assigned_staff_id = $1, updated_at = NOW()
+       WHERE report_id = $2 AND deleted_at IS NULL`,
+      [staff.staff_id, reportId]
+    );
+    return getReportDetail(reportId, staffSession);
+  }
+
+  if (action === 'release' || action === 'self_unassign') {
+    const staff = await resolveDisputeStaffId(staffSession);
+    if (!staff) throw new Error('Could not match your login to a staff profile.');
+
+    const fresh = await pool.query(
+      `SELECT assigned_staff_id FROM reports WHERE report_id = $1 AND deleted_at IS NULL`,
+      [reportId]
+    );
+    if (!fresh.rows.length) return null;
+    const perms = buildReportPermissions(fresh.rows[0], staff, staffSession);
+    if (!perms.canRelease && !perms.isAssignee) {
+      throw new Error('Only the current handler can release this case.');
+    }
+
+    if (perms.isAdmin && !perms.isAssignee) {
+      await pool.query(
+        `UPDATE reports
+         SET assigned_staff_id = NULL, updated_at = NOW()
+         WHERE report_id = $1 AND deleted_at IS NULL`,
+        [reportId]
+      );
+    } else {
+      await pool.query(
+        `UPDATE reports
+         SET assigned_staff_id = NULL, updated_at = NOW()
+         WHERE report_id = $1 AND deleted_at IS NULL AND assigned_staff_id = $2`,
+        [reportId, staff.staff_id]
+      );
+    }
+    return getReportDetail(reportId, staffSession);
+  }
+
+  const fresh = await pool.query(
+    `SELECT assigned_staff_id FROM reports WHERE report_id = $1 AND deleted_at IS NULL`,
+    [reportId]
+  );
+  if (!fresh.rows.length) return null;
+  const currentAssignee = fresh.rows[0].assigned_staff_id;
+  const staffForAssign = staffSession ? await resolveDisputeStaffId(staffSession) : null;
+  const reportPerms = buildReportPermissions(fresh.rows[0], staffForAssign, staffSession);
+
+  if (patch.assigned_staff_id !== undefined) {
+    const nextNorm = normalizeStaffId(
+      patch.assigned_staff_id === null || patch.assigned_staff_id === ''
+        ? null
+        : patch.assigned_staff_id
+    );
+    const curNorm = normalizeStaffId(currentAssignee);
+    if (curNorm && nextNorm !== curNorm && !reportPerms.canAssignOthers) {
+      throw new Error(
+        'This report already has a handler. They must release the case before it can be reassigned.'
+      );
+    }
+    if (nextNorm && (!curNorm || reportPerms.canAssignOthers)) {
+      const typeRow = await pool.query(
+        `SELECT target_type FROM reports WHERE report_id = $1 AND deleted_at IS NULL`,
+        [reportId]
+      );
+      const queueKey = inferReportAssignableQueue(typeRow.rows[0]?.target_type);
+      await assertStaffAssignableToQueue(patch.assigned_staff_id, queueKey);
+    }
+  }
+
   const allowed = ['status', 'priority', 'assigned_staff_id'];
   const sets = [];
   const values = [];
@@ -1624,13 +1855,22 @@ async function updateReport(reportId, patch) {
 
   for (const key of allowed) {
     if (patch[key] !== undefined) {
+      // Skip no-op assignee writes when locked
+      if (key === 'assigned_staff_id' && currentAssignee) {
+        const nextNorm = normalizeStaffId(
+          patch.assigned_staff_id === null || patch.assigned_staff_id === ''
+            ? null
+            : patch.assigned_staff_id
+        );
+        if (nextNorm === normalizeStaffId(currentAssignee)) continue;
+      }
       sets.push(`${key} = $${idx}`);
       values.push(patch[key]);
       idx += 1;
     }
   }
 
-  if (!sets.length) return null;
+  if (!sets.length) return getReportDetail(reportId, staffSession);
 
   if (patch.status === 'resolved') sets.push(`resolved_at = NOW()`);
   sets.push(`updated_at = NOW()`);
@@ -1638,11 +1878,34 @@ async function updateReport(reportId, patch) {
 
   await pool.query(`UPDATE reports SET ${sets.join(', ')} WHERE report_id = $${idx}`, values);
 
-  const list = await fetchReportsList();
-  return list.find((r) => String(r.id) === String(reportId)) || null;
+  return getReportDetail(reportId, staffSession);
 }
 
-async function getReportDetail(reportId) {
+function buildReportPermissions(row, staff, session = null) {
+  const staffId =
+    normalizeStaffId(staff?.staff_id) || normalizeStaffId(sessionStaffId(session));
+  const role = staff?.role || session?.role || null;
+  const assigneeId = normalizeStaffId(row?.assigned_staff_id);
+  const isAssignee = Boolean(staffId && assigneeId && staffId === assigneeId);
+  const isAdmin = isAdminRole(role);
+  const unassigned = !assigneeId;
+  const designated = isQueueHandlerRole(role);
+
+  return {
+    staffId: staff?.staff_id != null ? String(staff.staff_id) : sessionStaffId(session),
+    role,
+    isAssignee,
+    isAdmin,
+    canView: true,
+    canAct: Boolean(isAdmin || isAssignee || (unassigned && designated)),
+    canAssignOthers: Boolean(isAdmin),
+    canSelfAssign: Boolean(staffId && designated && !isAssignee && (unassigned || isAdmin)),
+    canAssignMyself: Boolean(staffId && designated && !isAssignee && (unassigned || isAdmin)),
+    canRelease: Boolean(isAssignee || (isAdmin && Boolean(assigneeId))),
+  };
+}
+
+async function getReportDetail(reportId, staffSession = null, options = {}) {
   const reportResult = await pool.query(
     `
     SELECT
@@ -1666,25 +1929,23 @@ async function getReportDetail(reportId) {
   );
   if (!reportResult.rows.length) return null;
 
-  const staffResult = await pool.query(`
-    SELECT s.staff_id, s.role, COALESCE(a.display_name, s.first_name || ' ' || s.last_name) AS name
-    FROM staff s INNER JOIN accounts a ON a.account_id = s.account_id
-    WHERE a.deleted_at IS NULL
-    ORDER BY s.role
-  `);
+  const row = reportResult.rows[0];
+  const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
+  const queueKey = options.assignableQueue || inferReportAssignableQueue(row.target_type);
+  const assignableStaff = await fetchAssignableStaffForQueue(queueKey, {
+    includeStaffId: row.assigned_staff_id,
+  });
 
   return {
     report: mapReportRow({
-      ...reportResult.rows[0],
-      reporter_name: reportResult.rows[0].reporter_name,
-      reporter_handle: reportResult.rows[0].reporter_handle,
-      assignee_name: reportResult.rows[0].assignee_name,
+      ...row,
+      reporter_name: row.reporter_name,
+      reporter_handle: row.reporter_handle,
+      assignee_name: row.assignee_name,
     }),
-    assignableStaff: staffResult.rows.map((s) => ({
-      staffId: s.staff_id,
-      name: s.name,
-      role: s.role,
-    })),
+    permissions: buildReportPermissions(row, staff, staffSession),
+    assignableQueue: normalizeQueueKey(queueKey),
+    assignableStaff,
   };
 }
 
@@ -1703,4 +1964,5 @@ module.exports = {
   fetchReportsList,
   updateReport,
   getReportDetail,
+  fetchStaffWorkload,
 };

@@ -45,13 +45,7 @@ import ListingApprovalsTab from './ListingApprovalsTab';
 import IdentityVerificationTab from './IdentityVerificationTab';
 import MyCasesTab from './MyCasesTab';
 
-const CLOSED_DISPUTE_STATUSES = new Set([
-  'resolved',
-  'closed',
-  'sanctioned',
-  'dismissed',
-  'withdrawn',
-]);
+const CLOSED_DISPUTE_STATUSES = new Set(['closed']);
 
 function disputeToModerationCase(d: Dispute): ModerationCase {
   return {
@@ -70,7 +64,7 @@ function disputeToModerationCase(d: Dispute): ModerationCase {
     assignedStaffName: d.assignee?.name || null,
     openedAt: d.openedAt,
     status: d.status,
-    canTakeOver: false,
+    canAssignMyself: false,
     canEdit: true,
     canDelete: true,
   };
@@ -361,6 +355,7 @@ export default function ModerationPage() {
             cases={data.pendingCases}
             disputes={(data.disputes || []) as Dispute[]}
             reports={(data.reports || []) as UserReport[]}
+            handlers={data.moderatorRoster}
             staffId={data.currentStaffId ?? user?.staffId ?? user?.staff_id ?? null}
             queue={caseQueue}
             onQueueChange={switchCaseQueue}
@@ -764,6 +759,7 @@ function CasesTab({
   cases,
   disputes,
   reports,
+  handlers = [],
   staffId,
   queue,
   onQueueChange,
@@ -772,9 +768,10 @@ function CasesTab({
   cases: ModerationCase[];
   disputes: Dispute[];
   reports: UserReport[];
+  handlers?: ModerationOverview['moderatorRoster'];
   staffId?: string | number | null;
   queue: CaseQueue;
-  onQueueChange: (queue: CaseQueue) => void;
+  onQueueChange: (q: CaseQueue) => void;
   onRefresh: () => void;
 }) {
   const myStaffId = staffId != null && staffId !== '' ? String(staffId) : null;
@@ -811,7 +808,7 @@ function CasesTab({
     () =>
       disputes.filter(
         (d) =>
-          !['resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn'].includes(
+          !['closed'].includes(
             String(d.status).toLowerCase()
           )
       ).length,
@@ -893,8 +890,20 @@ function CasesTab({
       {queue === 'mine' && (
         <MyCasesTab cases={myCases} currentStaffId={myStaffId} onUpdated={onRefresh} />
       )}
-      {queue === 'disputes' && <DisputesTab disputes={disputes} onUpdated={onRefresh} />}
-      {queue === 'reports' && <ReportsTab reports={reports} onUpdated={onRefresh} />}
+      {queue === 'disputes' && (
+        <DisputesTab disputes={disputes} handlers={handlers} onUpdated={onRefresh} />
+      )}
+      {queue === 'reports' && (
+        <ReportsTab
+          reports={reports}
+          handlers={(handlers || []).map((h) => ({
+            id: h.id,
+            name: h.name,
+            role: h.role,
+          }))}
+          onUpdated={onRefresh}
+        />
+      )}
       {queue === 'listings' && (
         <ListingApprovalsTab
           cases={listingCases}
@@ -984,7 +993,7 @@ function CasesTableBody({
   currentStaffId,
   onView,
   onDelete,
-  onTakeOver,
+  onAssignMyself,
 }: {
   cases: ModerationCase[];
   emptyLabel?: string;
@@ -992,9 +1001,9 @@ function CasesTableBody({
   currentStaffId?: string | null;
   onView?: (c: ModerationCase) => void;
   onDelete?: (c: ModerationCase) => void;
-  onTakeOver?: (c: ModerationCase) => void;
+  onAssignMyself?: (c: ModerationCase) => void;
 }) {
-  const showActions = Boolean(onView || onDelete || onTakeOver);
+  const showActions = Boolean(onView || onDelete || onAssignMyself);
   const colSpan = showActions ? 7 : 6;
   const isMine = (c: ModerationCase) =>
     currentStaffId != null &&
@@ -1057,12 +1066,12 @@ function CasesTableBody({
                         <Eye className="h-4 w-4" />
                       </button>
                     )}
-                    {onTakeOver && c.canTakeOver && !isMine(c) && (
+                    {onAssignMyself && c.canAssignMyself && !isMine(c) && (
                       <button
                         type="button"
-                        title="Take over"
+                        title="Assign myself"
                         disabled={busyId === c.id}
-                        onClick={() => onTakeOver(c)}
+                        onClick={() => onAssignMyself(c)}
                         className="rounded-lg p-2 text-zinc-400 hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-40"
                       >
                         {busyId === c.id ? (

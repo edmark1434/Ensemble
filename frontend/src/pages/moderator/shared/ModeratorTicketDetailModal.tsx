@@ -10,6 +10,7 @@ export default function ModeratorTicketDetailModal({
   endpointBase,
   accent = "sky",
   allowEscalate = true,
+  statusControl = "buttons",
   onClose,
   onUpdated,
 }: {
@@ -17,6 +18,7 @@ export default function ModeratorTicketDetailModal({
   endpointBase: string;
   accent?: Accent;
   allowEscalate?: boolean;
+  statusControl?: "select" | "buttons";
   onClose: () => void;
   onUpdated: () => void;
 }) {
@@ -26,6 +28,7 @@ export default function ModeratorTicketDetailModal({
       endpointBase={endpointBase}
       accent={accent}
       allowEscalate={allowEscalate}
+      statusControl={statusControl}
       onClose={onClose}
       onUpdated={onUpdated}
     />

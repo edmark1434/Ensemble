@@ -29,18 +29,22 @@ import {
 } from "lucide-react";
 import api from "@/lib/axios";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast.ts";
-import type { JobsGigsPosting, JobsGigsPostingDetail, UserJobsHistory } from "../shared/moderatorTypes";
+import type { JobsGigsPosting, JobsGigsPostingDetail, JobsOverview, UserJobsHistory } from "../shared/moderatorTypes";
 
 const TYPE_TABS = ["all", "job", "gig"] as const;
 const STATUS_TABS = ["all", "active", "paused", "closed", "archived"] as const;
 
 function postingStatusClass(status: string) {
-  switch (status) {
+  const s = status.toLowerCase();
+  switch (s) {
     case "active":
+    case "open":
       return "border-emerald-500/25 bg-emerald-500/10 text-emerald-300";
     case "paused":
+    case "pause":
       return "border-amber-500/25 bg-amber-500/10 text-amber-300";
     case "closed":
+    case "close":
       return "border-zinc-500/25 bg-zinc-500/10 text-zinc-300";
     case "archived":
       return "border-red-500/25 bg-red-500/10 text-red-300";
@@ -50,12 +54,16 @@ function postingStatusClass(status: string) {
 }
 
 function statusDotClass(status: string) {
-  switch (status) {
+  const s = status.toLowerCase();
+  switch (s) {
     case "active":
+    case "open":
       return "bg-emerald-400";
     case "paused":
+    case "pause":
       return "bg-amber-400";
     case "closed":
+    case "close":
       return "bg-zinc-400";
     case "archived":
       return "bg-red-400";
@@ -150,14 +158,23 @@ function SummaryChip({
   label,
   value,
   tone,
+  active,
+  onClick,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: number | string;
   tone: string;
+  active?: boolean;
+  onClick?: () => void;
 }) {
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-[#14151c] px-4 py-3">
+  const className = `flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition ${
+    active
+      ? "border-emerald-500/40 bg-emerald-500/10"
+      : "border-white/[0.08] bg-[#14151c] hover:border-white/15"
+  }`;
+  const body = (
+    <>
       <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${tone}`}>
         <Icon className="h-4 w-4" />
       </span>
@@ -165,8 +182,16 @@ function SummaryChip({
         <p className="text-lg font-bold leading-tight text-white">{value}</p>
         <p className="text-[11px] text-zinc-500">{label}</p>
       </div>
-    </div>
+    </>
   );
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={className}>
+        {body}
+      </button>
+    );
+  }
+  return <div className={className}>{body}</div>;
 }
 
 function MiniStat({
@@ -642,7 +667,15 @@ function HistorySection({
   );
 }
 
-function UserHistoryModal({ accountId, onClose }: { accountId: string; onClose: () => void }) {
+function UserHistoryModal({
+  accountId,
+  onClose,
+  onOpenPosting,
+}: {
+  accountId: string;
+  onClose: () => void;
+  onOpenPosting?: (type: "job" | "gig", id: string) => void;
+}) {
   const [history, setHistory] = useState<UserJobsHistory | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -723,7 +756,20 @@ function UserHistoryModal({ accountId, onClose }: { accountId: string; onClose: 
                   {history.jobs.map((j) => (
                     <li key={j.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm">
                       <div className="min-w-0">
-                        <p className="truncate text-zinc-200">{j.title}</p>
+                        {onOpenPosting ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose();
+                              onOpenPosting("job", String(j.id));
+                            }}
+                            className="truncate text-left font-medium text-zinc-200 hover:text-emerald-300 hover:underline"
+                          >
+                            {j.title}
+                          </button>
+                        ) : (
+                          <p className="truncate text-zinc-200">{j.title}</p>
+                        )}
                         <p className="text-[11px] text-zinc-500">
                           {j.paymentType} · {j.rateCreditsMin.toLocaleString()}–{j.rateCreditsMax.toLocaleString()} credits · {formatDate(j.createdAt)}
                         </p>
@@ -739,7 +785,20 @@ function UserHistoryModal({ accountId, onClose }: { accountId: string; onClose: 
                   {history.gigs.map((g) => (
                     <li key={g.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm">
                       <div className="min-w-0">
-                        <p className="truncate text-zinc-200">{g.title}</p>
+                        {onOpenPosting ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose();
+                              onOpenPosting("gig", String(g.id));
+                            }}
+                            className="truncate text-left font-medium text-zinc-200 hover:text-emerald-300 hover:underline"
+                          >
+                            {g.title}
+                          </button>
+                        ) : (
+                          <p className="truncate text-zinc-200">{g.title}</p>
+                        )}
                         <p className="text-[11px] text-zinc-500">
                           {g.paymentType} · {formatDate(g.createdAt)}
                         </p>
@@ -809,6 +868,7 @@ function UserHistoryModal({ accountId, onClose }: { accountId: string; onClose: 
 
 export default function JobsGigsControl() {
   const [postings, setPostings] = useState<JobsGigsPosting[]>([]);
+  const [overviewSummary, setOverviewSummary] = useState<JobsOverview["summary"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<(typeof TYPE_TABS)[number]>("all");
   const [statusFilter, setStatusFilter] = useState<(typeof STATUS_TABS)[number]>("all");
@@ -816,6 +876,15 @@ export default function JobsGigsControl() {
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [historyAccountId, setHistoryAccountId] = useState<string | null>(null);
   const [selectedPosting, setSelectedPosting] = useState<JobsGigsPosting | null>(null);
+
+  const loadOverview = async () => {
+    try {
+      const res = await api.get("/api/moderator/jobs/overview");
+      if (res.data?.success) setOverviewSummary(res.data.data.summary);
+    } catch {
+      /* chips fall back to in-view counts */
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -833,22 +902,41 @@ export default function JobsGigsControl() {
     }
   };
 
+  const refreshAll = async () => {
+    await Promise.all([load(), loadOverview()]);
+  };
+
+  useEffect(() => {
+    void loadOverview();
+  }, []);
+
   useEffect(() => {
     const timeout = setTimeout(() => void load(), search ? 350 : 0);
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typeFilter, statusFilter, search]);
 
-  const summary = useMemo(
-    () => ({
+  const summary = useMemo(() => {
+    if (overviewSummary) {
+      return {
+        total: overviewSummary.totalJobs + overviewSummary.totalGigs,
+        jobs: overviewSummary.totalJobs,
+        gigs: overviewSummary.totalGigs,
+        active: overviewSummary.activeJobs + overviewSummary.activeGigs,
+        applicants: postings.reduce((acc, p) => acc + p.applicantCount, 0),
+        archived:
+          (overviewSummary.archivedJobs ?? 0) + (overviewSummary.archivedGigs ?? 0),
+      };
+    }
+    return {
       total: postings.length,
       jobs: postings.filter((p) => p.type === "job").length,
       gigs: postings.filter((p) => p.type === "gig").length,
+      active: postings.filter((p) => p.status === "active").length,
       applicants: postings.reduce((acc, p) => acc + p.applicantCount, 0),
       archived: postings.filter((p) => p.status === "archived").length,
-    }),
-    [postings]
-  );
+    };
+  }, [overviewSummary, postings]);
 
   const updatePosting = async (posting: JobsGigsPosting, status: string) => {
     const key = `${posting.type}-${posting.id}`;
@@ -857,9 +945,9 @@ export default function JobsGigsControl() {
       const res = await api.patch(`/api/moderator/jobs/postings/${posting.type}/${posting.id}`, { status });
       showSuccessToast(`${posting.postNumber} marked ${status}`);
       if (res.data?.success && res.data.data && selectedPosting && String(selectedPosting.id) === String(posting.id)) {
-        setSelectedPosting(res.data.data);
+        setSelectedPosting({ ...selectedPosting, ...res.data.data, type: posting.type });
       }
-      await load();
+      await refreshAll();
     } catch {
       showErrorToast("Failed to update posting");
     } finally {
@@ -867,17 +955,59 @@ export default function JobsGigsControl() {
     }
   };
 
+  const openPostingFromHistory = async (type: "job" | "gig", id: string) => {
+    const existing = postings.find((p) => p.type === type && String(p.id) === String(id));
+    if (existing) {
+      setSelectedPosting(existing);
+      return;
+    }
+    try {
+      const res = await api.get(`/api/moderator/jobs/postings/${type}/${id}`);
+      if (res.data?.success && res.data.data) {
+        const detail = res.data.data;
+        setSelectedPosting({
+          id: detail.id,
+          postNumber: detail.postNumber,
+          type,
+          title: detail.title,
+          description: detail.description,
+          status: detail.status,
+          paymentType: detail.paymentType,
+          experienceLevel: detail.experienceLevel ?? null,
+          rateCreditsMin: detail.type === "job" ? detail.rateCreditsMin : null,
+          rateCreditsMax: detail.type === "job" ? detail.rateCreditsMax : null,
+          applicantCount: detail.type === "job" ? detail.proposals?.length || 0 : detail.requests?.length || 0,
+          contractCount: detail.contracts?.length || 0,
+          tags: detail.tags || [],
+          author: {
+            accountId: String(detail.author.accountId),
+            name: detail.author.name,
+            handle: detail.author.handle,
+          },
+          createdAt: detail.createdAt,
+          updatedAt: detail.updatedAt,
+          lastViewedAt: detail.lastViewedAt,
+          archivedAt: detail.archivedAt,
+        });
+      }
+    } catch {
+      showErrorToast("Failed to open posting");
+    }
+  };
+
   return (
-    <main className="relative z-10 min-h-screen px-6 py-8 md:ml-72 md:px-10" style={{ animation: "fadeIn 420ms ease" }}>
+    <main className="relative z-10 min-h-screen px-6 py-8 md:pl-[260px] md:px-10" style={{ animation: "fadeIn 420ms ease" }}>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-400">Jobs &amp; Gigs Moderator</p>
           <h1 className="text-2xl font-bold text-white">Jobs &amp; Gigs Control</h1>
-          <p className="mt-1 text-sm text-zinc-500">Review, audit and moderate every job and gig posting on the marketplace.</p>
+          <p className="mt-1 text-sm text-zinc-500">
+            Review, pause, close, and archive job/gig postings — including proposals, requests, and contracts.
+          </p>
         </div>
         <button
           type="button"
-          onClick={() => void load()}
+          onClick={() => void refreshAll()}
           disabled={loading}
           className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-medium text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white disabled:opacity-50"
         >
@@ -887,12 +1017,56 @@ export default function JobsGigsControl() {
       </div>
 
       {/* Summary strip */}
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
-        <SummaryChip icon={Layers} label="Postings in view" value={summary.total} tone="bg-emerald-500/15 text-emerald-300" />
-        <SummaryChip icon={Briefcase} label="Jobs" value={summary.jobs} tone="bg-sky-500/15 text-sky-300" />
-        <SummaryChip icon={Gem} label="Gigs" value={summary.gigs} tone="bg-violet-500/15 text-violet-300" />
-        <SummaryChip icon={Users} label="Applicants" value={summary.applicants} tone="bg-teal-500/15 text-teal-300" />
-        <SummaryChip icon={Archive} label="Archived" value={summary.archived} tone="bg-red-500/15 text-red-300" />
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        <SummaryChip
+          icon={Layers}
+          label="Total postings"
+          value={summary.total}
+          tone="bg-emerald-500/15 text-emerald-300"
+          active={statusFilter === "all" && typeFilter === "all"}
+          onClick={() => {
+            setStatusFilter("all");
+            setTypeFilter("all");
+          }}
+        />
+        <SummaryChip
+          icon={Briefcase}
+          label="Jobs"
+          value={summary.jobs}
+          tone="bg-sky-500/15 text-sky-300"
+          active={typeFilter === "job"}
+          onClick={() => setTypeFilter("job")}
+        />
+        <SummaryChip
+          icon={Gem}
+          label="Gigs"
+          value={summary.gigs}
+          tone="bg-violet-500/15 text-violet-300"
+          active={typeFilter === "gig"}
+          onClick={() => setTypeFilter("gig")}
+        />
+        <SummaryChip
+          icon={Play}
+          label="Active"
+          value={summary.active}
+          tone="bg-teal-500/15 text-teal-300"
+          active={statusFilter === "active"}
+          onClick={() => setStatusFilter("active")}
+        />
+        <SummaryChip
+          icon={Users}
+          label="Applicants in view"
+          value={summary.applicants}
+          tone="bg-amber-500/15 text-amber-300"
+        />
+        <SummaryChip
+          icon={Archive}
+          label="Archived"
+          value={summary.archived}
+          tone="bg-red-500/15 text-red-300"
+          active={statusFilter === "archived"}
+          onClick={() => setStatusFilter("archived")}
+        />
       </div>
 
       {/* Filters */}
@@ -1094,7 +1268,11 @@ export default function JobsGigsControl() {
       )}
 
       {historyAccountId !== null && (
-        <UserHistoryModal accountId={historyAccountId} onClose={() => setHistoryAccountId(null)} />
+        <UserHistoryModal
+          accountId={historyAccountId}
+          onClose={() => setHistoryAccountId(null)}
+          onOpenPosting={(type, id) => void openPostingFromHistory(type, id)}
+        />
       )}
     </main>
   );

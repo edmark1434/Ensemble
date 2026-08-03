@@ -58,19 +58,6 @@ function mapTicketRow(row) {
       : null,
     escalatedToRole: row.escalated_to_role || null,
     isEscalated: Boolean(row.escalated_to_role || row.escalated_by_staff_id),
-    takeoverRequestedByStaffId: row.takeover_requested_by_staff_id || null,
-    takeoverRequestedAt: row.takeover_requested_at || null,
-    takeoverRequestNote: row.takeover_request_note || null,
-    takeoverMode: row.takeover_mode || null,
-    takeoverRequester: row.takeover_requester_staff_id
-      ? {
-          staffId: row.takeover_requester_staff_id,
-          name: row.takeover_requester_name || 'Staff',
-          role: row.takeover_requester_role || null,
-        }
-      : row.takeover_requested_by_staff_id
-        ? { staffId: row.takeover_requested_by_staff_id, name: 'Staff', role: null }
-        : null,
     waitingForResponse,
     lastMessageAuthorType: row.last_message_author_type || null,
     relatedReportId: row.related_report_id,
@@ -121,7 +108,7 @@ function mapReportRow(row) {
 }
 
 function mapDisputeRow(row) {
-  const closedStatuses = ['resolved', 'closed', 'sanctioned', 'dismissed', 'withdrawn'];
+  const closedStatuses = ['closed'];
   return {
     id: row.dispute_id,
     number: row.dispute_number,
@@ -158,21 +145,9 @@ function mapDisputeRow(row) {
           transactionId: row.related_credit_transaction_id,
           status: row.hold_status,
           amount: Number(row.hold_amount ?? row.credit_amount_involved ?? 0),
-          type: row.hold_type || 'Dispute Hold',
+          type: row.hold_type || 'Escrow Hold',
         }
       : null,
-    takeoverRequestedByStaffId: row.takeover_requested_by_staff_id || null,
-    takeoverRequestedAt: row.takeover_requested_at || null,
-    takeoverRequestNote: row.takeover_request_note || null,
-    takeoverRequester: row.takeover_requester_staff_id
-      ? {
-          staffId: row.takeover_requester_staff_id,
-          name: row.takeover_requester_name || 'Staff',
-          role: row.takeover_requester_role || null,
-        }
-      : row.takeover_requested_by_staff_id
-        ? { staffId: row.takeover_requested_by_staff_id, name: 'Staff', role: null }
-        : null,
     openedAt: row.opened_at,
     updatedAt: row.updated_at,
     resolvedAt: row.resolved_at,
@@ -337,7 +312,7 @@ async function fetchScopedReports({ targetTypesIn, status } = {}) {
     LEFT JOIN accounts sa ON sa.account_id = st.account_id
     ${whereSql}
     ORDER BY r.created_at DESC
-    LIMIT 40
+    LIMIT 200
     `,
     params
   );

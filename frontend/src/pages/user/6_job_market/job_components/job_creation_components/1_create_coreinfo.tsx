@@ -17,6 +17,7 @@ interface CreateCoreInfoProps {
   previewUrl: string | null;
   setPreviewUrl: (val: string | null) => void;
   setThumbnail: (val: string) => void;
+  setThumbnailFile?: (file: File) => void;
   isDragging: boolean;
   setIsDragging: (val: boolean) => void;
   errors: { [key: string]: string };
@@ -128,6 +129,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
   previewUrl,
   setPreviewUrl,
   setThumbnail,
+  setThumbnailFile,
   isDragging,
   setIsDragging,
   errors,
@@ -145,6 +147,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
     const localUrl = URL.createObjectURL(file);
     setPreviewUrl(localUrl);
     setThumbnail(localUrl);
+    if (setThumbnailFile) setThumbnailFile(file);
   };
 
   const handleDragOver = (e: React.DragEvent) => {

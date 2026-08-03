@@ -23,6 +23,7 @@ const {
     createCreditTransaction,
     updatePlatformWalletBalance,
 } = require("../Repositories/PaymentRepositories");
+const { CREDIT_TRANSACTION_TYPE } = require("../lib/creditTransactionEnums");
 const {
     getSubcriptionByUserIdRepositories,
     getPlandetailsByPlanIdRepositories,
@@ -261,7 +262,7 @@ async function xenditWebhookHandler(req, res) {
                     result.credits_granted
                 );
                 const userTransaction = await createCreditTransaction({
-                    type: "Fund Transfer",
+                    type: CREDIT_TRANSACTION_TYPE.FUND_TRANSFER,
                     amount_credits: result.credits_granted,
                     status: "completed",
                     source_wallet_id: getPlatformWalletDetails.wallet_id,

@@ -93,15 +93,13 @@ const ACCENT_BTN: Record<Accent, string> = {
   rose: "bg-rose-500/90 hover:bg-rose-500",
 };
 
-/** Shared chrome for assign / takeover actions (same icon + layout everywhere). */
+/** Shared chrome for assign actions (same icon + layout everywhere). */
 const HANDLER_ACTION_BTN =
   "inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm disabled:opacity-50";
 const HANDLER_ACTION_ICON = "h-4 w-4 shrink-0";
 const HANDLER_TONES = {
   claim: "border-sky-500/30 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20",
-  request: "border-amber-500/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20",
-  force: "border-rose-500/30 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20",
-  accept: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20",
+  release: "border-amber-500/40 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20",
   cancel: "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10",
 } as const;
 
@@ -110,26 +108,43 @@ const STATUS_OPTIONS = [
   "open",
   "awaiting_response",
   "under_review",
-  "resolved",
-  "sanctioned",
-  "dismissed",
-  "withdrawn",
   "closed",
 ];
 
 const OUTCOME_OPTIONS = ["resolved", "sanctioned", "dismissed", "withdrawn"];
 const SANCTION_OPTIONS = ["warn", "mute", "suspend", "ban", "credit_adjustment", "listing_removal"];
+const CLOSED_STATUS = "closed";
+
+function isDisputeClosed(status: string) {
+  return String(status || "").toLowerCase() === CLOSED_STATUS;
+}
+
+function statusButtonClass(label: string, active: boolean) {
+  const s = String(label || "")
+    .toLowerCase()
+    .replace(/[_-]+/g, " ");
+  if (!active) {
+    return "border-white/10 bg-transparent text-zinc-400 hover:border-white/20 hover:bg-white/[0.04] hover:text-zinc-200 disabled:opacity-40";
+  }
+  if (s === "pending review") return "border-violet-500/40 bg-violet-500/20 text-violet-200";
+  if (s === "open") return "border-red-500/40 bg-red-500/20 text-red-200";
+  if (s === "awaiting response") return "border-sky-500/40 bg-sky-500/20 text-sky-200";
+  if (s === "under review") return "border-amber-500/40 bg-amber-500/20 text-amber-200";
+  if (s === "closed") return "border-zinc-500/40 bg-zinc-500/25 text-zinc-200";
+  return "border-white/25 bg-white/10 text-white";
+}
 
 /**
  * Dispute detail modal with discussion thread.
  * `endpointBase` e.g. "/api/admin/disputes" or "/api/moderator/support/disputes".
- * `adminMode` enables assign / takeover / publish / view-only gating.
+ * `adminMode` enables assign / publish / view-only gating.
  */
 export default function ModeratorDisputeDetailModal({
   disputeId,
   endpointBase,
   accent = "sky",
   adminMode = false,
+  deskLabel,
   onClose,
   onUpdated,
 }: {
@@ -137,6 +152,8 @@ export default function ModeratorDisputeDetailModal({
   endpointBase: string;
   accent?: Accent;
   adminMode?: boolean;
+  /** Shown in header when adminMode is on (e.g. Admin / Support). */
+  deskLabel?: string;
   onClose: () => void;
   onUpdated: () => void;
 }) {
@@ -153,7 +170,6 @@ export default function ModeratorDisputeDetailModal({
   const [outcome, setOutcome] = useState("");
   const [sanctionType, setSanctionType] = useState("");
   const [sanctionNotes, setSanctionNotes] = useState("");
-  const [takeoverNote, setTakeoverNote] = useState("");
 
   const load = async () => {
     setLoading(true);
@@ -192,21 +208,31 @@ export default function ModeratorDisputeDetailModal({
         assigneeStaffId &&
         myStaffId.toLowerCase() === assigneeStaffId.toLowerCase())
   );
-  const canAct = adminMode ? Boolean(perms?.canAct || alreadyAssignedToMe) : true;
-  const canAssignOthers = adminMode ? Boolean(perms?.canAssignOthers) : true;
+  const canAct = adminMode ? Boolean(perms?.canAct || perms?.isAdmin) : true;
+  const canReply = adminMode
+    ? Boolean(
+        perms?.canAct ||
+          perms?.canReply ||
+          perms?.isAdmin ||
+          (perms?.canView !== false && perms?.staffId)
+      )
+    : true;
+  const canAssignOthers = adminMode ? Boolean(perms?.canAssignOthers || perms?.isAdmin) : false;
   const canSelfAssign = adminMode
     ? Boolean(perms?.canSelfAssign && !alreadyAssignedToMe)
     : false;
   const canAssignMyself = adminMode
-    ? Boolean(
-        !alreadyAssignedToMe &&
-          (perms?.canAssignMyself || perms?.canSelfAssign || perms?.canForceTakeover)
-      )
+    ? Boolean(!alreadyAssignedToMe && (perms?.canAssignMyself || perms?.canSelfAssign))
+    : false;
+  const canRelease = adminMode
+    ? Boolean(perms?.canRelease || alreadyAssignedToMe || (perms?.isAdmin && Boolean(assigneeStaffId)))
     : false;
   const viewOnly = adminMode && !canAct;
-  /** Handler dropdown: assignee, Admin assigning others, or claiming / taking over */
+  const assigneeLocked =
+    Boolean(assigneeStaffId) && !(canAssignOthers || Boolean(perms?.isAdmin));
+  /** Handler dropdown: unlocked while unassigned, or Admin override */
   const canEditHandler =
-    !adminMode || canAssignOthers || canAct || canSelfAssign || canAssignMyself;
+    !adminMode || canAssignOthers || canSelfAssign || canAssignMyself || !assigneeLocked;
 
   const updateVisibilityPref = (key: keyof VisibilityPrefs, checked: boolean) => {
     setVisibilityPrefs((prev) => {
@@ -235,7 +261,7 @@ export default function ModeratorDisputeDetailModal({
 
   const onHandlerChange = async (next: string) => {
     setAssigneeId(next);
-    if (!adminMode) return;
+    if (!adminMode || assigneeLocked) return;
 
     // Claim unassigned dispute by picking yourself
     if (
@@ -249,8 +275,8 @@ export default function ModeratorDisputeDetailModal({
       return;
     }
 
-    // Admin may reassign without being the handler
-    if (canAssignOthers && !canAct) {
+    // Admin may designate or reassign a handler anytime
+    if (canAssignOthers) {
       await runAction(
         { assigned_staff_id: next ? next : null },
         next ? "Handler assigned" : "Handler cleared"
@@ -270,57 +296,86 @@ export default function ModeratorDisputeDetailModal({
       await runAction({ action: "self_assign" }, "You are now assigned");
       return;
     }
-    if (adminMode && viewOnly && canAssignOthers) {
+    if (adminMode && viewOnly && canAssignOthers && !assigneeLocked) {
       await runAction(
         { assigned_staff_id: assigneeId ? assigneeId : null },
         "Assignment updated"
       );
       return;
     }
+    const nextStatus = overrideStatus || status;
     const payload: Record<string, unknown> = {
-      status: overrideStatus || status,
+      status: nextStatus,
       priority,
       resolution_notes: resolutionNotes || null,
     };
     if (adminMode) {
-      if (outcome) payload.outcome = outcome;
-      if (sanctionType) payload.sanction_type = sanctionType;
-      payload.sanction_notes = sanctionNotes || null;
-      if (canAssignOthers || canAct) {
+      if (isDisputeClosed(nextStatus)) {
+        payload.outcome = outcome || "resolved";
+        if (sanctionType) payload.sanction_type = sanctionType;
+        payload.sanction_notes = sanctionNotes || null;
+      } else {
+        payload.outcome = null;
+        payload.sanction_type = null;
+        payload.sanction_notes = null;
+      }
+      // Admin may change handler anytime; others use Release / Assign myself while locked.
+      if (!assigneeLocked && (canAssignOthers || canAssignMyself)) {
+        payload.assigned_staff_id = assigneeId ? assigneeId : null;
+      } else if (canAssignOthers) {
         payload.assigned_staff_id = assigneeId ? assigneeId : null;
       }
     } else {
-      payload.assigned_staff_id = assigneeId ? assigneeId : null;
+      if (isDisputeClosed(nextStatus) && !outcome) {
+        payload.outcome = "resolved";
+      } else if (outcome) {
+        payload.outcome = outcome;
+      }
     }
-    await runAction(payload, overrideStatus === "resolved" ? "Dispute resolved" : "Dispute updated");
+    const closing = isDisputeClosed(nextStatus);
+    await runAction(
+      payload,
+      closing
+        ? `Dispute closed (${titleCaseLabel(String(payload.outcome || "resolved"))})`
+        : "Dispute updated"
+    );
   };
 
   const sendMessage = async () => {
     if (!message.trim()) return;
     setSaving(true);
     try {
-      const audience = audienceFromPrefs(visibilityPrefs, internalNote);
+      // Non-handlers may only post staff-visible replies; assignee publishes later.
+      const audience = canAct
+        ? audienceFromPrefs(visibilityPrefs, internalNote)
+        : "staff";
       await api.post(`${endpointBase}/${disputeId}/messages`, {
         body: message.trim(),
-        isInternal: internalNote || audience === "staff",
-        visibleToParties: audience === "parties" || audience === "public",
-        visibleToPublic: audience === "public",
+        isInternal: !canAct || internalNote || audience === "staff",
+        visibleToParties: canAct && (audience === "parties" || audience === "public"),
+        visibleToPublic: canAct && audience === "public",
         audience,
-        audiences: [
-          ...(internalNote || audience === "staff" ? (["staff"] as const) : []),
-          ...(visibilityPrefs.parties || visibilityPrefs.public ? (["parties"] as const) : []),
-          ...(visibilityPrefs.public ? (["public"] as const) : []),
-        ],
+        audiences: canAct
+          ? [
+              ...(internalNote || audience === "staff" ? (["staff"] as const) : []),
+              ...(visibilityPrefs.parties || visibilityPrefs.public
+                ? (["parties"] as const)
+                : []),
+              ...(visibilityPrefs.public ? (["public"] as const) : []),
+            ]
+          : (["staff"] as const),
       });
       setMessage("");
       showSuccessToast(
-        audience === "public"
-          ? "Message posted (visible to the public)"
-          : audience === "parties"
-            ? "Message posted (visible to parties)"
-            : internalNote
-              ? "Internal note added"
-              : "Message sent"
+        !canAct
+          ? "Staff reply posted — handler can publish when ready"
+          : audience === "public"
+            ? "Message posted (visible to the public)"
+            : audience === "parties"
+              ? "Message posted (visible to parties)"
+              : internalNote
+                ? "Internal note added"
+                : "Message sent"
       );
       await load();
       onUpdated();
@@ -365,7 +420,7 @@ export default function ModeratorDisputeDetailModal({
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
           <div>
             <p className={`text-[10px] font-semibold uppercase tracking-wide ${accentSpinner(accent)}`}>
-              Dispute detail{adminMode ? " · Admin" : ""}
+              Dispute detail{adminMode ? ` · ${deskLabel || "Staff"}` : ""}
             </p>
             <h2 className="text-lg font-bold text-white">{dispute?.number || "Dispute"}</h2>
           </div>
@@ -416,25 +471,10 @@ export default function ModeratorDisputeDetailModal({
                     {!perms?.staffId
                       ? "Your login isn’t linked to a staff profile, so assignment is blocked. Re-login as Admin or Support Moderator."
                       : canAssignMyself || canSelfAssign
-                        ? "This dispute needs a handler. Click Assign myself, or choose yourself in Designated handler."
+                        ? "This dispute needs a Support Moderator (or Admin). Click Assign myself to claim it."
                         : canAssignOthers
                           ? "You’re not the handler yet. Pick a Support Moderator in Designated handler, or Assign myself."
-                          : "Assign yourself (if unassigned) or request takeover to unlock handling actions."}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {adminMode && dispute.takeoverRequester && (
-              <div className="flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-sm text-amber-100">
-                <Hand className="mt-0.5 h-4 w-4 shrink-0" />
-                <div>
-                  <p className="font-medium">Takeover requested by {dispute.takeoverRequester.name}</p>
-                  {dispute.takeoverRequestNote && (
-                    <p className="mt-1 text-xs text-amber-200/80">{dispute.takeoverRequestNote}</p>
-                  )}
-                  <p className="mt-1 text-[11px] text-amber-200/60">
-                    {formatDateTime(dispute.takeoverRequestedAt)}
+                          : "Only Support Moderators or Admin can claim and handle disputes. You can still post staff-only replies."}
                   </p>
                 </div>
               </div>
@@ -453,63 +493,19 @@ export default function ModeratorDisputeDetailModal({
                     Assign myself
                   </button>
                 )}
-                {perms?.canForceTakeover && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void runAction({ action: "takeover" }, "Takeover complete")}
-                    className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.force}`}
-                  >
-                    <Hand className={HANDLER_ACTION_ICON} />
-                    Force takeover
-                  </button>
-                )}
-                {perms?.canRequestTakeover && (
-                  <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
-                    <input
-                      value={takeoverNote}
-                      onChange={(e) => setTakeoverNote(e.target.value)}
-                      placeholder="Optional note for takeover request"
-                      className="flex-1 rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white"
-                    />
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() =>
-                        void runAction(
-                          { action: "request_takeover", note: takeoverNote || null },
-                          "Takeover requested"
-                        )
-                      }
-                      className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.request}`}
-                    >
-                      <Hand className={HANDLER_ACTION_ICON} />
-                      Request takeover
-                    </button>
-                  </div>
-                )}
-                {perms?.canCancelTakeoverRequest && (
+                {canRelease && (
                   <button
                     type="button"
                     disabled={saving}
                     onClick={() =>
-                      void runAction({ action: "cancel_takeover_request" }, "Takeover request cancelled")
+                      void runAction(
+                        { action: "release" },
+                        "Case released — another Support Moderator can claim it"
+                      )
                     }
-                    className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.cancel}`}
+                    className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.release}`}
                   >
-                    <Hand className={HANDLER_ACTION_ICON} />
-                    Cancel my takeover request
-                  </button>
-                )}
-                {perms?.canAcceptTakeover && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void runAction({ action: "accept_takeover" }, "Takeover accepted")}
-                    className={`${HANDLER_ACTION_BTN} ${HANDLER_TONES.accept}`}
-                  >
-                    <Hand className={HANDLER_ACTION_ICON} />
-                    Accept takeover request
+                    Release case
                   </button>
                 )}
                 {canAct && toApiToken(dispute.status) === "pending_review" && (
@@ -537,21 +533,35 @@ export default function ModeratorDisputeDetailModal({
             )}
 
             <div className="grid gap-3 sm:grid-cols-3">
-              <label className="flex flex-col gap-1 text-xs text-zinc-500">
+              <div className="flex flex-col gap-1.5 text-xs text-zinc-500 sm:col-span-3">
                 Status
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  disabled={viewOnly}
-                  className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:opacity-50"
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {titleCaseLabel(s)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Dispute status">
+                  {STATUS_OPTIONS.map((s) => {
+                    const active = toApiToken(status) === s;
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        disabled={viewOnly}
+                        aria-pressed={active}
+                        onClick={() => {
+                          setStatus(s);
+                          if (isDisputeClosed(s)) {
+                            setOutcome((prev) => prev || "resolved");
+                          } else {
+                            setOutcome("");
+                            setSanctionType("");
+                            setSanctionNotes("");
+                          }
+                        }}
+                        className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed ${statusButtonClass(s, active)}`}
+                      >
+                        {titleCaseLabel(s)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <label className="flex flex-col gap-1 text-xs text-zinc-500">
                 Priority
                 <select
@@ -567,21 +577,24 @@ export default function ModeratorDisputeDetailModal({
                   ))}
                 </select>
               </label>
-              <label className="flex flex-col gap-1 text-xs text-zinc-500">
+              <label className="flex flex-col gap-1 text-xs text-zinc-500 sm:col-span-2">
                 Designated handler
                 <select
                   value={assigneeId}
                   onChange={(e) => void onHandlerChange(e.target.value)}
-                  disabled={!canEditHandler || saving}
+                  disabled={!canEditHandler || saving || assigneeLocked}
                   className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <option value="">Unassigned</option>
-                  {(canAssignMyself && !canAssignOthers && !canAct
-                    ? detail.assignableStaff.filter(
-                        (s) => String(s.staffId).toLowerCase() === myStaffId.toLowerCase()
-                      )
-                    : detail.assignableStaff
-                  ).map((s) => (
+                  {detail.assignableStaff
+                    .filter((s) => {
+                      if (!myStaffId) return true;
+                      const isMe =
+                        String(s.staffId).toLowerCase() === myStaffId.toLowerCase();
+                      // Keep current handler visible while locked; otherwise use Assign myself.
+                      return !isMe || (assigneeLocked && alreadyAssignedToMe);
+                    })
+                    .map((s) => (
                     <option key={s.staffId} value={String(s.staffId)}>
                       {s.name}
                       {myStaffId && String(s.staffId).toLowerCase() === myStaffId.toLowerCase()
@@ -591,18 +604,53 @@ export default function ModeratorDisputeDetailModal({
                     </option>
                   ))}
                 </select>
-                {!canEditHandler && (
+                {assigneeLocked && (
+                  <span className="text-[11px] text-zinc-500">
+                    Handler is locked. The assigned Support Moderator must release the case before
+                    someone else can claim it.
+                  </span>
+                )}
+                {!assigneeLocked && assigneeStaffId && canAssignOthers && (
+                  <span className="text-[11px] text-violet-300/80">
+                    Admin override: you can reassign this dispute without a release.
+                  </span>
+                )}
+                {canAssignMyself && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void runAction({ action: "self_assign" }, "You are now assigned")}
+                    className={`mt-2 inline-flex w-fit items-center gap-1.5 ${HANDLER_ACTION_BTN} ${HANDLER_TONES.claim}`}
+                  >
+                    <Hand className={HANDLER_ACTION_ICON} />
+                    Assign myself
+                  </button>
+                )}
+                {canRelease && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() =>
+                      void runAction(
+                        { action: "release" },
+                        "Case released — another Support Moderator can claim it"
+                      )
+                    }
+                    className={`mt-2 inline-flex w-fit items-center gap-1.5 ${HANDLER_ACTION_BTN} ${HANDLER_TONES.release}`}
+                  >
+                    Release case
+                  </button>
+                )}
+                {!canEditHandler && !assigneeLocked && (
                   <span className="text-[11px] text-amber-200/80">
                     {!perms?.staffId
                       ? "Your session isn’t linked to a staff profile — re-login as Admin or Support Moderator."
-                      : perms?.canRequestTakeover
-                        ? "Someone else is handling this — use Request takeover above, or ask an Admin to reassign."
-                        : "You can’t change the handler on this dispute."}
+                      : "You can’t change the handler on this dispute."}
                   </span>
                 )}
                 {canAssignMyself && !canAct && (
                   <span className="text-[11px] text-sky-200/70">
-                    Click Assign myself, or pick yourself in this list to become the handler.
+                    Click Assign myself to become the handler — no need to hunt yourself in the list.
                   </span>
                 )}
               </label>
@@ -614,8 +662,18 @@ export default function ModeratorDisputeDetailModal({
                   Outcome
                   <select
                     value={outcome}
-                    onChange={(e) => setOutcome(e.target.value)}
-                    disabled={viewOnly}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setOutcome(next);
+                      if (next) {
+                        setStatus(CLOSED_STATUS);
+                      }
+                      if (next !== "sanctioned") {
+                        setSanctionType("");
+                        setSanctionNotes("");
+                      }
+                    }}
+                    disabled={viewOnly || !isDisputeClosed(status)}
                     className="rounded-lg border border-white/10 bg-[#14151c] px-3 py-2 text-sm text-white disabled:opacity-50"
                   >
                     <option value="">—</option>
@@ -625,6 +683,11 @@ export default function ModeratorDisputeDetailModal({
                       </option>
                     ))}
                   </select>
+                  {!isDisputeClosed(status) && (
+                    <span className="text-[11px] text-zinc-600">
+                      Set status to Closed to choose an outcome.
+                    </span>
+                  )}
                 </label>
                 <label className="flex flex-col gap-1 text-xs text-zinc-500">
                   Sanction type
@@ -706,10 +769,10 @@ export default function ModeratorDisputeDetailModal({
                       : "Save dispute changes"}
                 </button>
               )}
-              {canAct && !["resolved", "closed", "sanctioned", "dismissed", "withdrawn"].includes(toApiToken(dispute.status)) && (
+              {canAct && !isDisputeClosed(toApiToken(dispute.status)) && (
                 <button
                   type="button"
-                  onClick={() => void saveChanges("resolved")}
+                  onClick={() => void saveChanges(CLOSED_STATUS)}
                   disabled={saving}
                   className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
                 >
@@ -803,16 +866,24 @@ export default function ModeratorDisputeDetailModal({
             </div>
 
             <div className="rounded-xl border border-white/10 bg-[#14151c] p-4">
+              {viewOnly && canReply && (
+                <p className="mb-3 rounded-lg border border-sky-500/20 bg-sky-500/5 px-3 py-2 text-xs text-sky-200">
+                  View &amp; reply mode — you can post staff-only replies. Only Support Moderators
+                  or Admin can claim, change status/outcome, or publish messages to parties / public.
+                </p>
+              )}
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 rows={3}
                 placeholder={
-                  viewOnly
-                    ? "Assign yourself before posting…"
-                    : "Write a message to discuss this dispute…"
+                  !canReply
+                    ? "You cannot reply on this dispute…"
+                    : viewOnly
+                      ? "Write a staff-only reply (handler publishes if needed)…"
+                      : "Write a message to discuss this dispute…"
                 }
-                disabled={detail.chatAvailable === false || viewOnly}
+                disabled={detail.chatAvailable === false || !canReply}
                 className="w-full resize-none rounded-lg border border-white/10 bg-[#0f1016] px-3 py-2 text-sm text-white outline-none disabled:opacity-50"
               />
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
@@ -820,20 +891,20 @@ export default function ModeratorDisputeDetailModal({
                   <label className="flex items-center gap-2">
                     <input
                       type="checkbox"
-                      checked={internalNote}
+                      checked={viewOnly ? true : internalNote}
                       onChange={(e) => setInternalNote(e.target.checked)}
-                      disabled={detail.chatAvailable === false || viewOnly}
+                      disabled={detail.chatAvailable === false || !canReply || viewOnly}
                     />
                     Internal note (staff only)
                   </label>
-                  {adminMode && (
+                  {adminMode && canAct && (
                     <>
                       <label className="flex items-center gap-2">
                         <input
                           type="checkbox"
                           checked={visibilityPrefs.parties}
                           onChange={(e) => updateVisibilityPref("parties", e.target.checked)}
-                          disabled={detail.chatAvailable === false || viewOnly || internalNote}
+                          disabled={detail.chatAvailable === false || internalNote}
                         />
                         Visible to parties
                       </label>
@@ -842,7 +913,7 @@ export default function ModeratorDisputeDetailModal({
                           type="checkbox"
                           checked={visibilityPrefs.public}
                           onChange={(e) => updateVisibilityPref("public", e.target.checked)}
-                          disabled={detail.chatAvailable === false || viewOnly || internalNote}
+                          disabled={detail.chatAvailable === false || internalNote}
                         />
                         Visible to the public
                       </label>
@@ -852,7 +923,7 @@ export default function ModeratorDisputeDetailModal({
                 <button
                   type="button"
                   onClick={() => void sendMessage()}
-                  disabled={saving || !message.trim() || detail.chatAvailable === false || viewOnly}
+                  disabled={saving || !message.trim() || detail.chatAvailable === false || !canReply}
                   className="rounded-lg bg-white/10 px-4 py-2 text-sm text-white hover:bg-white/15 disabled:opacity-50"
                 >
                   Send

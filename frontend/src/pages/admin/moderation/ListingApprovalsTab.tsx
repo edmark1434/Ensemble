@@ -106,20 +106,20 @@ export default function ListingApprovalsTab({
   const isMine = (c: ModerationCase) =>
     myStaffId != null && c.assignedStaffId != null && String(c.assignedStaffId) === myStaffId;
 
-  const handleTakeOver = async (c: ModerationCase) => {
-    if (!c.canTakeOver) return;
+  const handleAssignMyself = async (c: ModerationCase) => {
+    if (!c.canAssignMyself) return;
     setBusyId(c.id);
     try {
-      const res = await api.post(`/api/admin/moderation/cases/${c.id}/take-over`, {
+      const res = await api.post(`/api/admin/moderation/cases/${c.id}/assign-myself`, {
         source: c.source,
       });
-      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to take over case');
+      if (!res.data?.success) throw new Error(res.data?.message || 'Failed to assign case');
       showSuccessToast(res.data.message || 'Case assigned to you');
       onUpdated();
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        (err instanceof Error ? err.message : 'Failed to take over case');
+        (err instanceof Error ? err.message : 'Failed to assign case');
       showErrorToast(message);
     } finally {
       setBusyId(null);
@@ -259,12 +259,12 @@ export default function ListingApprovalsTab({
                   <td className="px-4 py-3.5 text-xs text-zinc-500">{formatDateTime(c.openedAt)}</td>
                   <td className="px-5 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="inline-flex items-center justify-end gap-1">
-                      {c.canTakeOver && !isMine(c) && (
+                      {c.canAssignMyself && !isMine(c) && (
                         <button
                           type="button"
-                          title="Take over"
+                          title="Assign myself"
                           disabled={busyId === c.id}
-                          onClick={() => void handleTakeOver(c)}
+                          onClick={() => void handleAssignMyself(c)}
                           className="rounded-lg p-2 text-zinc-400 hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-40"
                         >
                           {busyId === c.id ? (

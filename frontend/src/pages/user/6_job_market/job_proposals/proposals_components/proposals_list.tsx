@@ -23,13 +23,20 @@ export interface ProposalItemData {
   jobId: string;
   jobTitle: string;
   partyName: string;
+  clientName?: string;
+  clientAvatar?: string;
+  freelancerName?: string;
+  freelancerAvatar?: string;
   rating?: number;
   bidAmount: number;
   additionalWorkRate: number;
   coverLetter: string;
   tosContent: string;
+  tosTitle?: string;
+  tosDescription?: string;
   submittedAt: string;
   submittedAgo?: string;
+  jobPostedAt?: string;
   updatedAt?: string;
   updatedAgo?: string;
   status: ProposalStatus;
@@ -170,8 +177,8 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
               onClick={() =>
                 navigate(
                   item.type === "incoming"
-                    ? `/jobs/proposals/incoming/${item.jobId}/${item.id}`
-                    : `/jobs/proposals/sent/${item.jobId}/${item.id}`
+                    ? `/jobs/proposals/received/${item.id}`
+                    : `/jobs/proposals/sent/${item.id}`
                 )
               }
               className="group rounded-2xl border border-white/10 bg-[#0d0f1a]/80 p-5 backdrop-blur-sm shadow-xl hover:border-white/20 cursor-pointer transition-all duration-200 text-left space-y-4 flex flex-col justify-between"

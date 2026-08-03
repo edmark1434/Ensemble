@@ -24,6 +24,7 @@ const {
 const {
     createNotification
 } = require("../Repositories/NotificationRepositories");
+const { CREDIT_TRANSACTION_TYPE } = require("./creditTransactionEnums");
 
 const {getIo} = require('../lib/websocket');
 
@@ -210,7 +211,7 @@ async function reconcilePayment(payment) {
                 const getPlatformWalletDetails = await getPlatformWallet();
 
                 const userTransaction = await createCreditTransaction({
-                    type: "Fund Transfer",
+                    type: CREDIT_TRANSACTION_TYPE.FUND_TRANSFER,
                     amount_credits: result.credits_granted,
                     status: "completed",
                     source_wallet_id: getPlatformWalletDetails.wallet_id,

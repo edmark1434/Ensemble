@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const checkSession = require('../middleware/checkSession');
 const requireAdmin = require('../middleware/requireAdmin');
+const requireStaffRole = require('../middleware/requireStaffRole');
 const { getAdminDashboardOverview } = require('../Controllers/AdminControllers');
 const {
   getAdminTeamsManagement,
@@ -13,6 +14,17 @@ const {
   postAdminAccountWarn,
   postAdminAccountPardon,
 } = require('../Controllers/AdminUserTeamControllers');
+
+/** Admin + Support: full User & Team. Forum/Marketplace: read + limited enforcement. */
+const requireUserTeamAccess = requireStaffRole([
+  'Admin',
+  'Support Moderator',
+  'Forum Moderator',
+  'Marketplace Moderator',
+  'Jobs N Gigs Moderator',
+]);
+/** Credits, verification, pardons, team management, ban — Admin/Support only. */
+const requireUserTeamFullWrite = requireStaffRole(['Admin', 'Support Moderator']);
 const {
   getAdminEconomyOverview,
   getAdminWalletDetail,
@@ -21,7 +33,7 @@ const {
   getAdminModerationOverview,
   patchAdminModerationCase,
   deleteAdminModerationCase,
-  postAdminModerationCaseTakeOver,
+  postAdminModerationCaseAssignMyself,
 } = require('../Controllers/AdminModerationControllers');
 const { getAdminAnalyticsOverview } = require('../Controllers/AdminAnalyticsControllers');
 const {
@@ -50,21 +62,21 @@ router.get('/staff/roles', [checkSession, requireAdmin], getAdminStaffRoles);
 router.post('/staff', [checkSession, requireAdmin], createAdminStaff);
 router.patch('/staff/:staffId', [checkSession, requireAdmin], patchAdminStaff);
 router.delete('/staff/:staffId', [checkSession, requireAdmin], deleteAdminStaff);
-router.get('/teams-management', [checkSession, requireAdmin], getAdminTeamsManagement);
-router.get('/users-management', [checkSession, requireAdmin], getAdminUsersManagement);
-router.get('/user-team-overview', [checkSession, requireAdmin], getAdminUserTeamOverview);
-router.patch('/accounts/:accountId/status', [checkSession, requireAdmin], patchAdminAccountStatus);
-router.patch('/accounts/:accountId/verification', [checkSession, requireAdmin], patchAdminAccountVerification);
-router.post('/accounts/:accountId/credits/adjust', [checkSession, requireAdmin], postAdminAccountCreditAdjust);
-router.post('/accounts/:accountId/credits/freeze', [checkSession, requireAdmin], postAdminAccountCreditFreeze);
-router.post('/accounts/:accountId/warn', [checkSession, requireAdmin], postAdminAccountWarn);
-router.post('/accounts/:accountId/pardon', [checkSession, requireAdmin], postAdminAccountPardon);
+router.get('/teams-management', [checkSession, requireUserTeamFullWrite], getAdminTeamsManagement);
+router.get('/users-management', [checkSession, requireUserTeamAccess], getAdminUsersManagement);
+router.get('/user-team-overview', [checkSession, requireUserTeamAccess], getAdminUserTeamOverview);
+router.patch('/accounts/:accountId/status', [checkSession, requireUserTeamAccess], patchAdminAccountStatus);
+router.patch('/accounts/:accountId/verification', [checkSession, requireUserTeamFullWrite], patchAdminAccountVerification);
+router.post('/accounts/:accountId/credits/adjust', [checkSession, requireUserTeamFullWrite], postAdminAccountCreditAdjust);
+router.post('/accounts/:accountId/credits/freeze', [checkSession, requireUserTeamFullWrite], postAdminAccountCreditFreeze);
+router.post('/accounts/:accountId/warn', [checkSession, requireUserTeamAccess], postAdminAccountWarn);
+router.post('/accounts/:accountId/pardon', [checkSession, requireUserTeamFullWrite], postAdminAccountPardon);
 router.get('/economy-overview', [checkSession, requireAdmin], getAdminEconomyOverview);
 router.get('/economy/wallets/:walletId', [checkSession, requireAdmin], getAdminWalletDetail);
 router.get('/moderation-overview', [checkSession, requireAdmin], getAdminModerationOverview);
 router.patch('/moderation/cases/:id', [checkSession, requireAdmin], patchAdminModerationCase);
 router.delete('/moderation/cases/:id', [checkSession, requireAdmin], deleteAdminModerationCase);
-router.post('/moderation/cases/:id/take-over', [checkSession, requireAdmin], postAdminModerationCaseTakeOver);
+router.post('/moderation/cases/:id/assign-myself', [checkSession, requireAdmin], postAdminModerationCaseAssignMyself);
 router.get('/analytics-overview', [checkSession, requireAdmin], getAdminAnalyticsOverview);
 router.get('/tickets-overview', [checkSession, requireAdmin], getAdminTicketsOverview);
 router.post('/tickets', [checkSession, requireAdmin], createAdminTicket);

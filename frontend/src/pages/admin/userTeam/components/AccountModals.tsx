@@ -1083,27 +1083,33 @@ export function UserOverviewModal({
       onClose={onClose}
       footer={
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onOpenCredit}
-            className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
-          >
-            Credits & wallet
-          </button>
-          <button
-            type="button"
-            onClick={onOpenVerification}
-            className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
-          >
-            Verification
-          </button>
-          <button
-            type="button"
-            onClick={onOpenHistory}
-            className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
-          >
-            Violations & disputes
-          </button>
+          {onOpenCredit && (
+            <button
+              type="button"
+              onClick={onOpenCredit}
+              className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
+            >
+              Credits & wallet
+            </button>
+          )}
+          {onOpenVerification && (
+            <button
+              type="button"
+              onClick={onOpenVerification}
+              className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
+            >
+              Verification
+            </button>
+          )}
+          {onOpenHistory && (
+            <button
+              type="button"
+              onClick={onOpenHistory}
+              className="rounded-xl border border-white/[0.1] px-4 py-2.5 text-sm text-white hover:bg-white/[0.05]"
+            >
+              Violations & disputes
+            </button>
+          )}
         </div>
       }
     >

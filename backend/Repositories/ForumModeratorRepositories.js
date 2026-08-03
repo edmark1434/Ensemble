@@ -11,6 +11,7 @@ const {
   ticketStatusChart,
 } = require('./ModeratorSharedRepositories');
 const { QUEUE_SCOPES } = require('../lib/ticketEnums');
+const { FORUM_REPORT_TYPES } = require('../lib/reportEnums');
 
 function forumDb() {
   const client = getMongoClient();
@@ -44,14 +45,13 @@ async function lookupHandles(ids) {
 }
 
 // Forum moderation covers Forums tickets and reports about forum content.
-const FORUM_REPORT_TYPES = ['discussion', 'comment', 'post', 'forum', 'thread', 'group', 'member'];
 
 async function getForumTickets({ status } = {}) {
   return fetchScopedTickets({ ...FORUM_TICKET_SCOPE, status });
 }
 
 async function getForumReports({ status } = {}) {
-  return fetchScopedReports({ targetTypesIn: FORUM_REPORT_TYPES, status });
+  return fetchScopedReports({ targetTypesIn: [...FORUM_REPORT_TYPES], status });
 }
 
 // ─── Forum content moderation (MongoDB) ─────────────────────────────────
@@ -241,56 +241,212 @@ async function getForumContentStats() {
   const db = forumDb();
   if (!db) return { available: false };
 
-  const [groupCount, activeGroupCount, discussionDocs] = await Promise.all([
-    db.collection('forum_groups').countDocuments({}),
-    db.collection('forum_groups').countDocuments({ status: 'active' }),
-    db
-      .collection('forum_discussions')
-      .aggregate([
-        {
-          $group: {
-            _id: null,
-            total: { $sum: 1 },
-            removed: { $sum: { $cond: [{ $ifNull: ['$deleted_at', false] }, 1, 0] } },
-            comments: { $sum: { $size: { $ifNull: ['$comments', []] } } },
+  const [groupCount, activeGroupCount, inactiveGroupCount, discussionDocs, recentGroups, recentDiscussions] =
+    await Promise.all([
+      db.collection('forum_groups').countDocuments({}),
+      db.collection('forum_groups').countDocuments({ status: 'active' }),
+      db.collection('forum_groups').countDocuments({ status: { $ne: 'active' } }),
+      db
+        .collection('forum_discussions')
+        .aggregate([
+          {
+            $group: {
+              _id: null,
+              total: { $sum: 1 },
+              removed: {
+                $sum: {
+                  $cond: [
+                    {
+                      $or: [
+                        { $ifNull: ['$deleted_at', false] },
+                        { $eq: ['$status', 'removed'] },
+                      ],
+                    },
+                    1,
+                    0,
+                  ],
+                },
+              },
+              locked: { $sum: { $cond: [{ $eq: ['$is_locked', true] }, 1, 0] } },
+              sticky: { $sum: { $cond: [{ $eq: ['$is_sticky', true] }, 1, 0] } },
+              comments: { $sum: { $size: { $ifNull: ['$comments', []] } } },
+            },
           },
-        },
-      ])
-      .toArray(),
-  ]);
+        ])
+        .toArray(),
+      db.collection('forum_groups').find({}).sort({ created_at: -1 }).limit(6).toArray(),
+      db.collection('forum_discussions').find({}).sort({ updated_at: -1, created_at: -1 }).limit(8).toArray(),
+    ]);
 
-  const d = discussionDocs[0] || { total: 0, removed: 0, comments: 0 };
+  const d = discussionDocs[0] || { total: 0, removed: 0, locked: 0, sticky: 0, comments: 0 };
+  const groupIds = [
+    ...new Set(recentDiscussions.map((x) => x.forum_group_id).filter(Boolean).map(String)),
+  ];
+  const groupNameMap = {};
+  if (groupIds.length) {
+    const linked = await db
+      .collection('forum_groups')
+      .find({ _id: { $in: groupIds.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id)) } })
+      .project({ group_name: 1 })
+      .toArray();
+    for (const g of linked) groupNameMap[String(g._id)] = g.group_name || 'Untitled group';
+  }
+
   return {
     available: true,
     totalGroups: groupCount,
     activeGroups: activeGroupCount,
+    inactiveGroups: inactiveGroupCount,
     totalDiscussions: d.total,
     removedDiscussions: d.removed,
+    lockedDiscussions: d.locked,
+    stickyDiscussions: d.sticky,
     totalComments: d.comments,
+    recentGroups: recentGroups.map((g) => ({
+      id: String(g._id),
+      name: g.group_name || 'Untitled group',
+      status: g.status || 'active',
+      memberCount: Array.isArray(g.members) ? g.members.length : 0,
+      createdAt: g.created_at || null,
+    })),
+    recentDiscussions: recentDiscussions.map((x) => ({
+      id: String(x._id),
+      title: x.title || 'Untitled discussion',
+      groupId: x.forum_group_id ? String(x.forum_group_id) : null,
+      groupName: x.forum_group_id ? groupNameMap[String(x.forum_group_id)] || null : null,
+      commentCount: Array.isArray(x.comments) ? x.comments.length : 0,
+      status: x.deleted_at || x.status === 'removed' ? 'removed' : x.status || 'active',
+      isLocked: Boolean(x.is_locked),
+      isSticky: Boolean(x.is_sticky),
+      updatedAt: x.updated_at || x.created_at || null,
+    })),
   };
 }
 
-function buildAlerts(tc, rc) {
+async function getForumReportBreakdown(targetTypesIn) {
+  const params = [targetTypesIn];
+  const result = await pool.query(
+    `
+    SELECT
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE LOWER(status) IN ('open', 'pending'))::int AS open_status,
+      COUNT(*) FILTER (WHERE LOWER(status) IN ('in_review', 'in review', 'in_progress', 'in progress'))::int AS in_review,
+      COUNT(*) FILTER (WHERE LOWER(status) IN ('resolved', 'closed'))::int AS resolved,
+      COUNT(*) FILTER (WHERE LOWER(status) = 'dismissed')::int AS dismissed,
+      COUNT(*) FILTER (
+        WHERE LOWER(status) NOT IN ('resolved', 'closed', 'dismissed')
+          AND assigned_staff_id IS NULL
+      )::int AS unassigned,
+      COUNT(*) FILTER (
+        WHERE LOWER(priority) = 'high'
+          AND LOWER(status) NOT IN ('resolved', 'closed', 'dismissed')
+      )::int AS high_priority
+    FROM reports
+    WHERE deleted_at IS NULL
+      AND LOWER(COALESCE(target_type, type)) = ANY($1)
+    `,
+    params
+  );
+  const typeResult = await pool.query(
+    `
+    SELECT LOWER(COALESCE(target_type, type)) AS target_type, COUNT(*)::int AS count
+    FROM reports
+    WHERE deleted_at IS NULL
+      AND LOWER(COALESCE(target_type, type)) = ANY($1)
+    GROUP BY 1
+    ORDER BY count DESC
+    `,
+    params
+  );
+  const c = result.rows[0] || {};
+  return {
+    counts: {
+      total: Number(c.total || 0),
+      openStatus: Number(c.open_status || 0),
+      inReview: Number(c.in_review || 0),
+      resolved: Number(c.resolved || 0),
+      dismissed: Number(c.dismissed || 0),
+      unassigned: Number(c.unassigned || 0),
+      highPriority: Number(c.high_priority || 0),
+      openCount:
+        Number(c.open_status || 0) + Number(c.in_review || 0),
+    },
+    byType: typeResult.rows.map((r) => ({
+      label: String(r.target_type || 'other')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (ch) => ch.toUpperCase()),
+      value: Number(r.count),
+    })),
+  };
+}
+
+function buildAlerts(tc, rc, reportBreakdown, contentStats) {
   const alerts = [];
   const openTickets = Number(tc.open_count) + Number(tc.in_progress);
 
   if (Number(tc.unassigned) > 0) {
-    alerts.push({ id: 'unassigned', message: `${tc.unassigned} forum ticket(s) have no assignee.`, severity: 'warning' });
+    alerts.push({
+      id: 'unassigned',
+      message: `${tc.unassigned} forum ticket(s) have no assignee.`,
+      severity: 'warning',
+      action: { tab: 'ticket-management', ticketFilters: { assignee: 'unassigned' } },
+    });
   }
   if (Number(tc.high_priority) > 0) {
-    alerts.push({ id: 'high-priority', message: `${tc.high_priority} high-priority forum ticket(s) need attention.`, severity: 'error' });
+    alerts.push({
+      id: 'high-priority',
+      message: `${tc.high_priority} high-priority forum ticket(s) need attention.`,
+      severity: 'error',
+      action: { tab: 'ticket-management', ticketFilters: { priority: 'High', flag: 'open_only' } },
+    });
   }
   if (Number(tc.awaiting_reply) > 0) {
-    alerts.push({ id: 'awaiting-reply', message: `${tc.awaiting_reply} forum ticket(s) awaiting a staff reply.`, severity: 'warning' });
+    alerts.push({
+      id: 'awaiting-reply',
+      message: `${tc.awaiting_reply} forum ticket(s) awaiting a staff reply.`,
+      severity: 'warning',
+      action: { tab: 'ticket-management', ticketFilters: { flag: 'awaiting' } },
+    });
   }
   if (Number(tc.escalated) > 0) {
-    alerts.push({ id: 'escalated', message: `${tc.escalated} escalated forum ticket(s) need a handoff.`, severity: 'error' });
+    alerts.push({
+      id: 'escalated',
+      message: `${tc.escalated} escalated forum ticket(s) need a handoff.`,
+      severity: 'error',
+      action: { tab: 'ticket-management', ticketFilters: { flag: 'escalated' } },
+    });
   }
   if (Number(rc.open_count) > 0) {
-    alerts.push({ id: 'flagged-content', message: `${rc.open_count} flagged forum item(s) awaiting review.`, severity: 'error' });
+    alerts.push({
+      id: 'flagged-content',
+      message: `${rc.open_count} flagged forum item(s) awaiting review.`,
+      severity: 'error',
+      action: { tab: 'reports' },
+    });
+  }
+  if (reportBreakdown?.counts?.unassigned > 0) {
+    alerts.push({
+      id: 'unassigned-reports',
+      message: `${reportBreakdown.counts.unassigned} forum report(s) are unassigned.`,
+      severity: 'warning',
+      action: { tab: 'reports' },
+    });
+  }
+  if (contentStats?.available && Number(contentStats.removedDiscussions) > 0) {
+    alerts.push({
+      id: 'removed-discussions',
+      message: `${contentStats.removedDiscussions} discussion(s) are currently removed.`,
+      severity: 'info',
+      action: { tab: 'forum-discussion' },
+    });
   }
   if (openTickets > 0) {
-    alerts.push({ id: 'open-tickets', message: `${openTickets} forum ticket(s) open.`, severity: 'info' });
+    alerts.push({
+      id: 'open-tickets',
+      message: `${openTickets} forum ticket(s) open.`,
+      severity: 'info',
+      action: { tab: 'ticket-management' },
+    });
   }
   if (!alerts.length) {
     alerts.push({ id: 'clear', message: 'Forum queues are clear.', severity: 'success' });
@@ -299,17 +455,28 @@ function buildAlerts(tc, rc) {
 }
 
 async function getForumOverview() {
-  const [ticketCounts, categoryRows, reportCounts, tickets, reports, contentStats] = await Promise.all([
-    scopedTicketCounts(FORUM_TICKET_SCOPE),
-    scopedTicketCategoryBreakdown(FORUM_TICKET_SCOPE),
-    scopedReportCounts({ targetTypesIn: FORUM_REPORT_TYPES }),
-    getForumTickets(),
-    getForumReports(),
-    getForumContentStats(),
-  ]);
+  const forumTypes = [...FORUM_REPORT_TYPES];
+  const [ticketCounts, categoryRows, reportCounts, tickets, reports, contentStats, reportBreakdown] =
+    await Promise.all([
+      scopedTicketCounts(FORUM_TICKET_SCOPE),
+      scopedTicketCategoryBreakdown(FORUM_TICKET_SCOPE),
+      scopedReportCounts({ targetTypesIn: forumTypes }),
+      getForumTickets(),
+      getForumReports(),
+      getForumContentStats(),
+      getForumReportBreakdown(forumTypes),
+    ]);
 
   const tc = ticketCounts;
   const rc = reportCounts;
+  const rb = reportBreakdown.counts;
+
+  const reportStatusMix = [
+    { label: 'Open', value: rb.openStatus, color: '#f87171' },
+    { label: 'In review', value: rb.inReview, color: '#fbbf24' },
+    { label: 'Resolved', value: rb.resolved, color: '#34d399' },
+    { label: 'Dismissed', value: rb.dismissed, color: '#a1a1aa' },
+  ].filter((x) => x.value > 0);
 
   return {
     lastUpdated: new Date().toISOString(),
@@ -317,22 +484,37 @@ async function getForumOverview() {
       openTickets: Number(tc.open_count) + Number(tc.in_progress),
       totalTickets: Number(tc.total),
       unassignedTickets: Number(tc.unassigned),
+      highPriorityTickets: Number(tc.high_priority),
+      awaitingReplyTickets: Number(tc.awaiting_reply),
+      escalatedTickets: Number(tc.escalated),
+      inProgressTickets: Number(tc.in_progress),
       flaggedContent: Number(rc.open_count),
       totalReports: Number(rc.total),
+      unassignedReports: rb.unassigned,
+      highPriorityReports: rb.highPriority,
       resolvedTickets: Number(tc.resolved),
+      resolvedReports: rb.resolved,
     },
     forumContent: contentStats,
     charts: {
       ticketStatusMix: ticketStatusChart(tc),
       ticketCategories: toCategoryChart(categoryRows),
+      reportStatusMix,
+      reportTypes: reportBreakdown.byType.map((row, i) => ({
+        ...row,
+        color: ['#a78bfa', '#818cf8', '#c084fc', '#f0abfc', '#67e8f9', '#94a3b8'][i % 6],
+      })),
     },
-    recentTickets: tickets.slice(0, 8),
-    flaggedReports: reports.slice(0, 8),
-    alerts: buildAlerts(tc, rc),
+    recentTickets: tickets.slice(0, 10),
+    flaggedReports: reports.slice(0, 10),
+    alerts: buildAlerts(tc, rc, reportBreakdown, contentStats),
     notice: mongoConnected()
       ? null
       : 'MongoDB is not connected — forum groups, discussions and comment moderation are unavailable. Set MONGODB_URI in backend/.env to enable them. Ticket and report queues below always work.',
-    dataSources: { tables: ['tickets', 'reports', 'forum_groups (mongo)', 'forum_discussions (mongo)'], persisted: true },
+    dataSources: {
+      tables: ['tickets', 'reports', 'forum_groups (mongo)', 'forum_discussions (mongo)'],
+      persisted: true,
+    },
   };
 }
 

@@ -93,6 +93,7 @@ export default function ModeratorTicketDesk({
   listPath,
   accent = "sky",
   queueKey = "support",
+  statusControl = "buttons",
 }: {
   title?: string;
   subtitle?: string;
@@ -101,6 +102,7 @@ export default function ModeratorTicketDesk({
   listPath?: string;
   accent?: Accent;
   queueKey?: keyof typeof QUEUE_TYPES;
+  statusControl?: "select" | "buttons";
 }) {
   const [searchParams] = useSearchParams();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
@@ -140,8 +142,16 @@ export default function ModeratorTicketDesk({
     setError("");
     try {
       const res = await api.get(listPath || endpointBase);
-      if (res.data?.success) setTickets(res.data.data || []);
-      else setError("Failed to load tickets");
+      if (res.data?.success) {
+        const rows = (res.data.data || []) as SupportTicket[];
+        // Hard-scope specialist queues so cross-queue tickets never appear in the desk.
+        const allowed = new Set(typeCatalog.map((t) => t.toLowerCase()));
+        setTickets(
+          queueKey === "support"
+            ? rows
+            : rows.filter((t) => allowed.has(String(t.type || t.category || "").toLowerCase()))
+        );
+      } else setError("Failed to load tickets");
     } catch {
       setError("Failed to load tickets");
     } finally {
@@ -204,7 +214,7 @@ export default function ModeratorTicketDesk({
 
   if (loading) {
     return (
-      <main className="relative z-10 flex min-h-screen items-center justify-center md:ml-72">
+      <main className="relative z-10 flex min-h-screen items-center justify-center md:pl-[260px]">
         <Loader2 className={`h-8 w-8 animate-spin ${ACCENT_SPIN[accent]}`} />
       </main>
     );
@@ -212,7 +222,7 @@ export default function ModeratorTicketDesk({
 
   if (error && tickets.length === 0) {
     return (
-      <main className="relative z-10 p-8 md:ml-72">
+      <main className="relative z-10 p-8 md:pl-[260px]">
         <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-red-200">
           {error}
           <button type="button" onClick={() => void load()} className="mt-4 block text-sm underline">
@@ -225,7 +235,7 @@ export default function ModeratorTicketDesk({
 
   return (
     <main
-      className="relative z-10 min-h-screen px-6 py-8 md:ml-72 md:px-10"
+      className="relative z-10 min-h-screen px-6 py-8 md:pl-[260px] md:px-10"
       style={{ animation: "fadeIn 420ms ease" }}
     >
       {selectedId !== null && (
@@ -233,6 +243,7 @@ export default function ModeratorTicketDesk({
           ticketId={selectedId}
           endpointBase={endpointBase}
           accent={accent}
+          statusControl={statusControl}
           onClose={() => setSelectedId(null)}
           onUpdated={() => void load(true)}
         />

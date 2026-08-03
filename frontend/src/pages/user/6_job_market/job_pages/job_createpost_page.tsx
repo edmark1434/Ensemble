@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import ShapeGrid from "@/components/ui/ShapeGrid";
+import { useJobs } from "@/hooks/useJobs";
 
 // Sub-components & Popups
 import JobCreateHeader from "../job_components/job_creation_components/job_create_header";
@@ -17,10 +18,13 @@ const JobCreatePostPage: React.FC = () => {
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
 
-  // --- SLIDE 1 STATES ---
   const [thumbnail, setThumbnail] = useState("");
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const { createJob, uploadAttachment } = useJobs();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -121,28 +125,44 @@ const JobCreatePostPage: React.FC = () => {
     setCurrentSlide(3);
   };
 
-  const handleSubmit = () => {
-    const rawMinBudget = getRawNumber(minBudget);
-    const rawMaxBudget = getRawNumber(maxBudget);
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    try {
+      const rawMinBudget = getRawNumber(minBudget);
+      const rawMaxBudget = getRawNumber(maxBudget);
+      let fileId = null;
 
-    const finalJobPayload = {
-      title,
-      description,
-      category,
-      difficulty,
-      status: "Open",
-      postingAs: postingAs === "self" ? "Self" : selectedTeam,
-      skills,
-      priceRange: `₱${formatCommaString(minBudget)} ~ ₱${formatCommaString(maxBudget)}`,
-      minBudget: rawMinBudget,
-      maxBudget: rawMaxBudget,
-      timeline: `${minTimeline}-${maxTimeline} Days`,
-      positionsNeeded: positions,
-      thumbnail: thumbnail || "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=600&q=80",
-    };
+      if (thumbnailFile) {
+        fileId = await uploadAttachment(thumbnailFile, "jobs");
+      }
 
-    console.log("Submitting New Job Post Data:", finalJobPayload);
-    setIsSuccessOpen(true);
+      const finalJobPayload = {
+        title,
+        description,
+        category,
+        difficulty,
+        status: "Open",
+        posted_as: postingAs === "self" ? "Self" : "Team",
+        team_id: postingAs === "self" ? null : selectedTeam,
+        tags: skills, // Note: Backend may need adaptation if these are strings instead of IDs
+        payment_type: "Fixed",
+        experience_level: difficulty,
+        rate_credits_min: rawMinBudget,
+        rate_credits_max: rawMaxBudget,
+        timeline_min: parseInt(minTimeline) || 0,
+        timeline_max: parseInt(maxTimeline) || 0,
+        no_of_hires: positions,
+        file_id: fileId
+      };
+
+      await createJob(finalJobPayload);
+      setIsSuccessOpen(true);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "Failed to submit job post.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -218,6 +238,7 @@ const JobCreatePostPage: React.FC = () => {
                   previewUrl={previewUrl}
                   setPreviewUrl={setPreviewUrl}
                   setThumbnail={setThumbnail}
+                  setThumbnailFile={setThumbnailFile}
                   isDragging={isDragging}
                   setIsDragging={setIsDragging}
                   errors={errors}
@@ -290,6 +311,7 @@ const JobCreatePostPage: React.FC = () => {
                   onEditStep={setCurrentSlide}
                   onBack={() => setCurrentSlide(2)}
                   onSubmit={handleSubmit}
+                  isSubmitting={isSubmitting}
                 />
               </motion.div>
             )}

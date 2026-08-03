@@ -321,7 +321,7 @@ export default function MyCasesTab({
                   <td colSpan={7} className="px-5 py-16 text-center text-sm text-zinc-500">
                     {currentStaffId
                       ? cases.length === 0
-                        ? 'No cases are assigned to you yet. Take over a dispute, report, listing, or identity review to see it here.'
+                        ? 'No cases are assigned to you yet. Assign yourself to a dispute, report, listing, or identity review to see it here.'
                         : 'No assigned cases match this filter.'
                       : 'Staff session required to show your assigned cases.'}
                   </td>
