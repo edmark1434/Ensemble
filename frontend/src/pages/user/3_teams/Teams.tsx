@@ -1,294 +1,293 @@
-// src/pages/user/3_teams/Teams.tsx
-import { useState, useEffect } from "react";
-import {
-  Plus,
-  UserPlus,
-  X,
-  Compass
-} from "lucide-react";
-import UserHeader from "@/components/nav/user_header";
+import { useCallback, useEffect, useState } from "react";
+import axios from "axios";
+import { Compass, Plus, Search, UserPlus, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import api from "@/lib/axios";
+import UserHeader from "@/components/nav/user_header";
+import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
+import EditTeamModal from "./team_modals/EditTeamModal";
 
 interface Team {
-  id: number;
-  name: string;
-  memberCount: number;
-  role: "owner" | "admin" | "member";
-  banner: string;
-  description?: string;
-  pendingRequests?: number;
+  team_id: string;
+  display_name: string;
+  handle: string;
+  description: string;
+  avatar_path?: string;
+  member_count: number;
+  current_user_role?: string;
+  current_user_status?: string;
 }
 
-const myTeams: Team[] = [
-  {
-    id: 1,
-    name: "RavenLabs Development",
-    memberCount: 4,
-    role: "owner",
-    banner: "https://placehold.co/400x150/1e2130/4a6fa5?text=RavenLabs",
-    description: "A team of creative developers building the future of video editing",
-    pendingRequests: 2
-  },
-  {
-    id: 2,
-    name: "Creative Collective",
-    memberCount: 12,
-    role: "member",
-    banner: "https://placehold.co/400x150/1e2130/4a6fa5?text=Creative+Collective",
-    description: "A collective of video editors and content creators"
-  }
-];
+interface CreateTeamValues {
+  name: string;
+  handle: string;
+  tagline: string;
+  description: string;
+  photo: File;
+}
 
-const Teams: React.FC = () => {
+const cloudfrontUrl = String(import.meta.env.VITE_CLOUDFRONT_URL || "").replace(
+  /\/$/,
+  "",
+);
+
+function getImageUrl(path?: string) {
+  if (!path) return "";
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${cloudfrontUrl}/${path.replace(/^\/+/, "")}`;
+}
+
+export default function Teams() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [showBrowseTeams, setShowBrowseTeams] = useState(false);
-  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [isBrowseMode, setIsBrowseMode] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
-    useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 800);
-    return () => clearTimeout(timer);
-  }, []);
 
-  const handleTeamClick = (teamId: number) => {
-    navigate(`/teams/${teamId}`);
-  };
+  const loadTeams = useCallback(async () => {
+    setIsLoading(true);
 
-  const handleBrowseTeams = () => {
-    setShowBrowseTeams(true);
-  };
+    try {
+      const response = await api.get("/api/teams", {
+        params: {
+          mine: !isBrowseMode,
+          search: searchTerm,
+        },
+      });
 
-  const handleJoinWithCode = () => {
-    if (joinCode.trim()) {
-      console.log(`Joining team with code: ${joinCode}`);
-      // Here you would verify the code and join the team
-      setShowJoinModal(false);
-      setJoinCode("");
+      setTeams(response.data.data || []);
+    } catch (error: unknown) {
+      showErrorToast(getApiError(error, "Unable to load Teams"));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isBrowseMode, searchTerm]);
+
+  useEffect(() => {
+    void loadTeams();
+  }, [loadTeams]);
+
+  const createTeam = async ({ photo, ...teamValues }: CreateTeamValues) => {
+    if (!photo.type.startsWith("image/")) {
+      showErrorToast("Choose a valid image file");
+      return;
+    }
+
+    if (photo.size > 5 * 1024 * 1024) {
+      showErrorToast("Choose an image up to 5 MB");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const uploadResponse = await api.post("/api/files/upload-url", {
+        folder: "profile",
+        filename: photo.name,
+        contentType: photo.type,
+      });
+
+      await axios.put(uploadResponse.data.uploadUrl, photo, {
+        headers: {
+          "Content-Type": photo.type,
+        },
+      });
+
+      const fileResponse = await api.post("/api/files/register", {
+        name: photo.name,
+        path: uploadResponse.data.key,
+        mimeType: photo.type,
+        sizeBytes: photo.size,
+      });
+
+      const teamResponse = await api.post("/api/teams", {
+        ...teamValues,
+        avatarFileId: fileResponse.data.fileId,
+      });
+
+      showSuccessToast("Team created");
+      setIsCreateModalOpen(false);
+      navigate(`/teams/${teamResponse.data.data.team_id}`);
+    } catch (error: unknown) {
+      showErrorToast(getApiError(error, "Unable to create Team"));
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#080a12]">
-        <UserHeader pageTitle="Teams" credits={1250} />
-        <div className="mx-auto max-w-7xl p-6 md:p-8">
-          <div className="mb-8">
-            <div className="h-9 w-32 animate-pulse rounded-lg bg-white/10" />
-            <div className="mt-1 h-4 w-48 animate-pulse rounded-lg bg-white/5" />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[1, 2].map((i) => (
-              <div key={i} className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
-                <div className="h-24 w-full animate-pulse bg-white/10" />
-                <div className="p-4">
-                  <div className="h-5 w-32 animate-pulse rounded bg-white/10" />
-                  <div className="mt-1 h-3 w-20 animate-pulse rounded bg-white/5" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const joinTeam = async () => {
+    if (!joinCode.trim() || isSaving) return;
+
+    setIsSaving(true);
+
+    try {
+      await api.post("/api/teams/join-by-code", {
+        code: joinCode.trim(),
+      });
+
+      showSuccessToast("Team joined or request submitted");
+      setIsJoinModalOpen(false);
+      setJoinCode("");
+      setIsBrowseMode(false);
+      await loadTeams();
+    } catch (error: unknown) {
+      showErrorToast(getApiError(error, "Unable to join Team"));
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#080a12]">
-      <UserHeader pageTitle="Teams" credits={1250} />
+      <UserHeader pageTitle="Teams" />
 
-      <div className="mx-auto max-w-7xl p-6 md:p-8">
-
-        {/* Header Section */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-            Teams
-          </h1>
-          <p className="text-sm text-zinc-400" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-            Collaborate with your team members on projects
+      <main className="mx-auto max-w-7xl p-6 md:p-8">
+        <header className="mb-8">
+          <h1 className="text-2xl font-bold text-white">Teams</h1>
+          <p className="text-sm text-zinc-400">
+            Collaborate with your Team members on projects
           </p>
-        </div>
+        </header>
 
-        {/* Action Buttons */}
         <div className="mb-6 flex flex-wrap gap-3">
           <button
-            onClick={() => setShowJoinModal(true)}
-            className="group flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl active:scale-95 active:bg-gradient-to-r active:from-cyan-500 active:via-yellow-500 active:to-purple-600 active:text-white"
+            onClick={() => setIsJoinModalOpen(true)}
+            className="flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black"
           >
-            <UserPlus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-12" />
+            <UserPlus className="h-4 w-4" />
             Join with Code
           </button>
+
           <button
-            onClick={handleBrowseTeams}
-            className="group flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-medium text-white transition-all duration-300 hover:border-white/30 hover:bg-white/10"
+            onClick={() => setIsBrowseMode((current) => !current)}
+            className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm text-white"
           >
-            <Compass className="h-4 w-4 transition-transform duration-300 group-hover:rotate-12" />
-            Browse Teams
+            {isBrowseMode ? (
+              <X className="h-4 w-4" />
+            ) : (
+              <Compass className="h-4 w-4" />
+            )}
+            {isBrowseMode ? "Back to My Teams" : "Browse Teams"}
           </button>
+
           <button
-            onClick={() => navigate("/teams/create")}
-            className="group flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-medium text-white transition-all duration-300 hover:border-white/30 hover:bg-white/10"
+            onClick={() => setIsCreateModalOpen(true)}
+            className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm text-white"
           >
-            <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
+            <Plus className="h-4 w-4" />
             Create a Team
           </button>
+
+          <label className="ml-auto flex rounded-full border border-white/15 bg-white/5 px-4 py-2 text-zinc-400">
+            <Search className="mr-2 h-4 w-4" />
+            <input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search Teams"
+              className="bg-transparent text-sm text-white outline-none"
+            />
+          </label>
         </div>
 
-        {/* My Teams Section */}
-        {!showBrowseTeams && (
-          <div>
-            <div className="mb-4">
-              <h2 className="text-lg font-semibold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                My Teams
-              </h2>
-              <p className="text-xs text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                Teams you're currently a member of
-              </p>
-            </div>
+        <h2 className="mb-4 text-lg font-semibold text-white">
+          {isBrowseMode ? "Browse Teams" : "My Teams"}
+        </h2>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {myTeams.map((team) => (
-                <div
-                  key={team.id}
-                  onClick={() => handleTeamClick(team.id)}
-                  className="group relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent transition-all duration-300 hover:border-white/20 hover:bg-white/10 hover:scale-[1.02] cursor-pointer"
-                >
-                  <div className="relative h-24 w-full overflow-hidden">
+        {isLoading ? (
+          <div className="p-8 text-zinc-400">Loading Teams...</div>
+        ) : teams.length === 0 ? (
+          <div className="rounded-xl border border-white/10 p-12 text-center text-zinc-400">
+            No Teams found.
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {teams.map((team) => (
+              <article
+                key={team.team_id}
+                onClick={() => navigate(`/teams/${team.team_id}`)}
+                className="group cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent transition hover:scale-[1.02] hover:border-white/20"
+              >
+                <div className="relative h-24 overflow-hidden bg-[#1e2130]">
+                  {team.avatar_path ? (
                     <img
-                      src={team.banner}
-                      alt={team.name}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                      src={getImageUrl(team.avatar_path)}
+                      alt={team.display_name}
+                      className="h-full w-full object-cover transition group-hover:scale-110"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#080a12] via-transparent to-transparent" />
-                    {team.pendingRequests && team.pendingRequests > 0 && (
-                      <div className="absolute top-2 right-2 rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">
-                        {team.pendingRequests}
-                      </div>
+                  ) : (
+                    <div className="grid h-full place-items-center text-3xl text-white/30">
+                      {team.display_name.slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#080a12] via-transparent to-transparent" />
+                </div>
+
+                <div className="p-4">
+                  <div className="flex justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-white">
+                        {team.display_name}
+                      </h3>
+                      <p className="text-xs text-zinc-500">
+                        @{team.handle} · {team.member_count} members
+                      </p>
+                    </div>
+
+                    {team.current_user_role && (
+                      <span className="h-fit rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
+                        {team.current_user_role}
+                      </span>
                     )}
                   </div>
 
-                  <div className="p-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="text-sm font-semibold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                          {team.name}
-                        </h3>
-                        <p className="text-xs text-zinc-500">{team.memberCount} members</p>
-                      </div>
-                      <div className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        team.role === "owner" 
-                          ? "bg-yellow-500/20 text-yellow-400" 
-                          : "bg-blue-500/20 text-blue-400"
-                      }`}>
-                        {team.role === "owner" ? "Owner" : "Member"}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-pink-500/5 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <p className="mt-2 line-clamp-2 text-xs text-zinc-400">
+                    {team.description || "No description"}
+                  </p>
                 </div>
-              ))}
-            </div>
+              </article>
+            ))}
           </div>
         )}
+      </main>
 
-        {/* Browse Teams Section */}
-        {showBrowseTeams && (
-          <div>
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                  Browse Teams
-                </h2>
-                <p className="text-xs text-zinc-500" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                  Discover teams to join
-                </p>
-              </div>
-              <button
-                onClick={() => setShowBrowseTeams(false)}
-                className="flex items-center gap-1 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-zinc-400 transition hover:border-white/30 hover:text-white"
-              >
-                <X className="h-4 w-4" />
-                Back to My Teams
-              </button>
-            </div>
+      <EditTeamModal
+        isOpen={isCreateModalOpen}
+        mode="create"
+        saving={isSaving}
+        onClose={() => setIsCreateModalOpen(false)}
+        onCreate={createTeam}
+      />
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {[
-                { id: 3, name: "Film Masters", memberCount: 8, banner: "https://placehold.co/400x150/1e2130/4a6fa5?text=Film+Masters", description: "Professional film editors community" },
-                { id: 4, name: "Motion Graphics Guild", memberCount: 6, banner: "https://placehold.co/400x150/1e2130/4a6fa5?text=Motion+Graphics", description: "Motion graphics and animation experts" },
-                { id: 5, name: "Sound Design Studio", memberCount: 5, banner: "https://placehold.co/400x150/1e2130/4a6fa5?text=Sound+Design", description: "Audio professionals and sound designers" },
-              ].map((team) => (
-                <div
-                  key={team.id}
-                  onClick={() => handleTeamClick(team.id)}
-                  className="group relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent transition-all duration-300 hover:border-white/20 hover:bg-white/10 hover:scale-[1.02] cursor-pointer"
-                >
-                  <div className="relative h-24 w-full overflow-hidden">
-                    <img
-                      src={team.banner}
-                      alt={team.name}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#080a12] via-transparent to-transparent" />
-                  </div>
-                  <div className="p-4">
-                    <h3 className="text-sm font-semibold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                      {team.name}
-                    </h3>
-                    <p className="text-xs text-zinc-500">{team.memberCount} members</p>
-                    <p className="mt-2 text-xs text-zinc-400 line-clamp-2">{team.description}</p>
-                    <button
-                      className="mt-3 rounded-full border border-blue-500/50 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-400 transition hover:bg-blue-500/20"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Navigate to team page where they can request to join
-                        handleTeamClick(team.id);
-                      }}
-                    >
-                      View Team
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Join with Code Modal */}
-      {showJoinModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d0f1a] p-6 shadow-2xl animate-scale-in">
-            <h3 className="text-xl font-semibold text-white mb-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+      {isJoinModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d0f1a] p-6">
+            <h3 className="mb-2 text-xl font-semibold text-white">
               Join a Team
             </h3>
-            <p className="text-sm text-zinc-400 mb-4" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-              Enter the team invite code to join
+            <p className="mb-4 text-sm text-zinc-400">
+              Enter the Team invite code to join.
             </p>
-
             <input
-              type="text"
               value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value)}
-              placeholder="Enter invite code (e.g., abc-123-def)"
-              className="w-full rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 mb-4"
-              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+              onChange={(event) => setJoinCode(event.target.value)}
+              className="mb-4 w-full rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-white outline-none"
+              placeholder="Invite code"
             />
-
             <div className="flex gap-3">
               <button
-                onClick={handleJoinWithCode}
-                disabled={!joinCode.trim()}
-                className="flex-1 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-2 text-sm font-medium text-white transition hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isSaving || !joinCode.trim()}
+                onClick={() => void joinTeam()}
+                className="flex-1 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 py-2 text-white disabled:opacity-50"
               >
-                Join Team
+                {isSaving ? "Joining..." : "Join Team"}
               </button>
               <button
-                onClick={() => {
-                  setShowJoinModal(false);
-                  setJoinCode("");
-                }}
-                className="flex-1 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-400 transition hover:bg-white/10 hover:text-white"
+                onClick={() => setIsJoinModalOpen(false)}
+                className="flex-1 rounded-full border border-white/15 py-2 text-zinc-400"
               >
                 Cancel
               </button>
@@ -296,21 +295,24 @@ const Teams: React.FC = () => {
           </div>
         </div>
       )}
-
-      <style>{`
-        @keyframes fade-in {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes scale-in {
-          from { opacity: 0; transform: scale(0.95); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        .animate-fade-in { animation: fade-in 0.2s ease-out; }
-        .animate-scale-in { animation: scale-in 0.2s ease-out; }
-      `}</style>
     </div>
   );
-};
+}
 
-export default Teams;
+function getApiError(error: unknown, fallback: string) {
+  if (typeof error === "object" && error !== null && "response" in error) {
+    return (
+      (
+        error as {
+          response?: {
+            data?: {
+              message?: string;
+            };
+          };
+        }
+      ).response?.data?.message || fallback
+    );
+  }
+
+  return fallback;
+}
