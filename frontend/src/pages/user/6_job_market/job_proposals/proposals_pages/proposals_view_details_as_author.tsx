@@ -33,7 +33,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
   const { proposalId } = useParams<{ proposalId: string }>();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { fetchProposalById, withdrawProposal, loading } = useJobs();
+  const { fetchProposalById, withdrawProposal, sendJobOffer, loading } = useJobs();
 
   const [proposal, setProposal] = useState<ProposalItemData | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -43,10 +43,14 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
   const [isShortlistModalOpen, setIsShortlistModalOpen] = useState(false);
   const [shortlistMessage, setShortlistMessage] = useState("");
 
+  const { updateProposalStatus } = useJobs();
+
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
 
   const [isAcceptConfirmOpen, setIsAcceptConfirmOpen] = useState(false);
+  const [contractStartsAt, setContractStartsAt] = useState("");
+
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
 
@@ -109,79 +113,106 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
 
   const targetJob = sampleJobs.find((j) => j.id === proposal?.jobId);
 
-  const handleConfirmShortlist = () => {
-    if (!shortlistMessage.trim()) return;
-    if (!proposal) return;
-
-    setProposal((prev) =>
-      prev
-        ? {
-            ...prev,
-            status: "Shortlisted",
-            updatedAt: new Date().toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-              hour: "numeric",
-              minute: "numeric",
-            }),
-            updatedAgo: "Just now",
-          }
-        : null
-    );
-
-    console.log(`Shortlisted ${proposal.partyName} with message: "${shortlistMessage}"`);
-    setIsShortlistModalOpen(false);
-    setShortlistMessage("");
+  const handleConfirmShortlist = async () => {
+    if (!shortlistMessage.trim() || !proposal) return;
+    
+    try {
+      const res = await updateProposalStatus(proposal.id, { 
+        status: "Shortlisted",
+        rejection_reason: shortlistMessage
+      });
+      if (res && res.success) {
+        setProposal((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "Shortlisted",
+              }
+            : null
+        );
+        console.log(`Shortlisted ${proposal.partyName} with message: "${shortlistMessage}"`);
+        setIsShortlistModalOpen(false);
+        setShortlistMessage("");
+      } else {
+        alert("Failed to shortlist applicant");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Error shortlisting applicant");
+    }
   };
 
-  const handleConfirmReject = () => {
-    if (!rejectionReason.trim()) return;
-    if (!proposal) return;
+  const handleConfirmReject = async () => {
+    if (!rejectionReason.trim() || !proposal) return;
 
-    setProposal((prev) =>
-      prev
-        ? {
-            ...prev,
-            status: "Rejected",
-            rejectionReason,
-            updatedAt: new Date().toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-              hour: "numeric",
-              minute: "numeric",
-            }),
-            updatedAgo: "Just now",
-          }
-        : null
-    );
+    try {
+      const res = await updateProposalStatus(proposal.id, {
+        status: "Rejected",
+        rejection_reason: rejectionReason
+      });
+      
+      if (res && res.success) {
+        setProposal((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "Rejected",
+                rejectionReason,
+                updatedAt: new Date().toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                  hour: "numeric",
+                  minute: "numeric",
+                }),
+                updatedAgo: "Just now",
+              }
+            : null
+        );
 
-    setIsRejectModalOpen(false);
-    setRejectionReason("");
+        setIsRejectModalOpen(false);
+        setRejectionReason("");
+      } else {
+        alert("Failed to reject applicant");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Error rejecting applicant");
+    }
   };
 
-  const handleConfirmAccept = () => {
+  const handleConfirmAccept = async () => {
     if (!proposal) return;
 
-    setProposal((prev) =>
-      prev
-        ? {
-            ...prev,
-            status: "Accepted",
-            updatedAt: new Date().toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-              hour: "numeric",
-              minute: "numeric",
-            }),
-            updatedAgo: "Just now",
-          }
-        : null
-    );
+    try {
+      await sendJobOffer(
+        proposal.id, 
+        proposal.bidAmount, 
+        contractStartsAt ? new Date(contractStartsAt).toISOString() : undefined
+      );
 
-    setIsAcceptConfirmOpen(false);
+      setProposal((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: "Accepted",
+              updatedAt: new Date().toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+                hour: "numeric",
+                minute: "numeric",
+              }),
+              updatedAgo: "Just now",
+            }
+          : null
+      );
+      setIsAcceptConfirmOpen(false);
+      navigate("/jobs/proposals");
+    } catch (err) {
+      console.error("Failed to send job offer", err);
+      alert("Failed to send job offer. Check wallet balance.");
+    }
   };
 
   const handleWithdrawProposal = async () => {
@@ -789,22 +820,35 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                   Are you sure you want to accept this proposal by <strong className="text-white">{proposal.partyName}</strong>?
                 </p>
                 <p className="text-[11px] text-zinc-400 bg-white/5 p-3 rounded-xl border border-white/5">
-                  Accepting will automatically form a binding escrow contract for <strong>₱{proposal.bidAmount.toLocaleString()}</strong> across {proposal.milestones.length} milestone phases.
+                  <span className="block mb-1">Agreed Bid: <strong className="text-white text-xs">₱{proposal.bidAmount.toLocaleString()}</strong></span>
+                  Accepting will automatically form a binding escrow contract for the agreed bid across {proposal.milestones.length} milestone phases.
                 </p>
+                <div className="pt-2">
+                  <label className="text-xs font-medium text-zinc-400">Contract Start Date (Optional)</label>
+                  <input
+                    type="datetime-local"
+                    value={contractStartsAt}
+                    onChange={(e) => setContractStartsAt(e.target.value)}
+                    className="w-full mt-1 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white outline-none focus:border-emerald-500/50 transition"
+                  />
+                  <p className="text-[10px] text-zinc-500 mt-1">If left empty, contract starts immediately after applicant accepts.</p>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   onClick={() => setIsAcceptConfirmOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-white/10 text-xs font-bold text-zinc-400 hover:text-white transition"
+                  disabled={loading}
+                  className="px-4 py-2 rounded-xl border border-white/10 text-xs font-bold text-zinc-400 hover:text-white transition disabled:opacity-50"
                 >
                   Go Back
                 </button>
                 <button
                   onClick={handleConfirmAccept}
-                  className="px-5 py-2 rounded-xl bg-emerald-500 text-xs font-bold text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20"
+                  disabled={loading}
+                  className="px-5 py-2 rounded-xl bg-emerald-500 text-xs font-bold text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 disabled:opacity-50"
                 >
-                  Yes, Form Contract
+                  {loading ? "Processing..." : "Yes, Form Contract"}
                 </button>
               </div>
             </motion.div>

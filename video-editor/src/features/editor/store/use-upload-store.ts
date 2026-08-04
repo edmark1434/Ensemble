@@ -14,6 +14,10 @@ interface UploadFile {
   fileName?: string;
   name?: string;
   details?: { width?: number; height?: number; duration?: number };
+  fileSize?: number;
+  width?: number;
+  height?: number;
+  durationSeconds?: number;
 }
 
 interface IUploadStore {
@@ -148,7 +152,9 @@ const useUploadStore = create<IUploadStore>()(
             { file: upload.file, url: upload.url },
             callbacks,
             userId,
-            projectId
+            projectId,
+            upload.fileSize ?? undefined,
+            { width: upload.width, height: upload.height, durationSeconds: upload.durationSeconds }
           )
             .then((uploadData) => {
               // Add the complete upload data to the uploads array

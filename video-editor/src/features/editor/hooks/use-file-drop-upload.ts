@@ -3,10 +3,23 @@ import { useCallback, useRef, useState } from "react";
 import useUploadStore from "@/features/editor/store/use-upload-store";
 import useLayoutStore from "@/features/editor/store/use-layout-store";
 import { useIsLargeScreen } from "@/hooks/use-media-query";
+import { MAX_FILE_SIZE_BYTES } from "@/constants/upload-limits";
+
+export const formatFileSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(2)} KB`;
+  const mb = kb / 1024;
+  if (mb < 1024) return `${mb.toFixed(2)} MB`;
+  const gb = mb / 1024;
+  return `${gb.toFixed(2)} GB`;
+};
 
 export function useFileDropUpload() {
   const [isDragOver, setIsDragOver] = useState(false);
+  const [dragError, setDragError] = useState<string | null>(null);
   const dragCounterRef = useRef(0);
+  const dragErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { addPendingUploads, processUploads } = useUploadStore();
   const { setActiveMenuItem, setShowMenuItem, setDrawerOpen } = useLayoutStore();
@@ -21,11 +34,33 @@ export function useFileDropUpload() {
     }
   }, [isLargeScreen, setActiveMenuItem, setShowMenuItem, setDrawerOpen]);
 
+  const flashDragError = useCallback((message: string) => {
+    if (dragErrorTimeoutRef.current) clearTimeout(dragErrorTimeoutRef.current);
+    setDragError(message);
+    dragErrorTimeoutRef.current = setTimeout(() => setDragError(null), 3000);
+  }, []);
+
+  // Single choke point: called from handleDrop below AND directly from
+  // SceneEmpty's onFilesDropped={startUpload}. Filtering here means both
+  // paths get the size check without DroppableArea needing to know about it.
   const startUpload = useCallback(
     (files: File[]) => {
       if (files.length === 0) return;
 
-      const fileUploads = files.map((file) => ({
+      const oversized = files.filter((f) => f.size > MAX_FILE_SIZE_BYTES);
+      const validFiles = files.filter((f) => f.size <= MAX_FILE_SIZE_BYTES);
+
+      if (oversized.length > 0) {
+        const message =
+          oversized.length === 1
+            ? `${oversized[0].name} exceeds ${formatFileSize(MAX_FILE_SIZE_BYTES)} file size limit`
+            : `${oversized.length} files exceed ${formatFileSize(MAX_FILE_SIZE_BYTES)} file size limit`;
+        flashDragError(message);
+      }
+
+      if (validFiles.length === 0) return;
+
+      const fileUploads = validFiles.map((file) => ({
         id: crypto.randomUUID(),
         file,
         type: file.type,
@@ -40,7 +75,7 @@ export function useFileDropUpload() {
         processUploads();
       }, 0);
     },
-    [addPendingUploads, processUploads, openUploadsMenu]
+    [addPendingUploads, processUploads, openUploadsMenu, flashDragError]
   );
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
@@ -79,6 +114,7 @@ export function useFileDropUpload() {
 
   return {
     isDragOver,
+    dragError,
     handleDragEnter,
     handleDragOver,
     handleDragLeave,

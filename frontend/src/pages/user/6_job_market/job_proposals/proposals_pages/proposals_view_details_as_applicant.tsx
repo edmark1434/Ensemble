@@ -21,6 +21,7 @@ import {
   User,
   Send,
   UserCheck2,
+  Check
 } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
@@ -30,10 +31,10 @@ import { sampleJobs } from "../../job_datasets";
 import type { ProposalItemData, ProposalStatus } from "../proposals_components/proposals_list";
 
 export const ProposalsViewDetailsAsApplicant: React.FC = () => {
-  const { proposalId } = useParams<{ proposalId: string }>();
+  const { proposalId, contractId } = useParams<{ proposalId: string, contractId?: string }>();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { fetchProposalById, withdrawProposal, loading } = useJobs();
+  const { fetchProposalById, withdrawProposal, acceptJobOffer, loading } = useJobs();
 
   const [proposal, setProposal] = useState<ProposalItemData | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -46,9 +47,20 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
 
-  const [isAcceptConfirmOpen, setIsAcceptConfirmOpen] = useState(false);
+  const [isAcceptConfirmOpen, setIsAcceptConfirmOpen] = useState(!!contractId);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+
+  // Auto-open modal if contractId is present in URL
+  useEffect(() => {
+    if (contractId) {
+      setIsAcceptConfirmOpen(true);
+      setAgreedToTerms(false);
+    } else {
+      setIsAcceptConfirmOpen(false);
+    }
+  }, [contractId]);
 
   useEffect(() => {
     const loadProposal = async () => {
@@ -62,6 +74,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
           setProposal({
             id: p.proposal_id,
             jobId: p.job_id,
+            contractId: p.contract_id,
             jobTitle: p.job_title || "Unknown Job",
             partyName: (isIncoming ? p.freelancer_name || p.freelancer_handle : p.client_name || p.client_handle) || "Unknown",
             clientName: p.client_name || p.client_handle || "Unknown Client",
@@ -161,27 +174,34 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
     setRejectionReason("");
   };
 
-  const handleConfirmAccept = () => {
-    if (!proposal) return;
+  const handleConfirmAccept = async () => {
+    if (!proposal || !proposal.contractId) return;
 
-    setProposal((prev) =>
-      prev
-        ? {
-            ...prev,
-            status: "Accepted",
-            updatedAt: new Date().toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-              hour: "numeric",
-              minute: "numeric",
-            }),
-            updatedAgo: "Just now",
-          }
-        : null
-    );
-
-    setIsAcceptConfirmOpen(false);
+    try {
+      await acceptJobOffer(proposal.contractId);
+      
+      setProposal((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: "Hired",
+              updatedAt: new Date().toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+                hour: "numeric",
+                minute: "numeric",
+              }),
+              updatedAgo: "Just now",
+            }
+          : null
+      );
+      setIsAcceptConfirmOpen(false);
+      navigate("/jobs/proposals");
+    } catch (err) {
+      console.error("Failed to accept contract", err);
+      alert("Failed to accept contract.");
+    }
   };
 
   const handleWithdrawProposal = async () => {
@@ -484,7 +504,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
                 Cover Letter & Pitch Rationale
               </h3>
-              <div className="p-4 rounded-2xl border border-white/5 bg-white/[0.01] text-xs text-zinc-300 leading-relaxed whitespace-pre-line italic">
+              <div className="p-4 rounded-2xl border border-white/5 bg-white/[0.01] text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap break-words italic">
                 "{proposal.coverLetter}"
               </div>
             </div>
@@ -636,18 +656,36 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
           )}
 
           {/* Actions Bar for Freelancer (Applicant) */}
-          {proposal.type === "sent" && proposal.status === "Pending" && (
+          {proposal.type === "sent" && (
             <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
-              <button
-                onClick={() => setIsWithdrawModalOpen(true)}
-                className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-400 transition-all duration-300 hover:bg-red-500/20 hover:shadow-lg hover:shadow-red-500/10"
-              >
-                <XCircle className="h-4 w-4 shrink-0" />
-                <span className="whitespace-nowrap max-w-[65px] transition-all duration-300 group-hover:max-w-[150px]">
-                  <span className="inline group-hover:hidden">Withdraw</span>
-                  <span className="hidden group-hover:inline">Withdraw Proposal</span>
-                </span>
-              </button>
+              {proposal.status === "Approved" || proposal.status === "Hired" ? (
+                <button
+                  onClick={() => {
+                    navigate(`/jobs/proposals/sent/${proposal.id}/offer/${proposal.contractId}`);
+                  }}
+                  className="group relative flex items-center gap-2 overflow-hidden rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-bold text-white transition-all duration-300 hover:bg-emerald-600 hover:shadow-lg hover:shadow-emerald-500/20"
+                >
+                  <FileText className="h-4 w-4 shrink-0" />
+                  <span className="whitespace-nowrap max-w-[120px]">
+                    View Contract
+                  </span>
+                </button>
+              ) : proposal.status === "Pending" ? (
+                <button
+                  onClick={() => setIsWithdrawModalOpen(true)}
+                  className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-400 transition-all duration-300 hover:bg-red-500/20 hover:shadow-lg hover:shadow-red-500/10"
+                >
+                  <XCircle className="h-4 w-4 shrink-0" />
+                  <span className="whitespace-nowrap max-w-[65px] transition-all duration-300 group-hover:max-w-[150px]">
+                    <span className="inline group-hover:hidden">Withdraw</span>
+                    <span className="hidden group-hover:inline">Withdraw Proposal</span>
+                  </span>
+                </button>
+              ) : proposal.status === "Hired" ? (
+                <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 rounded-xl">
+                  <CheckCircle2 className="h-4 w-4" /> Contract Formed and Active in Escrow
+                </div>
+              ) : null}
             </div>
           )}
         </div>
@@ -692,6 +730,145 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                   className="px-5 py-2 rounded-xl bg-red-500 text-xs font-bold text-white hover:bg-red-600 transition shadow-lg shadow-red-500/20 disabled:opacity-50"
                 >
                   {isWithdrawing ? "Withdrawing..." : "Yes, Withdraw"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+        {isAcceptConfirmOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#0d0f1a] p-6 shadow-2xl space-y-6 text-left my-8"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-emerald-400" /> Formal Contract Details
+                </h3>
+                <button
+                  onClick={() => setIsAcceptConfirmOpen(false)}
+                  className="text-zinc-500 hover:text-white transition-colors"
+                >
+                  <XCircle className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                {/* I. Parties Involved */}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-bold text-white uppercase tracking-wider">I. Parties Involved</h4>
+                  <div className="grid grid-cols-2 gap-4 bg-white/5 p-4 rounded-xl border border-white/5">
+                    <div>
+                      <p className="text-[10px] text-zinc-500 font-semibold mb-1">CLIENT</p>
+                      <p className="text-xs text-white font-medium">{proposal.clientName}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-zinc-500 font-semibold mb-1">FREELANCER</p>
+                      <p className="text-xs text-white font-medium">{proposal.freelancerName}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* II. Scope of Work */}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-bold text-white uppercase tracking-wider">II. Scope of Work</h4>
+                  <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                    <p className="text-xs font-semibold text-white mb-2">{proposal.jobTitle}</p>
+                    <p className="text-xs text-zinc-400 leading-relaxed whitespace-pre-wrap">
+                      {targetJob?.description || "Description not available. The scope is defined by the job posting and subsequent communications."}
+                    </p>
+                  </div>
+                </div>
+
+                {/* III. Locked Milestones */}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-bold text-white uppercase tracking-wider">III. Locked Milestones</h4>
+                  <div className="bg-white/5 rounded-xl border border-white/5 overflow-hidden">
+                    {proposal.milestones.length > 0 ? (
+                      <table className="w-full text-left">
+                        <thead className="border-b border-white/10 bg-black/20">
+                          <tr>
+                            <th className="px-4 py-2 text-[10px] font-semibold text-zinc-400 uppercase">Phase</th>
+                            <th className="px-4 py-2 text-[10px] font-semibold text-zinc-400 uppercase text-right">Revisions</th>
+                            <th className="px-4 py-2 text-[10px] font-semibold text-zinc-400 uppercase text-right">Hours</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {proposal.milestones.map((m, i) => (
+                            <tr key={i} className="hover:bg-white/5 transition-colors">
+                              <td className="px-4 py-2 text-xs text-zinc-300 font-medium">{m.name}</td>
+                              <td className="px-4 py-2 text-xs text-zinc-400 text-right">{m.revisions}</td>
+                              <td className="px-4 py-2 text-xs text-emerald-400 font-medium text-right">{m.hours}h</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="border-t border-white/10 bg-black/20">
+                          <tr>
+                            <td className="px-4 py-3 text-xs font-bold text-white" colSpan={3}>
+                              Agreed Bid Amount: <span className="text-emerald-400">₱{proposal.bidAmount.toLocaleString()}</span>
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    ) : (
+                      <div className="p-4 text-xs text-zinc-400 text-center">No milestone phases defined.</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* IV. Agreed TOS */}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-bold text-white uppercase tracking-wider">IV. Agreed Terms of Service (TOS)</h4>
+                  <div className="bg-zinc-950 p-4 rounded-xl border border-white/5 space-y-2">
+                    <h5 className="text-xs font-bold text-white">{proposal.tosTitle}</h5>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed font-mono whitespace-pre-wrap">{proposal.tosContent}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Agreement Checkbox */}
+              <div className="pt-2">
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <div className="relative flex items-center justify-center mt-0.5">
+                    <input
+                      type="checkbox"
+                      className="peer sr-only"
+                      checked={agreedToTerms}
+                      onChange={(e) => setAgreedToTerms(e.target.checked)}
+                    />
+                    <div className="w-5 h-5 rounded border-2 border-white/20 bg-white/5 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-all flex items-center justify-center group-hover:border-emerald-400">
+                      <Check className={`w-3.5 h-3.5 text-white transition-opacity ${agreedToTerms ? 'opacity-100' : 'opacity-0'}`} strokeWidth={3} />
+                    </div>
+                  </div>
+                  <div className="text-xs text-zinc-300 leading-relaxed flex-1">
+                    <strong className="text-white block mb-0.5">I Agree to Platform Terms</strong>
+                    I acknowledge that clicking accept forms a legally binding agreement. Escrow funds for the agreed bid will be locked into the contract, and work is expected to commence as per the stated scope and terms.
+                  </div>
+                </label>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+                <button
+                  onClick={() => navigate(`/jobs/proposals/sent/${proposal.id}`)}
+                  disabled={loading}
+                  className="px-5 py-2.5 rounded-xl border border-white/10 text-xs font-bold text-zinc-400 hover:text-white transition disabled:opacity-50"
+                >
+                  Close & Review Later
+                </button>
+                <button
+                  onClick={async () => {
+                    await handleConfirmAccept();
+                    navigate(`/jobs/proposals/sent/${proposal.id}`);
+                  }}
+                  disabled={loading || !agreedToTerms}
+                  className="px-6 py-2.5 rounded-xl bg-emerald-500 text-xs font-bold text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  {loading ? "Processing..." : "Sign & Accept Contract"}
                 </button>
               </div>
             </motion.div>

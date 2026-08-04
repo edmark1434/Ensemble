@@ -27,8 +27,14 @@ import axios from "axios";
 import { getCurrentTime } from "@/features/editor/utils/time";
 import { normalizeDimensionsToCanvas } from "@/features/editor/utils/dimensions";
 import { useMasonryRows } from "@/features/editor/hooks/use-masonry-rows";
-import {resolveUniqueFileNameFromTaken} from "@/utils/filename";
 import useFileDropUpload from "@/features/editor/hooks/use-file-drop-upload";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 
 // Mirrors buildNormalizedImagePayload in Images.tsx
 const buildNormalizedImagePayload = (image: any) => {
@@ -160,7 +166,9 @@ const stripEphemeralFields = (item: any) => {
 // Probes a File's natural width/height up front, before the DB has a
 // value, so the masonry grid can lay it out correctly instead of
 // defaulting to a square while the upload is still in flight.
-const probeImageFileDimensions = (file: File): Promise<{ width: number; height: number } | null> => {
+const probeImageFileDimensions = (
+  file: File
+): Promise<{ width: number; height: number } | null> => {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -204,6 +212,53 @@ const probeVideoFileDimensions = (
       URL.revokeObjectURL(url);
       resolve(null);
     };
+    video.src = url;
+  });
+};
+
+const probeImageUrlDimensions = (
+  url: string
+): Promise<{ width: number; height: number } | null> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      resolve(
+        img.naturalWidth && img.naturalHeight
+          ? { width: img.naturalWidth, height: img.naturalHeight }
+          : null
+      );
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+};
+
+const probeVideoUrlDimensions = (
+  url: string
+): Promise<{ width: number; height: number; duration: number } | null> => {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    video.muted = true;
+    video.preload = "metadata";
+
+    const timeout = setTimeout(() => finish(null), 8000);
+    const finish = (result: { width: number; height: number; duration: number } | null) => {
+      clearTimeout(timeout);
+      resolve(result);
+    };
+
+    video.onloadedmetadata = () => {
+      finish(
+        video.videoWidth && video.videoHeight
+          ? {
+            width: video.videoWidth,
+            height: video.videoHeight,
+            duration: Number.isFinite(video.duration) ? video.duration : 0
+          }
+          : null
+      );
+    };
+    video.onerror = () => finish(null);
     video.src = url;
   });
 };
@@ -791,20 +846,26 @@ const UploadVideosGrid = ({
 
 export const Uploads = () => {
   const { setShowUploadModal, pendingUploads, activeUploads, uploads, setUploads } = useUploadStore();
-  const { projectId } = useStore();
   const [playingId, setPlayingId] = useState<string | null>(null);
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
   const queryClient = useQueryClient();
-  const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } =
+  const { isDragOver, dragError, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } =
     useFileDropUpload();
 
   const [activeTab, setActiveTab] = useState<"videos" | "images" | "audio">("videos");
   const seenUploadIdsRef = useRef<Set<string>>(new Set());
 
+  const { projectId, userId } = useStore();
+  const [scope, setScope] = useState<"mine" | "project" | "mine-in-project">("mine");
+
   const { data = [], isLoading, isError } = useQuery({
-    queryKey: ["media-assets", projectId],
-    queryFn: () => axios.get(`/api/media-assets?projectId=${projectId}`).then((r) => r.data.uploads),
-    enabled: !!projectId
+    queryKey: ["media-assets", projectId, scope, scope === "project" ? null : userId],
+    queryFn: () => {
+      const params = new URLSearchParams({ projectId, scope });
+      if (scope !== "project") params.set("userId", userId);
+      return axios.get(`/api/media-assets?${params}`).then((r) => r.data.uploads);
+    },
+    enabled: !!projectId && (scope === "project" || !!userId)
   });
 
   // Whenever a new upload lands in pending/active (i.e. its loading state
@@ -836,13 +897,19 @@ export const Uploads = () => {
   useEffect(() => {
     const toProbe = [...pendingUploads, ...activeUploads].filter((u) => {
       const kind = getUploadKind(u);
-      return kind === "image" && u.file && !probedImageFileDims[u.id] && !probingImageIdsRef.current.has(u.id);
+      return (
+        kind === "image" &&
+        (u.file || u.url) &&
+        !probedImageFileDims[u.id] &&
+        !probingImageIdsRef.current.has(u.id)
+      );
     });
     if (toProbe.length === 0) return;
 
     toProbe.forEach((u) => {
       probingImageIdsRef.current.add(u.id);
-      probeImageFileDimensions(u.file!).then((dims) => {
+      const probe = u.file ? probeImageFileDimensions(u.file) : probeImageUrlDimensions(u.url!);
+      probe.then((dims) => {
         probingImageIdsRef.current.delete(u.id);
         if (dims) {
           setProbedImageFileDims((prev) => ({ ...prev, [u.id]: dims }));
@@ -856,7 +923,7 @@ export const Uploads = () => {
       const kind = getUploadKind(u);
       return (
         kind === "video" &&
-        u.file &&
+        (u.file || u.url) &&
         !probedVideoFileDims[u.id] &&
         !probingVideoIdsRef.current.has(u.id)
       );
@@ -865,7 +932,8 @@ export const Uploads = () => {
 
     toProbe.forEach((u) => {
       probingVideoIdsRef.current.add(u.id);
-      probeVideoFileDimensions(u.file!).then((dims) => {
+      const probe = u.file ? probeVideoFileDimensions(u.file) : probeVideoUrlDimensions(u.url!);
+      probe.then((dims) => {
         probingVideoIdsRef.current.delete(u.id);
         if (dims) {
           setProbedVideoFileDims((prev) => ({ ...prev, [u.id]: dims }));
@@ -1085,11 +1153,21 @@ export const Uploads = () => {
     >
       <ModalUpload />
 
-      {isDragOver && (
-        <div className="pointer-events-none absolute inset-2 z-10 rounded-md border border-dashed border-primary bg-primary/10" />
+      {(isDragOver || dragError) && (
+        <div
+          className={`pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-md border border-dashed ${
+            dragError ? "border-red-500 bg-red-500/10" : "border-primary bg-primary/10"
+          }`}
+        >
+          {dragError && (
+            <span className="rounded bg-card/90 px-3 py-1 text-sm font-medium text-red-500">
+        {dragError}
+      </span>
+          )}
+        </div>
       )}
 
-      <div className="flex items-center justify-center p-4">
+      <div className="flex flex-col gap-4 p-4 pb-2">
         <Button
           className="w-full cursor-pointer"
           onClick={() => setShowUploadModal(true)}
@@ -1097,6 +1175,17 @@ export const Uploads = () => {
         >
           Upload files
         </Button>
+
+        <Select value={scope} onValueChange={(value) => setScope(value as typeof scope)}>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="mine">Your uploads</SelectItem>
+            <SelectItem value="project">Uploads in this project</SelectItem>
+            <SelectItem value="mine-in-project">Your uploads in this project</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {noUploads ? (

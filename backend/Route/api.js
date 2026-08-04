@@ -19,6 +19,7 @@ const jobRoutes = require('./job');
 const termsRoutes = require('./terms');
 const transactionRoutes = require('./transaction');
 const teamRoutes = require('./teams');
+const contractRoutes = require('./contract');
 const { getAllCountriesController,
     getAllPlacesController
 } = require('../Controllers/SystemControllers')
@@ -39,6 +40,7 @@ router.use('/verification', verificationRoutes);
 router.use('/tickets', ticketRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/jobs', jobRoutes);
+router.use('/contracts', contractRoutes);
 router.use('/terms-of-service', termsRoutes);
 router.use('/transactions', transactionRoutes);
 router.use('/teams', teamRoutes);

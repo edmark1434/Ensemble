@@ -70,7 +70,7 @@ const JobMain: React.FC = () => {
   const location = useLocation();
   const { id } = useParams();
 
-  const { fetchJobs, toggleSaveJob: toggleSaveJobApi } = useJobs();
+  const { fetchJobs, toggleJobSave: toggleSaveJobApi } = useJobs();
   const userInfo = useGlobalState((state) => state.user);
   const [loading, setLoading] = useState(true);
   const [viewType, setViewType] = useState<ViewType>("list");
@@ -119,15 +119,18 @@ const JobMain: React.FC = () => {
           clientRating: 5.0,
           ratingCount: 0,
           positionsNeeded: j.no_of_hires || 1,
-          applicantsCount: Number(j.applicant_count || 0),
-          savesCount: Number(j.saves_count || 0),
+          hiredCount: parseInt(j.hired_count) || 0,
+          applicantsCount: parseInt(j.applicant_count) || 0,
+          savesCount: parseInt(j.saves_count) || 0,
           timeline: `${j.timeline_min}-${j.timeline_max} Days`,
           thumbnail: j.thumbnail_path 
              ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${j.thumbnail_path}`
              : "/placeholder.svg",
           skills: j.tags || [],
           isSaved: j.is_saved || false,
-          isOwnPost: userInfo?.account_id === j.client_account_id
+          isOwnPost: userInfo?.account_id === j.client_account_id,
+          hasProposed: j.has_proposed || false,
+          myProposalId: j.my_proposal_id || null
         }));
         setJobsList(mappedJobs);
       } catch (err) {
