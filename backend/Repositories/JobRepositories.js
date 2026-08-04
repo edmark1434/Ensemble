@@ -79,8 +79,11 @@ async function getAllJobsRepositories(filters = {}, accountId = null) {
                 a.handle as client_handle,
                 (SELECT f.path FROM files f WHERE f.file_id = a.avatar_file_id LIMIT 1) as client_avatar_path,
                 (SELECT COUNT(*) FROM proposals p WHERE p.job_id = j.job_id AND p.deleted_at IS NULL) as applicant_count,
+                (SELECT COUNT(*) FROM proposals p WHERE p.job_id = j.job_id AND p.status = 'Hired' AND p.deleted_at IS NULL) as hired_count,
                 (SELECT COUNT(*) FROM job_saves js WHERE js.job_id = j.job_id) as saves_count,
                 CASE WHEN $1::uuid IS NOT NULL THEN (SELECT EXISTS(SELECT 1 FROM job_saves js WHERE js.job_id = j.job_id AND js.account_id = $1)) ELSE FALSE END as is_saved,
+                CASE WHEN $1::uuid IS NOT NULL THEN (SELECT EXISTS(SELECT 1 FROM proposals p WHERE p.job_id = j.job_id AND p.freelancer_account_id = $1 AND p.deleted_at IS NULL)) ELSE FALSE END as has_proposed,
+                CASE WHEN $1::uuid IS NOT NULL THEN (SELECT p.proposal_id FROM proposals p WHERE p.job_id = j.job_id AND p.freelancer_account_id = $1 AND p.deleted_at IS NULL LIMIT 1) ELSE NULL END as my_proposal_id,
                 (SELECT f.path FROM job_attachments ja JOIN files f ON ja.file_id = f.file_id WHERE ja.job_id = j.job_id AND ja.index = 0 LIMIT 1) as thumbnail_path,
                 (SELECT ARRAY_AGG(t.name) FROM job_tags jt JOIN tags t ON jt.tag_id = t.tag_id WHERE jt.job_id = j.job_id) as tags
             FROM jobs j
@@ -251,7 +254,8 @@ async function getProposalByIdRepositories(proposalId) {
                 f_acc.handle as freelancer_handle,
                 (SELECT f.path FROM files f WHERE f.file_id = f_acc.avatar_file_id LIMIT 1) as freelancer_avatar_path,
                 t.terms_title, t.terms_type, t.terms_description as terms_content,
-                (SELECT json_agg(json_build_object('id', m.proposal_milestone_id, 'name', m.name, 'description', m.description, 'hours', m.duration_hrs, 'revisions', m.no_of_revisions_max)) FROM proposal_milestones m WHERE m.proposal_id = p.proposal_id) as milestones
+                (SELECT json_agg(json_build_object('id', m.proposal_milestone_id, 'name', m.name, 'description', m.description, 'hours', m.duration_hrs, 'revisions', m.no_of_revisions_max)) FROM proposal_milestones m WHERE m.proposal_id = p.proposal_id) as milestones,
+                (SELECT jc.contract_id FROM job_contracts jc WHERE jc.proposal_id = p.proposal_id LIMIT 1) as contract_id
             FROM proposals p
             LEFT JOIN jobs j ON p.job_id = j.job_id
             LEFT JOIN accounts c ON j.client_account_id = c.account_id
