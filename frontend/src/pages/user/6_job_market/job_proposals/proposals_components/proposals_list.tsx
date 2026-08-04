@@ -21,6 +21,7 @@ export type ProposalStatus = "Pending" | "Shortlisted" | "Accepted" | "Rejected"
 export interface ProposalItemData {
   id: string;
   jobId: string;
+  contractId?: string;
   jobTitle: string;
   partyName: string;
   clientName?: string;
