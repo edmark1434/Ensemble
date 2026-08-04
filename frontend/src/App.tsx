@@ -225,6 +225,7 @@ function App() {
           <Route path='/jobs/proposals/edit/:proposalId' element={<ProposalsEditPage />} />
           <Route path='/jobs/proposals/received/:proposalId' element={<ProposalsViewDetailsAsAuthor />} />
           <Route path='/jobs/proposals/sent/:proposalId' element={<ProposalsViewDetailsAsApplicant />} />
+          <Route path='/jobs/proposals/sent/:proposalId/offer/:contractId' element={<ProposalsViewDetailsAsApplicant />} />
 
           <Route path='/gigs'>
             <Route index element={<GigMarketplace />} />
@@ -236,6 +237,7 @@ function App() {
           <Route path='/my-requests' element={<SectionPlaceholder title='MY REQUESTS' />} />
           <Route path='/terms-of-services' element={<TosMain />} />
           <Route path='/contracts' element={<Contracts />} />
+          <Route path='/contracts/:id' element={<Contracts />} />
           <Route path='/transactions' element={<TransactionHistoryMain />} />
         </Route>
       </Route>
