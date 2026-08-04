@@ -104,7 +104,7 @@ class PreviewTrackItem extends PreviewTrackItemBase {
 
     ctx.save();
     ctx.lineWidth = borderWidth;
-    ctx.setLineDash([5, 0]);
+    ctx.setLineDash([3, 2]);
 
     const fadeWidth = FADEABLE_TYPES.has(this.itemType) ? this.getFadeWidth() : 0;
 

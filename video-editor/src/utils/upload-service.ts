@@ -11,32 +11,112 @@ export type UploadStatusCallback = (
   error?: string
 ) => void;
 
+export type FileNameResolvedCallback = (
+  uploadId: string,
+  fileName: string
+) => void;
+
 export interface UploadCallbacks {
   onProgress: UploadProgressCallback;
   onStatus: UploadStatusCallback;
+  onFileNameResolved?: FileNameResolvedCallback;
+}
+
+type ProbedMetadata = {
+  width?: number;
+  height?: number;
+  durationSeconds?: number;
+};
+
+// Browser-only: reads width/height/duration off a File before it's uploaded,
+// using Image/video/audio elements rather than shelling out anywhere.
+function probeMediaFile(file: File): Promise<ProbedMetadata> {
+  return new Promise((resolve) => {
+    const objectUrl = URL.createObjectURL(file);
+    const cleanup = () => URL.revokeObjectURL(objectUrl);
+
+    // Don't let a corrupt/unreadable file stall the whole upload.
+    const timeout = setTimeout(() => {
+      cleanup();
+      resolve({});
+    }, 8000);
+
+    const finish = (result: ProbedMetadata) => {
+      clearTimeout(timeout);
+      cleanup();
+      resolve(result);
+    };
+
+    if (file.type.startsWith("image/")) {
+      const img = new Image();
+      img.onload = () =>
+        finish({ width: img.naturalWidth, height: img.naturalHeight });
+      img.onerror = () => finish({});
+      img.src = objectUrl;
+      return;
+    }
+
+    if (file.type.startsWith("video/")) {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.muted = true;
+      video.onloadedmetadata = () =>
+        finish({
+          width: video.videoWidth,
+          height: video.videoHeight,
+          durationSeconds: Number.isFinite(video.duration)
+            ? Math.round(video.duration)
+            : undefined
+        });
+      video.onerror = () => finish({});
+      video.src = objectUrl;
+      return;
+    }
+
+    if (file.type.startsWith("audio/")) {
+      const audio = document.createElement("audio");
+      audio.preload = "metadata";
+      audio.onloadedmetadata = () =>
+        finish({
+          durationSeconds: Number.isFinite(audio.duration)
+            ? Math.round(audio.duration)
+            : undefined
+        });
+      audio.onerror = () => finish({});
+      audio.src = objectUrl;
+      return;
+    }
+
+    finish({});
+  });
 }
 
 export async function processFileUpload(
   uploadId: string,
   file: File,
-  callbacks: UploadCallbacks
+  callbacks: UploadCallbacks,
+  userId: string,
+  projectId: string
 ): Promise<any> {
   try {
-    // Get presigned URL
-    const {
-      data: { uploads }
-    } = await axios.post(
-      "/api/uploads/presign",
-      {
-        userId: "PJ1nkaufw0hZPyhN7bWCP",
-        fileNames: [file.name]
-      },
-      {
-        headers: { "Content-Type": "application/json" }
-      }
-    );
+    // Probe in parallel with the presign request — no reason to wait on it.
+    const [{ data: { uploads } }, probed] = await Promise.all([
+      axios.post(
+        "/api/uploads/presign",
+        {
+          userId: userId,
+          fileNames: [file.name]
+        },
+        {
+          headers: { "Content-Type": "application/json" }
+        }
+      ),
+      probeMediaFile(file)
+    ]);
 
     const uploadInfo = uploads[0];
+
+    callbacks.onFileNameResolved?.(uploadId, uploadInfo.fileName);
 
     // Upload file with progress tracking
     await axios.put(uploadInfo.presignedUrl, file, {
@@ -48,6 +128,18 @@ export async function processFileUpload(
         callbacks.onProgress(uploadId, percent);
       },
       validateStatus: () => true
+    });
+
+    await axios.post("/api/uploads/complete", {
+      filePath: uploadInfo.filePath,
+      fileName: uploadInfo.fileName,
+      contentType: uploadInfo.contentType,
+      fileSize: file.size,
+      userId: userId,
+      projectId: projectId,
+      width: probed.width,
+      height: probed.height,
+      durationSeconds: probed.durationSeconds
     });
 
     // Construct upload data from uploadInfo
@@ -62,7 +154,12 @@ export async function processFileUpload(
       method: "direct",
       origin: "user",
       status: "uploaded",
-      isPreview: false
+      isPreview: false,
+      details: {
+        width: probed.width,
+        height: probed.height,
+        duration: probed.durationSeconds
+      }
     };
 
     callbacks.onStatus(uploadId, "uploaded");
@@ -76,17 +173,18 @@ export async function processFileUpload(
 export async function processUrlUpload(
   uploadId: string,
   url: string,
-  callbacks: UploadCallbacks
+  callbacks: UploadCallbacks,
+  userId: string,
+  projectId: string
 ): Promise<any[]> {
   try {
-    // Start with 10% progress
     callbacks.onProgress(uploadId, 10);
 
-    // Upload URL
     const { data: { uploads = [] } = {} } = await axios.post(
       "/api/uploads/url",
       {
-        userId: "PJ1nkaufw0hZPyhN7bWCP",
+        userId,
+        projectId,
         urls: [url]
       },
       {
@@ -94,11 +192,15 @@ export async function processUrlUpload(
       }
     );
 
-    // Update to 50% progress
-    callbacks.onProgress(uploadId, 50);
+    const resolvedFileName = uploads[0]?.fileName;
+    if (resolvedFileName) {
+      callbacks.onFileNameResolved?.(uploadId, resolvedFileName);
+    }
 
-    // Construct upload data from uploads array
-    const uploadDataArray = uploads.map((uploadInfo: any) => ({
+    callbacks.onProgress(uploadId, 100);
+    callbacks.onStatus(uploadId, "uploaded");
+
+    return uploads.map((uploadInfo: any) => ({
       fileName: uploadInfo.fileName,
       filePath: uploadInfo.filePath,
       fileSize: 0,
@@ -109,13 +211,13 @@ export async function processUrlUpload(
       method: "url",
       origin: "user",
       status: "uploaded",
-      isPreview: false
+      isPreview: false,
+      details: {
+        width: uploadInfo.width,
+        height: uploadInfo.height,
+        duration: uploadInfo.durationSeconds
+      }
     }));
-
-    // Complete
-    callbacks.onProgress(uploadId, 100);
-    callbacks.onStatus(uploadId, "uploaded");
-    return uploadDataArray;
   } catch (error) {
     callbacks.onStatus(uploadId, "failed", (error as Error).message);
     throw error;
@@ -125,13 +227,15 @@ export async function processUrlUpload(
 export async function processUpload(
   uploadId: string,
   upload: { file?: File; url?: string },
-  callbacks: UploadCallbacks
+  callbacks: UploadCallbacks,
+  userId: string,
+  projectId: string
 ): Promise<any> {
   if (upload.file) {
-    return await processFileUpload(uploadId, upload.file, callbacks);
+    return await processFileUpload(uploadId, upload.file, callbacks, userId, projectId);
   }
   if (upload.url) {
-    return await processUrlUpload(uploadId, upload.url, callbacks);
+    return await processUrlUpload(uploadId, upload.url, callbacks, userId, projectId);
   }
   callbacks.onStatus(uploadId, "failed", "No file or URL provided");
   throw new Error("No file or URL provided");

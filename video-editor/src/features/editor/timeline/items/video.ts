@@ -240,29 +240,36 @@ class Video extends Trimmable {
     return new Promise<void>((resolve) => {
       const img = new Image();
       img.crossOrigin = "anonymous";
-      img.src = `${fallbackThumbnail}?t=${Date.now()}`;
+
+      const isDataUri = fallbackThumbnail.startsWith("data:");
+      img.src = isDataUri ? fallbackThumbnail : `${fallbackThumbnail}?t=${Date.now()}`;
+
       img.onload = () => {
-        // Create a temporary canvas to resize the image
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
-        if (!ctx) return;
+        if (!ctx) {
+          resolve();
+          return;
+        }
 
-        // Calculate new width maintaining aspect ratio
         const aspectRatio = img.width / img.height;
         const targetHeight = 40;
         const targetWidth = Math.round(targetHeight * aspectRatio);
-        // Set canvas size and draw resized image
         canvas.height = targetHeight;
         canvas.width = targetWidth;
         ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
 
-        // Create new image from resized canvas
         const resizedImg = new Image();
         resizedImg.src = canvas.toDataURL();
-        // Update aspect ratio and cache the resized image
         this.aspectRatio = aspectRatio;
         this.thumbnailWidth = targetWidth;
         this.thumbnailCache.setThumbnail("fallback", resizedImg);
+        resolve();
+      };
+
+      img.onerror = () => {
+        // Failed to load (CORS, bad/corrupted src, network) — don't let
+        // this block initialize() forever, just skip the fallback thumbnail.
         resolve();
       };
     });
