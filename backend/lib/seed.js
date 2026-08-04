@@ -81,7 +81,7 @@ async function seedSampleJobs(userAccountIds) {
       minBudget: 28000,
       positionsNeeded: 3,
       timeline: "3-5 Days",
-      thumbnail: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80",
+      thumbnail: "https://d2dl0agwn9kque.cloudfront.net/jobs/placeholder_1785849579361_08797edc.png",
       skills: ["Multi-cam Editing", "Color Grading", "DaVinci Resolve", "Audio Sync"],
     },
     {
@@ -95,7 +95,7 @@ async function seedSampleJobs(userAccountIds) {
       minBudget: 12000,
       positionsNeeded: 1,
       timeline: "1-3 Days",
-      thumbnail: "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?auto=format&fit=crop&w=600&q=80",
+      thumbnail: "https://d2dl0agwn9kque.cloudfront.net/jobs/placeholder_1785849579361_08797edc.png",
       skills: ["After Effects", "Motion Graphics", "Sound Design", "Typography"],
     },
     {
@@ -109,7 +109,7 @@ async function seedSampleJobs(userAccountIds) {
       minBudget: 45000,
       positionsNeeded: 2,
       timeline: "1-2 Weeks",
-      thumbnail: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=600&q=80",
+      thumbnail: "https://d2dl0agwn9kque.cloudfront.net/jobs/placeholder_1785849579361_08797edc.png",
       skills: ["Premiere Pro", "Branding", "Commercial Edit", "4K Rendering"],
     },
     {
@@ -123,7 +123,7 @@ async function seedSampleJobs(userAccountIds) {
       minBudget: 15000,
       positionsNeeded: 2,
       timeline: "5-7 Days",
-      thumbnail: "https://images.unsplash.com/photo-1611162616305-c69b3fa7fbe0?auto=format&fit=crop&w=600&q=80",
+      thumbnail: "https://d2dl0agwn9kque.cloudfront.net/jobs/placeholder_1785849579361_08797edc.png",
       skills: ["Short-form Video", "CapCut", "Subtitles & Captions", "Social Media"],
     },
     {
@@ -137,7 +137,7 @@ async function seedSampleJobs(userAccountIds) {
       minBudget: 22000,
       positionsNeeded: 1,
       timeline: "3-5 Days",
-      thumbnail: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=600&q=80",
+      thumbnail: "https://d2dl0agwn9kque.cloudfront.net/jobs/placeholder_1785849579361_08797edc.png",
       skills: ["Product Ads", "Motion Callouts", "Sound Sync", "Color Correction"],
     },
     {
@@ -151,7 +151,7 @@ async function seedSampleJobs(userAccountIds) {
       minBudget: 35000,
       positionsNeeded: 1,
       timeline: "1 Week",
-      thumbnail: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80",
+      thumbnail: "https://d2dl0agwn9kque.cloudfront.net/jobs/placeholder_1785849579361_08797edc.png",
       skills: ["VFX", "DaVinci Resolve", "Colorist", "Glow Effects"],
     },
     {
@@ -165,7 +165,7 @@ async function seedSampleJobs(userAccountIds) {
       minBudget: 8000,
       positionsNeeded: 1,
       timeline: "1-2 Days",
-      thumbnail: "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=600&q=80",
+      thumbnail: "https://d2dl0agwn9kque.cloudfront.net/jobs/placeholder_1785849579361_08797edc.png",
       skills: ["Velocity Sync", "Gaming Montage", "Sound SFX", "Meme Edits"],
     },
     {
@@ -179,7 +179,7 @@ async function seedSampleJobs(userAccountIds) {
       minBudget: 18000,
       positionsNeeded: 2,
       timeline: "2-4 Days",
-      thumbnail: "https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=600&q=80",
+      thumbnail: "https://d2dl0agwn9kque.cloudfront.net/jobs/placeholder_1785849579361_08797edc.png",
       skills: ["Drone Footage", "Speed Ramping", "Lower Thirds", "Real Estate"],
     },
     {
@@ -193,7 +193,7 @@ async function seedSampleJobs(userAccountIds) {
       minBudget: 30000,
       positionsNeeded: 1,
       timeline: "1 Week",
-      thumbnail: "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&w=600&q=80",
+      thumbnail: "https://d2dl0agwn9kque.cloudfront.net/jobs/placeholder_1785849579361_08797edc.png",
       skills: ["Audio Cleanup", "iZotope RX", "Noise Reduction", "Audio Mastering"],
     },
     {
@@ -207,7 +207,7 @@ async function seedSampleJobs(userAccountIds) {
       minBudget: 10000,
       positionsNeeded: 3,
       timeline: "3-5 Days",
-      thumbnail: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?auto=format&fit=crop&w=600&q=80",
+      thumbnail: "https://d2dl0agwn9kque.cloudfront.net/jobs/placeholder_1785849579361_08797edc.png",
       skills: ["Timer Overlay", "Batch Editing", "Video Trimming", "Fitness Edits"],
     }
   ];
@@ -260,16 +260,14 @@ async function seedSampleJobs(userAccountIds) {
     const jobId = jobRes.rows[0].job_id;
 
     // 2. Insert thumbnail file and link
-    if (job.thumbnail) {
-      const fileRes = await pool.query(
-        `INSERT INTO files (name, path, mime_type, size_bytes) VALUES ($1, $2, 'image/jpeg', 0) RETURNING file_id`,
-        ['thumbnail.jpg', job.thumbnail]
-      );
-      await pool.query(
-        `INSERT INTO job_attachments (job_id, file_id, index) VALUES ($1, $2, 0)`,
-        [jobId, fileRes.rows[0].file_id]
-      );
-    }
+    const fileRes = await pool.query(
+      `INSERT INTO files (name, path, mime_type, size_bytes) VALUES ($1, $2, 'image/png', 0) RETURNING file_id`,
+      ['thumbnail.png', 'jobs/placeholder_1785849579361_08797edc.png']
+    );
+    await pool.query(
+      `INSERT INTO job_attachments (job_id, file_id, index) VALUES ($1, $2, 0)`,
+      [jobId, fileRes.rows[0].file_id]
+    );
 
     // 3. Insert tags and link
     if (job.skills) {
