@@ -43,7 +43,7 @@ const SceneEmpty = () => {
 
   const { setShowUploadModal } = useUploadStore();
   const isMediumScreen = useIsMediumScreen();
-  const { startUpload } = useFileDropUpload();
+  const { startUpload, dragError } = useFileDropUpload();
 
   return (
     <div
@@ -56,30 +56,34 @@ const SceneEmpty = () => {
         <DroppableArea
           onDragStateChange={setIsDraggingOver}
           onFilesDropped={startUpload}
-          style={{
-            width: desiredSize.width,
-            height: desiredSize.height,
-          }}
-          className={`absolute bg-card left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform items-center justify-center border border-dashed text-center transition-colors duration-200 ease-in-out ${
-            isDraggingOver ? "border-primary bg-primary/10" : "border-border"
+          style={{ width: desiredSize.width, height: desiredSize.height }}
+          className={`absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 transform items-center justify-center border border-dashed bg-card text-center transition-colors duration-200 ease-in-out ${
+            dragError
+              ? "border-red-500 bg-red-500/10"
+              : isDraggingOver
+                ? "border-primary bg-primary/10"
+                : "border-border"
           }`}
         >
           <div className="flex items-center justify-center gap-4">
-            <Button
-              className="flex h-9 gap-2 cursor-pointer"
-              variant="default"
-              size={isMediumScreen ? "sm" : "icon"}
-              onClick={() => setShowUploadModal(true)}
-            >
-              <Plus width={16} />
-              <span className="hidden md:block">Upload files</span>
-            </Button>
-
-            <div className="flex flex-col gap-px">
-              <p className="text-sm text-muted-foreground/70">
-                or drag and drop files here
-              </p>
-            </div>
+            {dragError ? (
+              <p className="text-sm font-medium text-red-500">{dragError}</p>
+            ) : (
+              <>
+                <Button
+                  className="flex h-9 gap-2 cursor-pointer"
+                  variant="default"
+                  size={isMediumScreen ? "sm" : "icon"}
+                  onClick={() => setShowUploadModal(true)}
+                >
+                  <Plus width={16} />
+                  <span className="hidden md:block">Upload files</span>
+                </Button>
+                <div className="flex flex-col gap-px">
+                  <p className="text-sm text-muted-foreground/70">or drag and drop files here</p>
+                </div>
+              </>
+            )}
           </div>
         </DroppableArea>
       ) : (

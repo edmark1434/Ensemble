@@ -166,7 +166,9 @@ const stripEphemeralFields = (item: any) => {
 // Probes a File's natural width/height up front, before the DB has a
 // value, so the masonry grid can lay it out correctly instead of
 // defaulting to a square while the upload is still in flight.
-const probeImageFileDimensions = (file: File): Promise<{ width: number; height: number } | null> => {
+const probeImageFileDimensions = (
+  file: File
+): Promise<{ width: number; height: number } | null> => {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -210,6 +212,53 @@ const probeVideoFileDimensions = (
       URL.revokeObjectURL(url);
       resolve(null);
     };
+    video.src = url;
+  });
+};
+
+const probeImageUrlDimensions = (
+  url: string
+): Promise<{ width: number; height: number } | null> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      resolve(
+        img.naturalWidth && img.naturalHeight
+          ? { width: img.naturalWidth, height: img.naturalHeight }
+          : null
+      );
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+};
+
+const probeVideoUrlDimensions = (
+  url: string
+): Promise<{ width: number; height: number; duration: number } | null> => {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    video.muted = true;
+    video.preload = "metadata";
+
+    const timeout = setTimeout(() => finish(null), 8000);
+    const finish = (result: { width: number; height: number; duration: number } | null) => {
+      clearTimeout(timeout);
+      resolve(result);
+    };
+
+    video.onloadedmetadata = () => {
+      finish(
+        video.videoWidth && video.videoHeight
+          ? {
+            width: video.videoWidth,
+            height: video.videoHeight,
+            duration: Number.isFinite(video.duration) ? video.duration : 0
+          }
+          : null
+      );
+    };
+    video.onerror = () => finish(null);
     video.src = url;
   });
 };
@@ -800,7 +849,7 @@ export const Uploads = () => {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
   const queryClient = useQueryClient();
-  const { isDragOver, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } =
+  const { isDragOver, dragError, handleDragEnter, handleDragOver, handleDragLeave, handleDrop } =
     useFileDropUpload();
 
   const [activeTab, setActiveTab] = useState<"videos" | "images" | "audio">("videos");
@@ -848,13 +897,19 @@ export const Uploads = () => {
   useEffect(() => {
     const toProbe = [...pendingUploads, ...activeUploads].filter((u) => {
       const kind = getUploadKind(u);
-      return kind === "image" && u.file && !probedImageFileDims[u.id] && !probingImageIdsRef.current.has(u.id);
+      return (
+        kind === "image" &&
+        (u.file || u.url) &&
+        !probedImageFileDims[u.id] &&
+        !probingImageIdsRef.current.has(u.id)
+      );
     });
     if (toProbe.length === 0) return;
 
     toProbe.forEach((u) => {
       probingImageIdsRef.current.add(u.id);
-      probeImageFileDimensions(u.file!).then((dims) => {
+      const probe = u.file ? probeImageFileDimensions(u.file) : probeImageUrlDimensions(u.url!);
+      probe.then((dims) => {
         probingImageIdsRef.current.delete(u.id);
         if (dims) {
           setProbedImageFileDims((prev) => ({ ...prev, [u.id]: dims }));
@@ -868,7 +923,7 @@ export const Uploads = () => {
       const kind = getUploadKind(u);
       return (
         kind === "video" &&
-        u.file &&
+        (u.file || u.url) &&
         !probedVideoFileDims[u.id] &&
         !probingVideoIdsRef.current.has(u.id)
       );
@@ -877,7 +932,8 @@ export const Uploads = () => {
 
     toProbe.forEach((u) => {
       probingVideoIdsRef.current.add(u.id);
-      probeVideoFileDimensions(u.file!).then((dims) => {
+      const probe = u.file ? probeVideoFileDimensions(u.file) : probeVideoUrlDimensions(u.url!);
+      probe.then((dims) => {
         probingVideoIdsRef.current.delete(u.id);
         if (dims) {
           setProbedVideoFileDims((prev) => ({ ...prev, [u.id]: dims }));
@@ -1097,8 +1153,18 @@ export const Uploads = () => {
     >
       <ModalUpload />
 
-      {isDragOver && (
-        <div className="pointer-events-none absolute inset-2 z-10 rounded-md border border-dashed border-primary bg-primary/10" />
+      {(isDragOver || dragError) && (
+        <div
+          className={`pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-md border border-dashed ${
+            dragError ? "border-red-500 bg-red-500/10" : "border-primary bg-primary/10"
+          }`}
+        >
+          {dragError && (
+            <span className="rounded bg-card/90 px-3 py-1 text-sm font-medium text-red-500">
+        {dragError}
+      </span>
+          )}
+        </div>
       )}
 
       <div className="flex flex-col gap-4 p-4 pb-2">

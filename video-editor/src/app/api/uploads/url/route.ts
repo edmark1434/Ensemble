@@ -10,7 +10,9 @@ import {
 } from "@/lib/s3";
 import { db } from "@/lib/db";
 import { resolveUserIdByAccountPublicId, resolveProjectId } from "@/utils/resolve-ids";
-import { probeAudioVideoDuration, probeImageDimensions } from "@/utils/media-probe";
+import {probeAudioVideoDuration, probeImageDimensions, probeVideoMetadata} from "@/utils/media-probe";
+import { resolveUniqueFileName } from "@/utils/resolve-unique-filename";
+import {MAX_FILE_SIZE_BYTES} from "@/constants/upload-limits";
 
 interface UrlEntry {
   url: string;
@@ -23,6 +25,46 @@ interface UploadUrlRequest {
   userId: string;
   projectId: string;
   urls: (string | UrlEntry)[];
+}
+
+async function readBufferWithLimit(response: Response, maxBytes: number): Promise<Buffer> {
+  const declaredLength = response.headers.get("content-length");
+  if (declaredLength && parseInt(declaredLength, 10) > maxBytes) {
+    throw new Error(`Exceeds ${maxBytes} byte limit (content-length: ${declaredLength})`);
+  }
+  if (!response.body) {
+    const buf = Buffer.from(await response.arrayBuffer());
+    if (buf.byteLength > maxBytes) throw new Error(`Exceeds ${maxBytes} byte limit`);
+    return buf;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw new Error(`Exceeds ${maxBytes} byte limit`);
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks.map((c) => Buffer.from(c)));
+}
+
+const GENERIC_CONTENT_TYPES = new Set([
+  "application/octet-stream",
+  "binary/octet-stream",
+  "application/binary",
+  ""
+]);
+
+function resolveContentType(headerType: string | null, url: string): string {
+  const normalized = headerType?.split(";")[0].trim().toLowerCase() ?? "";
+  if (headerType && !GENERIC_CONTENT_TYPES.has(normalized)) return headerType;
+  return getContentType(url);
 }
 
 export async function POST(request: NextRequest) {
@@ -59,53 +101,66 @@ export async function POST(request: NextRequest) {
       resolveProjectId(projectId)
     ]);
 
+    const reservedInBatch = new Set<string>();
+    const entriesWithNames = [];
+    for (const entry of entries) {
+      const original = entry.url.split("/").pop()?.split("?")[0] || "file";
+      const fileName = await resolveUniqueFileName(
+        ownerUserId,
+        original,
+        reservedInBatch
+      );
+      reservedInBatch.add(fileName);
+      entriesWithNames.push({ ...entry, fileName });
+    }
+
     const results = await Promise.allSettled(
-      entries.map(async ({ url: sourceUrl, width, height, durationSeconds }) => {
+      entriesWithNames.map(async ({ url: sourceUrl, width, height, durationSeconds, fileName }) => {
         const response = await fetch(sourceUrl);
 
         if (!response.ok) {
           throw new Error(`Failed to fetch ${sourceUrl}: ${response.status}`);
         }
 
-        const contentType =
-          response.headers.get("content-type") || getContentType(sourceUrl);
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+        const contentType = resolveContentType(response.headers.get("content-type"), sourceUrl);
+        const buffer = await readBufferWithLimit(response, MAX_FILE_SIZE_BYTES);
 
-        const originalName =
-          sourceUrl.split("/").pop()?.split("?")[0] || "file";
         const fileId = nanoid();
-        const filePath = buildS3Key(userId, fileId, originalName);
+        const filePath = buildS3Key(userId, fileId, fileName);
 
         await uploadBufferToS3(filePath, buffer, contentType);
 
         let resolvedWidth = width ?? null;
         let resolvedHeight = height ?? null;
-        let resolvedDuration = durationSeconds ?? null;
+        let resolvedDuration = durationSeconds != null ? Math.round(durationSeconds) : null;
 
-        if (
-          contentType.startsWith("image/") &&
-          (resolvedWidth == null || resolvedHeight == null)
-        ) {
-          const dims = await probeImageDimensions(buffer);
-          resolvedWidth = resolvedWidth ?? dims.width;
-          resolvedHeight = resolvedHeight ?? dims.height;
-        }
+        if (contentType.startsWith("image/")) {
+          if (resolvedWidth == null || resolvedHeight == null) {
+            const dims = await probeImageDimensions(buffer);
+            resolvedWidth = resolvedWidth ?? dims.width;
+            resolvedHeight = resolvedHeight ?? dims.height;
+          }
 
-        if (
-          (contentType.startsWith("audio/") || contentType.startsWith("video/")) &&
-          resolvedDuration == null
-        ) {
-          resolvedDuration = await probeAudioVideoDuration(buffer, contentType);
+        } else if (contentType.startsWith("video/")) {
+          if (resolvedWidth == null || resolvedHeight == null || resolvedDuration == null) {
+            const probed = await probeVideoMetadata(buffer, contentType);
+            resolvedWidth = resolvedWidth ?? probed.width;
+            resolvedHeight = resolvedHeight ?? probed.height;
+            resolvedDuration = resolvedDuration ?? probed.durationSeconds;
+          }
+
+        } else if (contentType.startsWith("audio/") && resolvedDuration == null) {
+          const probedDuration = await probeAudioVideoDuration(buffer, contentType);
+          resolvedDuration = probedDuration != null ? Math.round(probedDuration) : null;
         }
 
         const file = await db
           .insertInto("files")
           .values({
-            name: originalName,
+            name: fileName,
             path: filePath,
             mime_type: contentType,
-            size_bytes: arrayBuffer.byteLength
+            size_bytes: buffer.byteLength
           })
           .returning("file_id")
           .executeTakeFirstOrThrow();
@@ -116,8 +171,10 @@ export async function POST(request: NextRequest) {
             public_id: nanoid(),
             owner_user_id: ownerUserId,
             project_id: resolvedProjectId,
-            name: originalName,
+            name: fileName,
             original_file_id: file.file_id,
+            proxy_file_id: file.file_id,
+            thumbnail_file_id: file.file_id,
             type: contentType.split("/")[0],
             width: resolvedWidth,
             height: resolvedHeight,
@@ -127,7 +184,7 @@ export async function POST(request: NextRequest) {
           .executeTakeFirstOrThrow();
 
         return {
-          fileName: originalName,
+          fileName,
           filePath,
           contentType,
           originalUrl: sourceUrl,

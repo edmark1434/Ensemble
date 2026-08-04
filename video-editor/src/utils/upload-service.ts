@@ -175,22 +175,36 @@ export async function processUrlUpload(
   url: string,
   callbacks: UploadCallbacks,
   userId: string,
-  projectId: string
+  projectId: string,
+  estimatedBytes?: number,
+  dimensions?: { width?: number; height?: number; durationSeconds?: number }
 ): Promise<any[]> {
-  try {
-    callbacks.onProgress(uploadId, 10);
+  const BYTES_PER_SEC_ESTIMATE = 2 * 1024 * 1024; // conservative; fetch+reupload is slower than a direct PUT
+  const estimatedMs = estimatedBytes
+    ? Math.min(30000, Math.max(2000, (estimatedBytes / BYTES_PER_SEC_ESTIMATE) * 1000))
+    : 6000;
 
-    const { data: { uploads = [] } = {} } = await axios.post(
+  let simulated = 10;
+  callbacks.onProgress(uploadId, simulated);
+  const interval = setInterval(() => {
+    simulated = Math.min(85, simulated + 3);
+    callbacks.onProgress(uploadId, Math.round(simulated));
+  }, Math.max(200, estimatedMs / 25));
+
+  try {
+    const hasDims = dimensions && (dimensions.width || dimensions.height || dimensions.durationSeconds);
+    const { data: { uploads = [], failed = [] } = {} } = await axios.post(
       "/api/uploads/url",
-      {
-        userId,
-        projectId,
-        urls: [url]
-      },
-      {
-        headers: { "Content-Type": "application/json" }
-      }
+      { userId, projectId, urls: [hasDims ? { url, ...dimensions } : url] },
+      { headers: { "Content-Type": "application/json" } }
     );
+    clearInterval(interval);
+
+    if (uploads.length === 0) {
+      const message = failed[0] || "Failed to fetch URL";
+      callbacks.onStatus(uploadId, "failed", message);
+      throw new Error(message);
+    }
 
     const resolvedFileName = uploads[0]?.fileName;
     if (resolvedFileName) {
@@ -218,9 +232,9 @@ export async function processUrlUpload(
         duration: uploadInfo.durationSeconds
       }
     }));
-  } catch (error) {
-    callbacks.onStatus(uploadId, "failed", (error as Error).message);
-    throw error;
+  } catch (err) {
+    clearInterval(interval);
+    throw err;
   }
 }
 
@@ -229,13 +243,23 @@ export async function processUpload(
   upload: { file?: File; url?: string },
   callbacks: UploadCallbacks,
   userId: string,
-  projectId: string
+  projectId: string,
+  estimatedBytes?: number,
+  dimensions?: { width?: number; height?: number; durationSeconds?: number }
 ): Promise<any> {
   if (upload.file) {
     return await processFileUpload(uploadId, upload.file, callbacks, userId, projectId);
   }
   if (upload.url) {
-    return await processUrlUpload(uploadId, upload.url, callbacks, userId, projectId);
+    return await processUrlUpload(
+      uploadId,
+      upload.url,
+      callbacks,
+      userId,
+      projectId,
+      estimatedBytes ? estimatedBytes : undefined,
+      dimensions ? dimensions : undefined,
+    );
   }
   callbacks.onStatus(uploadId, "failed", "No file or URL provided");
   throw new Error("No file or URL provided");
