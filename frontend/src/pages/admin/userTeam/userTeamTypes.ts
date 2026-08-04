@@ -119,6 +119,8 @@ export type AdminVerificationDetails = {
   verificationStatus: string;
   kycStatus: string;
   verificationSessionId?: string;
+  verifiedAt: string | null;
+  expiresAt: string | null;
   decision: DiditVerificationDecision | null;
 };
 

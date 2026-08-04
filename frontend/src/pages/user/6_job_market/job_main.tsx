@@ -112,7 +112,7 @@ const JobMain: React.FC = () => {
           maxBudget: j.rate_credits_max || 0,
           postedBy: j.client_name || j.client_handle || "Unknown",
           clientAvatar: j.client_avatar_path
-            ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${j.client_avatar_path}`
+            ? `${import.meta.env.VITE_CLOUDFRONT_URL}${j.client_avatar_path.startsWith('/') ? '' : '/'}${j.client_avatar_path}`
             : undefined,
           postedAt: new Date(j.created_at).toLocaleString(),
           timeAgo: getTimeAgo(new Date(j.created_at)),

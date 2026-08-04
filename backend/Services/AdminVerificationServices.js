@@ -1,7 +1,16 @@
 const axios = require('axios');
 const {
   getUserVerificationRecord,
+  updateUserVerificationExpiry,
+  prepareUserVerificationApprovalExpiry,
+  restoreUserVerificationExpiry,
+  markUserVerificationPending,
 } = require('../Repositories/AdminUserTeamRepositories');
+const {
+  appyForResubmissionServices,
+  approvedVerificationServices,
+  DeclinedVerificationServices,
+} = require('./AccountVerificationServices');
 
 const DECISION_KYC_STATUSES = new Set(['in review', 'approved']);
 
@@ -61,6 +70,8 @@ async function getAdminVerificationDetails(accountId) {
       isVerified: Boolean(record?.is_verified),
       verificationStatus: 'No Verification Activity',
       kycStatus: 'No Verification Activity',
+      verifiedAt: record?.verified_at || null,
+      expiresAt: record?.expires_at || null,
       decision: null,
     };
   }
@@ -73,6 +84,8 @@ async function getAdminVerificationDetails(accountId) {
     verificationStatus,
     kycStatus,
     verificationSessionId: record.verification_session_id,
+    verifiedAt: record.verified_at || null,
+    expiresAt: record.expires_at || null,
     decision: null,
   };
 
@@ -105,4 +118,93 @@ async function getAdminVerificationDetails(accountId) {
   }
 }
 
-module.exports = { getAdminVerificationDetails };
+function actionError(message) {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+}
+
+async function applyAdminDiditVerificationAction(accountId, action, options = {}) {
+  const record = await getUserVerificationRecord(accountId);
+  if (!record?.verification_session_id || !record.didit_session_id) {
+    throw actionError('No verification session is linked to this user');
+  }
+
+  const normalizedAction = String(action || '').toLowerCase();
+  const kycStatus = String(record.kyc_status || '').toLowerCase();
+  const verificationStatus = String(record.internal_status || '').toLowerCase();
+  const verifiedByAccountId = options.verifiedByAccountId;
+  const comment = String(options.comment || '').trim();
+  if (normalizedAction === 'approve' && !verifiedByAccountId) {
+    throw actionError('The approving admin account could not be identified');
+  }
+  let validityDays = Number(options.validityDays);
+  if (!Number.isFinite(validityDays) || validityDays <= 0) validityDays = 365;
+  validityDays = Math.min(Math.max(Math.floor(validityDays), 1), 3650);
+
+  if (normalizedAction === 'approve') {
+    const alreadyApproved = kycStatus === 'approved'
+      && ['approved', 'verified'].includes(verificationStatus)
+      && Boolean(record.is_verified);
+
+    if (alreadyApproved) {
+      const expiry = await updateUserVerificationExpiry(accountId, validityDays, verifiedByAccountId);
+      return {
+        action: 'approve',
+        mode: expiry?.expiry_changed ? 'expiry_updated' : 'no_change',
+        verificationStatus: 'Approved',
+        kycStatus: 'Approved',
+        isVerified: true,
+        expiresAt: expiry?.expires_at || record.expires_at || null,
+        validityDays,
+      };
+    }
+
+    if (kycStatus !== 'in review' || record.is_verified) {
+      throw actionError('Only an In Review, unverified session can be approved through Didit');
+    }
+    if (!comment) {
+      throw actionError('A reason is required to approve this verification through Didit');
+    }
+
+    await prepareUserVerificationApprovalExpiry(accountId, validityDays, verifiedByAccountId);
+    try {
+      await approvedVerificationServices(record.didit_session_id, accountId, validityDays, comment);
+    } catch (error) {
+      await restoreUserVerificationExpiry(
+        accountId,
+        record.expires_at,
+        record.verified_by_account_id
+      );
+      throw error;
+    }
+    return {
+      action: 'approve',
+      mode: 'didit_requested',
+      verificationStatus: record.internal_status,
+      kycStatus: record.kyc_status,
+      validityDays,
+    };
+  }
+
+  if (normalizedAction === 'decline') {
+    if (!comment) throw actionError('A reason is required to decline this verification');
+    await DeclinedVerificationServices(record.didit_session_id, accountId, comment);
+    return { action: 'decline', mode: 'didit_requested' };
+  }
+
+  if (normalizedAction === 'reverify') {
+    if (!comment) throw actionError('A reason is required to request reverification');
+    await appyForResubmissionServices(record.didit_session_id, accountId, comment);
+    return { action: 'reverify', mode: 'didit_requested' };
+  }
+
+  if (normalizedAction === 'pending') {
+    await markUserVerificationPending(accountId);
+    return { action: 'pending', mode: 'local_update' };
+  }
+
+  throw actionError(`Unsupported verification action: ${action}`);
+}
+
+module.exports = { getAdminVerificationDetails, applyAdminDiditVerificationAction };

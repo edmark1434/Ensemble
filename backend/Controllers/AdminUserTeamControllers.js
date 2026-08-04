@@ -10,7 +10,10 @@ const {
   pardonAccount,
 } = require('../Repositories/AdminUserTeamRepositories');
 const { assertStatusActionAllowed } = require('../lib/userTeamPermissions');
-const { getAdminVerificationDetails } = require('../Services/AdminVerificationServices');
+const {
+  getAdminVerificationDetails,
+  applyAdminDiditVerificationAction,
+} = require('../Services/AdminVerificationServices');
 
 function staffIdFromSession(session) {
   return session?.staffId || session?.staff_id || null;
@@ -94,6 +97,40 @@ async function patchAdminAccountVerification(req, res) {
     console.error('Error updating verification:', err);
     res.status(400).json({ success: false, message: err.message || 'Failed to update verification' });
   }
+}
+
+async function runAdminDiditVerificationAction(req, res, action) {
+  try {
+    const data = await applyAdminDiditVerificationAction(req.params.accountId, action, {
+      validityDays: req.body?.validityDays ?? req.body?.validity_days,
+      verifiedByAccountId: req.session?.account_id,
+      comment: req.body?.comment,
+    });
+    const message = data.mode === 'no_change'
+      ? 'Verification is already approved with the selected validity period'
+      : data.mode === 'expiry_updated'
+        ? 'Verification expiry updated'
+        : `Didit ${action} request submitted`;
+    return res.status(200).json({ success: true, data, message });
+  } catch (err) {
+    console.error(`Error applying Didit ${action} action:`, err);
+    return res.status(err.statusCode || 500).json({
+      success: false,
+      message: err.statusCode ? err.message : `Failed to submit Didit ${action} request`,
+    });
+  }
+}
+
+async function approveAdminAccountVerification(req, res) {
+  return runAdminDiditVerificationAction(req, res, 'approve');
+}
+
+async function declineAdminAccountVerification(req, res) {
+  return runAdminDiditVerificationAction(req, res, 'decline');
+}
+
+async function resubmitAdminAccountVerification(req, res) {
+  return runAdminDiditVerificationAction(req, res, 'reverify');
 }
 
 async function postAdminAccountCreditAdjust(req, res) {
@@ -180,6 +217,9 @@ module.exports = {
   getAdminUserTeamOverview,
   patchAdminAccountStatus,
   patchAdminAccountVerification,
+  approveAdminAccountVerification,
+  declineAdminAccountVerification,
+  resubmitAdminAccountVerification,
   postAdminAccountCreditAdjust,
   postAdminAccountCreditFreeze,
   postAdminAccountWarn,

@@ -800,9 +800,12 @@ export function VerificationModal({
   const [validityDays, setValidityDays] = useState(365);
   const [customDays, setCustomDays] = useState('');
   const [useCustom, setUseCustom] = useState(false);
+  const [actionReason, setActionReason] = useState('');
+  const [actionReasonError, setActionReasonError] = useState('');
   const [diditDetails, setDiditDetails] = useState<AdminVerificationDetails | null>(null);
   const [diditLoading, setDiditLoading] = useState(loadDiditDetails);
   const [diditError, setDiditError] = useState('');
+  const [diditRefreshToken, setDiditRefreshToken] = useState(0);
 
   useEffect(() => {
     if (!loadDiditDetails) return;
@@ -821,7 +824,7 @@ export function VerificationModal({
     };
     void load();
     return () => { cancelled = true; };
-  }, [accountId, loadDiditDetails]);
+  }, [accountId, diditRefreshToken, loadDiditDetails]);
 
   const resolvedDays = useCustom
     ? Math.min(Math.max(Number(customDays) || 0, 1), 3650)
@@ -834,13 +837,48 @@ export function VerificationModal({
     return `${resolvedDays} day${resolvedDays === 1 ? '' : 's'}`;
   })();
 
+  const storedValidityLabel = (() => {
+    const verifiedAt = diditDetails?.verifiedAt;
+    const expiresAt = diditDetails?.expiresAt || verification.expiresAt;
+    if (!verifiedAt || !expiresAt) return '1 year (default)';
+
+    const days = Math.round(
+      (new Date(expiresAt).getTime() - new Date(verifiedAt).getTime()) / 86_400_000
+    );
+    if (!Number.isFinite(days) || days <= 0) return '—';
+    if (Math.abs(days - 365) <= 1 || Math.abs(days - 366) <= 1) return '1 year';
+    if (Math.abs(days - 730) <= 2 || Math.abs(days - 731) <= 2) return '2 years';
+    if (Math.abs(days - 180) <= 1) return '6 months';
+    return `${days} days`;
+  })();
+
+  const isAlreadyApproved =
+    String(diditDetails?.kycStatus || '').toLowerCase() === 'approved'
+    && ['approved', 'verified'].includes(
+      String(diditDetails?.verificationStatus || verification.status || '').toLowerCase()
+    )
+    && Boolean(diditDetails?.isVerified);
+
+  const requiresActionReason = (action: string) =>
+    Boolean(loadDiditDetails)
+    && ['approve', 'decline', 'reverify'].includes(action)
+    && !(action === 'approve' && isAlreadyApproved);
+
   const apply = async (action: string) => {
+    if (requiresActionReason(action) && !actionReason.trim()) {
+      setActionReasonError('A reason is required before submitting this action.');
+      return;
+    }
+    setActionReasonError('');
     setSaving(true);
     try {
       await setAccountVerification(accountId, action, {
         validityDays: action === 'approve' ? resolvedDays : undefined,
+        diditWorkflow: loadDiditDetails,
+        comment: actionReason.trim() || undefined,
       });
       onChanged?.();
+      if (loadDiditDetails) setDiditRefreshToken((value) => value + 1);
     } catch (err) {
       handleAccountActionError(err);
     } finally {
@@ -871,7 +909,6 @@ export function VerificationModal({
           </button>
           {[
             { label: 'Decline', action: 'decline' },
-            { label: 'Pending', action: 'pending' },
             { label: 'Require reverification now', action: 'reverify' },
           ].map((item) => (
             <button
@@ -888,7 +925,40 @@ export function VerificationModal({
       }
     >
       <div className="mb-6 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
-        <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="mb-4 block text-xs text-zinc-500">
+          Reason for verification action{' '}
+          <span className="text-red-400">* (required for Didit status actions)</span>
+          <textarea
+            value={actionReason}
+            onChange={(event) => {
+              setActionReason(event.target.value);
+              if (event.target.value.trim()) setActionReasonError('');
+            }}
+            required={Boolean(loadDiditDetails) && !isAlreadyApproved}
+            aria-invalid={Boolean(actionReasonError)}
+            aria-describedby={actionReasonError ? 'verification-action-reason-error' : undefined}
+            maxLength={1000}
+            rows={3}
+            placeholder="Explain why this verification is being approved, declined, or sent for reverification"
+            className={`mt-1 w-full resize-y rounded-lg border bg-white/[0.03] px-3 py-2 text-sm text-white placeholder:text-zinc-600 ${
+              actionReasonError ? 'border-red-500/70' : 'border-white/[0.1]'
+            }`}
+          />
+          {actionReasonError && (
+            <span id="verification-action-reason-error" className="mt-1 block text-red-400">
+              {actionReasonError}
+            </span>
+          )}
+        </label>
+        <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {loadDiditDetails && (
+            <div>
+              <p className="text-xs text-zinc-500">Account status</p>
+              <p className={`font-medium ${diditDetails?.isVerified ? 'text-emerald-300' : 'text-zinc-300'}`}>
+                {diditLoading ? 'Loading...' : diditDetails?.isVerified ? 'Verified' : 'Unverified'}
+              </p>
+            </div>
+          )}
           <div>
             <p className="text-xs text-zinc-500">Current status</p>
             <p className={verification.isExpired ? 'font-medium text-amber-300' : 'font-medium text-white'}>
@@ -908,8 +978,8 @@ export function VerificationModal({
             <p className="font-medium text-white">{formatDate(verification.expiresAt)}</p>
           </div>
           <div>
-            <p className="text-xs text-zinc-500">Default validity</p>
-            <p className="font-medium text-white">1 year</p>
+            <p className="text-xs text-zinc-500">Validity period</p>
+            <p className="font-medium text-white">{storedValidityLabel}</p>
           </div>
         </div>
 

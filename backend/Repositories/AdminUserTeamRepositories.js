@@ -436,6 +436,7 @@ async function getUserVerificationRecord(accountId) {
       avs.didit_session_id,
       avs.kyc_status,
       avs.verification_status AS internal_status,
+      avs.verified_by_account_id,
       avs.expires_at,
       avs.created_at AS session_created_at,
       avs.updated_at AS session_updated_at
@@ -448,6 +449,94 @@ async function getUserVerificationRecord(accountId) {
     [accountId]
   );
   return result.rows[0] || null;
+}
+
+async function updateUserVerificationExpiry(accountId, validityDays, verifiedByAccountId) {
+  const result = await pool.query(
+    `
+    WITH current_verification AS (
+      SELECT
+        avs.verification_session_id,
+        (
+          avs.expires_at IS NULL
+          OR v.verified_at IS NULL
+          OR ABS(EXTRACT(EPOCH FROM (avs.expires_at - v.verified_at)) - ($2::int * 86400)) > 60
+        ) AS expiry_changed
+      FROM account_verification_sessions avs
+      JOIN verifications v
+        ON avs.verification_session_id = v.verification_session_id
+      WHERE v.account_id = $1
+    )
+    UPDATE account_verification_sessions avs
+    SET expires_at = CASE
+          WHEN cv.expiry_changed THEN NOW() + ($2::int * INTERVAL '1 day')
+          ELSE avs.expires_at
+        END,
+        verified_by_account_id = $3,
+        updated_at = NOW()
+    FROM current_verification cv
+    WHERE avs.verification_session_id = cv.verification_session_id
+    RETURNING avs.expires_at, cv.expiry_changed
+    `,
+    [accountId, validityDays, verifiedByAccountId]
+  );
+  return result.rows[0] || null;
+}
+
+async function prepareUserVerificationApprovalExpiry(accountId, validityDays, verifiedByAccountId) {
+  const result = await pool.query(
+    `
+    UPDATE account_verification_sessions avs
+    SET expires_at = CASE
+          WHEN $2::int = 365 THEN NULL
+          ELSE NOW() + ($2::int * INTERVAL '1 day')
+        END,
+        verified_by_account_id = $3,
+        updated_at = NOW()
+    FROM verifications v
+    WHERE v.account_id = $1
+      AND avs.verification_session_id = v.verification_session_id
+    RETURNING avs.expires_at
+    `,
+    [accountId, validityDays, verifiedByAccountId]
+  );
+  return result.rows[0] || null;
+}
+
+async function restoreUserVerificationExpiry(accountId, expiresAt, verifiedByAccountId) {
+  await pool.query(
+    `
+    UPDATE account_verification_sessions avs
+    SET expires_at = $2,
+        verified_by_account_id = $3,
+        updated_at = NOW()
+    FROM verifications v
+    WHERE v.account_id = $1
+      AND avs.verification_session_id = v.verification_session_id
+    `,
+    [accountId, expiresAt || null, verifiedByAccountId || null]
+  );
+}
+
+async function markUserVerificationPending(accountId) {
+  await pool.query(
+    `
+    UPDATE verifications
+    SET is_verified = FALSE, verified_at = NULL, updated_at = NOW()
+    WHERE account_id = $1
+    `,
+    [accountId]
+  );
+  await pool.query(
+    `
+    UPDATE account_verification_sessions avs
+    SET verification_status = 'Pending', updated_at = NOW()
+    FROM verifications v
+    WHERE v.account_id = $1
+      AND avs.verification_session_id = v.verification_session_id
+    `,
+    [accountId]
+  );
 }
 
 async function fetchTeamsFromDatabase() {
@@ -1200,4 +1289,8 @@ module.exports = {
   warnAccount,
   pardonAccount,
   getUserVerificationRecord,
+  updateUserVerificationExpiry,
+  prepareUserVerificationApprovalExpiry,
+  restoreUserVerificationExpiry,
+  markUserVerificationPending,
 };

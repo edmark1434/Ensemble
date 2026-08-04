@@ -15,11 +15,21 @@ export async function setAccountStatus(accountId: string, action: string, option
 export async function setAccountVerification(
   accountId: string,
   action: string,
-  options?: ActionOptions & { validityDays?: number }
+  options?: ActionOptions & { validityDays?: number; diditWorkflow?: boolean; comment?: string }
 ) {
-  const res = await api.patch(`/api/admin/accounts/${accountId}/verification`, {
+  const diditPath: Record<string, string> = {
+    approve: 'approve',
+    decline: 'decline',
+    reverify: 'resubmit',
+  };
+  const suffix = options?.diditWorkflow ? diditPath[action] : undefined;
+  const endpoint = suffix
+    ? `/api/admin/accounts/${accountId}/verification/${suffix}`
+    : `/api/admin/accounts/${accountId}/verification`;
+  const res = await api.patch(endpoint, {
     action,
     validityDays: options?.validityDays,
+    comment: options?.comment,
   });
   if (!res.data?.success) throw new Error(res.data?.message || 'Verification update failed');
   if (!options?.silent) {
