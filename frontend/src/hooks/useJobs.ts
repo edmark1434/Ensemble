@@ -171,13 +171,40 @@ export const useJobs = () => {
         }
     };
 
-    const toggleSaveJob = async (jobId: string) => {
+    const toggleJobSave = async (jobId: string) => {
         setLoading(true);
         try {
             const res = await api.post(`/api/jobs/${jobId}/save`);
             return res.data;
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to toggle save');
+            throw err;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Contracts (Job Offers)
+    const sendJobOffer = async (proposalId: string, rateCredits: number, startsAt?: string) => {
+        setLoading(true);
+        try {
+            const res = await api.post('/api/contracts/job-offer', { proposalId, rateCredits, startsAt });
+            return res.data;
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Failed to send job offer');
+            throw err;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const acceptJobOffer = async (contractId: string) => {
+        setLoading(true);
+        try {
+            const res = await api.post(`/api/contracts/${contractId}/accept`);
+            return res.data;
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Failed to accept job offer');
             throw err;
         } finally {
             setLoading(false);
@@ -198,6 +225,8 @@ export const useJobs = () => {
         withdrawProposal,
         getTermsOfService,
         uploadAttachment,
-        toggleSaveJob
+        toggleJobSave,
+        sendJobOffer,
+        acceptJobOffer
     };
 };
