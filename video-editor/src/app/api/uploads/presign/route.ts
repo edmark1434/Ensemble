@@ -1,24 +1,24 @@
-import { NextRequest, NextResponse } from "next/server";
+// app/api/uploads/presign/route.ts
+
+import {connection, NextRequest, NextResponse} from "next/server";
+import { nanoid } from "nanoid";
+import {
+  buildPublicUrl,
+  buildS3Key,
+  createPresignedPutUrl,
+  getContentType
+} from "@/lib/s3";
+import { resolveUserIdByAccountPublicId } from "@/utils/resolve-ids";
+import { resolveUniqueFileName } from "@/utils/resolve-unique-filename";
 
 interface PresignRequest {
   userId: string;
   fileNames: string[];
 }
 
-interface ExternalPresignResponse {
-  fileName: string;
-  filePath: string;
-  contentType: string;
-  presignedUrl: string;
-  folder?: string;
-  url: string;
-}
-
-interface ExternalPresignsResponse {
-  uploads: ExternalPresignResponse[];
-}
-
 export async function POST(request: NextRequest) {
+  await connection();
+
   try {
     const body: PresignRequest = await request.json();
     const { userId, fileNames } = body;
@@ -37,39 +37,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Call external presigned URL service
-    const externalResponse = await fetch(
-      "https://upload-file-j43uyuaeza-uc.a.run.app/presigned",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          userId,
-          fileNames
-        })
-      }
-    );
+    const ownerUserId = await resolveUserIdByAccountPublicId(userId);
 
-    if (!externalResponse.ok) {
-      const errorData = await externalResponse.json();
-      return NextResponse.json(
-        {
-          error: "External presigned URL service failed",
-          details: errorData
-        },
-        { status: externalResponse.status }
+    const uploads = [];
+    const reservedInBatch = new Set<string>();
+
+    for (const fileName of fileNames) {
+      const uniqueFileName = await resolveUniqueFileName(
+        ownerUserId,
+        fileName,
+        reservedInBatch
       );
-    }
+      reservedInBatch.add(uniqueFileName);
 
-    const externalData: ExternalPresignsResponse =
-      await externalResponse.json();
-    const { uploads = [] } = externalData;
+      const contentType = getContentType(uniqueFileName);
+      const fileId = nanoid();
+      const filePath = buildS3Key(userId, fileId, uniqueFileName); // userId (public) still fine here — it's just the S3 folder prefix
+      const presignedUrl = await createPresignedPutUrl(filePath, contentType);
+
+      uploads.push({
+        fileName: uniqueFileName,
+        filePath,
+        contentType,
+        presignedUrl,
+        folder: "uploads",
+        url: buildPublicUrl(filePath)
+      });
+    }
 
     return NextResponse.json({
       success: true,
-      uploads: uploads
+      uploads
     });
   } catch (error) {
     console.error("Error in presign route:", error);
