@@ -18,7 +18,8 @@ const {
     getAccountVerificationByAccountId,
     getAccountVerificationSessionsByAccountId,
     updateAccountVerificationSessionStatus,
-    getAccountVerificationStatusByAccountId
+    getAccountVerificationStatusByAccountId,
+    updateAccountVerifications
 } = require("../Repositories/AccountVerificationRepositories");
 
 const {
@@ -172,7 +173,7 @@ async function createAccountVerificationSession(userId) {
         let verificationSession;
         if (existingSessionByAccountId) {
             verificationSession = await updateAccountVerificationSessionStatus(
-                existingSessionByAccountId.session_id,
+                existingSessionByAccountId.verification_session_id,
                 {
                     didit_session_id: didit.session_id,
                     verification_url: didit.url,
@@ -180,6 +181,9 @@ async function createAccountVerificationSession(userId) {
                     verification_status: "Pending",
                 }
             );
+            await updateAccountVerifications(user.account_id, {
+                verification_session_id: existingSessionByAccountId.verification_session_id,
+            });
         } else {
             verificationSession =
                 await createAccountVerificationSessionRepository({
@@ -187,6 +191,9 @@ async function createAccountVerificationSession(userId) {
                     didit_session_id: didit.session_id,
                     verification_url: didit.url,
                     kyc_status: didit.status,
+                });
+                await updateAccountVerifications(user.account_id, {
+                    verification_session_id: verificationSession.verification_session_id,
                 });
         }
 
@@ -249,6 +256,7 @@ async function sendVerificationServices(email, first_name, last_name) {
 
 module.exports = {
     createAccountVerificationSession,
+    updateAccountVerifications,
     appyForResubmissionServices,
     getAccountVerificationStatusServices,
     sendVerificationServices

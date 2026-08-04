@@ -6,6 +6,7 @@ const { getAdminDashboardOverview } = require('../Controllers/AdminControllers')
 const {
   getAdminTeamsManagement,
   getAdminUsersManagement,
+  getAdminUserVerificationDetails,
   getAdminUserTeamOverview,
   patchAdminAccountStatus,
   patchAdminAccountVerification,
@@ -64,6 +65,7 @@ router.patch('/staff/:staffId', [checkSession, requireAdmin], patchAdminStaff);
 router.delete('/staff/:staffId', [checkSession, requireAdmin], deleteAdminStaff);
 router.get('/teams-management', [checkSession, requireUserTeamFullWrite], getAdminTeamsManagement);
 router.get('/users-management', [checkSession, requireUserTeamAccess], getAdminUsersManagement);
+router.get('/accounts/:accountId/verification-details', [checkSession, requireUserTeamFullWrite], getAdminUserVerificationDetails);
 router.get('/user-team-overview', [checkSession, requireUserTeamAccess], getAdminUserTeamOverview);
 router.patch('/accounts/:accountId/status', [checkSession, requireUserTeamAccess], patchAdminAccountStatus);
 router.patch('/accounts/:accountId/verification', [checkSession, requireUserTeamFullWrite], patchAdminAccountVerification);

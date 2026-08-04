@@ -529,6 +529,7 @@ export default function UsersTab({
           entityName={selected.name}
           accountId={selected.accountId}
           verification={selected.verification}
+          loadDiditDetails
           onClose={closeModal}
           onChanged={() => void refreshAfterChange()}
         />

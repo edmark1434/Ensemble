@@ -10,6 +10,7 @@ const {
   pardonAccount,
 } = require('../Repositories/AdminUserTeamRepositories');
 const { assertStatusActionAllowed } = require('../lib/userTeamPermissions');
+const { getAdminVerificationDetails } = require('../Services/AdminVerificationServices');
 
 function staffIdFromSession(session) {
   return session?.staffId || session?.staff_id || null;
@@ -32,6 +33,16 @@ async function getAdminUsersManagement(req, res) {
   } catch (err) {
     console.error('Error fetching user management:', err);
     res.status(500).json({ success: false, message: 'Failed to load user accounts' });
+  }
+}
+
+async function getAdminUserVerificationDetails(req, res) {
+  try {
+    const data = await getAdminVerificationDetails(req.params.accountId);
+    res.status(200).json({ success: true, data });
+  } catch (err) {
+    console.error('Error fetching user verification details:', err);
+    res.status(500).json({ success: false, message: 'Failed to load verification details' });
   }
 }
 
@@ -165,6 +176,7 @@ async function postAdminAccountPardon(req, res) {
 module.exports = {
   getAdminTeamsManagement,
   getAdminUsersManagement,
+  getAdminUserVerificationDetails,
   getAdminUserTeamOverview,
   patchAdminAccountStatus,
   patchAdminAccountVerification,

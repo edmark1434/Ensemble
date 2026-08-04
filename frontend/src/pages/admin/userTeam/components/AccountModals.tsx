@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Download, X } from 'lucide-react';
+import api from '@/lib/axios';
 import {
   adjustAccountCredits,
   freezeAccountCredits,
@@ -10,6 +11,7 @@ import {
 } from '../accountActions';
 import type {
   CreditActivityItem,
+  AdminVerificationDetails,
   PlatformTeam,
   PlatformUserAccount,
   VerificationDetail,
@@ -648,23 +650,178 @@ const VERIFICATION_DURATION_OPTIONS = [
   { value: 730, label: '2 years' },
 ] as const;
 
+function VerificationStatusBadge({ status }: { status: string | null }) {
+  const value = status || 'Unavailable';
+  const normalized = value.toLowerCase();
+  const tone = normalized.includes('approv') || normalized.includes('complete')
+    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+    : normalized.includes('declin') || normalized.includes('reject')
+      ? 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+      : 'border-amber-500/30 bg-amber-500/10 text-amber-200';
+  return <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase ${tone}`}>{value}</span>;
+}
+
+function VerificationImage({ label, url }: { label: string; url: string | null }) {
+  if (!url) return null;
+  return (
+    <a href={url} target="_blank" rel="noreferrer" className="group block">
+      <span className="mb-1 block text-[10px] uppercase tracking-wide text-zinc-500">{label}</span>
+      <img
+        src={url}
+        alt={label}
+        referrerPolicy="no-referrer"
+        className="h-32 w-full rounded-lg border border-white/[0.08] bg-black/30 object-cover transition group-hover:border-white/20"
+      />
+    </a>
+  );
+}
+
+function DiditVerificationPanel({
+  details,
+  loading,
+  error,
+}: {
+  details: AdminVerificationDetails | null;
+  loading: boolean;
+  error: string;
+}) {
+  if (loading) return <p className="rounded-xl border border-white/[0.08] p-4 text-sm text-zinc-400">Loading verification activity...</p>;
+  if (error) return <p className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4 text-sm text-rose-200">{error}</p>;
+  if (!details) return null;
+
+  if (details.activity === 'none') {
+    return <p className="rounded-xl border border-dashed border-white/[0.1] p-5 text-center text-sm text-zinc-500">No Verification Activity</p>;
+  }
+
+  if (details.activity !== 'details' || !details.decision) {
+    return (
+      <div className="rounded-xl border border-white/[0.08] bg-black/20 p-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-white/[0.02] p-3">
+            <p className="text-xs text-zinc-400">Verification status</p>
+            <VerificationStatusBadge status={details.verificationStatus} />
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-white/[0.02] p-3">
+            <p className="text-xs text-zinc-400">KYC status</p>
+            <VerificationStatusBadge status={details.kycStatus} />
+          </div>
+        </div>
+        {details.activity === 'details_unavailable' && (
+          <p className="mt-2 text-xs text-amber-300">Detailed verification results are temporarily unavailable.</p>
+        )}
+      </div>
+    );
+  }
+
+  const { idVerification, liveness, faceMatch, ipAnalysis } = details.decision;
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 rounded-xl border border-white/[0.08] bg-black/20 p-4 sm:grid-cols-3">
+        <div><p className="mb-2 text-xs text-zinc-500">Verification status</p><VerificationStatusBadge status={details.verificationStatus} /></div>
+        <div><p className="mb-2 text-xs text-zinc-500">KYC status</p><VerificationStatusBadge status={details.kycStatus} /></div>
+        <div><p className="mb-2 text-xs text-zinc-500">Didit decision</p><VerificationStatusBadge status={details.decision.status} /></div>
+      </div>
+
+      <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h4 className="text-sm font-semibold text-white">ID verification</h4>
+            {idVerification?.documentType && <p className="text-xs text-zinc-500">{idVerification.documentType}</p>}
+          </div>
+          <VerificationStatusBadge status={idVerification?.status || null} />
+        </div>
+        {idVerification ? (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <VerificationImage label="ID front" url={idVerification.frontImage} />
+            <VerificationImage label="ID back" url={idVerification.backImage} />
+            <VerificationImage label="ID portrait" url={idVerification.portraitImage} />
+          </div>
+        ) : <p className="text-xs text-zinc-500">No ID verification result.</p>}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div><h4 className="text-sm font-semibold text-white">Liveness</h4>{liveness?.score != null && <p className="text-xs text-zinc-500">Score: {liveness.score}</p>}</div>
+            <VerificationStatusBadge status={liveness?.status || null} />
+          </div>
+          <VerificationImage label="Liveness image" url={liveness?.referenceImage || null} />
+          {liveness?.videoUrl && <a href={liveness.videoUrl} target="_blank" rel="noreferrer" className="mt-3 inline-block text-xs text-sky-300 hover:underline">Open liveness video</a>}
+        </div>
+
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div><h4 className="text-sm font-semibold text-white">Face match</h4>{faceMatch?.score != null && <p className="text-xs text-zinc-500">Score: {faceMatch.score}</p>}</div>
+            <VerificationStatusBadge status={faceMatch?.status || null} />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <VerificationImage label="Source face" url={faceMatch?.sourceImage || null} />
+            <VerificationImage label="Target face" url={faceMatch?.targetImage || null} />
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h4 className="text-sm font-semibold text-white">Device and IP analysis</h4>
+          <VerificationStatusBadge status={ipAnalysis?.status || null} />
+        </div>
+        {ipAnalysis ? (
+          <dl className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
+            <div><dt className="text-zinc-500">IP address</dt><dd className="mt-1 text-white">{ipAnalysis.ipAddress || '—'}</dd></div>
+            <div><dt className="text-zinc-500">Location</dt><dd className="mt-1 text-white">{[ipAnalysis.city, ipAnalysis.region, ipAnalysis.country].filter(Boolean).join(', ') || '—'}</dd></div>
+            <div><dt className="text-zinc-500">Device</dt><dd className="mt-1 text-white">{[ipAnalysis.deviceBrand, ipAnalysis.deviceModel].filter(Boolean).join(' ') || '—'}</dd></div>
+            <div><dt className="text-zinc-500">Browser</dt><dd className="mt-1 text-white">{ipAnalysis.browser || '—'}</dd></div>
+            <div><dt className="text-zinc-500">Operating system</dt><dd className="mt-1 text-white">{ipAnalysis.operatingSystem || '—'}</dd></div>
+            <div><dt className="text-zinc-500">Network flags</dt><dd className="mt-1 text-white">{ipAnalysis.isVpnOrTor ? 'VPN/Tor detected' : ipAnalysis.isDataCenter ? 'Data center detected' : 'No risk flags'}</dd></div>
+          </dl>
+        ) : <p className="text-xs text-zinc-500">No device or IP analysis result.</p>}
+      </div>
+    </div>
+  );
+}
+
 export function VerificationModal({
   entityName,
   accountId,
   verification,
   onClose,
   onChanged,
+  loadDiditDetails = false,
 }: {
   entityName: string;
   accountId: string;
   verification: VerificationDetail;
   onClose: () => void;
   onChanged?: () => void;
+  loadDiditDetails?: boolean;
 }) {
   const [saving, setSaving] = useState(false);
   const [validityDays, setValidityDays] = useState(365);
   const [customDays, setCustomDays] = useState('');
   const [useCustom, setUseCustom] = useState(false);
+  const [diditDetails, setDiditDetails] = useState<AdminVerificationDetails | null>(null);
+  const [diditLoading, setDiditLoading] = useState(loadDiditDetails);
+  const [diditError, setDiditError] = useState('');
+
+  useEffect(() => {
+    if (!loadDiditDetails) return;
+    let cancelled = false;
+    const load = async () => {
+      setDiditLoading(true);
+      setDiditError('');
+      try {
+        const response = await api.get(`/api/admin/accounts/${accountId}/verification-details`);
+        if (!cancelled) setDiditDetails(response.data?.data || null);
+      } catch {
+        if (!cancelled) setDiditError('Unable to load verification activity.');
+      } finally {
+        if (!cancelled) setDiditLoading(false);
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [accountId, loadDiditDetails]);
 
   const resolvedDays = useCustom
     ? Math.min(Math.max(Number(customDays) || 0, 1), 3650)
@@ -731,13 +888,21 @@ export function VerificationModal({
       }
     >
       <div className="mb-6 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
-        <div className="mb-4 grid gap-3 sm:grid-cols-3">
+        <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <p className="text-xs text-zinc-500">Current status</p>
             <p className={verification.isExpired ? 'font-medium text-amber-300' : 'font-medium text-white'}>
-              {verification.status}
+              {diditDetails?.verificationStatus || verification.status}
             </p>
           </div>
+          {loadDiditDetails && (
+            <div>
+              <p className="text-xs text-zinc-500">KYC status</p>
+              <p className="font-medium text-white">
+                {diditLoading ? 'Loading...' : diditDetails?.kycStatus || '—'}
+              </p>
+            </div>
+          )}
           <div>
             <p className="text-xs text-zinc-500">Verification expires</p>
             <p className="font-medium text-white">{formatDate(verification.expiresAt)}</p>
@@ -802,7 +967,9 @@ export function VerificationModal({
           </p>
         </div>
 
-        {verification.document ? (
+        {loadDiditDetails ? (
+          <DiditVerificationPanel details={diditDetails} loading={diditLoading} error={diditError} />
+        ) : verification.document ? (
           <div className="flex items-start justify-between">
             <div>
               <p className="font-medium text-white">{verification.document.name}</p>
