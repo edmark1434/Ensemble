@@ -27,8 +27,14 @@ import axios from "axios";
 import { getCurrentTime } from "@/features/editor/utils/time";
 import { normalizeDimensionsToCanvas } from "@/features/editor/utils/dimensions";
 import { useMasonryRows } from "@/features/editor/hooks/use-masonry-rows";
-import {resolveUniqueFileNameFromTaken} from "@/utils/filename";
 import useFileDropUpload from "@/features/editor/hooks/use-file-drop-upload";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 
 // Mirrors buildNormalizedImagePayload in Images.tsx
 const buildNormalizedImagePayload = (image: any) => {
@@ -791,7 +797,6 @@ const UploadVideosGrid = ({
 
 export const Uploads = () => {
   const { setShowUploadModal, pendingUploads, activeUploads, uploads, setUploads } = useUploadStore();
-  const { projectId } = useStore();
   const [playingId, setPlayingId] = useState<string | null>(null);
   const isDraggingOverTimeline = useIsDraggingOverTimeline();
   const queryClient = useQueryClient();
@@ -801,10 +806,17 @@ export const Uploads = () => {
   const [activeTab, setActiveTab] = useState<"videos" | "images" | "audio">("videos");
   const seenUploadIdsRef = useRef<Set<string>>(new Set());
 
+  const { projectId, userId } = useStore();
+  const [scope, setScope] = useState<"mine" | "project" | "mine-in-project">("mine");
+
   const { data = [], isLoading, isError } = useQuery({
-    queryKey: ["media-assets", projectId],
-    queryFn: () => axios.get(`/api/media-assets?projectId=${projectId}`).then((r) => r.data.uploads),
-    enabled: !!projectId
+    queryKey: ["media-assets", projectId, scope, scope === "project" ? null : userId],
+    queryFn: () => {
+      const params = new URLSearchParams({ projectId, scope });
+      if (scope !== "project") params.set("userId", userId);
+      return axios.get(`/api/media-assets?${params}`).then((r) => r.data.uploads);
+    },
+    enabled: !!projectId && (scope === "project" || !!userId)
   });
 
   // Whenever a new upload lands in pending/active (i.e. its loading state
@@ -1089,7 +1101,7 @@ export const Uploads = () => {
         <div className="pointer-events-none absolute inset-2 z-10 rounded-md border border-dashed border-primary bg-primary/10" />
       )}
 
-      <div className="flex items-center justify-center p-4">
+      <div className="flex flex-col gap-4 p-4 pb-2">
         <Button
           className="w-full cursor-pointer"
           onClick={() => setShowUploadModal(true)}
@@ -1097,6 +1109,17 @@ export const Uploads = () => {
         >
           Upload files
         </Button>
+
+        <Select value={scope} onValueChange={(value) => setScope(value as typeof scope)}>
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="mine">Your uploads</SelectItem>
+            <SelectItem value="project">Uploads in this project</SelectItem>
+            <SelectItem value="mine-in-project">Your uploads in this project</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {noUploads ? (
