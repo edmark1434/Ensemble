@@ -1,5 +1,7 @@
 // src/pages/user/contracts/contracts.tsx
 import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import api from "@/lib/axios";
 import UserHeader from "@/components/nav/user_header";
 import {
   Shield,
@@ -174,16 +176,69 @@ const ContractsSkeletonLoader: React.FC = () => (
 export const Contracts: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
+  const [contracts, setContracts] = useState<DetailedContract[]>([]);
   const [selectedContract, setSelectedContract] = useState<DetailedContract | null>(null);
 
+  const { id } = useParams<{ id?: string }>();
+  const navigate = useNavigate();
+
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 600);
-    return () => clearTimeout(timer);
-  }, []);
+    const fetchContracts = async () => {
+      try {
+        const res = await api.get('/api/contracts');
+        if (res.data.success) {
+          const mappedContracts = res.data.data.map((c: any) => ({
+            id: c.contract_id,
+            title: c.job_title || c.contract_type,
+            contractType: c.contract_type === 'job' ? 'Job' : 'Gig',
+            clientName: c.client_name || c.client_handle,
+            freelancerName: c.freelancer_name || c.freelancer_handle,
+            status: c.status,
+            isArchived: c.status === 'Done' || c.status === 'Cancelled',
+            dateCreated: new Date(c.created_at).toLocaleDateString(),
+            dateStarted: c.starts_at ? new Date(c.starts_at).toLocaleDateString() : undefined,
+            clientRange: "Fixed Price",
+            totalValueCredits: parseFloat(c.rate_credits) || 0,
+            platformFeePercent: 10,
+            jobDescription: c.job_description || "No description provided.",
+            addOnRate: "N/A",
+            freelancerTosTitle: c.terms_title || "Standard Terms",
+            freelancerTosContent: c.terms_content || "Standard terms apply.",
+            milestones: (c.milestones || []).filter(Boolean).map((m: any) => ({
+              id: m.id,
+              name: m.name,
+              revisions: parseInt(m.revisions, 10) || 0,
+              deadline: m.hours ? `${m.hours} Hours` : 'N/A',
+              credits: 0, // Would need calculation or separate fields
+              status: "Locked"
+            }))
+          }));
+          setContracts(mappedContracts);
+
+          // Auto-select contract if ID in URL
+          if (id) {
+            const contract = mappedContracts.find((c: DetailedContract) => c.id === id);
+            if (contract) {
+              setSelectedContract(contract);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch contracts:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchContracts();
+  }, [id]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSelectedContract(null);
+      if (e.key === "Escape") {
+        setSelectedContract(null);
+        navigate('/contracts');
+      }
     };
     if (selectedContract) {
       window.addEventListener("keydown", handleKeyDown);
@@ -191,7 +246,7 @@ export const Contracts: React.FC = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedContract]);
 
-  const filteredContracts = SAMPLE_DETAILED_CONTRACTS.filter((c) =>
+  const filteredContracts = contracts.filter((c) =>
     activeTab === "active" ? !c.isArchived : c.isArchived
   );
 
@@ -352,7 +407,10 @@ export const Contracts: React.FC = () => {
                         initial={{ opacity: 0, scale: 0.98 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.2 }}
-                        onClick={() => setSelectedContract(contract)}
+                        onClick={() => {
+                          setSelectedContract(contract);
+                          navigate(`/contracts/${contract.id}`);
+                        }}
                         className={`group relative cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/40 p-5 transition-all duration-300 hover:border-blue-500/50 hover:bg-zinc-900/80 hover:shadow-xl hover:shadow-blue-500/5 ${
                           isDone ? "opacity-60 grayscale-[30%] hover:opacity-100 hover:grayscale-0" : ""
                         }`}
@@ -465,7 +523,10 @@ export const Contracts: React.FC = () => {
       {selectedContract && (
         <div
           className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in font-['Plus_Jakarta_Sans']"
-          onClick={() => setSelectedContract(null)}
+          onClick={() => {
+            setSelectedContract(null);
+            navigate('/contracts');
+          }}
         >
           <div
             className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-white/15 bg-[#0a0d18] shadow-2xl"
@@ -480,7 +541,10 @@ export const Contracts: React.FC = () => {
                 </span>
               </div>
               <button
-                onClick={() => setSelectedContract(null)}
+                onClick={() => {
+                  setSelectedContract(null);
+                  navigate('/contracts');
+                }}
                 className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
               >
                 <X className="h-4 w-4" />
@@ -682,7 +746,10 @@ export const Contracts: React.FC = () => {
                 Press ESC or click close to exit
               </span>
               <button
-                onClick={() => setSelectedContract(null)}
+                onClick={() => {
+                  setSelectedContract(null);
+                  navigate('/contracts');
+                }}
                 className="rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/20"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
