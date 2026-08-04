@@ -21,6 +21,7 @@ export interface Job {
   clientRating: number;
   ratingCount: number;
   positionsNeeded: number;
+  hiredCount: number;
   applicantsCount: number;
   savesCount: number;
   timeline: string;
@@ -28,6 +29,8 @@ export interface Job {
   skills?: string[];
   isSaved?: boolean;
   isOwnPost?: boolean;
+  hasProposed?: boolean;
+  myProposalId?: string | null;
 }
 
 interface JobListProps {
@@ -395,7 +398,7 @@ const JobList: React.FC<JobListProps> = ({
 
                   <div className="flex items-center gap-2 text-[10px] font-medium text-zinc-400">
                     <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
-                      {job.positionsNeeded} positions needed
+                      {job.hiredCount}/{job.positionsNeeded} filled
                     </span>
                     <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
                       {job.applicantsCount} applicants

@@ -1,5 +1,5 @@
 import React from "react";
-import { Calendar, Clock, Briefcase, Users, Star, Send, CircleDollarSign, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw } from "lucide-react";
+import { Calendar, Clock, Briefcase, Users, Star, Send, CircleDollarSign, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw, FileText } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Job } from "./job_lists";
 
@@ -199,7 +199,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
               <div className="flex items-center justify-between text-[11px] font-medium text-zinc-400 px-1">
                 <span className="flex items-center gap-1 text-zinc-300">
                   <Briefcase className="h-3.5 w-3.5 text-zinc-500" />
-                  <strong className="text-white">{selectedJob.positionsNeeded}</strong> Positions Needed
+                  <strong className="text-white">{selectedJob.hiredCount} / {selectedJob.positionsNeeded}</strong> Positions Filled
                 </span>
                 <span className="flex items-center gap-1 text-zinc-300">
                   <Users className="h-3.5 w-3.5 text-zinc-500" />
@@ -208,12 +208,21 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
               </div>
 
               {!selectedJob.isOwnPost ? (
-                <button
-                  onClick={() => navigate(`/jobs/${selectedJob.id}/make-proposal`)}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 active:scale-[0.98]"
-                >
-                  <Send className="h-3.5 w-3.5" /> Send Proposal
-                </button>
+                selectedJob.hasProposed ? (
+                  <button
+                    onClick={() => navigate(`/jobs/proposals/sent/${selectedJob.myProposalId}`)}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 py-3 text-xs font-bold text-emerald-400 hover:bg-emerald-500/20 transition active:scale-[0.98]"
+                  >
+                    <FileText className="h-3.5 w-3.5" /> View your Proposal
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => navigate(`/jobs/${selectedJob.id}/make-proposal`)}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 active:scale-[0.98]"
+                  >
+                    <Send className="h-3.5 w-3.5" /> Send Proposal
+                  </button>
+                )
               ) : (
                 <div className="flex gap-2">
                   <button
