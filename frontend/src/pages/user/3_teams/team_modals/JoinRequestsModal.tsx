@@ -47,7 +47,10 @@ const JoinRequestsModal: React.FC<JoinRequestsModalProps> = ({
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <UserPlus className="h-5 w-5 text-blue-400" />
-            <h3 className="text-xl font-semibold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+            <h3
+              className="text-xl font-semibold text-white"
+              style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+            >
               Join Requests
             </h3>
           </div>
@@ -66,8 +69,12 @@ const JoinRequestsModal: React.FC<JoinRequestsModalProps> = ({
         {requests.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <UserPlus className="mb-3 h-12 w-12 text-zinc-500" />
-            <h3 className="text-lg font-semibold text-white">No pending requests</h3>
-            <p className="mt-1 text-sm text-zinc-400">When someone requests to join, they'll appear here</p>
+            <h3 className="text-lg font-semibold text-white">
+              No pending requests
+            </h3>
+            <p className="mt-1 text-sm text-zinc-400">
+              When someone requests to join, they'll appear here
+            </p>
           </div>
         ) : (
           <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
@@ -82,13 +89,19 @@ const JoinRequestsModal: React.FC<JoinRequestsModalProps> = ({
                   className="h-12 w-12 rounded-full object-cover ring-2 ring-white/20"
                 />
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-white">{request.name}</p>
+                  <p className="text-sm font-semibold text-white">
+                    {request.name}
+                  </p>
                   <div className="flex items-center gap-1 mt-1">
                     <Calendar className="h-3 w-3 text-zinc-500" />
-                    <p className="text-xs text-zinc-500">Requested {request.requestedAt}</p>
+                    <p className="text-xs text-zinc-500">
+                      Requested {request.requestedAt}
+                    </p>
                   </div>
                   {request.message && (
-                    <p className="text-xs text-zinc-400 mt-1 italic">"{request.message}"</p>
+                    <p className="text-xs text-zinc-400 mt-1 italic">
+                      "{request.message}"
+                    </p>
                   )}
                 </div>
                 <div className="flex gap-2">

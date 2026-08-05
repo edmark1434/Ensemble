@@ -95,7 +95,6 @@ async function reconcilePayment(payment) {
                     if (payment.status !== "EXPIRED") {
                         await updatePaymentByReference(payment.reference_id, {
                             status: "EXPIRED",
-                            UPDATED_AT: new Date()
                         });
 
                         await updateTopUpStatus(
@@ -104,6 +103,16 @@ async function reconcilePayment(payment) {
                             payment.payment_id ?? null,
                             payment.channel_code ?? null
                         );
+                        const notification = await createNotification({
+                            message: `Your payment for ${payment.reference_id} has expired. Please try again.`,
+                            is_read: false,
+                            reference_table: "payments",
+                            reference_prefix: "PAYMENT",
+                            reference_path: `${payment.redirect_url || `${process.env.FRONTEND_URL}/transactions`}`,
+                            reference_id: payment.payment_id,
+                            user_id: payment.user_id
+                        });
+                        io.to(notification.account_id).emit("notification", notification);
                     }
                     return;
 
@@ -144,7 +153,7 @@ async function reconcilePayment(payment) {
                     is_read: false,
                     reference_table: "payments",
                     reference_prefix: "PAYMENT",
-                    reference_path: `${process.env.FRONTEND_URL}/transactions`,
+                    reference_path: `${payment.redirect_url || payment.payment_link_url || `${process.env.FRONTEND_URL}/transactions`}`,
                     reference_id: payment.payment_id,
                     user_id: payment.user_id
                 });
@@ -158,7 +167,7 @@ async function reconcilePayment(payment) {
                     is_read: false,
                     reference_table: "payments",
                     reference_prefix: "PAYMENT",
-                    reference_path: `${process.env.FRONTEND_URL}/transactions`,
+                    reference_path: `${payment.redirect_url || payment.payment_link_url || `${process.env.FRONTEND_URL}/transactions`}`,
                     reference_id: payment.payment_id,
                     user_id: payment.user_id
                 });
@@ -218,7 +227,7 @@ async function reconcilePayment(payment) {
                     destination_wallet_id: userWallet.wallet_id,
                     fee_transaction_id: null,
                     reference_table: "payments",
-                    reference_id: payment.payment_id
+                    reference_id: payment.reference_id
                 });
                 await updatePlatformWalletBalance(result.credits_granted, 'add');
                 const notification = await createNotification({
@@ -226,7 +235,7 @@ async function reconcilePayment(payment) {
                     is_read: false,
                     reference_table: "credit_transactions",
                     reference_prefix: "TOPUP",
-                    reference_path: `${payment.redirect_url || `${process.env.FRONTEND_URL}/transactions`}`,
+                    reference_path: `${payment.redirect_url || payment.payment_link_url || `${process.env.FRONTEND_URL}/transactions`}`,
                     reference_id: userTransaction.credit_transaction_id,
                     user_id: payment.user_id
                 });

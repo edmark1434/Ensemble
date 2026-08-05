@@ -64,7 +64,7 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
       });
       return;
     }
-    navigate(referencePath || "/");
+    window.location.href = referencePath;
   };
 
   const handleMarkAllRead = () => {

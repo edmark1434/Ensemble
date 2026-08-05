@@ -11,7 +11,9 @@ async function getReusableAccountVerificationSessionByAccountId(accountId) {
                 'In Progress',
                 'Awaiting User',
                 'In Review',
-                'Resubmitted'
+                'Resubmitted',
+                'Approved',
+                'Declined'
             )
             ORDER BY created_at DESC
             LIMIT 1;
@@ -97,6 +99,37 @@ async function updateAccountVerificationSessionStatus(sessionId, payload) {
         return rows[0] || null;
     } catch (err) {
         console.error("Error updating account verification session status:", err);
+        throw err;
+    }
+}
+
+async function updateAccountVerificationSessionById(verificationSessionId, payload) {
+    try {
+        if (!payload || Object.keys(payload).length === 0) {
+            throw new Error("No fields provided to update.");
+        }
+
+        const fields = [];
+        const values = [];
+        let index = 1;
+
+        for (const [key, value] of Object.entries(payload)) {
+            fields.push(`${key} = $${index}`);
+            values.push(value);
+            index++;
+        }
+
+        values.push(verificationSessionId);
+        const query = `
+            UPDATE account_verification_sessions
+            SET ${fields.join(", ")}, updated_at = CURRENT_TIMESTAMP
+            WHERE verification_session_id = $${index}
+            RETURNING *;
+        `;
+        const { rows } = await pool.query(query, values);
+        return rows[0] || null;
+    } catch (err) {
+        console.error("Error updating account verification session by local ID:", err);
         throw err;
     }
 }
@@ -228,6 +261,7 @@ module.exports = {
     getReusableAccountVerificationSessionByAccountId,
     createAccountVerificationSessionRepository,
     updateAccountVerificationSessionStatus,
+    updateAccountVerificationSessionById,
     updateAccountVerifications,
     createAccountVerificationRepository,
     getAccountVerificationByAccountId,

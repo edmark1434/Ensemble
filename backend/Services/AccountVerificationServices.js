@@ -18,7 +18,9 @@ const {
     getAccountVerificationByAccountId,
     getAccountVerificationSessionsByAccountId,
     updateAccountVerificationSessionStatus,
-    getAccountVerificationStatusByAccountId
+    updateAccountVerificationSessionById,
+    getAccountVerificationStatusByAccountId,
+    updateAccountVerifications
 } = require("../Repositories/AccountVerificationRepositories");
 
 const {
@@ -82,19 +84,38 @@ async function createAccountVerificationSession(userId) {
                 },
             }
         );
-        console.log("Didit sessions response:", diditResponse);
         const reusableDiditSession = diditResponse.data.results?.find(session =>
             reusableStatuses.includes(session.status)
         );
 
         if (reusableDiditSession) {
-            const verificationSession =
-                await createAccountVerificationSessionRepository({
+            let verificationSession;
+            if (existingSessionByAccountId) {
+                verificationSession = await updateAccountVerificationSessionById(
+                    existingSessionByAccountId.verification_session_id,
+                    {
+                        didit_session_id: reusableDiditSession.session_id,
+                        verification_url: reusableDiditSession.session_url,
+                        kyc_status: reusableDiditSession.status,
+                        verification_status: "Pending",
+                        verified_by_account_id: null,
+                        expires_at: null,
+                    }
+                );
+            } else {
+                verificationSession = await createAccountVerificationSessionRepository({
                     account_id: user.account_id,
                     didit_session_id: reusableDiditSession.session_id,
                     verification_url: reusableDiditSession.session_url,
                     kyc_status: reusableDiditSession.status,
                 });
+            }
+
+            await updateAccountVerifications(user.account_id, {
+                verification_session_id: verificationSession.verification_session_id,
+                is_verified: false,
+                verified_at: null,
+            });
 
             return verificationSession;
         }
@@ -171,15 +192,22 @@ async function createAccountVerificationSession(userId) {
         // ============================================================
         let verificationSession;
         if (existingSessionByAccountId) {
-            verificationSession = await updateAccountVerificationSessionStatus(
-                existingSessionByAccountId.session_id,
+            verificationSession = await updateAccountVerificationSessionById(
+                existingSessionByAccountId.verification_session_id,
                 {
                     didit_session_id: didit.session_id,
                     verification_url: didit.url,
                     kyc_status: didit.status,
                     verification_status: "Pending",
+                    verified_by_account_id: null,
+                    expires_at: null,
                 }
             );
+            await updateAccountVerifications(user.account_id, {
+                verification_session_id: existingSessionByAccountId.verification_session_id,
+                is_verified: false,
+                verified_at: null,
+            });
         } else {
             verificationSession =
                 await createAccountVerificationSessionRepository({
@@ -187,6 +215,11 @@ async function createAccountVerificationSession(userId) {
                     didit_session_id: didit.session_id,
                     verification_url: didit.url,
                     kyc_status: didit.status,
+                });
+                await updateAccountVerifications(user.account_id, {
+                    verification_session_id: verificationSession.verification_session_id,
+                    is_verified: false,
+                    verified_at: null,
                 });
         }
 
@@ -201,13 +234,73 @@ async function createAccountVerificationSession(userId) {
 }
 
 
-async function appyForResubmissionServices(sessionId,accountId) {
+async function appyForResubmissionServices(sessionId,accountId,comment = "Please redo the required verification steps") {
+    const emailResponse = await getEmailAddressByAccountId(accountId);
+    try{
+        let nodesToResubmit = [];
+        try {
+            const decisionResponse = await axios.get(
+                `https://verification.didit.me/v3/session/${encodeURIComponent(sessionId)}/decision/`,
+                {
+                    headers: {
+                        "x-api-key": process.env.DIDIT_API_KEY,
+                        Accept: "application/json",
+                    },
+                }
+            );
+            const responseBody = decisionResponse.data || {};
+            const decision = responseBody.data?.decision
+                || responseBody.decision
+                || responseBody.data
+                || responseBody;
+            nodesToResubmit = [
+                ...(decision.id_verifications || []).map(({ node_id }) => ({ node_id, feature: "OCR" })),
+                ...(decision.nfc_verifications || []).map(({ node_id }) => ({ node_id, feature: "NFC" })),
+                ...(decision.liveness_checks || []).map(({ node_id }) => ({ node_id, feature: "LIVENESS" })),
+                ...(decision.face_matches || []).map(({ node_id }) => ({ node_id, feature: "FACE_MATCH" })),
+                ...(decision.ip_analyses || []).map(({ node_id }) => ({ node_id, feature: "IP_ANALYSIS" })),
+            ].filter(({ node_id }) => Boolean(node_id));
+        } catch (decisionError) {
+            console.warn(
+                "Unable to load Didit nodes; requesting full-session resubmission:",
+                decisionError.response?.status || decisionError.message
+            );
+        }
+
+        const updatePayload = {
+            new_status: "Resubmitted",
+            send_email: true,
+            email_address: emailResponse.email_address,
+            comment
+        };
+        if (nodesToResubmit.length) updatePayload.nodes_to_resubmit = nodesToResubmit;
+
+        const response = await axios.patch(
+            `https://verification.didit.me/v3/session/${encodeURIComponent(sessionId)}/update-status/`,
+            updatePayload,
+            {
+                headers: {
+                    "x-api-key": process.env.DIDIT_API_KEY,
+                    "Content-Type": "application/json",
+                },
+            }
+        );
+        return response.data;
+    }catch(err){
+        console.error("Error applying for resubmission:", err);
+        throw err;
+    }
+}
+
+
+async function approvedVerificationServices(sessionId,accountId,validityDays = 365,comment = `Approved by Ensemble admin for ${validityDays} days`) {
     const emailResponse = await getEmailAddressByAccountId(accountId);
     try{
         const response = await axios.patch(
             `https://verification.didit.me/v3/session/${sessionId}/update-status`,
             {
-                new_status: "Resubmitted",
+                new_status: "Approved",
+                comment,
                 send_email: true,
                 email_address: emailResponse.email_address,
             },
@@ -220,7 +313,32 @@ async function appyForResubmissionServices(sessionId,accountId) {
         );
         return response.data;
     }catch(err){
-        console.error("Error applying for resubmission:", err);
+        console.error("Error approving verification:", err);
+        throw err;
+    }
+}
+
+async function DeclinedVerificationServices(sessionId,accountId,comment = "Failed compliance check") {
+    const emailResponse = await getEmailAddressByAccountId(accountId);
+    try{
+        const response = await axios.patch(
+            `https://verification.didit.me/v3/session/${sessionId}/update-status`,
+            {
+                new_status: "Declined",
+                comment,
+                send_email: true,
+                email_address: emailResponse.email_address,
+            },
+            {
+                headers: {
+                    "x-api-key": process.env.DIDIT_API_KEY,
+                    "Content-Type": "application/json",
+                },
+            }
+        );
+        return response.data;
+    }catch(err){
+        console.error("Error declining verification:", err);
         throw err;
     }
 }
@@ -249,7 +367,10 @@ async function sendVerificationServices(email, first_name, last_name) {
 
 module.exports = {
     createAccountVerificationSession,
+    updateAccountVerifications,
     appyForResubmissionServices,
+    approvedVerificationServices,
+    DeclinedVerificationServices,
     getAccountVerificationStatusServices,
     sendVerificationServices
 };

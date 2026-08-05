@@ -6,9 +6,13 @@ const { getAdminDashboardOverview } = require('../Controllers/AdminControllers')
 const {
   getAdminTeamsManagement,
   getAdminUsersManagement,
+  getAdminUserVerificationDetails,
   getAdminUserTeamOverview,
   patchAdminAccountStatus,
   patchAdminAccountVerification,
+  approveAdminAccountVerification,
+  declineAdminAccountVerification,
+  resubmitAdminAccountVerification,
   postAdminAccountCreditAdjust,
   postAdminAccountCreditFreeze,
   postAdminAccountWarn,
@@ -64,9 +68,13 @@ router.patch('/staff/:staffId', [checkSession, requireAdmin], patchAdminStaff);
 router.delete('/staff/:staffId', [checkSession, requireAdmin], deleteAdminStaff);
 router.get('/teams-management', [checkSession, requireUserTeamFullWrite], getAdminTeamsManagement);
 router.get('/users-management', [checkSession, requireUserTeamAccess], getAdminUsersManagement);
+router.get('/accounts/:accountId/verification-details', [checkSession, requireUserTeamFullWrite], getAdminUserVerificationDetails);
 router.get('/user-team-overview', [checkSession, requireUserTeamAccess], getAdminUserTeamOverview);
 router.patch('/accounts/:accountId/status', [checkSession, requireUserTeamAccess], patchAdminAccountStatus);
 router.patch('/accounts/:accountId/verification', [checkSession, requireUserTeamFullWrite], patchAdminAccountVerification);
+router.patch('/accounts/:accountId/verification/approve', [checkSession, requireUserTeamFullWrite], approveAdminAccountVerification);
+router.patch('/accounts/:accountId/verification/decline', [checkSession, requireUserTeamFullWrite], declineAdminAccountVerification);
+router.patch('/accounts/:accountId/verification/resubmit', [checkSession, requireUserTeamFullWrite], resubmitAdminAccountVerification);
 router.post('/accounts/:accountId/credits/adjust', [checkSession, requireUserTeamFullWrite], postAdminAccountCreditAdjust);
 router.post('/accounts/:accountId/credits/freeze', [checkSession, requireUserTeamFullWrite], postAdminAccountCreditFreeze);
 router.post('/accounts/:accountId/warn', [checkSession, requireUserTeamAccess], postAdminAccountWarn);
