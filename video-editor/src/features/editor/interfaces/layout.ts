@@ -46,4 +46,7 @@ export interface ILayoutState {
   floatingControlIds: string[];
   floatingControlAnimationType?: "text" | "media";
   setFloatingControlIds: (ids: string[], animationType?: "text" | "media") => void;
+
+  controlsPanelRef: React.RefObject<HTMLDivElement | null> | null;
+  setControlsPanelRef: (ref: React.RefObject<HTMLDivElement | null>) => void;
 }

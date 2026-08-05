@@ -21,7 +21,7 @@ export const CompositionControls = () => {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
         <Label className="font-sans text-sm font-semibold">Project</Label>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           <ProjectName value={projectName} onCommit={setProjectName} />
 
           <SizeFields

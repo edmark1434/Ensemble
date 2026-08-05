@@ -12,6 +12,8 @@ import { formatColorDisplay, isGradientColor } from "@/components/color-picker/h
 import { useIsLargeScreen } from "@/hooks/use-media-query";
 import useLayoutStore from "../../store/use-layout-store";
 import {cn} from "@/lib/utils";
+import { DraggablePanel } from "@/components/draggable-panel";
+import {useDraggable} from "@/hooks/use-draggable";
 
 const CHECKERBOARD_STYLE: React.CSSProperties = {
   backgroundImage:
@@ -30,81 +32,7 @@ interface ColorPickerFieldProps {
   mobileControlLabel: string;
   disabled: boolean;
   mixed?: boolean;
-}
-
-function useDraggable() {
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const dragState = useRef<{
-    x: number;
-    y: number;
-    offsetX: number;
-    offsetY: number;
-  } | null>(null);
-
-  const onPointerDown = (e: React.PointerEvent<HTMLElement>) => {
-    dragState.current = {
-      x: e.clientX,
-      y: e.clientY,
-      offsetX: offset.x,
-      offsetY: offset.y
-    };
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
-
-  const onPointerMove = (e: React.PointerEvent<HTMLElement>) => {
-    if (!dragState.current) return;
-    const { x, y, offsetX, offsetY } = dragState.current;
-    setOffset({
-      x: offsetX + (e.clientX - x),
-      y: offsetY + (e.clientY - y)
-    });
-  };
-
-  const onPointerUp = (e: React.PointerEvent<HTMLElement>) => {
-    dragState.current = null;
-    e.currentTarget.releasePointerCapture(e.pointerId);
-  };
-
-  return { offset, dragHandleProps: { onPointerDown, onPointerMove, onPointerUp } };
-}
-
-function DraggableColorPanel({
-  title = "Color",
-  onClose,
-  children
-}: {
-  title?: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  const { offset, dragHandleProps } = useDraggable();
-
-  return (
-    <div
-      style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
-      className="flex flex-col gap-4 rounded-lg border bg-card p-4"
-    >
-      <div
-        className="handle flex cursor-grab select-none items-center justify-between active:cursor-grabbing"
-        style={{ touchAction: "none" }}
-        {...dragHandleProps}
-      >
-        <p className="text-sm font-semibold">{title}</p>
-        <X
-          className="h-4 w-4 cursor-pointer text-muted-foreground"
-          onPointerDown={(e) => {
-            // Stop the drag handle from capturing this event
-            e.stopPropagation();
-          }}
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
-        />
-      </div>
-      {children}
-    </div>
-  );
+  anchorRef?: React.RefObject<HTMLElement | null>;
 }
 
 const MIXED_SWATCH_STYLE: React.CSSProperties = {
@@ -171,7 +99,8 @@ export function ColorPickerField({
   mobileControlType,
   mobileControlLabel,
   disabled,
-  mixed = false
+  mixed = false,
+  anchorRef
 }: ColorPickerFieldProps) {
   const [localValue, setLocalValue] = useState<string>(value);
   const [open, setOpen] = useState(false);
@@ -242,9 +171,9 @@ export function ColorPickerField({
       <PopoverContent
         side="bottom"
         align="start"
-        className="w-3xs border-0 bg-transparent p-0 shadow-none"
+        className="pointer-events-none w-3xs border-0 bg-transparent p-0 shadow-none"
       >
-        <DraggableColorPanel title={popoverTitle} onClose={() => setOpen(false)}>
+        <DraggablePanel title={popoverTitle} onClose={() => setOpen(false)} anchorRef={anchorRef}>
           <ColorPicker
             value={localValue}
             format="hex"
@@ -252,7 +181,7 @@ export function ColorPickerField({
             solid={solid}
             onChange={handleChange}
           />
-        </DraggableColorPanel>
+        </DraggablePanel>
       </PopoverContent>
     </Popover>
   );

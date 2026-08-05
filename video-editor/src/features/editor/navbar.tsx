@@ -9,20 +9,15 @@ import {
   PopoverTrigger
 } from "@/components/ui/popover";
 import {
-  ArrowUpRight, Check,
-  ChevronDown,
-  Download,
+  ArrowUpRight,
   Keyboard,
   ProportionsIcon,
   Send,
   ShareIcon
 } from "lucide-react";
-import { Label } from "@/components/ui/label";
 
 import type StateManager from "@designcombo/state";
-import { generateId } from "@designcombo/timeline";
-import type { IDesign } from "@designcombo/types";
-import { useDownloadState } from "./store/use-download-state";
+import { DownloadPopover } from "./download-popover";
 import DownloadProgressModal from "./download-progress-modal";
 import AutosizeInput from "@/components/ui/autosize-input";
 import { debounce } from "lodash";
@@ -41,7 +36,6 @@ import { ShortcutsModal } from "./shortcuts-modal";
 import { ModeToggle } from "@/components/ui/mode-toggle";
 import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
 import {Input} from "@/components/ui/input";
-import {cn} from "@/lib/utils";
 import useStore from "./store/use-store";
 import {Kbd, KbdGroup} from "@/components/ui/kbd";
 
@@ -246,134 +240,6 @@ export default function Navbar({
     </div>
   );
 }
-
-const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
-  const isMediumScreen = useIsMediumScreen();
-  const { actions, exportType, exporting, output, error } = useDownloadState();
-  const { duration, trackItemIds } = useStore();
-  const isEmpty = trackItemIds.length === 0;
-  const [isExportTypeOpen, setIsExportTypeOpen] = useState(false);
-  const [open, setOpen] = useState(false);
-
-  const isCompleted = !!output;
-  const isFailed = !!error;
-
-  const buttonLabel = isCompleted
-    ? "Export ready for download"
-    : isFailed
-      ? "Export failed"
-      : "Export";
-
-  const handleExport = () => {
-    const data: IDesign = {
-      ...stateManager.toJSON(),
-      id: generateId(),
-      duration
-    };
-
-    actions.setState({ payload: data });
-    actions.startExport();
-    setOpen(false);
-  };
-
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (nextOpen && (isCompleted || isFailed)) {
-      actions.setDisplayProgressModal(true);
-      return;
-    }
-
-    if (nextOpen && exporting) {
-      actions.setDisplayProgressModal(true);
-      return;
-    }
-
-    setOpen(nextOpen);
-  };
-
-  return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
-        {isEmpty && !isCompleted && !isFailed ? (
-          <Tooltip delayDuration={10}>
-            <TooltipTrigger asChild>
-              <span>
-                <Button
-                  className={cn(
-                    "flex h-8 gap-2 hover:!bg-accent/30 font-semibold",
-                    (isCompleted || isFailed) && "!border-primary text-primary hover:!border-primary/80 hover:text-primary/80"
-                  )}
-                  variant={"outline"}
-                  size={isMediumScreen ? "sm" : "icon"}
-                  disabled={isEmpty && !isCompleted && !isFailed}
-                >
-                  <Download size={16} />{" "}
-                  <span className="hidden md:block">{buttonLabel}</span>
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" align="center" sideOffset={1}>
-              Project is still empty
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          <Button
-            className={cn(
-              "flex h-8 gap-2 hover:!bg-accent/30 font-semibold",
-              (isCompleted || isFailed) && "!border-primary text-primary hover:!border-primary/80 hover:text-primary/80"
-            )}
-            variant={"outline"}
-            size={isMediumScreen ? "sm" : "icon"}
-            disabled={isEmpty && !isCompleted && !isFailed}
-          >
-            <Download size={16} />{" "}
-            <span className="hidden md:block">{buttonLabel}</span>
-          </Button>
-        )}
-      </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        className="bg-sidebar z-[250] flex w-60 flex-col gap-4"
-      >
-        <Label className="font-semibold">Export settings</Label>
-
-        <Popover open={isExportTypeOpen} onOpenChange={setIsExportTypeOpen}>
-          <PopoverTrigger asChild>
-            <Button className="w-full justify-between" variant="outline">
-              <div>{exportType.toUpperCase()}</div>
-              <ChevronDown width={16} />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            className="z-[251] p-0"
-            style={{ width: "var(--radix-popover-trigger-width)" }}
-          >
-            {(["mp4"] as const).map((type) => (
-              <div
-                key={type}
-                onClick={() => {
-                  actions.setExportType(type);
-                  setIsExportTypeOpen(false);
-                }}
-                className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800/50"
-              >
-                {type.toUpperCase()}
-                {type === exportType && (
-                  <Check size={14} className="text-muted-foreground" />
-                )}
-              </div>
-            ))}
-          </PopoverContent>
-        </Popover>
-
-        <div>
-          <Button onClick={handleExport} className="w-full">
-            Export
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-};
 
 interface ResizeOptionProps {
   label: string;

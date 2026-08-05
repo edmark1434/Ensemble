@@ -120,9 +120,9 @@ const CaptionColors = ({
     <div className="flex flex-col gap-3">
       <Label className="font-sans text-sm font-semibold">Colors</Label>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-x-2 gap-y-3">
         <div className="flex flex-col gap-2 flex-1">
-          <div className="flex flex-1 items-center text-xs text-muted-foreground">Text (Start)</div>
+          <div className="flex flex-1 items-center text-xs text-muted-foreground">Text (Upcoming)</div>
           <ColorPickerField
             value={localColor}
             onChange={onChangeColor}

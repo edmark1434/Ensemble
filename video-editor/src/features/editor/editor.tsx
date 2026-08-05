@@ -345,7 +345,7 @@ const Panels = ({
   loaded,
   isLargeScreen,
 }: any) => {
-  const { showMenuItem } = useLayoutStore();
+  const { showMenuItem, setControlsPanelRef } = useLayoutStore();
   const menuPanelRef = useRef<ImperativePanelHandle>(null);
   const controlsPanelRef = useRef<HTMLDivElement>(null);
 
@@ -356,6 +356,10 @@ const Panels = ({
       menuPanelRef.current?.collapse();
     }
   }, [showMenuItem]);
+
+  useEffect(() => {
+    setControlsPanelRef(controlsPanelRef);
+  }, []);
 
   if (!isLargeScreen) {
     return (
