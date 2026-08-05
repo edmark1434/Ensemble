@@ -78,6 +78,10 @@ function mapUserRow(row) {
       account_id: row.account_id,
       account_verification_id: row.account_verification_id,
       verification_status: row.verification_status,
+      verification_session_id: row.verification_session_id,
+      didit_session_id: row.didit_session_id,
+      session_status: row.session_status,
+      kyc_status: row.kyc_status,
       verification_expires_at: row.verification_expires_at,
       verification_updated_at: row.verification_updated_at,
       created_at: row.created_at,
@@ -264,18 +268,12 @@ function buildHistory(accountId, historyMap) {
 }
 
 function buildVerificationDetail(row) {
-  const label = mapVerificationLabel(row.verification_status);
-  const verified = label === 'Verified' || label === 'Business Verified';
+  const hasActivity = Boolean(row.verification_session_id);
+  const label = hasActivity ? row.session_status || 'Pending' : 'No Verification Activity';
   const expiresAt = row.verification_expires_at || null;
   const isExpired = Boolean(expiresAt && new Date(expiresAt).getTime() <= Date.now());
   return {
-    status: isExpired
-      ? 'Reverification Required'
-      : verified
-        ? 'Verified'
-        : label === 'Pending Review'
-          ? 'Pending'
-          : label,
+    status: label,
     expiresAt,
     isExpired,
     reverificationDueDays: expiresAt
@@ -289,7 +287,7 @@ function buildVerificationDetail(row) {
     logs: [
       {
         id: `vl-${row.account_id}`,
-        title: `Verification status: ${row.verification_status || 'unverified'}`,
+        title: hasActivity ? `Verification session status: ${label}` : 'No verification activity',
         timeAgo: formatRelativeTime(row.verification_updated_at || row.created_at),
         by: row.verified_by_name || 'System',
         ref: row.account_verification_id || '—',
@@ -338,17 +336,15 @@ async function fetchAllUsers() {
       a.description,
       f.path AS avatar_path,
       p.name AS subscription_plan,
-      av.account_verification_id,
-      CASE
-        WHEN LOWER(COALESCE(av.status, '')) = 'verified'
-          AND av.expires_at IS NOT NULL
-          AND av.expires_at <= NOW()
-        THEN 'reverification_required'
-        ELSE av.status
-      END AS verification_status,
-      av.expires_at AS verification_expires_at,
-      av.updated_at AS verification_updated_at,
-      COALESCE(va.display_name, vs.first_name || ' ' || vs.last_name) AS verified_by_name,
+      v.verification_id AS account_verification_id,
+      CASE WHEN COALESCE(v.is_verified, FALSE) THEN 'verified' ELSE 'unverified' END AS verification_status,
+      v.verification_session_id,
+      avs.didit_session_id,
+      avs.verification_status AS session_status,
+      avs.kyc_status,
+      avs.expires_at AS verification_expires_at,
+      COALESCE(avs.updated_at, v.updated_at) AS verification_updated_at,
+      NULL::text AS verified_by_name,
       w.balance_credits,
       w.frozen_balance_credits
     FROM users u
@@ -362,15 +358,9 @@ async function fetchAllUsers() {
       ORDER BY s.created_at DESC
       LIMIT 1
     ) p ON TRUE
-    LEFT JOIN LATERAL (
-      SELECT *
-      FROM account_verification av
-      WHERE av.account_id = a.account_id AND av.deleted_at IS NULL
-      ORDER BY av.created_at DESC
-      LIMIT 1
-    ) av ON TRUE
-    LEFT JOIN staff vs ON vs.staff_id = av.verified_by_staff_id
-    LEFT JOIN accounts va ON va.account_id = vs.account_id
+    LEFT JOIN verifications v ON v.account_id = a.account_id
+    LEFT JOIN account_verification_sessions avs
+      ON avs.verification_session_id = v.verification_session_id
     LEFT JOIN LATERAL (
       SELECT w.balance_credits, w.frozen_balance_credits
       FROM account_wallets aw
@@ -431,6 +421,122 @@ async function fetchTeamMembershipsForUsers(userIds) {
     memberships.set(row.user_id, list);
   }
   return memberships;
+}
+
+async function getUserVerificationRecord(accountId) {
+  const result = await pool.query(
+    `
+    SELECT
+      v.verification_id,
+      v.account_id,
+      v.verification_session_id,
+      v.is_verified,
+      v.verified_at,
+      v.updated_at AS verification_updated_at,
+      avs.didit_session_id,
+      avs.kyc_status,
+      avs.verification_status AS internal_status,
+      avs.verified_by_account_id,
+      avs.expires_at,
+      avs.created_at AS session_created_at,
+      avs.updated_at AS session_updated_at
+    FROM verifications v
+    LEFT JOIN account_verification_sessions avs
+      ON avs.verification_session_id = v.verification_session_id
+    WHERE v.account_id = $1
+    LIMIT 1
+    `,
+    [accountId]
+  );
+  return result.rows[0] || null;
+}
+
+async function updateUserVerificationExpiry(accountId, validityDays, verifiedByAccountId) {
+  const result = await pool.query(
+    `
+    WITH current_verification AS (
+      SELECT
+        avs.verification_session_id,
+        (
+          avs.expires_at IS NULL
+          OR v.verified_at IS NULL
+          OR ABS(EXTRACT(EPOCH FROM (avs.expires_at - v.verified_at)) - ($2::int * 86400)) > 60
+        ) AS expiry_changed
+      FROM account_verification_sessions avs
+      JOIN verifications v
+        ON avs.verification_session_id = v.verification_session_id
+      WHERE v.account_id = $1
+    )
+    UPDATE account_verification_sessions avs
+    SET expires_at = CASE
+          WHEN cv.expiry_changed THEN NOW() + ($2::int * INTERVAL '1 day')
+          ELSE avs.expires_at
+        END,
+        verified_by_account_id = $3,
+        updated_at = NOW()
+    FROM current_verification cv
+    WHERE avs.verification_session_id = cv.verification_session_id
+    RETURNING avs.expires_at, cv.expiry_changed
+    `,
+    [accountId, validityDays, verifiedByAccountId]
+  );
+  return result.rows[0] || null;
+}
+
+async function prepareUserVerificationApprovalExpiry(accountId, validityDays, verifiedByAccountId) {
+  const result = await pool.query(
+    `
+    UPDATE account_verification_sessions avs
+    SET expires_at = CASE
+          WHEN $2::int = 365 THEN NULL
+          ELSE NOW() + ($2::int * INTERVAL '1 day')
+        END,
+        verified_by_account_id = $3,
+        updated_at = NOW()
+    FROM verifications v
+    WHERE v.account_id = $1
+      AND avs.verification_session_id = v.verification_session_id
+    RETURNING avs.expires_at
+    `,
+    [accountId, validityDays, verifiedByAccountId]
+  );
+  return result.rows[0] || null;
+}
+
+async function restoreUserVerificationExpiry(accountId, expiresAt, verifiedByAccountId) {
+  await pool.query(
+    `
+    UPDATE account_verification_sessions avs
+    SET expires_at = $2,
+        verified_by_account_id = $3,
+        updated_at = NOW()
+    FROM verifications v
+    WHERE v.account_id = $1
+      AND avs.verification_session_id = v.verification_session_id
+    `,
+    [accountId, expiresAt || null, verifiedByAccountId || null]
+  );
+}
+
+async function markUserVerificationPending(accountId) {
+  await pool.query(
+    `
+    UPDATE verifications
+    SET is_verified = FALSE, verified_at = NULL, updated_at = NOW()
+    WHERE account_id = $1
+    `,
+    [accountId]
+  );
+  await pool.query(
+    `
+    UPDATE account_verification_sessions avs
+    SET verification_status = 'Pending', updated_at = NOW()
+    FROM verifications v
+    WHERE v.account_id = $1
+      AND avs.verification_session_id = v.verification_session_id
+    `,
+    [accountId]
+  );
 }
 
 async function fetchTeamsFromDatabase() {
@@ -638,10 +744,16 @@ function computeUserStats(users) {
   const banned = users.filter((u) => u.status === 'Banned').length;
   const active = users.filter((u) => u.status === 'Active').length;
   const pending = users.filter(
-    (u) =>
-      u.status === 'Pending' ||
-      u.verificationStatus === 'Pending Review' ||
-      u.verificationStatus === 'Reverification Required'
+    (u) => {
+      const sessionStatus = String(u.verificationMeta?.session_status || '').toLowerCase();
+      return u.status === 'Pending' || (
+        u.verificationStatus !== 'Verified' &&
+        (sessionStatus.includes('pending') ||
+          sessionStatus.includes('review') ||
+          sessionStatus.includes('progress') ||
+          sessionStatus.includes('awaiting'))
+      );
+    }
   ).length;
   const verified = users.filter((u) => u.verificationStatus === 'Verified').length;
   const unverified = users.filter((u) => u.verificationStatus === 'Unverified').length;
@@ -898,6 +1010,46 @@ async function updateAccountVerification(accountId, action, staffId, options = {
   if (!Number.isFinite(validityDays) || validityDays <= 0) validityDays = 365;
   validityDays = Math.min(Math.max(Math.floor(validityDays), 1), 3650); // 1 day – 10 years
 
+  const userAccount = await pool.query(
+    `SELECT 1 FROM users WHERE account_id = $1 LIMIT 1`,
+    [accountId]
+  );
+
+  if (userAccount.rows.length) {
+    const isVerified = nextStatus === 'verified';
+    await pool.query(
+      `
+      INSERT INTO verifications (account_id, is_verified, verified_at, created_at, updated_at)
+      VALUES ($1, $2, CASE WHEN $2 THEN NOW() ELSE NULL END, NOW(), NOW())
+      ON CONFLICT (account_id) DO UPDATE
+      SET is_verified = EXCLUDED.is_verified,
+          verified_at = EXCLUDED.verified_at,
+          updated_at = NOW()
+      `,
+      [accountId, isVerified]
+    );
+    await pool.query(
+      `
+      UPDATE account_verification_sessions avs
+      SET verification_status = $2,
+          expires_at = CASE
+            WHEN $2 = 'verified' THEN NOW() + ($3::int * INTERVAL '1 day')
+            ELSE expires_at
+          END,
+          updated_at = NOW()
+      FROM verifications v
+      WHERE v.account_id = $1
+        AND avs.verification_session_id = v.verification_session_id
+      `,
+      [accountId, nextStatus, validityDays]
+    );
+    return {
+      accountId,
+      verificationStatus: isVerified ? 'Verified' : 'Unverified',
+      validityDays: isVerified ? validityDays : null,
+    };
+  }
+
   const existing = await pool.query(
     `
     SELECT account_verification_id
@@ -1136,4 +1288,9 @@ module.exports = {
   freezeAccountCredits,
   warnAccount,
   pardonAccount,
+  getUserVerificationRecord,
+  updateUserVerificationExpiry,
+  prepareUserVerificationApprovalExpiry,
+  restoreUserVerificationExpiry,
+  markUserVerificationPending,
 };

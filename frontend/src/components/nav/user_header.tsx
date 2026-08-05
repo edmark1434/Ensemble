@@ -30,10 +30,22 @@ interface Notification {
   deleted_at: string | null;
 }
 
+interface CreatorSearchApiAccount {
+  account_id: string;
+  display_name: string | null;
+  handle: string;
+  avatar_preset_url: string | null;
+}
+
+interface CreatorSearchResult {
+  accountId: string;
+  name: string;
+  username: string;
+  avatar: string;
+}
+
 const UserHeader: React.FC<UserHeaderProps> = ({
   pageTitle,
-  credits = 0,
-  userName = "",
   userAvatar = "https://i.pravatar.cc/150?u=john",
 }) => {
   const navigate = useNavigate();
@@ -46,9 +58,13 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const [isHovered, setIsHovered] = useState(false);
 
   const [headerSearchInput, setHeaderSearchInput] = useState("");
+  const [creatorSearchResults, setCreatorSearchResults] = useState<CreatorSearchResult[]>([]);
+  const [isSearchingCreators, setIsSearchingCreators] = useState(false);
+  const [isCreatorSearchOpen, setIsCreatorSearchOpen] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const creatorSearchRef = useRef<HTMLFormElement>(null);
 
   const userInfo = useGlobalState((state) => state.user);
   const [showHeader, setShowHeader] = useState(false);
@@ -160,7 +176,7 @@ useEffect(() => {
   useEffect(() => {
     const checkRole = async () => {
       try {
-        const [checkRoleResponse, getWalletResponse, getAvatarResponse, getSubscriptionPlanResponse] = await Promise.all([
+        const [, getWalletResponse, getAvatarResponse, getSubscriptionPlanResponse] = await Promise.all([
           api.get("/api/users/check-user-role"),
           api.get("/api/accounts/wallet", {
             params: { type: 'account_wallets' },
@@ -200,6 +216,60 @@ useEffect(() => {
     checkRole();
   }, []);
 
+  useEffect(() => {
+    const query = headerSearchInput.replace(/^@/, "").trim();
+    if (query.length < 2) {
+      setCreatorSearchResults([]);
+      setIsSearchingCreators(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      setIsSearchingCreators(true);
+      try {
+        const response = await api.get("/api/accounts/search-users", {
+          params: { handle: query },
+        });
+        const cloudfront = String(import.meta.env.VITE_CLOUDFRONT_URL || "").replace(/\/$/, "");
+        const accounts = (response.data?.data || []) as CreatorSearchApiAccount[];
+        const results = accounts.map((account) => {
+          const avatarPath = account.avatar_preset_url || "";
+          const name = account.display_name || account.handle;
+          return {
+            accountId: String(account.account_id),
+            name,
+            username: `@${account.handle}`,
+            avatar: avatarPath
+              ? /^https?:\/\//i.test(avatarPath)
+                ? avatarPath
+                : `${cloudfront}/${avatarPath.replace(/^\/+/, "")}`
+              : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`,
+          };
+        });
+        if (!cancelled) setCreatorSearchResults(results);
+      } catch {
+        if (!cancelled) setCreatorSearchResults([]);
+      } finally {
+        if (!cancelled) setIsSearchingCreators(false);
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [headerSearchInput]);
+
+  useEffect(() => {
+    const closeCreatorSearch = (event: MouseEvent) => {
+      if (!creatorSearchRef.current?.contains(event.target as Node)) {
+        setIsCreatorSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", closeCreatorSearch);
+    return () => document.removeEventListener("mousedown", closeCreatorSearch);
+  }, []);
 
   const handleTopUp = () => {
     navigate("/credits");
@@ -211,6 +281,13 @@ useEffect(() => {
       navigate(`/search/user/${encodeURIComponent(headerSearchInput.trim())}`);
       setHeaderSearchInput("");
     }
+  };
+
+  const handleCreatorSelect = (creator: CreatorSearchResult) => {
+    setHeaderSearchInput("");
+    setCreatorSearchResults([]);
+    setIsCreatorSearchOpen(false);
+    navigate(`/profile/${encodeURIComponent(creator.accountId)}`);
   };
 
   const executeFinalLogout = async () => {
@@ -246,7 +323,7 @@ useEffect(() => {
               {pageTitle}
             </h1>
 
-            <form onSubmit={handleHeaderSearchSubmit} className="relative w-full max-w-xs group">
+            <form ref={creatorSearchRef} onSubmit={handleHeaderSearchSubmit} className="relative w-full max-w-xs group">
               <Search
                 onClick={handleHeaderSearchSubmit}
                 className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500 group-hover:text-blue-400 transition-colors cursor-pointer"
@@ -255,9 +332,40 @@ useEffect(() => {
                 type="text"
                 placeholder="Search creators..."
                 value={headerSearchInput}
-                onChange={(e) => setHeaderSearchInput(e.target.value)}
+                onFocus={() => setIsCreatorSearchOpen(true)}
+                onChange={(e) => {
+                  setHeaderSearchInput(e.target.value);
+                  setIsCreatorSearchOpen(true);
+                }}
                 className="w-full rounded-full border border-white/10 bg-white/5 pl-9 pr-4 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder-zinc-500"
               />
+
+              {isCreatorSearchOpen && headerSearchInput.replace(/^@/, "").trim().length >= 2 && (
+                <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-white/10 bg-[#151824] shadow-2xl">
+                  {isSearchingCreators ? (
+                    <p className="px-4 py-3 text-center text-xs text-zinc-400">Searching creators...</p>
+                  ) : creatorSearchResults.length > 0 ? (
+                    <div className="max-h-72 overflow-y-auto p-1.5">
+                      {creatorSearchResults.map((creator) => (
+                        <button
+                          key={creator.accountId}
+                          type="button"
+                          onClick={() => handleCreatorSelect(creator)}
+                          className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                        >
+                          <img src={creator.avatar} alt="" className="h-9 w-9 shrink-0 rounded-full bg-zinc-800 object-cover" />
+                          <span className="min-w-0">
+                            <span className="block truncate text-xs font-semibold text-white">{creator.name}</span>
+                            <span className="block truncate text-[10px] text-zinc-400">{creator.username}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="px-4 py-3 text-center text-xs text-zinc-500">No creators found.</p>
+                  )}
+                </div>
+              )}
             </form>
           </div>
 

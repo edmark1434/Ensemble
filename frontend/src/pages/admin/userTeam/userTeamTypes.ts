@@ -76,6 +76,54 @@ export type VerificationDetail = {
   logs: { id: string; title: string; timeAgo: string; by: string; ref: string }[];
 };
 
+export type DiditVerificationDecision = {
+  status: string | null;
+  idVerification: {
+    status: string | null;
+    documentType: string | null;
+    frontImage: string | null;
+    backImage: string | null;
+    portraitImage: string | null;
+  } | null;
+  liveness: {
+    status: string | null;
+    score: number | null;
+    referenceImage: string | null;
+    videoUrl: string | null;
+  } | null;
+  faceMatch: {
+    status: string | null;
+    score: number | null;
+    sourceImage: string | null;
+    targetImage: string | null;
+  } | null;
+  ipAnalysis: {
+    status: string | null;
+    ipAddress: string | null;
+    country: string | null;
+    region: string | null;
+    city: string | null;
+    deviceBrand: string | null;
+    deviceModel: string | null;
+    browser: string | null;
+    operatingSystem: string | null;
+    platform: string | null;
+    isVpnOrTor: boolean;
+    isDataCenter: boolean;
+  } | null;
+};
+
+export type AdminVerificationDetails = {
+  activity: 'none' | 'status_only' | 'details' | 'details_unavailable';
+  isVerified: boolean;
+  verificationStatus: string;
+  kycStatus: string;
+  verificationSessionId?: string;
+  verifiedAt: string | null;
+  expiresAt: string | null;
+  decision: DiditVerificationDecision | null;
+};
+
 export type ActiveDispute = {
   id?: string;
   title: string;

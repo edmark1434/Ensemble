@@ -10,7 +10,6 @@ import {
   Pin,
   PinOff,
   Flag,
-  X,
   FileText,
   Video,
 } from "lucide-react";
@@ -296,7 +295,6 @@ const InboxMain = () => {
       ),
     [inboxList]
   );
-  const memberIdSignature = memberIds.join(",");
   const profileAccountIdSignature = profileAccountIds.join(",");
   const suggestedAccounts = useMemo(
     () =>
@@ -374,23 +372,23 @@ const InboxMain = () => {
       (location.state as { conversationId?: string } | null)?.conversationId ||
         ""
     );
-    const requestedConversation = requestedConversationId
-      ? tabConversations.find(
-          (conversation) =>
-            String(conversation._id) === requestedConversationId
-        )
-      : undefined;
     const activeIsVisible = tabConversations.some(
       (conversation) => String(conversation._id) === String(activeConversationId)
     );
     if (
-      requestedConversation &&
+      requestedConversationId &&
       String(activeConversationId) !== requestedConversationId
     ) {
-      void handleSelectConversation(requestedConversation);
-      navigate(location.pathname, { replace: true, state: null });
+      void selectConversation(requestedConversationId)
+        .then(() => {
+          navigate(location.pathname, { replace: true, state: null });
+        })
+        .catch((error: unknown) => {
+          console.error("Unable to open requested conversation:", error);
+          setMessageError("Unable to open this conversation.");
+        });
       return;
-    } else if (requestedConversation) {
+    } else if (requestedConversationId) {
       navigate(location.pathname, { replace: true, state: null });
       return;
     } else if (!activeIsVisible && tabConversations[0]) {
@@ -402,6 +400,7 @@ const InboxMain = () => {
     location.state,
     location.pathname,
     navigate,
+    selectConversation,
     tabConversations,
   ]);
 
@@ -426,6 +425,27 @@ const InboxMain = () => {
       ].some((value) => String(value || "").toLowerCase().includes(query))
     );
   }, [tabConversations, searchQuery, getConversationName]);
+
+  const visibleConversations = useMemo(() => {
+    if (!selectedConversation) return filteredConversations;
+
+    const selectedBelongsToTab = isMarketplace
+      ? ["engagement", "ticket", "dispute"].includes(
+          selectedConversation.conversation_type
+        )
+      : ["direct", "group"].includes(selectedConversation.conversation_type);
+
+    if (!selectedBelongsToTab) return filteredConversations;
+
+    const selectedIsAlreadyVisible = filteredConversations.some(
+      (conversation) =>
+        String(conversation._id) === String(selectedConversation._id)
+    );
+
+    if (selectedIsAlreadyVisible) return filteredConversations;
+
+    return [selectedConversation, ...filteredConversations];
+  }, [filteredConversations, isMarketplace, selectedConversation]);
 
   useEffect(() => {
     setVisibleMessageCount(MESSAGE_PAGE_SIZE);
@@ -1046,7 +1066,7 @@ const InboxMain = () => {
                 path="direct"
                 element={
                   <InboxDirect
-                    conversations={filteredConversations}
+                    conversations={visibleConversations}
                     selectedConversation={selectedConversation}
                     onSelectConversation={(conversation) =>
                       void handleSelectConversation(conversation)
@@ -1069,7 +1089,7 @@ const InboxMain = () => {
                 path="marketplace"
                 element={
                   <InboxMarketplace
-                    conversations={filteredConversations}
+                    conversations={visibleConversations}
                     selectedConversation={selectedConversation}
                     onSelectConversation={(conversation) =>
                       void handleSelectConversation(conversation)

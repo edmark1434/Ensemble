@@ -5,50 +5,118 @@ import { X, Upload, Image as ImageIcon } from "lucide-react";
 interface EditTeamModalProps {
   isOpen: boolean;
   onClose: () => void;
-  teamName: string;
-  teamBanner: string;
-  onSave: (name: string, banner: string) => void;
+  teamName?: string;
+  teamHandle?: string;
+  teamTagline?: string;
+  teamDescription?: string;
+  teamBanner?: string;
+  onSave?: (values: TeamFormValues) => void;
+  mode?: "edit" | "create";
+  saving?: boolean;
+  onCreate?: (values: TeamFormValues & { photo: File }) => void;
 }
 
-const EditTeamModal: React.FC<EditTeamModalProps> = ({
-  isOpen,
+export interface TeamFormValues {
+  name: string;
+  handle: string;
+  tagline: string;
+  description: string;
+  photo?: File;
+}
+
+const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
   onClose,
   teamName,
+  teamHandle,
+  teamTagline,
+  teamDescription,
   teamBanner,
   onSave,
+  mode = "edit",
+  saving = false,
+  onCreate,
 }) => {
-  const [name, setName] = useState(teamName);
-  const [banner, setBanner] = useState(teamBanner);
-  const [isUploading, setIsUploading] = useState(false);
-
-  if (!isOpen) return null;
+  const [name, setName] = useState(teamName || "");
+  const [handle, setHandle] = useState(teamHandle || "");
+  const [tagline, setTagline] = useState(teamTagline || "");
+  const [description, setDescription] = useState(teamDescription || "");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState(teamBanner || "");
+  const [photoError, setPhotoError] = useState("");
 
   const handleSave = () => {
-    if (name.trim()) {
-      onSave(name, banner);
-      onClose();
+    if (
+      mode === "create" &&
+      name.trim() &&
+      handle.trim() &&
+      tagline.trim() &&
+      description.trim() &&
+      photo &&
+      onCreate
+    ) {
+      onCreate({
+        name: name.trim(),
+        handle: handle.trim(),
+        tagline: tagline.trim(),
+        description: description.trim(),
+        photo,
+      });
+    } else if (
+      name.trim() &&
+      handle.trim() &&
+      tagline.trim() &&
+      description.trim() &&
+      onSave
+    ) {
+      onSave({
+        name: name.trim(),
+        handle: handle.trim(),
+        tagline: tagline.trim(),
+        description: description.trim(),
+        photo: photo || undefined,
+      });
     }
   };
 
-  const handleBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setIsUploading(true);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setBanner(reader.result as string);
-        setIsUploading(false);
-      };
-      reader.readAsDataURL(file);
+  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setPhotoError("Choose a valid image file.");
+      return;
     }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setPhotoError("The Team photo must be 5 MB or smaller.");
+      return;
+    }
+
+    setPhotoError("");
+    setPhoto(file);
+
+    const reader = new FileReader();
+    reader.onload = () => setPhotoPreview(String(reader.result || ""));
+    reader.readAsDataURL(file);
+  };
+
+  const removePhoto = () => {
+    setPhoto(null);
+    setPhotoPreview("");
+    setPhotoError("");
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d0f1a] p-6 shadow-2xl animate-scale-in">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xl font-semibold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-            Edit Team
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-fade-in">
+      <div className="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0d0f1a] shadow-2xl animate-scale-in">
+        <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-6 py-5">
+          <h3
+            className="text-xl font-semibold text-white"
+            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+          >
+            {mode === "create" ? "Create a Team" : "Edit Team"}
           </h3>
           <button
             onClick={onClose}
@@ -58,57 +126,154 @@ const EditTeamModal: React.FC<EditTeamModalProps> = ({
           </button>
         </div>
 
-        {/* Banner Upload */}
-        <div className="mb-4">
-          <label className="mb-2 block text-sm font-medium text-zinc-300" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-            Team Banner
-          </label>
-          <div className="relative h-32 w-full overflow-hidden rounded-lg border border-white/15 bg-white/5">
-            {banner ? (
-              <img src={banner} alt="Team banner" className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full items-center justify-center">
-                <ImageIcon className="h-8 w-8 text-zinc-500" />
+        <div className="inbox-scroll-thin flex-1 overflow-y-auto px-6 py-5">
+          <div className="space-y-5">
+            <label className="block text-sm font-medium text-zinc-300">
+              Team Name <span className="text-red-400">*</span>
+              <input
+                type="text"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Enter Team name"
+                className="mt-2 w-full rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+              />
+            </label>
+
+            <label className="block text-sm font-medium text-zinc-300">
+              Handle <span className="text-red-400">*</span>
+              <input
+                value={handle}
+                onChange={(event) =>
+                  setHandle(event.target.value.replace(/^@/, ""))
+                }
+                className="mt-2 w-full rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
+                placeholder="team-handle"
+              />
+            </label>
+
+            <label className="block text-sm font-medium text-zinc-300">
+              Tagline <span className="text-red-400">*</span>
+              <input
+                value={tagline}
+                onChange={(event) => setTagline(event.target.value)}
+                maxLength={50}
+                placeholder="A short description of your Team"
+                className="mt-2 w-full rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
+              />
+            </label>
+
+            <label className="block text-sm font-medium text-zinc-300">
+              Description <span className="text-red-400">*</span>
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                rows={4}
+                placeholder="Tell people about your Team"
+                className="mt-2 w-full resize-none rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 text-white outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50"
+              />
+            </label>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-zinc-300">
+                Team Photo{" "}
+                {mode === "create" && <span className="text-red-400">*</span>}
+              </label>
+              <div className="relative h-36 w-full overflow-hidden rounded-xl border border-white/15 bg-white/5">
+                {photoPreview ? (
+                  <img
+                    src={photoPreview}
+                    alt="Team photo preview"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center gap-2 text-zinc-500">
+                    <ImageIcon className="h-8 w-8" />
+                    <span className="text-xs">No Team photo selected</span>
+                  </div>
+                )}
+                <label className="absolute inset-0 flex cursor-pointer items-center justify-center bg-black/55 opacity-0 transition-opacity hover:opacity-100">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoUpload}
+                    className="hidden"
+                  />
+                  <Upload className="h-5 w-5 text-white" />
+                  <span className="ml-2 text-sm text-white">
+                    {photoPreview ? "Change Photo" : "Choose Photo"}
+                  </span>
+                </label>
+              </div>
+              <div className="mt-2 flex items-center justify-between">
+                <p className="text-xs text-zinc-500">Image file, up to 5 MB</p>
+                {photoPreview && mode === "create" && (
+                  <button
+                    type="button"
+                    onClick={removePhoto}
+                    className="text-xs text-red-400 hover:text-red-300"
+                  >
+                    Remove photo
+                  </button>
+                )}
+              </div>
+              {photoError && (
+                <p className="mt-1 text-xs text-red-400">{photoError}</p>
+              )}
+            </div>
+
+            {mode === "create" && (
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  Live Preview
+                </p>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="flex gap-3">
+                    {photoPreview && (
+                      <img
+                        src={photoPreview}
+                        className="h-16 w-16 rounded-lg object-cover"
+                        alt="Team preview"
+                      />
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-white">
+                        {name || "Team name"}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        @{handle || "handle"}
+                      </p>
+                      <p className="text-sm text-blue-300">
+                        {tagline || "Team tagline"}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs text-zinc-400">
+                    {description || "Team description"}
+                  </p>
+                </div>
               </div>
             )}
-            <label className="absolute inset-0 flex cursor-pointer items-center justify-center bg-black/50 opacity-0 transition-opacity hover:opacity-100">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleBannerUpload}
-                className="hidden"
-              />
-              <Upload className="h-6 w-6 text-white" />
-              <span className="ml-2 text-sm text-white">Change Banner</span>
-            </label>
           </div>
-          {isUploading && (
-            <p className="mt-1 text-xs text-zinc-500">Uploading...</p>
-          )}
         </div>
 
-        {/* Team Name */}
-        <div className="mb-6">
-          <label className="mb-2 block text-sm font-medium text-zinc-300" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-            Team Name
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Enter team name"
-            className="w-full rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
-            style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-          />
-        </div>
-
-        <div className="flex gap-3">
+        <div className="flex shrink-0 gap-3 border-t border-white/10 bg-[#0d0f1a] px-6 py-4">
           <button
             onClick={handleSave}
-            disabled={!name.trim()}
+            disabled={
+              saving ||
+              !name.trim() ||
+              !handle.trim() ||
+              !tagline.trim() ||
+              !description.trim() ||
+              (mode === "create" && !photo)
+            }
             className="flex-1 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-2 text-sm font-medium text-white transition hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Save Changes
+            {saving
+              ? "Saving..."
+              : mode === "create"
+                ? "Create Team"
+                : "Save Changes"}
           </button>
           <button
             onClick={onClose}
@@ -120,6 +285,12 @@ const EditTeamModal: React.FC<EditTeamModalProps> = ({
       </div>
     </div>
   );
+};
+
+const EditTeamModal: React.FC<EditTeamModalProps> = (props) => {
+  if (!props.isOpen) return null;
+
+  return <EditTeamModalContent {...props} />;
 };
 
 export default EditTeamModal;

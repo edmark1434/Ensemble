@@ -59,10 +59,17 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
             case "In Review": {
                 payload.verification_status = status;
                 if(status === "Approved"){
-                    const expiresAt = new Date();
-                    expiresAt.setFullYear(expiresAt.getFullYear() + 1);
-                    payload.expires_at = expiresAt;
                     const session = await getAccountVerificationSessionBySessionId(sessionId);
+                    const existingExpiry = session?.expires_at ? new Date(session.expires_at) : null;
+                    // Admin approval stores a custom future expiry before asking Didit to approve.
+                    // A normal user-completed session has no expiry yet and receives the one-year default.
+                    if (existingExpiry && existingExpiry.getTime() > Date.now()) {
+                        payload.expires_at = existingExpiry;
+                    } else {
+                        const expiresAt = new Date();
+                        expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+                        payload.expires_at = expiresAt;
+                    }
                     console.log("Updating account verification status to verified for account:", session.verification_session_id);
                     const result = await updateAccountVerifications(req.body.metadata?.account_id, { is_verified: true, verified_at: new Date(),verification_session_id: session?.verification_session_id || null });
                 
@@ -121,7 +128,7 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
             case "Declined":
                 await updateAccountVerifications(req.body.metadata?.account_id, { is_verified: false, verified_at: null });
                 const notificationDeclined = await createNotification({
-                    message: `Your account verification has been declined.`,
+                    message: `Your account verification has been declined. Please complete the verification again.`,
                     is_read: false,
                     reference_table: "verifications",
                     reference_prefix: "VERIFICATION",
@@ -130,13 +137,15 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
                     account_id: req.body.metadata?.account_id
                 });
                 io.to(notificationDeclined.account_id).emit("notification", notificationDeclined);
-                payload.verification_status = "Rejected";
-                const data = await applyForResubmission(sessionId,req.body.metadata?.account_id);
+                await applyForResubmission(sessionId, req.body.metadata?.account_id);
+                payload.kyc_status = "Resubmitted";
                 payload.verification_status = "Pending";
+                payload.expires_at = null;
                 break;
             case "Expired":
             case "Abandoned":
                 payload.verification_status = "Rejected";
+                payload.expires_at = null;
                 const notificationRejected = await createNotification({
                     message: `Your account verification session has expired or was abandoned.`,
                     is_read: false,
@@ -155,6 +164,7 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
             case "Resubmitted":
                 if(status === "Resubmitted"){
                     await updateAccountVerifications(req.body.metadata?.account_id, { is_verified: false, verified_at: null });
+                    payload.expires_at = null;
                 }
                 payload.verification_status = "Pending";
                 const notificationPending = await createNotification({
