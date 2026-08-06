@@ -64,7 +64,7 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
             </div>
           </div>
 
-          <p className="text-zinc-300 leading-relaxed italic bg-white/[0.02] p-3 rounded-xl border border-white/5 text-[11px]">
+          <p className="text-zinc-300 leading-relaxed italic bg-white/[0.02] p-3 rounded-xl border border-white/5 text-[11px] whitespace-pre-wrap break-words">
             "{coverLetter}"
           </p>
         </div>
