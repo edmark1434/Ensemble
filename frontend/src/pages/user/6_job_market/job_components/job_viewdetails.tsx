@@ -1,5 +1,6 @@
 import React from "react";
 import { Calendar, Clock, Briefcase, Users, Star, Send, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw, FileText } from "lucide-react";
+import { JobRichText } from "./JobRichText";
 import { useNavigate } from "react-router-dom";
 import type { Job } from "./job_lists";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -134,8 +135,8 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                 <h4 className="text-[10px] uppercase font-bold tracking-wider text-zinc-400">
                   Scope of Work & Requirements
                 </h4>
-                <div className="text-xs text-zinc-400 leading-relaxed whitespace-pre-line bg-white/[0.01] border border-white/5 p-3.5 rounded-xl">
-                  {selectedJob.description}
+                <div className="bg-white/[0.01] border border-white/5 p-3.5 rounded-xl">
+                  <JobRichText content={selectedJob.description} />
                 </div>
               </div>
 
