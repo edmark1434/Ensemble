@@ -28,7 +28,7 @@ export const Appearance = ({
   return (
     <div className="flex flex-col gap-3">
       <Label className="font-sans text-sm font-semibold">Appearance</Label>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
         <Opacity id={id} ids={ids} value={opacity} disabled={disabled} />
         <BorderRadius id={id} ids={ids} value={cornerRadius} disabled={disabled} />
 

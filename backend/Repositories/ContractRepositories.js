@@ -182,6 +182,62 @@ async function acceptJobOffer(freelancerId, contractId) {
     }
 }
 
+async function rejectJobOffer(freelancerId, contractId, reason) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Verify contract belongs to a proposal owned by this freelancer
+        const contractRes = await client.query(`
+            SELECT c.contract_id, p.proposal_id, j.title, j.client_account_id
+            FROM contracts c
+            JOIN job_contracts jc ON c.contract_id = jc.contract_id
+            JOIN proposals p ON jc.proposal_id = p.proposal_id
+            JOIN jobs j ON p.job_id = j.job_id
+            WHERE c.contract_id = $1 AND p.freelancer_account_id = $2 AND c.status = 'Pending Signature'
+        `, [contractId, freelancerId]);
+
+        if (contractRes.rows.length === 0) {
+            throw new Error("Contract not found or not pending signature for this user");
+        }
+
+        const { proposal_id, title, client_account_id } = contractRes.rows[0];
+
+        // 2. Update Contract Status
+        await client.query(`
+            UPDATE contracts
+            SET status = 'Rejected'
+            WHERE contract_id = $1
+        `, [contractId]);
+
+        // 3. Update Proposal Status
+        await client.query(`
+            UPDATE proposals
+            SET status = 'Pending', reject_reason = $1
+            WHERE proposal_id = $2
+        `, [reason || 'Applicant rejected the contract offer.', proposal_id]);
+
+        // 4. Notify the Client
+        await NotificationRepositories.createNotification({
+            account_id: client_account_id,
+            message: `Your contract offer for ${title} was rejected. Reason: ${reason || 'No reason provided.'}`,
+            reference_table: 'proposals',
+            reference_prefix: 'PRP',
+            reference_path: `/jobs/proposals/incoming/${proposal_id}`,
+            reference_id: proposal_id
+        });
+
+        await client.query('COMMIT');
+        return { success: true };
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error("Error in rejectJobOffer transaction:", error);
+        throw error;
+    } finally {
+        client.release();
+    }
+}
+
 async function getContractsByUserId(accountId) {
     const query = `
         SELECT 
@@ -195,6 +251,7 @@ async function getContractsByUserId(accountId) {
             j.job_id,
             j.title as job_title,
             j.description as job_description,
+            p.revision_price_credits as additional_work_rate,
             client_acc.display_name as client_name,
             client_acc.handle as client_handle,
             free_acc.display_name as freelancer_name,
@@ -219,5 +276,6 @@ async function getContractsByUserId(accountId) {
 module.exports = {
     sendJobOffer,
     acceptJobOffer,
+    rejectJobOffer,
     getContractsByUserId
 };

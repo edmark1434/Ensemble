@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, type FormEvent, type ChangeEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Save, X, ChevronDown, Check, CircleDollarSign, Briefcase, Lock, Image as ImageIcon, Info } from "lucide-react";
+import { ArrowLeft, Save, X, ChevronDown, Check, CircleDollarSign, Briefcase, Lock, Image as ImageIcon, Info, Plus, Trash2 } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
 import PopupConfirmReturn from "../job_components/job_popups/popup_confirm_return";
@@ -118,17 +118,18 @@ export const JobEditPostPage: React.FC = () => {
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const { fetchJobs, updateJob, uploadAttachment } = useJobs();
+  const { fetchJobs, updateJob, uploadAttachment, deleteJob } = useJobs();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Read-only baseline state holders
   const [priceRange, setPriceRange] = useState("");
   const [positionsNeeded, setPositionsNeeded] = useState<number>(1);
-  const [initialJob, setInitialJob] = useState<Job | null>(null);
+  const [hiredCount, setHiredCount] = useState<number>(0);
 
   // Popup & UI States
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isDirty, setIsDirty] = useState(false);
 
@@ -137,7 +138,6 @@ export const JobEditPostPage: React.FC = () => {
       if (!id) return;
       try {
         const data = await fetchJobs();
-        // Since fetchJobs returns backend structure, we map it or use raw
         const found = data.find((j: any) => j.job_id === id);
         if (found) {
           setTitle(found.title);
@@ -147,6 +147,7 @@ export const JobEditPostPage: React.FC = () => {
           setSkills(found.tags || []);
           setPriceRange(`₱${found.rate_credits_min?.toLocaleString() || 0} ~ ₱${found.rate_credits_max?.toLocaleString() || 0}`);
           setPositionsNeeded(found.no_of_hires || 1);
+          setHiredCount(parseInt(found.hired_count) || 0);
           if (found.thumbnail_path) {
             setPreviewUrl(`${import.meta.env.VITE_CLOUDFRONT_URL}/${found.thumbnail_path}`);
           }
@@ -267,8 +268,21 @@ export const JobEditPostPage: React.FC = () => {
       await updateJob(id, updatedPayload);
       setIsSuccessOpen(true);
     } catch (err: any) {
-      console.error(err);
-      alert(err.message || "Failed to update job post");
+      setErrors((prev) => ({ ...prev, submit: err.message || "Failed to update job post." }));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!id || hiredCount > 0) return;
+    setIsSubmitting(true);
+    try {
+      await deleteJob(id);
+      setIsDeleteOpen(false);
+      navigate("/jobs/postings");
+    } catch (err: any) {
+      setErrors((prev) => ({ ...prev, submit: err.message || "Failed to delete job post." }));
     } finally {
       setIsSubmitting(false);
     }
@@ -516,21 +530,40 @@ export const JobEditPostPage: React.FC = () => {
 
           {/* Action Footer */}
           <div className="pt-4 border-t border-white/5 flex gap-2.5">
-            <button
-              type="button"
-              onClick={handleReturnTrigger}
-              className="px-4 py-2.5 rounded-xl border border-white/10 text-zinc-400 font-bold hover:text-white transition text-xs focus:outline-none"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isSubmitting}
-              className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold text-white transition focus:outline-none shadow-lg ${isSubmitting ? 'bg-blue-500/50 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'}`}
-            >
-              {isSubmitting ? 'Saving...' : 'Save Changes'} <Save className="h-3.5 w-3.5" />
-            </button>
+            <div className="relative group">
+              <button
+                type="button"
+                onClick={() => setIsDeleteOpen(true)}
+                disabled={hiredCount > 0 || isSubmitting}
+                className={`px-4 py-2.5 rounded-xl border border-red-500/20 text-red-400 font-bold hover:bg-red-500/10 transition text-xs focus:outline-none flex items-center gap-2 ${
+                  hiredCount > 0 ? "opacity-50 cursor-not-allowed" : ""
+                }`}
+              >
+                <Trash2 className="h-4 w-4" /> Delete Job
+              </button>
+              {hiredCount > 0 && (
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block w-48 bg-black text-white text-[10px] p-2 rounded shadow-lg border border-white/10 z-10 text-center pointer-events-none">
+                  Cannot delete a job post that already has positions filled.
+                </div>
+              )}
+            </div>
+            <div className="flex-1 flex justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={handleReturnTrigger}
+                className="px-4 py-2.5 rounded-xl border border-white/10 text-zinc-400 font-bold hover:text-white transition text-xs focus:outline-none"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSubmitting}
+                className={`w-40 flex items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-bold text-white transition focus:outline-none shadow-lg ${isSubmitting ? 'bg-blue-500/50 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'}`}
+              >
+                {isSubmitting ? 'Saving...' : 'Save Changes'} <Save className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -549,6 +582,13 @@ export const JobEditPostPage: React.FC = () => {
           navigate("/jobs");
         }}
         onCancel={() => setIsDiscardOpen(false)}
+      />
+
+      {/* Delete Confirmation Popup */}
+      <PopupConfirmReturn
+        isOpen={isDeleteOpen}
+        onConfirm={handleDelete}
+        onCancel={() => setIsDeleteOpen(false)}
       />
     </div>
   );

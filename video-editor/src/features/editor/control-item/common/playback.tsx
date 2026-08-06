@@ -22,7 +22,7 @@ export const PlaybackControls = ({
   return (
     <div className="flex flex-col gap-3">
       <Label className="font-sans text-sm font-semibold">Playback</Label>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
         <Volume value={volume} onChange={onChangeVolume} ids={ids} disabled={disabled} />
         {/*<Speed value={speed} onChange={onChangeSpeed} ids={ids} disabled={disabled} />*/}
       </div>

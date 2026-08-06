@@ -1,5 +1,22 @@
 import { IDesign } from "@designcombo/types";
 import { create } from "zustand";
+import {
+  DEFAULT_AUDIO_BITRATE_KBPS,
+  DEFAULT_COMPOSITION_HEIGHT,
+  DEFAULT_COMPOSITION_WIDTH,
+  DEFAULT_EXPORT_FORMAT,
+  DEFAULT_EXPORT_TYPE,
+  DEFAULT_FRAME_RATE,
+  DEFAULT_RESOLUTION,
+  ExportFormat,
+  ExportType,
+  FORMATS_BY_TYPE,
+  getDefaultResolution,
+  getDefaultVideoBitrateKbps,
+  getResolutionOptions
+} from "../constants/download-options";
+import {IBackground} from "@/features/editor/store/use-store";
+
 interface Output {
   url: string;
   type: string;
@@ -9,18 +26,33 @@ interface DownloadState {
   projectId: string;
   jobId: string | null;
   exporting: boolean;
-  exportType: "json" | "mp4";
+  type: ExportType;
+  format: ExportFormat;
+  resolution: number;
+  fps: number;
+  bitrate: number | null;
+  compositionWidth: number;
+  compositionHeight: number;
+  projectName: string;
+  background: IBackground;
   progress: number;
   output?: Output;
   error: string | null;
   cancelled: boolean;
-  payload?: IDesign;
+  payload?: RenderPayload;
   displayProgressModal: boolean;
   exportStartedAt: number | null;
   actions: {
     setProjectId: (projectId: string) => void;
     setExporting: (exporting: boolean) => void;
-    setExportType: (exportType: "json" | "mp4") => void;
+    setType: (type: ExportType) => void;
+    setFormat: (format: ExportFormat) => void;
+    setResolution: (resolution: number) => void;
+    setFps: (fps: number) => void;
+    setBitrate: (bitrate: number) => void;
+    setCompositionSize: (width: number, height: number) => void;
+    setProjectName: (projectName: string) => void;
+    setBackground: (background: IBackground) => void;
     setProgress: (progress: number) => void;
     setState: (state: Partial<DownloadState>) => void;
     setOutput: (output: Output) => void;
@@ -31,11 +63,34 @@ interface DownloadState {
   };
 }
 
+export interface RenderPayload extends IDesign {
+  projectName: string;
+  background: IBackground;
+  type: ExportType;
+  format: ExportFormat;
+  resolution: number;
+  fps: number;
+  bitrate: number | null;
+}
+
 export const useDownloadState = create<DownloadState>((set, get) => ({
   projectId: "",
   jobId: null,
   exporting: false,
-  exportType: "mp4",
+  type: DEFAULT_EXPORT_TYPE,
+  format: DEFAULT_EXPORT_FORMAT,
+  resolution: DEFAULT_RESOLUTION,
+  fps: DEFAULT_FRAME_RATE,
+  compositionWidth: DEFAULT_COMPOSITION_WIDTH,
+  compositionHeight: DEFAULT_COMPOSITION_HEIGHT,
+  projectName: "My Project",
+  background: { type: "color", value: "#000000" },
+  bitrate: getDefaultVideoBitrateKbps(
+    DEFAULT_COMPOSITION_WIDTH,
+    DEFAULT_COMPOSITION_HEIGHT,
+    DEFAULT_RESOLUTION,
+    DEFAULT_FRAME_RATE
+  ),
   progress: 0,
   error: null,
   cancelled: false,
@@ -44,7 +99,60 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
   actions: {
     setProjectId: (projectId) => set({ projectId }),
     setExporting: (exporting) => set({ exporting }),
-    setExportType: (exportType) => set({ exportType }),
+    setType: (type) => {
+      const format = FORMATS_BY_TYPE[type][0].value;
+      const resolution = type === "audio" ? get().resolution : getDefaultResolution(format);
+      const fps = DEFAULT_FRAME_RATE;
+      const { compositionWidth, compositionHeight } = get();
+      const bitrate =
+        type === "audio"
+          ? DEFAULT_AUDIO_BITRATE_KBPS
+          : type === "video"
+            ? getDefaultVideoBitrateKbps(compositionWidth, compositionHeight, resolution, fps)
+            : 0;
+      set({ type, format, resolution, fps, bitrate });
+    },
+    setFormat: (format) => {
+      const { type, fps, resolution, compositionWidth, compositionHeight } = get();
+      const resolutionOptions = getResolutionOptions(format);
+      const nextResolution = resolutionOptions.some((option) => option.value === resolution)
+        ? resolution
+        : getDefaultResolution(format);
+      const bitrate =
+        format === "gif" ? null
+          : (type === "video"
+            ? getDefaultVideoBitrateKbps(compositionWidth, compositionHeight, nextResolution, fps)
+            : get().bitrate
+          );
+      set({ format, resolution: nextResolution, bitrate });
+    },
+    setResolution: (resolution) => {
+      const { type, fps, compositionWidth, compositionHeight } = get();
+      const bitrate =
+        type === "video"
+          ? getDefaultVideoBitrateKbps(compositionWidth, compositionHeight, resolution, fps)
+          : get().bitrate;
+      set({ resolution, bitrate });
+    },
+    setFps: (fps) => {
+      const { type, resolution, compositionWidth, compositionHeight } = get();
+      const bitrate =
+        type === "video"
+          ? getDefaultVideoBitrateKbps(compositionWidth, compositionHeight, resolution, fps)
+          : get().bitrate;
+      set({ fps, bitrate });
+    },
+    setBitrate: (bitrate) => set({ bitrate }),
+    setCompositionSize: (width, height) => {
+      const { type, resolution, fps } = get();
+      const bitrate =
+        type === "video"
+          ? getDefaultVideoBitrateKbps(width, height, resolution, fps)
+          : get().bitrate;
+      set({ compositionWidth: width, compositionHeight: height, bitrate });
+    },
+    setProjectName: (projectName) => set({ projectName }),
+    setBackground: (background) => set({ background }),
     setProgress: (progress) => set({ progress }),
     setState: (state) => set({ ...state }),
     setOutput: (output) => set({ output }),
@@ -113,7 +221,7 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
             set({ progress: progress ?? 0 });
 
             if (status === "completed") {
-              set({ exporting: false, output: { url: videoUrl, type: get().exportType } });
+              set({ exporting: false, output: { url: videoUrl, type: get().format } });
             } else if (status === "in-progress" || status === "queued") {
               setTimeout(checkStatus, 2500);
             } else if (status === "failed") {

@@ -610,7 +610,7 @@ const CaptionWords = ({
     <div className="flex flex-col gap-3">
       <Label className="font-sans text-sm font-semibold">Captions</Label>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
         <div className="flex gap-2">
           <div className="flex flex-col gap-2 flex-1">
             <div className="flex flex-1 items-center text-xs text-muted-foreground">

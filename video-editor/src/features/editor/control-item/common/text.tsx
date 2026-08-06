@@ -74,7 +74,7 @@ export const TextControls = ({
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
         <Label className="font-sans text-sm font-semibold">Typography</Label>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           <FontFamily
             ids={targetIds}
             handleChangeFont={onChangeFontFamily}
@@ -115,7 +115,7 @@ export const TextControls = ({
 
       <div className="flex flex-col gap-3">
         <Label className="font-sans text-sm font-semibold">Decoration</Label>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           <TextDecorationLines
             ids={targetIds}
             value={properties.textDecorationLines}
@@ -133,7 +133,7 @@ export const TextControls = ({
       {showFill && handleColorChange && (
         <div className="flex flex-col gap-3">
           <Label className="font-sans text-sm font-semibold">Colors</Label>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             <FontColor
               ids={targetIds}
               value={properties.color}

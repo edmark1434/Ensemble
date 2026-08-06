@@ -38,9 +38,11 @@ export interface ProposalItemData {
   submittedAt: string;
   submittedAgo?: string;
   jobPostedAt?: string;
+  jobStatus?: string;
+  jobDeletedAt?: string;
   updatedAt?: string;
   updatedAgo?: string;
-  status: ProposalStatus;
+  status: ProposalStatus | string;
   type: "incoming" | "sent";
   rejectionReason?: string;
   milestones: {
@@ -131,10 +133,12 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
     );
   }
 
-  const renderStatusBadge = (status: ProposalStatus) => {
+  const renderStatusBadge = (status: ProposalStatus | string) => {
     switch (status) {
       case "Accepted":
+      case "Hired":
         return "bg-emerald-500/10 border-emerald-500/30 text-emerald-400";
+      case "Approved":
       case "Shortlisted":
         return "bg-blue-500/10 border-blue-500/30 text-blue-400";
       case "Rejected":
@@ -188,8 +192,12 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                 {/* 1. User Header & Clickable Target Job Post Link */}
                 <div className="flex items-start justify-between gap-3 border-b border-white/5 pb-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-9 w-9 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-sm font-bold shrink-0">
-                      {item.partyName[0]}
+                    <div className="h-9 w-9 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-sm font-bold shrink-0 overflow-hidden">
+                      {item.partyAvatar ? (
+                        <img src={item.partyAvatar} alt={item.partyName} className="w-full h-full object-cover" />
+                      ) : (
+                        item.partyName[0]
+                      )}
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -277,7 +285,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                 </div>
 
                 {/* 3. Cover Letter Pitch Snippet */}
-                <p className="text-xs text-zinc-300 leading-relaxed line-clamp-2 italic px-1">
+                <p className="text-xs text-zinc-300 leading-relaxed line-clamp-2 italic px-1 whitespace-pre-wrap break-words">
                   "{item.coverLetter}"
                 </p>
 

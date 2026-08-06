@@ -188,7 +188,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
             )}
             <div className="flex-1 space-y-1 min-w-0">
               <h4 className="text-xs font-bold text-white truncate">{title || <span className="text-red-400 italic">No Title Given</span>}</h4>
-              <p className="text-zinc-400 line-clamp-2 leading-relaxed text-[11px]">{description}</p>
+              <p className="text-zinc-400 line-clamp-2 leading-relaxed text-[11px] break-words whitespace-pre-wrap">{description}</p>
               <div className="flex gap-4 pt-1 text-zinc-500 text-[10px]">
                 <span>Category: <strong className="text-zinc-300">{category}</strong></span>
                 <span>Competency Target: <strong className="text-zinc-300">{difficulty}</strong></span>

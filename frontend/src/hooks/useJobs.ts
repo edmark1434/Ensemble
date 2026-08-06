@@ -45,6 +45,19 @@ export const useJobs = () => {
         }
     };
 
+    const deleteJob = async (jobId: string) => {
+        setLoading(true);
+        try {
+            const res = await api.delete(`/api/jobs/${jobId}`);
+            return res.data;
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Failed to delete job');
+            throw err;
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // Proposals
     const createProposal = async (jobId: string, proposalData: any) => {
         setLoading(true);
@@ -211,12 +224,26 @@ export const useJobs = () => {
         }
     };
 
+    const rejectContract = async (contractId: string, reason: string) => {
+        setLoading(true);
+        try {
+            const res = await api.post(`/api/contracts/${contractId}/reject`, { reason });
+            return res.data;
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Failed to reject job offer');
+            throw err;
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return {
         loading,
         error,
         fetchJobs,
         createJob,
         updateJob,
+        deleteJob,
         createProposal,
         fetchSentProposals,
         fetchProposalsByJob,
@@ -227,6 +254,7 @@ export const useJobs = () => {
         uploadAttachment,
         toggleJobSave,
         sendJobOffer,
-        acceptJobOffer
+        acceptJobOffer,
+        rejectContract
     };
 };

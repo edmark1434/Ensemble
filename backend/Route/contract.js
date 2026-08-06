@@ -12,4 +12,7 @@ router.post('/job-offer', requireAuth, ContractControllers.sendJobOfferControlle
 // Accept a job offer (Applicant action)
 router.post('/:contractId/accept', requireAuth, ContractControllers.acceptJobOfferController);
 
+// Reject a job offer (Applicant action)
+router.post('/:contractId/reject', requireAuth, ContractControllers.rejectJobOfferController);
+
 module.exports = router;

@@ -149,7 +149,7 @@ const SelectaAnimation = ({ trackItem, disabled, showLoop, ids, captionIds, anim
   };
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
       {isLargeScreen ? (
         <>
           <div className="flex gap-2">

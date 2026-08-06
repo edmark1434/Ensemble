@@ -41,6 +41,9 @@ const useLayoutStore = create<ILayoutState>((set) => ({
   floatingControlAnimationType: undefined,
   setFloatingControlIds: (ids, animationType) =>
     set({ floatingControlIds: ids, floatingControlAnimationType: animationType }),
+
+  controlsPanelRef: null,
+  setControlsPanelRef: (ref) => set({ controlsPanelRef: ref }),
 }));
 
 export default useLayoutStore;

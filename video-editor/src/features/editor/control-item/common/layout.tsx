@@ -80,7 +80,7 @@ export const LayoutControls = ({ trackItem }: LayoutControlProps) => {
   return (
     <div className="flex flex-col gap-3">
       <Label className="font-sans text-sm font-semibold">Layout</Label>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
         <div className="flex gap-2">
           <div className="flex gap-2 flex-5">
             <LayoutDimension

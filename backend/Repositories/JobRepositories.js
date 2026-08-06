@@ -129,6 +129,52 @@ async function updateJobRepositories(jobId, accountId, jobData) {
     }
 }
 
+async function deleteJobRepositories(jobId, accountId) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Check hired count
+        const hiredCheck = await client.query(`
+            SELECT COUNT(*) as hired_count 
+            FROM proposals 
+            WHERE job_id = $1 AND status = 'Hired' AND deleted_at IS NULL
+        `, [jobId]);
+
+        if (parseInt(hiredCheck.rows[0].hired_count) > 0) {
+            throw new Error('Cannot delete a job post that already has positions filled.');
+        }
+
+        // Soft delete job
+        const jobUpdate = await client.query(`
+            UPDATE jobs
+            SET deleted_at = NOW(), status = 'Deleted'
+            WHERE job_id = $1 AND client_account_id = $2 AND deleted_at IS NULL
+            RETURNING *;
+        `, [jobId, accountId]);
+
+        if (jobUpdate.rows.length === 0) {
+            throw new Error('Job not found or unauthorized.');
+        }
+
+        // Archive pending proposals
+        await client.query(`
+            UPDATE proposals
+            SET status = 'Archived', updated_at = NOW()
+            WHERE job_id = $1 AND status = 'Pending' AND deleted_at IS NULL
+        `, [jobId]);
+
+        await client.query('COMMIT');
+        return jobUpdate.rows[0];
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error in deleteJobRepositories:', err);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
 async function createProposalRepositories(proposalData) {
     const client = await pool.connect();
     try {
@@ -201,7 +247,7 @@ async function getProposalsByJobIdRepositories(jobId) {
             LEFT JOIN accounts a ON p.freelancer_account_id = a.account_id
             LEFT JOIN jobs j ON p.job_id = j.job_id
             LEFT JOIN terms_of_service t ON p.terms_id = t.terms_id
-            WHERE p.job_id = $1 AND p.deleted_at IS NULL
+            WHERE p.job_id = $1 AND p.deleted_at IS NULL AND p.status != 'Archived'
             ORDER BY p.created_at DESC
         `;
         const res = await pool.query(query, [jobId]);
@@ -228,7 +274,7 @@ async function getProposalsByFreelancerRepositories(accountId) {
             LEFT JOIN jobs j ON p.job_id = j.job_id
             LEFT JOIN accounts c ON j.client_account_id = c.account_id
             LEFT JOIN terms_of_service t ON p.terms_id = t.terms_id
-            WHERE p.freelancer_account_id = $1 AND p.deleted_at IS NULL
+            WHERE p.freelancer_account_id = $1 AND p.deleted_at IS NULL AND p.status != 'Archived'
             ORDER BY p.created_at DESC
         `;
         const res = await pool.query(query, [accountId]);
@@ -247,6 +293,8 @@ async function getProposalByIdRepositories(proposalId) {
                 j.title as job_title,
                 j.category as job_category,
                 j.created_at as job_created_at,
+                j.status as job_status,
+                j.deleted_at as job_deleted_at,
                 c.display_name as client_name,
                 c.handle as client_handle,
                 (SELECT f.path FROM files f WHERE f.file_id = c.avatar_file_id LIMIT 1) as client_avatar_path,
@@ -351,5 +399,6 @@ module.exports = {
     withdrawProposalRepositories,
     updateProposalStatusRepositories,
     getTermsOfServiceRepositories,
-    toggleJobSaveRepositories
+    toggleJobSaveRepositories,
+    deleteJobRepositories
 };

@@ -41,10 +41,7 @@ interface ITimelineStore {
   compositions: Partial<IComposition>[];
   setCompositions: (compositions: Partial<IComposition>[]) => void;
 
-  background: {
-    type: "color" | "image";
-    value: string;
-  };
+  background: IBackground;
   viewTimeline: boolean;
   setViewTimeline: (viewTimeline: boolean) => void;
 
@@ -78,6 +75,11 @@ export interface IMarker {
   label?: string;
   color?: string;
   type: "marker" | "comment";
+}
+
+export interface IBackground {
+  type: "color" | "image";
+  value: string;
 }
 
 const useStore = create<ITimelineStore>((set, get) => ({
