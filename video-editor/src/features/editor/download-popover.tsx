@@ -29,6 +29,7 @@ import {
   getResolutionOptions, getDefaultVideoBitrateKbps, GIF_MAXIMUM_DURATION_MS
 } from "./constants/download-options";
 import { DraggablePanel } from "@/components/draggable-panel";
+import {getSafeCurrentFrame} from "@/features/editor/utils/time";
 
 export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
   const isMediumScreen = useIsMediumScreen();
@@ -105,6 +106,10 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
       : "Export";
 
   const handleExport = () => {
+    const { playerRef, fps: timelineFps } = useStore.getState();
+    const currentFrame = getSafeCurrentFrame(playerRef);
+    const currentTime = (currentFrame / timelineFps) * 1000;
+
     const data: RenderPayload = {
       ...stateManager.toJSON(),
       id: generateId(),
@@ -115,7 +120,8 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
       format,
       resolution,
       fps,
-      bitrate
+      bitrate,
+      ...(type === "image" ? { currentTime } : {})
     };
 
     actions.setState({ payload: data });

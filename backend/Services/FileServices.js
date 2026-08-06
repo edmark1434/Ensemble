@@ -17,7 +17,7 @@ const ALLOWED_FOLDERS = process.env.UPLOAD_ALLOWED_FOLDERS
 
 const ALLOWED_CONTENT_TYPES = process.env.UPLOAD_ALLOWED_TYPES 
     ? process.env.UPLOAD_ALLOWED_TYPES.split(',').map(t => t.trim())
-    : ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/avif'];
+    : ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/avif', 'application/pdf'];
 
 const MAX_FILE_SIZE = process.env.UPLOAD_MAX_FILE_SIZE 
     ? parseInt(process.env.UPLOAD_MAX_FILE_SIZE) 

@@ -106,7 +106,9 @@ async function runAdminDiditVerificationAction(req, res, action) {
       verifiedByAccountId: req.session?.account_id,
       comment: req.body?.comment,
     });
-    const message = data.mode === 'no_change'
+    const message = data.mode === 'team_local_update'
+      ? `Team verification updated to ${data.verificationStatus}`
+      : data.mode === 'no_change'
       ? 'Verification is already approved with the selected validity period'
       : data.mode === 'expiry_updated'
         ? 'Verification expiry updated'

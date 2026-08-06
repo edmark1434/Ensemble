@@ -1,11 +1,14 @@
 const { pool } = require('../lib/database');
+const { randomUUID } = require('crypto');
 const { ObjectId } = require('mongodb');
 const { getMongoClient } = require('../lib/mongodb');
 const {
   createInboxRepositories,
   createMessageRepositories,
+  getMessageByIdRepositories,
   getConversationByConvoId,
 } = require('./InboxRepositories');
+const { createNotificationServices } = require('../Services/NotificationServices');
 const {
   isMongoReady,
   getDisputeChatId,
@@ -841,7 +844,31 @@ async function getTicketChatId(ticketId) {
 /** Create (or reuse) the Mongo inbox for a support ticket and link it via ticket_chats. */
 async function ensureTicketChat(ticketId, ticketRow) {
   const existing = await getTicketChatId(ticketId);
-  if (existing) return existing;
+  const ticketDetails = {
+    ticket_number: ticketRow.ticket_number || null,
+    subject: ticketRow.reason || null,
+    type: ticketRow.type || null,
+    priority: ticketRow.priority || null,
+    status: ticketRow.status || null,
+  };
+
+  if (existing) {
+    const db = mongoDb();
+    if (db && ObjectId.isValid(existing)) {
+      await db.collection('inbox').updateOne(
+        { _id: new ObjectId(existing) },
+        {
+          $set: {
+            conversation_type: 'ticket',
+            ticket_id: String(ticketId),
+            support_ticket_id: String(ticketId),
+            ticket_details: ticketDetails,
+          },
+        }
+      );
+    }
+    return existing;
+  }
 
   if (!getMongoClient()) {
     throw new Error('MongoDB is not connected — ticket chats require MONGODB_URI');
@@ -861,9 +888,10 @@ async function ensureTicketChat(ticketId, ticketRow) {
     conversation_name: ticketRow.ticket_number
       ? `Ticket ${ticketRow.ticket_number}`
       : `Ticket ${ticketId}`,
-    conversation_type: 'group',
+    conversation_type: 'ticket',
     ticket_id: String(ticketId),
     support_ticket_id: String(ticketId),
+    ticket_details: ticketDetails,
     members,
     pinned_messages: [],
     created_at: new Date(),
@@ -881,11 +909,12 @@ async function ensureTicketChat(ticketId, ticketRow) {
   return chatId;
 }
 
-function mapMongoTicketMessage(m) {
+function mapMongoTicketMessage(m, senderNames = new Map()) {
   return {
     id: String(m._id),
+    senderId: m.sender_id ? String(m.sender_id) : null,
     authorType: m.author_type || (m.is_internal ? 'staff' : 'user'),
-    authorName: m.author_name || 'Unknown',
+    authorName: m.author_name || senderNames.get(String(m.sender_id)) || 'Unknown',
     body: m.message_content || m.body || '',
     isInternal: Boolean(m.is_internal),
     createdAt: m.created_at || m.createdAt || null,
@@ -927,15 +956,63 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
   let messages = [];
   let chatId = null;
   let chatAvailable = Boolean(getMongoClient());
+  const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
 
   try {
     chatId = await getTicketChatId(ticketId);
     if (chatId && chatAvailable) {
+      // This method receives staffSession only from authenticated admin/moderator
+      // ticket endpoints. Room membership must use that authenticated account
+      // directly; it must not depend on a second staff-profile lookup succeeding.
+      const staffAccountId = staffSession ? sessionAccountId(staffSession) : null;
+      const db = mongoDb();
+      if (staffAccountId && db && ObjectId.isValid(chatId)) {
+        await db.collection('inbox').updateOne(
+          { _id: new ObjectId(chatId), 'members.account_id': { $ne: String(staffAccountId) } },
+          {
+            $push: {
+              members: {
+                account_id: String(staffAccountId),
+                role: 'admin',
+                status: 'active',
+                joined_at: new Date(),
+              },
+            },
+            $set: { updated_at: new Date() },
+          }
+        );
+      }
       const { Messages } = await getConversationByConvoId(chatId);
-      messages = (Messages || [])
-        .filter((m) => !m.is_deleted && !m.deleted_at)
+      const activeMessages = (Messages || []).filter(
+        (message) => !message.is_deleted && !message.deleted_at
+      );
+      const senderIds = [
+        ...new Set(
+          activeMessages
+            .map((message) => String(message.sender_id || ''))
+            .filter((senderId) =>
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(senderId)
+            )
+        ),
+      ];
+      const senderNames = new Map();
+      if (senderIds.length) {
+        const senderResult = await pool.query(
+          `SELECT
+             a.account_id,
+             COALESCE(a.display_name, NULLIF(TRIM(CONCAT(u.first_name, ' ', u.last_name)), ''), a.handle, 'Unknown') AS sender_name
+           FROM accounts a
+           LEFT JOIN users u ON u.account_id = a.account_id
+           WHERE a.account_id = ANY($1::uuid[])`,
+          [senderIds]
+        );
+        senderResult.rows.forEach((sender) => {
+          senderNames.set(String(sender.account_id), sender.sender_name);
+        });
+      }
+      messages = activeMessages
         .sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0))
-        .map(mapMongoTicketMessage);
+        .map((message) => mapMongoTicketMessage(message, senderNames));
     }
   } catch (err) {
     console.error('Error loading ticket chat from MongoDB:', err.message);
@@ -943,7 +1020,6 @@ async function getTicketDetail(ticketId, staffSession = null, options = {}) {
   }
 
   const catalog = await getTicketCatalog();
-  const staff = staffSession ? await resolveDisputeStaffId(staffSession) : null;
   const { buildTicketPermissions } = require('./TicketAssignmentHelpers');
 
   const lastPublic = [...messages].reverse().find((m) => !m.isInternal);
@@ -1218,7 +1294,7 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
     }
   }
 
-  await createMessageRepositories({
+  const insertedMessageId = await createMessageRepositories({
     conversation_id: String(chatId),
     sender_id: accountId,
     message_type: 'text',
@@ -1236,6 +1312,7 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
     created_at: now,
     updated_at: now,
   });
+  const createdMessage = await getMessageByIdRepositories(insertedMessageId);
 
   await pool.query(
     `UPDATE tickets
@@ -1253,6 +1330,50 @@ async function addTicketMessage(ticketId, body, staffSession, isInternal = false
       await db.collection('inbox').updateOne(
         { _id: new ObjectId(chatId) },
         { $set: { updated_at: now, last_message: body, last_message_time: now } }
+      );
+
+      const inbox = await db.collection('inbox').findOne({ _id: new ObjectId(chatId) });
+      const recipients = (inbox?.members || []).filter(
+        (member) =>
+          String(member.account_id) !== String(accountId) &&
+          !['left', 'removed'].includes(member.status || 'active') &&
+          (!isInternal || ['admin', 'staff', 'moderator'].includes(String(member.role).toLowerCase()))
+      );
+      const { getIo } = require('../lib/websocket');
+      let io = null;
+      try {
+        io = getIo();
+      } catch (error) {
+        console.error('Ticket message saved without realtime delivery:', error.message);
+      }
+
+      if (io && isInternal) {
+        recipients.forEach((member) => {
+          io.to(String(member.account_id)).emit('ticketInternalMessage', createdMessage);
+        });
+      } else if (io) {
+        io.to(String(chatId)).emit('newMessage', createdMessage);
+      }
+
+      await Promise.all(
+        recipients.map(async (member) => {
+          try {
+            const notification = await createNotificationServices({
+              account_id: String(member.account_id),
+              message: `${sessionDisplayName(staffSession) || (staff ? 'Staff' : 'A user')} replied to ticket ${ticketResult.rows[0].ticket_number}.`,
+              is_read: false,
+              reference_table: 'inbox',
+              reference_prefix: isInternal ? 'TICKET_INTERNAL_REPLY' : 'TICKET_REPLY',
+              reference_path: `/inbox/direct?conversation=${chatId}`,
+              reference_id: randomUUID(),
+            });
+            if (io) {
+              io.to(String(member.account_id)).emit('notification', notification);
+            }
+          } catch (error) {
+            console.error('Error creating ticket reply notification:', error.message);
+          }
+        })
       );
     }
   }

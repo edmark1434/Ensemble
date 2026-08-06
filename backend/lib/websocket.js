@@ -199,6 +199,7 @@ async function initSocket(httpServer) {
         const message = await createMessageServices(messagePayload, accountId, {
           onNotification: (recipientId, notification) => {
             io.to(String(recipientId)).emit('notification', notification);
+            io.to(String(recipientId)).emit('conversationMessageNotification', messagePayload);
           },
         });
         io.to(message.conversation_id).emit('newMessage', message);
@@ -216,6 +217,7 @@ async function initSocket(httpServer) {
         const reply = await replyMessageServices(parentMessageId, payload, accountId, {
           onNotification: (recipientId, notification) => {
             io.to(String(recipientId)).emit('notification', notification);
+            io.to(String(recipientId)).emit('conversationMessageNotification', reply);
           },
         });
         io.to(reply.conversation_id).emit('messageReplied', reply);
@@ -232,7 +234,12 @@ async function initSocket(httpServer) {
           : await reactMessageServices(
               payload.message_id,
               payload.react_type,
-              accountId
+              accountId,
+              {
+                onNotification: (recipientId, notification) => {
+                  io.to(String(recipientId)).emit('notification', notification);
+                },
+              }
             );
         io.to(message.conversation_id).emit('messageReactionUpdated', message);
         acknowledge(callback, message);

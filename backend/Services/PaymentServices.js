@@ -406,10 +406,10 @@ const customerPayload = await getCustomerPayload(req);
         },
 
         success_return_url:
-            `https://app.com/credits?success`,
+            `${process.env.FRONTEND_URL}/credits?success`,
 
         cancel_return_url:
-            `https://app.com/credits?cancel`,
+            `${process.env.FRONTEND_URL}/credits?cancel`,
 
     };
     const topUpPayload = {
@@ -525,10 +525,10 @@ async function createPaymentToken(req, res) {
                 country: "PH",
                 ...customerPayload,
                 success_return_url:
-                    `https://app.com/credits?success`,
+                    `${process.env.FRONTEND_URL}/credits?success`,
 
                 cancel_return_url:
-                    `https://app.com/credits?cancel`,
+                    `${process.env.FRONTEND_URL}/credits?cancel`,
                 metadata: {
                     user_id: `${userId}`
                 }

@@ -1,7 +1,7 @@
 // src/components/ui/inbox/inbox_functions/inbox_pin_message.tsx
 import React, { useState, useCallback } from "react";
 import { Pin, X } from "lucide-react";
-import type { Message, PinnedMessage } from "../inbox_dataset";
+import type { Inbox, Message, PinnedMessage } from "../inbox_dataset";
 
 export const useInboxPinMessage = () => {
   const [pinnedMessages, setPinnedMessages] = useState<PinnedMessage[]>([]);
@@ -29,6 +29,7 @@ export const useInboxPinMessage = () => {
 };
 
 interface InboxPinnedBannerProps {
+  selectedConversation: Inbox;
   pinnedMessages: PinnedMessage[];
   messages: Message[];
   onUnpin: (messageId: string) => void;
@@ -36,15 +37,64 @@ interface InboxPinnedBannerProps {
 }
 
 export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
+  selectedConversation,
   pinnedMessages,
   messages,
   onUnpin,
   onJumpTo,
 }) => {
-  if (pinnedMessages.length === 0) return null;
+  const isTicket = selectedConversation.conversation_type === "ticket";
+  const ticketDetails = selectedConversation.ticket_details;
+  const ticketNumber =
+    ticketDetails?.ticket_number ||
+    selectedConversation.support_ticket_id ||
+    selectedConversation.ticket_id;
+  const description =
+    ticketDetails?.description ||
+    messages.find(
+      (message) =>
+        message.message_type !== "system" &&
+        String(message.author_type || "user").toLowerCase() !== "staff"
+    )?.message_content;
+
+  if (!isTicket && pinnedMessages.length === 0) return null;
 
   return (
     <div className="inbox-scroll-thin border-b border-white/10 bg-[#0d0f1a] px-4 py-2 flex-shrink-0 max-h-28 overflow-y-auto">
+      {isTicket && (
+        <div className="mb-1 rounded-lg border border-violet-400/20 bg-violet-500/5 px-3 py-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="text-xs font-bold text-violet-300">
+              {ticketNumber || "Ticket"}
+            </span>
+            {ticketDetails?.type && (
+              <span className="text-[11px] text-zinc-400">
+                Type: <span className="text-zinc-200">{ticketDetails.type}</span>
+              </span>
+            )}
+            {ticketDetails?.status && (
+              <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-300">
+                {ticketDetails.status}
+              </span>
+            )}
+            {ticketDetails?.priority && (
+              <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-300">
+                {ticketDetails.priority} priority
+              </span>
+            )}
+          </div>
+          {ticketDetails?.subject && (
+            <p className="mt-1 text-xs font-medium text-white">
+              {ticketDetails.subject}
+            </p>
+          )}
+          {description && (
+            <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-zinc-400">
+              {description}
+            </p>
+          )}
+        </div>
+      )}
       {pinnedMessages.map((pin) => {
         const msg = messages.find((m) => m._id === pin.message_id);
         if (!msg) return null;

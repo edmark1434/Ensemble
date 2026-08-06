@@ -1,140 +1,125 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { lazy, Suspense, type ComponentType } from 'react'
 import {ToastProvider} from "@/components/utility/toast_provider.tsx";
-import LandingPage from './pages/LandingPage'
-import LoginPage from './pages/auth/Loginpage'
-import AdminLoginPage from './pages/auth/AdminLoginPage'
-import StaffLoginPage from './pages/auth/StaffLoginPage'
-import SignupPage from './pages/auth/Signuppage'
-import EmailVerification from './pages/EmailVerification'
-
-import NotFound from "@/pages/user/0_misc/NotFound.tsx";
-
-import ResetPasswordPage from "@/pages/auth/ResetPasswordPage.tsx";
-import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage.tsx";
-
-import CreditShop from "@/pages/user/13_creditsshop/CreditsShop.tsx";
-import Checkout from "@/pages/payment/checkout.tsx";
-import Profile from "@/pages/user/7_profile/Profile.tsx";
-import UserSettings from "@/components/nav/Settings/user_settings.tsx";
-
-import Layout from './components/ui/Layout.tsx'
-
-import Home from '@/pages/user/1_home/Home.tsx'
-
-import Projects from "@/pages/user/2_projects/Projects.tsx"
-import Projects_Selection from "@/pages/user/2_projects/Projects_Selection.tsx";
-
-import Teams from "@/pages/user/3_teams/Teams.tsx";
-import SelectedTeam from "@/pages/user/3_teams/SelectedTeam.tsx";
-
-import Forums from './pages/user/4_forums/Forums.tsx'
-import SelectedGroup from "@/pages/user/4_forums/SelectedGroup.tsx";
-import ExpandDiscussion from "@/pages/user/4_forums/ExpandDiscussion.tsx";
-
-// Updated Inbox Root Import
-import InboxMain from "@/components/ui/inbox/inbox_main.tsx";
-
-import SectionPlaceholder from '@/pages/user/0_misc/SectionPlaceholder.tsx'
-
-// Job Market Core Imports
-import DashboardMain from './pages/user/8_dashboard/dashboard_main';
-import { DashboardTaskDetail } from './pages/user/8_dashboard/dashboard_components/DashboardTaskDetail';
-import JobMain from "@/pages/user/6_job_market/job_main.tsx";
-import JobPostingPage from "@/pages/user/6_job_market/job_pages/job_posting_page.tsx";
-import JobSavesPage from "@/pages/user/6_job_market/job_pages/job_saves_page.tsx";
-import JobMyPostPage from "@/pages/user/6_job_market/job_pages/job_mypost_page.tsx";
-import JobCreatePostPage from "@/pages/user/6_job_market/job_pages/job_createpost_page.tsx";
-import JobEditPostPage from "@/pages/user/6_job_market/job_pages/job_editpost_page.tsx";
-
-// Job Proposals Imports
-import ProposalsMain from "@/pages/user/6_job_market/job_proposals/proposals_main.tsx";
-import ProposalsSelectJobPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_select_job_page.tsx";
-import ProposalsIncomingPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_incoming_page.tsx";
-import ProposalsSentPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_sent_page.tsx";
-import ProposalsCreatePage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_create_page.tsx";
-import ProposalsEditPage from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_edit_page.tsx";
-import ProposalsViewDetailsAsApplicant from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_applicant";
-import ProposalsViewDetailsAsAuthor from "@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author";
-
-import GigMarketplace from "@/pages/user/7_gigs/Gig_Posting/main.tsx";
-import {CreateGigWizard} from "@/pages/user/7_gigs/Gig_Posting/CreateGigWizard.tsx";
-
-import Verification from "@/pages/user/9_verification/Verification.tsx";
-
-import TransactionHistoryMain from "@/pages/user/11_transactionhistory/main.tsx";
-import TosMain from "@/pages/user/terms_of_service/tos_main.tsx";
-import Contracts from "@/pages/user/contracts/contracts.tsx";
-
-import UserProfilesList from "@/components/nav/user_profiles_list.tsx";
-import {VerificationStatus} from "@/pages/user/7_profile/VerificationStatus/VerificationStatus.tsx";
-
-import AdminLayout from './pages/admin/AdminLayout'
-import AdminDashboard from './pages/admin/AdminDashboard'
-import UserTeamPage from './pages/admin/userTeam/UserTeamPage'
-import CreditEconomyPage from './pages/admin/creditEconomy/CreditEconomyPage'
-import ModerationPage from './pages/admin/moderation/ModerationPage'
-import AnalyticsPage from './pages/admin/analytics/AnalyticsPage'
-import TicketManagementPage from './pages/admin/ticketManagement/TicketManagementPage'
-import SystemSettingsPage from './pages/admin/systemSettings/SystemSettingsPage'
-import StaffPortalLayout from './pages/staff/StaffPortalLayout'
-import StaffDashboard from './pages/staff/StaffDashboard'
-
-// Account Setup Routes
-import VerifyEmail from "@/pages/setup_account/00_VerifyEmail.tsx";
-import PersonalDetails from "@/pages/setup_account/01_PersonalDetails.tsx";
-import UploadImage from "@/pages/setup_account/02_UploadImage.tsx";
-import Survey from "@/pages/setup_account/04_Survey.tsx";
-
-import ForumModeratorLayout from './pages/moderator/forum-moderator/Layout'
-import ForumModeratorDashboard from './pages/moderator/forum-moderator/Dashboard'
-import ForumDiscussion from './pages/moderator/forum-moderator/ForumDiscussion'
-import ForumTicketManagement from './pages/moderator/forum-moderator/TicketManagement'
-import ForumReports from './pages/moderator/forum-moderator/Reports'
-import ForumUserTeam from './pages/moderator/forum-moderator/UserTeam'
-import ForumDisputes from './pages/moderator/forum-moderator/Disputes'
-import MarketplaceModeratorLayout from './pages/moderator/marketplace-moderator/Layout'
-import MarketplaceModeratorDashboard from './pages/moderator/marketplace-moderator/Dashboard'
-import MarketplaceControl from './pages/moderator/marketplace-moderator/MarketplaceControl'
-import MarketplaceTicketManagement from './pages/moderator/marketplace-moderator/TicketManagement'
-import MarketplaceReports from './pages/moderator/marketplace-moderator/Reports'
-import MarketplaceUserTeam from './pages/moderator/marketplace-moderator/UserTeam'
-import MarketplaceDisputes from './pages/moderator/marketplace-moderator/Disputes'
-import SupportModeratorLayout from './pages/moderator/support-moderator/Layout'
-import SupportModeratorDashboard from './pages/moderator/support-moderator/Dashboard'
-import SupportTicketManagement from './pages/moderator/support-moderator/TicketManagement'
-import SupportDisputes from './pages/moderator/support-moderator/Disputes'
-import SupportUserTeam from './pages/moderator/support-moderator/UserTeam'
-import SupportReports from './pages/moderator/support-moderator/Reports'
-import JobsModeratorLayout from './pages/moderator/jobs-moderator/Layout'
-import JobsModeratorDashboard from './pages/moderator/jobs-moderator/Dashboard'
-import JobsGigsControl from './pages/moderator/jobs-moderator/JobsGigsControl'
-import JobsTicketManagement from './pages/moderator/jobs-moderator/TicketManagement'
-import JobsDisputes from './pages/moderator/jobs-moderator/Disputes'
-import JobsReports from './pages/moderator/jobs-moderator/Reports'
-import JobsUserTeam from './pages/moderator/jobs-moderator/UserTeam'
 import RouteMiddleware from './lib/RouteMiddleware'
 import StaffMiddleware from './lib/StaffMiddleware'
 
-// Landing Dropdown Pages Imports
-import PageAboutUs from "@/pages/landing/pages/page_AboutUs.tsx";
-import PageAskOurChatbot from './pages/landing/pages/page_AskOurChatbot';
-import PageFAQ from './pages/landing/pages/page_FAQ';
-import PageHowToHire from './pages/landing/pages/page_HowToHire';
-import PageHowToWork from './pages/landing/pages/page_HowToWork';
-import PagePricing from './pages/landing/pages/page_Pricing';
-import PagePrivacyPolicy from "@/pages/landing/pages/page_PrivacyPolicy.tsx";
-import PageTermsOfService from "@/pages/landing/pages/page_TermsOfService.tsx";
-import PageSendAFeedback from './pages/landing/pages/page_SendAFeedback';
-import PageSubmitATicket from './pages/landing/pages/page_SubmitATicket';
-import PageSupportUs from './pages/landing/pages/page_SupportUs';
-
 import './App.css'
+
+const lazyPage = (loader: () => Promise<{ default: ComponentType<any> }>) => lazy(loader);
+
+const LandingPage = lazyPage(() => import('./pages/LandingPage'));
+const LoginPage = lazyPage(() => import('./pages/auth/Loginpage'));
+const AdminLoginPage = lazyPage(() => import('./pages/auth/AdminLoginPage'));
+const StaffLoginPage = lazyPage(() => import('./pages/auth/StaffLoginPage'));
+const SignupPage = lazyPage(() => import('./pages/auth/Signuppage'));
+const EmailVerification = lazyPage(() => import('./pages/EmailVerification'));
+const NotFound = lazyPage(() => import('@/pages/user/0_misc/NotFound.tsx'));
+const ResetPasswordPage = lazyPage(() => import('@/pages/auth/ResetPasswordPage.tsx'));
+const ForgotPasswordPage = lazyPage(() => import('@/pages/auth/ForgotPasswordPage.tsx'));
+const CreditShop = lazyPage(() => import('@/pages/user/13_creditsshop/CreditsShop.tsx'));
+const Checkout = lazyPage(() => import('@/pages/payment/checkout.tsx'));
+const Profile = lazyPage(() => import('@/pages/user/7_profile/Profile.tsx'));
+const UserSettings = lazyPage(() => import('@/components/nav/Settings/user_settings.tsx'));
+const Layout = lazyPage(() => import('./components/ui/Layout.tsx'));
+const Home = lazyPage(() => import('@/pages/user/1_home/Home.tsx'));
+const Projects = lazyPage(() => import('@/pages/user/2_projects/Projects.tsx'));
+const Projects_Selection = lazyPage(() => import('@/pages/user/2_projects/Projects_Selection.tsx'));
+const Teams = lazyPage(() => import('@/pages/user/3_teams/Teams.tsx'));
+const SelectedTeam = lazyPage(() => import('@/pages/user/3_teams/SelectedTeam.tsx'));
+const Forums = lazyPage(() => import('./pages/user/4_forums/Forums.tsx'));
+const SelectedGroup = lazyPage(() => import('@/pages/user/4_forums/SelectedGroup.tsx'));
+const ExpandDiscussion = lazyPage(() => import('@/pages/user/4_forums/ExpandDiscussion.tsx'));
+const InboxMain = lazyPage(() => import('@/components/ui/inbox/inbox_main.tsx'));
+const SectionPlaceholder = lazyPage(() => import('@/pages/user/0_misc/SectionPlaceholder.tsx'));
+const JobMain = lazyPage(() => import('@/pages/user/6_job_market/job_main.tsx'));
+const JobPostingPage = lazyPage(() => import('@/pages/user/6_job_market/job_pages/job_posting_page.tsx'));
+const JobSavesPage = lazyPage(() => import('@/pages/user/6_job_market/job_pages/job_saves_page.tsx'));
+const JobMyPostPage = lazyPage(() => import('@/pages/user/6_job_market/job_pages/job_mypost_page.tsx'));
+const JobCreatePostPage = lazyPage(() => import('@/pages/user/6_job_market/job_pages/job_createpost_page.tsx'));
+const JobEditPostPage = lazyPage(() => import('@/pages/user/6_job_market/job_pages/job_editpost_page.tsx'));
+const ProposalsMain = lazyPage(() => import('@/pages/user/6_job_market/job_proposals/proposals_main.tsx'));
+const ProposalsSelectJobPage = lazyPage(() => import('@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_select_job_page.tsx'));
+const ProposalsIncomingPage = lazyPage(() => import('@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_incoming_page.tsx'));
+const ProposalsSentPage = lazyPage(() => import('@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_sent_page.tsx'));
+const ProposalsCreatePage = lazyPage(() => import('@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_create_page.tsx'));
+const ProposalsEditPage = lazyPage(() => import('@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_edit_page.tsx'));
+const ProposalsViewDetailsAsApplicant = lazyPage(() => import('@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_applicant'));
+const ProposalsViewDetailsAsAuthor = lazyPage(() => import('@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author'));
+const GigMarketplace = lazyPage(() => import('@/pages/user/7_gigs/Gig_Posting/main.tsx'));
+const CreateGigWizard = lazy(() => import('@/pages/user/7_gigs/Gig_Posting/CreateGigWizard.tsx').then((module) => ({ default: module.CreateGigWizard })));
+const Verification = lazyPage(() => import('@/pages/user/9_verification/Verification.tsx'));
+const BusinessVerification = lazyPage(() => import('@/pages/user/9_verification/BusinessVerification.tsx'));
+const TransactionHistoryMain = lazyPage(() => import('@/pages/user/11_transactionhistory/main.tsx'));
+const TosMain = lazyPage(() => import('@/pages/user/terms_of_service/tos_main.tsx'));
+const Contracts = lazyPage(() => import('@/pages/user/contracts/contracts.tsx'));
+const UserProfilesList = lazyPage(() => import('@/components/nav/user_profiles_list.tsx'));
+const VerificationStatus = lazy(() => import('@/pages/user/7_profile/VerificationStatus/VerificationStatus.tsx').then((module) => ({ default: module.VerificationStatus })));
+const AdminLayout = lazyPage(() => import('./pages/admin/AdminLayout'));
+const AdminDashboard = lazyPage(() => import('./pages/admin/AdminDashboard'));
+const UserTeamPage = lazyPage(() => import('./pages/admin/userTeam/UserTeamPage'));
+const CreditEconomyPage = lazyPage(() => import('./pages/admin/creditEconomy/CreditEconomyPage'));
+const ModerationPage = lazyPage(() => import('./pages/admin/moderation/ModerationPage'));
+const AnalyticsPage = lazyPage(() => import('./pages/admin/analytics/AnalyticsPage'));
+const TicketManagementPage = lazyPage(() => import('./pages/admin/ticketManagement/TicketManagementPage'));
+const SystemSettingsPage = lazyPage(() => import('./pages/admin/systemSettings/SystemSettingsPage'));
+const StaffPortalLayout = lazyPage(() => import('./pages/staff/StaffPortalLayout'));
+const StaffDashboard = lazyPage(() => import('./pages/staff/StaffDashboard'));
+const VerifyEmail = lazyPage(() => import('@/pages/setup_account/00_VerifyEmail.tsx'));
+const PersonalDetails = lazyPage(() => import('@/pages/setup_account/01_PersonalDetails.tsx'));
+const UploadImage = lazyPage(() => import('@/pages/setup_account/02_UploadImage.tsx'));
+const Survey = lazyPage(() => import('@/pages/setup_account/04_Survey.tsx'));
+const ForumModeratorLayout = lazyPage(() => import('./pages/moderator/forum-moderator/Layout'));
+const ForumModeratorDashboard = lazyPage(() => import('./pages/moderator/forum-moderator/Dashboard'));
+const ForumDiscussion = lazyPage(() => import('./pages/moderator/forum-moderator/ForumDiscussion'));
+const ForumTicketManagement = lazyPage(() => import('./pages/moderator/forum-moderator/TicketManagement'));
+const ForumReports = lazyPage(() => import('./pages/moderator/forum-moderator/Reports'));
+const ForumUserTeam = lazyPage(() => import('./pages/moderator/forum-moderator/UserTeam'));
+const ForumDisputes = lazyPage(() => import('./pages/moderator/forum-moderator/Disputes'));
+const MarketplaceModeratorLayout = lazyPage(() => import('./pages/moderator/marketplace-moderator/Layout'));
+const MarketplaceModeratorDashboard = lazyPage(() => import('./pages/moderator/marketplace-moderator/Dashboard'));
+const MarketplaceControl = lazyPage(() => import('./pages/moderator/marketplace-moderator/MarketplaceControl'));
+const MarketplaceTicketManagement = lazyPage(() => import('./pages/moderator/marketplace-moderator/TicketManagement'));
+const MarketplaceReports = lazyPage(() => import('./pages/moderator/marketplace-moderator/Reports'));
+const MarketplaceUserTeam = lazyPage(() => import('./pages/moderator/marketplace-moderator/UserTeam'));
+const MarketplaceDisputes = lazyPage(() => import('./pages/moderator/marketplace-moderator/Disputes'));
+const SupportModeratorLayout = lazyPage(() => import('./pages/moderator/support-moderator/Layout'));
+const SupportModeratorDashboard = lazyPage(() => import('./pages/moderator/support-moderator/Dashboard'));
+const SupportTicketManagement = lazyPage(() => import('./pages/moderator/support-moderator/TicketManagement'));
+const SupportDisputes = lazyPage(() => import('./pages/moderator/support-moderator/Disputes'));
+const SupportUserTeam = lazyPage(() => import('./pages/moderator/support-moderator/UserTeam'));
+const SupportReports = lazyPage(() => import('./pages/moderator/support-moderator/Reports'));
+const JobsModeratorLayout = lazyPage(() => import('./pages/moderator/jobs-moderator/Layout'));
+const JobsModeratorDashboard = lazyPage(() => import('./pages/moderator/jobs-moderator/Dashboard'));
+const JobsGigsControl = lazyPage(() => import('./pages/moderator/jobs-moderator/JobsGigsControl'));
+const JobsTicketManagement = lazyPage(() => import('./pages/moderator/jobs-moderator/TicketManagement'));
+const JobsDisputes = lazyPage(() => import('./pages/moderator/jobs-moderator/Disputes'));
+const JobsReports = lazyPage(() => import('./pages/moderator/jobs-moderator/Reports'));
+const JobsUserTeam = lazyPage(() => import('./pages/moderator/jobs-moderator/UserTeam'));
+const PageAboutUs = lazyPage(() => import('@/pages/landing/pages/page_AboutUs.tsx'));
+const PageAskOurChatbot = lazyPage(() => import('./pages/landing/pages/page_AskOurChatbot'));
+const PageFAQ = lazyPage(() => import('./pages/landing/pages/page_FAQ'));
+const PageHowToHire = lazyPage(() => import('./pages/landing/pages/page_HowToHire'));
+const PageHowToWork = lazyPage(() => import('./pages/landing/pages/page_HowToWork'));
+const PagePricing = lazyPage(() => import('./pages/landing/pages/page_Pricing'));
+const PagePrivacyPolicy = lazyPage(() => import('@/pages/landing/pages/page_PrivacyPolicy.tsx'));
+const PageTermsOfService = lazyPage(() => import('@/pages/landing/pages/page_TermsOfService.tsx'));
+const PageSendAFeedback = lazyPage(() => import('./pages/landing/pages/page_SendAFeedback'));
+const PageSubmitATicket = lazyPage(() => import('./pages/landing/pages/page_SubmitATicket'));
+const PageSupportUs = lazyPage(() => import('./pages/landing/pages/page_SupportUs'));
 
 function App() {
 
   return (
     <>
       <ToastProvider />
+      <Suspense
+        fallback={
+          <div className="flex min-h-screen items-center justify-center bg-[#080a12] text-sm text-zinc-400">
+            Loading...
+          </div>
+        }
+      >
       <Routes>
       <Route path="/admin" element={<AdminLoginPage />} />
       <Route path="/staff" element={<StaffLoginPage />} />
@@ -197,6 +182,7 @@ function App() {
 
           <Route path='/teams'>
             <Route index element={<Teams />} />
+            <Route path=':id/business-verification' element={<BusinessVerification />} />
             <Route path=':id' element={<SelectedTeam />} />
           </Route>
 
@@ -240,12 +226,6 @@ function App() {
           <Route path='/terms-of-services' element={<TosMain />} />
           <Route path='/contracts' element={<Contracts />} />
           <Route path='/contracts/:id' element={<Contracts />} />
-          <Route path='/dashboard' element={<DashboardMain />} />
-          <Route path='/dashboard/tasks' element={<DashboardMain />} />
-          <Route path='/dashboard/review' element={<DashboardMain />} />
-          <Route path='/dashboard/archived' element={<DashboardMain />} />
-          <Route path='/dashboard/tasks/:id' element={<DashboardTaskDetail />} />
-          <Route path='/dashboard/review/:id' element={<DashboardTaskDetail />} />
           <Route path='/transactions' element={<TransactionHistoryMain />} />
         </Route>
       </Route>
@@ -304,6 +284,7 @@ function App() {
         </Route>
       </Route>
       </Routes>
+      </Suspense>
     </>
   )
 }

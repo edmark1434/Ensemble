@@ -38,7 +38,7 @@ export const FORMATS_BY_TYPE: Record<ExportType, SelectOption<ExportFormat>[]> =
   "image-sequence": [
     { value: "png", label: "PNG" },
     { value: "jpeg", label: "JPEG" },
-    { value: "zip", label: "ZIP" }
+    // { value: "zip", label: "ZIP" }
   ],
   audio: [
     { value: "mp3", label: "MP3" },

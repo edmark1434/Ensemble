@@ -5,7 +5,11 @@ const {
   prepareUserVerificationApprovalExpiry,
   restoreUserVerificationExpiry,
   markUserVerificationPending,
+  applyTeamVerificationAction,
 } = require('../Repositories/AdminUserTeamRepositories');
+const { createNotification } = require('../Repositories/NotificationRepositories');
+const { getActiveTeamOwnerAccountIds } = require('../Repositories/TeamsRepositories');
+const { getIo } = require('../lib/websocket');
 const {
   appyForResubmissionServices,
   approvedVerificationServices,
@@ -64,9 +68,39 @@ function sanitizeDecision(decision) {
 
 async function getAdminVerificationDetails(accountId) {
   const record = await getUserVerificationRecord(accountId);
+  const isTeam = String(record?.account_type || '').toLowerCase() === 'team';
+
+  if (isTeam) {
+    return {
+      activity: record?.verification_id ? 'details' : 'none',
+      accountType: 'Team',
+      isTeam: true,
+      isVerified: Boolean(record?.is_verified),
+      verificationStatus: record?.internal_status || 'Pending',
+      kycStatus: null,
+      verifiedAt: record?.verified_at || null,
+      expiresAt: record?.expires_at || null,
+      attachments: record?.attachments || [],
+      businessDetails: record?.business_type ? {
+        businessType: record.business_type,
+        registeredBusinessName: record.registered_business_name,
+        registrationNumber: record.registration_number,
+        registrationCountry: record.registration_country,
+        relationshipToBusiness: record.relationship_to_business,
+        submittedByAccountId: record.submitted_by_account_id,
+        submittedByName: record.submitted_by_name,
+        submittedByHandle: record.submitted_by_handle,
+        submissionVersion: record.submission_version,
+      } : null,
+      decision: null,
+    };
+  }
+
   if (!record || !record.verification_session_id) {
     return {
       activity: 'none',
+      accountType: record?.account_type || null,
+      isTeam: false,
       isVerified: Boolean(record?.is_verified),
       verificationStatus: 'No Verification Activity',
       kycStatus: 'No Verification Activity',
@@ -80,6 +114,8 @@ async function getAdminVerificationDetails(accountId) {
   const kycStatus = record.kyc_status || 'Not Started';
   const base = {
     activity: 'status_only',
+    accountType: record.account_type || 'User',
+    isTeam: false,
     isVerified: Boolean(record.is_verified),
     verificationStatus,
     kycStatus,
@@ -126,21 +162,72 @@ function actionError(message) {
 
 async function applyAdminDiditVerificationAction(accountId, action, options = {}) {
   const record = await getUserVerificationRecord(accountId);
+  const normalizedAction = String(action || '').toLowerCase();
+  const verifiedByAccountId = options.verifiedByAccountId;
+  const comment = String(options.comment || '').trim();
+  let validityDays = Number(options.validityDays);
+  if (!Number.isFinite(validityDays) || validityDays <= 0) validityDays = 365;
+  validityDays = Math.min(Math.max(Math.floor(validityDays), 1), 3650);
+
+  if (String(record?.account_type || '').toLowerCase() === 'team') {
+    if (!['approve', 'decline', 'reverify'].includes(normalizedAction)) {
+      throw actionError(`Unsupported Team verification action: ${action}`);
+    }
+    if (!verifiedByAccountId) {
+      throw actionError('The reviewing admin account could not be identified');
+    }
+    if (!comment) {
+      throw actionError('A reason is required for this Team verification action');
+    }
+
+    const result = await applyTeamVerificationAction(
+      accountId,
+      normalizedAction,
+      validityDays,
+      verifiedByAccountId
+    );
+    const actionMessages = {
+      approve: 'Your Team business verification has been approved.',
+      decline: 'Your Team business verification was declined. You may resubmit the required documents.',
+      reverify: 'Your Team business verification requires resubmission.',
+    };
+    const notificationMessage = `${actionMessages[normalizedAction]} Admin message: ${comment}`;
+    const ownerAccountIds = await getActiveTeamOwnerAccountIds(accountId);
+    const io = getIo();
+    await Promise.all(ownerAccountIds.map(async (ownerAccountId) => {
+      const notification = await createNotification({
+        message: notificationMessage,
+        is_read: false,
+        reference_table: 'verifications',
+        reference_prefix: 'BUSINESS_VERIFICATION',
+        reference_path: '/teams',
+        reference_id: result.verification.verification_id,
+        account_id: ownerAccountId,
+      });
+      io.to(String(ownerAccountId)).emit('notification', notification);
+      return notification;
+    }));
+
+    return {
+      action: normalizedAction,
+      mode: 'team_local_update',
+      verificationStatus: result.verificationStatus,
+      kycStatus: null,
+      isVerified: Boolean(result.verification.is_verified),
+      expiresAt: result.session.expires_at,
+      validityDays: normalizedAction === 'approve' ? validityDays : null,
+    };
+  }
+
   if (!record?.verification_session_id || !record.didit_session_id) {
     throw actionError('No verification session is linked to this user');
   }
 
-  const normalizedAction = String(action || '').toLowerCase();
   const kycStatus = String(record.kyc_status || '').toLowerCase();
   const verificationStatus = String(record.internal_status || '').toLowerCase();
-  const verifiedByAccountId = options.verifiedByAccountId;
-  const comment = String(options.comment || '').trim();
   if (normalizedAction === 'approve' && !verifiedByAccountId) {
     throw actionError('The approving admin account could not be identified');
   }
-  let validityDays = Number(options.validityDays);
-  if (!Number.isFinite(validityDays) || validityDays <= 0) validityDays = 365;
-  validityDays = Math.min(Math.max(Math.floor(validityDays), 1), 3650);
 
   if (normalizedAction === 'approve') {
     const alreadyApproved = kycStatus === 'approved'
