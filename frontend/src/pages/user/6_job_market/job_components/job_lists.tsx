@@ -1,6 +1,7 @@
 import React from "react";
 import { Star, Clock, Bookmark, Edit2, Flag, Wrench } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { JobRichText } from "./JobRichText";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ViewType } from "./job_list_viewtype";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -247,9 +248,9 @@ const JobList: React.FC<JobListProps> = ({
                   <h3 className="text-white text-base font-bold mb-1 group-hover:text-blue-400 transition-colors line-clamp-1">
                     {job.title}
                   </h3>
-                  <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed mb-3">
-                    {job.description}
-                  </p>
+                  <div className="mb-4">
+                    <JobRichText content={job.description} truncate={2} />
+                  </div>
                 </div>
 
                 <div className="pt-3 border-t border-white/5 flex items-center justify-between text-[11px] text-zinc-400 font-medium">
@@ -354,7 +355,9 @@ const JobList: React.FC<JobListProps> = ({
                     <span>{job.priceRange}</span>
                   </div>
                   <h3 className="text-white text-xl font-bold mb-1.5 group-hover:text-blue-400 transition-colors">{job.title}</h3>
-                  <p className="text-sm text-zinc-400 line-clamp-2 leading-relaxed mb-3">{job.description}</p>
+                  <div className="mb-3">
+                    <JobRichText content={job.description} truncate={2} />
+                  </div>
 
                   {/* Clean Gray Skill Tags without Outer Box or 'Skills:' label */}
                   {Array.isArray(job.skills) && job.skills.length > 0 && (
