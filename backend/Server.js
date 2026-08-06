@@ -19,8 +19,7 @@ const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
 // Middleware configuration
 app.use(cors({
   origin: [
-    'https://ensemble-snowy.vercel.app',
-    'http://localhost:5173'
+    process.env.FRONTEND_URL
   ],
   credentials: true,
 }));
