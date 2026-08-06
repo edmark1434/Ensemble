@@ -5,6 +5,7 @@ import {
   ArrowUpRight,
   ChevronLeft,
   ChevronRight,
+  CircleDollarSign,
   LayoutDashboard,
   List,
   LoaderCircle,
@@ -16,7 +17,6 @@ import {
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/axios";
 import UserHeader from "@/components/nav/user_header";
-import { CreditIcon } from "@/components/ui/credit-icon";
 
 const TRANSACTION_CATEGORIES = [
   "Fund Transfer",
@@ -110,7 +110,7 @@ function CreditAmount({ transaction }: { transaction: CreditTransaction }) {
 
   return (
     <span className={`inline-flex items-center gap-1.5 font-semibold tabular-nums ${color}`}>
-      <CreditIcon className="h-4 w-4" aria-hidden="true" />
+      <CircleDollarSign className="h-4 w-4" aria-hidden="true" />
       {sign}{credits(transaction.amountCredits)}
     </span>
   );
@@ -131,7 +131,7 @@ function SummaryCard({
     <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/70 p-5 shadow-xl">
       <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
       <p className={`mt-3 flex items-center gap-2 text-2xl font-bold tabular-nums ${color}`}>
-        <CreditIcon className="h-5 w-5" aria-hidden="true" />
+        <CircleDollarSign className="h-5 w-5" aria-hidden="true" />
         {credits(value)}
       </p>
       <p className="mt-2 text-xs text-zinc-500">{detail}</p>
@@ -274,7 +274,7 @@ export const TransactionHistoryMain = () => {
             onClick={() => navigate("/credits")}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
           >
-            <CreditIcon className="h-4 w-4" aria-hidden="true" />
+            <CircleDollarSign className="h-4 w-4" aria-hidden="true" />
             Purchase credits
           </button>
         </div>
@@ -405,7 +405,7 @@ export const TransactionHistoryMain = () => {
 
           {!loading && !error && activeMainTab !== "Summary" && tabTransactions.length === 0 && (
             <div className="flex min-h-72 flex-col items-center justify-center gap-3 px-5 text-center">
-              <CreditIcon className="h-9 w-9 text-zinc-700" aria-hidden="true" />
+              <CircleDollarSign className="h-9 w-9 text-zinc-700" aria-hidden="true" />
               <div>
                 <p className="font-semibold text-zinc-200">No transactions found</p>
                 <p className="mt-1 text-sm text-zinc-500">There are no entries in this transaction tab yet.</p>
