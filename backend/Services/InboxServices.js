@@ -24,6 +24,7 @@ const { checkAccountIdService } = require('./AccountServices');
 const { getProfileCurrentAvatarByAccountIdService } = require('./ProfileServices');
 const { createNotificationServices } = require('./NotificationServices');
 const { getAccountById } = require('../Repositories/AccountRepositories');
+const { pool } = require('../lib/database');
 
 const CONVERSATION_TYPES = ['direct', 'engagement', 'group', 'ticket', 'dispute'];
 const MESSAGE_TYPES = ['text', 'image', 'video', 'audio', 'file', 'system'];
@@ -38,6 +39,66 @@ const activeCalls = new Map();
 const activeCallsById = new Map();
 const MAX_CALL_PARTICIPANTS = 8;
 const CALL_RING_TIMEOUT_MS = 60_000;
+
+function normalizeLinkedConversation(inbox) {
+    if (!inbox) return inbox;
+    if (inbox.ticket_id || inbox.support_ticket_id) {
+        return { ...inbox, conversation_type: 'ticket' };
+    }
+    if (inbox.dispute_id) {
+        return { ...inbox, conversation_type: 'dispute' };
+    }
+    return inbox;
+}
+
+async function normalizeLinkedConversations(inboxes) {
+    await Promise.all(
+        inboxes.map(async (inbox) => {
+            const normalized = normalizeLinkedConversation(inbox);
+            if (normalized.conversation_type !== inbox.conversation_type) {
+                await updateInboxRepositories(String(inbox._id), {
+                    $set: { conversation_type: normalized.conversation_type },
+                });
+            }
+        })
+    );
+    const normalized = inboxes.map(normalizeLinkedConversation);
+    const ticketIds = [
+        ...new Set(
+            normalized
+                .map((inbox) => inbox.ticket_id || inbox.support_ticket_id)
+                .filter(Boolean)
+                .map(String)
+        ),
+    ];
+    if (!ticketIds.length) return normalized;
+
+    const ticketResult = await pool.query(
+        `SELECT ticket_id, ticket_number, reason, type, priority, status
+         FROM tickets
+         WHERE ticket_id = ANY($1::uuid[]) AND deleted_at IS NULL`,
+        [ticketIds]
+    );
+    const ticketsById = new Map(
+        ticketResult.rows.map((ticket) => [String(ticket.ticket_id), ticket])
+    );
+    return normalized.map((inbox) => {
+        const ticketId = String(inbox.ticket_id || inbox.support_ticket_id || '');
+        const ticket = ticketsById.get(ticketId);
+        if (!ticket) return inbox;
+        return {
+            ...inbox,
+            ticket_details: {
+                ...inbox.ticket_details,
+                ticket_number: ticket.ticket_number,
+                subject: ticket.reason,
+                type: ticket.type,
+                priority: ticket.priority,
+                status: ticket.status,
+            },
+        };
+    });
+}
 
 class ChatServiceError extends Error {
     constructor(message, statusCode = 400) {
@@ -338,11 +399,14 @@ async function buildMessage(payload, accountId) {
     }
 
     const now = new Date();
+    const senderName = await actorDisplayName(senderId);
     return {
         inbox,
         document: {
             conversation_id: conversationId,
             sender_id: senderId,
+            author_type: 'user',
+            author_name: senderName,
             message_type: messageType,
             message_content: messageContent,
             message_id_reply: null,
@@ -400,7 +464,7 @@ async function replyMessageServices(parentMessageId, payload, accountId, options
     return reply;
 }
 
-async function reactMessageServices(messageId, reactType, accountId) {
+async function reactMessageServices(messageId, reactType, accountId, options = {}) {
     const { inbox, message } = await requireMessageMember(messageId, accountId);
     const reaction = String(reactType || '').trim();
     if (!reaction || reaction.length > 32) {
@@ -414,8 +478,9 @@ async function reactMessageServices(messageId, reactType, accountId) {
         inbox,
         actorId: accountId,
         recipientIds: [message.sender_id],
-        message: 'reacted to your message.',
+        message: `reacted ${reaction} to your message.`,
         prefix: 'CHAT_REACTION',
+        onNotification: options.onNotification,
     });
     return updated;
 }
@@ -635,7 +700,14 @@ async function getConversationByConvoIdServices(conversationId, accountId) {
     ) {
         throw new ChatServiceError('Conversation access denied', 403);
     }
-    return await getConversationByConvoId(conversationId);
+    const conversation = await getConversationByConvoId(conversationId);
+    const [normalizedInbox] = await normalizeLinkedConversations([
+        conversation.Inbox,
+    ]);
+    return {
+        ...conversation,
+        Inbox: normalizedInbox,
+    };
 }
 
 async function getConversationSummaryServices(conversationId, accountId) {
@@ -1045,7 +1117,8 @@ async function getActiveGroupCallServices(conversationId, accountId) {
 async function getInboxByAccountIdServices(accountId, conversationType) {
     await requireAccount(accountId);
     validateConversationType(conversationType);
-    return await getInboxByAccountId(accountId, conversationType);
+    const inboxes = await getInboxByAccountId(accountId, conversationType);
+    return await normalizeLinkedConversations(inboxes);
 }
 
 async function getAllInboxesByAccountIdServices(accountId) {
@@ -1053,7 +1126,10 @@ async function getAllInboxesByAccountIdServices(accountId) {
     const conversations = await Promise.all(
         CONVERSATION_TYPES.map((type) => getInboxByAccountId(accountId, type))
     );
-    return conversations.flat().sort((left, right) => {
+    const normalizedConversations = await normalizeLinkedConversations(
+        conversations.flat()
+    );
+    return normalizedConversations.sort((left, right) => {
         const leftTime = new Date(left.last_message_time || left.updated_at || 0);
         const rightTime = new Date(right.last_message_time || right.updated_at || 0);
         return rightTime - leftTime;

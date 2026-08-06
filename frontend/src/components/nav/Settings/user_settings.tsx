@@ -73,6 +73,7 @@ export default function UserSettings() {
 
   const [reportSubject, setReportSubject] = useState("");
   const [reportDescription, setReportDescription] = useState("");
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
 
   const constructAvatarUrl = (path: string | undefined): string => {
     if (!path) return "https://i.pravatar.cc/150?u=user";
@@ -271,22 +272,39 @@ export default function UserSettings() {
 
   const handleReportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reportSubject || !reportDescription) {
+    const accountId = globalUser?.account_id || globalUser?.accountId;
+    if (!accountId) {
+      navigate('/login');
+      return;
+    }
+    if (!reportSubject.trim() || reportDescription.trim().length < 20) {
       toast.error("Please fill out all fields.");
       return;
     }
+    if (isSubmittingReport) return;
 
+    setIsSubmittingReport(true);
     try {
-      await api.post("/api/tickets/create", {
-        subject: reportSubject,
-        description: reportDescription,
-        type: "Technical Problem",
+      const response = await api.post("/api/users/reports", {
+        account_id: accountId,
+        subject: reportSubject.trim(),
+        description: reportDescription.trim(),
       });
-      toast.success("Technical problem submitted successfully!");
+      const reportNumber = response.data?.data?.number;
+      toast.success(
+        reportNumber
+          ? `Technical report ${reportNumber} submitted successfully!`
+          : "Technical report submitted successfully!"
+      );
       setReportSubject("");
       setReportDescription("");
-    } catch (err) {
-      toast.error("Failed to submit technical report.");
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
+        "Failed to submit technical report.";
+      toast.error(message);
+    } finally {
+      setIsSubmittingReport(false);
     }
   };
 
@@ -406,6 +424,7 @@ export default function UserSettings() {
                     description={reportDescription}
                     setDescription={setReportDescription}
                     onSubmit={handleReportSubmit}
+                    submitting={isSubmittingReport}
                   />
                 )}
 

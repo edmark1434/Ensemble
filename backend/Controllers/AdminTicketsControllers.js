@@ -2,6 +2,7 @@ const {
   getTicketsOverview,
   getTicketDetail,
   createSupportTicket,
+  getTicketCatalog,
   updateTicket,
   addTicketMessage,
   updateDispute,
@@ -12,6 +13,8 @@ const {
   getReportDetail,
 } = require('../Repositories/AdminTicketsRepositories');
 const { pool } = require('../lib/database');
+const { randomUUID } = require('crypto');
+const { createReport } = require('../Repositories/ModeratorSharedRepositories');
 
 async function getAdminTicketsOverview(req, res) {
   try {
@@ -226,9 +229,34 @@ async function getAdminReportDetail(req, res) {
 }
 
 /** Public/user ticket intake — uses session account, or looks up account by email. */
+async function getPublicTicketCatalog(_req, res) {
+  try {
+    const catalog = await getTicketCatalog();
+    res.status(200).json({
+      success: true,
+      data: {
+        types: catalog.types,
+        typeDetails: catalog.typeDetails,
+      },
+    });
+  } catch (err) {
+    console.error('Error loading public ticket catalog:', err);
+    res.status(500).json({ success: false, message: 'Failed to load ticket types' });
+  }
+}
+
 async function createPublicTicket(req, res) {
   try {
-    const { subject, reason, type, category, priority, channel, description, email } = req.body;
+    const {
+      subject,
+      reason,
+      type,
+      category,
+      priority,
+      channel,
+      description,
+      account_id,
+    } = req.body;
     const subjectOrReason = (reason || subject || '').trim();
     if (!subjectOrReason) {
       return res.status(400).json({ success: false, message: 'Subject is required' });
@@ -237,29 +265,15 @@ async function createPublicTicket(req, res) {
       return res.status(400).json({ success: false, message: 'Description is required' });
     }
 
-    let requesterAccountId = req.session?.account_id || req.session?.accountId || null;
-
+    const requesterAccountId = req.session?.account_id || req.session?.accountId || null;
     if (!requesterAccountId) {
-      if (!email?.trim()) {
-        return res.status(400).json({
-          success: false,
-          message: 'Email is required when not logged in',
-        });
-      }
-      const found = await pool.query(
-        `SELECT u.account_id
-         FROM users u
-         WHERE LOWER(u.email_address) = LOWER($1)
-         LIMIT 1`,
-        [email.trim()]
-      );
-      if (!found.rows.length) {
-        return res.status(404).json({
-          success: false,
-          message: 'No account found for that email. Sign up or log in to submit a ticket.',
-        });
-      }
-      requesterAccountId = found.rows[0].account_id;
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    if (!account_id || String(account_id) !== String(requesterAccountId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Ticket account does not match the authenticated account',
+      });
     }
 
     const data = await createSupportTicket(
@@ -273,9 +287,7 @@ async function createPublicTicket(req, res) {
         description: description.trim(),
         requesterAccountId,
       },
-      req.session?.account_id
-        ? req.session
-        : { account_id: requesterAccountId, type: 'User', username: email || 'User' }
+      req.session
     );
 
     res.status(201).json({
@@ -382,6 +394,44 @@ async function postMyTicketMessage(req, res) {
   }
 }
 
+async function createMyTechnicalReport(req, res) {
+  try {
+    const accountId = req.session?.account_id || req.session?.accountId;
+    if (!accountId) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    if (req.body?.account_id && String(req.body.account_id) !== String(accountId)) {
+      return res.status(403).json({ success: false, message: 'Account does not match the authenticated session' });
+    }
+
+    const subject = String(req.body?.subject || '').trim();
+    const description = String(req.body?.description || '').trim();
+    if (!subject || subject.length > 100) {
+      return res.status(400).json({ success: false, message: 'Subject is required and must not exceed 100 characters' });
+    }
+    if (description.length < 20 || description.length > 5000) {
+      return res.status(400).json({ success: false, message: 'Description must contain 20 to 5,000 characters' });
+    }
+
+    const report = await createReport({
+      reportNumber: `RPT-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`,
+      reporterAccountId: accountId,
+      targetAccountId: accountId,
+      targetType: 'technical_problem',
+      targetId: String(accountId),
+      targetLabel: subject,
+      reason: subject,
+      description,
+      referenceTable: 'accounts',
+      referencePrefix: 'settings',
+    });
+    return res.status(201).json({ success: true, data: report });
+  } catch (err) {
+    console.error('Error creating technical report:', err);
+    return res.status(500).json({ success: false, message: 'Failed to submit technical report' });
+  }
+}
+
 module.exports = {
   getAdminTicketsOverview,
   getAdminTicketDetail,
@@ -394,8 +444,10 @@ module.exports = {
   patchAdminDisputeMessage,
   getAdminReportDetail,
   patchAdminReport,
+  getPublicTicketCatalog,
   createPublicTicket,
   listMyTickets,
   getMyTicket,
   postMyTicketMessage,
+  createMyTechnicalReport,
 };

@@ -161,25 +161,18 @@ async function createAccountVerificationSession(userId) {
             "https://verification.didit.me/v3/session/",
             {
                 workflow_id: process.env.DIDIT_WORKFLOW_ID,
-
                 vendor_data: `account-${user.account_id}`,
-
-                callback: `${process.env.FRONTEND_URL}/verification/result`,
-
+                callback: `${process.env.FRONTEND_URL}/account-verification-status`,
                 callback_method: "both",
-
                 metadata: {
                     account_id: user.account_id,
                 },
-
                 language: "en",
-
                 contact_details: {
                     email: user.email_address,
                     send_notification_emails: true,
                     email_lang: "en",
                 },
-
                 expected_details: expectedDetails,
             },
             {
