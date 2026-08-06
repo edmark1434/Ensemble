@@ -115,6 +115,35 @@ async function acceptJobOffer(freelancerId, contractId) {
             WHERE contract_id = $2
         `, [contractStatus, contractId]);
 
+        // 3.5. Copy proposal_milestones to contract_milestones and allocate credits
+        const pMilestonesRes = await client.query(`
+            SELECT * FROM proposal_milestones WHERE proposal_id = $1 ORDER BY index ASC
+        `, [proposal_id]);
+        
+        if (pMilestonesRes.rows.length > 0) {
+            const milestones = pMilestonesRes.rows;
+            const contractRes2 = await client.query('SELECT rate_credits FROM contracts WHERE contract_id = $1', [contractId]);
+            const totalCredits = parseFloat(contractRes2.rows[0].rate_credits) || 0;
+            const creditsPerMilestone = Math.floor(totalCredits / milestones.length);
+            let remainingCredits = totalCredits - (creditsPerMilestone * milestones.length);
+
+            for (let i = 0; i < milestones.length; i++) {
+                const m = milestones[i];
+                // Add any remainder to the first milestone
+                let mCredits = creditsPerMilestone;
+                if (i === 0) {
+                    mCredits += remainingCredits;
+                }
+                await client.query(`
+                    INSERT INTO contract_milestones (
+                        contract_id, index, name, description, deadline, no_of_revisions_max, status, credits
+                    ) VALUES ($1, $2, $3, $4, $5, $6, 'Pending', $7)
+                `, [
+                    contractId, m.index, m.name, m.description, m.duration_hrs || 0, m.no_of_revisions_max || 0, mCredits
+                ]);
+            }
+        }
+
         // 4. Update Proposal Status to Hired
         await client.query(`
             UPDATE proposals
@@ -251,22 +280,32 @@ async function getContractsByUserId(accountId) {
             j.job_id,
             j.title as job_title,
             j.description as job_description,
+            j.rough_deadline as job_deadline,
             j.rate_credits_min,
             j.rate_credits_max,
             p.revision_price_credits as additional_work_rate,
             client_acc.display_name as client_name,
             client_acc.handle as client_handle,
+            client_f.path as client_avatar,
+            j.client_account_id,
             free_acc.display_name as freelancer_name,
             free_acc.handle as freelancer_handle,
+            free_f.path as freelancer_avatar,
+            p.freelancer_account_id,
             t.terms_title,
             t.terms_description as terms_content,
-            (SELECT json_agg(json_build_object('id', m.proposal_milestone_id, 'name', m.name, 'description', m.description, 'hours', m.duration_hrs, 'revisions', m.no_of_revisions_max)) FROM proposal_milestones m WHERE m.proposal_id = p.proposal_id) as milestones
+            COALESCE(
+                (SELECT json_agg(json_build_object('id', cm.contract_milestone_id, 'name', cm.name, 'status', cm.status, 'revisions', cm.no_of_revisions_max, 'deadline', cm.deadline, 'credits', cm.credits)) FROM contract_milestones cm WHERE cm.contract_id = c.contract_id),
+                (SELECT json_agg(json_build_object('id', m.proposal_milestone_id, 'name', m.name, 'description', m.description, 'hours', m.duration_hrs, 'revisions', m.no_of_revisions_max, 'status', 'Locked')) FROM proposal_milestones m WHERE m.proposal_id = p.proposal_id)
+            ) as milestones
         FROM contracts c
         JOIN job_contracts jc ON c.contract_id = jc.contract_id
         JOIN proposals p ON jc.proposal_id = p.proposal_id
         JOIN jobs j ON p.job_id = j.job_id
         JOIN accounts client_acc ON j.client_account_id = client_acc.account_id
+        LEFT JOIN files client_f ON client_acc.avatar_file_id = client_f.file_id
         JOIN accounts free_acc ON p.freelancer_account_id = free_acc.account_id
+        LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
         LEFT JOIN terms_of_service t ON p.terms_id = t.terms_id
         WHERE j.client_account_id = $1 OR p.freelancer_account_id = $1
         ORDER BY c.created_at DESC
