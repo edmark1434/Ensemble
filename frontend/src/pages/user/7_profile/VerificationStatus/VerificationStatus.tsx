@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import api from "@/lib/axios";
 import {
   CheckCircle2,
@@ -13,18 +13,11 @@ import {
   UserCheck,
   Smartphone,
   Monitor,
-  QrCode,
-  Download,
-  Copy,
-  X,
-  Link,
   Loader2,
-  ShieldCheck,
   BadgeCheck,
   Calendar
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import QRCodeStyling from "qr-code-styling";
 
 interface Level2Step {
   id: number;
@@ -35,16 +28,9 @@ interface Level2Step {
 
 export const VerificationStatus: React.FC = () => {
   const navigate = useNavigate();
-  const qrCodeRef = useRef<HTMLDivElement>(null);
-  const qrCodeInstance = useRef<QRCodeStyling | null>(null);
-
   // Track status check: "not_started" | "pending_review"
   const [verificationState, setVerificationState] = useState<"not_started" | "pending_review">("not_started");
   const [isMobile, setIsMobile] = useState<boolean>(false);
-  const [sessionData, setSessionData] = useState<any>(null);
-  const [showQRModal, setShowQRModal] = useState<boolean>(false);
-  const [copied, setCopied] = useState<boolean>(false);
-  const [verificationUrl, setVerificationUrl] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [isVerified, setIsVerified] = useState<boolean>(false);
@@ -74,7 +60,11 @@ export const VerificationStatus: React.FC = () => {
 
     // Check if device is mobile or PC
     const checkDevice = () => {
-      const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+      const userAgent =
+        navigator.userAgent ||
+        navigator.vendor ||
+        (window as Window & { opera?: string }).opera ||
+        "";
       const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
       const isMobileDevice = mobileRegex.test(userAgent.toLowerCase());
       setIsMobile(isMobileDevice);
@@ -85,72 +75,6 @@ export const VerificationStatus: React.FC = () => {
     fetchVerificationStatus();
     checkDevice();
   }, []);
-
-  // Generate QR code when modal opens
-  useEffect(() => {
-    if (showQRModal && !isMobile && sessionData && qrCodeRef.current) {
-      // Clear previous QR code by removing all child nodes
-      while (qrCodeRef.current.firstChild) {
-        qrCodeRef.current.removeChild(qrCodeRef.current.firstChild);
-      }
-
-      // Extract URL from the response
-      const url = sessionData.verification_url || 
-                  sessionData.session?.verification_url || 
-                  sessionData.session?.url || 
-                  sessionData.url;
-      
-      if (!url) {
-        console.error("No verification URL found in response:", sessionData);
-        return;
-      }
-      
-      setVerificationUrl(url);
-      
-      console.log("Generating QR code for URL:", url);
-      
-      // Create styled QR code with smaller size
-      qrCodeInstance.current = new QRCodeStyling({
-        width: 180,
-        height: 180,
-        type: "svg",
-        data: url,
-        image: "/icons/verification/lvl1_verified.png",
-        dotsOptions: {
-          color: "#06b6d4",
-          type: "rounded"
-        },
-        backgroundOptions: {
-          color: "#ffffff",
-        },
-        imageOptions: {
-          crossOrigin: "anonymous",
-          margin: 8,
-          imageSize: 0.35
-        },
-        cornersSquareOptions: {
-          type: "extra-rounded",
-          color: "#3b82f6"
-        },
-        cornersDotOptions: {
-          type: "dot",
-          color: "#2563eb"
-        }
-      });
-
-      qrCodeInstance.current.append(qrCodeRef.current);
-    }
-
-    // Cleanup on unmount or modal close
-    return () => {
-      if (qrCodeRef.current) {
-        while (qrCodeRef.current.firstChild) {
-          qrCodeRef.current.removeChild(qrCodeRef.current.firstChild);
-        }
-      }
-      qrCodeInstance.current = null;
-    };
-  }, [showQRModal, isMobile, sessionData]);
 
   const handleStartVerification = async () => {
     // Prevent duplicate clicks
@@ -166,28 +90,16 @@ export const VerificationStatus: React.FC = () => {
       const response = await api.post("/api/verification/create-session");
       console.log("Verification session created:", response.data);
       
-      // Store the full response data
-      setSessionData(response.data);
-      
       // Extract the verification URL
       const verificationUrl = response.data.verification_url || 
                              response.data.session?.verification_url || 
                              response.data.session?.url || 
                              response.data.url;
       
-      const isDesktop = !isMobile;
-      
       console.log("Verification URL:", verificationUrl);
-      console.log("Is Desktop:", isDesktop);
       console.log("Full response data:", response.data);
-      
-      // If on PC and we have a URL, show QR modal
-      if (isDesktop && verificationUrl) {
-        setShowQRModal(true);
-        console.log("Showing QR modal");
-      } 
-      // If on mobile, redirect to the verification URL
-      else if (isMobile && verificationUrl) {
+
+      if (verificationUrl) {
         window.location.href = verificationUrl;
       } else {
         console.error("No verification URL found in response");
@@ -200,40 +112,6 @@ export const VerificationStatus: React.FC = () => {
       setIsLoading(false);
       setIsProcessing(false);
     }
-  };
-
-  const handleDownloadQR = () => {
-    if (qrCodeInstance.current) {
-      const sessionId = sessionData?.verification_session_id || 
-                        sessionData?.session?.verification_session_id ||
-                        sessionData?.session?.session_id || 
-                        sessionData?.session_id;
-      qrCodeInstance.current.download({
-        name: `verification-qr-${sessionId?.slice(0, 8) || 'session'}`,
-        extension: "png"
-      });
-    }
-  };
-
-  const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(verificationUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 3000);
-    } catch (err) {
-      console.error("Failed to copy:", err);
-    }
-  };
-
-  const handleCloseModal = () => {
-    setShowQRModal(false);
-    setIsProcessing(false);
-    if (qrCodeRef.current) {
-      while (qrCodeRef.current.firstChild) {
-        qrCodeRef.current.removeChild(qrCodeRef.current.firstChild);
-      }
-    }
-    qrCodeInstance.current = null;
   };
 
   // Format expiry date for display
@@ -500,7 +378,7 @@ export const VerificationStatus: React.FC = () => {
                   {isMobile ? (
                     "📱 Continue verification on this device"
                   ) : (
-                    "🖥️ You'll get a QR code to scan with your phone"
+                    "🖥️ Continue verification in your browser"
                   )}
                 </div>
               </div>
@@ -636,100 +514,6 @@ export const VerificationStatus: React.FC = () => {
             </div>
           )}
         </div>
-
-        {/* QR Code Modal - Only for desktop */}
-        {showQRModal && !isMobile && sessionData && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-[fadeIn_0.3s_ease-out]">
-            <div className="relative w-full max-w-sm bg-[#0f121e] rounded-2xl border border-white/10 shadow-2xl p-5 animate-[slideIn_0.3s_ease-out]">
-              
-              {/* Close Button */}
-              <button
-                onClick={handleCloseModal}
-                className="absolute top-3 right-3 p-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-zinc-400 hover:text-white"
-              >
-                <X className="h-4 w-4" />
-              </button>
-
-              {/* Modal Header */}
-              <div className="text-center mb-4">
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-[10px] font-bold mb-2">
-                  <QrCode className="h-3 w-3" />
-                  Scan to Continue
-                </div>
-                <h2 className="text-lg font-bold text-white">Verify on Your Phone</h2>
-                <p className="text-xs text-zinc-400 mt-0.5">
-                  Scan the QR code below with your mobile device to complete verification
-                </p>
-              </div>
-
-              {/* QR Code - Smaller and centered */}
-              <div className="flex justify-center mb-4">
-                <div className="p-3 bg-white rounded-lg shadow-lg shadow-cyan-500/10 relative">
-                  <div ref={qrCodeRef} className="w-[180px] h-[180px] flex items-center justify-center" />
-                  
-                  {/* Download Button Overlay - Smaller */}
-                  <button
-                    onClick={handleDownloadQR}
-                    className="absolute -bottom-2 -right-2 p-2 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full shadow-md shadow-cyan-500/20 hover:shadow-cyan-500/40 transition-all duration-300 hover:scale-110"
-                    title="Download QR Code"
-                  >
-                    <Download className="h-3.5 w-3.5 text-white" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Copy Link Section - Compact */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 justify-center">
-                  <Link className="h-3 w-3" />
-                  <span>Or copy the link to open on your phone</span>
-                </div>
-                
-                <div className="flex items-center gap-1.5 bg-white/5 rounded-lg border border-white/10 p-1">
-                  <input
-                    type="text"
-                    value={verificationUrl}
-                    readOnly
-                    className="flex-1 bg-transparent px-2 py-1.5 text-[10px] text-zinc-300 outline-none font-mono truncate"
-                  />
-                  <button
-                    onClick={handleCopyLink}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-md text-white text-[10px] font-bold transition-all hover:opacity-90 whitespace-nowrap"
-                  >
-                    {copied ? (
-                      <>
-                        <CheckCircle2 className="h-3 w-3" />
-                        Copied!
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3 w-3" />
-                        Copy
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Session Info - Updated for new schema */}
-                <div className="flex justify-center gap-3 text-[9px] text-zinc-500">
-                  <span>Session: {sessionData?.verification_session_id?.slice(0, 12) || 'N/A'}</span>
-                  <span>•</span>
-                  <span className="text-emerald-400/60">KYC: {sessionData?.kyc_status || 'Not Started'}</span>
-                  <span>•</span>
-                  <span className="text-blue-400/60">Status: {sessionData?.verification_status || 'Pending'}</span>
-                </div>
-              </div>
-
-              {/* Close Button at Bottom - More compact */}
-              <button
-                onClick={handleCloseModal}
-                className="w-full mt-3 py-2 text-xs text-zinc-400 hover:text-white font-medium transition-colors border-t border-white/5 pt-3"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Cryptographic Vault Warning Disclaimer */}
         <div className="mt-6 flex items-start gap-3 border border-white/5 bg-gradient-to-r from-blue-500/[0.02] to-transparent p-4 rounded-xl animate-[fadeIn_0.5s_ease-out_both] delay-[600ms]">

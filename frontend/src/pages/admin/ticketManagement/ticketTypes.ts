@@ -43,6 +43,7 @@ export type SupportTicket = {
 
 export type TicketMessage = {
   id: number | string;
+  senderId?: string | null;
   authorType: string;
   authorName: string;
   authorRole?: string | null;

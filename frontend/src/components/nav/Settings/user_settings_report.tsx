@@ -6,6 +6,7 @@ interface ReportProps {
   description: string;
   setDescription: (val: string) => void;
   onSubmit: (e: React.FormEvent) => void;
+  submitting?: boolean;
 }
 
 export const UserSettingsReport: React.FC<ReportProps> = ({
@@ -14,6 +15,7 @@ export const UserSettingsReport: React.FC<ReportProps> = ({
   description,
   setDescription,
   onSubmit,
+  submitting = false,
 }) => {
   return (
     <form onSubmit={onSubmit} className="space-y-6">
@@ -50,9 +52,10 @@ export const UserSettingsReport: React.FC<ReportProps> = ({
       <div className="pt-2 flex justify-end">
         <button
           type="submit"
-          className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-5 py-2.5 text-sm font-medium text-white transition-all"
+          disabled={submitting}
+          className="flex items-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-5 py-2.5 text-sm font-medium text-white transition-all disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Submit Technical Report
+          {submitting ? "Submitting..." : "Submit Technical Report"}
         </button>
       </div>
     </form>

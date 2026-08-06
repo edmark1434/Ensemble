@@ -352,6 +352,7 @@ async function createReport({
   reason,
   description,
   referenceTable,
+  referencePrefix = 'forum',
 }) {
   const result = await pool.query(
     `
@@ -372,7 +373,7 @@ async function createReport({
       status,
       is_created_by_bot
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'medium', $4, $9, 'forum', $5, 'open', false)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'medium', $4, $9, $10, $5, 'open', false)
     RETURNING *
     `,
     [
@@ -385,6 +386,7 @@ async function createReport({
       reason,
       description,
       referenceTable,
+      referencePrefix,
     ]
   );
   return mapReportRow(result.rows[0]);

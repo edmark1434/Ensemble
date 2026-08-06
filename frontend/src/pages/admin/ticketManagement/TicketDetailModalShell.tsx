@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Hand, Loader2, Lock, MessageSquare, Send, ShieldAlert, UserRound, X } from 'lucide-react';
 import api from '@/lib/axios';
+import socket from '@/lib/socket';
 import { showErrorToast, showSuccessToast } from '@/components/utility/toast.ts';
 import type { TicketDetail, TicketMessage } from './ticketTypes';
 import {
@@ -239,6 +240,7 @@ export default function TicketDetailModalShell({
   const [confirmEscalate, setConfirmEscalate] = useState(false);
   const [confirmEscalateAdmin, setConfirmEscalateAdmin] = useState(false);
   const threadEndRef = useRef<HTMLDivElement>(null);
+  const realtimeRefreshRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isAdminQueue = (role: string) => {
     const r = String(role || '').toLowerCase();
@@ -324,6 +326,67 @@ export default function TicketDetailModalShell({
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId, endpointBase]);
+
+  useEffect(() => {
+    const chatId = detail?.chatId;
+    if (!chatId) return;
+
+    const scheduleRefresh = () => {
+      if (realtimeRefreshRef.current) {
+        clearTimeout(realtimeRefreshRef.current);
+      }
+      realtimeRefreshRef.current = setTimeout(() => {
+        realtimeRefreshRef.current = null;
+        void load();
+      }, 75);
+    };
+    const refreshTicketThread = (message: { conversation_id?: string }) => {
+      if (String(message?.conversation_id) === String(chatId)) {
+        scheduleRefresh();
+      }
+    };
+    const refreshFromNotification = (notification: {
+      reference_path?: string | null;
+      reference_prefix?: string | null;
+    }) => {
+      const referencePath = String(notification?.reference_path || '');
+      const referencePrefix = String(notification?.reference_prefix || '');
+      if (
+        referencePath.includes(`conversation=${chatId}`) &&
+        (referencePrefix.includes('CHAT_') || referencePrefix.includes('TICKET_'))
+      ) {
+        scheduleRefresh();
+      }
+    };
+    const joinTicketRoom = () => {
+      socket.emit('joinRoom', { conversation_id: String(chatId) });
+    };
+
+    if (!socket.connected) socket.connect();
+    joinTicketRoom();
+    socket.on('connect', joinTicketRoom);
+    socket.on('newMessage', refreshTicketThread);
+    socket.on('messageReplied', refreshTicketThread);
+    socket.on('conversationMessageNotification', refreshTicketThread);
+    socket.on('ticketInternalMessage', refreshTicketThread);
+    socket.on('notification', refreshFromNotification);
+
+    return () => {
+      socket.off('connect', joinTicketRoom);
+      socket.off('newMessage', refreshTicketThread);
+      socket.off('messageReplied', refreshTicketThread);
+      socket.off('conversationMessageNotification', refreshTicketThread);
+      socket.off('ticketInternalMessage', refreshTicketThread);
+      socket.off('notification', refreshFromNotification);
+      socket.emit('leaveRoom', { conversation_id: String(chatId) });
+      if (realtimeRefreshRef.current) {
+        clearTimeout(realtimeRefreshRef.current);
+        realtimeRefreshRef.current = null;
+      }
+    };
+    // The room changes only when another ticket is opened.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail?.chatId, ticketId, endpointBase]);
 
   useEffect(() => {
     threadEndRef.current?.scrollIntoView({ behavior: 'smooth' });

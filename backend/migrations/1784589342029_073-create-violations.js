@@ -25,6 +25,12 @@ exports.up = (pgm) => {
     },
     deleted_at: { type: 'timestamp without time zone' },
     staff_id: { type: 'uuid', notNull: true },
+    violation_number: { type: 'varchar(20)', unique: true },
+    account_id: { type: 'uuid' },
+    title: { type: 'varchar(255)' },
+    reason: { type: 'text' },
+    points: { type: 'integer', default: 0 },
+    issued_by_staff_id: { type: 'uuid' },
   });
 
   pgm.addConstraint('violations', 'violations_staff_id_fkey', 'FOREIGN KEY (staff_id) REFERENCES staff(staff_id)');

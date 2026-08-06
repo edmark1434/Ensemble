@@ -1,6 +1,12 @@
 // src/components/ui/inbox/inbox_components/inbox_panel_header.tsx
 import React from "react";
-import { Share2, Video, MoreVertical, ExternalLink, Briefcase } from "lucide-react";
+import {
+  Share2,
+  Video,
+  MoreVertical,
+  ExternalLink,
+  Briefcase,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Inbox } from "../inbox_dataset";
 import useGlobalState from "@/lib/global_state";
@@ -50,6 +56,7 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
     (member) => !["left", "removed"].includes(member.status || "active")
   ).length;
   const isEngagement = selectedConversation.conversation_type === "engagement";
+  const isTicket = selectedConversation.conversation_type === "ticket";
   const canCall = Boolean(otherMember);
   const listingType =
     selectedConversation.listing_type ||
@@ -65,6 +72,8 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
     ? typingCount === 1
       ? "Typing..."
       : `${typingCount} people typing...`
+    : isTicket
+    ? `${activeMemberCount} participants`
     : isGroup
     ? `${activeMemberCount} members`
     : isOnline

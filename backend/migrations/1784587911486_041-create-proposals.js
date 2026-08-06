@@ -34,6 +34,8 @@ exports.up = (pgm) => {
     deleted_at: { type: 'timestamp without time zone' },
     job_id: { type: 'uuid', notNull: true },
     freelancer_account_id: { type: 'uuid', notNull: true },
+    terms_id: { type: 'uuid' },
+    reject_reason: { type: 'varchar(255)' },
   });
 
   pgm.addConstraint('proposals', 'proposals_job_id_fkey', 'FOREIGN KEY (job_id) REFERENCES jobs(job_id)');

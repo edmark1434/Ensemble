@@ -433,22 +433,120 @@ async function getUserVerificationRecord(accountId) {
       v.is_verified,
       v.verified_at,
       v.updated_at AS verification_updated_at,
+      a.type AS account_type,
       avs.didit_session_id,
       avs.kyc_status,
       avs.verification_status AS internal_status,
       avs.verified_by_account_id,
       avs.expires_at,
       avs.created_at AS session_created_at,
-      avs.updated_at AS session_updated_at
+      avs.updated_at AS session_updated_at,
+      bvd.business_type,
+      bvd.registered_business_name,
+      bvd.registration_number,
+      bvd.registration_country,
+      bvd.relationship_to_business,
+      bvd.submitted_by_account_id,
+      bvd.submission_version,
+      submitter.display_name AS submitted_by_name,
+      submitter.handle AS submitted_by_handle,
+      COALESCE((
+        SELECT json_agg(json_build_object(
+          'fileId', f.file_id,
+          'name', f.name,
+          'path', f.path,
+          'mimeType', f.mime_type,
+          'sizeBytes', f.size_bytes,
+          'documentType', va.document_type,
+          'index', va."index",
+          'isRequired', va.is_required,
+          'isLatest', va.is_latest,
+          'submissionVersion', va.submission_version
+        ) ORDER BY va."index")
+        FROM verification_attachments va
+        JOIN files f ON f.file_id = va.file_id
+        WHERE va.verification_id = v.verification_id
+          AND va.is_latest = TRUE
+          AND f.deleted_at IS NULL
+      ), '[]'::json) AS attachments
     FROM verifications v
+    JOIN accounts a ON a.account_id = v.account_id
     LEFT JOIN account_verification_sessions avs
       ON avs.verification_session_id = v.verification_session_id
+    LEFT JOIN business_verification_details bvd
+      ON bvd.verification_id = v.verification_id
+    LEFT JOIN accounts submitter
+      ON submitter.account_id = bvd.submitted_by_account_id
     WHERE v.account_id = $1
     LIMIT 1
     `,
     [accountId]
   );
   return result.rows[0] || null;
+}
+
+async function applyTeamVerificationAction(
+  accountId,
+  action,
+  validityDays,
+  verifiedByAccountId
+) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const statusMap = {
+      approve: 'Approved',
+      decline: 'Declined',
+      reverify: 'Resubmitted',
+    };
+    const verificationStatus = statusMap[action];
+    if (!verificationStatus) throw new Error('Unsupported Team verification action');
+
+    const isApproved = action === 'approve';
+    const result = await client.query(
+      `UPDATE verifications v
+       SET is_verified = $2::boolean,
+           verified_at = CASE WHEN $2::boolean THEN NOW() ELSE NULL END,
+           updated_at = NOW()
+       FROM accounts a
+       WHERE v.account_id = $1::uuid
+         AND a.account_id = v.account_id
+         AND a.type = 'Team'
+       RETURNING v.*`,
+      [accountId, isApproved]
+    );
+    if (!result.rows[0]) throw new Error('Team verification was not found');
+
+    const sessionResult = await client.query(
+      `UPDATE account_verification_sessions avs
+       SET verification_status = $2::varchar,
+           verified_by_account_id = $3::uuid,
+           expires_at = CASE
+             WHEN $2::varchar = 'Approved'::varchar
+             THEN NOW() + ($4::int * INTERVAL '1 day')
+             ELSE NULL
+           END,
+           updated_at = NOW()
+       FROM verifications v
+       WHERE v.account_id = $1::uuid
+         AND avs.verification_session_id = v.verification_session_id
+       RETURNING avs.*`,
+      [accountId, verificationStatus, verifiedByAccountId, validityDays]
+    );
+    if (!sessionResult.rows[0]) throw new Error('Team verification session was not found');
+
+    await client.query('COMMIT');
+    return {
+      verification: result.rows[0],
+      session: sessionResult.rows[0],
+      verificationStatus,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function updateUserVerificationExpiry(accountId, validityDays, verifiedByAccountId) {
@@ -553,17 +651,17 @@ async function fetchTeamsFromDatabase() {
       a.tagline,
       a.description,
       f.path AS avatar_path,
-      av.account_verification_id,
+      v.verification_id AS account_verification_id,
       CASE
-        WHEN LOWER(COALESCE(av.status, '')) = 'verified'
-          AND av.expires_at IS NOT NULL
-          AND av.expires_at <= NOW()
+        WHEN LOWER(COALESCE(avs.verification_status, '')) = 'approved'
+          AND avs.expires_at IS NOT NULL
+          AND avs.expires_at <= NOW()
         THEN 'reverification_required'
-        ELSE av.status
+        ELSE avs.verification_status
       END AS verification_status,
-      av.expires_at AS verification_expires_at,
-      av.updated_at AS verification_updated_at,
-      COALESCE(va.display_name, vs.first_name || ' ' || vs.last_name) AS verified_by_name,
+      avs.expires_at AS verification_expires_at,
+      COALESCE(avs.updated_at, v.updated_at) AS verification_updated_at,
+      va.display_name AS verified_by_name,
       w.balance_credits,
       w.frozen_balance_credits,
       w.wallet_id,
@@ -575,15 +673,10 @@ async function fetchTeamsFromDatabase() {
     FROM teams t
     INNER JOIN accounts a ON a.account_id = t.account_id
     LEFT JOIN files f ON f.file_id = a.avatar_file_id
-    LEFT JOIN LATERAL (
-      SELECT *
-      FROM account_verification av
-      WHERE av.account_id = a.account_id AND av.deleted_at IS NULL
-      ORDER BY av.created_at DESC
-      LIMIT 1
-    ) av ON TRUE
-    LEFT JOIN staff vs ON vs.staff_id = av.verified_by_staff_id
-    LEFT JOIN accounts va ON va.account_id = vs.account_id
+    LEFT JOIN verifications v ON v.account_id = a.account_id
+    LEFT JOIN account_verification_sessions avs
+      ON avs.verification_session_id = v.verification_session_id
+    LEFT JOIN accounts va ON va.account_id = avs.verified_by_account_id
     LEFT JOIN LATERAL (
       SELECT w.wallet_id, w.balance_credits, w.frozen_balance_credits
       FROM account_wallets aw
@@ -1293,4 +1386,5 @@ module.exports = {
   prepareUserVerificationApprovalExpiry,
   restoreUserVerificationExpiry,
   markUserVerificationPending,
+  applyTeamVerificationAction,
 };
