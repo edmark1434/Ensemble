@@ -1,5 +1,6 @@
 import React from "react";
 import { Check, Layers, FileText, Percent, RefreshCcw, Send } from "lucide-react";
+import { JobRichText } from "../../../job_components/JobRichText";
 import type { Job } from "../../../job_components/job_lists";
 import type { Milestone } from "./3_proposal_milestones";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -65,9 +66,9 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
             </div>
           </div>
 
-          <p className="text-zinc-300 leading-relaxed italic bg-white/[0.02] p-3 rounded-xl border border-white/5 text-[11px] whitespace-pre-wrap break-words">
-            "{coverLetter}"
-          </p>
+          <div className="bg-white/[0.02] p-3 rounded-xl border border-white/5">
+            <JobRichText content={coverLetter} />
+          </div>
         </div>
 
         {/* 02. Terms of Service */}
@@ -99,7 +100,7 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
                   <span>Step {idx + 1}: {m.name}</span>
                   <span className="text-emerald-400 font-mono">{milestonePayout.toLocaleString()}</span>
                 </div>
-                {m.description && <p className="text-[11px] text-zinc-400">{m.description}</p>}
+                {m.description && <p className="text-[11px] text-zinc-400 break-all whitespace-pre-wrap">{m.description}</p>}
                 <div className="flex gap-4 text-[10px] text-zinc-500 pt-1">
                   <span>Hours: <strong className="text-zinc-300">{m.hours} hrs</strong></span>
                   <span className="flex items-center gap-1">

@@ -1,8 +1,9 @@
-import React, { useState } from "react";
-import { ArrowRight, ChevronDown, Check, Percent } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { ArrowRight, ChevronDown, Check, Percent, Bold, Italic, List, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Job } from "../../../job_components/job_lists";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import { JobRichText } from "../../../job_components/JobRichText";
 
 export const additionalWorkRates = [
   { label: "+10% per extra revision pass", value: 10 },
@@ -40,6 +41,44 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
   onDiscard,
 }) => {
   const [isRateOpen, setIsRateOpen] = useState(false);
+  const coverLetterRef = useRef<HTMLTextAreaElement>(null);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+
+  const insertMarkdown = (prefix: string, suffix: string = '') => {
+    const textarea = coverLetterRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    const before = text.substring(0, start);
+    const selected = text.substring(start, end);
+    const after = text.substring(end, text.length);
+
+    let newText = "";
+    let finalSelectionStart = start + prefix.length;
+    let finalSelectionEnd = end + prefix.length + selected.length;
+
+    if (suffix === '' && selected.includes('\n')) {
+      const lines = selected.split('\n');
+      const bulleted = lines.map(line => prefix + line).join('\n');
+      newText = before + bulleted + after;
+      finalSelectionEnd = start + bulleted.length;
+    } else {
+      newText = before + prefix + selected + suffix + after;
+    }
+
+    setCoverLetter(newText);
+    setErrors((prev) => {
+      const { coverLetter: _, ...rest } = prev;
+      return rest;
+    });
+
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(finalSelectionStart, finalSelectionEnd);
+    }, 0);
+  };
 
   const formatCommaString = (val: string) => {
     const clean = val.replace(/\D/g, "");
@@ -167,30 +206,59 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
 
       {/* Cover Letter Pitch */}
       <div className="space-y-1.5">
-        <div className="flex justify-between items-center">
-          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+        <div className="flex justify-between items-end mb-1">
+          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
             Cover Letter / Pitch <span className="text-red-500">*</span>
           </label>
-          <span className="text-[10px] font-mono text-zinc-500">{coverLetter.length}/2000</span>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => insertMarkdown('**', '**')} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 transition-colors" title="Bold" disabled={isPreviewMode}>
+              <Bold className="w-3.5 h-3.5" />
+            </button>
+            <button type="button" onClick={() => insertMarkdown('*', '*')} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 transition-colors" title="Italic" disabled={isPreviewMode}>
+              <Italic className="w-3.5 h-3.5" />
+            </button>
+            <button type="button" onClick={() => insertMarkdown('- ')} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 transition-colors" title="Bullet List" disabled={isPreviewMode}>
+              <List className="w-3.5 h-3.5" />
+            </button>
+            <div className="w-px h-4 bg-white/10 mx-1" />
+            <button type="button" onClick={() => setIsPreviewMode(!isPreviewMode)} className={`p-1 rounded transition-colors flex items-center gap-1 px-2 ${isPreviewMode ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 hover:bg-white/10 text-zinc-300'}`} title="Toggle Preview">
+              {isPreviewMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              <span className="text-[10px] font-bold uppercase">{isPreviewMode ? 'Edit' : 'Preview'}</span>
+            </button>
+            <span className="text-[10px] font-mono text-zinc-500 ml-2">{coverLetter.length}/2000</span>
+          </div>
         </div>
-        <textarea
-          rows={7}
-          maxLength={2000}
-          placeholder="Introduce yourself, your experience, and how you will execute this project..."
-          value={coverLetter}
-          onChange={(e) => {
-            setCoverLetter(e.target.value);
-            if (e.target.value.trim().length >= 50) {
-              setErrors((prev) => {
-                const { coverLetter: _, ...rest } = prev;
-                return rest;
-              });
-            }
-          }}
-          className={`w-full min-h-[160px] rounded-xl border bg-white/5 p-3.5 text-xs text-white outline-none transition-all resize-y leading-relaxed ${
-            errors.coverLetter ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-blue-500/50"
-          }`}
-        />
+
+        {isPreviewMode ? (
+          <div className="w-full min-h-[160px] rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs overflow-y-auto custom-scrollbar">
+            {coverLetter ? (
+              <JobRichText content={coverLetter} />
+            ) : (
+              <span className="text-zinc-500 italic">Nothing to preview</span>
+            )}
+          </div>
+        ) : (
+          <textarea
+            ref={coverLetterRef}
+            rows={7}
+            maxLength={2000}
+            placeholder="Introduce yourself, your experience, and how you will execute this project..."
+            value={coverLetter}
+            onChange={(e) => {
+              setCoverLetter(e.target.value);
+              if (e.target.value.trim().length >= 50) {
+                setErrors((prev) => {
+                  const { coverLetter: _, ...rest } = prev;
+                  return rest;
+                });
+              }
+            }}
+            className={`w-full min-h-[160px] rounded-xl border bg-white/5 p-3.5 text-xs text-white outline-none transition-all resize-y leading-relaxed custom-scrollbar ${
+              errors.coverLetter ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-blue-500/50"
+            }`}
+          />
+        )}
+        
         {errors.coverLetter && <p className="text-[11px] text-red-400">{errors.coverLetter}</p>}
       </div>
 
