@@ -17,6 +17,7 @@ import {
     ChevronDown,
     BriefcaseBusiness,
     MicVocal,
+    LayoutDashboard,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
@@ -50,6 +51,7 @@ let gigsItemsInitial: NavItem[] = [
 ];
 
 let activityRecordsInitial: NavItem[] = [
+    { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" },
     { label: "My Terms", icon: FileText, to: "/terms-of-services" },
     { label: "My Contracts", icon: Shield, to: "/contracts" },
     { label: "Transaction History", icon: Wallet, to: "/transactions" },
