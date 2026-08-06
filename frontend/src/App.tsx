@@ -37,6 +37,8 @@ import InboxMain from "@/components/ui/inbox/inbox_main.tsx";
 import SectionPlaceholder from '@/pages/user/0_misc/SectionPlaceholder.tsx'
 
 // Job Market Core Imports
+import DashboardMain from './pages/user/8_dashboard/dashboard_main';
+import { DashboardTaskDetail } from './pages/user/8_dashboard/dashboard_components/DashboardTaskDetail';
 import JobMain from "@/pages/user/6_job_market/job_main.tsx";
 import JobPostingPage from "@/pages/user/6_job_market/job_pages/job_posting_page.tsx";
 import JobSavesPage from "@/pages/user/6_job_market/job_pages/job_saves_page.tsx";
@@ -238,6 +240,12 @@ function App() {
           <Route path='/terms-of-services' element={<TosMain />} />
           <Route path='/contracts' element={<Contracts />} />
           <Route path='/contracts/:id' element={<Contracts />} />
+          <Route path='/dashboard' element={<DashboardMain />} />
+          <Route path='/dashboard/tasks' element={<DashboardMain />} />
+          <Route path='/dashboard/review' element={<DashboardMain />} />
+          <Route path='/dashboard/archived' element={<DashboardMain />} />
+          <Route path='/dashboard/tasks/:id' element={<DashboardTaskDetail />} />
+          <Route path='/dashboard/review/:id' element={<DashboardTaskDetail />} />
           <Route path='/transactions' element={<TransactionHistoryMain />} />
         </Route>
       </Route>
