@@ -45,6 +45,7 @@ export interface Job {
   applicantsCount: number;
   timeline: string;
   thumbnail: string;
+  clientAvatar?: string;
   skills?: string[];
   isSaved?: boolean;
   isOwnPost?: boolean;
@@ -97,6 +98,9 @@ export const HomeFeaturedJobs: React.FC = () => {
           thumbnail: j.thumbnail_path 
              ? `${import.meta.env.VITE_CLOUDFRONT_URL}${j.thumbnail_path.startsWith('/') ? '' : '/'}${j.thumbnail_path}`
              : "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80",
+          clientAvatar: j.client_avatar_path
+            ? `${import.meta.env.VITE_CLOUDFRONT_URL}${j.client_avatar_path.startsWith('/') ? '' : '/'}${j.client_avatar_path}`
+            : undefined,
           skills: j.tags || [],
           isSaved: j.is_saved || false,
           isOwnPost: userInfo?.account_id === j.client_account_id,
@@ -250,9 +254,13 @@ export const HomeFeaturedJobs: React.FC = () => {
             {/* Footer */}
             <div className="mt-2 flex items-center justify-between border-t border-white/5 pt-3 text-[11px] font-medium text-zinc-400">
               <div className="flex items-center gap-1.5 truncate">
-                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 bg-zinc-800 text-[9px] font-bold text-white">
-                  {job.postedBy.charAt(0)}
-                </div>
+                {job.clientAvatar ? (
+                  <img src={job.clientAvatar} alt={job.postedBy} className="h-5 w-5 shrink-0 rounded-full border border-zinc-700 object-cover" />
+                ) : (
+                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 bg-zinc-800 text-[9px] font-bold text-white">
+                    {job.postedBy.charAt(0)}
+                  </div>
+                )}
                 <span className="truncate font-semibold text-zinc-300">{job.postedBy}</span>
               </div>
 
