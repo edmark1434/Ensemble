@@ -402,13 +402,13 @@ const JobList: React.FC<JobListProps> = ({
 
                   <div className="flex items-center gap-2 text-[10px] font-medium text-zinc-400">
                     <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
-                      {job.hiredCount}/{job.positionsNeeded} filled
+                      {job.hiredCount}/{job.positionsNeeded} Positions
                     </span>
                     <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
-                      {job.applicantsCount} applicants
+                      {job.applicantsCount} Proposals
                     </span>
                     <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
-                      {job.savesCount} saves
+                      {job.savesCount} Saves
                     </span>
                     <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5 flex items-center gap-1">
                       <Clock className="h-3 w-3 text-zinc-500" /> {job.timeline}

@@ -370,6 +370,10 @@ const JobMain: React.FC = () => {
         selectedJob={selectedJob}
         onClose={() => navigate(getParentRoute())}
         onReportJob={handleReportJob}
+        onToggleSave={(jobId) => {
+           const e = { stopPropagation: () => {} } as React.MouseEvent;
+           toggleSaveJob(e, jobId);
+        }}
       />
 
       {/* Report Popup Modal */}
