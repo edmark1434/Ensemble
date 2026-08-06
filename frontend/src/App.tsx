@@ -32,6 +32,11 @@ const SelectedGroup = lazyPage(() => import('@/pages/user/4_forums/SelectedGroup
 const ExpandDiscussion = lazyPage(() => import('@/pages/user/4_forums/ExpandDiscussion.tsx'));
 const InboxMain = lazyPage(() => import('@/components/ui/inbox/inbox_main.tsx'));
 const SectionPlaceholder = lazyPage(() => import('@/pages/user/0_misc/SectionPlaceholder.tsx'));
+
+// Dashboard Imports
+const DashboardMain = lazyPage(() => import('./pages/user/8_dashboard/dashboard_main'));
+const DashboardTaskDetail = lazy(() => import('./pages/user/8_dashboard/dashboard_components/DashboardTaskDetail').then((module) => ({ default: module.DashboardTaskDetail })));
+
 const JobMain = lazyPage(() => import('@/pages/user/6_job_market/job_main.tsx'));
 const JobPostingPage = lazyPage(() => import('@/pages/user/6_job_market/job_pages/job_posting_page.tsx'));
 const JobSavesPage = lazyPage(() => import('@/pages/user/6_job_market/job_pages/job_saves_page.tsx'));
@@ -226,6 +231,12 @@ function App() {
           <Route path='/terms-of-services' element={<TosMain />} />
           <Route path='/contracts' element={<Contracts />} />
           <Route path='/contracts/:id' element={<Contracts />} />
+          <Route path='/dashboard' element={<DashboardMain />} />
+          <Route path='/dashboard/tasks' element={<DashboardMain />} />
+          <Route path='/dashboard/review' element={<DashboardMain />} />
+          <Route path='/dashboard/archived' element={<DashboardMain />} />
+          <Route path='/dashboard/tasks/:id' element={<DashboardTaskDetail />} />
+          <Route path='/dashboard/review/:id' element={<DashboardTaskDetail />} />
           <Route path='/transactions' element={<TransactionHistoryMain />} />
         </Route>
       </Route>
