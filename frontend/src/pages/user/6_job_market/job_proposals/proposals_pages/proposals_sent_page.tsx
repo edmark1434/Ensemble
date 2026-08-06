@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useNavigate } from "react-router-dom";
 import ProposalsList, {
   type ProposalStatus,
 } from "../proposals_components/proposals_list";
@@ -22,10 +22,13 @@ export const ProposalsSentPage: React.FC = () => {
   } = useOutletContext<ProposalsMainContext>();
 
   const [proposals, setProposals] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { fetchSentProposals } = useJobs();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const loadData = async () => {
+      setIsLoading(true);
       try {
         const fetched = await fetchSentProposals();
         const mapped = fetched.map((p: any) => ({
@@ -34,7 +37,9 @@ export const ProposalsSentPage: React.FC = () => {
           jobTitle: p.job_title || "Unknown Job",
           jobCategory: p.job_category || "Uncategorized",
           partyName: p.client_name || p.client_handle || "Unknown",
-          partyAvatar: p.client_avatar_path ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${p.client_avatar_path}` : undefined,
+          partyAvatar: p.client_avatar_path
+            ? `${import.meta.env.VITE_CLOUDFRONT_URL}${p.client_avatar_path.startsWith('/') ? '' : '/'}${p.client_avatar_path}`
+            : undefined,
           bidAmount: parseFloat(p.rate_credits) || 0,
           additionalWorkRate: parseFloat(p.revision_price_credits) || 0,
           status: p.status,
@@ -47,10 +52,13 @@ export const ProposalsSentPage: React.FC = () => {
         setProposals(mapped);
       } catch (err) {
         console.error("Failed to load sent proposals", err);
+      } finally {
+        setIsLoading(false);
       }
     };
     loadData();
-  }, [fetchSentProposals]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleUpdateStatus = (
     id: string,
@@ -113,6 +121,33 @@ export const ProposalsSentPage: React.FC = () => {
         return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
       return 0;
     });
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 space-y-4">
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-zinc-400 text-sm animate-pulse">Loading sent proposals...</p>
+      </div>
+    );
+  }
+
+  if (proposals.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 space-y-4 text-center">
+        <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-2">
+          <span className="text-2xl">🚀</span>
+        </div>
+        <h3 className="text-lg font-bold text-white">No Proposals Sent Yet</h3>
+        <p className="text-xs text-zinc-400 max-w-sm">You haven't applied to any jobs yet. Start exploring the job market to find your next gig!</p>
+        <button
+          onClick={() => navigate('/jobs/postings')}
+          className="mt-4 px-6 py-2.5 rounded-xl bg-blue-500 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20"
+        >
+          Look for Jobs
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 text-left">
