@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { Filter } from "lucide-react";
 import { Outlet, useNavigate, useParams, useLocation } from "react-router-dom";
 import UserHeader from "@/components/nav/user_header";
 
@@ -78,6 +79,7 @@ const JobMain: React.FC = () => {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [activeCategoryFilter, setActiveCategoryFilter] = useState("All");
   const [jobsList, setJobsList] = useState<Job[]>([]);
+  const [showFilters, setShowFilters] = useState(true);
 
   // Popup Report State
   const [reportingJob, setReportingJob] = useState<Job | null>(null);
@@ -292,48 +294,61 @@ const JobMain: React.FC = () => {
 
         <div className="mb-8 flex flex-wrap items-center justify-between border-b border-white/10 gap-4">
           <JobTabs />
-          <div className="py-2">
+          <div className="py-2 flex items-center gap-4">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`flex items-center justify-center p-2 rounded-lg transition-colors border ${
+                showFilters 
+                  ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' 
+                  : 'bg-white/5 border-white/10 text-zinc-400 hover:text-white hover:bg-white/10'
+              }`}
+              title="Toggle Filters"
+            >
+              <Filter className="h-5 w-5" />
+            </button>
             <JobListViewType viewType={viewType} onViewTypeChange={setViewType} />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
-          <div className="space-y-6 sticky top-24">
-            {loading ? (
-              <SidebarSkeleton />
-            ) : (
-              <>
-                <JobCategories
-                  categories={dynamicCategories}
-                  activeCategory={activeCategoryFilter}
-                  onCategoryChange={setActiveCategoryFilter}
-                />
-                <JobFilters
-                  filters={{
-                    minPrice,
-                    maxPrice,
-                    priceSort,
-                    selectedDiffs,
-                    posValue,
-                    posSort,
-                    ratingSort,
-                  }}
-                  setters={{
-                    setMinPrice,
-                    setMaxPrice,
-                    setPriceSort,
-                    setSelectedDifficulty,
-                    setPosValue,
-                    setPosSort,
-                    setRatingSort,
-                  }}
-                  onClear={handleClearFilters}
-                />
-              </>
-            )}
-          </div>
+        <div className={`grid grid-cols-1 ${showFilters ? 'lg:grid-cols-4' : 'lg:grid-cols-1'} gap-8 items-start`}>
+          {showFilters && (
+            <div className="space-y-6 sticky top-24 lg:col-span-1">
+              {loading ? (
+                <SidebarSkeleton />
+              ) : (
+                <>
+                  <JobCategories
+                    categories={dynamicCategories}
+                    activeCategory={activeCategoryFilter}
+                    onCategoryChange={setActiveCategoryFilter}
+                  />
+                  <JobFilters
+                    filters={{
+                      minPrice,
+                      maxPrice,
+                      priceSort,
+                      selectedDiffs,
+                      posValue,
+                      posSort,
+                      ratingSort,
+                    }}
+                    setters={{
+                      setMinPrice,
+                      setMaxPrice,
+                      setPriceSort,
+                      setSelectedDifficulty,
+                      setPosValue,
+                      setPosSort,
+                      setRatingSort,
+                    }}
+                    onClear={handleClearFilters}
+                  />
+                </>
+              )}
+            </div>
+          )}
 
-          <div className="lg:col-span-3">
+          <div className={showFilters ? "lg:col-span-3" : "lg:col-span-1"}>
             <Outlet
               context={
                 {
