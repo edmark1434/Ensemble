@@ -17,9 +17,11 @@ import {
   X,
   Check,
   Lock,
+  ExternalLink
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import useGlobalState from "@/lib/global_state";
 
 export type ContractType = "Job" | "Gig";
 export type ContractStatus = "Active" | "Waiting" | "Done" | "Cancelled";
@@ -40,12 +42,18 @@ export interface DetailedContract {
   contractType: ContractType;
   clientName: string;
   freelancerName: string;
+  clientAccountId?: string;
+  freelancerAccountId?: string;
+  clientAvatar?: string;
+  freelancerAvatar?: string;
   status: ContractStatus;
   isArchived: boolean;
+  jobId?: string;
 
   // Dates
   dateCreated: string;
   dateStarted?: string;
+  dueDate?: string;
 
   // Financial breakdown
   clientRange: string;
@@ -171,6 +179,32 @@ const ContractsSkeletonLoader: React.FC = () => (
 );
 
 // ============================================================================
+// HELPERS
+// ============================================================================
+function formatDateTimeWithRelative(dateString: string | undefined): string {
+    if (!dateString) return "N/A";
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "N/A";
+
+    const formattedDate = date.toLocaleDateString([], { month: '2-digit', day: '2-digit', year: 'numeric' });
+    const formattedTime = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    const now = new Date();
+    const diffInSeconds = (date.getTime() - now.getTime()) / 1000;
+    
+    const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+    let relative = "";
+    const absDiff = Math.abs(diffInSeconds);
+    
+    if (absDiff < 60) relative = rtf.format(Math.round(diffInSeconds), 'second');
+    else if (absDiff < 3600) relative = rtf.format(Math.round(diffInSeconds / 60), 'minute');
+    else if (absDiff < 86400) relative = rtf.format(Math.round(diffInSeconds / 3600), 'hour');
+    else relative = rtf.format(Math.round(diffInSeconds / 86400), 'day');
+
+    return `${formattedDate} ${formattedTime} (${relative})`;
+}
+
+// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 export const Contracts: React.FC = () => {
@@ -178,6 +212,7 @@ export const Contracts: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"active" | "archived">("active");
   const [contracts, setContracts] = useState<DetailedContract[]>([]);
   const [selectedContract, setSelectedContract] = useState<DetailedContract | null>(null);
+  const { user } = useGlobalState();
 
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
@@ -187,16 +222,39 @@ export const Contracts: React.FC = () => {
       try {
         const res = await api.get('/api/contracts');
         if (res.data.success) {
-          const mappedContracts = res.data.data.map((c: any) => ({
+          const mappedContracts = res.data.data.map((c: any) => {
+            const mappedMilestones = (c.milestones || []).filter(Boolean).map((m: any, idx: number, arr: any[]) => ({
+              id: m.id,
+              name: m.name,
+              revisions: parseInt(m.revisions, 10) || 0,
+              deadline: m.hours ? `${m.hours} Hours` : m.deadline ? new Date(m.deadline).toLocaleDateString() : 'N/A',
+              credits: m.credits || Math.floor((parseFloat(c.rate_credits) || 0) / (arr.length || 1)),
+              status: m.status === 'completed' || m.status === 'approved' ? "Claimed" : m.status === 'active' || m.status === 'submitted_for_review' ? "In Progress" : "Locked"
+            }));
+
+            const isCompleted = mappedMilestones.length > 0 && mappedMilestones.every((m: any) => m.status === 'Claimed');
+            const derivedStatus = isCompleted ? 'Closed' : (c.status === 'Done' ? 'Closed' : c.status);
+
+            return {
             id: c.contract_id,
             title: c.job_title || c.contract_type,
             contractType: c.contract_type === 'job' ? 'Job' : 'Gig',
             clientName: c.client_name || c.client_handle,
             freelancerName: c.freelancer_name || c.freelancer_handle,
-            status: c.status,
-            isArchived: c.status === 'Done' || c.status === 'Cancelled',
-            dateCreated: new Date(c.created_at).toLocaleDateString(),
-            dateStarted: c.starts_at ? new Date(c.starts_at).toLocaleDateString() : undefined,
+            clientAccountId: c.client_account_id,
+            freelancerAccountId: c.freelancer_account_id,
+            clientAvatar: c.client_avatar 
+              ? `${import.meta.env.VITE_CLOUDFRONT_URL}${c.client_avatar.startsWith('/') ? '' : '/'}${c.client_avatar}` 
+              : undefined,
+            freelancerAvatar: c.freelancer_avatar
+              ? `${import.meta.env.VITE_CLOUDFRONT_URL}${c.freelancer_avatar.startsWith('/') ? '' : '/'}${c.freelancer_avatar}` 
+              : undefined,
+            status: derivedStatus,
+            isArchived: derivedStatus === 'Closed' || derivedStatus === 'Cancelled',
+            jobId: c.job_id,
+            dateCreated: c.created_at,
+            dateStarted: c.starts_at || undefined,
+            dueDate: c.job_deadline || undefined,
             clientRange: (c.rate_credits_min && c.rate_credits_max) 
               ? `${parseFloat(c.rate_credits_min).toLocaleString()} ~ ${parseFloat(c.rate_credits_max).toLocaleString()}` 
               : "Fixed Price",
@@ -206,16 +264,13 @@ export const Contracts: React.FC = () => {
             addOnRate: c.additional_work_rate ? `+${c.additional_work_rate}% / Revision` : "N/A",
             freelancerTosTitle: c.terms_title || "Standard Terms",
             freelancerTosContent: c.terms_content || "Standard terms apply.",
-            milestones: (c.milestones || []).filter(Boolean).map((m: any) => ({
-              id: m.id,
-              name: m.name,
-              revisions: parseInt(m.revisions, 10) || 0,
-              deadline: m.hours ? `${m.hours} Hours` : 'N/A',
-              credits: 0, // Would need calculation or separate fields
-              status: "Locked"
-            }))
-          }));
-          setContracts(mappedContracts);
+            milestones: mappedMilestones
+          };
+          });
+          
+          const validStatuses = ["Active", "Waiting", "Closed"];
+          const filteredContracts = mappedContracts.filter((c: DetailedContract) => validStatuses.includes(c.status));
+          setContracts(filteredContracts);
 
           // Auto-select contract if ID in URL
           if (id) {
@@ -250,39 +305,19 @@ export const Contracts: React.FC = () => {
 
   const filteredContracts = contracts.filter((c) =>
     activeTab === "active" ? !c.isArchived : c.isArchived
-  );
+  );  
 
   const getStatusBadge = (status: ContractStatus) => {
-    switch (status) {
-      case "Active":
-        return (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-400">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Active
-          </span>
-        );
-      case "Waiting":
-        return (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-amber-400">
-            <Clock className="h-3 w-3" />
-            Waiting
-          </span>
-        );
-      case "Done":
-        return (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/30 bg-blue-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-blue-400">
-            <CheckCircle2 className="h-3 w-3" />
-            Done
-          </span>
-        );
-      case "Cancelled":
-        return (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-rose-400">
-            <AlertCircle className="h-3 w-3" />
-            Cancelled
-          </span>
-        );
-    }
+    let color = 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20';
+    if (status === 'Active') color = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+    else if (status === 'Waiting') color = 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+    else if (status === 'Closed' || status === 'Done') color = 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+
+    return (
+      <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${color}`}>
+        {status}
+      </span>
+    );
   };
 
   return (
@@ -328,7 +363,7 @@ export const Contracts: React.FC = () => {
               <span className="relative z-10 flex items-center gap-2">
                 <Shield className="h-4 w-4" /> Active Contracts
                 <span className="rounded-full bg-white/10 px-2 py-0.2 text-[10px] text-zinc-300">
-                  {SAMPLE_DETAILED_CONTRACTS.filter((c) => !c.isArchived).length}
+                  {contracts.filter((c) => !c.isArchived).length}
                 </span>
               </span>
 
@@ -358,7 +393,7 @@ export const Contracts: React.FC = () => {
               <span className="relative z-10 flex items-center gap-2">
                 <Archive className="h-4 w-4" /> Archived Contracts
                 <span className="rounded-full bg-white/10 px-2 py-0.2 text-[10px] text-zinc-300">
-                  {SAMPLE_DETAILED_CONTRACTS.filter((c) => c.isArchived).length}
+                  {contracts.filter((c) => c.isArchived).length}
                 </span>
               </span>
 
@@ -396,7 +431,7 @@ export const Contracts: React.FC = () => {
                 <div className="grid gap-4 md:grid-cols-2">
                   {filteredContracts.map((contract) => {
                     const isWaiting = contract.status === "Waiting";
-                    const isDone = contract.status === "Done";
+                    const isArchived = contract.isArchived;
                     const claimedCount = contract.milestones.filter(
                       (m) => m.status === "Claimed"
                     ).length;
@@ -414,52 +449,49 @@ export const Contracts: React.FC = () => {
                           navigate(`/contracts/${contract.id}`);
                         }}
                         className={`group relative cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/40 p-5 transition-all duration-300 hover:border-blue-500/50 hover:bg-zinc-900/80 hover:shadow-xl hover:shadow-blue-500/5 ${
-                          isDone ? "opacity-60 grayscale-[30%] hover:opacity-100 hover:grayscale-0" : ""
+                          isArchived ? "opacity-40 grayscale-[50%] hover:opacity-100 hover:grayscale-0" : ""
                         }`}
                       >
-                        {/* Top Row: Icon, Truncated Title, and Status */}
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-start gap-3 min-w-0">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-blue-400">
-                              {contract.contractType === "Job" ? (
-                                <Briefcase className="h-5 w-5" />
-                              ) : (
-                                <MicVocal className="h-5 w-5" />
-                              )}
-                            </div>
-
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-mono text-zinc-300">
-                                  {contract.id}
-                                </span>
-                                <span className="rounded bg-zinc-800 border border-zinc-700/60 px-1.5 py-0.5 text-[9px] font-semibold text-zinc-300 uppercase tracking-wider">
-                                  {contract.contractType}
-                                </span>
-                              </div>
-
-                              {/* Truncated Title */}
-                              <h3
-                                className="mt-1 text-sm font-bold text-white transition group-hover:text-blue-400 truncate max-w-[220px] sm:max-w-[280px] md:max-w-[240px] lg:max-w-[320px]"
-                                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-                                title={contract.title}
-                              >
+                        {/* Main Card Header */}
+                        <div className="flex items-start justify-between mb-4 gap-4">
+                          <div className="flex items-center gap-4 flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <h3 className="font-bold text-white text-lg tracking-tight truncate group-hover:text-blue-400 transition-colors">
                                 "{contract.title}"
                               </h3>
-
-                              {/* Credits Display */}
-                              <div className="mt-1.5 flex items-center gap-1 text-xs font-extrabold text-yellow-500">
-                                <CreditIcon className="h-3.5 w-3.5 text-yellow-500" />
-                                <span>{contract.totalValueCredits.toLocaleString()} Credits</span>
-                              </div>
+                              {contract.jobId && (
+                                <a href={`/jobs/postings/${contract.jobId}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-zinc-500 hover:text-white transition-colors shrink-0" title="View Original Job Post">
+                                  <ExternalLink className="h-4 w-4" />
+                                </a>
+                              )}
                             </div>
                           </div>
+                          <div className="flex items-center gap-2">
+                            <span className="rounded bg-white/5 px-2 py-0.5 text-[10px] font-bold text-zinc-400 uppercase tracking-wider border border-white/5">
+                              {contract.contractType}
+                            </span>
+                            {getStatusBadge(contract.status)}
+                          </div>
+                        </div>
 
-                          {getStatusBadge(contract.status)}
+                        {/* Credits Display */}
+                        <div className="mb-4 flex items-center gap-1 text-xs font-extrabold text-yellow-500">
+                          <span className="text-zinc-400 font-medium mr-1 uppercase text-[10px]">{isArchived ? "Claimed:" : "Agreed Bid:"}</span>
+                          <CreditIcon className="h-3.5 w-3.5 text-yellow-500" />
+                          <span>{contract.totalValueCredits.toLocaleString()} Credits</span>
+                        </div>
+
+                        {/* Contract Document Preview (Compressed) */}
+                        <div className="mb-4 relative rounded-xl border border-white/5 bg-[#080a12]/80 opacity-70 group-hover:opacity-100 transition-opacity overflow-hidden pointer-events-none mx-2 shadow-[0_2px_10px_rgba(0,0,0,0.5)]" style={{ transform: 'rotate(-1deg)' }}>
+                          <div className="p-3 text-[7px] text-zinc-500 font-sans leading-[10px] h-[90px] overflow-hidden whitespace-pre-wrap">
+                            <h4 className="font-bold text-[8px] border-b border-white/10 pb-1 mb-1 uppercase tracking-widest text-zinc-400">Contract Agreement</h4>
+                            {contract.jobDescription || "No contract description provided."}
+                          </div>
+                          <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#080a12] to-transparent" />
                         </div>
 
                         {/* Milestone Progress Bar Segmented */}
-                        <div className="mt-4 space-y-1">
+                        <div className="space-y-1">
                           <div className="flex justify-between items-center text-[10px] text-zinc-400">
                             <span className="font-semibold uppercase tracking-wider text-zinc-500">
                               Milestones Progress
@@ -470,7 +502,10 @@ export const Contracts: React.FC = () => {
                           </div>
 
                           <div className="flex gap-1.5 h-1.5 w-full">
-                            {contract.milestones.map((m) => {
+                            {[...contract.milestones].sort((a, b) => {
+                                const getVal = (s: string) => s === "Claimed" ? 2 : s === "In Progress" ? 1 : 0;
+                                return getVal(b.status) - getVal(a.status);
+                            }).map((m, idx) => {
                               let barColor = "bg-white/10";
                               if (m.status === "Claimed") barColor = "bg-emerald-400";
                               else if (m.status === "In Progress") barColor = "bg-amber-400 animate-pulse";
@@ -485,28 +520,34 @@ export const Contracts: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Metadata & Dates Info */}
-                        <div className="mt-4 pt-3 border-t border-white/5 space-y-2 text-xs">
-                          <div className="flex items-center justify-between text-zinc-400">
-                            <span className="flex items-center gap-1.5 text-zinc-300">
-                              <User className="h-3.5 w-3.5 text-zinc-500" />
-                              {contract.clientName}
-                            </span>
+                        {/* Footer Stats */}
+                        <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between text-xs text-zinc-400">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center text-zinc-300 font-medium">
+                              {(() => {
+                                const isClient = user?.account_id === contract.clientAccountId;
+                                const displayAvatar = isClient ? contract.freelancerAvatar : contract.clientAvatar;
+                                const displayName = isClient ? contract.freelancerName : contract.clientName;
+                                return (
+                                  <>
+                                    <img
+                                      src={displayAvatar || "https://i.pravatar.cc/150?u=a042581f4e29026704d"}
+                                      alt="User avatar"
+                                      className="h-5 w-5 rounded-full mr-2 object-cover border border-zinc-700"
+                                    />
+                                    <span>{displayName}</span>
+                                  </>
+                                );
+                              })()}
+                            </div>
                           </div>
-
-                          {/* Date Created & Starts In */}
-                          <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-0.5">
-                            <span className="flex items-center gap-1.5 text-zinc-400">
-                              <Calendar className="h-3 w-3 text-zinc-500" />
-                              Date Created: <strong className="text-zinc-300 font-semibold">{contract.dateCreated}</strong>
-                            </span>
-
-                            {isWaiting && contract.dateStarted && (
-                              <span className="flex items-center gap-1.5 text-zinc-300 font-medium bg-zinc-800/80 border border-zinc-700/60 px-2.5 py-0.5 rounded-full text-[10px]">
-                                <Clock className="h-3 w-3 text-zinc-400" />
-                                Starts In: {contract.dateStarted}
-                              </span>
-                            )}
+                          <div className="flex flex-col items-end gap-1 text-[10px] opacity-70 text-right font-mono mt-1 sm:mt-0">
+                            <div>
+                              Start: <span className="font-bold text-emerald-400">{formatDateTimeWithRelative(contract.dateStarted || contract.dateCreated)}</span>
+                            </div>
+                            <div>
+                              Due: <span className="font-bold text-rose-400">{contract.dueDate ? formatDateTimeWithRelative(contract.dueDate) : "N/A"}</span>
+                            </div>
                           </div>
                         </div>
                       </motion.div>
@@ -539,7 +580,7 @@ export const Contracts: React.FC = () => {
               <div className="flex items-center gap-2.5">
                 <FileText className="h-5 w-5 text-blue-400" />
                 <span className="text-xs font-bold uppercase tracking-widest text-zinc-300">
-                  Formal Contract Details ({selectedContract.id})
+                  Formal Contract Details
                 </span>
               </div>
               <button
@@ -554,168 +595,140 @@ export const Contracts: React.FC = () => {
             </div>
 
             {/* Scrollable Formal Contract Body */}
-            <div className="p-6 md:p-8 space-y-8 max-h-[78vh] overflow-y-auto custom-scrollbar">
+            <div className="p-6 md:p-8 space-y-8 max-h-[78vh] overflow-y-auto custom-scrollbar bg-[#0f1115]">
               {/* Header Title & Financial Summary */}
-              <div className="text-center space-y-2 border-b border-white/10 pb-6">
-                <div className="flex justify-center mb-1">
+              <div className="text-center space-y-2 border-b border-zinc-800 pb-5">
+                <div className="flex justify-center mb-2">
                   {getStatusBadge(selectedContract.status)}
                 </div>
+                
                 <h2
-                  className="text-2xl font-extrabold tracking-tight text-white md:text-3xl"
-                  style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                  className="text-xl font-bold tracking-tight text-zinc-100 uppercase"
+                  style={{ fontFamily: "'Inter', sans-serif" }}
                 >
-                  Job Contract Agreement
+                  Contract Agreement
                 </h2>
-                <p className="text-base text-zinc-300 italic font-medium">
-                  "{selectedContract.title}"
-                </p>
-
-                {/* Date Badges in Modal Header */}
-                <div className="flex flex-wrap items-center justify-center gap-3 pt-2 text-xs text-zinc-400">
-                  <span className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2.5 py-1 rounded-md">
-                    <Calendar className="h-3.5 w-3.5 text-zinc-400" /> Date Created: {selectedContract.dateCreated}
+                
+                <div className="flex flex-col items-center gap-1 pt-1 text-[11px] text-zinc-400 uppercase tracking-widest">
+                  <span>Contract Type: <strong className="text-zinc-200">{selectedContract.contractType}</strong></span>
+                  <span className="flex items-center gap-1.5">
+                    <Calendar className="h-3 w-3 text-zinc-500" /> Date Created: <strong className="text-zinc-200">{selectedContract.dateCreated}</strong>
                   </span>
                   {selectedContract.status === "Waiting" && selectedContract.dateStarted && (
-                    <span className="flex items-center gap-1.5 bg-zinc-800 border border-zinc-700 text-zinc-300 px-2.5 py-1 rounded-md font-medium text-xs">
-                      <Clock className="h-3.5 w-3.5 text-zinc-400" /> Starts In: {selectedContract.dateStarted}
+                    <span className="flex items-center gap-1.5 text-zinc-300 font-bold mt-1">
+                      <Clock className="h-3 w-3 text-zinc-500" /> Starts In: {selectedContract.dateStarted}
                     </span>
                   )}
                 </div>
 
-                {/* Financial Value Box */}
-                <div className="pt-4 max-w-md mx-auto space-y-1.5 text-center">
-                  <p className="text-lg font-bold text-white flex items-center justify-center gap-2">
+                <div className="pt-4 max-w-sm mx-auto space-y-1 text-center">
+                  <p className="text-xs font-semibold text-zinc-300 flex items-center justify-center gap-1.5 uppercase tracking-wider">
                     Total Contract Value:
-                    <span className="text-yellow-500 font-extrabold flex items-center gap-1">
-                      <CreditIcon className="h-4 w-4 text-yellow-500" />
+                    <span className="text-zinc-100 font-bold">
                       {selectedContract.totalValueCredits.toLocaleString()} Credits
                     </span>
                   </p>
 
-                  <div className="text-xs space-y-1.5 pt-2 font-mono text-zinc-400 max-w-xs mx-auto border-t border-white/10">
-                    <div className="flex justify-between items-center">
-                      <span>Client Range:</span>
-                      <span className="text-yellow-500/80 flex items-center gap-1">
-                        <CreditIcon className="h-3 w-3 text-yellow-500/80" />
-                        {selectedContract.clientRange}
-                      </span>
+                  <div className="text-[10px] space-y-1 pt-1.5 font-mono text-zinc-500 mx-auto">
+                    <div className="flex justify-between items-center px-2 py-0.5">
+                      <span className="uppercase">Client Range:</span>
+                      <span className="text-zinc-400">{selectedContract.clientRange}</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span>Freelancer Bid:</span>
-                      <span className="text-yellow-500 flex items-center gap-1">
-                        <CreditIcon className="h-3 w-3 text-yellow-500" />
-                        {selectedContract.totalValueCredits.toLocaleString()}
-                      </span>
+                    <div className="flex justify-between items-center px-2 py-0.5">
+                      <span className="uppercase">Accepted Bid:</span>
+                      <span className="text-zinc-300">{selectedContract.totalValueCredits.toLocaleString()}</span>
                     </div>
-                    <div className="flex justify-between items-center text-rose-400">
-                      <span>Platform Fee ({selectedContract.platformFeePercent}%):</span>
-                      <span>- {Math.floor(selectedContract.totalValueCredits * 0.2).toLocaleString()}</span>
+                    <div className="flex justify-between items-center px-2 py-0.5">
+                      <span className="uppercase">Platform Fee ({selectedContract.platformFeePercent}%):</span>
+                      <span className="text-zinc-400">- {Math.floor(selectedContract.totalValueCredits * 0.2).toLocaleString()}</span>
                     </div>
-                    <div className="flex justify-between items-center font-bold text-yellow-500 border-t border-white/10 pt-1.5">
-                      <span>Freelancer Net:</span>
-                      <span className="flex items-center gap-1">
-                        <CreditIcon className="h-3.5 w-3.5 text-yellow-500" />
-                        {Math.floor(selectedContract.totalValueCredits * 0.8).toLocaleString()}
-                      </span>
+                    <div className="flex justify-between items-center font-bold text-zinc-200 border-t border-zinc-800 px-2 py-1.5 mt-1">
+                      <span className="uppercase tracking-widest">Net Value:</span>
+                      <span>{Math.floor(selectedContract.totalValueCredits * 0.8).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* I. PARTIES */}
-              <div className="space-y-2.5">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-blue-400">
+              <div className="space-y-1.5">
+                <h3 className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">
                   I. Parties Involved
                 </h3>
-                <div className="overflow-hidden rounded-xl border border-white/10 bg-zinc-950/60 text-xs">
-                  <div className="flex items-center justify-between border-b border-white/10 p-3.5">
-                    <span className="text-zinc-400 font-medium">Client</span>
-                    <span className="font-bold text-white italic">{selectedContract.clientName}</span>
+                <div className="overflow-hidden border-y border-zinc-800 bg-transparent text-[10px] font-mono">
+                  <div className="flex items-center justify-between border-b border-zinc-800/50 px-3 py-2">
+                    <span className="text-zinc-500 uppercase tracking-wider">Client</span>
+                    <span className="font-semibold text-zinc-200">{selectedContract.clientName}</span>
                   </div>
-                  <div className="flex items-center justify-between p-3.5">
-                    <span className="text-zinc-400 font-medium">Freelancer</span>
-                    <span className="font-bold text-white italic">{selectedContract.freelancerName}</span>
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="text-zinc-500 uppercase tracking-wider">Freelancer</span>
+                    <span className="font-semibold text-zinc-200">{selectedContract.freelancerName}</span>
                   </div>
                 </div>
               </div>
 
               {/* II. SCOPE OF WORK */}
-              <div className="space-y-2.5">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-blue-400">
+              <div className="space-y-1.5">
+                <h3 className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">
                   II. Scope of Work
                 </h3>
-                <div className="overflow-hidden rounded-xl border border-white/10 bg-zinc-950/60 text-xs">
-                  <div className="p-3.5 border-b border-white/10 space-y-1">
-                    <span className="text-zinc-400 font-medium block">Job Description</span>
+                <div className="overflow-hidden border-y border-zinc-800 bg-transparent text-[10px] font-mono">
+                  <div className="px-3 py-3 border-b border-zinc-800/50 space-y-2">
+                    <span className="text-zinc-500 uppercase tracking-wider block">Job Post Title</span>
+                    <p className="text-zinc-200 font-semibold leading-relaxed whitespace-pre-line text-xs font-sans">
+                      "{selectedContract.title}"
+                    </p>
+                  </div>
+                  <div className="px-3 py-3 border-b border-zinc-800/50 space-y-2">
+                    <span className="text-zinc-500 uppercase tracking-wider block">Job Description</span>
                     <p className="text-zinc-300 leading-relaxed whitespace-pre-line">
                       {selectedContract.jobDescription}
                     </p>
                   </div>
-                  <div className="flex items-center justify-between p-3.5">
-                    <span className="text-zinc-400 font-medium">Add-On Work Rate</span>
-                    <span className="font-bold text-white">{selectedContract.addOnRate}</span>
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="text-zinc-500 uppercase tracking-wider">Add-On Work Rate</span>
+                    <span className="font-semibold text-zinc-300">{selectedContract.addOnRate}</span>
                   </div>
                 </div>
               </div>
 
               {/* III. LOCKED MILESTONES WITH CLAIMED INDICATORS */}
-              <div className="space-y-2.5">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-blue-400">
-                  III. Locked Milestones
+              <div className="space-y-1.5">
+                <h3 className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">
+                  III. Milestones Schedule
                 </h3>
-                <div className="overflow-x-auto rounded-xl border border-white/10 bg-zinc-950/60 text-xs">
-                  <table className="w-full text-left">
+                <div className="overflow-x-auto border-y border-zinc-800 bg-transparent">
+                  <table className="w-full text-left text-[10px] font-mono">
                     <thead>
-                      <tr className="border-b border-white/10 bg-white/5 text-zinc-400 font-semibold">
-                        <th className="p-3 text-center w-10">#</th>
-                        <th className="p-3">Milestone Name</th>
-                        <th className="p-3 text-center">Status</th>
-                        <th className="p-3 text-center">Revisions</th>
-                        <th className="p-3 text-center">Deadline</th>
-                        <th className="p-3 text-right">Credits</th>
+                      <tr className="border-b border-zinc-800/50 text-zinc-500">
+                        <th className="px-3 py-2 text-center w-8 uppercase font-normal">#</th>
+                        <th className="px-3 py-2 uppercase font-normal">Milestone Name</th>
+                        <th className="px-3 py-2 text-center uppercase font-normal">Status</th>
+                        <th className="px-3 py-2 text-center uppercase font-normal">Revs</th>
+                        <th className="px-3 py-2 text-center uppercase font-normal">Deadline</th>
+                        <th className="px-3 py-2 text-right uppercase font-normal">Credits</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5 text-zinc-300">
-                      {selectedContract.milestones.map((m) => {
+                    <tbody className="divide-y divide-zinc-800/30 text-zinc-300">
+                      {selectedContract.milestones.map((m, index) => {
                         const isClaimed = m.status === "Claimed";
                         const isInProgress = m.status === "In Progress";
 
                         return (
-                          <tr key={m.id} className="hover:bg-white/[0.02]">
-                            <td className="p-3 text-center font-mono text-zinc-500">{m.id}</td>
-                            <td className="p-3 font-semibold text-white">
-                              <div className="flex items-center gap-2">
-                                <span>{m.name}</span>
-                              </div>
+                          <tr key={m.id} className="hover:bg-zinc-800/10 transition-colors">
+                            <td className="px-3 py-2 text-center text-zinc-500">{index + 1}</td>
+                            <td className="px-3 py-2 font-medium text-zinc-200">{m.name}</td>
+                            <td className="px-3 py-2 text-center">
+                              <span className="uppercase tracking-widest text-[8px] text-zinc-400">
+                                {m.status}
+                              </span>
                             </td>
-                            {/* Claimed Indicator Badge */}
-                            <td className="p-3 text-center">
-                              {isClaimed ? (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-400">
-                                  <Check className="h-3 w-3" /> Claimed
-                                </span>
-                              ) : isInProgress ? (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-400">
-                                  <Clock className="h-3 w-3 animate-pulse" /> In Progress
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-white/5 border border-white/10 px-2 py-0.5 text-[10px] font-bold text-zinc-500">
-                                  <Lock className="h-3 w-3" /> Locked
-                                </span>
-                              )}
-                            </td>
-                            <td className="p-3 text-center font-mono">{m.revisions}</td>
-                            <td className="p-3 text-center font-mono">{m.deadline}</td>
-                            <td className="p-3 text-right font-bold font-mono">
-                              <div className="flex items-center justify-end gap-1">
-                                <CreditIcon
-                                  className={`h-3.5 w-3.5 ${
-                                    isClaimed ? "text-emerald-400" : "text-yellow-500"
-                                  }`}
-                                />
-                                <span className={isClaimed ? "text-emerald-400 line-through opacity-80" : "text-yellow-500"}>
-                                  {m.credits.toLocaleString()}
-                                </span>
+                            <td className="px-3 py-2 text-center">{m.revisions}</td>
+                            <td className="px-3 py-2 text-center">{m.deadline}</td>
+                            <td className="px-3 py-2 text-right font-medium">
+                              <div className="flex items-center justify-end gap-1.5 text-zinc-300">
+                                <CreditIcon className="h-2.5 w-2.5 opacity-50 grayscale" />
+                                <span>{m.credits.toLocaleString()}</span>
                               </div>
                             </td>
                           </tr>
@@ -727,36 +740,57 @@ export const Contracts: React.FC = () => {
               </div>
 
               {/* IV. TERMS OF SERVICE & ESCROW */}
-              <div className="space-y-2.5">
+              <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-blue-400">
+                  <h3 className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">
                     IV. Agreed Terms of Service (TOS)
                   </h3>
-                  <span className="text-[10px] font-mono text-zinc-400 bg-white/5 border border-white/10 px-2 py-0.5 rounded-md">
+                  <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">
                     Preset: {selectedContract.freelancerTosTitle}
                   </span>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-zinc-950/60 p-4 text-xs font-mono text-zinc-300 whitespace-pre-wrap leading-relaxed">
+                <div className="border-y border-zinc-800 bg-transparent p-4 text-[9px] font-mono text-zinc-400 whitespace-pre-wrap leading-relaxed">
                   {selectedContract.freelancerTosContent}
                 </div>
               </div>
             </div>
 
-            {/* Modal Footer */}
-            <div className="flex items-center justify-between border-t border-white/10 bg-zinc-950/80 px-6 py-4">
-              <span className="text-[11px] text-zinc-500">
+            {/* Footer */}
+            <div className="flex items-center justify-between border-t border-white/5 bg-[#0a0c10] px-6 py-4">
+              <span className="text-xs text-zinc-500 hidden sm:block">
                 Press ESC or click close to exit
               </span>
-              <button
-                onClick={() => {
-                  setSelectedContract(null);
-                  navigate('/contracts');
-                }}
-                className="rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/20"
-                style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
-              >
-                Close Contract View
-              </button>
+              <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                {selectedContract.status === 'Active' && (
+                  user?.account_id === selectedContract.freelancerAccountId ? (
+                    <button
+                      onClick={() => navigate(`/dashboard/tasks/${selectedContract.id}`)}
+                      className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                    >
+                      View Tasks
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => navigate(`/dashboard/review/${selectedContract.id}`)}
+                      className="rounded-xl bg-blue-500/10 border border-blue-500/20 px-4 py-2 text-xs font-semibold text-blue-400 hover:bg-blue-500/20 transition-colors"
+                      style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                    >
+                      Review Updates
+                    </button>
+                  )
+                )}
+                <button
+                  onClick={() => {
+                    setSelectedContract(null);
+                    navigate('/contracts');
+                  }}
+                  className="rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/20"
+                  style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                >
+                  Close Contract View
+                </button>
+              </div>
             </div>
           </div>
         </div>
