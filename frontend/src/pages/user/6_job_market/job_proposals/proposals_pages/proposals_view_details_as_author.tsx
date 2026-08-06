@@ -23,13 +23,18 @@ import {
 } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
+import { JobRichText } from "../../job_components/JobRichText";
 
 import { sampleIncomingProposals, sampleSentProposals } from "../proposals_datasets";
 import { sampleJobs } from "../../job_datasets";
 import type { ProposalItemData, ProposalStatus } from "../proposals_components/proposals_list";
 import { CreditIcon } from "@/components/ui/credit-icon";
 
+import useGlobalState from "@/lib/global_state";
+import api from "@/lib/axios";
+
 export const ProposalsViewDetailsAsAuthor: React.FC = () => {
+  const { user } = useGlobalState();
   const { proposalId } = useParams<{ proposalId: string }>();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -38,6 +43,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
   const [proposal, setProposal] = useState<ProposalItemData | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [walletBalance, setWalletBalance] = useState<number>(0);
 
   // Decision Modal States
   const [isShortlistModalOpen, setIsShortlistModalOpen] = useState(false);
@@ -55,9 +61,18 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
   const [isWithdrawing, setIsWithdrawing] = useState(false);
 
   useEffect(() => {
-    const loadProposal = async () => {
+    const loadProposalAndWallet = async () => {
       if (!proposalId) return;
       setIsInitializing(true);
+      
+      try {
+        const walletRes = await api.get("/api/accounts/wallet", {
+          params: { type: 'account_wallets' },
+        });
+        setWalletBalance(walletRes.data.wallet?.balance_credits || 0);
+      } catch (err) {
+        console.error("Failed to fetch wallet", err);
+      }
       try {
         const isIncoming = true;
         const p = await fetchProposalById(proposalId);
@@ -112,8 +127,8 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
         setIsInitializing(false);
       }
     };
-    loadProposal();
-  }, [proposalId, pathname]);
+    loadProposalAndWallet();
+  }, [proposalId]);
 
   const targetJob = sampleJobs.find((j) => j.id === proposal?.jobId);
 
@@ -212,10 +227,11 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
           : null
       );
       setIsAcceptConfirmOpen(false);
-      navigate("/jobs/proposals");
-    } catch (err) {
+      // Stay on the same page instead of navigating away
+    } catch (err: any) {
       console.error("Failed to send job offer", err);
-      alert("Failed to send job offer. Check wallet balance.");
+      const msg = err.response?.data?.message || err.message || "Unknown error";
+      alert(`Failed to send job offer: ${msg}`);
     }
   };
 
@@ -519,8 +535,8 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
               <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
                 Cover Letter & Pitch Rationale
               </h3>
-              <div className="p-4 rounded-2xl border border-white/5 bg-white/[0.01] text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap break-words italic">
-                "{proposal.coverLetter}"
+              <div className="p-4 rounded-2xl border border-white/5 bg-white/[0.01]">
+                <JobRichText content={proposal.coverLetter} />
               </div>
             </div>
 
@@ -824,7 +840,10 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                   Are you sure you want to accept this proposal by <strong className="text-white">{proposal.partyName}</strong>?
                 </p>
                 <p className="text-[11px] text-zinc-400 bg-white/5 p-3 rounded-xl border border-white/5">
-                  <span className="block mb-1">Agreed Bid: <strong className="text-white text-xs">{proposal.bidAmount.toLocaleString()}</strong></span>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="block mb-1 text-zinc-400">Agreed Bid: <strong className="text-white text-xs">{proposal.bidAmount.toLocaleString()}</strong></span>
+                    <span className="block mb-1 text-zinc-400 text-[10px]">Available Balance: <strong className={walletBalance >= proposal.bidAmount ? "text-emerald-400" : "text-red-400"}>{walletBalance.toLocaleString()}</strong></span>
+                  </div>
                   Accepting will automatically form a binding escrow contract for the agreed bid across {proposal.milestones.length} milestone phases.
                 </p>
                 <div className="pt-2">

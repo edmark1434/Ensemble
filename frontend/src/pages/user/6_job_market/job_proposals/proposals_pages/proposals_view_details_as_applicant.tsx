@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
+import { JobRichText } from "../../job_components/JobRichText";
 
 import { sampleIncomingProposals, sampleSentProposals } from "../proposals_datasets";
 import { sampleJobs } from "../../job_datasets";
@@ -53,6 +54,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
   const [offerRejectReason, setOfferRejectReason] = useState("");
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Auto-open modal if contractId is present in URL
   useEffect(() => {
@@ -183,7 +185,8 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
   };
 
   const handleConfirmAccept = async () => {
-    if (!proposal || !proposal.contractId) return;
+    if (!proposal || !proposal.contractId || isProcessing) return;
+    setIsProcessing(true);
     try {
       await acceptJobOffer(proposal.contractId);
       setProposal((prev) =>
@@ -204,13 +207,17 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
       );
       setIsAcceptConfirmOpen(false);
       navigate("/jobs/proposals");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to accept offer:", error);
+      alert(error.response?.data?.message || "Failed to accept offer.");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   const handleConfirmRejectOffer = async () => {
-    if (!proposal || !proposal.contractId) return;
+    if (!proposal || !proposal.contractId || isProcessing) return;
+    setIsProcessing(true);
     try {
       await rejectContract(proposal.contractId, offerRejectReason);
       setProposal((prev) =>
@@ -232,8 +239,11 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
       setIsRejectOfferModalOpen(false);
       setIsAcceptConfirmOpen(false);
       navigate(`/jobs/proposals/sent/${proposal.id}`);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to reject offer:", error);
+      alert(error.response?.data?.message || "Failed to reject offer.");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -549,8 +559,8 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
                 Cover Letter & Pitch Rationale
               </h3>
-              <div className="p-4 rounded-2xl border border-white/5 bg-white/[0.01] text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap break-words italic">
-                "{proposal.coverLetter}"
+              <div className="p-4 rounded-2xl border border-white/5 bg-white/[0.01]">
+                <JobRichText content={proposal.coverLetter} />
               </div>
             </div>
 
@@ -570,7 +580,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
 
               <div className="space-y-3">
                 {proposal.milestones.map((m, idx) => (
-                  <div key={m.id} className="p-4 rounded-2xl border border-white/5 bg-white/[0.02] space-y-2 text-xs">
+                  <div key={m.id || idx} className="p-4 rounded-2xl border border-white/5 bg-white/[0.02] space-y-2 text-xs">
                     <div className="flex items-center justify-between font-bold text-white">
                       <span>Step {idx + 1}: {m.name}</span>
                       <span className="text-yellow-500 font-mono flex items-center">
@@ -944,14 +954,14 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                   <>
                     <button
                       onClick={() => setIsRejectOfferModalOpen(true)}
-                      disabled={loading}
+                      disabled={isProcessing}
                       className="px-5 py-2.5 rounded-xl border border-red-500/30 bg-red-500/10 text-xs font-bold text-red-400 hover:bg-red-500/20 transition disabled:opacity-50"
                     >
                       Reject Offer
                     </button>
                     <button
                       onClick={() => navigate(`/jobs/proposals/sent/${proposal.id}`)}
-                      disabled={loading}
+                      disabled={isProcessing}
                       className="px-5 py-2.5 rounded-xl border border-white/10 text-xs font-bold text-zinc-400 hover:text-white transition disabled:opacity-50"
                     >
                       Close & Review Later
@@ -960,11 +970,11 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                       onClick={async () => {
                         await handleConfirmAccept();
                       }}
-                      disabled={loading || !agreedToTerms}
-                      className="px-6 py-2.5 rounded-xl bg-emerald-500 text-xs font-bold text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed flex items-center gap-2"
+                      disabled={isProcessing || !agreedToTerms}
+                      className="px-6 py-2.5 rounded-xl bg-emerald-500 text-xs font-bold text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 flex items-center gap-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
                     >
                       <CheckCircle2 className="w-4 h-4" />
-                      {loading ? "Processing..." : "Sign & Accept Contract"}
+                      {isProcessing ? "Processing..." : "Sign & Accept Contract"}
                     </button>
                   </>
                 )}
@@ -999,17 +1009,17 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   onClick={() => setIsRejectOfferModalOpen(false)}
-                  disabled={loading}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-400 hover:text-white transition border border-white/10 hover:border-white/20 disabled:opacity-50"
+                  disabled={isProcessing}
+                  className="px-4 py-2 rounded-xl border border-white/10 text-white font-bold text-xs hover:bg-white/5 transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmRejectOffer}
-                  disabled={loading}
-                  className="px-4 py-2 rounded-xl bg-red-500 text-xs font-bold text-white hover:bg-red-600 transition disabled:opacity-50"
+                  disabled={isProcessing || !offerRejectReason.trim()}
+                  className="px-6 py-2 rounded-xl bg-red-500 hover:bg-red-400 text-white font-bold text-xs shadow-[0_0_15px_rgba(239,68,68,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {loading ? "Rejecting..." : "Reject Offer"}
+                  {isProcessing ? "Rejecting..." : "Reject Offer"}
                 </button>
               </div>
             </motion.div>
