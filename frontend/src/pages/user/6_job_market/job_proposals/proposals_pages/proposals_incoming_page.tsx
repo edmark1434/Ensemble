@@ -24,6 +24,7 @@ export const ProposalsIncomingPage: React.FC = () => {
 
   const [proposals, setProposals] = useState<any[]>([]);
   const [targetJob, setTargetJob] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const { fetchProposalsByJob, fetchJobs } = useJobs();
 
   React.useEffect(() => {
@@ -37,7 +38,9 @@ export const ProposalsIncomingPage: React.FC = () => {
           jobTitle: p.job_title || "Unknown Job",
           jobCategory: p.job_category || "Uncategorized",
           partyName: p.freelancer_name || p.freelancer_handle || "Unknown",
-          partyAvatar: p.freelancer_avatar_path ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${p.freelancer_avatar_path}` : undefined,
+          partyAvatar: p.freelancer_avatar_path
+            ? `${import.meta.env.VITE_CLOUDFRONT_URL}${p.freelancer_avatar_path.startsWith('/') ? '' : '/'}${p.freelancer_avatar_path}`
+            : undefined,
           bidAmount: parseFloat(p.rate_credits) || 0,
           additionalWorkRate: parseFloat(p.revision_price_credits) || 0,
           status: p.status,
@@ -57,10 +60,13 @@ export const ProposalsIncomingPage: React.FC = () => {
         }
       } catch (err) {
         console.error("Failed to load incoming proposals", err);
+      } finally {
+        setIsLoading(false);
       }
     };
     loadData();
-  }, [jobPostId, fetchProposalsByJob, fetchJobs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobPostId]);
 
   const handleUpdateStatus = (
     id: string,
@@ -119,6 +125,33 @@ export const ProposalsIncomingPage: React.FC = () => {
       if (dateSort === "dec") return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
       return 0;
     });
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 space-y-4">
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-zinc-400 text-sm animate-pulse">Loading incoming proposals...</p>
+      </div>
+    );
+  }
+
+  if (proposals.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 space-y-4 text-center">
+        <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-2">
+          <Briefcase className="h-8 w-8 text-blue-400" />
+        </div>
+        <h3 className="text-lg font-bold text-white">No Proposals Received Yet</h3>
+        <p className="text-xs text-zinc-400 max-w-sm">You haven't received any proposals for this job post yet, or you haven't created a job post.</p>
+        <button
+          onClick={() => navigate('/jobs/create')}
+          className="mt-4 px-6 py-2.5 rounded-xl bg-blue-500 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20"
+        >
+          Create a Job Post
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 text-left">

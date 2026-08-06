@@ -92,6 +92,20 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
             />
           </div>
           {errors.bidAmount && <p className="text-[11px] text-red-400">{errors.bidAmount}</p>}
+          
+          {/* Platform Fee Indicator */}
+          {bidAmount && Number(bidAmount) > 0 && (
+            <div className="pt-2 space-y-1.5">
+              <div className="flex justify-between items-center text-[10px] text-zinc-500">
+                <span>10% Platform Fee</span>
+                <span>- ₱{formatCommaString(String(Number(bidAmount) * 0.10))}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs font-bold text-emerald-400">
+                <span>Your Net Earnings</span>
+                <span>₱{formatCommaString(String(Number(bidAmount) * 0.90))}</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Additional Work Rate Dropdown */}

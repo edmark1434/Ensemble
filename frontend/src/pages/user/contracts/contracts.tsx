@@ -201,7 +201,7 @@ export const Contracts: React.FC = () => {
             totalValueCredits: parseFloat(c.rate_credits) || 0,
             platformFeePercent: 10,
             jobDescription: c.job_description || "No description provided.",
-            addOnRate: "N/A",
+            addOnRate: c.additional_work_rate ? `+${c.additional_work_rate}% / Revision` : "N/A",
             freelancerTosTitle: c.terms_title || "Standard Terms",
             freelancerTosContent: c.terms_content || "Standard terms apply.",
             milestones: (c.milestones || []).filter(Boolean).map((m: any) => ({

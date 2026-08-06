@@ -20,6 +20,14 @@ async function updateJobServices(jobId, accountId, jobData) {
     return updated;
 }
 
+async function deleteJobServices(jobId, accountId) {
+    const deleted = await JobRepositories.deleteJobRepositories(jobId, accountId);
+    if (!deleted) {
+        throw new Error('Job not found or you do not have permission to delete it.');
+    }
+    return deleted;
+}
+
 async function createProposalServices(proposalData) {
     if (!proposalData.job_id || !proposalData.rate_credits) {
         throw new Error('Job ID and rate are required.');
@@ -80,5 +88,6 @@ module.exports = {
     withdrawProposalServices,
     updateProposalStatusServices,
     getTermsOfServiceServices,
-    toggleJobSaveServices
+    toggleJobSaveServices,
+    deleteJobServices
 };

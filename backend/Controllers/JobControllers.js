@@ -42,6 +42,20 @@ async function updateJobController(req, res) {
     }
 }
 
+async function deleteJobController(req, res) {
+    try {
+        const accountId = req.user?.account_id;
+        const { jobId } = req.params;
+        if (!accountId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+        await JobServices.deleteJobServices(jobId, accountId);
+        res.status(200).json({ success: true, message: 'Job successfully deleted.' });
+    } catch (err) {
+        console.error('Error in deleteJobController:', err);
+        res.status(400).json({ success: false, message: err.message || 'Internal Server Error' });
+    }
+}
+
 async function createProposalController(req, res) {
     try {
         const accountId = req.user?.account_id;
@@ -161,5 +175,6 @@ module.exports = {
     withdrawProposalController,
     updateProposalStatusController,
     getTermsOfServiceController,
-    toggleJobSaveController
+    toggleJobSaveController,
+    deleteJobController
 };

@@ -69,9 +69,13 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
             jobTitle: p.job_title || "Unknown Job",
             partyName: (isIncoming ? p.freelancer_name || p.freelancer_handle : p.client_name || p.client_handle) || "Unknown",
             clientName: p.client_name || p.client_handle || "Unknown Client",
-            clientAvatar: p.client_avatar_path ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${p.client_avatar_path}` : undefined,
+            clientAvatar: p.client_avatar_path
+              ? `${import.meta.env.VITE_CLOUDFRONT_URL}${p.client_avatar_path.startsWith('/') ? '' : '/'}${p.client_avatar_path}`
+              : undefined,
             freelancerName: p.freelancer_name || p.freelancer_handle || "Unknown Freelancer",
-            freelancerAvatar: p.freelancer_avatar_path ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${p.freelancer_avatar_path}` : undefined,
+            freelancerAvatar: p.freelancer_avatar_path
+              ? `${import.meta.env.VITE_CLOUDFRONT_URL}${p.freelancer_avatar_path.startsWith('/') ? '' : '/'}${p.freelancer_avatar_path}`
+              : undefined,
             rating: 5.0, // Default since we don't fetch real rating yet
             bidAmount: parseFloat(p.rate_credits) || 0,
             additionalWorkRate: parseFloat(p.revision_price_credits) || 0,
@@ -515,7 +519,7 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
               <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
                 Cover Letter & Pitch Rationale
               </h3>
-              <div className="p-4 rounded-2xl border border-white/5 bg-white/[0.01] text-xs text-zinc-300 leading-relaxed whitespace-pre-line italic">
+              <div className="p-4 rounded-2xl border border-white/5 bg-white/[0.01] text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap break-words italic">
                 "{proposal.coverLetter}"
               </div>
             </div>
