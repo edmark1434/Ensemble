@@ -71,6 +71,7 @@ export interface RenderPayload extends IDesign {
   resolution: number;
   fps: number;
   bitrate: number | null;
+  currentTime?: number; // ms
 }
 
 export const useDownloadState = create<DownloadState>((set, get) => ({
@@ -109,7 +110,7 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
           ? DEFAULT_AUDIO_BITRATE_KBPS
           : type === "video"
             ? getDefaultVideoBitrateKbps(compositionWidth, compositionHeight, resolution, fps)
-            : 0;
+            : null;
       set({ type, format, resolution, fps, bitrate });
     },
     setFormat: (format) => {

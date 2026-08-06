@@ -544,7 +544,7 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
 
   if (!loaded) {
     return (
-      <div className="fixed top-0 left-0 z-50 flex h-screen w-screen flex-col items-center justify-center gap-4 bg-card">
+      <div className="fixed top-0 left-0 z-50 flex h-screen w-screen items-center justify-center gap-4 bg-card">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="text-sm text-muted-foreground">Loading...</p>
       </div>
