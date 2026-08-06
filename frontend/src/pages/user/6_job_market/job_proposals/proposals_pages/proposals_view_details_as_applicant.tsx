@@ -34,7 +34,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
   const { proposalId, contractId } = useParams<{ proposalId: string, contractId?: string }>();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { fetchProposalById, withdrawProposal, acceptJobOffer, loading } = useJobs();
+  const { fetchProposalById, withdrawProposal, acceptJobOffer, rejectContract, loading } = useJobs();
 
   const [proposal, setProposal] = useState<ProposalItemData | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -49,6 +49,8 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
 
   const [isAcceptConfirmOpen, setIsAcceptConfirmOpen] = useState(!!contractId);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [isRejectOfferModalOpen, setIsRejectOfferModalOpen] = useState(false);
+  const [offerRejectReason, setOfferRejectReason] = useState("");
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [isWithdrawing, setIsWithdrawing] = useState(false);
 
@@ -78,9 +80,13 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             jobTitle: p.job_title || "Unknown Job",
             partyName: (isIncoming ? p.freelancer_name || p.freelancer_handle : p.client_name || p.client_handle) || "Unknown",
             clientName: p.client_name || p.client_handle || "Unknown Client",
-            clientAvatar: p.client_avatar_path ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${p.client_avatar_path}` : undefined,
+            clientAvatar: p.client_avatar_path
+              ? `${import.meta.env.VITE_CLOUDFRONT_URL}${p.client_avatar_path.startsWith('/') ? '' : '/'}${p.client_avatar_path}`
+              : undefined,
             freelancerName: p.freelancer_name || p.freelancer_handle || "Unknown Freelancer",
-            freelancerAvatar: p.freelancer_avatar_path ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${p.freelancer_avatar_path}` : undefined,
+            freelancerAvatar: p.freelancer_avatar_path
+              ? `${import.meta.env.VITE_CLOUDFRONT_URL}${p.freelancer_avatar_path.startsWith('/') ? '' : '/'}${p.freelancer_avatar_path}`
+              : undefined,
             rating: 5.0, // Default since we don't fetch real rating yet
             bidAmount: parseFloat(p.rate_credits) || 0,
             additionalWorkRate: parseFloat(p.revision_price_credits) || 0,
@@ -91,6 +97,8 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             submittedAt: new Date(p.created_at).toLocaleDateString(),
             submittedAgo: "Recently",
             jobPostedAt: p.job_created_at ? new Date(p.job_created_at).toLocaleDateString() : "N/A",
+            jobStatus: p.job_status,
+            jobDeletedAt: p.job_deleted_at,
             status: p.status,
             type: isIncoming ? "incoming" : "sent",
             rejectionReason: p.reject_reason,
@@ -176,10 +184,8 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
 
   const handleConfirmAccept = async () => {
     if (!proposal || !proposal.contractId) return;
-
     try {
       await acceptJobOffer(proposal.contractId);
-      
       setProposal((prev) =>
         prev
           ? {
@@ -198,9 +204,36 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
       );
       setIsAcceptConfirmOpen(false);
       navigate("/jobs/proposals");
-    } catch (err) {
-      console.error("Failed to accept contract", err);
-      alert("Failed to accept contract.");
+    } catch (error) {
+      console.error("Failed to accept offer:", error);
+    }
+  };
+
+  const handleConfirmRejectOffer = async () => {
+    if (!proposal || !proposal.contractId) return;
+    try {
+      await rejectContract(proposal.contractId, offerRejectReason);
+      setProposal((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: "Pending",
+              updatedAt: new Date().toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+                hour: "numeric",
+                minute: "numeric",
+              }),
+              updatedAgo: "Just now",
+            }
+          : null
+      );
+      setIsRejectOfferModalOpen(false);
+      setIsAcceptConfirmOpen(false);
+      navigate(`/jobs/proposals/sent/${proposal.id}`);
+    } catch (error) {
+      console.error("Failed to reject offer:", error);
     }
   };
 
@@ -274,6 +307,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
     milestonePayout * (proposal.additionalWorkRate / 100)
   );
   const totalHours = proposal.milestones.reduce((acc, m) => acc + m.hours, 0);
+  const isJobDeleted = proposal?.jobStatus === "Deleted" || !!proposal?.jobDeletedAt;
 
   return (
     <div className="relative w-full min-h-screen bg-[#080a12] text-white overflow-x-hidden pt-6 pb-16">
@@ -296,6 +330,17 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
         transition={{ duration: 0.3 }}
         className="relative z-10 mx-auto max-w-6xl p-6 md:p-8 w-full space-y-6 text-left"
       >
+        {/* Deleted Job Post Banner */}
+        {isJobDeleted && (
+          <div className="px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-3 shadow-lg shadow-red-500/5 mb-4">
+            <ShieldAlert className="h-5 w-5 text-red-400 flex-shrink-0" />
+            <div className="flex-1">
+              <h4 className="text-sm font-bold text-red-400">This Job Post has been deleted.</h4>
+              <p className="text-[11px] text-red-400/80 mt-0.5">The client has removed this job post. Your proposal has been archived.</p>
+            </div>
+          </div>
+        )}
+
         {/* Navigation Bar */}
         <div className="flex items-center justify-between gap-4">
           <button
@@ -658,17 +703,21 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
           {/* Actions Bar for Freelancer (Applicant) */}
           {proposal.type === "sent" && (
             <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
-              {proposal.status === "Approved" || proposal.status === "Hired" ? (
+              {proposal.status === "Approved" ? (
                 <button
-                  onClick={() => {
-                    navigate(`/jobs/proposals/sent/${proposal.id}/offer/${proposal.contractId}`);
-                  }}
+                  onClick={() => navigate(`/jobs/proposals/sent/${proposal.id}/offer/${proposal.contractId}`)}
+                  className="group relative flex items-center gap-2 overflow-hidden rounded-xl bg-blue-500 px-4 py-2.5 text-xs font-bold text-white transition-all duration-300 hover:bg-blue-600 hover:shadow-lg hover:shadow-blue-500/20"
+                >
+                  <FileText className="h-4 w-4 shrink-0" />
+                  <span className="whitespace-nowrap max-w-[120px]">Review & Accept Offer</span>
+                </button>
+              ) : proposal.status === "Hired" ? (
+                <button
+                  onClick={() => navigate(`/contracts/${proposal.contractId}`)}
                   className="group relative flex items-center gap-2 overflow-hidden rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-bold text-white transition-all duration-300 hover:bg-emerald-600 hover:shadow-lg hover:shadow-emerald-500/20"
                 >
                   <FileText className="h-4 w-4 shrink-0" />
-                  <span className="whitespace-nowrap max-w-[120px]">
-                    View Contract
-                  </span>
+                  <span className="whitespace-nowrap max-w-[120px]">View Contract</span>
                 </button>
               ) : proposal.status === "Pending" ? (
                 <button
@@ -681,10 +730,6 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                     <span className="hidden group-hover:inline">Withdraw Proposal</span>
                   </span>
                 </button>
-              ) : proposal.status === "Hired" ? (
-                <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 rounded-xl">
-                  <CheckCircle2 className="h-4 w-4" /> Contract Formed and Active in Escrow
-                </div>
               ) : null}
             </div>
           )}
@@ -829,46 +874,142 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 </div>
               </div>
 
-              {/* Agreement Checkbox */}
-              <div className="pt-2">
-                <label className="flex items-start gap-3 cursor-pointer group">
-                  <div className="relative flex items-center justify-center mt-0.5">
-                    <input
-                      type="checkbox"
-                      className="peer sr-only"
-                      checked={agreedToTerms}
-                      onChange={(e) => setAgreedToTerms(e.target.checked)}
-                    />
-                    <div className="w-5 h-5 rounded border-2 border-white/20 bg-white/5 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-all flex items-center justify-center group-hover:border-emerald-400">
-                      <Check className={`w-3.5 h-3.5 text-white transition-opacity ${agreedToTerms ? 'opacity-100' : 'opacity-0'}`} strokeWidth={3} />
+              {/* Agreement Checkbox or Accepted State */}
+              {proposal.status === "Hired" ? (
+                <div className="pt-2">
+                  <div className="p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 flex items-center justify-between text-emerald-400">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2 className="w-5 h-5" />
+                      <span className="text-sm font-bold">You have already accepted this contract</span>
                     </div>
                   </div>
-                  <div className="text-xs text-zinc-300 leading-relaxed flex-1">
-                    <strong className="text-white block mb-0.5">I Agree to Platform Terms</strong>
-                    I acknowledge that clicking accept forms a legally binding agreement. Escrow funds for the agreed bid will be locked into the contract, and work is expected to commence as per the stated scope and terms.
+                </div>
+              ) : proposal.status === "Pending" ? (
+                <div className="pt-2">
+                  <div className="p-4 rounded-xl border border-red-500/20 bg-red-500/10 flex items-center justify-between text-red-400">
+                    <div className="flex items-center gap-3">
+                      <XCircle className="w-5 h-5" />
+                      <span className="text-sm font-bold">You have rejected this contract offer</span>
+                    </div>
                   </div>
-                </label>
-              </div>
+                </div>
+              ) : (
+                <div className="pt-2">
+                  <label className="flex items-start gap-3 cursor-pointer group">
+                    <div className="relative flex items-center justify-center mt-0.5">
+                      <input
+                        type="checkbox"
+                        className="peer sr-only"
+                        checked={agreedToTerms}
+                        onChange={(e) => setAgreedToTerms(e.target.checked)}
+                      />
+                      <div className="w-5 h-5 rounded border-2 border-white/20 bg-white/5 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-all flex items-center justify-center group-hover:border-emerald-400">
+                        <Check className={`w-3.5 h-3.5 text-white transition-opacity ${agreedToTerms ? 'opacity-100' : 'opacity-0'}`} strokeWidth={3} />
+                      </div>
+                    </div>
+                    <div className="text-xs text-zinc-300 leading-relaxed flex-1">
+                      <strong className="text-white block mb-0.5">I Agree to Platform Terms</strong>
+                      I acknowledge that clicking accept forms a legally binding agreement. Escrow funds for the agreed bid will be locked into the contract, and work is expected to commence as per the stated scope and terms.
+                    </div>
+                  </label>
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+                {proposal.status === "Hired" ? (
+                  <>
+                    <button
+                      onClick={() => navigate(`/jobs/proposals/sent/${proposal.id}`)}
+                      className="px-5 py-2.5 rounded-xl border border-white/10 text-xs font-bold text-zinc-400 hover:text-white transition"
+                    >
+                      Return to Proposal
+                    </button>
+                    <button
+                      onClick={() => navigate(`/contracts/${proposal.contractId}`)}
+                      className="px-6 py-2.5 rounded-xl bg-emerald-500 text-xs font-bold text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 flex items-center gap-2"
+                    >
+                      <FileText className="w-4 h-4" />
+                      View Contract
+                    </button>
+                  </>
+                ) : proposal.status === "Pending" ? (
+                  <button
+                    onClick={() => navigate(`/jobs/proposals/sent/${proposal.id}`)}
+                    className="px-5 py-2.5 rounded-xl border border-white/10 text-xs font-bold text-zinc-400 hover:text-white transition"
+                  >
+                    Return to Proposal
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setIsRejectOfferModalOpen(true)}
+                      disabled={loading}
+                      className="px-5 py-2.5 rounded-xl border border-red-500/30 bg-red-500/10 text-xs font-bold text-red-400 hover:bg-red-500/20 transition disabled:opacity-50"
+                    >
+                      Reject Offer
+                    </button>
+                    <button
+                      onClick={() => navigate(`/jobs/proposals/sent/${proposal.id}`)}
+                      disabled={loading}
+                      className="px-5 py-2.5 rounded-xl border border-white/10 text-xs font-bold text-zinc-400 hover:text-white transition disabled:opacity-50"
+                    >
+                      Close & Review Later
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await handleConfirmAccept();
+                      }}
+                      disabled={loading || !agreedToTerms}
+                      className="px-6 py-2.5 rounded-xl bg-emerald-500 text-xs font-bold text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      {loading ? "Processing..." : "Sign & Accept Contract"}
+                    </button>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* 6. REJECT OFFER MODAL */}
+        {isRejectOfferModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0d0f1a] p-6 shadow-2xl space-y-4 text-left"
+            >
+              <div className="flex items-center gap-3 text-red-400 pb-2 border-b border-white/5">
+                <XCircle className="h-6 w-6" />
+                <h3 className="text-lg font-bold">Reject Contract Offer</h3>
+              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                You are about to reject this contract offer. You can optionally provide a reason to the client so they can send a revised offer.
+              </p>
+              <textarea
+                value={offerRejectReason}
+                onChange={(e) => setOfferRejectReason(e.target.value)}
+                placeholder="Optional: Please adjust the timeline..."
+                rows={3}
+                className="w-full rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white outline-none focus:border-red-500/50"
+              />
+              <div className="flex justify-end gap-3 pt-2">
                 <button
-                  onClick={() => navigate(`/jobs/proposals/sent/${proposal.id}`)}
+                  onClick={() => setIsRejectOfferModalOpen(false)}
                   disabled={loading}
-                  className="px-5 py-2.5 rounded-xl border border-white/10 text-xs font-bold text-zinc-400 hover:text-white transition disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-400 hover:text-white transition border border-white/10 hover:border-white/20 disabled:opacity-50"
                 >
-                  Close & Review Later
+                  Cancel
                 </button>
                 <button
-                  onClick={async () => {
-                    await handleConfirmAccept();
-                    navigate(`/jobs/proposals/sent/${proposal.id}`);
-                  }}
-                  disabled={loading || !agreedToTerms}
-                  className="px-6 py-2.5 rounded-xl bg-emerald-500 text-xs font-bold text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed flex items-center gap-2"
+                  onClick={handleConfirmRejectOffer}
+                  disabled={loading}
+                  className="px-4 py-2 rounded-xl bg-red-500 text-xs font-bold text-white hover:bg-red-600 transition disabled:opacity-50"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
-                  {loading ? "Processing..." : "Sign & Accept Contract"}
+                  {loading ? "Rejecting..." : "Reject Offer"}
                 </button>
               </div>
             </motion.div>
