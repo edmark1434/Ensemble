@@ -69,8 +69,37 @@ async function getContractsController(req, res) {
     }
 }
 
+async function rejectJobOfferController(req, res) {
+    try {
+        const freelancerId = req.user.account_id || req.user.accountId;
+        const { contractId } = req.params;
+        const { reason } = req.body;
+
+        if (!contractId) {
+            return res.status(400).json({ success: false, message: 'Contract ID is required' });
+        }
+
+        const result = await ContractRepositories.rejectJobOffer(freelancerId, contractId, reason);
+
+        return res.status(200).json({
+            success: true,
+            message: 'Job offer rejected successfully',
+            data: result
+        });
+    } catch (error) {
+        console.error("Error in rejectJobOfferController:", error);
+        
+        if (error.message === "Contract not found or not pending signature for this user") {
+            return res.status(400).json({ success: false, message: error.message });
+        }
+
+        return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+}
+
 module.exports = {
     sendJobOfferController,
     acceptJobOfferController,
+    rejectJobOfferController,
     getContractsController
 };
