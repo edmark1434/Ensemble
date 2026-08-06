@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef, type FormEvent, type ChangeEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Save, X, ChevronDown, Check, CircleDollarSign, Briefcase, Lock, Image as ImageIcon, Info, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, X, ChevronDown, Check, Briefcase, Lock, Image as ImageIcon, Info, Plus, Trash2 } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
 import PopupConfirmReturn from "../job_components/job_popups/popup_confirm_return";
 import CreationSuccess from "../job_components/job_creation_components/4_creation_success";
 import { categories, difficulties } from "../job_components/job_creation_components/1_create_coreinfo";
 import type { Job } from "../job_components/job_lists";
+import { CreditIcon } from "@/components/ui/credit-icon";
 
 interface CustomSelectProps {
   label: string;
@@ -145,7 +146,7 @@ export const JobEditPostPage: React.FC = () => {
           setCategory(found.category);
           setDifficulty(found.experience_level || "Intermediate");
           setSkills(found.tags || []);
-          setPriceRange(`₱${found.rate_credits_min?.toLocaleString() || 0} ~ ₱${found.rate_credits_max?.toLocaleString() || 0}`);
+          setPriceRange(`${found.rate_credits_min?.toLocaleString() || 0} ~ ${found.rate_credits_max?.toLocaleString() || 0}`);
           setPositionsNeeded(found.no_of_hires || 1);
           setHiredCount(parseInt(found.hired_count) || 0);
           if (found.thumbnail_path) {
@@ -336,7 +337,7 @@ export const JobEditPostPage: React.FC = () => {
           <div className="p-3.5 rounded-2xl border border-white/5 bg-white/[0.02] grid grid-cols-1 md:grid-cols-2 gap-3 text-xs mb-2">
             <div className="flex items-center gap-2.5 text-zinc-400">
               <div className="p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 shrink-0">
-                <CircleDollarSign className="h-4 w-4" />
+                <CreditIcon className="h-4 w-4" />
               </div>
               <div>
                 <span className="text-[10px] uppercase font-bold text-zinc-500 flex items-center gap-1">

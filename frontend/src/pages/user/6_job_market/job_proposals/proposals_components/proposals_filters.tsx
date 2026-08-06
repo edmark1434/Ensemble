@@ -50,7 +50,7 @@ export const ProposalsFilters: React.FC<ProposalsFiltersProps> = ({
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-            Escrow Bid Range (₱)
+            Escrow Bid Range (Credits)
           </label>
           <div className="flex gap-1 bg-white/5 p-0.5 rounded-lg border border-white/5">
             <button

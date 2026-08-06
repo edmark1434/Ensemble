@@ -251,6 +251,8 @@ async function getContractsByUserId(accountId) {
             j.job_id,
             j.title as job_title,
             j.description as job_description,
+            j.rate_credits_min,
+            j.rate_credits_max,
             p.revision_price_credits as additional_work_rate,
             client_acc.display_name as client_name,
             client_acc.handle as client_handle,

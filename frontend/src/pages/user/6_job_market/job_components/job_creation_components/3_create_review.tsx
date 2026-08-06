@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { Check, CircleDollarSign, User, Users, ChevronDown } from "lucide-react";
+import { Check, User, Users, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { CreditIcon } from "@/components/ui/credit-icon";
 
 export const sampleUserTeams = [
   { id: "team-01", name: "Alpha Developers Lab" },
@@ -208,8 +209,8 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
           <div className="p-3 rounded-xl border border-yellow-500/10 bg-yellow-500/5 flex items-center justify-between">
             <span className="text-zinc-400 text-[11px] font-semibold">Budget Pool Range</span>
             <span className="text-sm font-extrabold text-yellow-500 flex items-center gap-1.5">
-              <CircleDollarSign className="h-4 w-4 shrink-0 text-yellow-500" />
-              ₱{formatCommaString(minBudget)} ~ ₱{formatCommaString(maxBudget)}
+              <CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />
+              {formatCommaString(minBudget)} ~ {formatCommaString(maxBudget)}
             </span>
           </div>
 

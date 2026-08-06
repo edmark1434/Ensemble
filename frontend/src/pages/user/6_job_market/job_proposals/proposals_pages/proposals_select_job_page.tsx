@@ -1,10 +1,11 @@
 import React from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ClipboardList, ChevronRight, Calendar, CircleDollarSign } from "lucide-react";
+import { ClipboardList, ChevronRight, Calendar } from "lucide-react";
 import type { ProposalsMainContext } from "../proposals_main";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
+import { CreditIcon } from "@/components/ui/credit-icon";
 
 export const SelectJobCardSkeleton: React.FC = () => (
   <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/40 overflow-hidden animate-pulse space-y-4 flex flex-col justify-between">
@@ -155,7 +156,7 @@ export const ProposalsSelectJobPage: React.FC = () => {
                   <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5">
                     <span className="text-[9px] font-bold text-zinc-500 uppercase block">Budget Pool</span>
                     <span className="font-extrabold text-yellow-500 flex items-center gap-1 text-xs mt-0.5">
-                      <CircleDollarSign className="h-3.5 w-3.5" /> ₱{job.priceRange}
+                      <CreditIcon className="h-3.5 w-3.5" /> {job.priceRange}
                     </span>
                   </div>
 

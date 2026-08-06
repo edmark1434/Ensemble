@@ -1,7 +1,8 @@
 import React from "react";
-import { Calendar, Clock, Briefcase, Users, Star, Send, CircleDollarSign, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw, FileText } from "lucide-react";
+import { Calendar, Clock, Briefcase, Users, Star, Send, MousePointerClick, User, Edit2, Flag, Wrench, RefreshCw, FileText } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Job } from "./job_lists";
+import { CreditIcon } from "@/components/ui/credit-icon";
 
 interface JobViewDetailsProps {
   selectedJob: Job | null;
@@ -114,7 +115,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                     Budget Range
                   </p>
                   <p className="text-lg font-extrabold text-yellow-500 flex items-center gap-1.5">
-                    <CircleDollarSign className="h-5 w-5 text-yellow-500 shrink-0" />
+                    <CreditIcon className="h-5 w-5 text-yellow-500 shrink-0" />
                     <span>{selectedJob.priceRange}</span>
                   </p>
                 </div>

@@ -12,7 +12,6 @@ import {
   AlertCircle,
   Archive,
   User,
-  CircleDollarSign,
   FileText,
   Calendar,
   X,
@@ -20,6 +19,7 @@ import {
   Lock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { CreditIcon } from "@/components/ui/credit-icon";
 
 export type ContractType = "Job" | "Gig";
 export type ContractStatus = "Active" | "Waiting" | "Done" | "Cancelled";
@@ -197,7 +197,9 @@ export const Contracts: React.FC = () => {
             isArchived: c.status === 'Done' || c.status === 'Cancelled',
             dateCreated: new Date(c.created_at).toLocaleDateString(),
             dateStarted: c.starts_at ? new Date(c.starts_at).toLocaleDateString() : undefined,
-            clientRange: "Fixed Price",
+            clientRange: (c.rate_credits_min && c.rate_credits_max) 
+              ? `${parseFloat(c.rate_credits_min).toLocaleString()} ~ ${parseFloat(c.rate_credits_max).toLocaleString()}` 
+              : "Fixed Price",
             totalValueCredits: parseFloat(c.rate_credits) || 0,
             platformFeePercent: 10,
             jobDescription: c.job_description || "No description provided.",
@@ -447,7 +449,7 @@ export const Contracts: React.FC = () => {
 
                               {/* Credits Display */}
                               <div className="mt-1.5 flex items-center gap-1 text-xs font-extrabold text-yellow-500">
-                                <CircleDollarSign className="h-3.5 w-3.5 text-yellow-500" />
+                                <CreditIcon className="h-3.5 w-3.5 text-yellow-500" />
                                 <span>{contract.totalValueCredits.toLocaleString()} Credits</span>
                               </div>
                             </div>
@@ -585,7 +587,7 @@ export const Contracts: React.FC = () => {
                   <p className="text-lg font-bold text-white flex items-center justify-center gap-2">
                     Total Contract Value:
                     <span className="text-yellow-500 font-extrabold flex items-center gap-1">
-                      <CircleDollarSign className="h-4 w-4 text-yellow-500" />
+                      <CreditIcon className="h-4 w-4 text-yellow-500" />
                       {selectedContract.totalValueCredits.toLocaleString()} Credits
                     </span>
                   </p>
@@ -594,14 +596,14 @@ export const Contracts: React.FC = () => {
                     <div className="flex justify-between items-center">
                       <span>Client Range:</span>
                       <span className="text-yellow-500/80 flex items-center gap-1">
-                        <CircleDollarSign className="h-3 w-3 text-yellow-500/80" />
+                        <CreditIcon className="h-3 w-3 text-yellow-500/80" />
                         {selectedContract.clientRange}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span>Freelancer Bid:</span>
                       <span className="text-yellow-500 flex items-center gap-1">
-                        <CircleDollarSign className="h-3 w-3 text-yellow-500" />
+                        <CreditIcon className="h-3 w-3 text-yellow-500" />
                         {selectedContract.totalValueCredits.toLocaleString()}
                       </span>
                     </div>
@@ -612,7 +614,7 @@ export const Contracts: React.FC = () => {
                     <div className="flex justify-between items-center font-bold text-yellow-500 border-t border-white/10 pt-1.5">
                       <span>Freelancer Net:</span>
                       <span className="flex items-center gap-1">
-                        <CircleDollarSign className="h-3.5 w-3.5 text-yellow-500" />
+                        <CreditIcon className="h-3.5 w-3.5 text-yellow-500" />
                         {Math.floor(selectedContract.totalValueCredits * 0.8).toLocaleString()}
                       </span>
                     </div>
@@ -706,7 +708,7 @@ export const Contracts: React.FC = () => {
                             <td className="p-3 text-center font-mono">{m.deadline}</td>
                             <td className="p-3 text-right font-bold font-mono">
                               <div className="flex items-center justify-end gap-1">
-                                <CircleDollarSign
+                                <CreditIcon
                                   className={`h-3.5 w-3.5 ${
                                     isClaimed ? "text-emerald-400" : "text-yellow-500"
                                   }`}

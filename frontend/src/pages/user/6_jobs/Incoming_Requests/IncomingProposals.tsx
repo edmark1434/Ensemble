@@ -38,14 +38,14 @@ const sampleMyJobsProposals: MyJobWithProposals[] = [
     id: "JP001",
     title: "Wedding Video Edit - Romantic Style",
     category: "Events",
-    priceRange: "₱28,000 ~ 36,000",
+    priceRange: "28,000 ~ 36,000",
     thumbnail: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80",
     proposals: [
       {
         id: "PROP-101",
         freelancerName: "Rexshimura Dev",
         freelancerRating: 4.9,
-        bidAmount: "₱32,000",
+        bidAmount: "32,000",
         deliveryTimeline: "4 Days",
         coverLetter: "Greetings! I specialize in narrative wedding editing and high-end cinematic color grading. I work exclusively with 4K log profiles and can easily manage your 50GB footage footprint. I use a dedicated high-speed scratch disk setup for fast render turnarounds. Let's collaborate!",
         submittedAt: "1 hour ago"
@@ -54,7 +54,7 @@ const sampleMyJobsProposals: MyJobWithProposals[] = [
         id: "PROP-102",
         freelancerName: "Charlyn Shaw",
         freelancerRating: 4.7,
-        bidAmount: "₱30,000",
+        bidAmount: "30,000",
         deliveryTimeline: "3 Days",
         coverLetter: "Hi there! I love your project timeline and description. I've edited over 15 wedding highlight reels over the past year. I excel at rhythmic dynamic audio syncing and building an emotional arc through sound design. Happy to send over past portfolio samples.",
         submittedAt: "5 hours ago"
@@ -65,14 +65,14 @@ const sampleMyJobsProposals: MyJobWithProposals[] = [
     id: "JP002",
     title: "YouTube Channel Intro Animation",
     category: "YouTube",
-    priceRange: "₱12,000 ~ 14,000",
+    priceRange: "12,000 ~ 14,000",
     thumbnail: "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?auto=format&fit=crop&w=600&q=80",
     proposals: [
       {
         id: "PROP-201",
         freelancerName: "Dave Almeda",
         freelancerRating: 4.5,
-        bidAmount: "₱13,500",
+        bidAmount: "13,500",
         deliveryTimeline: "2 Days",
         coverLetter: "Hey! Clean typography and slick sound effects are my bread and butter. I will deliver the intro in full After Effects source file formats along with pre-rendered transparent alpha channels.",
         submittedAt: "Yesterday"

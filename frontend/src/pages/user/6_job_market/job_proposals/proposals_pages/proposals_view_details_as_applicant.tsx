@@ -3,7 +3,6 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
-  CircleDollarSign,
   Calendar,
   Clock,
   Briefcase,
@@ -29,6 +28,7 @@ import { useJobs } from "@/hooks/useJobs";
 import { sampleIncomingProposals, sampleSentProposals } from "../proposals_datasets";
 import { sampleJobs } from "../../job_datasets";
 import type { ProposalItemData, ProposalStatus } from "../proposals_components/proposals_list";
+import { CreditIcon } from "@/components/ui/credit-icon";
 
 export const ProposalsViewDetailsAsApplicant: React.FC = () => {
   const { proposalId, contractId } = useParams<{ proposalId: string, contractId?: string }>();
@@ -524,7 +524,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 <div>
                   <span className="text-[10px] font-bold text-zinc-500 uppercase block">Proposed Bid</span>
                   <p className="text-base font-extrabold text-yellow-500 flex items-center gap-1 mt-0.5">
-                    <CircleDollarSign className="h-4 w-4" /> ₱{proposal.bidAmount.toLocaleString()}
+                    <CreditIcon className="h-4 w-4" /> {proposal.bidAmount.toLocaleString()}
                   </p>
                 </div>
 
@@ -574,7 +574,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                     <div className="flex items-center justify-between font-bold text-white">
                       <span>Step {idx + 1}: {m.name}</span>
                       <span className="text-yellow-500 font-mono flex items-center">
-                        <CircleDollarSign className="h-3.5 w-3.5 text-yellow-500 inline mr-1 shrink-0" />
+                        <CreditIcon className="h-3.5 w-3.5 text-yellow-500 inline mr-1 shrink-0" />
                         {milestonePayout.toLocaleString()}
                       </span>
                     </div>
@@ -589,7 +589,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                       <span className="flex items-center gap-1">
                         Added Overage Rate:
                         <strong className="text-yellow-500 font-mono flex items-center">
-                          +<CircleDollarSign className="h-3 w-3 text-yellow-500 inline mx-0.5 shrink-0" />
+                          +<CreditIcon className="h-3 w-3 text-yellow-500 inline mx-0.5 shrink-0" />
                           {addedOverageAmount.toLocaleString()} (+{proposal.additionalWorkRate}%)
                         </strong>
                       </span>
@@ -853,7 +853,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                         <tfoot className="border-t border-white/10 bg-black/20">
                           <tr>
                             <td className="px-4 py-3 text-xs font-bold text-white" colSpan={3}>
-                              Agreed Bid Amount: <span className="text-emerald-400">₱{proposal.bidAmount.toLocaleString()}</span>
+                              Agreed Bid Amount: <span className="text-emerald-400">{proposal.bidAmount.toLocaleString()}</span>
                             </td>
                           </tr>
                         </tfoot>

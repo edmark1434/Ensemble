@@ -41,7 +41,7 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
     {
       name: "Business",
       tagline: "Business monthly membership",
-      price: "₱350,000 /mo",
+      price: "350,000 /mo",
       current: subscription.plan_name?.toLowerCase().includes("business"),
       features: [
         { label: "Maximum export quality", val: "2K-4K" },
@@ -59,7 +59,7 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
     {
       name: "Premium",
       tagline: "Premium monthly membership",
-      price: "₱59,900 /mo",
+      price: "59,900 /mo",
       popular: true,
       current: subscription.plan_name?.toLowerCase().includes("premium"),
       features: [

@@ -670,7 +670,7 @@ export const CreateGigWizard: React.FC = () => {
                       <input type="text" placeholder="e.g., Quick Turnaround Highlight" value={tierName} onChange={e => setTierName(e.target.value)} className="w-full rounded-xl border border-white/10 bg-[#0d0f1a] px-4 py-2 text-sm focus:outline-none text-white" />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-zinc-400 uppercase">Credit Cost Allocation (₱)</label>
+                      <label className="text-[10px] font-bold text-zinc-400 uppercase">Credit Cost Allocation (Credits)</label>
                       <input type="text" placeholder="Cost baseline value" value={formatCommaString(tierPrice)} onChange={e => setTierPrice(e.target.value.replace(/\D/g, ""))} className="w-full rounded-xl border border-white/10 bg-[#0d0f1a] px-4 py-2 text-sm focus:outline-none font-mono text-white" />
                     </div>
                   </div>
@@ -718,7 +718,7 @@ export const CreateGigWizard: React.FC = () => {
                       </div>
                       <div className="pt-3 border-t border-white/5 mt-4 flex items-baseline justify-between">
                         <span className="text-[10px] text-zinc-500">{t.deliveryDays} Days / {t.revisions} Revs</span>
-                        <span className="text-sm font-extrabold text-yellow-500">₱{formatCommaString(t.price)}</span>
+                        <span className="text-sm font-extrabold text-yellow-500">{formatCommaString(t.price)}</span>
                       </div>
                     </div>
                   ))}
@@ -943,7 +943,7 @@ export const CreateGigWizard: React.FC = () => {
                         </div>
                         <div className="flex justify-between items-center text-[10px] text-zinc-500 pt-2 border-t border-white/5">
                           <span>{t.deliveryDays} Days / {t.revisions} Revs</span>
-                          <span className="font-extrabold text-yellow-500 text-xs">₱{formatCommaString(t.price)}</span>
+                          <span className="font-extrabold text-yellow-500 text-xs">{formatCommaString(t.price)}</span>
                         </div>
                       </div>
                     ))}

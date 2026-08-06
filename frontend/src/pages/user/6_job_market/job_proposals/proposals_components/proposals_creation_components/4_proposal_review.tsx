@@ -1,7 +1,8 @@
 import React from "react";
-import { Check, CircleDollarSign, Layers, FileText, Percent, RefreshCcw, Send } from "lucide-react";
+import { Check, Layers, FileText, Percent, RefreshCcw, Send } from "lucide-react";
 import type { Job } from "../../../job_components/job_lists";
 import type { Milestone } from "./3_proposal_milestones";
+import { CreditIcon } from "@/components/ui/credit-icon";
 
 interface ProposalReviewProps {
   job: Job | null;
@@ -52,7 +53,7 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
             <div className="p-2.5 rounded-xl border border-white/5 bg-white/[0.02]">
               <span className="text-zinc-500 block text-[10px]">Proposed Bid</span>
               <span className="text-sm font-extrabold text-yellow-500 flex items-center gap-1">
-                <CircleDollarSign className="h-4 w-4" /> ₱{totalBid.toLocaleString()}
+                <CreditIcon className="h-4 w-4" /> {totalBid.toLocaleString()}
               </span>
             </div>
 
@@ -96,7 +97,7 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
               <div key={m.id} className="p-3 rounded-xl border border-white/5 bg-white/[0.02] space-y-1">
                 <div className="flex justify-between items-center text-xs font-bold text-white">
                   <span>Step {idx + 1}: {m.name}</span>
-                  <span className="text-emerald-400 font-mono">₱{milestonePayout.toLocaleString()}</span>
+                  <span className="text-emerald-400 font-mono">{milestonePayout.toLocaleString()}</span>
                 </div>
                 {m.description && <p className="text-[11px] text-zinc-400">{m.description}</p>}
                 <div className="flex gap-4 text-[10px] text-zinc-500 pt-1">
@@ -105,7 +106,7 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
                     <RefreshCcw className="h-2.5 w-2.5 text-emerald-400" />
                     Included Revisions: <strong className="text-zinc-300">{m.revisions}</strong>
                   </span>
-                  <span>Overage Price: <strong className="text-blue-400">₱{(milestonePayout + overageRateBonus).toLocaleString()}</strong></span>
+                  <span>Overage Price: <strong className="text-blue-400">{(milestonePayout + overageRateBonus).toLocaleString()}</strong></span>
                 </div>
               </div>
             ))}

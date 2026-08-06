@@ -1,10 +1,10 @@
 // src/pages/user/1_home/home_components/home_featured_jobs.tsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { CreditIcon } from "@/components/ui/credit-icon";
 import {
   Clock,
   ArrowRight,
-  CircleDollarSign,
   Wrench,
   Bookmark,
 } from "lucide-react";
@@ -183,7 +183,7 @@ export const HomeFeaturedJobs: React.FC = () => {
 
               {/* Price Range */}
               <div className="mb-1 flex items-center gap-1 text-base font-black text-yellow-500">
-                <CircleDollarSign className="h-4 w-4 shrink-0 text-yellow-500" />
+                <CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />
                 <span>{job.priceRange}</span>
               </div>
 

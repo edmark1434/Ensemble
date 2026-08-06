@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { ArrowRight, CircleDollarSign, ChevronDown, Check, Percent } from "lucide-react";
+import { ArrowRight, ChevronDown, Check, Percent } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Job } from "../../../job_components/job_lists";
+import { CreditIcon } from "@/components/ui/credit-icon";
 
 export const additionalWorkRates = [
   { label: "+10% per extra revision pass", value: 10 },
@@ -60,7 +61,7 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
         <div className="p-3.5 rounded-xl border border-yellow-500/20 bg-yellow-500/5 flex items-center justify-between">
           <span className="text-xs text-zinc-400 font-medium">Target Job Budget Pool</span>
           <span className="text-sm font-extrabold text-yellow-500 flex items-center gap-1.5">
-            <CircleDollarSign className="h-4 w-4" /> ₱{job.priceRange}
+            <CreditIcon className="h-4 w-4" /> {job.priceRange}
           </span>
         </div>
       )}
@@ -73,7 +74,7 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
             Your Proposed Bid (PHP) <span className="text-red-500">*</span>
           </label>
           <div className="relative">
-            <CircleDollarSign className="absolute left-3.5 top-3 h-4 w-4 text-yellow-500 pointer-events-none" />
+            <CreditIcon className="absolute left-3.5 top-3 h-4 w-4 text-yellow-500 pointer-events-none" />
             <input
               type="text"
               placeholder="e.g. 12,000"
@@ -98,11 +99,11 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
             <div className="pt-2 space-y-1.5">
               <div className="flex justify-between items-center text-[10px] text-zinc-500">
                 <span>10% Platform Fee</span>
-                <span>- ₱{formatCommaString(String(Number(bidAmount) * 0.10))}</span>
+                <span>- {formatCommaString(String(Number(bidAmount) * 0.10))}</span>
               </div>
               <div className="flex justify-between items-center text-xs font-bold text-emerald-400">
                 <span>Your Net Earnings</span>
-                <span>₱{formatCommaString(String(Number(bidAmount) * 0.90))}</span>
+                <span>{formatCommaString(String(Number(bidAmount) * 0.90))}</span>
               </div>
             </div>
           )}

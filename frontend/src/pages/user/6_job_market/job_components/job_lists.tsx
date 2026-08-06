@@ -1,8 +1,9 @@
 import React from "react";
-import { Star, Clock, Bookmark, CircleDollarSign, Edit2, Flag, Wrench } from "lucide-react";
+import { Star, Clock, Bookmark, Edit2, Flag, Wrench } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ViewType } from "./job_list_viewtype";
+import { CreditIcon } from "@/components/ui/credit-icon";
 
 export interface Job {
   id: string;
@@ -240,7 +241,7 @@ const JobList: React.FC<JobListProps> = ({
 
                   {/* Price & Title */}
                   <div className="text-yellow-500 text-base font-black mb-1 flex items-center gap-1">
-                    <CircleDollarSign className="h-4 w-4 text-yellow-500 shrink-0" />
+                    <CreditIcon className="h-4 w-4 text-yellow-500 shrink-0" />
                     <span>{job.priceRange}</span>
                   </div>
                   <h3 className="text-white text-base font-bold mb-1 group-hover:text-blue-400 transition-colors line-clamp-1">
@@ -349,7 +350,7 @@ const JobList: React.FC<JobListProps> = ({
 
                   {/* Price */}
                   <div className="text-yellow-500 text-lg font-black mb-1 flex items-center gap-1.5">
-                    <CircleDollarSign className="h-5 w-5 text-yellow-500 shrink-0" />
+                    <CreditIcon className="h-5 w-5 text-yellow-500 shrink-0" />
                     <span>{job.priceRange}</span>
                   </div>
                   <h3 className="text-white text-xl font-bold mb-1.5 group-hover:text-blue-400 transition-colors">{job.title}</h3>
