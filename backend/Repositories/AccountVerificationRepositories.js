@@ -279,8 +279,9 @@ async function createVerificationAttachments(payload){
 
 async function createBusinessVerificationSubmissionRepository(
     accountId,
-    documentType,
-    files
+    submitterAccountId,
+    businessDetails,
+    documents
 ) {
     const client = await pool.connect();
 
@@ -335,14 +336,60 @@ async function createBusinessVerificationSubmissionRepository(
         );
 
         await client.query(
-            `DELETE FROM verification_attachments
-             WHERE verification_id = $1`,
+            `UPDATE verification_attachments
+             SET is_latest = FALSE
+             WHERE verification_id = $1 AND is_latest = TRUE`,
             [verification.verification_id]
         );
 
+        const detailsResult = await client.query(
+            `INSERT INTO business_verification_details (
+                verification_id,
+                business_type,
+                registered_business_name,
+                registration_number,
+                registration_country,
+                relationship_to_business,
+                submitted_by_account_id,
+                submission_version
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, 1)
+             ON CONFLICT (verification_id)
+             DO UPDATE SET
+                business_type = EXCLUDED.business_type,
+                registered_business_name = EXCLUDED.registered_business_name,
+                registration_number = EXCLUDED.registration_number,
+                registration_country = EXCLUDED.registration_country,
+                relationship_to_business = EXCLUDED.relationship_to_business,
+                submitted_by_account_id = EXCLUDED.submitted_by_account_id,
+                submission_version = business_verification_details.submission_version + 1,
+                updated_at = CURRENT_TIMESTAMP
+             RETURNING *`,
+            [
+                verification.verification_id,
+                businessDetails.business_type,
+                businessDetails.registered_business_name,
+                businessDetails.registration_number,
+                businessDetails.registration_country,
+                businessDetails.relationship_to_business,
+                submitterAccountId,
+            ]
+        );
+        const savedDetails = detailsResult.rows[0];
+
+        const attachmentIndexResult = await client.query(
+            `SELECT COALESCE(MAX("index"), -1) + 1 AS next_index
+             FROM verification_attachments
+             WHERE verification_id = $1`,
+            [verification.verification_id]
+        );
+        const firstAttachmentIndex = Number(
+            attachmentIndexResult.rows[0].next_index
+        );
+
         const attachments = [];
-        for (let index = 0; index < files.length; index += 1) {
-            const file = files[index];
+        for (let index = 0; index < documents.length; index += 1) {
+            const document = documents[index];
+            const file = document.file;
             const fileResult = await client.query(
                 `INSERT INTO files (name, path, mime_type, size_bytes)
                  VALUES ($1, $2, $3, $4)
@@ -353,20 +400,26 @@ async function createBusinessVerificationSubmissionRepository(
 
             await client.query(
                 `INSERT INTO verification_attachments
-                    (verification_id, file_id, document_type, "index")
-                 VALUES ($1, $2, $3, $4)`,
+                    (verification_id, file_id, document_type, "index",
+                     submission_version, is_latest, is_required)
+                 VALUES ($1, $2, $3, $4, $5, TRUE, $6)`,
                 [
                     verification.verification_id,
                     savedFile.file_id,
-                    documentType,
-                    index,
+                    document.document_type,
+                    firstAttachmentIndex + index,
+                    savedDetails.submission_version,
+                    document.is_required,
                 ]
             );
 
             attachments.push({
                 ...savedFile,
-                document_type: documentType,
-                index,
+                document_type: document.document_type,
+                index: firstAttachmentIndex + index,
+                submission_version: savedDetails.submission_version,
+                is_latest: true,
+                is_required: document.is_required,
             });
         }
 
@@ -376,6 +429,7 @@ async function createBusinessVerificationSubmissionRepository(
                 ...verification,
                 verification_session_id: verificationSession.verification_session_id,
             },
+            business_details: savedDetails,
             attachments,
         };
     } catch (error) {

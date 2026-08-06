@@ -77,6 +77,13 @@ export default function BusinessVerification() {
       state.verificationStatus ||
       "";
   const hasSubmittedVerification = Boolean(currentStatus);
+  const normalizedStatus = currentStatus.trim().toLowerCase();
+  const canResubmit = [
+    "declined",
+    "rejected",
+    "resubmitted",
+    "action required",
+  ].includes(normalizedStatus);
 
   return (
     <div className="min-h-screen bg-[#080a12] text-white">
@@ -191,14 +198,14 @@ export default function BusinessVerification() {
                   </div>
                 )}
 
-                {!hasSubmittedVerification && (
+                {(!hasSubmittedVerification || canResubmit) && (
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(true)}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 px-6 py-3 text-sm font-semibold text-white transition hover:scale-[1.01] sm:w-auto"
                   >
                     <ShieldCheck className="h-4 w-4" />
-                    Verify Business
+                    {canResubmit ? "Resubmit Business Documents" : "Verify Business"}
                   </button>
                 )}
               </div>

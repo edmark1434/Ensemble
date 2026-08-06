@@ -39,7 +39,15 @@ async function createAccountVerificationController(req,res){
 
 async function createBusinessVerificationController(req,res){
     try{
-        const { account_id, document_type, file } = req.body || {};
+        const {
+            account_id,
+            business_type,
+            registered_business_name,
+            registration_number,
+            registration_country,
+            relationship_to_business,
+            documents
+        } = req.body || {};
         const requesterAccountId = req.session.account_id;
 
         const eligibility = await getTeamOwnerVerificationEligibility(
@@ -63,8 +71,15 @@ async function createBusinessVerificationController(req,res){
 
         const response = await createBusinessAccountVerificationServices(
             account_id,
-            document_type,
-            file
+            requesterAccountId,
+            {
+                business_type,
+                registered_business_name,
+                registration_number,
+                registration_country,
+                relationship_to_business
+            },
+            documents
         );
         res.status(201).json({
             success: true,

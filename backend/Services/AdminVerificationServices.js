@@ -81,6 +81,17 @@ async function getAdminVerificationDetails(accountId) {
       verifiedAt: record?.verified_at || null,
       expiresAt: record?.expires_at || null,
       attachments: record?.attachments || [],
+      businessDetails: record?.business_type ? {
+        businessType: record.business_type,
+        registeredBusinessName: record.registered_business_name,
+        registrationNumber: record.registration_number,
+        registrationCountry: record.registration_country,
+        relationshipToBusiness: record.relationship_to_business,
+        submittedByAccountId: record.submitted_by_account_id,
+        submittedByName: record.submitted_by_name,
+        submittedByHandle: record.submitted_by_handle,
+        submissionVersion: record.submission_version,
+      } : null,
       decision: null,
     };
   }

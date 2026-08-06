@@ -132,7 +132,21 @@ export type AdminVerificationDetails = {
     sizeBytes: number;
     documentType: string;
     index: number;
+    isRequired: boolean;
+    isLatest: boolean;
+    submissionVersion: number;
   }>;
+  businessDetails?: {
+    businessType: string;
+    registeredBusinessName: string;
+    registrationNumber: string;
+    registrationCountry: string;
+    relationshipToBusiness: string;
+    submittedByAccountId: string;
+    submittedByName: string;
+    submittedByHandle: string | null;
+    submissionVersion: number;
+  } | null;
 };
 
 export type ActiveDispute = {

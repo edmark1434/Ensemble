@@ -34,6 +34,7 @@ exports.up = (pgm) => {
       default: false
     }
   });
+  pgm.addConstraint('proposals', 'proposals_terms_id_fkey', 'FOREIGN KEY (terms_id) REFERENCES terms_of_service(terms_id)');
 };
 
 /**

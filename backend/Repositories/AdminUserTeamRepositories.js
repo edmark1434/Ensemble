@@ -441,6 +441,15 @@ async function getUserVerificationRecord(accountId) {
       avs.expires_at,
       avs.created_at AS session_created_at,
       avs.updated_at AS session_updated_at,
+      bvd.business_type,
+      bvd.registered_business_name,
+      bvd.registration_number,
+      bvd.registration_country,
+      bvd.relationship_to_business,
+      bvd.submitted_by_account_id,
+      bvd.submission_version,
+      submitter.display_name AS submitted_by_name,
+      submitter.handle AS submitted_by_handle,
       COALESCE((
         SELECT json_agg(json_build_object(
           'fileId', f.file_id,
@@ -449,17 +458,25 @@ async function getUserVerificationRecord(accountId) {
           'mimeType', f.mime_type,
           'sizeBytes', f.size_bytes,
           'documentType', va.document_type,
-          'index', va."index"
+          'index', va."index",
+          'isRequired', va.is_required,
+          'isLatest', va.is_latest,
+          'submissionVersion', va.submission_version
         ) ORDER BY va."index")
         FROM verification_attachments va
         JOIN files f ON f.file_id = va.file_id
         WHERE va.verification_id = v.verification_id
+          AND va.is_latest = TRUE
           AND f.deleted_at IS NULL
       ), '[]'::json) AS attachments
     FROM verifications v
     JOIN accounts a ON a.account_id = v.account_id
     LEFT JOIN account_verification_sessions avs
       ON avs.verification_session_id = v.verification_session_id
+    LEFT JOIN business_verification_details bvd
+      ON bvd.verification_id = v.verification_id
+    LEFT JOIN accounts submitter
+      ON submitter.account_id = bvd.submitted_by_account_id
     WHERE v.account_id = $1
     LIMIT 1
     `,

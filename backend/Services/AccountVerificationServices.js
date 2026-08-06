@@ -370,17 +370,105 @@ async function sendVerificationServices(email, first_name, last_name) {
     }
 }
 
-async function createBusinessAccountVerificationServices(accountId, documentType, filePath) {
+const BUSINESS_DOCUMENT_REQUIREMENTS = {
+    "Sole Proprietorship": ["DTI_CERTIFICATE"],
+    "One Person Corporation": ["SEC_CERTIFICATE"],
+    Corporation: ["SEC_CERTIFICATE"],
+    Partnership: ["SEC_CERTIFICATE"],
+    Cooperative: ["CDA_CERTIFICATE"],
+    "Non-Profit Organization": ["NON_PROFIT_REGISTRATION"],
+    "Educational Institution": ["GOVERNMENT_RECOGNITION"],
+    "Government Organization": ["GOVERNMENT_AUTHORIZATION"],
+    "Foreign Registered Business": ["FOREIGN_BUSINESS_REGISTRATION"],
+    Other: ["OTHER_BUSINESS_DOCUMENT"],
+};
+
+const BUSINESS_DOCUMENT_OPTIONS = {
+    "Sole Proprietorship": ["DTI_CERTIFICATE", "BIR_CERTIFICATE", "BUSINESS_PERMIT"],
+    "One Person Corporation": ["SEC_CERTIFICATE", "GENERAL_INFORMATION_SHEET", "ARTICLES_OF_INCORPORATION", "BIR_CERTIFICATE", "BUSINESS_PERMIT"],
+    Corporation: ["SEC_CERTIFICATE", "GENERAL_INFORMATION_SHEET", "ARTICLES_OF_INCORPORATION", "BIR_CERTIFICATE", "BUSINESS_PERMIT"],
+    Partnership: ["SEC_CERTIFICATE", "PARTNERSHIP_REGISTRATION", "BIR_CERTIFICATE"],
+    Cooperative: ["CDA_CERTIFICATE", "CERTIFICATE_OF_COMPLIANCE"],
+    "Non-Profit Organization": ["NON_PROFIT_REGISTRATION", "SEC_CERTIFICATE", "BIR_CERTIFICATE"],
+    "Educational Institution": ["GOVERNMENT_RECOGNITION"],
+    "Government Organization": ["GOVERNMENT_AUTHORIZATION"],
+    "Foreign Registered Business": ["FOREIGN_BUSINESS_REGISTRATION"],
+    Other: ["OTHER_BUSINESS_DOCUMENT"],
+};
+
+const BUSINESS_RELATIONSHIPS = new Set([
+    "Owner",
+    "Sole Proprietor",
+    "Director",
+    "Partner",
+    "President",
+    "Corporate Officer",
+    "Authorized Representative",
+    "Employee",
+    "Other",
+]);
+
+const RELATIONSHIPS_REQUIRING_AUTHORIZATION = new Set([
+    "Authorized Representative",
+    "Employee",
+    "Other",
+]);
+
+const AUTHORIZATION_DOCUMENT_TYPES = new Set([
+    "AUTHORIZATION_LETTER",
+    "SECRETARY_CERTIFICATE",
+    "BOARD_RESOLUTION",
+    "SPECIAL_POWER_OF_ATTORNEY",
+    "PROOF_OF_EMPLOYMENT",
+    "OTHER_AUTHORIZATION",
+]);
+
+async function createBusinessAccountVerificationServices(
+    accountId,
+    submitterAccountId,
+    businessDetails,
+    documents
+) {
     if (!(await checkAccountId(accountId))) {
         throw new Error("Invalid accountId");
     }
-    if (!documentType || !String(documentType).trim()) {
-        throw new Error("Document type is required");
+
+    const normalizedDetails = {
+        business_type: String(businessDetails?.business_type || "").trim(),
+        registered_business_name: String(
+            businessDetails?.registered_business_name || ""
+        ).trim(),
+        registration_number: String(
+            businessDetails?.registration_number || ""
+        ).trim(),
+        registration_country: String(
+            businessDetails?.registration_country || ""
+        ).trim(),
+        relationship_to_business: String(
+            businessDetails?.relationship_to_business || ""
+        ).trim(),
+    };
+
+    if (!BUSINESS_DOCUMENT_REQUIREMENTS[normalizedDetails.business_type]) {
+        throw new Error("Invalid business type");
     }
-    if (!Array.isArray(filePath) || filePath.length === 0) {
+    if (!normalizedDetails.registered_business_name) {
+        throw new Error("Registered business name is required");
+    }
+    if (!normalizedDetails.registration_number) {
+        throw new Error("Registration number is required");
+    }
+    if (!normalizedDetails.registration_country) {
+        throw new Error("Registration country is required");
+    }
+    if (!BUSINESS_RELATIONSHIPS.has(normalizedDetails.relationship_to_business)) {
+        throw new Error("Invalid relationship to business");
+    }
+
+    if (!Array.isArray(documents) || documents.length === 0) {
         throw new Error("No files provided for verification");
     }
-    if (filePath.length > 10) {
+    if (documents.length > 10) {
         throw new Error("A maximum of 10 files can be submitted");
     }
 
@@ -391,8 +479,27 @@ async function createBusinessAccountVerificationServices(accountId, documentType
         "image/webp",
     ]);
 
-    const sanitizedFiles = filePath.map((file) => {
+    const seenDocumentTypes = new Set();
+    const sanitizedDocuments = documents.map((document) => {
+        const documentType = String(document?.document_type || "").trim();
+        const file = document?.file || {};
         const { name, path, mime_type, size_bytes } = file;
+        if (!documentType || seenDocumentTypes.has(documentType)) {
+            throw new Error("Each document type can only be submitted once");
+        }
+        const isAuthorizationDocument = AUTHORIZATION_DOCUMENT_TYPES.has(documentType);
+        const isBusinessDocument = BUSINESS_DOCUMENT_OPTIONS[
+            normalizedDetails.business_type
+        ].includes(documentType);
+        if (!isBusinessDocument && !isAuthorizationDocument) {
+            throw new Error("Document type is not valid for the selected business type");
+        }
+        if (isAuthorizationDocument && !RELATIONSHIPS_REQUIRING_AUTHORIZATION.has(
+            normalizedDetails.relationship_to_business
+        )) {
+            throw new Error("Authorization document is not valid for this relationship");
+        }
+        seenDocumentTypes.add(documentType);
         if (!name || !path || !mime_type || !Number.isInteger(size_bytes) || size_bytes <= 0) {
             throw new Error("File details are incomplete");
         }
@@ -404,17 +511,43 @@ async function createBusinessAccountVerificationServices(accountId, documentType
         }
 
         return {
-            name: String(name).trim(),
-            path: String(path).trim(),
-            mime_type: String(mime_type).trim(),
-            size_bytes,
+            document_type: documentType,
+            is_required:
+                BUSINESS_DOCUMENT_REQUIREMENTS[normalizedDetails.business_type].includes(
+                    documentType
+                ) || isAuthorizationDocument,
+            file: {
+                name: String(name).trim(),
+                path: String(path).trim(),
+                mime_type: String(mime_type).trim(),
+                size_bytes,
+            },
         };
     });
 
+    const missingRequiredDocument = BUSINESS_DOCUMENT_REQUIREMENTS[
+        normalizedDetails.business_type
+    ].find((documentType) => !seenDocumentTypes.has(documentType));
+    if (missingRequiredDocument) {
+        throw new Error(`Required document is missing: ${missingRequiredDocument}`);
+    }
+
+    if (
+        RELATIONSHIPS_REQUIRING_AUTHORIZATION.has(
+            normalizedDetails.relationship_to_business
+        ) &&
+        ![...seenDocumentTypes].some((type) =>
+            AUTHORIZATION_DOCUMENT_TYPES.has(type)
+        )
+    ) {
+        throw new Error("An authorization document is required for this relationship");
+    }
+
     return createBusinessVerificationSubmissionRepository(
         accountId,
-        String(documentType).trim(),
-        sanitizedFiles
+        submitterAccountId,
+        normalizedDetails,
+        sanitizedDocuments
     );
 }
 

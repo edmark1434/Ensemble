@@ -30,6 +30,7 @@ import EditTeamModal, {
 import LeaveTeamModal from "./team_modals/LeaveTeamModal";
 import RemoveMemberModal from "./team_modals/RemoveMemberModal";
 import ReportTeamModal from "./team_modals/ReportTeamModal";
+import BusinessVerificationEligibilityModal from "./team_modals/BusinessVerificationEligibilityModal";
 
 type PermissionSet = Record<string, boolean>;
 type Membership = { role: string; status: string; permissions: PermissionSet };
@@ -103,6 +104,8 @@ export default function SelectedTeam() {
   const [showEdit, setShowEdit] = useState(false);
   const [showLeave, setShowLeave] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  const [showVerificationEligibility, setShowVerificationEligibility] =
+    useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<Member | null>(null);
 
@@ -317,10 +320,13 @@ export default function SelectedTeam() {
         <div className="absolute bottom-4 right-4 flex gap-2">
           {isTeamOwner &&
             !team.is_business_verified &&
-            !team.business_verification_status &&
-            team.current_user_is_verified && (
+            !team.business_verification_status && (
             <button
-              onClick={() =>
+              onClick={() => {
+                if (!team.current_user_is_verified) {
+                  setShowVerificationEligibility(true);
+                  return;
+                }
                 navigate(`/teams/${id}/business-verification`, {
                   state: {
                     teamName: team.display_name,
@@ -329,26 +335,14 @@ export default function SelectedTeam() {
                     verificationStatus: team.business_verification_status,
                     isOwner: true,
                   },
-                })
-              }
+                });
+              }}
               className="flex items-center gap-2 rounded-full border border-white/15 bg-black/60 px-4 py-2 text-sm font-medium text-white transition hover:border-emerald-400/40 hover:bg-emerald-500/15 hover:text-emerald-200"
             >
               <ShieldCheck className="h-4 w-4" />
               Verify Business
             </button>
           )}
-          {isTeamOwner &&
-            !team.is_business_verified &&
-            !team.business_verification_status &&
-            !team.current_user_is_verified && (
-              <button
-                onClick={() => navigate("/account-verification-status")}
-                className="flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-500/15 px-4 py-2 text-sm font-medium text-amber-200 transition hover:bg-amber-500/25"
-              >
-                <ShieldCheck className="h-4 w-4" />
-                Verify Your Account First
-              </button>
-            )}
           {isTeamOwner &&
             !team.is_business_verified &&
             team.business_verification_status && (
@@ -605,6 +599,14 @@ export default function SelectedTeam() {
         teamBanner={imageUrl(team.avatar_path)}
         saving={saving}
         onSave={(values) => void updateTeam(values)}
+      />
+      <BusinessVerificationEligibilityModal
+        isOpen={showVerificationEligibility}
+        onClose={() => setShowVerificationEligibility(false)}
+        onVerifyAccount={() => {
+          setShowVerificationEligibility(false);
+          navigate("/account-verification-status");
+        }}
       />
     </Page>
   );

@@ -16,6 +16,7 @@ import type {
   PlatformUserAccount,
   VerificationDetail,
 } from '../userTeamTypes';
+import { getBusinessDocumentLabel } from '@/pages/user/9_verification/businessVerificationConfig';
 
 function formatDateTime(value: string | null) {
   if (!value) return '—';
@@ -697,6 +698,7 @@ function DiditVerificationPanel({
 
   if (details.isTeam) {
     const attachments = details.attachments || [];
+    const business = details.businessDetails;
     return (
       <div className="space-y-4">
         <div className="grid gap-3 rounded-xl border border-white/[0.08] bg-black/20 p-4 sm:grid-cols-3">
@@ -716,12 +718,48 @@ function DiditVerificationPanel({
           </div>
         </div>
 
+        {business && (
+          <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+            <h4 className="mb-3 text-sm font-semibold text-white">Business information</h4>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <p className="text-xs text-zinc-500">Business type</p>
+                <p className="mt-1 text-sm text-white">{business.businessType}</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500">Registered business name</p>
+                <p className="mt-1 text-sm text-white">{business.registeredBusinessName}</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500">Registration number</p>
+                <p className="mt-1 text-sm text-white">{business.registrationNumber}</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500">Registration country</p>
+                <p className="mt-1 text-sm text-white">{business.registrationCountry}</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500">Submitted by</p>
+                <p className="mt-1 text-sm text-white">{business.submittedByName}</p>
+                {business.submittedByHandle && (
+                  <p className="text-xs text-zinc-500">@{business.submittedByHandle}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500">Submitter's role / relationship</p>
+                <p className="mt-1 text-sm text-white">{business.relationshipToBusiness}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
           <h4 className="mb-3 text-sm font-semibold text-white">Business verification documents</h4>
           {attachments.length ? (
             <div className="grid gap-3 sm:grid-cols-2">
               {attachments.map((attachment) => {
                 const url = verificationAttachmentUrl(attachment.path);
+                const documentLabel = getBusinessDocumentLabel(attachment.documentType);
                 const isImage = attachment.mimeType.startsWith('image/');
                 const isPdf = attachment.mimeType === 'application/pdf';
                 return (
@@ -732,13 +770,13 @@ function DiditVerificationPanel({
                     {isImage ? (
                       <img
                         src={url}
-                        alt={attachment.documentType}
+                        alt={documentLabel}
                         className="h-48 w-full bg-black/30 object-contain"
                       />
                     ) : isPdf ? (
                       <iframe
                         src={`${url}#toolbar=0&navpanes=0`}
-                        title={`${attachment.documentType} preview`}
+                        title={`${documentLabel} preview`}
                         className="h-48 w-full bg-white"
                       />
                     ) : (
@@ -747,7 +785,12 @@ function DiditVerificationPanel({
                       </div>
                     )}
                     <div className="p-3">
-                      <p className="text-sm font-medium text-white">{attachment.documentType}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium text-white">{documentLabel}</p>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] ${attachment.isRequired ? 'bg-rose-500/15 text-rose-300' : 'bg-white/5 text-zinc-400'}`}>
+                          {attachment.isRequired ? 'Required' : 'Optional'}
+                        </span>
+                      </div>
                       <p className="mt-1 truncate text-xs text-zinc-400">{attachment.name}</p>
                       <p className="mt-1 break-all text-[10px] text-zinc-600">{attachment.path}</p>
                       <a
