@@ -2,7 +2,8 @@ const {
     createAccountVerificationSession,
     appyForResubmissionServices,
     getAccountVerificationStatusServices,
-    sendVerificationServices
+    sendVerificationServices,
+    createBusinessAccountVerificationServices
 } = require('../Services/AccountVerificationServices');
 const {
     updateAccountVerificationSessionStatus,
@@ -21,6 +22,9 @@ const {
 const {getIo} = require('../lib/websocket');
 
 const redisClient = require('../lib/redis');
+const {
+    getTeamOwnerVerificationEligibility
+} = require('../Repositories/TeamsRepositories');
 
 async function createAccountVerificationController(req,res){
     try{
@@ -30,6 +34,49 @@ async function createAccountVerificationController(req,res){
     }catch(err){
         console.error("Error creating account verification session:", err);
         res.status(500).json({ error: "Failed to create account verification session" });
+    }
+}
+
+async function createBusinessVerificationController(req,res){
+    try{
+        const { account_id, document_type, file } = req.body || {};
+        const requesterAccountId = req.session.account_id;
+
+        const eligibility = await getTeamOwnerVerificationEligibility(
+            account_id,
+            requesterAccountId
+        );
+
+        if (!eligibility.is_owner) {
+            return res.status(403).json({
+                success: false,
+                message: "Only the active Team owner can submit business verification"
+            });
+        }
+
+        if (!eligibility.is_verified) {
+            return res.status(403).json({
+                success: false,
+                message: "Verify your personal account before submitting business verification"
+            });
+        }
+
+        const response = await createBusinessAccountVerificationServices(
+            account_id,
+            document_type,
+            file
+        );
+        res.status(201).json({
+            success: true,
+            message: "Business verification submitted for manual review",
+            data: response
+        });
+    }catch(err){
+        console.error("Error creating business verification:", err);
+        res.status(400).json({
+            success: false,
+            message: err.message || "Failed to create business verification"
+        });
     }
 }
 
@@ -279,5 +326,6 @@ module.exports = {
     handleVerificationWebhookStatusUpdated,
     getAccountVerificationStatusController,
     sendVerificationController,
-    verifyCode
+    verifyCode,
+    createBusinessVerificationController
 };

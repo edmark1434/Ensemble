@@ -257,6 +257,135 @@ async function getAccountVerificationSessionBySessionId(sessionId) {
     }
 }
 
+async function createVerificationAttachments(payload){
+    try{
+        const query = `
+        INSERT INTO verification_attachments (VERIFICATION_ID , FILE_ID, DOCUMENT_TYPE, INDEX, CREATED_AT)
+        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP);
+        `;
+        const values = [
+            payload.verification_id,
+            payload.file_id,
+            payload.document_type,
+            payload.index
+        ];
+        const result = await pool.query(query, values);
+        return result.rows[0];
+    }catch(err){
+        console.error("Error creating verification attachments:", err);
+        throw err;
+    }
+}
+
+async function createBusinessVerificationSubmissionRepository(
+    accountId,
+    documentType,
+    files
+) {
+    const client = await pool.connect();
+
+    try {
+        await client.query("BEGIN");
+
+        const verificationResult = await client.query(
+            `INSERT INTO verifications (account_id, is_verified, verified_at)
+             VALUES ($1, FALSE, NULL)
+             ON CONFLICT (account_id)
+             DO UPDATE SET
+                is_verified = FALSE,
+                verified_at = NULL,
+                updated_at = CURRENT_TIMESTAMP
+             RETURNING *`,
+            [accountId]
+        );
+        const verification = verificationResult.rows[0];
+
+        const sessionResult = await client.query(
+            `INSERT INTO account_verification_sessions (
+                account_id,
+                didit_session_id,
+                verification_url,
+                kyc_status,
+                verification_status,
+                verified_by_account_id,
+                expires_at
+             )
+             VALUES ($1, $2, $3, 'Not Applicable', 'Pending', NULL, NULL)
+             ON CONFLICT (didit_session_id)
+             DO UPDATE SET
+                verification_status = 'Pending',
+                verified_by_account_id = NULL,
+                expires_at = NULL,
+                updated_at = CURRENT_TIMESTAMP
+             RETURNING *`,
+            [
+                accountId,
+                `manual-business-${verification.verification_id}`,
+                `/teams/business-verification/${verification.verification_id}`,
+            ]
+        );
+        const verificationSession = sessionResult.rows[0];
+
+        await client.query(
+            `UPDATE verifications
+             SET verification_session_id = $2,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE verification_id = $1`,
+            [verification.verification_id, verificationSession.verification_session_id]
+        );
+
+        await client.query(
+            `DELETE FROM verification_attachments
+             WHERE verification_id = $1`,
+            [verification.verification_id]
+        );
+
+        const attachments = [];
+        for (let index = 0; index < files.length; index += 1) {
+            const file = files[index];
+            const fileResult = await client.query(
+                `INSERT INTO files (name, path, mime_type, size_bytes)
+                 VALUES ($1, $2, $3, $4)
+                 RETURNING file_id, name, path, mime_type, size_bytes`,
+                [file.name, file.path, file.mime_type, file.size_bytes]
+            );
+            const savedFile = fileResult.rows[0];
+
+            await client.query(
+                `INSERT INTO verification_attachments
+                    (verification_id, file_id, document_type, "index")
+                 VALUES ($1, $2, $3, $4)`,
+                [
+                    verification.verification_id,
+                    savedFile.file_id,
+                    documentType,
+                    index,
+                ]
+            );
+
+            attachments.push({
+                ...savedFile,
+                document_type: documentType,
+                index,
+            });
+        }
+
+        await client.query("COMMIT");
+        return {
+            verification: {
+                ...verification,
+                verification_session_id: verificationSession.verification_session_id,
+            },
+            attachments,
+        };
+    } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+    } finally {
+        client.release();
+    }
+}
+
 module.exports = {
     getReusableAccountVerificationSessionByAccountId,
     createAccountVerificationSessionRepository,
@@ -267,5 +396,7 @@ module.exports = {
     getAccountVerificationByAccountId,
     getAccountVerificationSessionsByAccountId,
     getAccountVerificationSessionBySessionId,
-    getAccountVerificationStatusByAccountId
+    getAccountVerificationStatusByAccountId,
+    createVerificationAttachments,
+    createBusinessVerificationSubmissionRepository
 };

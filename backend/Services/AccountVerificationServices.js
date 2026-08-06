@@ -20,7 +20,8 @@ const {
     updateAccountVerificationSessionStatus,
     updateAccountVerificationSessionById,
     getAccountVerificationStatusByAccountId,
-    updateAccountVerifications
+    updateAccountVerifications,
+    createBusinessVerificationSubmissionRepository
 } = require("../Repositories/AccountVerificationRepositories");
 
 const {
@@ -31,6 +32,10 @@ const {
 const {
     sendVerificationEmail
 } = require('../Services/UserServices')
+
+const {
+    checkAccountId
+} = require('../Repositories/AccountRepositories')
 
 const redisClient = require('../lib/redis');
 
@@ -365,6 +370,54 @@ async function sendVerificationServices(email, first_name, last_name) {
     }
 }
 
+async function createBusinessAccountVerificationServices(accountId, documentType, filePath) {
+    if (!(await checkAccountId(accountId))) {
+        throw new Error("Invalid accountId");
+    }
+    if (!documentType || !String(documentType).trim()) {
+        throw new Error("Document type is required");
+    }
+    if (!Array.isArray(filePath) || filePath.length === 0) {
+        throw new Error("No files provided for verification");
+    }
+    if (filePath.length > 10) {
+        throw new Error("A maximum of 10 files can be submitted");
+    }
+
+    const allowedBusinessDocumentTypes = new Set([
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+    ]);
+
+    const sanitizedFiles = filePath.map((file) => {
+        const { name, path, mime_type, size_bytes } = file;
+        if (!name || !path || !mime_type || !Number.isInteger(size_bytes) || size_bytes <= 0) {
+            throw new Error("File details are incomplete");
+        }
+        if (!allowedBusinessDocumentTypes.has(String(mime_type))) {
+            throw new Error(`Unsupported business document type: ${mime_type}`);
+        }
+        if (size_bytes > 5 * 1024 * 1024) {
+            throw new Error(`${name} exceeds the 5 MB file limit`);
+        }
+
+        return {
+            name: String(name).trim(),
+            path: String(path).trim(),
+            mime_type: String(mime_type).trim(),
+            size_bytes,
+        };
+    });
+
+    return createBusinessVerificationSubmissionRepository(
+        accountId,
+        String(documentType).trim(),
+        sanitizedFiles
+    );
+}
+
 module.exports = {
     createAccountVerificationSession,
     updateAccountVerifications,
@@ -372,5 +425,6 @@ module.exports = {
     approvedVerificationServices,
     DeclinedVerificationServices,
     getAccountVerificationStatusServices,
-    sendVerificationServices
+    sendVerificationServices,
+    createBusinessAccountVerificationServices
 };

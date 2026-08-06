@@ -13,6 +13,7 @@ import {
   LogOut,
   MessageCircle,
   MoreVertical,
+  ShieldCheck,
   Star,
   Trash2,
   UserPlus,
@@ -33,6 +34,7 @@ import ReportTeamModal from "./team_modals/ReportTeamModal";
 type PermissionSet = Record<string, boolean>;
 type Membership = { role: string; status: string; permissions: PermissionSet };
 type Team = {
+  account_id: string;
   display_name: string;
   handle: string;
   tagline?: string;
@@ -44,6 +46,10 @@ type Team = {
   member_count: number;
   owner_name: string;
   join_code?: string;
+  is_business_verified: boolean;
+  current_user_is_verified: boolean;
+  business_verified_at?: string;
+  business_verification_status?: string;
   current_user_membership?: Membership;
 };
 type Member = {
@@ -286,6 +292,7 @@ export default function SelectedTeam() {
   const membership = team.current_user_membership;
   const permissions = membership?.permissions || {};
   const activeMember = membership?.status === "Active";
+  const isTeamOwner = activeMember && membership?.role === "Owner";
   const pendingRequests = requests.filter(
     (member) => member.status === "Pending",
   );
@@ -308,6 +315,61 @@ export default function SelectedTeam() {
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div className="absolute bottom-4 right-4 flex gap-2">
+          {isTeamOwner &&
+            !team.is_business_verified &&
+            !team.business_verification_status &&
+            team.current_user_is_verified && (
+            <button
+              onClick={() =>
+                navigate(`/teams/${id}/business-verification`, {
+                  state: {
+                    teamName: team.display_name,
+                    teamHandle: team.handle,
+                    teamAccountId: team.account_id,
+                    verificationStatus: team.business_verification_status,
+                    isOwner: true,
+                  },
+                })
+              }
+              className="flex items-center gap-2 rounded-full border border-white/15 bg-black/60 px-4 py-2 text-sm font-medium text-white transition hover:border-emerald-400/40 hover:bg-emerald-500/15 hover:text-emerald-200"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              Verify Business
+            </button>
+          )}
+          {isTeamOwner &&
+            !team.is_business_verified &&
+            !team.business_verification_status &&
+            !team.current_user_is_verified && (
+              <button
+                onClick={() => navigate("/account-verification-status")}
+                className="flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-500/15 px-4 py-2 text-sm font-medium text-amber-200 transition hover:bg-amber-500/25"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Verify Your Account First
+              </button>
+            )}
+          {isTeamOwner &&
+            !team.is_business_verified &&
+            team.business_verification_status && (
+              <button
+                onClick={() =>
+                  navigate(`/teams/${id}/business-verification`, {
+                    state: {
+                      teamAccountId: team.account_id,
+                      teamName: team.display_name,
+                      teamHandle: team.handle,
+                      verificationStatus: team.business_verification_status,
+                      isOwner: true,
+                    },
+                  })
+                }
+                className="flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-500/15 px-4 py-2 text-sm font-medium text-amber-200 transition hover:bg-amber-500/25"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                View Verification Status
+              </button>
+            )}
           {activeMember && (
             <button
               onClick={() => void openChat()}
@@ -339,6 +401,12 @@ export default function SelectedTeam() {
             <h1 className="text-3xl font-bold text-white">
               {team.display_name}
             </h1>
+            {team.is_business_verified && (
+              <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
+                <ShieldCheck className="h-4 w-4" />
+                Verified Business
+              </div>
+            )}
             <p className="mt-2 text-zinc-400">{team.description}</p>
             <p className="mt-3 text-sm text-zinc-500">
               @{team.handle} · {team.member_count} members · Owner:{" "}

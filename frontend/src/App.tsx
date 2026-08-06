@@ -58,6 +58,7 @@ import GigMarketplace from "@/pages/user/7_gigs/Gig_Posting/main.tsx";
 import {CreateGigWizard} from "@/pages/user/7_gigs/Gig_Posting/CreateGigWizard.tsx";
 
 import Verification from "@/pages/user/9_verification/Verification.tsx";
+import BusinessVerification from "@/pages/user/9_verification/BusinessVerification.tsx";
 
 import TransactionHistoryMain from "@/pages/user/11_transactionhistory/main.tsx";
 import TosMain from "@/pages/user/terms_of_service/tos_main.tsx";
@@ -195,6 +196,7 @@ function App() {
 
           <Route path='/teams'>
             <Route index element={<Teams />} />
+            <Route path=':id/business-verification' element={<BusinessVerification />} />
             <Route path=':id' element={<SelectedTeam />} />
           </Route>
 
