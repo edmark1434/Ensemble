@@ -1,5 +1,5 @@
 // src/pages/user/1_home/home_components/home_featured_jobs.tsx
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import {
@@ -8,6 +8,24 @@ import {
   Wrench,
   Bookmark,
 } from "lucide-react";
+import { useJobs } from "@/hooks/useJobs";
+import useGlobalState from "@/lib/global_state";
+import { JobRichText } from "../../6_job_market/job_components/JobRichText";
+
+function getTimeAgo(date: Date) {
+  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+  let interval = seconds / 31536000;
+  if (interval > 1) return Math.floor(interval) + " years ago";
+  interval = seconds / 2592000;
+  if (interval > 1) return Math.floor(interval) + " months ago";
+  interval = seconds / 86400;
+  if (interval > 1) return Math.floor(interval) + " days ago";
+  interval = seconds / 3600;
+  if (interval > 1) return Math.floor(interval) + " hours ago";
+  interval = seconds / 60;
+  if (interval > 1) return Math.floor(interval) + " minutes ago";
+  return Math.floor(seconds) + " seconds ago";
+}
 
 export interface Job {
   id: string;
@@ -32,83 +50,90 @@ export interface Job {
   isOwnPost?: boolean;
 }
 
-export const sampleJobs: Job[] = [
-  {
-    id: "JP001",
-    title: "Wedding Video Edit - Romantic Style",
-    description:
-      "Looking for an experienced editor to create a 10-minute wedding highlight reel. Must be proficient in color grading and narrative storytelling. Raw footage provided is around 50GB in 4K.",
-    status: "Open",
-    category: "Events",
-    difficulty: "Intermediate",
-    priceRange: "28,000 ~ 36,000",
-    minBudget: 28000,
-    postedBy: "Edmark Talingting",
-    postedAt: "Oct 24, 2026 • 2:30 PM",
-    timeAgo: "Posted 2 hours ago",
-    clientRating: 4.5,
-    ratingCount: 12,
-    positionsNeeded: 3,
-    applicantsCount: 28,
-    timeline: "3-5 Days",
-    thumbnail:
-      "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80",
-    skills: ["Multi-cam Editing", "Color Grading", "DaVinci Resolve", "Audio Sync"],
-    isSaved: true,
-    isOwnPost: false,
-  },
-  {
-    id: "JP002",
-    title: "YouTube Channel Intro Animation",
-    description:
-      "Need a 10-second animated intro for a tech review channel. Should include clean typography, slick sound effects, and source project delivery file formats.",
-    status: "Open",
-    category: "YouTube",
-    difficulty: "Beginner",
-    priceRange: "12,000 ~ 14,000",
-    minBudget: 12000,
-    postedBy: "Jodeci Pacibe",
-    postedAt: "Oct 24, 2026 • 11:15 AM",
-    timeAgo: "Posted 2 hours ago",
-    clientRating: 4.5,
-    ratingCount: 5,
-    positionsNeeded: 1,
-    applicantsCount: 33,
-    timeline: "1-3 Days",
-    thumbnail:
-      "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?auto=format&fit=crop&w=600&q=80",
-    skills: ["After Effects", "Motion Graphics", "Sound Design", "Typography"],
-    isSaved: false,
-    isOwnPost: true,
-  },
-  {
-    id: "JP003",
-    title: "Corporate Brand Identity Video",
-    description:
-      "Seeking a professional video creator to craft a high-end promotional commercial sequence highlighting global enterprise logistics infrastructure updates.",
-    status: "Open",
-    category: "Corporate",
-    difficulty: "Expert",
-    priceRange: "45,000 ~ 60,000",
-    minBudget: 45000,
-    postedBy: "Sarah Chen",
-    postedAt: "Oct 24, 2026 • 9:00 AM",
-    timeAgo: "Posted 5 hours ago",
-    clientRating: 4.9,
-    ratingCount: 42,
-    positionsNeeded: 2,
-    applicantsCount: 14,
-    timeline: "1-2 Weeks",
-    thumbnail:
-      "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=600&q=80",
-    skills: ["Premiere Pro", "Branding", "Commercial Edit", "4K Rendering"],
-    isSaved: false,
-    isOwnPost: false,
-  },
-];
-
 export const HomeFeaturedJobs: React.FC = () => {
   const navigate = useNavigate();
+  const { fetchJobs, toggleJobSave } = useJobs();
+  const userInfo = useGlobalState((state) => state.user);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const handleToggleSave = async (jobId: string) => {
+    if (!userInfo) return; // Prevent saving if not logged in (optional depending on global state)
+    try {
+      await toggleJobSave(jobId);
+      setJobs((prevJobs) =>
+        prevJobs.map((job) =>
+          job.id === jobId ? { ...job, isSaved: !job.isSaved } : job
+        )
+      );
+    } catch (err) {
+      console.error("Failed to toggle save", err);
+    }
+  };
+
+  React.useEffect(() => {
+    const loadJobs = async () => {
+      try {
+        const fetchedJobs = await fetchJobs();
+        if (!Array.isArray(fetchedJobs)) return;
+
+        const mappedJobs = fetchedJobs.map((j: any) => ({
+          id: j.job_id,
+          title: j.title,
+          description: j.description,
+          status: j.status,
+          category: j.category,
+          difficulty: j.experience_level,
+          priceRange: `${j.rate_credits_min?.toLocaleString() || 0} ~ ${j.rate_credits_max?.toLocaleString() || 0}`,
+          minBudget: j.rate_credits_min || 0,
+          postedBy: j.client_name || j.client_handle || "Unknown",
+          postedAt: new Date(j.created_at).toLocaleString(),
+          timeAgo: getTimeAgo(new Date(j.created_at)),
+          clientRating: 5.0,
+          ratingCount: 0,
+          positionsNeeded: j.no_of_hires || 1,
+          applicantsCount: parseInt(j.applicant_count) || 0,
+          timeline: `${j.timeline_min}-${j.timeline_max} Days`,
+          thumbnail: j.thumbnail_path 
+             ? `${import.meta.env.VITE_CLOUDFRONT_URL}${j.thumbnail_path.startsWith('/') ? '' : '/'}${j.thumbnail_path}`
+             : "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80",
+          skills: j.tags || [],
+          isSaved: j.is_saved || false,
+          isOwnPost: userInfo?.account_id === j.client_account_id,
+        }));
+        
+        // Only show Open jobs, and sort by newest
+        const openJobs = mappedJobs.filter(j => j.status === 'Open').sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime());
+        setJobs(openJobs.slice(0, 3));
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadJobs();
+  }, [fetchJobs, userInfo]);
+
+  if (loading) {
+      return (
+          <section>
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-white">Latest Job Posts</h2>
+                </div>
+              </div>
+              <div className="grid gap-5 grid-cols-1 md:grid-cols-3">
+                  {[1, 2, 3].map(i => (
+                      <div key={i} className="h-72 bg-white/5 animate-pulse rounded-2xl border border-white/10" />
+                  ))}
+              </div>
+          </section>
+      );
+  }
+
+  if (jobs.length === 0) {
+      return null;
+  }
 
   return (
     <section>
@@ -137,7 +162,7 @@ export const HomeFeaturedJobs: React.FC = () => {
       </div>
 
       <div className="grid gap-5 grid-cols-1 md:grid-cols-3">
-        {sampleJobs.slice(0, 3).map((job: Job) => (
+        {jobs.map((job: Job) => (
           <div
             key={job.id}
             onClick={() => navigate(`/jobs/postings/${job.id}`)}
@@ -153,7 +178,10 @@ export const HomeFeaturedJobs: React.FC = () => {
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                 <button
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleSave(job.id);
+                  }}
                   className={`absolute top-2 right-2 rounded-full bg-black/50 p-1.5 backdrop-blur-sm transition ${
                     job.isSaved ? "text-yellow-500" : "text-zinc-400 hover:text-white"
                   }`}
@@ -194,9 +222,9 @@ export const HomeFeaturedJobs: React.FC = () => {
               >
                 {job.title}
               </h3>
-              <p className="mb-3 line-clamp-2 text-xs leading-relaxed text-zinc-400">
-                {job.description}
-              </p>
+              <div className="mb-3">
+                <JobRichText content={job.description} truncate={2} />
+              </div>
 
               {/* Skill Badges */}
               {Array.isArray(job.skills) && job.skills.length > 0 && (
