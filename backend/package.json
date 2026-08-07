@@ -5,17 +5,17 @@
   "license": "ISC",
   "author": "",
   "type": "commonjs",
-  "main": "index.js",
+  "main": "Server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon server.js",
-    "db:setup": "node lib/setup-db.js",
-    "seed": "node lib/seed.js",
-    "clean": "node lib/clean.js",
+    "start": "nodemon Server.js",
+    "db:setup": "node lib/SetupDb.js",
+    "seed": "node lib/Seed.js",
+    "clean": "node lib/Clean.js",
     "migrate": "node-pg-migrate up",
     "rollback": "node-pg-migrate down",
     "migration:create": "node-pg-migrate create",
-    "db:create": "node lib/create-db.js",
+    "db:create": "node lib/CreateDb.js",
     "rollback:all": "node-pg-migrate down 100"
   },
   "devDependencies": {
