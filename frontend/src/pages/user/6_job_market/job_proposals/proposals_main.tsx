@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Outlet, useLocation } from "react-router-dom";
+import { Filter } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 
 // Modular Proposal Components
@@ -59,6 +60,7 @@ export const ProposalsMain: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeStatus, setActiveStatus] = useState<"All" | ProposalStatus>("All");
+  const [showFilters, setShowFilters] = useState(true);
 
   // Filters & Sorting States
   const [minPrice, setMinPrice] = useState("");
@@ -130,58 +132,73 @@ export const ProposalsMain: React.FC = () => {
         <ProposalsSearchbar searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
 
         {/* Navigation Tabs & View Switcher */}
-        <div className="mb-8 flex flex-wrap items-center justify-between border-b border-white/10 gap-4">
+        <div className="mb-8 flex flex-wrap items-center justify-between border-b border-white/10 gap-4 pb-2">
           <ProposalsTabs />
           {!isJobSelectionPage && (
-            <div className="py-2">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${
+                  showFilters
+                    ? "bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20"
+                    : "bg-white/5 border-white/10 text-zinc-400 hover:text-white hover:bg-white/10"
+                }`}
+              >
+                <Filter className="h-4 w-4" />
+                <span>Filters</span>
+              </button>
               <ProposalsListViewType viewType={viewType} onViewTypeChange={setViewType} />
             </div>
           )}
         </div>
 
         {/* Sidebar & Content Layout */}
-        <div className={isJobSelectionPage ? "w-full" : "grid grid-cols-1 lg:grid-cols-4 gap-8 items-start"}>
+        <div className={isJobSelectionPage ? "w-full" : "flex flex-col lg:flex-row gap-6 lg:gap-8 items-start"}>
           {/* Sidebar */}
           {!isJobSelectionPage && (
-            <div className="space-y-6 sticky top-24">
-              {loading ? (
-                <ProposalSidebarSkeleton />
-              ) : (
-                <>
-                  <ProposalsStatuses
-                    statuses={statusCounts}
-                    activeStatus={activeStatus}
-                    onStatusChange={setActiveStatus}
-                  />
+            <div className={`transition-all duration-300 origin-left ease-in-out shrink-0 ${
+              showFilters ? "opacity-100 w-full lg:w-72" : "opacity-0 w-0 h-0 lg:h-auto overflow-hidden hidden lg:block"
+            }`}>
+              <div className="space-y-6 sticky top-24 w-full">
+                {loading ? (
+                  <ProposalSidebarSkeleton />
+                ) : (
+                  <>
+                    <ProposalsStatuses
+                      statuses={statusCounts}
+                      activeStatus={activeStatus}
+                      onStatusChange={setActiveStatus}
+                    />
 
-                  <ProposalsFilters
-                    filters={{
-                      minPrice,
-                      maxPrice,
-                      priceSort,
-                      milestonesValue,
-                      milestonesSort,
-                      revisionRateSort,
-                      dateSort,
-                    }}
-                    setters={{
-                      setMinPrice,
-                      setMaxPrice,
-                      setPriceSort,
-                      setMilestonesValue,
-                      setMilestonesSort,
-                      setRevisionRateSort,
-                      setDateSort,
-                    }}
-                    onClear={handleClearFilters}
-                  />
-                </>
-              )}
+                    <ProposalsFilters
+                      filters={{
+                        minPrice,
+                        maxPrice,
+                        priceSort,
+                        milestonesValue,
+                        milestonesSort,
+                        revisionRateSort,
+                        dateSort,
+                      }}
+                      setters={{
+                        setMinPrice,
+                        setMaxPrice,
+                        setPriceSort,
+                        setMilestonesValue,
+                        setMilestonesSort,
+                        setRevisionRateSort,
+                        setDateSort,
+                      }}
+                      onClear={handleClearFilters}
+                    />
+                  </>
+                )}
+              </div>
             </div>
           )}
 
           {/* Sub-Pages Container */}
-          <div className={isJobSelectionPage ? "w-full" : "lg:col-span-3"}>
+          <div className={`transition-all duration-300 ${isJobSelectionPage ? "w-full" : "flex-1 min-w-0"}`}>
             <Outlet
               context={
                 {

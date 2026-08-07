@@ -462,7 +462,7 @@ export function TeamOverviewModal({
               ['Total assets', team.stats.totalAssets],
               ['Total jobs', team.stats.totalJobs],
               ['Job earnings', team.stats.totalJobEarnings.toLocaleString()],
-              ['Total revenue', `₱${team.stats.totalRevenue.toLocaleString()}`],
+              ['Total revenue', `${team.stats.totalRevenue.toLocaleString()}`],
               ['Total posts', team.stats.totalPosts.toLocaleString()],
               ['Reactions', team.stats.totalReactions.toLocaleString()],
             ].map(([label, val]) => (
@@ -617,7 +617,7 @@ export function CreditActivityModal({
         {totalRevenue != null && (
           <div>
             <p className="text-zinc-500">Total revenue</p>
-            <p className="text-xl font-bold text-emerald-300">₱{totalRevenue.toLocaleString()}</p>
+            <p className="text-xl font-bold text-emerald-300">{totalRevenue.toLocaleString()}</p>
           </div>
         )}
       </div>

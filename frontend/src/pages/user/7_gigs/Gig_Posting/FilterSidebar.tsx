@@ -35,7 +35,7 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ filters, setters, onClear
       {/* 1. PRICE RANGE OPTION (With Increasng / Decreasing Checkbox Sort Arrays) */}
       <div className="space-y-3">
         <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
-          Budget Range (₱)
+          Budget Range (Credits)
         </label>
         <div className="flex gap-2">
           <input

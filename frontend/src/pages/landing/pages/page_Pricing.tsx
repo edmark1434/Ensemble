@@ -25,8 +25,8 @@ const PLANS = [
   },
   {
     name: "PREMIUM",
-    price: "₱599",
-    originalPrice: "₱899",
+    price: "599",
+    originalPrice: "899",
     color: "#eab308", // Gold accent matching image_ed9fca.jpg
     badgeColor: "rgba(234, 179, 8, 0.1)",
     icon: <Crown size={16} fill="#eab308" color="#eab308" />,
@@ -47,8 +47,8 @@ const PLANS = [
   },
   {
     name: "BUSINESS",
-    price: "₱3,500",
-    originalPrice: "₱3,999",
+    price: "3,500",
+    originalPrice: "3,999",
     color: "#2dd4bf", // Teal accent matching image_ed9fca.jpg
     badgeColor: "rgba(45, 212, 191, 0.1)",
     icon: <Crown size={16} fill="#2dd4bf" color="#2dd4bf" />,
@@ -195,7 +195,7 @@ const PagePricing: React.FC = () => {
 
                 {/* Pricing Block */}
                 <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 32 }}>
-                  <h2 style={{ fontSize: tier.price.includes("₱") ? 40 : 44, fontWeight: 800, margin: 0, color: "#fff", letterSpacing: "-0.02em" }}>
+                  <h2 style={{ fontSize: tier.price.includes("") ? 40 : 44, fontWeight: 800, margin: 0, color: "#fff", letterSpacing: "-0.02em" }}>
                     {tier.price}
                   </h2>
                   {tier.originalPrice && (

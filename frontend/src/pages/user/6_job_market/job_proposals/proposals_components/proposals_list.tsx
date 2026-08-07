@@ -2,7 +2,6 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  CircleDollarSign,
   Layers,
   Percent,
   RefreshCcw,
@@ -15,6 +14,8 @@ import {
   MessageSquare,
 } from "lucide-react";
 import type { ViewType } from "./proposals_list_viewtype";
+import { CreditIcon } from "@/components/ui/credit-icon";
+import { JobRichText } from "../../job_components/JobRichText";
 
 export type ProposalStatus = "Pending" | "Shortlisted" | "Accepted" | "Rejected";
 
@@ -26,6 +27,7 @@ export interface ProposalItemData {
   partyName: string;
   clientName?: string;
   clientAvatar?: string;
+  partyAvatar?: string;
   freelancerName?: string;
   freelancerAvatar?: string;
   rating?: number;
@@ -277,17 +279,17 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                     PROPOSED BID
                   </span>
                   <div className="flex items-center gap-1.5 text-yellow-500">
-                    <CircleDollarSign className="h-5 w-5 text-yellow-500 shrink-0" />
+                    <CreditIcon className="h-5 w-5 text-yellow-500 shrink-0" />
                     <span className="text-lg font-black tracking-tight">
-                      ₱{item.bidAmount.toLocaleString()}
+                      {item.bidAmount.toLocaleString()}
                     </span>
                   </div>
                 </div>
 
                 {/* 3. Cover Letter Pitch Snippet */}
-                <p className="text-xs text-zinc-300 leading-relaxed line-clamp-2 italic px-1 whitespace-pre-wrap break-words">
-                  "{item.coverLetter}"
-                </p>
+                <div className="px-1 text-zinc-300 italic">
+                  <JobRichText content={item.coverLetter} truncate={2} />
+                </div>
 
                 {/* 4. Sleek Gray Pill Tags */}
                 <div className="flex flex-wrap items-center gap-1.5 pt-1">

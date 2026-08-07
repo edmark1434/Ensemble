@@ -48,7 +48,7 @@ const GigCard: React.FC<GigCardProps> = ({ gig, isSaved, onSave, onClick }) => {
 
           {/* Pricing Row */}
           <div className="text-yellow-500 text-lg font-black mb-1">
-            ₱{gig.startingPrice.toLocaleString()}
+            {gig.startingPrice.toLocaleString()}
           </div>
 
           {/* Title and Scope Copy Block */}

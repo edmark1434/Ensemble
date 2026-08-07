@@ -1,8 +1,35 @@
 import React, { useRef, useState, type ChangeEvent } from "react";
-import { ArrowRight, Image as ImageIcon, ChevronDown, Check } from "lucide-react";
+import { ArrowRight, Image as ImageIcon, ChevronDown, Check, Bold, Italic, List, Eye, EyeOff } from "lucide-react";
+import { JobRichText } from "../JobRichText";
 import { motion, AnimatePresence } from "framer-motion";
 
-export const categories = ["Social", "YouTube", "Corporate", "Events", "Design", "Development"];
+export const categories = [
+  "Ads & Social",
+  "Youtube Videos",
+  "Tiktoks",
+  "Design",
+  "Corporate Videos",
+  "Gaming Videos",
+  "Family & Travel",
+  "Music Videos",
+  "Wedding",
+  "Events",
+  "Explainer Videos",
+  "Showreels",
+  "Fiction Films",
+  "Movie Trailers",
+  "Podcast",
+  "Sports Video",
+  "Montages",
+  "Anime Edits",
+  "Short Drama",
+  "Tutorial Videos",
+  "Teaser Videos",
+  "Animation",
+  "Presentation",
+  "Cinematic",
+  "Other"
+];
 export const difficulties = ["Beginner", "Intermediate", "Expert"];
 
 interface CreateCoreInfoProps {
@@ -16,60 +43,43 @@ interface CreateCoreInfoProps {
   setDifficulty: (val: string) => void;
   previewUrl: string | null;
   setPreviewUrl: (val: string | null) => void;
-  setThumbnail: (val: string) => void;
-  setThumbnailFile?: (file: File) => void;
+  setThumbnail: (val: string | null) => void;
+  setThumbnailFile?: (file: File | null) => void;
   isDragging: boolean;
   setIsDragging: (val: boolean) => void;
-  errors: { [key: string]: string };
-  setErrors: React.Dispatch<React.SetStateAction<{ [key: string]: string }>>;
+  errors: Record<string, string>;
+  setErrors: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   onNext: () => void;
   onDiscard: () => void;
 }
 
-interface CustomSelectProps {
+const CustomDropdown: React.FC<{
   label: string;
   value: string;
   options: string[];
   placeholder: string;
   error?: string;
   onSelect: (val: string) => void;
-}
-
-const CustomDropdown: React.FC<CustomSelectProps> = ({
-  label,
-  value,
-  options,
-  placeholder,
-  error,
-  onSelect,
-}) => {
+}> = ({ label, value, options, placeholder, error, onSelect }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
     <div className="space-y-1.5 relative">
-      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
         {label} <span className="text-red-500">*</span>
       </label>
       <div className="relative">
         <button
           type="button"
-          onClick={() => setIsOpen((prev) => !prev)}
-          className={`w-full flex items-center justify-between rounded-xl border bg-[#0d0f1a] px-3.5 py-2.5 text-xs text-left transition-all ${
-            error
-              ? "border-red-500/50 focus:border-red-500"
-              : isOpen
-              ? "border-blue-500 ring-2 ring-blue-500/10"
-              : "border-white/10 hover:border-white/20"
+          onClick={() => setIsOpen(!isOpen)}
+          className={`w-full flex items-center justify-between rounded-xl border bg-white/5 px-3.5 py-2.5 text-xs transition-all ${
+            error ? "border-red-500/50" : isOpen ? "border-blue-500/50" : "border-white/10 hover:border-white/20"
           }`}
         >
-          <span className={value ? "text-white font-medium" : "text-zinc-500"}>
+          <span className={value ? "text-white" : "text-zinc-500"}>
             {value || placeholder}
           </span>
-          <ChevronDown
-            className={`h-4 w-4 text-zinc-400 transition-transform duration-200 ${
-              isOpen ? "rotate-180 text-blue-400" : ""
-            }`}
-          />
+          <ChevronDown className={`h-3.5 w-3.5 text-zinc-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
         </button>
 
         <AnimatePresence>
@@ -138,6 +148,42 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
   onDiscard,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+
+  const insertMarkdown = (prefix: string, suffix: string = '') => {
+    const textarea = descriptionRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    const before = text.substring(0, start);
+    const selected = text.substring(start, end);
+    const after = text.substring(end, text.length);
+
+    let newText = "";
+    let finalSelectionStart = start + prefix.length;
+    let finalSelectionEnd = end + prefix.length + selected.length;
+
+    // Handle multiline bullet insertion (when suffix is empty and we are applying a list)
+    if (suffix === '' && selected.includes('\n')) {
+      const lines = selected.split('\n');
+      const bulleted = lines.map(line => prefix + line).join('\n');
+      newText = before + bulleted + after;
+      finalSelectionEnd = start + bulleted.length;
+    } else {
+      newText = before + prefix + selected + suffix + after;
+    }
+
+    setDescription(newText);
+    clearError("description");
+
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(finalSelectionStart, finalSelectionEnd);
+    }, 0);
+  };
 
   const processFile = (file: File) => {
     if (!file.type.startsWith("image/")) {
@@ -187,7 +233,6 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
         <p className="text-xs text-zinc-400">Provide fundamental background criteria for your project.</p>
       </div>
 
-      {/* Compact Thumbnail Upload Area */}
       <div className="space-y-1.5">
         <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Job Thumbnail Image</label>
         <div
@@ -213,7 +258,6 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
         </div>
       </div>
 
-      {/* Job Title */}
       <div className="space-y-1.5">
         <div className="flex justify-between items-center">
           <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Job Post Title <span className="text-red-500">*</span></label>
@@ -223,17 +267,6 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
         {errors.title && <p className="text-[11px] text-red-400">{errors.title}</p>}
       </div>
 
-      {/* Larger Job Description Input Field */}
-      <div className="space-y-1.5">
-        <div className="flex justify-between items-center">
-          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Job Post Description <span className="text-red-500">*</span></label>
-          <span className="text-[10px] font-mono text-zinc-500">{description.length}/2000</span>
-        </div>
-        <textarea rows={8} maxLength={2000} placeholder="Outline requirements, raw footage details, deliverables..." value={description} onChange={e => { setDescription(e.target.value); if(e.target.value.trim()) clearError("description"); }} className={`w-full min-h-[180px] rounded-xl border bg-white/5 px-3.5 py-3 text-xs text-white outline-none transition-all resize-y leading-relaxed custom-scrollbar ${errors.description ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-blue-500/50"}`} />
-        {errors.description && <p className="text-[11px] text-red-400">{errors.description}</p>}
-      </div>
-
-      {/* Category & Difficulty Dropdowns */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <CustomDropdown
           label="Job Category"
@@ -258,6 +291,45 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
             clearError("difficulty");
           }}
         />
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex justify-between items-end mb-1">
+          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+            Job Post Description <span className="text-red-500">*</span>
+          </label>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => insertMarkdown('**', '**')} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 transition-colors" title="Bold" disabled={isPreviewMode}>
+              <Bold className="w-3.5 h-3.5" />
+            </button>
+            <button type="button" onClick={() => insertMarkdown('*', '*')} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 transition-colors" title="Italic" disabled={isPreviewMode}>
+              <Italic className="w-3.5 h-3.5" />
+            </button>
+            <button type="button" onClick={() => insertMarkdown('- ')} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 transition-colors" title="Bullet List" disabled={isPreviewMode}>
+              <List className="w-3.5 h-3.5" />
+            </button>
+            <div className="w-px h-4 bg-white/10 mx-1" />
+            <button type="button" onClick={() => setIsPreviewMode(!isPreviewMode)} className={`p-1 rounded transition-colors flex items-center gap-1 px-2 ${isPreviewMode ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 hover:bg-white/10 text-zinc-300'}`} title="Toggle Preview">
+              {isPreviewMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              <span className="text-[10px] font-bold uppercase">{isPreviewMode ? 'Edit' : 'Preview'}</span>
+            </button>
+            <span className="text-[10px] font-mono text-zinc-500 ml-2">{description.length}/2000</span>
+          </div>
+        </div>
+        
+        {isPreviewMode ? (
+          <div className="w-full min-h-[180px] rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs overflow-y-auto custom-scrollbar">
+            {description ? (
+              <JobRichText content={description} />
+            ) : (
+              <span className="text-zinc-500 italic">Nothing to preview</span>
+            )}
+          </div>
+        ) : (
+          <textarea ref={descriptionRef} rows={8} maxLength={2000} placeholder="Outline requirements, raw footage details, deliverables..." value={description} onChange={e => { setDescription(e.target.value); if(e.target.value.trim()) clearError("description"); }} className={`w-full min-h-[180px] rounded-xl border bg-white/5 px-3.5 py-3 text-xs text-white outline-none transition-all resize-y leading-relaxed custom-scrollbar ${errors.description ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-blue-500/50"}`} />
+        )}
+        
+        {errors.description && <p className="text-[11px] text-red-400">{errors.description}</p>}
       </div>
 
       {/* Actions */}

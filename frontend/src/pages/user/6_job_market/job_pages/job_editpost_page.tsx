@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef, type FormEvent, type ChangeEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Save, X, ChevronDown, Check, CircleDollarSign, Briefcase, Lock, Image as ImageIcon, Info, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Save, X, ChevronDown, Check, Briefcase, Lock, Image as ImageIcon, Info, Plus, Trash2, Bold, Italic, List, Eye, EyeOff } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
 import PopupConfirmReturn from "../job_components/job_popups/popup_confirm_return";
 import CreationSuccess from "../job_components/job_creation_components/4_creation_success";
 import { categories, difficulties } from "../job_components/job_creation_components/1_create_coreinfo";
 import type { Job } from "../job_components/job_lists";
+import { CreditIcon } from "@/components/ui/credit-icon";
+import { JobRichText } from "../job_components/JobRichText";
 
 interface CustomSelectProps {
   label: string;
@@ -107,6 +109,8 @@ export const JobEditPostPage: React.FC = () => {
   // Form States
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [category, setCategory] = useState("");
   const [difficulty, setDifficulty] = useState<"Beginner" | "Intermediate" | "Expert">("Intermediate");
   const [skills, setSkills] = useState<string[]>([]);
@@ -145,7 +149,7 @@ export const JobEditPostPage: React.FC = () => {
           setCategory(found.category);
           setDifficulty(found.experience_level || "Intermediate");
           setSkills(found.tags || []);
-          setPriceRange(`₱${found.rate_credits_min?.toLocaleString() || 0} ~ ₱${found.rate_credits_max?.toLocaleString() || 0}`);
+          setPriceRange(`${found.rate_credits_min?.toLocaleString() || 0} ~ ${found.rate_credits_max?.toLocaleString() || 0}`);
           setPositionsNeeded(found.no_of_hires || 1);
           setHiredCount(parseInt(found.hired_count) || 0);
           if (found.thumbnail_path) {
@@ -267,11 +271,50 @@ export const JobEditPostPage: React.FC = () => {
 
       await updateJob(id, updatedPayload);
       setIsSuccessOpen(true);
+      setIsDirty(false);
     } catch (err: any) {
+      console.error(err);
       setErrors((prev) => ({ ...prev, submit: err.message || "Failed to update job post." }));
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const insertMarkdown = (prefix: string, suffix: string = '') => {
+    const textarea = descriptionRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    const before = text.substring(0, start);
+    const selected = text.substring(start, end);
+    const after = text.substring(end, text.length);
+
+    let newText = "";
+    let finalSelectionStart = start + prefix.length;
+    let finalSelectionEnd = end + prefix.length + selected.length;
+
+    if (suffix === '' && selected.includes('\n')) {
+      const lines = selected.split('\n');
+      const bulleted = lines.map(line => prefix + line).join('\n');
+      newText = before + bulleted + after;
+      finalSelectionEnd = start + bulleted.length;
+    } else {
+      newText = before + prefix + selected + suffix + after;
+    }
+
+    setDescription(newText);
+    setIsDirty(true);
+    setErrors((prev) => {
+      const { description: _, ...rest } = prev;
+      return rest;
+    });
+
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(finalSelectionStart, finalSelectionEnd);
+    }, 0);
   };
 
   const handleDelete = async () => {
@@ -336,7 +379,7 @@ export const JobEditPostPage: React.FC = () => {
           <div className="p-3.5 rounded-2xl border border-white/5 bg-white/[0.02] grid grid-cols-1 md:grid-cols-2 gap-3 text-xs mb-2">
             <div className="flex items-center gap-2.5 text-zinc-400">
               <div className="p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 shrink-0">
-                <CircleDollarSign className="h-4 w-4" />
+                <CreditIcon className="h-4 w-4" />
               </div>
               <div>
                 <span className="text-[10px] uppercase font-bold text-zinc-500 flex items-center gap-1">
@@ -436,26 +479,55 @@ export const JobEditPostPage: React.FC = () => {
 
           {/* Job Description */}
           <div className="space-y-1.5">
-            <div className="flex justify-between items-center">
-              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+            <div className="flex justify-between items-end mb-1">
+              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
                 Job Post Description <span className="text-red-500">*</span>
               </label>
-              <span className="text-[10px] font-mono text-zinc-500">{description.length}/2000</span>
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => insertMarkdown('**', '**')} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 transition-colors" title="Bold" disabled={isPreviewMode}>
+                  <Bold className="w-3.5 h-3.5" />
+                </button>
+                <button type="button" onClick={() => insertMarkdown('*', '*')} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 transition-colors" title="Italic" disabled={isPreviewMode}>
+                  <Italic className="w-3.5 h-3.5" />
+                </button>
+                <button type="button" onClick={() => insertMarkdown('- ')} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 transition-colors" title="Bullet List" disabled={isPreviewMode}>
+                  <List className="w-3.5 h-3.5" />
+                </button>
+                <div className="w-px h-4 bg-white/10 mx-1" />
+                <button type="button" onClick={() => setIsPreviewMode(!isPreviewMode)} className={`p-1 rounded transition-colors flex items-center gap-1 px-2 ${isPreviewMode ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 hover:bg-white/10 text-zinc-300'}`} title="Toggle Preview">
+                  {isPreviewMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  <span className="text-[10px] font-bold uppercase">{isPreviewMode ? 'Edit' : 'Preview'}</span>
+                </button>
+                <span className="text-[10px] font-mono text-zinc-500 ml-2">{description.length}/2000</span>
+              </div>
             </div>
-            <textarea
-              rows={8}
-              maxLength={2000}
-              placeholder="Outline requirements, raw footage details, deliverables..."
-              value={description}
-              onChange={(e) => {
-                setDescription(e.target.value);
-                setIsDirty(true);
-                if (e.target.value.trim()) setErrors((prev) => { const { description: _, ...r } = prev; return r; });
-              }}
-              className={`w-full min-h-[180px] rounded-xl border bg-white/5 px-3.5 py-3 text-xs text-white outline-none transition-all resize-y leading-relaxed custom-scrollbar ${
-                errors.description ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-blue-500/50"
-              }`}
-            />
+            
+            {isPreviewMode ? (
+              <div className="w-full min-h-[180px] rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs overflow-y-auto custom-scrollbar">
+                {description ? (
+                  <JobRichText content={description} />
+                ) : (
+                  <span className="text-zinc-500 italic">Nothing to preview</span>
+                )}
+              </div>
+            ) : (
+              <textarea
+                ref={descriptionRef}
+                rows={8}
+                maxLength={2000}
+                placeholder="Outline requirements, raw footage details, deliverables..."
+                value={description}
+                onChange={(e) => {
+                  setDescription(e.target.value);
+                  setIsDirty(true);
+                  if (e.target.value.trim()) setErrors((prev) => { const { description: _, ...r } = prev; return r; });
+                }}
+                className={`w-full min-h-[180px] rounded-xl border bg-white/5 px-3.5 py-3 text-xs text-white outline-none transition-all resize-y leading-relaxed custom-scrollbar ${
+                  errors.description ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-blue-500/50"
+                }`}
+              />
+            )}
+            
             {errors.description && <p className="text-[11px] text-red-400">{errors.description}</p>}
           </div>
 

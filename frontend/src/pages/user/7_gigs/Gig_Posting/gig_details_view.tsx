@@ -61,7 +61,7 @@ const GigDetailsView: React.FC<GigDetailsViewProps> = ({ gig, onClose }) => {
 
             <div className="p-6 rounded-2xl bg-white/[0.03] border border-white/10">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-2xl font-black text-white">₱{current.price.toLocaleString()}</h3>
+                <h3 className="text-2xl font-black text-white">{current.price.toLocaleString()}</h3>
                 <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{current.label}</span>
               </div>
 

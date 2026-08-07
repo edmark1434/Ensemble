@@ -1,5 +1,6 @@
 import React, { type FormEvent } from "react";
-import { ArrowRight, X, Plus, Minus, CircleDollarSign } from "lucide-react";
+import { ArrowRight, X, Plus, Minus } from "lucide-react";
+import { CreditIcon } from "@/components/ui/credit-icon";
 
 interface CreateBudgetSkillsProps {
   skills: string[];
@@ -111,14 +112,14 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="relative">
             <div className="absolute left-3.5 top-3 text-yellow-500 pointer-events-none">
-              <CircleDollarSign className="h-4 w-4" />
+              <CreditIcon className="h-4 w-4" />
             </div>
             <input type="text" placeholder="Min Value" value={formatCommaString(minBudget)} onChange={e => { setMinBudget(e.target.value.replace(/\D/g, "")); setErrors(prev => { const {minBudget, ...r} = prev; return r; }); }} className={`w-full rounded-xl border bg-white/5 pl-10 pr-3.5 py-2.5 text-xs text-white outline-none transition-all ${errors.minBudget ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-blue-500/50"}`} />
             {errors.minBudget && <p className="text-[11px] text-red-400 mt-1">{errors.minBudget}</p>}
           </div>
           <div className="relative">
             <div className="absolute left-3.5 top-3 text-yellow-500 pointer-events-none">
-              <CircleDollarSign className="h-4 w-4" />
+              <CreditIcon className="h-4 w-4" />
             </div>
             <input type="text" placeholder="Max Value" value={formatCommaString(maxBudget)} onChange={e => { setMaxBudget(e.target.value.replace(/\D/g, "")); setErrors(prev => { const {maxBudget, ...r} = prev; return r; }); }} className={`w-full rounded-xl border bg-white/5 pl-10 pr-3.5 py-2.5 text-xs text-white outline-none transition-all ${errors.maxBudget ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-blue-500/50"}`} />
             {errors.maxBudget && <p className="text-[11px] text-red-400 mt-1">{errors.maxBudget}</p>}
