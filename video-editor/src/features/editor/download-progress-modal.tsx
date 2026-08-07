@@ -47,7 +47,8 @@ const DownloadProgressModal = () => {
 
   const handleDownload = async () => {
     if (output?.url) {
-      await download(output.url, `${sanitizeFilename(projectName)}`);
+      const extension = new URL(output.url).pathname.split(".").pop() || "mp4";
+      await download(output.url, `${sanitizeFilename(projectName)}.${extension}`);
     }
     actions.resetExport();
   };
@@ -84,7 +85,7 @@ const DownloadProgressModal = () => {
             </div>
           ) : isFailed ? (
             <div className="flex flex-col items-center justify-center gap-4 py-4 text-center">
-              <CircleXIcon size={32} className="text-destructive" />
+              <CircleXIcon size={32} className="text-red-500" />
               <div className="space-y-1">
                 <div className="font-semibold">Export failed</div>
                 <div className="text-muted-foreground text-sm">{error}</div>

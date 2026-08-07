@@ -347,7 +347,7 @@ const UploadImageItem = ({
       {!isReady &&
         (isError ? (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-md">
-            <AlertCircle className="h-6 w-6 text-red-400" />
+            <AlertCircle className="h-6 w-6 text-red-500" />
           </div>
         ) : (
           <div className="absolute bottom-1 left-1 right-1 h-2 bg-black/30 overflow-hidden rounded-full">
@@ -505,7 +505,7 @@ const UploadVideoItem = ({
       {!isReady &&
         (isError ? (
           <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-md">
-            <AlertCircle className="h-6 w-6 text-red-400" />
+            <AlertCircle className="h-6 w-6 text-red-500" />
           </div>
         ) : (
           <div className="absolute bottom-1 left-1 right-1 h-2 bg-black/30 overflow-hidden rounded-full">
@@ -646,7 +646,7 @@ const UploadAudioItem = ({
         disabled={!isReady}
       >
         {isError ? (
-          <AlertCircle className="size-4 text-red-400" />
+          <AlertCircle className="size-4 text-red-500" />
         ) : !isReady ? (
           <Loader2 className="size-4 text-current" />
         ) : isPlaying ? (
@@ -673,7 +673,7 @@ const UploadAudioItem = ({
             {durationLabel}
     </span>
         ) : isError ? (
-          <span className="text-xs text-red-400">Upload failed</span>
+          <span className="text-xs text-red-500">Upload failed</span>
         ) : (
           <div className="h-1 w-full max-w-[160px] bg-black/20 rounded-full overflow-hidden mt-1">
             <div

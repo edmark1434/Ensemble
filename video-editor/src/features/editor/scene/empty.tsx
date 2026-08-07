@@ -8,6 +8,7 @@ import useUploadStore from "@/features/editor/store/use-upload-store";
 import { useIsMediumScreen } from "@/hooks/use-media-query";
 import ModalUpload from "@/components/modal-upload";
 import { useFileDropUpload } from "../hooks/use-file-drop-upload";
+import {cn} from "@/lib/utils";
 
 const SceneEmpty = () => {
   const [isLoading, setIsLoading] = useState(true);
@@ -65,7 +66,11 @@ const SceneEmpty = () => {
                 : "border-border"
           }`}
         >
-          <div className="flex items-center justify-center gap-4">
+          <div className={cn(
+              "flex items-center justify-center gap-4 p-2",
+              size.height >= size.width ? "flex-col" : "flex-row",
+            )}
+          >
             {dragError ? (
               <p className="text-sm font-medium text-red-500">{dragError}</p>
             ) : (

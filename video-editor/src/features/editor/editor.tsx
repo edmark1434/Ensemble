@@ -537,6 +537,10 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
   useKeyboardShortcuts(stateManager);
 
   useEffect(() => {
+    useStore.getState().setStateManager(stateManager);
+  }, []);
+
+  useEffect(() => {
     const lockWindowScroll = () => window.scrollTo(0, 0);
     window.addEventListener("scroll", lockWindowScroll);
     return () => window.removeEventListener("scroll", lockWindowScroll);

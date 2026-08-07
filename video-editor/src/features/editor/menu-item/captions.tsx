@@ -225,7 +225,7 @@ const MediaSection = ({
           />
 
           {errorMessage && (
-            <div className="text-sm text-destructive text-center my-4">{errorMessage}</div>
+            <div className="text-sm text-red-500 text-center my-4">{errorMessage}</div>
           )}
         </div>
       )
