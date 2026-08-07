@@ -14,6 +14,7 @@ import { PlayerRef } from "@remotion/player";
 import { create } from "zustand";
 import {TIMELINE_ZOOM_LEVELS} from "@/features/editor/constants/scale";
 import {nanoid} from "nanoid";
+import StateManager from "@designcombo/state";
 
 interface ITimelineStore {
   duration: number;
@@ -67,6 +68,9 @@ interface ITimelineStore {
 
   userId: string;
   projectId: string;
+
+  stateManager: StateManager | null;
+  setStateManager: (stateManager: StateManager | null) => void;
 }
 
 export interface IMarker {
@@ -187,7 +191,10 @@ const useStore = create<ITimelineStore>((set, get) => ({
   setProjectName: (name: string) => set({ projectName: name }),
 
   userId: "dev-user-id",
-  projectId: "dev-project-id"
+  projectId: "dev-project-id",
+
+  stateManager: null,
+  setStateManager: (stateManager) => set({ stateManager }),
 }));
 
 export default useStore;

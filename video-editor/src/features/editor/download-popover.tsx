@@ -103,7 +103,9 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
     ? "Export ready for download"
     : isFailed
       ? "Export failed"
-      : "Export";
+      : exporting
+        ? "Export in progress"
+        : "Export";
 
   const handleExport = () => {
     const { playerRef, fps: timelineFps } = useStore.getState();
@@ -116,6 +118,7 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
       duration,
       projectName,
       background,
+      size,
       type,
       format,
       resolution,
@@ -145,7 +148,7 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
 
   const showResolution = type !== "audio";
   const showFrameRate = type === "video" || type === "image-sequence";
-  const showBitrate = (type === "video" || type === "audio") && format !== "gif";
+  const showBitrate = (type === "video" || type === "audio") && !(format === "gif" || format === "mov");
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -153,20 +156,22 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
         {isEmpty && !isCompleted && !isFailed ? (
           <Tooltip delayDuration={10}>
             <TooltipTrigger asChild>
-              <span>
-                <Button
-                  className={cn(
-                    "flex h-8 gap-2 hover:!bg-accent/30 font-semibold",
-                    (isCompleted || isFailed) && "!border-primary text-primary hover:!border-primary/80 hover:text-primary/80"
-                  )}
-                  variant={"outline"}
-                  size={isMediumScreen ? "sm" : "icon"}
-                  disabled={isEmpty && !isCompleted && !isFailed}
-                >
-                  <Download size={16} />{" "}
-                  <span className="hidden md:block">{buttonLabel}</span>
-                </Button>
-              </span>
+        <span>
+          <Button
+            className={cn(
+              "flex h-8 gap-2 hover:!bg-accent/30 font-semibold",
+              (exporting && !isCompleted && !isFailed) && "!border-foreground hover:!border-foreground/80",
+              isCompleted && "!border-primary text-primary hover:!border-primary/80 hover:text-primary/80",
+              isFailed && "!border-red-500 text-red-500 hover:!border-red-500/80 hover:text-red-500/80"
+            )}
+            variant={"outline"}
+            size={isMediumScreen ? "sm" : "icon"}
+            disabled={isEmpty && !isCompleted && !isFailed}
+          >
+            <Download size={16} />{" "}
+            <span className="hidden md:block">{buttonLabel}</span>
+          </Button>
+        </span>
             </TooltipTrigger>
             <TooltipContent side="bottom" align="center" sideOffset={1}>
               Project is still empty
@@ -176,7 +181,9 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
           <Button
             className={cn(
               "flex h-8 gap-2 hover:!bg-accent/30 font-semibold",
-              (isCompleted || isFailed) && "!border-primary text-primary hover:!border-primary/80 hover:text-primary/80"
+              (exporting && !isCompleted && !isFailed) && "!border-foreground hover:!border-foreground/80",
+              isCompleted && "!border-primary text-primary hover:!border-primary/80 hover:text-primary/80",
+              isFailed && "!border-red-500 text-red-500 hover:!border-red-500/80 hover:text-red-500/80"
             )}
             variant={"outline"}
             size={isMediumScreen ? "sm" : "icon"}

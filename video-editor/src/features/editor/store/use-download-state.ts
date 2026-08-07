@@ -120,7 +120,7 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
         ? resolution
         : getDefaultResolution(format);
       const bitrate =
-        format === "gif" ? null
+        format === "gif" || format === "mov" ? null
           : (type === "video"
             ? getDefaultVideoBitrateKbps(compositionWidth, compositionHeight, nextResolution, fps)
             : get().bitrate

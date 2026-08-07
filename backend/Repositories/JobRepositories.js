@@ -1,5 +1,5 @@
-// backend/Repositories/JobRepositories.js
-const { pool } = require('../lib/database');
+// backend/repositories/JobRepositories.js
+const { pool } = require('../lib/Database');
 
 async function createJobRepositories(jobData) {
     const client = await pool.connect();

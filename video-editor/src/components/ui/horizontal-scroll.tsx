@@ -65,7 +65,7 @@ export const HorizontalScroll: React.FC<HorizontalScrollProps> = ({
     <div className={`relative ${className}`}>
       {/* Debug indicator */}
       {debug && (
-        <div className="absolute -top-6 left-0 text-xs text-red-400">
+        <div className="absolute -top-6 left-0 text-xs text-red-500">
           Left: {showLeftShadow ? "ON" : "OFF"} | Right:{" "}
           {showRightShadow ? "ON" : "OFF"}
         </div>
