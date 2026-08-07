@@ -3,7 +3,7 @@ const ContractRepositories = require('../repositories/ContractRepositories');
 async function sendJobOfferController(req, res) {
     try {
         // req.user from auth middleware (assuming verifyToken is used)
-        const clientId = req.user.accountId;
+        const clientId = req.user.account_id || req.user.accountId;
         const { proposalId, rateCredits, startsAt } = req.body;
 
         if (!proposalId || !rateCredits) {

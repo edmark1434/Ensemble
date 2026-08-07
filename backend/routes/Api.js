@@ -20,7 +20,7 @@ const termsRoutes = require('./Terms');
 const transactionRoutes = require('./Transaction');
 const teamRoutes = require('./Teams');
 const contractRoutes = require('./Contract');
-const dashboardRoutes = require('./dashboardRoutes');
+const dashboardRoutes = require('./Dashboard');
 const { getAllCountriesController,
     getAllPlacesController
 } = require('../controllers/SystemControllers')
