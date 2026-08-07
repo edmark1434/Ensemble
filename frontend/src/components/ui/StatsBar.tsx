@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FC } from "react";
 import { useNavigate } from "react-router-dom";
+import api from "@/lib/axios";
 
 const T = {
   bgCard: "#0d0f1a",
@@ -55,31 +56,47 @@ const AnimatedCounter: FC<CounterProps> = ({ targetValue, duration = 2000 }) => 
   return <>{count}</>;
 };
 
-const AvatarGroup = () => (
-  <div style={{ display: "flex", alignItems: "center" }}>
-    {[1, 2, 3, 4, 5].map((i) => (
-      <div key={i} style={{
-        width: 36, height: 36, borderRadius: "50%",
-        border: `2px solid #080a12`, // matching the DriftWall overlay background to blend perfectly
-        marginLeft: i === 1 ? 0 : -14,
-        background: i === 4 
-          ? "#0284c7" // The blue "M" avatar from screenshot
-          : `url('https://i.pravatar.cc/100?img=${i * 12 + 10}') center/cover`,
-        zIndex: 10 - i,
-        position: "relative",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: "#fff",
-        fontWeight: "bold",
-        fontSize: "16px",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.5)"
-      }}>
-        {i === 4 ? "M" : ""}
-      </div>
-    ))}
-  </div>
-);
+const AvatarGroup = () => {
+  const [avatars, setAvatars] = useState<string[]>([]);
+  
+  useEffect(() => {
+    const fetchAvatars = async () => {
+      try {
+        const response = await api.get("/api/accounts/recent-avatars");
+        if (response.data?.success && Array.isArray(response.data.data)) {
+          const fetchedUrls = response.data.data.map((u: any) => 
+            u.avatar_path ? `${import.meta.env.VITE_CLOUDFRONT_URL}${u.avatar_path.startsWith('/') ? '' : '/'}${u.avatar_path}` : "https://d2dl0agwn9kque.cloudfront.net/jobs/Chiikawa_2025_1786113209772_9bef7d8f.webp"
+          );
+          setAvatars(fetchedUrls);
+        }
+      } catch (err) {
+        console.error("Failed to fetch recent avatars", err);
+      }
+    };
+    fetchAvatars();
+  }, []);
+
+  const displayAvatars = avatars.length > 0 ? avatars : Array(5).fill("https://d2dl0agwn9kque.cloudfront.net/jobs/Chiikawa_2025_1786113209772_9bef7d8f.webp");
+
+  return (
+    <div style={{ display: "flex", alignItems: "center" }}>
+      {displayAvatars.slice(0, 5).map((url, i) => (
+        <div key={i} style={{
+          width: 36, height: 36, borderRadius: "50%",
+          border: `2px solid #080a12`, 
+          marginLeft: i === 0 ? 0 : -14,
+          background: `url('${url}') center/cover`,
+          zIndex: 10 - i,
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.5)"
+        }} />
+      ))}
+    </div>
+  );
+};
 
 const StatsBar: FC = () => {
   const navigate = useNavigate();
