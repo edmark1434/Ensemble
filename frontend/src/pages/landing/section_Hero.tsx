@@ -11,6 +11,8 @@ const T_HERO = {
   muted: "#7a8499",
 } as const;
 
+import TrueFocus from "@/components/ui/TrueFocus";
+
 const INTENT_INDEX = { hire: 0, work: 1, edit: 2 } as const;
 
 const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
@@ -124,8 +126,19 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
         <div style={{ maxWidth: "800px" }}>
 
           {/* STATIC BADGE */}
-          <div style={{ ...animLoad(0), display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(59, 130, 246, 0.15)", border: "1px solid rgba(59, 130, 246, 0.25)", padding: "6px 14px", borderRadius: "100px", marginBottom: "24px", backdropFilter: "blur(8px)" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#3b82f6", textTransform: "uppercase", letterSpacing: 0.5 }}>Collaborative Video Editing & Creative Marketplace</span>
+          <div style={{ ...animLoad(0), display: "inline-flex", alignItems: "center", gap: 8, background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.08)", padding: "6px 14px", borderRadius: "100px", marginBottom: "24px", backdropFilter: "blur(8px)" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#a1a1aa", textTransform: "uppercase", letterSpacing: 0.5 }}>
+              <TrueFocus 
+                sentence="COLLABORATIVE VIDEO EDITING|& CREATIVE MARKETPLACE"
+                separator="|"
+                manualMode={false}
+                blurAmount={2}
+                borderColor="#a1a1aa"
+                glowColor="rgba(255, 255, 255, 0.2)"
+                animationDuration={0.8}
+                pauseBetweenAnimations={2}
+              />
+            </div>
           </div>
 
           {/* SLIDING CONTENT */}

@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { FC } from "react";
+import { motion, useInView } from "framer-motion";
 import ColorBends from "@/components/ui/ColorBends"; // Update path if needed
+import FadeInScroll from "@/components/ui/FadeInScroll";
 
 interface CtaStripProps {
   onStart: () => void;
@@ -18,6 +20,10 @@ const T_CTA = {
 const SectionCallForAction: FC<CtaStripProps> = ({ onStart, isMuted = false }) => {
   const hoverAudioRef = useRef<HTMLAudioElement | null>(null);
   const clickAudioRef = useRef<HTMLAudioElement | null>(null);
+  const textRef = useRef(null);
+  const isInView = useInView(textRef, { once: false, amount: 0.5 });
+  
+  const text = "Ready to build your blueprint?";
 
   useEffect(() => {
     // Initialize standard action sound effects
@@ -79,9 +85,18 @@ const SectionCallForAction: FC<CtaStripProps> = ({ onStart, isMuted = false }) =
       </div>
 
       {/* ─── High-Priority Interactive Layout Content Layer ─── */}
-      <div style={{ position: "relative", zIndex: 1 }}>
-        <h2 style={{ fontFamily: T_CTA.fontDisplay, fontWeight: 800, fontSize: "clamp(26px,4vw,40px)", marginBottom: 14, color: "#fff" }}>
-          Ready to build your blueprint?
+      <FadeInScroll distance={40} duration={0.8} style={{ position: "relative", zIndex: 1 }}>
+        <h2 ref={textRef} style={{ fontFamily: T_CTA.fontDisplay, fontWeight: 800, fontSize: "clamp(26px,4vw,40px)", marginBottom: 14, color: "#fff" }}>
+          {text.split("").map((char, index) => (
+            <motion.span
+              key={index}
+              initial={{ opacity: 0 }}
+              animate={isInView ? { opacity: 1 } : { opacity: 0 }}
+              transition={{ duration: 0.05, delay: index * 0.05 }}
+            >
+              {char}
+            </motion.span>
+          ))}
         </h2>
         <p style={{ color: T_CTA.muted, fontSize: 15, maxWidth: 440, margin: "0 auto 32px", lineHeight: 1.5 }}>
           Join thousands of filmmakers already using Ensemble to ship better stories, faster.
@@ -112,7 +127,7 @@ const SectionCallForAction: FC<CtaStripProps> = ({ onStart, isMuted = false }) =
         >
           Start for free →
         </button>
-      </div>
+      </FadeInScroll>
     </section>
   );
 };

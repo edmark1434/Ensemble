@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Suspense, lazy } from "react";
 import type { FC } from "react";
 import { useNavigate } from "react-router-dom";
 import ScrollToTop from "@/components/utility/scroll_to_top.tsx";
@@ -6,12 +6,16 @@ import ScrollToTop from "@/components/utility/scroll_to_top.tsx";
 // Modular Split Section Imports
 import NavLanding from "../pages/landing/nav_Landing";
 import SectionHero from "../pages/landing/section_Hero";
-import SectionGallery from "@/pages/landing/section_gallery.tsx";
-import SectionHowItWorks from "../pages/landing/section_HowItWorks";
-import SectionFeatures from "../pages/landing/section_Features";
-import SectionScrollText from "../pages/landing/section_ScrollText";
-import SectionCallForAction from "../pages/landing/section_CallForAction";
-import SectionFooter from "../pages/landing/section_Footer";
+
+// Lazy-loaded components below the fold for better performance
+const SectionGallery = lazy(() => import("@/pages/landing/section_gallery.tsx"));
+const SectionHowItWorks = lazy(() => import("../pages/landing/section_HowItWorks"));
+const SectionFeatures = lazy(() => import("../pages/landing/section_Features"));
+const SectionScrollExpand = lazy(() => import("../pages/landing/section_ScrollExpand"));
+const SectionScrollText = lazy(() => import("../pages/landing/section_ScrollText"));
+const SectionTestimonials = lazy(() => import("../pages/landing/section_Testimonials"));
+const SectionCallForAction = lazy(() => import("../pages/landing/section_CallForAction"));
+const SectionFooter = lazy(() => import("../pages/landing/section_Footer"));
 
 // ─── Design tokens (Plus Jakarta Sans) ────────────────────────────────────────
 const T = {
@@ -50,84 +54,7 @@ function useGlobalStyle(css: string): void {
   }, []);
 }
 
-// ─── Animated Counter Sub-Component ──────────────────────────────────────────
-interface CounterProps {
-  targetValue: string;
-  duration?: number;
-}
 
-const AnimatedCounter: FC<CounterProps> = ({ targetValue, duration = 2000 }) => {
-  const [count, setCount] = useState<string>("0");
-
-  useEffect(() => {
-    // Extract raw numerical values and any string suffixes/prefixes
-    const numericPart = parseFloat(targetValue.replace(/[^0-9.]/g, ""));
-    const suffix = targetValue.replace(/[0-9.,]/g, "");
-    const hasComma = targetValue.includes(",");
-
-    if (isNaN(numericPart)) {
-      setCount(targetValue);
-      return;
-    }
-
-    let startTimestamp: number | null = null;
-    const step = (timestamp: number) => {
-      if (!startTimestamp) startTimestamp = timestamp;
-      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-
-      // Calculate active numeric step position
-      const currentCount = progress * numericPart;
-
-      // Format output based on original value characteristics
-      let formattedCount = "";
-      if (targetValue.includes(".")) {
-        // Handle decimals (e.g., 4.8★)
-        formattedCount = currentCount.toFixed(1);
-      } else {
-        // Handle whole numbers
-        formattedCount = Math.floor(currentCount).toString();
-      }
-
-      // Restore standard thousands comma separation if original had it
-      if (hasComma) {
-        formattedCount = Math.floor(currentCount).toLocaleString();
-      }
-
-      setCount(`${formattedCount}${suffix}`);
-
-      if (progress < 1) {
-        window.requestAnimationFrame(step);
-      }
-    };
-
-    window.requestAnimationFrame(step);
-  }, [targetValue, duration]);
-
-  return <>{count}</>;
-};
-
-// ─── Stats Bar Component ───────────────────────────────────────────────────
-const STATS = [
-  { value: "200+",   label: "Verified Clients" },
-  { value: "1,000+", label: "Users" },
-  { value: "4.8★",   label: "User Satisfaction" },
-];
-
-const StatsBar: FC = () => (
-  <div style={{ borderBottom: `1px solid ${T.border}`, background: T.bgCard, padding: "36px 40px" }}>
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, maxWidth: 840, margin: "0 auto", textAlign: "center" }}>
-      {STATS.map((s) => (
-        <div key={s.label}>
-          <div style={{ fontFamily: T.fontDisplay, fontSize: 32, fontWeight: 800, color: "#fff", letterSpacing: -1 }}>
-            {/* Smooth 60fps counting frame injector */}
-            <AnimatedCounter targetValue={s.value} duration={2000} />
-          </div>
-          <div style={{ color: T.muted, fontSize: 13, marginTop: 4 }}>{s.label}</div>
-        </div>
-      ))}
-    </div>
-  </div>
-);
 
 // ─── Main Landing Page Composition ───────────────────────────────────────────
 const LandingPage: FC = () => {
@@ -194,7 +121,7 @@ const LandingPage: FC = () => {
   };
 
   return (
-    <div style={{ background: T.bg, minHeight: "100vh", overflowX: "hidden" }}>
+    <div style={{ background: T.bg, minHeight: "100vh", overflowX: "clip" }}>
       {/* Background Music Resource Initialization Loop */}
       <audio ref={audioRef} src="/sounds/bgm_landing.mp3" loop />
 
@@ -209,26 +136,32 @@ const LandingPage: FC = () => {
       {/* 2. Full Video Backdrop Hero Module */}
       <SectionHero onStart={handleStartAction} isMuted={isMuted} />
 
-      {/* 3. Operational Performance Stats Module */}
-      <StatsBar />
+      {/* Lazy-loaded sections to prevent initial lag */}
+      <Suspense fallback={<div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: T.muted }}>Loading...</div>}>
+        {/* 4. Interactive WebGL Curvature Showcase */}
+        <SectionGallery isMuted={isMuted} />
 
-      {/* 4. Interactive WebGL Curvature Showcase */}
-      <SectionGallery isMuted={isMuted} />
+        {/* 6.5 Isolated Scrolling Text Module */}
+        <SectionScrollText isMuted={isMuted} />
 
-      {/* 5. Multi-Intent 3-Way Structural Flow Module */}
-      <SectionHowItWorks isMuted={isMuted} />
+        {/* 5. Multi-Intent 3-Way Structural Flow Module */}
+        <SectionHowItWorks isMuted={isMuted} />
 
-      {/* 6. Marketplace Value Grid Module */}
-      <SectionFeatures isMuted={isMuted} />
+        {/* 6. Marketplace Value Grid Module */}
+        <SectionFeatures isMuted={isMuted} />
 
-      {/* 6.5 Isolated Scrolling Text Module */}
-      <SectionScrollText isMuted={isMuted} />
+        {/* 6.1 Scroll Expansion Module */}
+        <SectionScrollExpand isMuted={isMuted} />
 
-      {/* 7. Action Acquisition Strip Module */}
-      <SectionCallForAction onStart={handleStartAction} isMuted={isMuted} />
+        {/* 6.7 Wall of Love / Testimonials Module */}
+        <SectionTestimonials />
 
-      {/* 8. Directory Tree Architecture Footer Module */}
-      <SectionFooter isMuted={isMuted} />
+        {/* 7. Action Acquisition Strip Module */}
+        <SectionCallForAction onStart={handleStartAction} isMuted={isMuted} />
+
+        {/* 8. Directory Tree Architecture Footer Module */}
+        <SectionFooter isMuted={isMuted} />
+      </Suspense>
 
       <ScrollToTop />
     </div>

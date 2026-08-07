@@ -30,7 +30,8 @@ const SectionScrollText: React.FC<ScrollTextProps> = ({ isMuted = false }) => {
         padding: "60px 0",
         background: "linear-gradient(180deg, #080a12 0%, #0d0f1a 100%)",
         overflow: "hidden",
-        width: "100%"
+        width: "100%",
+        borderBottom: "1px solid #1e2130"
       }}
     >
       <style>{`
