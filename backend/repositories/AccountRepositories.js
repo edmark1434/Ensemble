@@ -203,7 +203,7 @@ async function getProfileRepositories(accountId) {
         throw err;
     }
 }
-
+//jp
 async function getAccountLinkByAccountIdRepositories(accountId) { 
     try {
         const result = await pool.query('SELECT account_link_id,platform,url FROM account_link WHERE account_id = $1', [accountId]);
@@ -271,6 +271,29 @@ async function updateAccountProfile(accountId, fileId) {
     }
 }
 
+async function getRecentUserAvatarsRepositories(limit = 5) {
+    try {
+        const query = `
+            SELECT 
+                a.account_id,
+                a.display_name,
+                a.handle,
+                f.path AS avatar_path
+            FROM accounts a
+            INNER JOIN users u ON a.account_id = u.account_id
+            LEFT JOIN files f ON a.avatar_file_id = f.file_id
+            WHERE a.type = 'User' AND LOWER(a.status) = 'active' AND a.deleted_at IS NULL
+            ORDER BY u.user_id DESC
+            LIMIT $1
+        `;
+        const result = await pool.query(query, [limit]);
+        return result.rows;
+    } catch (err) {
+        console.error('Error fetching recent user avatars:', err);
+        throw err;
+    }
+}
+
 module.exports = {
     getAllAccounts,
     getAccountById,
@@ -284,5 +307,6 @@ module.exports = {
     checkUserAccountIdRepositories,
     getDisplayNameByAccountId,
     updateAndInsertAccountProfile,
-    updateAccountProfile
+    updateAccountProfile,
+    getRecentUserAvatarsRepositories
 };

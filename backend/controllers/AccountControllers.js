@@ -6,6 +6,7 @@ const { createNewAccount, fetchAllAccounts, getAccountByHandleService,
     updateAndInsertAccountProfileServices,
     updateAccountProfileServices,
     settingAccountInfoUpdate,
+    getRecentUserAvatarsService
 } = require("../services/AccountServices");
 const { getUserOnboardingStep,
      updateUserDetails
@@ -222,6 +223,19 @@ async function settingAccountInfoUpdateController(req, res) {
         });
     }
 }
+//jp
+async function getRecentUserAvatarsController(req, res) {
+    try {
+        const avatars = await getRecentUserAvatarsService();
+        return res.status(200).json({ success: true, data: avatars });
+    } catch (err) {
+        console.error('Error on fetching recent user avatars:', err);
+        return res.status(500).json({
+            success: false,
+            message: 'Unable to fetch recent user avatars',
+        });
+    }
+}
 
 module.exports = {
     createAccount,
@@ -235,4 +249,5 @@ module.exports = {
     settingAccountInfoUpdateController,
     updateAndInsertAccountProfileController,
     updateAccountProfileIdController,
+    getRecentUserAvatarsController,
 };
