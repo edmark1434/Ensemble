@@ -1,9 +1,10 @@
 // src/pages/user/1_home/home_components/home_banner.tsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Search, X, ChevronUp, ChevronDown, HelpCircle } from "lucide-react";
 import { HomeQuickActButtons } from "./home_quickact_buttons";
 import { HomeBannerVersion } from "./home_banner_version";
 import { HomeBannerInfo } from "./home_banner_info";
+import useGlobalState from "@/lib/global_state";
 
 export const WelcomeCardSkeleton: React.FC = () => (
   <div className="mb-12 overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-8">
@@ -34,6 +35,79 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
+  const [isFirstVisit, setIsFirstVisit] = useState(false);
+  const [greeting, setGreeting] = useState("Welcome back");
+  const [displayedText, setDisplayedText] = useState("");
+  const [isTyping, setIsTyping] = useState(true);
+
+  const user = useGlobalState((state) => state.user);
+
+  useEffect(() => {
+    const hasVisited = sessionStorage.getItem("hasVisitedHome");
+    if (!hasVisited) {
+      setIsFirstVisit(true);
+      sessionStorage.setItem("hasVisitedHome", "true");
+    }
+  }, []);
+
+  const getRandomGreeting = useCallback(() => {
+    const fullUserName = user?.display_name || user?.name || user?.username || "Editor";
+    const firstName = fullUserName.split(' ')[0];
+    const hour = new Date().getHours();
+    
+    const greetings = [
+      `Welcome back, ${firstName}!`,
+      `Hey ${firstName}, good to see you!`,
+      `Look who’s back, ${firstName}!`,
+      `Back in action, ${firstName}!`,
+      `Hey ${firstName}, let’s get to it!`,
+      `Good to have you here, ${firstName}.`,
+      `Ready when you are, ${firstName}!`,
+      `Hey ${firstName}, glad you dropped in!`,
+      `Ah, ${firstName}! Welcome back.`,
+      `Right on time, ${firstName}!`,
+      `Timeline’s waiting, ${firstName}!`,
+      `Ready to render, ${firstName}?`,
+      `Back to the cuts, ${firstName}!`,
+      `What are we editing today, ${firstName}?`,
+      `What’s up, ${firstName}?`
+    ];
+
+    if (hour >= 5 && hour < 12) greetings.push(`Good morning, ${firstName}.`);
+    else if (hour >= 18 || hour < 5) greetings.push(`Good evening, ${firstName}.`);
+    else if (hour >= 12 && hour < 18) greetings.push(`Good afternoon, ${firstName}.`);
+
+    return greetings[Math.floor(Math.random() * greetings.length)];
+  }, [user]);
+
+  // Initial greeting
+  useEffect(() => {
+    setGreeting(getRandomGreeting());
+  }, [getRandomGreeting]);
+
+  // Typewriter effect
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    
+    if (isTyping) {
+      if (displayedText.length < greeting.length) {
+        timeout = setTimeout(() => {
+          setDisplayedText(greeting.slice(0, displayedText.length + 1));
+        }, 50); // Typing speed
+      } else {
+        setIsTyping(false); // Finished typing
+      }
+    } else {
+      // 3 seconds later, change randomly
+      timeout = setTimeout(() => {
+        setGreeting(getRandomGreeting());
+        setDisplayedText(""); // Reset text
+        setIsTyping(true); // Start typing again
+      }, 3000);
+    }
+
+    return () => clearTimeout(timeout);
+  }, [displayedText, isTyping, greeting, getRandomGreeting]);
 
   // Dual-Layer Video Cross-Fade Management
   const [activeClipIndex, setActiveClipIndex] = useState(0);
@@ -144,7 +218,8 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
           className="text-2xl font-extrabold tracking-tight text-white md:text-4xl"
           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
         >
-          Welcome back, Editor
+          {displayedText}
+          <span className="animate-pulse inline-block ml-1 opacity-70">|</span>
         </h1>
 
         {/* Smooth CSS Grid Transition for Collapsible Paragraphs & Search Bar */}
