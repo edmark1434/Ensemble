@@ -31,11 +31,23 @@ exports.up = (pgm) => {
     by_account_id: { type: 'uuid' },
     for_account_id: { type: 'uuid', notNull: true },
     violation_id: { type: 'uuid' },
+    report_number: { type: 'varchar(20)', unique: true },
+    target_type: { type: 'varchar(50)' },
+    target_id: { type: 'varchar(100)' },
+    target_label: { type: 'varchar(255)' },
+    reason: { type: 'varchar(100)' },
+    description: { type: 'text' },
+    priority: { type: 'varchar(20)', default: 'medium' },
+    assigned_staff_id: { type: 'uuid' },
+    updated_at: { type: 'timestamptz', default: pgm.func('NOW()') },
+    resolved_at: { type: 'timestamptz' },
   });
 
   pgm.addConstraint('reports', 'reports_by_account_id_fkey', 'FOREIGN KEY (by_account_id) REFERENCES accounts(account_id)');
   pgm.addConstraint('reports', 'reports_for_account_id_fkey', 'FOREIGN KEY (for_account_id) REFERENCES accounts(account_id)');
   pgm.addConstraint('reports', 'reports_violation_id_fkey', 'FOREIGN KEY (violation_id) REFERENCES violations(violation_id)');
+  pgm.addConstraint('reports', 'reports_assigned_staff_id_fkey', 'FOREIGN KEY (assigned_staff_id) REFERENCES staff(staff_id)');
+  pgm.createIndex('reports', 'status', { name: 'idx_reports_status_portal' });
 };
 
 
@@ -47,4 +59,3 @@ exports.up = (pgm) => {
 exports.down = (pgm) => {
   pgm.dropTable('reports', { ifExists: true });
 };
-

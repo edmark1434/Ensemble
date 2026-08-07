@@ -115,13 +115,38 @@ export type DiditVerificationDecision = {
 
 export type AdminVerificationDetails = {
   activity: 'none' | 'status_only' | 'details' | 'details_unavailable';
+  accountType?: string | null;
+  isTeam?: boolean;
   isVerified: boolean;
   verificationStatus: string;
-  kycStatus: string;
+  kycStatus: string | null;
   verificationSessionId?: string;
   verifiedAt: string | null;
   expiresAt: string | null;
   decision: DiditVerificationDecision | null;
+  attachments?: Array<{
+    fileId: string;
+    name: string;
+    path: string;
+    mimeType: string;
+    sizeBytes: number;
+    documentType: string;
+    index: number;
+    isRequired: boolean;
+    isLatest: boolean;
+    submissionVersion: number;
+  }>;
+  businessDetails?: {
+    businessType: string;
+    registeredBusinessName: string;
+    registrationNumber: string;
+    registrationCountry: string;
+    relationshipToBusiness: string;
+    submittedByAccountId: string;
+    submittedByName: string;
+    submittedByHandle: string | null;
+    submissionVersion: number;
+  } | null;
 };
 
 export type ActiveDispute = {

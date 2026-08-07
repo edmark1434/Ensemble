@@ -46,7 +46,7 @@ const JobFilters: React.FC<JobFiltersProps> = ({ filters, setters, onClear }) =>
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-            Price Range (₱)
+            Price Range (Credits)
           </label>
 
           {/* Compact Price Sort Buttons */}

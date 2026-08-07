@@ -14,18 +14,19 @@ interface ProposalsStatusesProps {
   onStatusChange: (status: "All" | ProposalStatus) => void;
 }
 
-const getStatusIcon = (label: string) => {
+const getStatusIcon = (label: string, isActive: boolean) => {
+  const defaultClass = isActive ? "" : "text-zinc-500 opacity-60";
   switch (label) {
     case "Pending":
-      return <Clock className="h-3.5 w-3.5 text-yellow-400" />;
+      return <Clock className={`h-3.5 w-3.5 transition-colors ${isActive ? "text-yellow-400" : defaultClass}`} />;
     case "Shortlisted":
-      return <UserCheck className="h-3.5 w-3.5 text-blue-400" />;
+      return <UserCheck className={`h-3.5 w-3.5 transition-colors ${isActive ? "text-blue-400" : defaultClass}`} />;
     case "Accepted":
-      return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />;
+      return <CheckCircle2 className={`h-3.5 w-3.5 transition-colors ${isActive ? "text-emerald-400" : defaultClass}`} />;
     case "Rejected":
-      return <XCircle className="h-3.5 w-3.5 text-red-400" />;
+      return <XCircle className={`h-3.5 w-3.5 transition-colors ${isActive ? "text-red-400" : defaultClass}`} />;
     default:
-      return <Layers className="h-3.5 w-3.5 text-zinc-400" />;
+      return <Layers className={`h-3.5 w-3.5 transition-colors ${isActive ? "text-zinc-400" : defaultClass}`} />;
   }
 };
 
@@ -62,7 +63,7 @@ export const ProposalsStatuses: React.FC<ProposalsStatusesProps> = ({
               )}
 
               <div className="relative z-10 flex items-center gap-2">
-                {getStatusIcon(st.label)}
+                {getStatusIcon(st.label, isActive)}
                 <span>{st.label}</span>
               </div>
 

@@ -1,11 +1,35 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import api from "@/lib/axios";
 import { TICKET_TYPE_GROUPS } from "@/pages/admin/ticketManagement/ticketTypes";
+import useGlobalState from "@/lib/global_state";
+
+interface TicketTypeDetail {
+  label: string;
+  queueRole: string;
+}
+
+interface TicketTypeGroup {
+  label: string;
+  types: string[];
+}
+
+function groupTicketTypes(details: TicketTypeDetail[]): TicketTypeGroup[] {
+  const groups = new Map<string, string[]>();
+  details.forEach((detail) => {
+    const groupLabel = detail.queueRole.replace(/ Moderator$/, "") || "Support";
+    const current = groups.get(groupLabel) || [];
+    current.push(detail.label);
+    groups.set(groupLabel, current);
+  });
+  return Array.from(groups, ([label, types]) => ({ label, types }));
+}
 
 const PageSubmitATicket: React.FC = () => {
   const navigate = useNavigate();
+  const user = useGlobalState((state) => state.user);
+  const accountId = user?.account_id || user?.accountId || null;
   const [submitted, setSubmitted] = useState(false);
   const [ticketNumber, setTicketNumber] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -13,24 +37,66 @@ const PageSubmitATicket: React.FC = () => {
   const [subject, setSubject] = useState("");
   const [ticketType, setTicketType] = useState<string>("Other");
   const [description, setDescription] = useState("");
+  const [ticketTypeGroups, setTicketTypeGroups] = useState<TicketTypeGroup[]>(
+    TICKET_TYPE_GROUPS.map((group) => ({
+      label: group.label,
+      types: [...group.types],
+    })),
+  );
+  const [loadingTypes, setLoadingTypes] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    api.get("/api/users/ticket-catalog")
+      .then((response) => {
+        const details = response.data?.data?.typeDetails;
+        if (!cancelled && Array.isArray(details) && details.length) {
+          const groups = groupTicketTypes(details);
+          setTicketTypeGroups(groups);
+          const availableTypes = groups.flatMap((group) => group.types);
+          setTicketType((current) =>
+            availableTypes.includes(current)
+              ? current
+              : availableTypes[0] || "Other",
+          );
+        }
+      })
+      .catch(() => {
+        // Keep the shared admin ticket-type constants as the fallback catalog.
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingTypes(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!accountId) {
+      navigate("/login");
+      return;
+    }
     setError(null);
     setSubmitting(true);
     try {
-      // console.log("Submitting ticket:", { subject, ticketType, description });
-      // const res = await api.post("/api/tickets/", {
-      //   subject: subject.trim(),
-      //   ticketType,
-      //   description: description.trim(),
-      // });
-      // if (res.data?.success && res.status === 200) {
-      //   setTicketNumber(res.data.data?.ticketNumber || null);
-      //   setSubmitted(true);
-      // } else {
-      //   setError(res.data?.message || "Failed to submit ticket");
-      // }
+      const response = await api.post("/api/users/tickets", {
+        account_id: accountId,
+        subject: subject.trim(),
+        type: ticketType,
+        priority: "Medium",
+        channel: "web",
+        description: description.trim(),
+      });
+      if (!response.data?.success) {
+        setError(response.data?.message || "Failed to submit ticket");
+        return;
+      }
+      setTicketNumber(response.data.data?.ticketNumber || null);
+      setSubmitted(true);
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
@@ -96,6 +162,7 @@ const PageSubmitATicket: React.FC = () => {
               <select
                 value={ticketType}
                 onChange={(e) => setTicketType(e.target.value)}
+                disabled={loadingTypes || submitting}
                 style={{
                   width: "100%",
                   background: "#0d0f1a",
@@ -106,7 +173,7 @@ const PageSubmitATicket: React.FC = () => {
                   outline: "none",
                 }}
               >
-                {TICKET_TYPE_GROUPS.map((group) => (
+                {ticketTypeGroups.map((group) => (
                   <optgroup key={group.label} label={group.label}>
                     {group.types.map((t) => (
                       <option key={t} value={t}>

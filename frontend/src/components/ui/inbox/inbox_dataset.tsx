@@ -40,6 +40,17 @@ export interface Inbox {
   gig_id?: string;
   engagement_id?: string;
   asset_id?: string;
+  ticket_id?: string;
+  support_ticket_id?: string;
+  dispute_id?: string;
+  ticket_details?: {
+    ticket_number?: string | null;
+    subject?: string | null;
+    description?: string | null;
+    type?: string | null;
+    priority?: string | null;
+    status?: string | null;
+  };
   listing_type?: "job" | "gig" | "asset" | string;
   listing_title?: string;
   listing_preview?: string;
@@ -60,6 +71,8 @@ export interface Message {
   _id: string;
   conversation_id: string;
   sender_id: number | string;
+  author_type?: "staff" | "user" | string;
+  author_name?: string;
   message_type: string;
   message_content: string;
   message_id_reply: string;

@@ -52,11 +52,16 @@ export const ProposalsIncomingPage: React.FC = () => {
         }));
         setProposals(mapped);
 
-        // Fetch job details to display title
+        // Fetch job details to display title and thumbnail
         const jobs = await fetchJobs();
         const found = jobs.find((j: any) => j.job_id === jobPostId);
         if (found) {
-          setTargetJob({ title: found.title });
+          setTargetJob({ 
+            title: found.title,
+            thumbnail: found.thumbnail_path 
+              ? `${import.meta.env.VITE_CLOUDFRONT_URL}/${found.thumbnail_path}` 
+              : "/placeholder.svg"
+          });
         }
       } catch (err) {
         console.error("Failed to load incoming proposals", err);
@@ -165,20 +170,28 @@ export const ProposalsIncomingPage: React.FC = () => {
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
-          <div className="min-w-0">
-            <span className="text-[10px] font-mono text-blue-400 uppercase tracking-wider block">
-              Viewing Proposals for ID: {jobPostId}
-            </span>
-            <button
-              type="button"
-              onClick={() => navigate(`/jobs/my-job-post/${jobPostId}`)}
-              className="text-sm font-bold text-white hover:text-blue-400 transition-colors flex items-center gap-2 truncate text-left"
-              title="View My Job Post Details"
-            >
-              <Briefcase className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
-              <span className="truncate">{targetJob?.title || "Job Post"}</span>
-              <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
-            </button>
+          <div className="min-w-0 flex items-center gap-3">
+            {targetJob?.thumbnail && (
+              <img 
+                src={targetJob.thumbnail} 
+                alt="" 
+                className="h-10 w-10 rounded-lg object-cover border border-white/10 shrink-0" 
+              />
+            )}
+            <div>
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-0.5">
+                Viewing Proposals
+              </span>
+              <button
+                type="button"
+                onClick={() => navigate(`/jobs/my-job-post/${jobPostId}`)}
+                className="text-sm font-bold text-white hover:text-blue-400 transition-colors flex items-center gap-2 truncate text-left"
+                title="View My Job Post Details"
+              >
+                <span className="truncate">{targetJob?.title || "Job Post"}</span>
+                <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" />
+              </button>
+            </div>
           </div>
         </div>
 

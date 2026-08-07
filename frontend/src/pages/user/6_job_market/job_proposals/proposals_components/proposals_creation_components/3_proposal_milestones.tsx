@@ -1,5 +1,6 @@
 import React from "react";
-import { Plus, Trash2, ArrowRight, CircleDollarSign, Clock, RefreshCcw, Layers } from "lucide-react";
+import { Plus, Trash2, ArrowRight, Clock, RefreshCcw, Layers } from "lucide-react";
+import { CreditIcon } from "@/components/ui/credit-icon";
 
 export interface Milestone {
   id: string;
@@ -74,17 +75,17 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
         <div>
           <span className="text-[10px] font-bold text-zinc-500 uppercase">Total Escrow Bid</span>
           <p className="text-sm font-extrabold text-yellow-500 flex items-center gap-1">
-            <CircleDollarSign className="h-4 w-4" /> ₱{totalBid.toLocaleString()}
+            <CreditIcon className="h-4 w-4" /> {totalBid.toLocaleString()}
           </p>
         </div>
         <div>
           <span className="text-[10px] font-bold text-zinc-500 uppercase">Payout Per Milestone</span>
-          <p className="text-sm font-bold text-emerald-400">₱{milestonePayout.toLocaleString()}</p>
+          <p className="text-sm font-bold text-emerald-400">{milestonePayout.toLocaleString()}</p>
         </div>
         <div>
           <span className="text-[10px] font-bold text-zinc-500 uppercase">Overage Revision Fee</span>
           <p className="text-xs font-bold text-blue-400">
-            +₱{overageRateBonus.toLocaleString()} ({additionalWorkRate}%)
+            +{overageRateBonus.toLocaleString()} ({additionalWorkRate}%)
           </p>
         </div>
       </div>
@@ -97,7 +98,7 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
           <div key={m.id} className="p-4 rounded-2xl border border-white/10 bg-[#0d0f1a]/80 space-y-3 relative group">
             <div className="flex items-center justify-between border-b border-white/5 pb-2">
               <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Layers className="h-3.5 w-3.5" /> Step {idx + 1} • ₱{milestonePayout.toLocaleString()} Credits
+                <Layers className="h-3.5 w-3.5" /> Step {idx + 1} • {milestonePayout.toLocaleString()} Credits
               </span>
               {milestones.length > 1 && (
                 <button

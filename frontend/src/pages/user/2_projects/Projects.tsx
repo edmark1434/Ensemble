@@ -171,7 +171,7 @@ const contractProjects: Project[] = [
     sharedBy: "Sarah Chen",
     thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Corporate+Video",
     progress: 75,
-    contractAmount: "₱15,000"
+    contractAmount: "15,000"
   },
   {
     id: 13,
@@ -183,7 +183,7 @@ const contractProjects: Project[] = [
     sharedBy: "Emma Watson",
     thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Music+Video",
     progress: 45,
-    contractAmount: "₱25,000"
+    contractAmount: "25,000"
   },
   {
     id: 14,
@@ -195,7 +195,7 @@ const contractProjects: Project[] = [
     sharedBy: "Marcus Thompson",
     thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Nature+Doc",
     progress: 90,
-    contractAmount: "₱50,000"
+    contractAmount: "50,000"
   },
   {
     id: 15,
@@ -207,7 +207,7 @@ const contractProjects: Project[] = [
     sharedBy: "Jessica Martinez",
     thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Commercial",
     progress: 30,
-    contractAmount: "₱8,000"
+    contractAmount: "8,000"
   },
 ];
 
@@ -242,7 +242,7 @@ const recentProjects: Project[] = [
     sharedBy: "Sarah Chen",
     thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Corporate+Video",
     progress: 75,
-    contractAmount: "₱15,000"
+    contractAmount: "15,000"
   },
   {
     id: 4,
@@ -283,7 +283,7 @@ const recentProjects: Project[] = [
     sharedBy: "Emma Watson",
     thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Music+Video",
     progress: 45,
-    contractAmount: "₱25,000"
+    contractAmount: "25,000"
   },
   {
     id: 8,
@@ -295,7 +295,7 @@ const recentProjects: Project[] = [
     sharedBy: "Marcus Thompson",
     thumbnail: "https://placehold.co/400x225/1e2130/4a6fa5?text=Nature+Doc",
     progress: 90,
-    contractAmount: "₱50,000"
+    contractAmount: "50,000"
   },
   {
     id: 9,

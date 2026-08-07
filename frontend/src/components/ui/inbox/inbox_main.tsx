@@ -346,10 +346,10 @@ const InboxMain = () => {
     () =>
       inboxList.filter((inbox) =>
         isMarketplace
-          ? ["engagement", "ticket", "dispute"].includes(
+          ? inbox.conversation_type === "engagement"
+          : ["direct", "group", "ticket", "dispute"].includes(
               inbox.conversation_type
             )
-          : ["direct", "group"].includes(inbox.conversation_type)
       ),
     [inboxList, isMarketplace]
   );
@@ -430,10 +430,10 @@ const InboxMain = () => {
     if (!selectedConversation) return filteredConversations;
 
     const selectedBelongsToTab = isMarketplace
-      ? ["engagement", "ticket", "dispute"].includes(
+      ? selectedConversation.conversation_type === "engagement"
+      : ["direct", "group", "ticket", "dispute"].includes(
           selectedConversation.conversation_type
-        )
-      : ["direct", "group"].includes(selectedConversation.conversation_type);
+        );
 
     if (!selectedBelongsToTab) return filteredConversations;
 
@@ -664,8 +664,11 @@ const InboxMain = () => {
     const recipientAvatar = selectedConversation
       ? getAvatar(selectedConversation)
       : undefined;
-    const isGroupMessage =
-      selectedConversation?.conversation_type === "group";
+    const isGroupMessage = ["group", "ticket", "dispute"].includes(
+      selectedConversation?.conversation_type || ""
+    );
+    const isTicketMessage =
+      selectedConversation?.conversation_type === "ticket";
     const groupSeenAvatars = isGroupMessage
       ? Array.from(
           new Set(
@@ -687,9 +690,21 @@ const InboxMain = () => {
         })
       : [];
     const senderProfile = profiles[String(message.sender_id)];
+    const senderMembership = selectedConversation?.members?.find(
+      (member) => String(member.account_id) === String(message.sender_id)
+    );
+    const isTicketStaff =
+      isTicketMessage &&
+      ["admin", "staff", "moderator"].includes(
+        String(senderMembership?.role || message.author_type || "").toLowerCase()
+      );
     const senderName = isSender
       ? "You"
-      : senderProfile?.name || `User ${String(message.sender_id).slice(0, 8)}`;
+      : isTicketStaff
+      ? "Staff"
+      : message.author_name ||
+        senderProfile?.name ||
+        `User ${String(message.sender_id).slice(0, 8)}`;
     const senderAvatar = (() => {
       const avatar = senderProfile?.avatar_preset_url;
       if (avatar && /^https?:\/\//i.test(avatar)) return avatar;

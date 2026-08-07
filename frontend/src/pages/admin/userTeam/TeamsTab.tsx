@@ -485,6 +485,7 @@ export default function TeamsTab({
           entityName={selected.name}
           accountId={selected.accountId}
           verification={selected.verification}
+          loadDiditDetails
           onClose={closeModal}
           onChanged={() => void refreshAfterChange()}
         />

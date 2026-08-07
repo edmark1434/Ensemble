@@ -80,6 +80,7 @@ export const InboxPanelPage = ({
         />
 
         <InboxPinnedBanner
+          selectedConversation={selectedConversation}
           pinnedMessages={pinnedMessages}
           messages={messages}
           onUnpin={onUnpin}

@@ -26,6 +26,7 @@ exports.up = (pgm) => {
   });
 
   pgm.addConstraint('staff', 'staff_account_id_fkey', 'FOREIGN KEY (account_id) REFERENCES accounts(account_id)');
+  pgm.addConstraint('account_verification', 'verifications_verified_by_staff_id_fkey', 'FOREIGN KEY (verified_by_staff_id) REFERENCES staff(staff_id)');
 };
 
 
@@ -37,4 +38,3 @@ exports.up = (pgm) => {
 exports.down = (pgm) => {
   pgm.dropTable('staff', { ifExists: true });
 };
-

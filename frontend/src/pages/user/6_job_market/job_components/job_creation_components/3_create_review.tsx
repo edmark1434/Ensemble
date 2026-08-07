@@ -1,6 +1,8 @@
 import React, { useState } from "react";
-import { Check, CircleDollarSign, User, Users, ChevronDown } from "lucide-react";
+import { Check, User, Users, ChevronDown } from "lucide-react";
+import { JobRichText } from "../JobRichText";
 import { motion, AnimatePresence } from "framer-motion";
+import { CreditIcon } from "@/components/ui/credit-icon";
 
 export const sampleUserTeams = [
   { id: "team-01", name: "Alpha Developers Lab" },
@@ -188,7 +190,9 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
             )}
             <div className="flex-1 space-y-1 min-w-0">
               <h4 className="text-xs font-bold text-white truncate">{title || <span className="text-red-400 italic">No Title Given</span>}</h4>
-              <p className="text-zinc-400 line-clamp-2 leading-relaxed text-[11px] break-words whitespace-pre-wrap">{description}</p>
+              <div className="line-clamp-3">
+                <JobRichText content={description} />
+              </div>
               <div className="flex gap-4 pt-1 text-zinc-500 text-[10px]">
                 <span>Category: <strong className="text-zinc-300">{category}</strong></span>
                 <span>Competency Target: <strong className="text-zinc-300">{difficulty}</strong></span>
@@ -208,8 +212,8 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
           <div className="p-3 rounded-xl border border-yellow-500/10 bg-yellow-500/5 flex items-center justify-between">
             <span className="text-zinc-400 text-[11px] font-semibold">Budget Pool Range</span>
             <span className="text-sm font-extrabold text-yellow-500 flex items-center gap-1.5">
-              <CircleDollarSign className="h-4 w-4 shrink-0 text-yellow-500" />
-              ₱{formatCommaString(minBudget)} ~ ₱{formatCommaString(maxBudget)}
+              <CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />
+              {formatCommaString(minBudget)} ~ {formatCommaString(maxBudget)}
             </span>
           </div>
 

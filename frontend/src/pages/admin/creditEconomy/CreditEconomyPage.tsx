@@ -296,7 +296,7 @@ function OverviewTab({
               <TrendingUp className="h-5 w-5 text-rose-400" />
             </div>
             <p className="mt-3 text-3xl font-bold tabular-nums text-white">
-              ₱{summary.totalRevenue.toLocaleString()}
+              {summary.totalRevenue.toLocaleString()}
             </p>
             <p className="mt-1 text-xs text-zinc-500">{summary.frozenWallets} frozen wallet(s)</p>
           </div>
@@ -642,7 +642,7 @@ function ManagementTab({
                 </div>
                 <div className="mt-auto flex items-center justify-between text-xs text-zinc-500">
                   <span>
-                    ₱{p.pricePhp.toLocaleString()} · {p.salesCount} sold
+                    {p.pricePhp.toLocaleString()} · {p.salesCount} sold
                   </span>
                   <button
                     type="button"
@@ -698,7 +698,7 @@ function ManagementTab({
                 <tr key={f.id} className="border-b border-white/[0.04] hover:bg-white/[0.02]">
                   <td className="px-5 py-3.5 font-medium text-white">{f.label}</td>
                   <td className="px-5 py-3.5 text-right tabular-nums text-rose-300">{f.percent}%</td>
-                  <td className="px-5 py-3.5 text-right tabular-nums text-zinc-300">₱{f.flatFee}</td>
+                  <td className="px-5 py-3.5 text-right tabular-nums text-zinc-300">{f.flatFee}</td>
                   <td className="px-5 py-3.5 text-zinc-400">{f.appliesTo}</td>
                   <td className="px-5 py-3.5 text-right">
                     <button
@@ -899,7 +899,7 @@ function PackageEditModal({
           />
         </label>
         <label className="block text-xs text-zinc-500">
-          Price (₱)
+          Price (Credits)
           <input
             type="number"
             min={0}
@@ -985,7 +985,7 @@ function FeeEditModal({
           />
         </label>
         <label className="block text-xs text-zinc-500">
-          Flat fee (₱)
+          Flat fee (Credits)
           <input
             type="number"
             min={0}

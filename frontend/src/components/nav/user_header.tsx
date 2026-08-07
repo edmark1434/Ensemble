@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, Settings, LogOut, User, CircleDollarSign, Search } from "lucide-react";
+import { Bell, ChevronDown, Settings, LogOut, User, Search } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useGlobalState from "@/lib/global_state";
@@ -9,6 +9,7 @@ import { auth } from "@/pages/firebase";
 import UserNotificationModal from "./user_notification_modal";
 import UserLogoutModal from "./user_logout_modal";
 import socket from "@/lib/socket";
+import { CreditIcon } from "@/components/ui/credit-icon";
 
 interface UserHeaderProps {
   pageTitle: string;
@@ -379,7 +380,7 @@ useEffect(() => {
                 className="group relative flex items-center gap-2 overflow-hidden rounded-full border border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 via-amber-500/10 to-orange-500/10 px-3 py-1.5 transition-all duration-300 hover:scale-105"
               >
                 <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-                <CircleDollarSign className="h-4 w-4 text-yellow-500" />
+                <CreditIcon className="h-4 w-4 text-yellow-500" />
                 <span className="text-sm font-bold text-yellow-200">{userCredits.toLocaleString()}</span>
                 {isHovered && (
                   <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] text-white shadow-lg animate-fade-in">

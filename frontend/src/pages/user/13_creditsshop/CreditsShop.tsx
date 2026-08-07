@@ -82,7 +82,7 @@ const creditPacks: CreditPack[] = [
 ];
 
 const formatPHP = (value: number) =>
-  `₱${value.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  `${value.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
 const CREDIT_RATE = 1.25;
 
@@ -237,9 +237,9 @@ const CreditShop: React.FC = () => {
   const navigateToCheckout = (item: CheckoutItem) => {
     if (item.isUpgrade && item.proratedDetails) {
       console.log(`💳 Prorated upgrade checkout: ${item.name}`);
-      console.log(`   Original price: ₱${item.proratedDetails.originalPrice}`);
-      console.log(`   Current plan: ₱${item.proratedDetails.currentPlanPrice}`);
-      console.log(`   Prorated amount: ₱${item.proratedDetails.proratedAmount}`);
+      console.log(`   Original price: ${item.proratedDetails.originalPrice}`);
+      console.log(`   Current plan: ${item.proratedDetails.currentPlanPrice}`);
+      console.log(`   Prorated amount: ${item.proratedDetails.proratedAmount}`);
       console.log(`   Remaining days: ${item.proratedDetails.remainingDays}`);
     }
 
@@ -306,11 +306,11 @@ const CreditShop: React.FC = () => {
           priceDifference: membership.price - currentPlan.price,
         };
 
-        console.log(`✅ UPGRADE! Prorated: ₱${proratedAmount}`);
+        console.log(`✅ UPGRADE! Prorated: ${proratedAmount}`);
       } else if (membership.price < currentPlan.price) {
         isDowngrade = true;
         finalPrice = membership.price;
-        console.log(`⬇️ DOWNGRADE! New price: ₱${membership.price}`);
+        console.log(`⬇️ DOWNGRADE! New price: ${membership.price}`);
       }
     } else {
       console.log(`User is on free plan or no xendit_plan_id - using full price`);

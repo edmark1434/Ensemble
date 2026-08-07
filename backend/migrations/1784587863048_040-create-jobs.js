@@ -45,6 +45,11 @@ exports.up = (pgm) => {
     },
     deleted_at: { type: 'timestamp without time zone' },
     client_account_id: { type: 'uuid', notNull: true },
+    category: { type: 'varchar(50)' },
+    posted_as: { type: 'varchar(50)' },
+    team_id: { type: 'uuid' },
+    timeline_min: { type: 'integer' },
+    timeline_max: { type: 'integer' },
   });
 
   pgm.addConstraint('jobs', 'jobs_client_account_id_fkey', 'FOREIGN KEY (client_account_id) REFERENCES accounts(account_id)');

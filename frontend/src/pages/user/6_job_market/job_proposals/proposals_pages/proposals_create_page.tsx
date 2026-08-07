@@ -115,7 +115,7 @@ const ProposalsCreatePage: React.FC = () => {
     if (!bidAmount || rawBid <= 0) {
       stepErrors.bidAmount = "A valid bid amount is required.";
     } else if (job && (rawBid < job.minBudget || rawBid > job.maxBudget)) {
-      stepErrors.bidAmount = `Your bid must be between ₱${job.minBudget.toLocaleString()} and ₱${job.maxBudget.toLocaleString()}.`;
+      stepErrors.bidAmount = `Your bid must be between ${job.minBudget.toLocaleString()} and ${job.maxBudget.toLocaleString()}.`;
     }
     if (!coverLetter.trim() || coverLetter.length < 50) {
       stepErrors.coverLetter = "Cover pitch must be at least 50 characters long.";

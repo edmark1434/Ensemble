@@ -205,7 +205,7 @@ export default function WalletDetailModal({ wallet, onClose }: WalletDetailModal
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
                 <p className="text-[10px] uppercase tracking-wide text-zinc-600">Total revenue</p>
                 <p className="mt-1 text-lg font-bold tabular-nums text-emerald-300">
-                  ₱{detail.totalRevenue.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  {detail.totalRevenue.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </p>
               </div>
               <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 sm:col-span-1 col-span-2">

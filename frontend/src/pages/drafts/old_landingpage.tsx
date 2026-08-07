@@ -732,8 +732,8 @@ const PLANS = [
   },
   {
     name: "PREMIUM",
-    price: "₱350",
-    originalPrice: "₱499",
+    price: "350",
+    originalPrice: "499",
     color: T.gold,
     features: ["1080p Export", "No Watermark", "Premium Tools + AI", "10 Collaborators", "10 Collaborative Projects", "20 Asset Posts", "Profile Visibility +30%", "Badge Display"],
     buttonText: "Upgrade to Premium",
@@ -742,8 +742,8 @@ const PLANS = [
   },
   {
     name: "BUSINESS",
-    price: "₱950",
-    originalPrice: "₱1,299",
+    price: "950",
+    originalPrice: "1,299",
     color: T.teal,
     features: ["2K - 4K Export", "No Watermark", "Premium Tools + AI", "20 Collaborators", "20 Collaborative Projects", "Unlimited Asset Posts", "Profile Visibility +90%", "Badge Display and More"],
     buttonText: "Upgrade to Business",

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build --warnInverted",
+    "build": "tsc --noEmit && vite build",
     "build:force": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -13,6 +13,7 @@
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
     "@icons-pack/react-simple-icons": "^13.13.0",
+    "@lottiefiles/dotlottie-react": "^0.19.13",
     "@shadcn/ui": "^0.0.4",
     "@shotstack/shotstack-studio": "^2.4.4",
     "@tailwindcss/vite": "^4.2.2",
