@@ -33,7 +33,7 @@ import {getSafeCurrentFrame} from "@/features/editor/utils/time";
 
 export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
   const isMediumScreen = useIsMediumScreen();
-  const { actions, type, format, compositionWidth, compositionHeight, resolution, fps, bitrate, exporting, output, error } =
+  const { actions, type, format, compositionWidth, compositionHeight, resolution, fps, bitrate, exporting, output, error, queuePosition } =
     useDownloadState();
   const { duration, trackItemIds, size, projectName, background } = useStore();
   const isEmpty = trackItemIds.length === 0;
@@ -104,7 +104,9 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
     : isFailed
       ? "Export failed"
       : exporting
-        ? "Export in progress"
+        ? queuePosition
+          ? "Export queued"
+          : "Export in progress"
         : "Export";
 
   const handleExport = () => {

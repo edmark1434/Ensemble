@@ -36,6 +36,7 @@ interface DownloadState {
   projectName: string;
   background: IBackground;
   progress: number;
+  queuePosition: { position: number; total: number } | null;
   output?: Output;
   error: string | null;
   cancelled: boolean;
@@ -93,6 +94,7 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
     DEFAULT_FRAME_RATE
   ),
   progress: 0,
+  queuePosition: null,
   error: null,
   cancelled: false,
   displayProgressModal: false,
@@ -175,6 +177,7 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
           output: undefined,
           cancelled: false,
           progress: 0,
+          queuePosition: null,
           exportStartedAt: Date.now()
         });
 
@@ -215,11 +218,18 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
               throw new Error("Failed to fetch export status.");
 
             const statusInfo = await statusResponse.json();
-            const { status, progress, videoUrl } = statusInfo;
+            const { status, progress, videoUrl, queuePosition } = statusInfo;
 
             if (get().cancelled) return;
 
-            set({ progress: progress ?? 0 });
+            const wasQueued = get().queuePosition !== null;
+            const justStartedRendering = wasQueued && status === "in-progress";
+
+            set({
+              progress: progress ?? 0,
+              queuePosition: status === "queued" ? queuePosition ?? null : null,
+              ...(justStartedRendering ? { exportStartedAt: Date.now() } : {})
+            });
 
             if (status === "completed") {
               set({ exporting: false, output: { url: videoUrl, type: get().format } });
@@ -269,6 +279,7 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
         jobId: null,
         exporting: false,
         progress: 0,
+        queuePosition: null,
         output: undefined,
         error: null,
         cancelled: false,

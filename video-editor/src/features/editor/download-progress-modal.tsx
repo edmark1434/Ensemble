@@ -21,7 +21,7 @@ const sanitizeFilename = (name: string): string => {
 };
 
 const DownloadProgressModal = () => {
-  const { progress, exporting, exportStartedAt, displayProgressModal, output, error, actions } =
+  const { progress, exporting, exportStartedAt, displayProgressModal, output, error, jobId, queuePosition, actions } =
     useDownloadState();
   const { projectName } = useStore();
   const isCompleted = !!output;
@@ -49,6 +49,12 @@ const DownloadProgressModal = () => {
     if (output?.url) {
       const extension = new URL(output.url).pathname.split(".").pop() || "mp4";
       await download(output.url, `${sanitizeFilename(projectName)}.${extension}`);
+
+      if (jobId) {
+        fetch(`/api/render/${jobId}`, { method: "DELETE" }).catch((error) => {
+          console.error("Failed to delete render output after download:", error);
+        });
+      }
     }
     actions.resetExport();
   };
@@ -98,14 +104,28 @@ const DownloadProgressModal = () => {
               </Button>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center gap-4 text-center">
-              <div className="text-4xl font-semibold">
-                {Math.floor(progress * 100)}%
-              </div>
-              <div className="text-muted-foreground text-sm">
-                <div>Closing the browser will not cancel the export.</div>
-                <div>The video will be saved in your space.</div>
-              </div>
+            <div className="flex flex-col items-center justify-center gap-4 py-4 text-center">
+              {queuePosition ? (
+                <>
+                  <div className="text-4xl font-semibold">
+                    #{queuePosition.position}
+                  </div>
+                  <div className="text-muted-foreground text-sm">
+                    <div>Queued — {queuePosition.position} of {queuePosition.total} in line.</div>
+                    <div>Your export will start rendering shortly.</div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-4xl font-semibold">
+                    {Math.floor(progress * 100)}%
+                  </div>
+                  <div className="text-muted-foreground text-sm">
+                    <div>Closing this modal will not cancel the export.</div>
+                    <div>The video will be saved in your space.</div>
+                  </div>
+                </>
+              )}
               <div className="flex items-center gap-2 text-muted-foreground text-sm">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 {millisecondsToHHMMSS(elapsedMs)}
