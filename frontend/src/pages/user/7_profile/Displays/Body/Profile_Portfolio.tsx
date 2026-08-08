@@ -14,27 +14,57 @@ export interface PortfolioItem {
   externalUrl?: string;
   views?: number;
   likes?: number;
+  createdAt?: string;
 }
 
 interface ProfilePortfolioProps {
   portfolioItems?: PortfolioItem[];
-  onUploadPDF?: (file: File) => void;
-  onAddExternalLink?: () => void;
+  isOwner?: boolean;
+  onUploadPDF?: (file: File) => Promise<void>;
+  onAddExternalLink?: (data: { name: string; url: string; description: string }) => Promise<void>;
+  onDeleteItem?: (id: string) => Promise<void>;
   onEditTermsOfService?: () => void;
 }
 
 export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
   portfolioItems = [],
+  isOwner = false,
   onUploadPDF,
   onAddExternalLink,
+  onDeleteItem,
   onEditTermsOfService
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeViewItem, setActiveViewItem] = useState<PortfolioItem | null>(null);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkName, setLinkName] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkDescription, setLinkDescription] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0] && onUploadPDF) {
-      onUploadPDF(e.target.files[0]);
+      void onUploadPDF(e.target.files[0]);
+      e.target.value = "";
+    }
+  };
+
+  const submitLink = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!onAddExternalLink || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await onAddExternalLink({
+        name: linkName.trim(),
+        url: linkUrl.trim(),
+        description: linkDescription.trim(),
+      });
+      setLinkName("");
+      setLinkUrl("");
+      setLinkDescription("");
+      setShowLinkModal(false);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -51,7 +81,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
     <div className="space-y-6 flex-1 TrulyRawFixUnsetOverflow">
 
       {/* ==================== ACTION UTILITY BAR ==================== */}
-      <div className="flex flex-wrap gap-2 pb-1 border-b border-white/5">
+      {isOwner && <div className="flex flex-wrap gap-2 pb-1 border-b border-white/5">
         <input
           type="file"
           ref={fileInputRef}
@@ -69,7 +99,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
         </button>
 
         <button
-          onClick={onAddExternalLink}
+          onClick={() => setShowLinkModal(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/5 bg-white/[0.02] text-[11px] font-bold text-zinc-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
         >
           <Plus className="h-3 w-3" />
@@ -83,7 +113,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
           <Scale className="h-3 w-3" />
           <span>Configure Terms of Service</span>
         </button>
-      </div>
+      </div>}
 
       {/* ==================== UNIFORM SQUARE GRID ==================== */}
       <div className="grid gap-5 grid-cols-2 md:grid-cols-3 content-start">
@@ -98,6 +128,19 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
               onClick={() => setActiveViewItem(item)}
               className="group relative flex flex-col aspect-square justify-between bg-[#121420]/30 rounded-2xl border border-white/5 overflow-hidden transition-all duration-300 hover:border-white/15 hover:bg-[#121420]/50 cursor-pointer shadow-lg"
             >
+              {isOwner && onDeleteItem && (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void onDeleteItem(String(item.id));
+                  }}
+                  className="absolute right-2 top-2 z-20 rounded-lg border border-red-500/20 bg-black/60 p-1.5 text-red-300 opacity-0 transition group-hover:opacity-100 hover:bg-red-500/20"
+                  title="Remove attachment"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
               <div className="relative flex-1 w-full bg-zinc-900/40 border-b border-white/5 flex items-center justify-center overflow-hidden">
                 {item.type === "project" && item.thumbnail ? (
                   <img
@@ -105,6 +148,29 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                     alt={item.title}
                     className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
                   />
+                ) : item.type === "document" && item.fileUrl ? (
+                  <iframe
+                    src={`${item.fileUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0`}
+                    title={`${item.title} PDF preview`}
+                    className="pointer-events-none h-full w-full border-0 bg-white"
+                    loading="lazy"
+                  />
+                ) : item.type === "link" && item.externalUrl ? (
+                  <div className="relative h-full w-full bg-zinc-950">
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className={`p-4 rounded-2xl ${cfg.bg} ${cfg.color} border ${cfg.border}`}>
+                        <CardIcon className="h-6 w-6" />
+                      </div>
+                    </div>
+                    <iframe
+                      src={item.externalUrl}
+                      title={`${item.title} website preview`}
+                      className="pointer-events-none relative h-[200%] w-[200%] origin-top-left scale-50 border-0 bg-white"
+                      loading="lazy"
+                      sandbox="allow-scripts allow-same-origin allow-forms"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
                 ) : (
                   <div className={`p-4 rounded-2xl ${cfg.bg} ${cfg.color} border ${cfg.border} transition-transform duration-300 group-hover:scale-110 shadow-inner`}>
                     <CardIcon className="h-6 w-6" />
@@ -134,6 +200,11 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                 <p className="text-[10px] text-zinc-400 font-medium leading-normal line-clamp-1 opacity-70">
                   {item.description}
                 </p>
+                {item.createdAt && (
+                  <p className="text-[9px] text-zinc-600">
+                    Added {new Date(item.createdAt).toLocaleDateString()}
+                  </p>
+                )}
               </div>
             </div>
           );
@@ -149,6 +220,51 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
 
       {/* ==================== EXPANDED IMMERSIVE DISPLAY MODAL ==================== */}
       <AnimatePresence>
+        {showLinkModal && (
+          <div className="fixed inset-0 z-[200001] flex items-center justify-center p-4">
+            <motion.button
+              type="button"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowLinkModal(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+              aria-label="Close website link form"
+            />
+            <motion.form
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              onSubmit={submitLink}
+              className="relative w-full max-w-md space-y-4 rounded-2xl border border-white/10 bg-[#12141f] p-5 shadow-2xl"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-white">Embed Website Link</h3>
+                  <p className="mt-1 text-xs text-zinc-500">Add a public portfolio or professional website.</p>
+                </div>
+                <button type="button" onClick={() => setShowLinkModal(false)} className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <label className="block text-xs text-zinc-400">
+                Display name <span className="text-red-400">*</span>
+                <input required maxLength={255} value={linkName} onChange={(e) => setLinkName(e.target.value)} className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#0b0e17] px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500" placeholder="My portfolio website" />
+              </label>
+              <label className="block text-xs text-zinc-400">
+                Website URL <span className="text-red-400">*</span>
+                <input required type="url" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#0b0e17] px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500" placeholder="https://example.com" />
+              </label>
+              <label className="block text-xs text-zinc-400">
+                Description
+                <textarea maxLength={2000} rows={3} value={linkDescription} onChange={(e) => setLinkDescription(e.target.value)} className="mt-1.5 w-full resize-none rounded-xl border border-white/10 bg-[#0b0e17] px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500" placeholder="Describe what visitors will find." />
+              </label>
+              <button disabled={isSubmitting} type="submit" className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50">
+                {isSubmitting ? "Adding..." : "Add Website"}
+              </button>
+            </motion.form>
+          </div>
+        )}
         {activeViewItem && (
           <div className="fixed inset-0 flex items-center justify-center z-[200000] p-4 md:p-6">
             <motion.div
@@ -202,25 +318,31 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                 )}
 
                 {activeViewItem.type === "link" && activeViewItem.externalUrl && (
-                  <div className="p-8 rounded-xl border border-dashed border-emerald-500/20 bg-emerald-500/[0.02] text-center space-y-4">
-                    <div className="p-4 rounded-full bg-emerald-500/10 text-emerald-400 w-fit mx-auto border border-emerald-500/20">
-                      <Globe className="h-8 w-8" />
+                  <div className="space-y-3">
+                    <div className="h-[500px] w-full overflow-hidden rounded-xl border border-emerald-500/20 bg-white">
+                      <iframe
+                        src={activeViewItem.externalUrl}
+                        title={`${activeViewItem.title} website preview`}
+                        className="h-full w-full border-0"
+                        loading="lazy"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                        referrerPolicy="no-referrer"
+                      />
                     </div>
-                    <div className="space-y-1 max-w-md mx-auto">
-                      <h4 className="text-sm font-bold text-white">External Platform Destination Integration</h4>
-                      <p className="text-xs text-zinc-400 leading-relaxed">
-                        This link directs externally toward the user's primary workspace endpoint hub or verified project network domain.
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.02] p-3">
+                      <p className="min-w-0 truncate text-xs text-zinc-400">
+                        If the website blocks embedded previews, open it in a new tab.
                       </p>
-                    </div>
                     <a
                       href={activeViewItem.externalUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-lg shadow-emerald-600/20 hover:bg-emerald-500 transition-all cursor-pointer"
+                        className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white transition-all hover:bg-emerald-500"
                     >
-                      <span>Visit Target Domain</span>
+                        <span>Open Website</span>
                       <ExternalLink className="h-3.5 w-3.5" />
                     </a>
+                    </div>
                   </div>
                 )}
 

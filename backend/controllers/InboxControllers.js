@@ -6,6 +6,7 @@ const {
     replyMessageServices,
     reactMessageServices,
     removeMessageReactionServices,
+    reportMessageServices,
     pinMessageServices,
     unpinMessageServices,
     editMessageServices,
@@ -97,6 +98,23 @@ async function removeMessageReactionController(req, res) {
             accountId(req)
         );
         return res.status(200).json(result);
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
+async function reportMessageController(req, res) {
+    try {
+        const report = await reportMessageServices(
+            req.params.messageId,
+            req.body,
+            accountId(req)
+        );
+        return res.status(201).json({
+            success: true,
+            message: 'Message report submitted successfully',
+            report,
+        });
     } catch (error) {
         return sendError(res, error);
     }
@@ -255,6 +273,7 @@ module.exports = {
     replyMessageController,
     reactMessageController,
     removeMessageReactionController,
+    reportMessageController,
     pinMessageController,
     unpinMessageController,
     updateMessageController,

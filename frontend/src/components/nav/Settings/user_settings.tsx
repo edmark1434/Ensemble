@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, CreditCard, AlertTriangle, HelpCircle, FileText, ArrowLeft, AlertCircle,Ticket } from "lucide-react";
+import { User, CreditCard, HelpCircle, FileText, ArrowLeft, AlertCircle,Ticket } from "lucide-react";
 
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
@@ -14,11 +14,10 @@ import AvatarEditModal from "@/pages/user/7_profile/Edits/AvatarEditModal";
 // Modular Tab Components
 import { UserSettingsAccountDetails } from "./user_settings_accountdetails";
 import { UserSettingsSubscriptionDetails } from "./user_settings_subscriptiondetails";
-import { UserSettingsReport } from "./user_settings_report";
 import { UserSettingsHelp } from "./user_settings_help";
 import { UserSettingsLegalPolicies } from "./user_settings_legalpolicies";
 import PageSubmitATicket from '@/pages/landing/pages/page_SubmitATicket';
-type TabType = "account" | "subscription" | "report" | "help" | "legal" | "ticket";
+type TabType = "account" | "subscription" | "help" | "legal" | "ticket";
 
 interface Preset {
   file_id: number;
@@ -70,10 +69,6 @@ export default function UserSettings() {
     plan_name: "Free Member",
     status: "Active",
   });
-
-  const [reportSubject, setReportSubject] = useState("");
-  const [reportDescription, setReportDescription] = useState("");
-  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
 
   const constructAvatarUrl = (path: string | undefined): string => {
     if (!path) return "https://i.pravatar.cc/150?u=user";
@@ -270,48 +265,9 @@ export default function UserSettings() {
     }
   };
 
-  const handleReportSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const accountId = globalUser?.account_id || globalUser?.accountId;
-    if (!accountId) {
-      navigate('/login');
-      return;
-    }
-    if (!reportSubject.trim() || reportDescription.trim().length < 20) {
-      toast.error("Please fill out all fields.");
-      return;
-    }
-    if (isSubmittingReport) return;
-
-    setIsSubmittingReport(true);
-    try {
-      const response = await api.post("/api/users/reports", {
-        account_id: accountId,
-        subject: reportSubject.trim(),
-        description: reportDescription.trim(),
-      });
-      const reportNumber = response.data?.data?.number;
-      toast.success(
-        reportNumber
-          ? `Technical report ${reportNumber} submitted successfully!`
-          : "Technical report submitted successfully!"
-      );
-      setReportSubject("");
-      setReportDescription("");
-    } catch (err: unknown) {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        "Failed to submit technical report.";
-      toast.error(message);
-    } finally {
-      setIsSubmittingReport(false);
-    }
-  };
-
   const navItems = [
     { id: "account", label: "Account Details", icon: User },
     { id: "subscription", label: "Subscription Details", icon: CreditCard },
-    { id: "report", label: "Report Technical Problem", icon: AlertTriangle },
     { id: "ticket", label: "Submit a Ticket", icon: Ticket },
     { id: "help", label: "Help & Support", icon: HelpCircle },
     { id: "legal", label: "Legal & Policies", icon: FileText },
@@ -414,17 +370,6 @@ export default function UserSettings() {
                   <UserSettingsSubscriptionDetails
                     subscription={subscription}
                     onCancelSubscription={handleCancelSubscription}
-                  />
-                )}
-
-                {activeTab === "report" && (
-                  <UserSettingsReport
-                    subject={reportSubject}
-                    setSubject={setReportSubject}
-                    description={reportDescription}
-                    setDescription={setReportDescription}
-                    onSubmit={handleReportSubmit}
-                    submitting={isSubmittingReport}
                   />
                 )}
 

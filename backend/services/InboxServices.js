@@ -25,6 +25,7 @@ const { getProfileCurrentAvatarByAccountIdService } = require('./ProfileServices
 const { createNotificationServices } = require('./NotificationServices');
 const { getAccountById } = require('../repositories/AccountRepositories');
 const { pool } = require('../lib/Database');
+const { createReport } = require('../repositories/ModeratorSharedRepositories');
 
 const CONVERSATION_TYPES = ['direct', 'engagement', 'group', 'ticket', 'dispute'];
 const MESSAGE_TYPES = ['text', 'image', 'video', 'audio', 'file', 'system'];
@@ -150,6 +151,76 @@ async function requireMessageMember(messageId, accountId) {
     }
     const inbox = await requireConversationMember(message.conversation_id, accountId);
     return { inbox, message };
+}
+
+const CHAT_REPORT_REASONS = new Set([
+    'Harassment or Bullying',
+    'Spam or Scam',
+    'Inappropriate or Explicit Content',
+    'Hate Speech or Violence',
+    'Other',
+]);
+
+async function reportMessageServices(messageId, payload, accountId) {
+    const { inbox, message } = await requireMessageMember(messageId, accountId);
+    const reportedAccountId = String(message.sender_id || '');
+    if (!reportedAccountId) {
+        throw new ChatServiceError('The message sender could not be identified', 400);
+    }
+    if (reportedAccountId === String(accountId)) {
+        throw new ChatServiceError('You cannot report your own message', 400);
+    }
+
+    const reason = String(payload?.reason || '').trim();
+    const details = String(payload?.details || '').trim();
+    if (!CHAT_REPORT_REASONS.has(reason)) {
+        throw new ChatServiceError('Select a valid report reason', 400);
+    }
+    if (details.length > 2000) {
+        throw new ChatServiceError('Report details must not exceed 2,000 characters', 400);
+    }
+
+    const exactMessage = String(message.message_content || '').trim();
+    const attachmentSummary = (message.attachments || [])
+        .map((attachment) =>
+            attachment.attachment_name ||
+            attachment.attachment_key ||
+            attachment.attachment_url ||
+            attachment.attachment_type ||
+            'Attachment'
+        )
+        .join(', ');
+    const messagePreview = String(exactMessage || '[Attachment]')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 220);
+    const conversationId = String(inbox._id || message.conversation_id);
+    const conversationType = String(inbox.conversation_type || 'conversation')
+        .replace(/[_-]+/g, ' ')
+        .replace(/\b\w/g, (character) => character.toUpperCase());
+    const conversationName = String(
+        inbox.conversation_name || `${conversationType} Conversation`
+    ).trim();
+    const conversationContext = `${conversationType}: ${conversationName} - Chat Inbox`;
+    const description = [
+        details || 'No additional details provided.',
+        `Conversation: ${conversationId}`,
+        `Exact reported message:\n${exactMessage || '[No text content]'}`,
+        attachmentSummary ? `Reported attachments:\n${attachmentSummary}` : null,
+    ].filter(Boolean).join('\n\n');
+
+    return createReport({
+        reportNumber: `RPT-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 4).toUpperCase()}`,
+        reporterAccountId: String(accountId),
+        targetAccountId: reportedAccountId,
+        targetType: 'chat_message',
+        targetId: String(message._id),
+        targetLabel: conversationContext,
+        reason,
+        description,
+        referenceTable: 'messages',
+        referencePrefix: 'inbox',
+    });
 }
 
 function normalizeMembers(members, ownerId) {
@@ -1180,6 +1251,7 @@ module.exports = {
     replyMessageServices,
     reactMessageServices,
     removeMessageReactionServices,
+    reportMessageServices,
     pinMessageServices,
     unpinMessageServices,
     editMessageServices,

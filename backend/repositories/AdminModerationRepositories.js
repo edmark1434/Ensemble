@@ -347,18 +347,21 @@ async function fetchRecentModerationActivity() {
         r.report_id,
         r.report_number,
         r.reason,
+        r.description,
+        r.target_type,
+        r.target_label,
+        r.reference_prefix,
         r.status,
         r.updated_at,
         r.created_at,
         COALESCE(fa.display_name, fa.handle, r.target_label, 'Target') AS target_name,
         fa.handle AS target_handle,
-        COALESCE(sa.display_name, st.first_name || ' ' || st.last_name, 'Staff') AS executed_by,
-        st.role AS executed_by_role,
-        sa.handle AS executed_by_handle
+        COALESCE(ba.display_name, ba.handle, 'Account') AS executed_by,
+        INITCAP(COALESCE(ba.type, 'account')) AS executed_by_role,
+        ba.handle AS executed_by_handle
       FROM reports r
       LEFT JOIN accounts fa ON fa.account_id = r.for_account_id
-      LEFT JOIN staff st ON st.staff_id = r.assigned_staff_id
-      LEFT JOIN accounts sa ON sa.account_id = st.account_id
+      LEFT JOIN accounts ba ON ba.account_id = r.by_account_id
       WHERE r.deleted_at IS NULL
       ORDER BY COALESCE(r.updated_at, r.created_at) DESC
       LIMIT 25
@@ -428,13 +431,18 @@ async function fetchRecentModerationActivity() {
       category: 'report',
       target: r.target_name,
       targetHandle: r.target_handle || r.report_number,
-      targetType: 'Report',
+      targetType:
+        String(r.target_type || '').toLowerCase() === 'chat_message'
+          ? r.target_label || 'Chat Inbox'
+          : String(r.target_type || 'Report')
+              .replace(/[_-]+/g, ' ')
+              .replace(/\b\w/g, (character) => character.toUpperCase()),
       executedBy: r.executed_by,
-      executedByRole: r.executed_by_role || 'Support Moderator',
+      executedByRole: r.executed_by_role || 'Account',
       executedByHandle: r.executed_by_handle || '—',
       timestamp: r.updated_at || r.created_at,
       status: titleCaseStatus(r.status || 'open'),
-      notes: r.reason || '',
+      notes: r.description || r.reason || '',
     });
   }
 

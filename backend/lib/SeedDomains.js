@@ -910,18 +910,26 @@ async function seedVerificationDemos(userAccountIds, staffByRole) {
   }
 
   if ((await tableExists('verification_attachments')) && files[0]) {
-    const av = (
+    const verification = (
       await pool.query(
-        `SELECT account_verification_id FROM account_verification WHERE account_id = $1 LIMIT 1`,
+        `SELECT verification_id
+         FROM verifications
+         WHERE account_id = $1
+         LIMIT 1`,
         [userAccountIds[1]]
       )
     ).rows[0];
-    if (av) {
+    if (verification) {
       await pool.query(
-        `INSERT INTO verification_attachments (account_verification_id, file_id, index)
-         VALUES ($1,$2,0)
+        `INSERT INTO verification_attachments (
+           verification_id,
+           file_id,
+           document_type,
+           index
+         )
+         VALUES ($1, $2, 'Identity document', 0)
          ON CONFLICT DO NOTHING`,
-        [av.account_verification_id, files[0].file_id]
+        [verification.verification_id, files[0].file_id]
       );
     }
   }

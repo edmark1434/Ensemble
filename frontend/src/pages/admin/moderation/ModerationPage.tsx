@@ -1983,7 +1983,7 @@ function ConfirmDeleteModal({
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 md:pl-[260px]">
       <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
-      <div className="relative w-full max-w-md rounded-2xl border border-white/[0.1] bg-[#12131a] p-6 shadow-2xl">
+      <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-white/[0.1] bg-[#12131a] p-6 shadow-2xl">
         <h2 className="text-lg font-bold text-white">Delete {name}?</h2>
         <p className="mt-2 text-sm text-zinc-400">
           This soft-deletes the staff account and bans access. Historical moderation records are kept.
@@ -2340,8 +2340,12 @@ function ActivityDetailModal({
             </dd>
           </div>
           <div>
-            <dt className="text-zinc-600">Notes</dt>
-            <dd className="text-zinc-400">{activity.notes}</dd>
+            <dt className="text-zinc-600">
+              {activity.category === 'report' ? 'Report details' : 'Notes'}
+            </dt>
+            <dd className="whitespace-pre-wrap break-words text-zinc-400">
+              {activity.notes || 'No additional details provided.'}
+            </dd>
           </div>
         </dl>
         {activity.status === 'Completed' && (

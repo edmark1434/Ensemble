@@ -630,12 +630,15 @@ const InboxMain = () => {
     scrollToRepliedMessage(containerRef, messageId);
   };
 
-  const handleReportSubmit = (reportData: {
+  const handleReportSubmit = async (reportData: {
     messageId: string;
     reason: string;
     details: string;
   }) => {
-    console.log("Report submitted successfully:", reportData);
+    await api.post(`/api/inbox/message/${reportData.messageId}/report`, {
+      reason: reportData.reason,
+      details: reportData.details,
+    });
   };
 
   const renderMessage = (message: ExtendedMessage, index: number) => {
@@ -643,6 +646,9 @@ const InboxMain = () => {
     const isMenuOpen = activeMenuId === message._id;
     const isPickerOpen = activeEmojiPickerId === message._id;
     const pinned = isPinned(message._id);
+    const hasRestrictedMessageTools = ["ticket", "dispute"].includes(
+      String(selectedConversation?.conversation_type || "").toLowerCase()
+    );
     const isUnsent = message.is_unsent;
     const attachments = message.attachments || [];
     const hasText = Boolean(message.message_content && message.message_content.trim());
@@ -761,7 +767,7 @@ const InboxMain = () => {
                   {senderName}
                 </span>
               )}
-              {pinned && (
+              {pinned && !hasRestrictedMessageTools && (
                 <div
                   className={`flex items-center gap-1 text-[11px] font-medium text-yellow-400 mb-1 ${
                     isSender ? "self-end" : "self-start"
@@ -886,12 +892,14 @@ const InboxMain = () => {
                   </span>
                 )}
 
-                <InboxReactionBadges
-                  reactions={message.message_react}
-                  currentUserId={currentUserId}
-                  isSender={isSender}
-                  onToggleReaction={(emoji) => handleToggleReaction(message._id, emoji)}
-                />
+                {!hasRestrictedMessageTools && (
+                  <InboxReactionBadges
+                    reactions={message.message_react}
+                    currentUserId={currentUserId}
+                    isSender={isSender}
+                    onToggleReaction={(emoji) => handleToggleReaction(message._id, emoji)}
+                  />
+                )}
               </div>
 
               {(showTime || message.is_edited || isSender) && (
@@ -931,7 +939,7 @@ const InboxMain = () => {
                 isSender ? "flex-row-reverse" : "flex-row"
               }`}
             >
-              <div className="relative">
+              {!hasRestrictedMessageTools && <div className="relative">
                 <button
                   onClick={() => {
                     setActiveEmojiPickerId(isPickerOpen ? null : message._id);
@@ -949,7 +957,7 @@ const InboxMain = () => {
                     onClose={() => setActiveEmojiPickerId(null)}
                   />
                 )}
-              </div>
+              </div>}
 
               <button
                 onClick={() => handleReply(message)}
@@ -1000,7 +1008,7 @@ const InboxMain = () => {
                         </button>
                       </>
                     )}
-                    <button
+                    {!hasRestrictedMessageTools && <button
                       onClick={() => {
                         if (selectedConversation) {
                           void pinMessage(
@@ -1024,17 +1032,19 @@ const InboxMain = () => {
                           Pin
                         </>
                       )}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setReportModalMessage(message);
-                        setActiveMenuId(null);
-                      }}
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-zinc-300 hover:bg-white/10"
-                    >
-                      <Flag className="h-3.5 w-3.5 text-red-400" />
-                      Report
-                    </button>
+                    </button>}
+                    {!isSender && (
+                      <button
+                        onClick={() => {
+                          setReportModalMessage(message);
+                          setActiveMenuId(null);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-zinc-300 hover:bg-white/10"
+                      >
+                        <Flag className="h-3.5 w-3.5 text-red-400" />
+                        Report
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

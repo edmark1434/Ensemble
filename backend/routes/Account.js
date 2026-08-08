@@ -22,7 +22,10 @@ const {
     updateProfileSocialMediaController,
     updateProfileDetailsController,
     getProfileAvatarsByAccountIdController,
-    getProfileCurrentAvatarByAccountIdController
+    getProfileCurrentAvatarByAccountIdController,
+    getProfileAttachmentsController,
+    createProfileAttachmentController,
+    deleteProfileAttachmentController
 } = require('../controllers/ProfileControllers');
 
 router.get('/recent-avatars', getRecentUserAvatarsController);
@@ -31,6 +34,9 @@ router.get('/wallet', [checkSession, requireAuth], getAccountWalletController);
 router.get('/search-users', [checkSession, requireAuth], searchUserAccountsByHandleController);
 router.get('/personal-details', [checkSession, requireAuth], getPersonalDetailsController);
 router.get('/profile/current-avatar', [checkSession, requireAuth], getProfileCurrentAvatarByAccountIdController);
+router.get('/profile/:accountId/attachments', [checkSession, requireAuth], getProfileAttachmentsController);
+router.post('/profile/attachments', [checkSession, requireAuth], createProfileAttachmentController);
+router.delete('/profile/attachments/:attachmentId', [checkSession, requireAuth], deleteProfileAttachmentController);
 router.get('/profile/:accountId', [checkSession, requireAuth], getProfileByAccountIdController);
 router.get('/links/:accountId', [checkSession, requireAuth], getAccountLinkByAccountIdController);
 router.get('/profile/avatars/:accountId', [checkSession, requireAuth], getProfileAvatarsByAccountIdController);
