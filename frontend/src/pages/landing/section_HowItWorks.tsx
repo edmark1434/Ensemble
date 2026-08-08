@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import ShapeGrid from "@/components/ui/ShapeGrid"; // Adjust this path to match your folder structure
+import FadeInScroll from "@/components/ui/FadeInScroll";
 
 interface HowItWorksProps {
   isMuted?: boolean;
@@ -136,62 +137,64 @@ const SectionHowItWorks: React.FC<HowItWorksProps> = ({ isMuted = false }) => {
       </div>
 
       {/* ─── Main Content Foreground Layer ─── */}
-      <div style={{ maxWidth: 1300, margin: "0 auto", position: "relative", zIndex: 1 }}>
+      <FadeInScroll distance={40} duration={0.8} style={{ width: "100%", position: "relative", zIndex: 1 }}>
+        <div style={{ maxWidth: 1300, margin: "0 auto" }}>
 
-        {/* Header with 3-Way Switcher */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 48 }}>
-          <h2 style={{ fontSize: 42, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>How it works</h2>
+          {/* Header with 3-Way Switcher */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 48 }}>
+            <h2 style={{ fontSize: 42, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>How it works</h2>
 
-          <div style={{ display: "flex", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 100, padding: 4 }}>
-            {(["hire", "work", "edit"] as const).map((mode) => {
-              const isActive = tab === mode;
-              const isCurrentlyHovered = hoveredTab === mode;
-              const labels = { hire: "For hiring", work: "For finding work", edit: "For editing" };
+            <div style={{ display: "flex", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 100, padding: 4 }}>
+              {(["hire", "work", "edit"] as const).map((mode) => {
+                const isActive = tab === mode;
+                const isCurrentlyHovered = hoveredTab === mode;
+                const labels = { hire: "For hiring", work: "For finding work", edit: "For editing" };
 
-              return (
-                <button
-                  key={mode}
-                  onClick={() => handleTabChange(mode)}
-                  onMouseEnter={() => {
-                    setHoveredTab(mode);
-                    if (!isActive) playHoverSound();
-                  }}
-                  onMouseLeave={() => setHoveredTab(null)}
-                  style={{
-                    padding: "8px 24px",
-                    borderRadius: 100,
-                    border: "none",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    transition: "all 0.25s ease",
-                    background: isActive
-                      ? "#fff"
-                      : (isCurrentlyHovered ? "rgba(255,255,255,0.06)" : "transparent"),
-                    color: isActive
-                      ? "#000"
-                      : (isCurrentlyHovered ? "#fff" : "#7a8499")
-                  }}
-                >
-                  {labels[mode]}
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={mode}
+                    onClick={() => handleTabChange(mode)}
+                    onMouseEnter={() => {
+                      setHoveredTab(mode);
+                      if (!isActive) playHoverSound();
+                    }}
+                    onMouseLeave={() => setHoveredTab(null)}
+                    style={{
+                      padding: "8px 24px",
+                      borderRadius: 100,
+                      border: "none",
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      transition: "all 0.25s ease",
+                      background: isActive
+                        ? "#fff"
+                        : (isCurrentlyHovered ? "rgba(255,255,255,0.06)" : "transparent"),
+                      color: isActive
+                        ? "#000"
+                        : (isCurrentlyHovered ? "#fff" : "#7a8499")
+                    }}
+                  >
+                    {labels[mode]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 3-Column Grid with Key to trigger CSS animation on tab change */}
+          <div key={tab} style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 32 }}>
+            {HIW_DATA[tab].map((step, i) => (
+              <div key={i} className="animate-swap" style={{ animationDelay: `${i * 0.1}s` }}>
+                <div style={{ width: "100%", aspectRatio: "16/10", borderRadius: 24, overflow: "hidden", marginBottom: 20, background: "#111827", border: "1px solid rgba(255,255,255,0.05)" }}>
+                  <img src={step.img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.8 }} />
+                </div>
+                <h4 style={{ fontSize: 20, fontWeight: 700, color: "#fff" }}>{step.title}</h4>
+              </div>
+            ))}
           </div>
         </div>
-
-        {/* 3-Column Grid with Key to trigger CSS animation on tab change */}
-        <div key={tab} style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 32 }}>
-          {HIW_DATA[tab].map((step, i) => (
-            <div key={i} className="animate-swap" style={{ animationDelay: `${i * 0.1}s` }}>
-              <div style={{ width: "100%", aspectRatio: "16/10", borderRadius: 24, overflow: "hidden", marginBottom: 20, background: "#111827", border: "1px solid rgba(255,255,255,0.05)" }}>
-                <img src={step.img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.8 }} />
-              </div>
-              <h4 style={{ fontSize: 20, fontWeight: 700, color: "#fff" }}>{step.title}</h4>
-            </div>
-          ))}
-        </div>
-      </div>
+      </FadeInScroll>
     </section>
   );
 };

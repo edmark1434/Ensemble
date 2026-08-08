@@ -148,7 +148,17 @@ export const JobEditPostPage: React.FC = () => {
           setDescription(found.description);
           setCategory(found.category);
           setDifficulty(found.experience_level || "Intermediate");
-          setSkills(found.tags || []);
+          let parsedTags: string[] = [];
+          if (Array.isArray(found.tags)) {
+            parsedTags = found.tags;
+          } else if (typeof found.tags === 'string') {
+            try {
+              parsedTags = JSON.parse(found.tags);
+            } catch (e) {
+              parsedTags = found.tags.split(',').map((s: string) => s.trim()).filter(Boolean);
+            }
+          }
+          setSkills(parsedTags);
           setPriceRange(`${found.rate_credits_min?.toLocaleString() || 0} ~ ${found.rate_credits_max?.toLocaleString() || 0}`);
           setPositionsNeeded(found.no_of_hires || 1);
           setHiredCount(parseInt(found.hired_count) || 0);

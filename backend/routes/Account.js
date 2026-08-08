@@ -10,7 +10,8 @@ const {
     updateAndInsertAccountProfileController,
     updateAccountProfileIdController,
     settingAccountInfoUpdateController,
-    searchUserAccountsByHandleController
+    searchUserAccountsByHandleController,
+    getRecentUserAvatarsController
 } = require('../controllers/AccountControllers');
 const {
     updateTaglineAndDescriptionController,
@@ -24,6 +25,7 @@ const {
     getProfileCurrentAvatarByAccountIdController
 } = require('../controllers/ProfileControllers');
 
+router.get('/recent-avatars', getRecentUserAvatarsController);
 router.put('/profile/tagline-description', [checkSession, requireAuth], updateTaglineAndDescriptionController);
 router.get('/wallet', [checkSession, requireAuth], getAccountWalletController);
 router.get('/search-users', [checkSession, requireAuth], searchUserAccountsByHandleController);

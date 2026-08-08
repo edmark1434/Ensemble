@@ -1,6 +1,6 @@
 // backend/repositories/JobRepositories.js
 const { pool } = require('../lib/Database');
-
+//jp
 async function createJobRepositories(jobData) {
     const client = await pool.connect();
     try {
@@ -109,7 +109,10 @@ async function getAllJobsRepositories(filters = {}, accountId = null) {
 }
 
 async function updateJobRepositories(jobId, accountId, jobData) {
+    const client = await pool.connect();
     try {
+        await client.query('BEGIN');
+        
         const query = `
             UPDATE jobs
             SET title = $1, description = $2, category = $3, experience_level = $4,
@@ -121,11 +124,51 @@ async function updateJobRepositories(jobId, accountId, jobData) {
             jobData.title, jobData.description, jobData.category, jobData.experience_level,
             jobId, accountId
         ];
-        const res = await pool.query(query, values);
-        return res.rows[0];
+        const res = await client.query(query, values);
+        const updatedJob = res.rows[0];
+
+        if (!updatedJob) {
+            await client.query('ROLLBACK');
+            return null;
+        }
+
+        // Handle Tags
+        if (jobData.tags) {
+            await client.query(`DELETE FROM job_tags WHERE job_id = $1`, [jobId]);
+            for (const tagName of jobData.tags) {
+                if (!tagName || typeof tagName !== 'string') continue;
+                let tagId;
+                const tagRes = await client.query(`SELECT tag_id FROM tags WHERE LOWER(name) = LOWER($1) LIMIT 1`, [tagName]);
+                if (tagRes.rows.length > 0) {
+                    tagId = tagRes.rows[0].tag_id;
+                } else {
+                    const newTagRes = await client.query(`INSERT INTO tags (name) VALUES ($1) RETURNING tag_id`, [tagName]);
+                    tagId = newTagRes.rows[0].tag_id;
+                }
+                await client.query(
+                    `INSERT INTO job_tags (job_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                    [jobId, tagId]
+                );
+            }
+        }
+
+        // Handle Thumbnail
+        if (jobData.file_id) {
+            await client.query(`DELETE FROM job_attachments WHERE job_id = $1 AND index = 0`, [jobId]);
+            await client.query(
+                `INSERT INTO job_attachments (job_id, file_id, index) VALUES ($1, $2, $3)`,
+                [jobId, jobData.file_id, 0]
+            );
+        }
+
+        await client.query('COMMIT');
+        return updatedJob;
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Error in updateJobRepositories:', err);
         throw err;
+    } finally {
+        client.release();
     }
 }
 

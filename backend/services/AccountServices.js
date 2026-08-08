@@ -1,10 +1,12 @@
+//jp
 const { getAllAccounts, createAccount, getAccountByHandle, getAccountWalletRepositories,
     checkAccountId, getProfileRepositories, getAccountLinkByAccountIdRepositories,
     checkUserAccountIdRepositories,
     getDisplayNameByAccountId,
     updateAndInsertAccountProfile,
     updateAccountProfile,
-    searchUserAccountsByHandle
+    searchUserAccountsByHandle,
+    getRecentUserAvatarsRepositories
 } = require("../repositories/AccountRepositories");
 const {
     updateUserDetailsByAccountId,
@@ -207,6 +209,16 @@ async function settingAccountInfoUpdate(accountId, payload) {
     }
 }
 
+async function getRecentUserAvatarsService() {
+    try {
+        const avatars = await getRecentUserAvatarsRepositories(5);
+        return avatars;
+    } catch (err) {
+        console.error('Error fetching recent user avatars:', err);
+        throw err;
+    }
+}
+
 module.exports = {
     fetchAllAccounts,
     createNewAccount,
@@ -220,5 +232,6 @@ module.exports = {
     getDisplayNameByAccountIdService,
     updateAndInsertAccountProfileServices,
     updateAccountProfileServices,
-    settingAccountInfoUpdate
+    settingAccountInfoUpdate,
+    getRecentUserAvatarsService
 };
