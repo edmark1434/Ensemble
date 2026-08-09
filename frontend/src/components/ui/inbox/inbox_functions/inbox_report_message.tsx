@@ -18,7 +18,7 @@ interface InboxReportModalProps {
     messageId: string;
     reason: string;
     details: string;
-  }) => void;
+  }) => Promise<void>;
 }
 
 export const InboxReportModal: React.FC<InboxReportModalProps> = ({
@@ -29,6 +29,8 @@ export const InboxReportModal: React.FC<InboxReportModalProps> = ({
   const [selectedReason, setSelectedReason] = useState(REPORT_REASONS[0]);
   const [details, setDetails] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   if (!messageToReport) return null;
 
@@ -36,18 +38,30 @@ export const InboxReportModal: React.FC<InboxReportModalProps> = ({
     messageToReport.message_content ||
     (messageToReport.attachments?.length ? "[Image Attachment]" : "Message");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmitReport({
-      messageId: messageToReport._id,
-      reason: selectedReason,
-      details,
-    });
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      onClose();
-    }, 1500);
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setSubmitError("");
+    try {
+      await onSubmitReport({
+        messageId: messageToReport._id,
+        reason: selectedReason,
+        details,
+      });
+      setSubmitted(true);
+      setTimeout(() => {
+        setSubmitted(false);
+        onClose();
+      }, 1500);
+    } catch (error) {
+      const message =
+        (error as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error || "Failed to submit the report. Please try again.";
+      setSubmitError(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -127,6 +141,12 @@ export const InboxReportModal: React.FC<InboxReportModalProps> = ({
               <span>Misuse of reports may lead to account penalties.</span>
             </div>
 
+            {submitError && (
+              <p className="text-xs text-red-400" role="alert">
+                {submitError}
+              </p>
+            )}
+
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
@@ -137,9 +157,10 @@ export const InboxReportModal: React.FC<InboxReportModalProps> = ({
               </button>
               <button
                 type="submit"
-                className="rounded-xl bg-red-600/80 hover:bg-red-600 px-4 py-2 text-xs font-medium text-white transition shadow-lg shadow-red-500/20"
+                disabled={isSubmitting}
+                className="rounded-xl bg-red-600/80 hover:bg-red-600 px-4 py-2 text-xs font-medium text-white transition shadow-lg shadow-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Submit Report
+                {isSubmitting ? "Submitting..." : "Submit Report"}
               </button>
             </div>
           </form>

@@ -9,6 +9,11 @@ const {
     getProfileAvatarsByAccountIdService,
     getProfileCurrentAvatarByAccountIdService
 } = require('../services/ProfileServices');
+const {
+    getProfileAttachmentsService,
+    createProfileAttachmentService,
+    deleteProfileAttachmentService,
+} = require('../services/ProfileAttachmentServices');
 
 
 
@@ -177,6 +182,61 @@ async function getProfileCurrentAvatarByAccountIdController(req, res) {
     }
 }
 
+async function getProfileAttachmentsController(req, res) {
+    try {
+        const attachments = await getProfileAttachmentsService(
+            req.params.accountId,
+            req.session.account_id
+        );
+        return res.status(200).json({ success: true, attachments });
+    } catch (err) {
+        console.error('Error fetching profile attachments:', err);
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            message: err.message || 'Unable to fetch profile attachments',
+        });
+    }
+}
+
+async function createProfileAttachmentController(req, res) {
+    try {
+        const attachment = await createProfileAttachmentService(
+            req.session.account_id,
+            req.body
+        );
+        return res.status(201).json({
+            success: true,
+            message: 'Profile attachment created successfully',
+            attachment,
+        });
+    } catch (err) {
+        console.error('Error creating profile attachment:', err);
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            message: err.message || 'Unable to create profile attachment',
+        });
+    }
+}
+
+async function deleteProfileAttachmentController(req, res) {
+    try {
+        await deleteProfileAttachmentService(
+            req.params.attachmentId,
+            req.session.account_id
+        );
+        return res.status(200).json({
+            success: true,
+            message: 'Profile attachment removed successfully',
+        });
+    } catch (err) {
+        console.error('Error deleting profile attachment:', err);
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            message: err.message || 'Unable to remove profile attachment',
+        });
+    }
+}
+
 module.exports = {
     updateTaglineAndDescriptionController,
     getPersonalDetailsController,
@@ -186,5 +246,8 @@ module.exports = {
     updateProfileSocialMediaController,
     updateProfileDetailsController,
     getProfileAvatarsByAccountIdController,
-    getProfileCurrentAvatarByAccountIdController
+    getProfileCurrentAvatarByAccountIdController,
+    getProfileAttachmentsController,
+    createProfileAttachmentController,
+    deleteProfileAttachmentController
 };

@@ -43,7 +43,13 @@ export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
   onUnpin,
   onJumpTo,
 }) => {
-  const isTicket = selectedConversation.conversation_type === "ticket";
+  const conversationType = String(
+    selectedConversation.conversation_type || ""
+  ).toLowerCase();
+  const isTicket = conversationType === "ticket";
+  const hasRestrictedMessageTools = ["ticket", "dispute"].includes(
+    conversationType
+  );
   const ticketDetails = selectedConversation.ticket_details;
   const ticketNumber =
     ticketDetails?.ticket_number ||
@@ -57,7 +63,9 @@ export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
         String(message.author_type || "user").toLowerCase() !== "staff"
     )?.message_content;
 
-  if (!isTicket && pinnedMessages.length === 0) return null;
+  if (!isTicket && (hasRestrictedMessageTools || pinnedMessages.length === 0)) {
+    return null;
+  }
 
   return (
     <div className="inbox-scroll-thin border-b border-white/10 bg-[#0d0f1a] px-4 py-2 flex-shrink-0 max-h-28 overflow-y-auto">
@@ -95,7 +103,7 @@ export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
           )}
         </div>
       )}
-      {pinnedMessages.map((pin) => {
+      {!hasRestrictedMessageTools && pinnedMessages.map((pin) => {
         const msg = messages.find((m) => m._id === pin.message_id);
         if (!msg) return null;
 

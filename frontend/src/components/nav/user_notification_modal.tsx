@@ -2,6 +2,7 @@ import React from "react";
 import { X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import socket from "@/lib/socket";
+import api from "@/lib/axios";
 
 interface Notification {
   notification_id: string;
@@ -33,18 +34,26 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
 }) => {
   const navigate = useNavigate();
 
-  const handleNotificationClick = (notification: Notification) => {
-    // Optimistic update
+  const handleNotificationClick = async (notification: Notification) => {
     if (!notification.is_read) {
-      setNotifications((prev) =>
-        prev.map((item) =>
-          item.notification_id === notification.notification_id
-            ? { ...item, is_read: true }
-            : item
-        )
-      );
-
-      socket.emit("markMessageAsRead", notification.notification_id);
+      try {
+        await api.patch(
+          `/api/notifications/${notification.notification_id}/read`
+        );
+        setNotifications((prev) =>
+          prev.map((item) =>
+            item.notification_id === notification.notification_id
+              ? { ...item, is_read: true }
+              : item
+          )
+        );
+        if (socket.connected) {
+          socket.emit("markMessageAsRead", notification.notification_id);
+        }
+      } catch (error) {
+        console.error("Failed to mark notification as read", error);
+        return;
+      }
     }
 
     onClose();
@@ -67,16 +76,21 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
     window.location.href = referencePath;
   };
 
-  const handleMarkAllRead = () => {
-    // Optimistic update
-    setNotifications((prev) =>
-      prev.map((item) => ({
-        ...item,
-        is_read: true,
-      }))
-    );
-
-    socket.emit("markAllNotificationsAsRead");
+  const handleMarkAllRead = async () => {
+    try {
+      await api.patch("/api/notifications/read-all");
+      setNotifications((prev) =>
+        prev.map((item) => ({
+          ...item,
+          is_read: true,
+        }))
+      );
+      if (socket.connected) {
+        socket.emit("markAllNotificationsAsRead");
+      }
+    } catch (error) {
+      console.error("Failed to mark all notifications as read", error);
+    }
   };
 
   const formatTimeAgo = (date: string) => {

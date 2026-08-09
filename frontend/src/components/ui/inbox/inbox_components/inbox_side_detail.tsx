@@ -108,6 +108,9 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   const pinnedMessageIds = new Set(
     pinnedMessages.map((pinned) => String(pinned.message_id))
   );
+  const hasRestrictedMessageTools = ["ticket", "dispute"].includes(
+    String(selectedConversation.conversation_type || "").toLowerCase()
+  );
   const pinnedList = messages.filter((message) =>
     pinnedMessageIds.has(String(message._id))
   );
@@ -535,6 +538,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
           )}
 
           {/* 3. Pinned Messages Section */}
+          {!hasRestrictedMessageTools && (
           <div className="rounded-xl overflow-hidden bg-white/5 border border-white/5">
             <button
               onClick={() => setIsPinnedOpen((prev) => !prev)}
@@ -576,6 +580,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
               </div>
             )}
           </div>
+          )}
 
           {/* 4. Shared Links Section */}
           <div className="rounded-xl overflow-hidden bg-white/5 border border-white/5">

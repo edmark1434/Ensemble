@@ -107,6 +107,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         !["left", "removed"].includes(member.status || "active")
     )?.account_id;
   const isEngagement = conversation?.conversation_type === "engagement";
+  const hasRestrictedMessageTools = ["ticket", "dispute"].includes(
+    String(conversation?.conversation_type || "").toLowerCase()
+  );
   const listingType =
     conversation?.listing_type ||
     (conversation?.gig_id ? "gig" : conversation?.job_id ? "job" : "");
@@ -322,7 +325,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         </div>
         <div className="flex gap-1">
-          {callTargetAccountId &&
+          {!hasRestrictedMessageTools && callTargetAccountId &&
             String(callTargetAccountId) !== currentUserId && (
             <button
               onClick={() =>
@@ -420,7 +423,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 key={message._id}
                 className={`group flex flex-col ${isMe ? "items-end" : "items-start"}`}
               >
-                {pinnedIds.has(String(message._id)) && (
+                {!hasRestrictedMessageTools && pinnedIds.has(String(message._id)) && (
                   <span className="mb-1 flex items-center gap-1 text-[9px] text-yellow-400">
                     <Pin size={10} /> Pinned
                   </span>
@@ -541,6 +544,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           className="fixed z-[110] w-36 rounded-lg border border-zinc-200 bg-white p-1 text-zinc-800 shadow-xl"
                           style={menuPosition}
                         >
+                          {!hasRestrictedMessageTools && (
                           <div className="relative border-b border-zinc-200 pb-1">
                             <button
                               type="button"
@@ -563,13 +567,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                               />
                             )}
                           </div>
+                          )}
                           <button onClick={() => { setReplyTo(message); setEditing(null); closeMessageMenu(); }} className="flex w-full gap-2 rounded px-2 py-1.5 hover:bg-zinc-100">
                             <Reply size={13} /> Reply
                           </button>
-                          <button onClick={() => { closeMessageMenu(); void pinMessage(conversationId, message._id, pinnedIds.has(String(message._id))); }} className="flex w-full gap-2 rounded px-2 py-1.5 hover:bg-zinc-100">
+                          {!hasRestrictedMessageTools && <button onClick={() => { closeMessageMenu(); void pinMessage(conversationId, message._id, pinnedIds.has(String(message._id))); }} className="flex w-full gap-2 rounded px-2 py-1.5 hover:bg-zinc-100">
                             {pinnedIds.has(String(message._id)) ? <PinOff size={13} /> : <Pin size={13} />}
                             {pinnedIds.has(String(message._id)) ? "Unpin" : "Pin"}
-                          </button>
+                          </button>}
                           {isMe && (
                             <>
                               <button onClick={() => beginEdit(message)} className="flex w-full gap-2 rounded px-2 py-1.5 hover:bg-zinc-100">
@@ -586,7 +591,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </div>
                   )}
                 </div>
-                {(message.message_react || []).length > 0 && (
+                {!hasRestrictedMessageTools && (message.message_react || []).length > 0 && (
                   <div className="mt-0.5 flex gap-1">
                     {[...new Set(message.message_react.map((item) => item.react_type))].map(
                       (emoji) => (

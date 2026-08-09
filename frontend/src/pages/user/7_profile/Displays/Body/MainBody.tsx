@@ -18,6 +18,10 @@ interface DetailsListBodyProps {
   onTabChange: (tab: TabType) => void;
   portfolioItems?: any[];
   services?: any[];
+  isOwner?: boolean;
+  onUploadPDF?: (file: File) => Promise<void>;
+  onAddExternalLink?: (data: { name: string; url: string; description: string }) => Promise<void>;
+  onDeletePortfolioItem?: (id: string) => Promise<void>;
 }
 
 const tabOptions: { key: TabType; label: string; icon: React.ReactNode }[] = [
@@ -44,7 +48,11 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
   activeTab,
   onTabChange,
   portfolioItems = [],
-  services = []
+  services = [],
+  isOwner = false,
+  onUploadPDF,
+  onAddExternalLink,
+  onDeletePortfolioItem,
 }) => {
   if (loading) return <DetailsListBodySkeleton />;
 
@@ -92,7 +100,15 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
             transition={{ duration: 0.2, ease: "easeInOut" }}
             className="flex-1 flex flex-col"
           >
-            {activeTab === "portfolio" && <Profile_Portfolio portfolioItems={portfolioItems} />}
+            {activeTab === "portfolio" && (
+              <Profile_Portfolio
+                portfolioItems={portfolioItems}
+                isOwner={isOwner}
+                onUploadPDF={onUploadPDF}
+                onAddExternalLink={onAddExternalLink}
+                onDeleteItem={onDeletePortfolioItem}
+              />
+            )}
             {activeTab === "services" && <Profile_Services services={services} />}
             {activeTab === "job-posts" && <Profile_JobPosts />}
             {activeTab === "projects" && <Profile_Projects />}

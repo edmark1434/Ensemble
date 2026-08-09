@@ -360,7 +360,12 @@ export default function LoginPage({
       const result = await axios.post(
         `${API_BASE_URL}/api/users/login`,
         { email, password },
-        { withCredentials: true }
+        { withCredentials: true,
+        headers: {
+            "ngrok-skip-browser-warning": "true",
+            "Content-Type": "application/json",
+          }
+        }
       );
       if (result.status === 200 && result.data.success) {
 

@@ -6,6 +6,7 @@ const {
     replyMessageController,
     reactMessageController,
     removeMessageReactionController,
+    reportMessageController,
     pinMessageController,
     unpinMessageController,
     updateMessageController,
@@ -37,6 +38,7 @@ router.patch('/message/:messageId', updateMessageController);
 router.delete('/message/:messageId', deleteMessageController);
 router.put('/message/:messageId/reaction', reactMessageController);
 router.delete('/message/:messageId/reaction', removeMessageReactionController);
+router.post('/message/:messageId/report', reportMessageController);
 
 router.post(
     '/conversation/:conversationId/pin/:messageId',

@@ -1,7 +1,7 @@
 const {
     getNotificationsByAccountIdServices,
-    markNotificationAsRead,
-    markAllNotificationsAsRead
+    markNotificationAsReadServices,
+    markAllNotificationsAsReadServices
 } = require('../services/NotificationServices');
 
 async function getNotificationsByAccountIdController(req, res) {
@@ -19,6 +19,39 @@ async function getNotificationsByAccountIdController(req, res) {
     }
 }
 
+async function markNotificationAsReadController(req, res) {
+    try {
+        const notification = await markNotificationAsReadServices(
+            req.params.notificationId,
+            req.session.account_id
+        );
+        return res.status(200).json({ success: true, notification });
+    } catch (err) {
+        console.error("Error marking notification as read:", err);
+        return res.status(err.statusCode || 500).json({
+            success: false,
+            error: err.message || "Internal Server Error"
+        });
+    }
+}
+
+async function markAllNotificationsAsReadController(req, res) {
+    try {
+        const notifications = await markAllNotificationsAsReadServices(
+            req.session.account_id
+        );
+        return res.status(200).json({ success: true, notifications });
+    } catch (err) {
+        console.error("Error marking all notifications as read:", err);
+        return res.status(500).json({
+            success: false,
+            error: "Internal Server Error"
+        });
+    }
+}
+
 module.exports = {
-    getNotificationsByAccountIdController
+    getNotificationsByAccountIdController,
+    markNotificationAsReadController,
+    markAllNotificationsAsReadController
 }

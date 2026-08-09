@@ -13,6 +13,7 @@ import { SkillsSideSection_ProfileDisplay } from "./Displays/SkillsSideSection_P
 import { SocialLinksSection_ProfileDisplay } from "./Displays/SocialLinksSection_ProfileDisplay.tsx";
 import { MainBody } from "./Displays/Body/MainBody.tsx";
 import type { TabType } from "./Displays/Body/MainBody.tsx";
+import type { PortfolioItem } from "./Displays/Body/Profile_Portfolio.tsx";
 
 // Badges Registry & Type Infrastructure
 import { badgesRegistry } from "@/pages/user/7_profile/Utilities/BadgesRegistry.ts";
@@ -38,6 +39,17 @@ interface SocialLink {
   account_link_id?: number;
   platform: string;
   url: string;
+}
+
+interface ProfileAttachmentResponse {
+  account_attachment_id: string;
+  attachment_kind: "file" | "link";
+  name: string;
+  description?: string | null;
+  external_url?: string | null;
+  file_name?: string | null;
+  file_path?: string | null;
+  created_at?: string;
 }
 
 interface UserDetail {
@@ -66,10 +78,6 @@ interface UserDetail {
   social_links?: SocialLink[];
   subscriptionType?: "Free" | "Premium" | "Business";
 }
-
-const portfolioItems = [
-  { id: 1, title: "Corporate Brand Identity", description: "Complete brand identity design for a tech startup", type: "image" as const, thumbnail: "https://placehold.co/600x400/1e2130/4a6fa5?text=Brand+Identity", likes: 234, views: 1234 }
-];
 
 const services = [
   { id: 1, title: "Professional Logo Design", description: "Unique, modern logo design with 3 concepts and unlimited revisions", price: 499, deliveryTime: "3 days", rating: 4.9, orders: 127 }
@@ -116,11 +124,30 @@ export default function Profile() {
   const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
   const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
   const [isSavingSkills, setIsSavingSkills] = useState(false);
+  const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
 
   const [avatarPresets, setAvatarPresets] = useState<Preset[]>([]);
   const [currentAvatar, setCurrentAvatar] = useState<Preset | null>(null);
 
   const isOwner = id == user?.account_id;
+
+  const mapAttachmentToPortfolioItem = (
+    attachment: ProfileAttachmentResponse
+  ): PortfolioItem => ({
+    id: String(attachment.account_attachment_id),
+    type: attachment.attachment_kind === "link" ? "link" : "document",
+    title: attachment.name,
+    description:
+      attachment.description ||
+      (attachment.attachment_kind === "link"
+        ? attachment.external_url
+        : attachment.file_name || "PDF document"),
+    fileUrl: attachment.file_path
+      ? constructAvatarUrl(attachment.file_path)
+      : undefined,
+    externalUrl: attachment.external_url || undefined,
+    createdAt: attachment.created_at,
+  });
 
   // Open Chat Trigger Handler
   const handleOpenChat = () => {
@@ -226,6 +253,84 @@ export default function Profile() {
       }
 
       throw new Error(error.message || 'Failed to upload image. Please try again.');
+    }
+  };
+
+  const handleUploadResume = async (file: File) => {
+    if (!isOwner) return;
+    if (file.type !== "application/pdf") {
+      toast.error("Please select a PDF file.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("The PDF must not exceed 5 MB.");
+      return;
+    }
+
+    const toastId = toast.loading("Uploading CV / resume...");
+    try {
+      const key = await uploadFile(file);
+      const response = await api.post("/api/accounts/profile/attachments", {
+        attachment_kind: "file",
+        attachment_type: "cv_resume",
+        name: file.name.replace(/\.pdf$/i, ""),
+        description: "CV / Resume",
+        file: {
+          name: file.name,
+          path: key,
+          mime_type: file.type,
+          size_bytes: file.size,
+        },
+      });
+      setPortfolioItems((current) => [
+        mapAttachmentToPortfolioItem(response.data.attachment),
+        ...current,
+      ]);
+      toast.success("CV / resume added to your profile.", { id: toastId });
+    } catch (error: any) {
+      toast.error(
+        error.response?.data?.message || error.message || "Unable to upload CV / resume.",
+        { id: toastId }
+      );
+      throw error;
+    }
+  };
+
+  const handleAddWebsite = async (data: {
+    name: string;
+    url: string;
+    description: string;
+  }) => {
+    if (!isOwner) return;
+    try {
+      const response = await api.post("/api/accounts/profile/attachments", {
+        attachment_kind: "link",
+        attachment_type: "website",
+        name: data.name,
+        description: data.description,
+        external_url: data.url,
+      });
+      setPortfolioItems((current) => [
+        mapAttachmentToPortfolioItem(response.data.attachment),
+        ...current,
+      ]);
+      toast.success("Website added to your profile.");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Unable to add website.");
+      throw error;
+    }
+  };
+
+  const handleDeletePortfolioItem = async (attachmentId: string) => {
+    if (!isOwner || !window.confirm("Remove this profile attachment?")) return;
+    try {
+      await api.delete(`/api/accounts/profile/attachments/${attachmentId}`);
+      setPortfolioItems((current) =>
+        current.filter((item) => String(item.id) !== attachmentId)
+      );
+      toast.success("Profile attachment removed.");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Unable to remove attachment.");
     }
   };
 
@@ -450,11 +555,15 @@ export default function Profile() {
           return;
         }
 
-        const [profileResponse, tagsResponse, accountLinkResponse] = await Promise.all([
+        const [profileResponse, tagsResponse, accountLinkResponse, attachmentsResponse] = await Promise.all([
           api.get(`/api/accounts/profile/${id}`),
           api.get(`/api/tags/`),
-          api.get(`api/accounts/links/${id}`)
+          api.get(`api/accounts/links/${id}`),
+          api.get(`/api/accounts/profile/${id}/attachments`),
         ]);
+        setPortfolioItems(
+          (attachmentsResponse.data?.attachments || []).map(mapAttachmentToPortfolioItem)
+        );
 
         const profilePayload =
           profileResponse.data?.data ??
@@ -668,6 +777,10 @@ export default function Profile() {
               onTabChange={(tab) => setActiveTab(tab)}
               portfolioItems={portfolioItems}
               services={services}
+              isOwner={isOwner}
+              onUploadPDF={handleUploadResume}
+              onAddExternalLink={handleAddWebsite}
+              onDeletePortfolioItem={handleDeletePortfolioItem}
             />
           </div>
 

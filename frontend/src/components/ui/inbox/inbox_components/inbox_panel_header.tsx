@@ -57,6 +57,9 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
   ).length;
   const isEngagement = selectedConversation.conversation_type === "engagement";
   const isTicket = selectedConversation.conversation_type === "ticket";
+  const hasRestrictedMessageTools = ["ticket", "dispute"].includes(
+    String(selectedConversation.conversation_type || "").toLowerCase()
+  );
   const canCall = Boolean(otherMember);
   const listingType =
     selectedConversation.listing_type ||
@@ -166,22 +169,24 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
         <button className="rounded-lg p-2 text-zinc-400 hover:bg-white/10 hover:text-white transition">
           <Share2 className="h-5 w-5" />
         </button>
-        <button
-          disabled={!canCall || Boolean(activeCall)}
-          onClick={() =>
-            canCall &&
-            otherMember &&
-            void startCall(
-              String(selectedConversation._id),
-              String(otherMember.account_id),
-              { name, avatar }
-            )
-          }
-          title={canCall ? "Start video call" : "No other member is available to call"}
-          className="rounded-lg p-2 text-zinc-400 hover:bg-white/10 hover:text-white transition disabled:opacity-40"
-        >
-          <Video className="h-5 w-5" />
-        </button>
+        {!hasRestrictedMessageTools && (
+          <button
+            disabled={!canCall || Boolean(activeCall)}
+            onClick={() =>
+              canCall &&
+              otherMember &&
+              void startCall(
+                String(selectedConversation._id),
+                String(otherMember.account_id),
+                { name, avatar }
+              )
+            }
+            title={canCall ? "Start video call" : "No other member is available to call"}
+            className="rounded-lg p-2 text-zinc-400 hover:bg-white/10 hover:text-white transition disabled:opacity-40"
+          >
+            <Video className="h-5 w-5" />
+          </button>
+        )}
         <button
           onClick={onToggleDetails}
           title="Chat Details"
