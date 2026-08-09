@@ -8,6 +8,9 @@ const SOCKET_URL =
 const socket: Socket = io(SOCKET_URL, {
   autoConnect: false,
   withCredentials: true,
+  extraHeaders: {
+    "ngrok-skip-browser-warning": "true",
+  },
 });
 
 export default socket;
