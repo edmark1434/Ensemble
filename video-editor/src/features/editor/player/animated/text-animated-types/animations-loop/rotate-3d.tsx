@@ -2,12 +2,18 @@ import { interpolate } from "remotion";
 import { FullBlockAnimationProps, renderBlockContent } from "./full-block-animation";
 
 const Rotate3d = (props: FullBlockAnimationProps) => {
-  const { frame, durationInFrames, animationTextInFrames, animationTextOutFrames } = props;
+  const { frame, fps, durationInFrames, animationTextInFrames, animationTextOutFrames } = props;
 
   const loopDuration = durationInFrames - animationTextInFrames - animationTextOutFrames;
   const loopFrame = frame - animationTextInFrames;
 
-  const rotation = interpolate(loopFrame, [0, loopDuration / 2], [0, 360]);
+  // ~0.5 rotations/sec
+  const rotations = Math.max(1, Math.round(loopDuration / (2 * fps)));
+
+  const rotation = interpolate(loopFrame, [0, loopDuration], [0, rotations * 360], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
   const rotation2 = rotation - 180;
 
   const blockContent = renderBlockContent(props);
