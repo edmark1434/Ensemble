@@ -33,7 +33,21 @@ import {getSafeCurrentFrame} from "@/features/editor/utils/time";
 
 export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }) => {
   const isMediumScreen = useIsMediumScreen();
-  const { actions, type, format, compositionWidth, compositionHeight, resolution, fps, bitrate, exporting, output, error, queuePosition } =
+  const {
+    actions,
+    type,
+    format,
+    compositionWidth,
+    compositionHeight,
+    resolution,
+    fps,
+    bitrate,
+    exporting,
+    output,
+    error,
+    queuePosition,
+    downloadStatus
+  } =
     useDownloadState();
   const { duration, trackItemIds, size, projectName, background } = useStore();
   const isEmpty = trackItemIds.length === 0;
@@ -99,7 +113,7 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
     }
   }, [type, format, isLongDuration]);
 
-  const buttonLabel = isCompleted
+  const buttonLabel = isCompleted && downloadStatus === "idle"
     ? "Export ready"
     : isFailed
       ? "Export failed"
@@ -162,8 +176,8 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
           <Button
             className={cn(
               "flex h-8 gap-2 hover:!bg-accent/30 font-semibold",
-              (exporting && !isCompleted && !isFailed) && "!border-foreground hover:!border-foreground/80",
-              isCompleted && "!border-primary text-primary hover:!border-primary/80 hover:text-primary/80",
+              (exporting && !(isCompleted && downloadStatus === "idle") && !isFailed) && "!border-foreground hover:!border-foreground/80",
+              isCompleted && downloadStatus === "idle" && "!border-primary text-primary hover:!border-primary/80 hover:text-primary/80",
               isFailed && "!border-red-500 text-red-500 hover:!border-red-500/80 hover:text-red-500/80"
             )}
             variant={"outline"}
@@ -183,8 +197,8 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
           <Button
             className={cn(
               "flex h-8 gap-2 hover:!bg-accent/30 font-semibold",
-              (exporting && !isCompleted && !isFailed) && "!border-foreground hover:!border-foreground/80",
-              isCompleted && "!border-primary text-primary hover:!border-primary/80 hover:text-primary/80",
+              (exporting && !(isCompleted && downloadStatus === "idle") && !isFailed) && "!border-foreground hover:!border-foreground/80",
+              isCompleted && downloadStatus === "idle" && "!border-primary text-primary hover:!border-primary/80 hover:text-primary/80",
               isFailed && "!border-red-500 text-red-500 hover:!border-red-500/80 hover:text-red-500/80"
             )}
             variant={"outline"}

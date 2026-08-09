@@ -17,11 +17,24 @@ import {
 } from "../constants/download-options";
 import useStore, {IBackground} from "@/features/editor/store/use-store";
 
+export interface RenderPayload extends IDesign {
+  projectName: string;
+  background: IBackground;
+  type: ExportType;
+  format: ExportFormat;
+  resolution: number;
+  fps: number;
+  bitrate: number | null;
+  currentTime?: number; // ms
+}
+
 interface Output {
   url: string;
   type: string;
   projectName: string;
 }
+
+export type DownloadStatus = "idle" | "downloading" | "downloaded" | "expired";
 
 interface DownloadState {
   projectId: string;
@@ -44,6 +57,7 @@ interface DownloadState {
   payload?: RenderPayload;
   displayProgressModal: boolean;
   exportStartedAt: number | null;
+  downloadStatus: DownloadStatus;
   actions: {
     setProjectId: (projectId: string) => void;
     setExporting: (exporting: boolean) => void;
@@ -63,19 +77,9 @@ interface DownloadState {
     pollJobStatus: (jobId: string) => void;
     cancelExport: () => void;
     resetExport: () => void;
+    setDownloadStatus: (status: DownloadStatus) => void;
     setDisplayProgressModal: (displayProgressModal: boolean) => void;
   };
-}
-
-export interface RenderPayload extends IDesign {
-  projectName: string;
-  background: IBackground;
-  type: ExportType;
-  format: ExportFormat;
-  resolution: number;
-  fps: number;
-  bitrate: number | null;
-  currentTime?: number; // ms
 }
 
 export const useDownloadState = create<DownloadState>((set, get) => ({
@@ -102,6 +106,7 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
   cancelled: false,
   displayProgressModal: false,
   exportStartedAt: null,
+  downloadStatus: "idle" as const,
   actions: {
     setProjectId: (projectId) => set({ projectId }),
     setExporting: (exporting) => set({ exporting }),
@@ -181,7 +186,8 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
           cancelled: false,
           progress: 0,
           queuePosition: null,
-          exportStartedAt: Date.now()
+          exportStartedAt: Date.now(),
+          downloadStatus: "idle"
         });
 
         const { payload } = get();
@@ -198,9 +204,10 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
         });
 
         if (response.status === 409) {
-          const existing = await response.json();
-          set({ jobId: existing.jobId });
-          get().actions.pollJobStatus(existing.jobId);
+          set({
+            exporting: false,
+            error: "You already have a pending export.\nRefresh to see progress."
+          });
           return;
         }
 
@@ -246,7 +253,8 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
           output: undefined,
           cancelled: false,
           progress: 0,
-          queuePosition: null
+          queuePosition: null,
+          downloadStatus: "idle"
         });
 
         get().actions.pollJobStatus(existing.jobId);
@@ -297,7 +305,7 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
             }
           });
         } else if (status === "in-progress" || status === "queued") {
-          setTimeout(() => get().actions.pollJobStatus(jobId), 2500);
+          setTimeout(() => get().actions.pollJobStatus(jobId), 1000);
         } else if (status === "failed") {
           set({ exporting: false, error: "Render failed." });
         }
@@ -340,8 +348,10 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
         error: null,
         cancelled: false,
         displayProgressModal: false,
-        exportStartedAt: null
+        exportStartedAt: null,
+        downloadStatus: "idle"
       });
-    }
+    },
+    setDownloadStatus: (downloadStatus) => set({ downloadStatus }),
   }
 }));
