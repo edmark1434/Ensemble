@@ -69,7 +69,7 @@ export const getDefaultResolution = (format: ExportFormat): number =>
   format === "gif" ? 240 : 720;
 
 export const FRAME_RATE_OPTIONS: SelectOption<number>[] = [
-  { value: 3, label: "3 fps" }, // testing only, remove later
+  // { value: 3, label: "3 fps" }, // testing only
   { value: 15, label: "15 fps" },
   { value: 24, label: "24 fps" },
   { value: 25, label: "25 fps" },
