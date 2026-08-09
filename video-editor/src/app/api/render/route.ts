@@ -7,11 +7,13 @@ const RENDER_SERVER_URL = process.env.RENDER_SERVER_URL || "http://localhost:300
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const userId = request.headers.get("x-user-id");
 
     const response = await fetch(`${RENDER_SERVER_URL}/renders`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(userId ? { "x-user-id": userId } : {}),
       },
       body: JSON.stringify(body),
     });

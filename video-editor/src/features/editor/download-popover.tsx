@@ -100,7 +100,7 @@ export const DownloadPopover = ({ stateManager }: { stateManager: StateManager }
   }, [type, format, isLongDuration]);
 
   const buttonLabel = isCompleted
-    ? "Export ready for download"
+    ? "Export ready"
     : isFailed
       ? "Export failed"
       : exporting

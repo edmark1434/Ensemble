@@ -10,6 +10,8 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const userId = request.headers.get("x-user-id");
+
     if (!id) {
       return NextResponse.json(
         { message: "id parameter is required" },
@@ -19,6 +21,7 @@ export async function GET(
 
     const response = await fetch(`${RENDER_SERVER_URL}/renders/${id}`, {
       cache: "no-store",
+      headers: userId ? { "x-user-id": userId } : undefined,
     });
 
     const statusData = await response.json();
@@ -46,6 +49,8 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const userId = request.headers.get("x-user-id");
+
     if (!id) {
       return NextResponse.json(
         { message: "id parameter is required" },
@@ -54,7 +59,8 @@ export async function DELETE(
     }
 
     const response = await fetch(`${RENDER_SERVER_URL}/renders/${id}`, {
-      method: "DELETE"
+      method: "DELETE",
+      headers: userId ? { "x-user-id": userId } : undefined,
     });
 
     const data = await response.json();

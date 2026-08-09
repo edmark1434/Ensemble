@@ -15,11 +15,12 @@ import {
   getDefaultVideoBitrateKbps,
   getResolutionOptions
 } from "../constants/download-options";
-import {IBackground} from "@/features/editor/store/use-store";
+import useStore, {IBackground} from "@/features/editor/store/use-store";
 
 interface Output {
   url: string;
   type: string;
+  projectName: string;
 }
 
 interface DownloadState {
@@ -58,6 +59,8 @@ interface DownloadState {
     setState: (state: Partial<DownloadState>) => void;
     setOutput: (output: Output) => void;
     startExport: () => void;
+    resumeExport: () => void;
+    pollJobStatus: (jobId: string) => void;
     cancelExport: () => void;
     resetExport: () => void;
     setDisplayProgressModal: (displayProgressModal: boolean) => void;
@@ -188,10 +191,18 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
         const response = await fetch(`/api/render`, {
           method: "POST",
           headers: {
-            "Content-Type": "application/json"
-          },
+            "Content-Type": "application/json",
+            "x-user-id": useStore.getState().userId
+      },
           body: JSON.stringify(payload)
         });
+
+        if (response.status === 409) {
+          const existing = await response.json();
+          set({ jobId: existing.jobId });
+          get().actions.pollJobStatus(existing.jobId);
+          return;
+        }
 
         if (!response.ok) {
           const errorBody = await response.json().catch(() => null);
@@ -203,54 +214,96 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
         const jobId = jobInfo.jobId;
 
         set({ jobId });
-
-        const checkStatus = async () => {
-          if (get().cancelled) return;
-
-          try {
-            const statusResponse = await fetch(`/api/render/${jobId}`, {
-              headers: {
-                "Content-Type": "application/json"
-              }
-            });
-
-            if (!statusResponse.ok)
-              throw new Error("Failed to fetch export status.");
-
-            const statusInfo = await statusResponse.json();
-            const { status, progress, videoUrl, queuePosition } = statusInfo;
-
-            if (get().cancelled) return;
-
-            const wasQueued = get().queuePosition !== null;
-            const justStartedRendering = wasQueued && status === "in-progress";
-
-            set({
-              progress: progress ?? 0,
-              queuePosition: status === "queued" ? queuePosition ?? null : null,
-              ...(justStartedRendering ? { exportStartedAt: Date.now() } : {})
-            });
-
-            if (status === "completed") {
-              set({ exporting: false, output: { url: videoUrl, type: get().format } });
-            } else if (status === "in-progress" || status === "queued") {
-              setTimeout(checkStatus, 2500);
-            } else if (status === "failed") {
-              set({ exporting: false, error: "Render failed." });
-            }
-          } catch (error) {
-            console.error(error);
-            set({ exporting: false, error: "Failed to check export status." });
-          }
-        };
-
-        checkStatus();
+        get().actions.pollJobStatus(jobId);
       } catch (error) {
         console.error(error);
         set({
           exporting: false,
           error: error instanceof Error ? error.message : "Export failed."
         });
+      }
+    },
+    resumeExport: async () => {
+      try {
+        const response = await fetch(`/api/render/mine`, {
+          headers: {
+            "Content-Type": "application/json",
+            "x-user-id": useStore.getState().userId
+      }
+        });
+
+        if (!response.ok) return;
+
+        const existing = await response.json();
+        if (!existing.jobId) return;
+
+        set({
+          jobId: existing.jobId,
+          exportStartedAt: existing.createdAt ?? Date.now(),
+          exporting: true,
+          displayProgressModal: true,
+          error: null,
+          output: undefined,
+          cancelled: false,
+          progress: 0,
+          queuePosition: null
+        });
+
+        get().actions.pollJobStatus(existing.jobId);
+      } catch (error) {
+        console.error("Failed to check for an existing export:", error);
+      }
+    },
+    pollJobStatus: async (jobId) => {
+      if (get().cancelled) return;
+
+      try {
+        const statusResponse = await fetch(`/api/render/${jobId}`, {
+          headers: {
+            "Content-Type": "application/json",
+            "x-user-id": useStore.getState().userId
+          }
+        });
+
+        if (statusResponse.status === 404) {
+          set({ exporting: false, error: "This export is no longer available." });
+          return;
+        }
+
+        if (!statusResponse.ok)
+          throw new Error("Failed to fetch export status.");
+
+        const statusInfo = await statusResponse.json();
+        const { status, progress, videoUrl, queuePosition, data } = statusInfo;
+
+        if (get().cancelled) return;
+
+        const wasQueued = get().queuePosition !== null;
+        const justStartedRendering = wasQueued && status === "in-progress";
+
+        set({
+          progress: progress ?? 0,
+          queuePosition: status === "queued" ? queuePosition ?? null : null,
+          ...(justStartedRendering ? { exportStartedAt: Date.now() } : {})
+        });
+
+        if (status === "completed") {
+          set({
+            exporting: false,
+            output: {
+              url: videoUrl,
+              type: data?.format ?? get().format,
+              projectName: data?.projectName ?? get().projectName
+            }
+          });
+        } else if (status === "in-progress" || status === "queued") {
+          setTimeout(() => get().actions.pollJobStatus(jobId), 2500);
+        } else if (status === "failed") {
+          set({ exporting: false, error: "Render failed." });
+        }
+      } catch (error) {
+        console.error(error);
+        set({ exporting: false, error: "Failed to check export status." });
       }
     },
     cancelExport: async () => {
@@ -265,7 +318,10 @@ export const useDownloadState = create<DownloadState>((set, get) => ({
 
       if (jobId) {
         try {
-          const response = await fetch(`/api/render/${jobId}`, { method: "DELETE" });
+          const response = await fetch(`/api/render/${jobId}`, {
+            method: "DELETE",
+            headers: { "x-user-id": useStore.getState().userId }
+          });
           if (!response.ok) {
             console.error("Failed to cancel render job:", await response.json().catch(() => null));
           }

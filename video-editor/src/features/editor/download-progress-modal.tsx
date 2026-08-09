@@ -30,6 +30,11 @@ const DownloadProgressModal = () => {
   const [elapsedMs, setElapsedMs] = useState(0);
 
   useEffect(() => {
+    actions.resumeExport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     if (!exporting || !exportStartedAt) return;
 
     const tick = () => setElapsedMs(Date.now() - exportStartedAt);
@@ -48,7 +53,7 @@ const DownloadProgressModal = () => {
   const handleDownload = async () => {
     if (output?.url) {
       const extension = new URL(output.url).pathname.split(".").pop() || "mp4";
-      await download(output.url, `${sanitizeFilename(projectName)}.${extension}`);
+      await download(output.url, `${sanitizeFilename(output.projectName ?? projectName)}.${extension}`);
 
       if (jobId) {
         fetch(`/api/render/${jobId}`, { method: "DELETE" }).catch((error) => {
@@ -82,9 +87,9 @@ const DownloadProgressModal = () => {
             <div className="flex flex-col items-center justify-center gap-4 py-4 text-center">
               <CircleCheckIcon size={32} className="text-primary" />
               <div className="space-y-1">
-                <div className="font-semibold">Export ready for download</div>
+                <div className="font-semibold">Export ready</div>
                 <div className="text-muted-foreground text-sm">
-                  You can download the video to your device.
+                  Hang on while we save it to your device.
                 </div>
               </div>
               <Button onClick={handleDownload}>Download</Button>
@@ -121,7 +126,7 @@ const DownloadProgressModal = () => {
                     {Math.floor(progress * 100)}%
                   </div>
                   <div className="text-muted-foreground text-sm">
-                    <div>Closing this modal will not cancel the export.</div>
+                    <div>Closing the browser will not cancel the export.</div>
                     <div>The video will be saved in your space.</div>
                   </div>
                 </>
