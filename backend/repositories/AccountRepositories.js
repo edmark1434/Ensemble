@@ -186,7 +186,9 @@ async function getProfileRepositories(accountId) {
                         WHERE AL.ACCOUNT_ID = A.ACCOUNT_ID
                     ), 
                     '[]'::json
-                ) AS SOCIAL_LINKS
+                ) AS SOCIAL_LINKS,
+                (SELECT COUNT(*) FROM account_followers WHERE followed_id = A.ACCOUNT_ID) AS followers_count,
+                (SELECT COUNT(*) FROM account_followers WHERE follower_id = A.ACCOUNT_ID) AS following_count
             FROM ACCOUNTS A
             LEFT JOIN USERS U ON A.ACCOUNT_ID = U.ACCOUNT_ID
             LEFT JOIN VERIFICATIONS V ON V.ACCOUNT_ID = A.ACCOUNT_ID
@@ -294,6 +296,98 @@ async function getRecentUserAvatarsRepositories(limit = 5) {
     }
 }
 
+async function followUser(followerId, followedId) {
+    try {
+        const query = `
+            INSERT INTO account_followers (follower_id, followed_id)
+            VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+            RETURNING *;
+        `;
+        const result = await pool.query(query, [followerId, followedId]);
+        return result.rows[0];
+    } catch (err) {
+        console.error(`Error following user ${followedId}:`, err);
+        throw err;
+    }
+}
+
+async function unfollowUser(followerId, followedId) {
+    try {
+        const query = `
+            DELETE FROM account_followers
+            WHERE follower_id = $1 AND followed_id = $2
+            RETURNING *;
+        `;
+        const result = await pool.query(query, [followerId, followedId]);
+        return result.rows[0];
+    } catch (err) {
+        console.error(`Error unfollowing user ${followedId}:`, err);
+        throw err;
+    }
+}
+
+async function getFollowers(accountId) {
+    try {
+        const query = `
+            SELECT 
+                a.account_id,
+                a.display_name,
+                a.handle,
+                f.path AS avatar_preset_url
+            FROM account_followers af
+            INNER JOIN accounts a ON a.account_id = af.follower_id
+            LEFT JOIN files f ON f.file_id = a.avatar_file_id
+            WHERE af.followed_id = $1
+            ORDER BY af.created_at DESC;
+        `;
+        const result = await pool.query(query, [accountId]);
+        return result.rows;
+    } catch (err) {
+        console.error(`Error fetching followers for ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function getFollowing(accountId) {
+    try {
+        const query = `
+            SELECT 
+                a.account_id,
+                a.display_name,
+                a.handle,
+                f.path AS avatar_preset_url
+            FROM account_followers af
+            INNER JOIN accounts a ON a.account_id = af.followed_id
+            LEFT JOIN files f ON f.file_id = a.avatar_file_id
+            WHERE af.follower_id = $1
+            ORDER BY af.created_at DESC;
+        `;
+        const result = await pool.query(query, [accountId]);
+        return result.rows;
+    } catch (err) {
+        console.error(`Error fetching following for ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function checkIsFollowing(followerId, followedId) {
+    if (!followerId || !followedId) return false;
+    try {
+        const query = `
+            SELECT EXISTS (
+                SELECT 1 FROM account_followers
+                WHERE follower_id = $1 AND followed_id = $2
+            );
+        `;
+        const result = await pool.query(query, [followerId, followedId]);
+        return result.rows[0].exists;
+    } catch (err) {
+        console.error('Error checking follow status:', err);
+        throw err;
+    }
+}
+
 module.exports = {
     getAllAccounts,
     getAccountById,
@@ -308,5 +402,10 @@ module.exports = {
     getDisplayNameByAccountId,
     updateAndInsertAccountProfile,
     updateAccountProfile,
-    getRecentUserAvatarsRepositories
+    getRecentUserAvatarsRepositories,
+    followUser,
+    unfollowUser,
+    getFollowers,
+    getFollowing,
+    checkIsFollowing
 };

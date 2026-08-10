@@ -11,7 +11,12 @@ const {
     updateAccountProfileIdController,
     settingAccountInfoUpdateController,
     searchUserAccountsByHandleController,
-    getRecentUserAvatarsController
+    getRecentUserAvatarsController,
+    followUserController,
+    unfollowUserController,
+    getFollowersController,
+    getFollowingController,
+    checkIsFollowingController
 } = require('../controllers/AccountControllers');
 const {
     updateTaglineAndDescriptionController,
@@ -34,6 +39,11 @@ router.get('/wallet', [checkSession, requireAuth], getAccountWalletController);
 router.get('/search-users', [checkSession, requireAuth], searchUserAccountsByHandleController);
 router.get('/personal-details', [checkSession, requireAuth], getPersonalDetailsController);
 router.get('/profile/current-avatar', [checkSession, requireAuth], getProfileCurrentAvatarByAccountIdController);
+router.post('/:accountId/follow', [checkSession, requireAuth], followUserController);
+router.delete('/:accountId/follow', [checkSession, requireAuth], unfollowUserController);
+router.get('/:accountId/followers', [checkSession], getFollowersController);
+router.get('/:accountId/following', [checkSession], getFollowingController);
+router.get('/:accountId/follow-status', [checkSession], checkIsFollowingController);
 router.get('/profile/:accountId/attachments', [checkSession, requireAuth], getProfileAttachmentsController);
 router.post('/profile/attachments', [checkSession, requireAuth], createProfileAttachmentController);
 router.delete('/profile/attachments/:attachmentId', [checkSession, requireAuth], deleteProfileAttachmentController);

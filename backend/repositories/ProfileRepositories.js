@@ -202,7 +202,9 @@ async function getProfileByAccountId(accountId) {
                 F.PATH AS avatar_preset_url,
                 P.NAME AS subscriptionType,
                 U.USER_ID as user_id,
-                COALESCE(V.IS_VERIFIED, FALSE) AS verification_status
+                COALESCE(V.IS_VERIFIED, FALSE) AS verification_status,
+                (SELECT COUNT(*) FROM account_followers WHERE followed_id = A.ACCOUNT_ID) AS followers_count,
+                (SELECT COUNT(*) FROM account_followers WHERE follower_id = A.ACCOUNT_ID) AS following_count
             FROM ACCOUNTS A
             JOIN USERS U ON A.ACCOUNT_ID = U.ACCOUNT_ID
             LEFT JOIN VERIFICATIONS V ON A.ACCOUNT_ID = V.ACCOUNT_ID

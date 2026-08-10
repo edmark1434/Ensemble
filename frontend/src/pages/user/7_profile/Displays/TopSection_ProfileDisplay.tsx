@@ -28,6 +28,13 @@ interface TopSectionProps {
   onEditProfile?: () => void;
   onChatClick?: () => void;
   onVerificationClick?: () => void;
+  followersCount?: number;
+  followingCount?: number;
+  isFollowing?: boolean;
+  onFollow?: () => void;
+  onUnfollow?: () => void;
+  onFollowersClick?: () => void;
+  onFollowingClick?: () => void;
 }
 
 export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
@@ -52,7 +59,14 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
   onEditAvatar,
   onEditProfile,
   onChatClick,
-  onVerificationClick
+  onVerificationClick,
+  followersCount = 0,
+  followingCount = 0,
+  isFollowing = false,
+  onFollow,
+  onUnfollow,
+  onFollowersClick,
+  onFollowingClick
 }) => {
   const [isMetadataOpen, setIsMetadataOpen] = useState(false);
   const [isBioExpanded, setIsBioExpanded] = useState(false);
@@ -173,6 +187,16 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
           <p className="text-xs text-blue-400/90 font-bold tracking-wide pt-0.5">
             {tagline || "No specialized tagline configured"}
           </p>
+          
+          {/* Row 5: Followers Stats */}
+          <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 pt-1 text-sm font-semibold text-zinc-300">
+            <button onClick={onFollowersClick} className="hover:text-blue-400 hover:underline decoration-blue-400/50 underline-offset-4 transition">
+              <span className="text-white">{followersCount}</span> <span className="text-zinc-500 font-normal">Followers</span>
+            </button>
+            <button onClick={onFollowingClick} className="hover:text-blue-400 hover:underline decoration-blue-400/50 underline-offset-4 transition">
+              <span className="text-white">{followingCount}</span> <span className="text-zinc-500 font-normal">Following</span>
+            </button>
+          </div>
 
         </div>
 
@@ -195,6 +219,20 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
           >
             <MessageCircle className="h-4 w-4" />
           </button>
+          
+          {!isOwner && (
+            <button
+              onClick={isFollowing ? onUnfollow : onFollow}
+              className={`px-4 py-2 text-sm font-bold rounded-xl border transition shadow-sm ${
+                isFollowing
+                  ? "bg-white/5 border-white/10 text-zinc-300 hover:text-white hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-400"
+                  : "bg-blue-600 border-blue-500 text-white hover:bg-blue-500 hover:border-blue-400"
+              }`}
+            >
+              {isFollowing ? "Unfollow" : "Follow"}
+            </button>
+          )}
+
           {!verificationLevel && isOwner && (
           <button
             onClick={onVerificationClick}

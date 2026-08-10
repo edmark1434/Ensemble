@@ -6,7 +6,12 @@ const { getAllAccounts, createAccount, getAccountByHandle, getAccountWalletRepos
     updateAndInsertAccountProfile,
     updateAccountProfile,
     searchUserAccountsByHandle,
-    getRecentUserAvatarsRepositories
+    getRecentUserAvatarsRepositories,
+    followUser,
+    unfollowUser,
+    getFollowers,
+    getFollowing,
+    checkIsFollowing
 } = require("../repositories/AccountRepositories");
 const {
     updateUserDetailsByAccountId,
@@ -219,6 +224,57 @@ async function getRecentUserAvatarsService() {
     }
 }
 
+async function followUserService(followerId, followedId) {
+    if (!followerId || !followedId) throw new Error('Follower and followed IDs are required');
+    if (followerId === followedId) throw new Error('Cannot follow yourself');
+    try {
+        return await followUser(followerId, followedId);
+    } catch (err) {
+        console.error('Error in followUserService:', err);
+        throw err;
+    }
+}
+
+async function unfollowUserService(followerId, followedId) {
+    if (!followerId || !followedId) throw new Error('Follower and followed IDs are required');
+    try {
+        return await unfollowUser(followerId, followedId);
+    } catch (err) {
+        console.error('Error in unfollowUserService:', err);
+        throw err;
+    }
+}
+
+async function getFollowersService(accountId) {
+    if (!accountId) throw new Error('Account ID is required');
+    try {
+        return await getFollowers(accountId);
+    } catch (err) {
+        console.error('Error in getFollowersService:', err);
+        throw err;
+    }
+}
+
+async function getFollowingService(accountId) {
+    if (!accountId) throw new Error('Account ID is required');
+    try {
+        return await getFollowing(accountId);
+    } catch (err) {
+        console.error('Error in getFollowingService:', err);
+        throw err;
+    }
+}
+
+async function checkIsFollowingService(followerId, followedId) {
+    if (!followerId || !followedId) return false;
+    try {
+        return await checkIsFollowing(followerId, followedId);
+    } catch (err) {
+        console.error('Error in checkIsFollowingService:', err);
+        throw err;
+    }
+}
+
 module.exports = {
     fetchAllAccounts,
     createNewAccount,
@@ -233,5 +289,10 @@ module.exports = {
     updateAndInsertAccountProfileServices,
     updateAccountProfileServices,
     settingAccountInfoUpdate,
-    getRecentUserAvatarsService
+    getRecentUserAvatarsService,
+    followUserService,
+    unfollowUserService,
+    getFollowersService,
+    getFollowingService,
+    checkIsFollowingService
 };

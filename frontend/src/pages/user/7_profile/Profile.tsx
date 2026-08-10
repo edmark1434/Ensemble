@@ -24,6 +24,7 @@ import AvatarEditModal from "@/pages/user/7_profile/Edits/AvatarEditModal.tsx";
 import ProfileEditModal from "@/pages/user/7_profile/Edits/ProfileEditModal.tsx";
 import { BadgeEditModal } from "./Edits/BadgeEditModal.tsx";
 import SkillsEditModal from "@/pages/user/7_profile/Edits/SkillsEditModal.tsx";
+import { FollowersModal } from "./Displays/FollowersModal.tsx";
 
 // Chat Interface Context Types
 import type { ChatTarget } from "@/components/ui/Layout";
@@ -77,6 +78,8 @@ interface UserDetail {
   badges?: BadgeMetadata[];
   social_links?: SocialLink[];
   subscriptionType?: "Free" | "Premium" | "Business";
+  followers_count?: number;
+  following_count?: number;
 }
 
 const services = [
@@ -128,6 +131,9 @@ export default function Profile() {
 
   const [avatarPresets, setAvatarPresets] = useState<Preset[]>([]);
   const [currentAvatar, setCurrentAvatar] = useState<Preset | null>(null);
+  
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followersModalType, setFollowersModalType] = useState<"followers" | "following" | null>(null);
 
   const isOwner = id == user?.account_id;
 
@@ -161,6 +167,30 @@ export default function Profile() {
       avatarUrl: userDetails.avatar_preset_url,
       account_id: id
     });
+  };
+
+  const handleFollow = async () => {
+    if (!id || !user) return;
+    try {
+      await api.post(`/api/accounts/${id}/follow`);
+      setIsFollowing(true);
+      setUserDetails(prev => prev ? { ...prev, followers_count: (Number(prev.followers_count) || 0) + 1 } : null);
+      toast.success("Followed user!");
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || "Failed to follow user");
+    }
+  };
+
+  const handleUnfollow = async () => {
+    if (!id || !user) return;
+    try {
+      await api.delete(`/api/accounts/${id}/follow`);
+      setIsFollowing(false);
+      setUserDetails(prev => prev ? { ...prev, followers_count: Math.max(0, (Number(prev.followers_count) || 1) - 1) } : null);
+      toast.success("Unfollowed user!");
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || "Failed to unfollow user");
+    }
   };
 
   const uploadFile = async (file: File): Promise<string> => {
@@ -556,11 +586,20 @@ export default function Profile() {
         }
 
         const [profileResponse, tagsResponse, accountLinkResponse, attachmentsResponse] = await Promise.all([
-          api.get(`/api/accounts/profile/${id}`),
+          api.get(`/api/accounts/profile/${id}?t=${new Date().getTime()}`),
           api.get(`/api/tags/`),
           api.get(`api/accounts/links/${id}`),
           api.get(`/api/accounts/profile/${id}/attachments`),
         ]);
+        
+        if (!isOwner) {
+          try {
+             const followStatus = await api.get(`/api/accounts/${id}/follow-status`);
+             setIsFollowing(followStatus.data.isFollowing);
+          } catch(e) {
+             console.error('Error fetching follow status:', e);
+          }
+        }
         setPortfolioItems(
           (attachmentsResponse.data?.attachments || []).map(mapAttachmentToPortfolioItem)
         );
@@ -575,7 +614,10 @@ export default function Profile() {
         if (!profileData || typeof profileData !== "object") {
           throw new Error("Profile data was not returned by the server");
         }
-        console.log("Fetched profile data:", profileData);
+        
+        console.log("PROFILE DATA RECEIVED: ", profileData);
+
+        const avatarUrl = constructAvatarUrl(profileData.avatar_preset_url);
 
         setAvailableSkills(tagsResponse.data.data || []);
 
@@ -612,7 +654,9 @@ export default function Profile() {
             skills: compiledCompoundSkills,
             badges: profileData.badges || [],
             social_links: accountLinkResponse.data.links || accountLinkResponse.data || [],
-            subscriptionType: profileData.subscriptiontype || "Free"
+            subscriptionType: profileData.subscriptiontype || "Free",
+            followers_count: Number(profileData.followers_count) || 0,
+            following_count: Number(profileData.following_count) || 0
           });
         } catch (skillsError) {
           console.error("Error fetching user skills:", skillsError);
@@ -650,7 +694,10 @@ export default function Profile() {
               avatar_preset_url: avatarUrl,
               skills: compiledCompoundSkills,
               badges: profileData.badges || [],
-              social_links: accountLinkResponse.data.links || accountLinkResponse.data || []
+              social_links: accountLinkResponse.data.links || accountLinkResponse.data || [],
+              subscriptionType: profileData.subscriptiontype || "Free",
+              followers_count: Number(profileData.followers_count) || 0,
+              following_count: Number(profileData.following_count) || 0
             });
           } catch (fallbackError) {
             console.error("Error fetching user skills from fallback:", fallbackError);
@@ -677,7 +724,10 @@ export default function Profile() {
               avatar_preset_url: avatarUrl,
               skills: [],
               badges: profileData.badges || [],
-              social_links: accountLinkResponse.data.links || accountLinkResponse.data || []
+              social_links: accountLinkResponse.data.links || accountLinkResponse.data || [],
+              subscriptionType: profileData.subscriptiontype || "Free",
+              followers_count: Number(profileData.followers_count) || 0,
+              following_count: Number(profileData.following_count) || 0
             });
           }
         }
@@ -728,6 +778,13 @@ export default function Profile() {
           birthdate={userDetails?.birthdate}
           verificationLevel={userDetails?.verification_status}
           subscriptionType={userDetails?.subscriptionType || "Free"}
+          followersCount={userDetails?.followers_count}
+          followingCount={userDetails?.following_count}
+          isFollowing={isFollowing}
+          onFollow={handleFollow}
+          onUnfollow={handleUnfollow}
+          onFollowersClick={() => setFollowersModalType("followers")}
+          onFollowingClick={() => setFollowersModalType("following")}
           onEditAvatar={() => setIsAvatarModalOpen(true)}
           onEditProfile={() => setIsProfileModalOpen(true)}
           onChatClick={handleOpenChat}
@@ -804,6 +861,15 @@ export default function Profile() {
           data={userDetails}
           onSave={saveProfileDetails}
           availableSkillsList={availableSkills}
+        />
+      )}
+
+      {followersModalType && id && (
+        <FollowersModal
+          isOpen={!!followersModalType}
+          onClose={() => setFollowersModalType(null)}
+          accountId={id}
+          type={followersModalType}
         />
       )}
 
