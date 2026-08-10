@@ -15,7 +15,7 @@ interface ProposalsStatusesProps {
 }
 
 const getStatusIcon = (label: string, isActive: boolean) => {
-  const defaultClass = isActive ? "" : "text-zinc-500 opacity-60";
+  const defaultClass = isActive ? "" : "text-gray-500 dark:text-zinc-500 opacity-60";
   switch (label) {
     case "Pending":
       return <Clock className={`h-3.5 w-3.5 transition-colors ${isActive ? "text-yellow-400" : defaultClass}`} />;
@@ -26,7 +26,7 @@ const getStatusIcon = (label: string, isActive: boolean) => {
     case "Rejected":
       return <XCircle className={`h-3.5 w-3.5 transition-colors ${isActive ? "text-red-400" : defaultClass}`} />;
     default:
-      return <Layers className={`h-3.5 w-3.5 transition-colors ${isActive ? "text-zinc-400" : defaultClass}`} />;
+      return <Layers className={`h-3.5 w-3.5 transition-colors ${isActive ? "text-gray-500 dark:text-zinc-400" : defaultClass}`} />;
   }
 };
 
@@ -36,8 +36,8 @@ export const ProposalsStatuses: React.FC<ProposalsStatusesProps> = ({
   onStatusChange,
 }) => {
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/80 p-5 backdrop-blur-sm space-y-3 text-left">
-      <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-5 backdrop-blur-sm space-y-3 text-left">
+      <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
         Proposal Statuses
       </h3>
       <div className="flex flex-col gap-1.5">
@@ -50,8 +50,8 @@ export const ProposalsStatuses: React.FC<ProposalsStatusesProps> = ({
               onClick={() => onStatusChange(st.label)}
               className={`relative flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors duration-200 ${
                 isActive
-                  ? "text-white"
-                  : "text-zinc-400 hover:text-white hover:bg-white/5"
+                  ? "text-gray-900 dark:text-white"
+                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 shadow-sm dark:shadow-none"
               }`}
             >
               {isActive && (
@@ -71,7 +71,7 @@ export const ProposalsStatuses: React.FC<ProposalsStatusesProps> = ({
                 className={`relative z-10 text-[10px] font-mono px-2 py-0.5 rounded-md ${
                   isActive
                     ? "bg-blue-500/30 text-blue-300 border border-blue-500/40"
-                    : "bg-white/5 text-zinc-500 border border-white/5"
+                    : "bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-500 dark:text-zinc-500 border border-gray-100 dark:border-white/5"
                 }`}
               >
                 {st.count}

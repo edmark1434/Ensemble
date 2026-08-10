@@ -48,50 +48,50 @@ interface JobListProps {
 export const JobCardSkeleton: React.FC<{ viewType?: ViewType }> = ({ viewType = "list" }) => {
   if (viewType === "grid") {
     return (
-      <div className="flex flex-col rounded-2xl border border-white/10 bg-[#0d0f1a]/40 p-5 animate-pulse space-y-4">
-        <div className="h-44 w-full rounded-xl bg-white/5" />
+      <div className="flex flex-col rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/40 p-5 animate-pulse space-y-4">
+        <div className="h-44 w-full rounded-xl bg-gray-100 dark:bg-white/5" />
         <div className="space-y-2">
           <div className="flex gap-2">
-            <div className="h-4 w-12 rounded bg-white/10" />
-            <div className="h-4 w-16 rounded bg-white/5" />
+            <div className="h-4 w-12 rounded bg-gray-200 dark:bg-white/10" />
+            <div className="h-4 w-16 rounded bg-gray-100 dark:bg-white/5" />
           </div>
-          <div className="h-5 w-3/4 rounded bg-white/10" />
-          <div className="h-4 w-1/2 rounded bg-white/5" />
+          <div className="h-5 w-3/4 rounded bg-gray-200 dark:bg-white/10" />
+          <div className="h-4 w-1/2 rounded bg-gray-100 dark:bg-white/5" />
         </div>
-        <div className="pt-3 border-t border-white/5 flex items-center justify-between">
-          <div className="h-4 w-20 rounded bg-white/5" />
-          <div className="h-4 w-16 rounded bg-white/5" />
+        <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between">
+          <div className="h-4 w-20 rounded bg-gray-100 dark:bg-white/5" />
+          <div className="h-4 w-16 rounded bg-gray-100 dark:bg-white/5" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col md:flex-row gap-6 rounded-2xl border border-white/10 bg-[#0d0f1a]/40 p-5 animate-pulse">
-      <div className="hidden md:block h-40 w-full md:w-60 shrink-0 rounded-xl bg-white/5" />
+    <div className="flex flex-col md:flex-row gap-6 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/40 p-5 animate-pulse">
+      <div className="hidden md:block h-40 w-full md:w-60 shrink-0 rounded-xl bg-gray-100 dark:bg-white/5" />
       <div className="flex-1 flex flex-col justify-between py-1">
         <div className="space-y-3">
           <div className="flex gap-2">
-            <div className="h-4 w-12 rounded bg-white/10" />
-            <div className="h-4 w-16 rounded bg-white/10" />
-            <div className="h-4 w-14 rounded bg-white/5" />
+            <div className="h-4 w-12 rounded bg-gray-200 dark:bg-white/10" />
+            <div className="h-4 w-16 rounded bg-gray-200 dark:bg-white/10" />
+            <div className="h-4 w-14 rounded bg-gray-100 dark:bg-white/5" />
           </div>
-          <div className="h-5 w-28 rounded bg-white/10" />
-          <div className="h-6 w-3/4 rounded bg-white/10" />
+          <div className="h-5 w-28 rounded bg-gray-200 dark:bg-white/10" />
+          <div className="h-6 w-3/4 rounded bg-gray-200 dark:bg-white/10" />
           <div className="space-y-1.5">
-            <div className="h-4 w-full rounded bg-white/5" />
-            <div className="h-4 w-5/6 rounded bg-white/5" />
+            <div className="h-4 w-full rounded bg-gray-100 dark:bg-white/5" />
+            <div className="h-4 w-5/6 rounded bg-gray-100 dark:bg-white/5" />
           </div>
         </div>
-        <div className="mt-4 pt-4 border-t border-white/5 flex flex-wrap items-center justify-between gap-3">
+        <div className="mt-4 pt-4 border-t border-gray-100 dark:border-white/5 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-full bg-white/10" />
-            <div className="h-4 w-24 rounded bg-white/5" />
+            <div className="h-6 w-6 rounded-full bg-gray-200 dark:bg-white/10" />
+            <div className="h-4 w-24 rounded bg-gray-100 dark:bg-white/5" />
           </div>
           <div className="flex gap-2">
-            <div className="h-5 w-28 rounded bg-white/5" />
-            <div className="h-5 w-20 rounded bg-white/5" />
-            <div className="h-5 w-20 rounded bg-white/5" />
+            <div className="h-5 w-28 rounded bg-gray-100 dark:bg-white/5" />
+            <div className="h-5 w-20 rounded bg-gray-100 dark:bg-white/5" />
+            <div className="h-5 w-20 rounded bg-gray-100 dark:bg-white/5" />
           </div>
         </div>
       </div>
@@ -143,7 +143,7 @@ const JobList: React.FC<JobListProps> = ({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.2, ease: "easeOut" }}
-        className="p-12 text-center rounded-2xl border border-white/10 bg-[#0d0f1a]/40 text-zinc-500"
+        className="p-12 text-center rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/40 text-gray-500 dark:text-zinc-500"
       >
         No job postings found matching your parameters.
       </motion.div>
@@ -178,24 +178,24 @@ const JobList: React.FC<JobListProps> = ({
                 className={`group flex flex-col justify-between rounded-2xl border p-4 transition-colors duration-200 cursor-pointer ${
                   isActive
                     ? "border-blue-500 bg-blue-500/5 shadow-[0_0_30px_rgba(59,130,246,0.1)]"
-                    : "border-white/10 bg-[#0d0f1a]/40 hover:border-white/20"
+                    : "border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/40 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/[0.06] shadow-sm hover:shadow-md dark:shadow-none"
                 }`}
               >
                 <div>
-                  <div className="h-40 w-full overflow-hidden rounded-xl bg-zinc-900 border border-white/5 relative mb-3">
+                  <div className="h-40 w-full overflow-hidden rounded-xl bg-gray-200 dark:bg-zinc-900 border border-gray-100 dark:border-white/5 relative mb-3">
                     <img
                       src={job.thumbnail}
                       alt=""
                       className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
 
                     <div className="absolute top-2 right-2 flex items-center gap-1.5">
                       {!job.isOwnPost && (
                         <button
                           title="Report Post"
                           onClick={(e) => handleReportClick(e, job)}
-                          className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-zinc-400 hover:text-red-400 transition-colors"
+                          className="p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm text-gray-500 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                         >
                           <Flag className="h-3.5 w-3.5" />
                         </button>
@@ -204,19 +204,19 @@ const JobList: React.FC<JobListProps> = ({
                         <button
                           title="Edit Post"
                           onClick={(e) => handleEditClick(e, job.id)}
-                          className="p-1.5 rounded-full bg-black/50 backdrop-blur-sm text-zinc-300 hover:text-white transition-colors"
+                          className="p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm text-gray-500 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-gray-900 dark:text-white transition-colors"
                         >
                           <Edit2 className="h-3.5 w-3.5" />
                         </button>
                       )}
                       <button
                         onClick={(e) => onToggleSave(e, job.id)}
-                        className={`p-1.5 rounded-full bg-black/50 backdrop-blur-sm transition-colors flex items-center gap-1 ${
-                          job.isSaved ? "text-yellow-500" : "text-zinc-400 hover:text-white"
+                        className={`p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm transition-colors flex items-center gap-1 ${
+                          job.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-gray-900 dark:text-white"
                         }`}
                       >
                         <Bookmark className={`h-4 w-4 ${job.isSaved ? "fill-current" : ""}`} />
-                        <span className="text-[10px] font-bold">{job.savesCount}</span>
+                        <span className="text-[10px] font-bold text-gray-700 dark:text-white">{job.savesCount}</span>
                       </button>
                     </div>
                   </div>
@@ -226,16 +226,16 @@ const JobList: React.FC<JobListProps> = ({
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
                         job.status?.toLowerCase() === "open"
-                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                          : "bg-red-500/10 text-red-400 border-red-500/20"
+                          ? "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
+                          : "bg-red-100 text-red-700 border-red-300 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
                       }`}
                     >
                       {job.status}
                     </span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-800 border border-white/10 text-zinc-300">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                       {job.difficulty}
                     </span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-800 border border-white/10 text-zinc-300">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                       {job.category}
                     </span>
                   </div>
@@ -245,7 +245,7 @@ const JobList: React.FC<JobListProps> = ({
                     <CreditIcon className="h-4 w-4 text-yellow-500 shrink-0" />
                     <span>{job.priceRange}</span>
                   </div>
-                  <h3 className="text-white text-base font-bold mb-1 group-hover:text-blue-400 transition-colors line-clamp-1">
+                  <h3 className="text-gray-900 dark:text-white text-base font-bold mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1">
                     {job.title}
                   </h3>
                   <div className="mb-4">
@@ -253,20 +253,20 @@ const JobList: React.FC<JobListProps> = ({
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-white/5 flex items-center justify-between text-[11px] text-zinc-400 font-medium">
+                <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-[11px] text-gray-500 dark:text-zinc-400 font-medium">
                   <div className="flex items-center gap-1.5 truncate">
                     {job.clientAvatar ? (
-                      <img src={job.clientAvatar} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover border border-white/10" />
+                      <img src={job.clientAvatar} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover border border-gray-200 dark:border-white/10" />
                     ) : (
-                      <div className="h-5 w-5 shrink-0 rounded-full bg-zinc-800 flex items-center justify-center text-[9px] text-white font-bold border border-white/10">
+                      <div className="h-5 w-5 shrink-0 rounded-full bg-gray-200 dark:bg-zinc-800 flex items-center justify-center text-[9px] text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10">
                         {job.postedBy.charAt(0)}
                       </div>
                     )}
-                    <span className="truncate text-zinc-300 font-semibold">{job.postedBy}</span>
+                    <span className="truncate text-gray-700 dark:text-zinc-300 font-semibold">{job.postedBy}</span>
                   </div>
 
-                  <div className="flex items-center gap-1 text-zinc-400 text-[10px] shrink-0 ml-2">
-                    <Clock className="h-3 w-3 text-zinc-500" />
+                  <div className="flex items-center gap-1 text-gray-400 dark:text-zinc-400 text-[10px] shrink-0 ml-2">
+                    <Clock className="h-3 w-3 text-gray-400 dark:text-zinc-500" />
                     <span>{job.timeAgo}</span>
                   </div>
                 </div>
@@ -287,16 +287,16 @@ const JobList: React.FC<JobListProps> = ({
               className={`group flex flex-col md:flex-row gap-5 rounded-2xl border p-5 transition-colors duration-200 cursor-pointer ${
                 isActive
                   ? "border-blue-500 bg-blue-500/5 shadow-[0_0_30px_rgba(59,130,246,0.1)]"
-                  : "border-white/10 bg-[#0d0f1a]/40 hover:border-white/20"
+                  : "border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/40 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/[0.06] shadow-sm hover:shadow-md dark:shadow-none"
               }`}
             >
-              <div className="hidden md:block relative h-auto min-h-[160px] w-full md:w-56 shrink-0 overflow-hidden rounded-xl bg-zinc-900 border border-white/5">
+              <div className="hidden md:block relative h-auto min-h-[160px] w-full md:w-56 shrink-0 overflow-hidden rounded-xl bg-gray-200 dark:bg-zinc-900 border border-gray-100 dark:border-white/5">
                 <img
                   src={job.thumbnail}
                   alt=""
                   className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
               </div>
 
               <div className="flex-1 flex flex-col justify-between min-w-0">
@@ -306,16 +306,16 @@ const JobList: React.FC<JobListProps> = ({
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
                           job.status?.toLowerCase() === "open"
-                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                            : "bg-red-500/10 text-red-400 border-red-500/20"
+                            ? "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
+                            : "bg-red-100 text-red-700 border-red-300 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
                         }`}
                       >
                         {job.status}
                       </span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-800 border border-white/10 text-zinc-300">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                         {job.difficulty}
                       </span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-zinc-800 border border-white/10 text-zinc-300">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                         {job.category}
                       </span>
                     </div>
@@ -325,7 +325,7 @@ const JobList: React.FC<JobListProps> = ({
                         <button
                           title="Report Post"
                           onClick={(e) => handleReportClick(e, job)}
-                          className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-500 hover:text-red-400 transition-colors border border-white/10"
+                          className="p-1 rounded bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-500 hover:text-red-600 dark:hover:text-red-400 transition-colors border border-gray-200 dark:border-white/10"
                         >
                           <Flag className="h-4 w-4" />
                         </button>
@@ -334,17 +334,17 @@ const JobList: React.FC<JobListProps> = ({
                         <button
                           title="Edit Post"
                           onClick={(e) => handleEditClick(e, job.id)}
-                          className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors border border-white/10"
+                          className="p-1 rounded bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-gray-900 dark:text-white transition-colors border border-gray-200 dark:border-white/10"
                         >
                           <Edit2 className="h-4 w-4" />
                         </button>
                       )}
                       <button
                         onClick={(e) => onToggleSave(e, job.id)}
-                        className={`transition-colors flex items-center gap-1 ${job.isSaved ? "text-yellow-500" : "text-zinc-600 hover:text-white"}`}
+                        className={`transition-colors flex items-center gap-1 ${job.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-600 hover:text-gray-900 dark:hover:text-gray-900 dark:text-white"}`}
                       >
                         <Bookmark className={`h-5 w-5 ${job.isSaved ? "fill-current" : ""}`} />
-                        <span className="text-xs font-bold">{job.savesCount}</span>
+                        <span className="text-xs font-bold text-gray-700 dark:text-white">{job.savesCount}</span>
                       </button>
                     </div>
                   </div>
@@ -354,7 +354,7 @@ const JobList: React.FC<JobListProps> = ({
                     <CreditIcon className="h-5 w-5 text-yellow-500 shrink-0" />
                     <span>{job.priceRange}</span>
                   </div>
-                  <h3 className="text-white text-xl font-bold mb-1.5 group-hover:text-blue-400 transition-colors">{job.title}</h3>
+                  <h3 className="text-gray-900 dark:text-white text-xl font-bold mb-1.5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{job.title}</h3>
                   <div className="mb-3">
                     <JobRichText content={job.description} truncate={2} />
                   </div>
@@ -362,56 +362,56 @@ const JobList: React.FC<JobListProps> = ({
                   {/* Clean Gray Skill Tags without Outer Box or 'Skills:' label */}
                   {Array.isArray(job.skills) && job.skills.length > 0 && (
                     <div className="flex flex-wrap items-center gap-1.5 mb-3">
-                      <Wrench className="h-3 w-3 text-zinc-400 shrink-0 mr-0.5" />
+                      <Wrench className="h-3 w-3 text-gray-400 dark:text-zinc-400 shrink-0 mr-0.5" />
                       {job.skills.slice(0, 4).map((skill) => (
                         <span
                           key={skill}
-                          className="px-2 py-0.5 rounded-md bg-zinc-800/80 border border-white/10 text-zinc-300 text-[10px] font-semibold"
+                          className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-zinc-800/80 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 text-[10px] font-semibold"
                         >
                           {skill}
                         </span>
                       ))}
                       {job.skills.length > 4 && (
-                        <span className="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-zinc-400 text-[10px] font-medium">
+                        <span className="px-2 py-0.5 rounded-md bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 text-[10px] font-medium">
                           +{job.skills.length - 4} more
                         </span>
                       )}
                     </div>
                   )}
 
-                  <p className="text-[11px] text-zinc-500 font-medium mb-1">{job.timeAgo}</p>
+                  <p className="text-[11px] text-gray-500 dark:text-zinc-500 font-medium mb-1">{job.timeAgo}</p>
                 </div>
 
-                <div className="mt-2 pt-4 border-t border-white/5 flex flex-wrap items-center justify-between text-[10px] text-zinc-400 gap-3">
+                <div className="mt-2 pt-4 border-t border-gray-200 dark:border-white/5 flex flex-wrap items-center justify-between text-[10px] text-gray-500 dark:text-zinc-400 gap-3">
                   <div className="flex items-center gap-2">
                     {job.clientAvatar ? (
-                      <img src={job.clientAvatar} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover border border-white/10" />
+                      <img src={job.clientAvatar} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover border border-gray-200 dark:border-white/10" />
                     ) : (
-                      <div className="h-6 w-6 shrink-0 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] text-white font-bold border border-white/10 overflow-hidden">
+                      <div className="h-6 w-6 shrink-0 rounded-full bg-gray-200 dark:bg-zinc-800 flex items-center justify-center text-[10px] text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 overflow-hidden">
                         {job.postedBy.charAt(0)}
                       </div>
                     )}
                     <div className="text-left leading-tight">
-                      <p className="text-xs font-bold text-zinc-300">{job.postedBy}</p>
-                      <div className="flex items-center gap-1 text-[10px] text-zinc-400">
+                      <p className="text-xs font-bold text-gray-700 dark:text-zinc-300">{job.postedBy}</p>
+                      <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-400">
                         <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
                         <span>{job.clientRating} ({job.ratingCount})</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 text-[10px] font-medium text-zinc-400">
-                    <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
+                  <div className="flex items-center gap-2 text-[10px] font-medium text-gray-500 dark:text-zinc-400">
+                    <span className="bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/5">
                       {job.hiredCount}/{job.positionsNeeded} Positions
                     </span>
-                    <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
+                    <span className="bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/5">
                       {job.applicantsCount} Proposals
                     </span>
-                    <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
+                    <span className="bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/5">
                       {job.savesCount} Saves
                     </span>
-                    <span className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5 flex items-center gap-1">
-                      <Clock className="h-3 w-3 text-zinc-500" /> {job.timeline}
+                    <span className="bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/5 flex items-center gap-1">
+                      <Clock className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> {job.timeline}
                     </span>
                   </div>
                 </div>

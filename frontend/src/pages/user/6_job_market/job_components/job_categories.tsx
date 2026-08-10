@@ -18,8 +18,8 @@ const JobCategories: React.FC<JobCategoriesProps> = ({
   onCategoryChange
 }) => {
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-5 backdrop-blur-sm space-y-3">
-      <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em]">
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/60 shadow-sm dark:shadow-none p-5 backdrop-blur-sm space-y-3">
+      <h2 className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase tracking-[0.2em]">
         Categories
       </h2>
 
@@ -34,8 +34,8 @@ const JobCategories: React.FC<JobCategoriesProps> = ({
               onClick={() => onCategoryChange(cat.label)}
               className={`relative flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-colors duration-200 focus:outline-none ${
                 isActive
-                  ? "text-blue-400 border border-blue-500/30"
-                  : "text-zinc-400 bg-white/5 border border-white/5 hover:bg-white/10 hover:text-white"
+                  ? "text-blue-600 dark:text-blue-400 border border-blue-500/30 bg-blue-50 dark:bg-transparent"
+                  : "text-gray-500 dark:text-zinc-400 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/5 hover:bg-gray-200 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
               }`}
             >
               {/* Smooth Animated Background Pill indicator */}
@@ -51,8 +51,8 @@ const JobCategories: React.FC<JobCategoriesProps> = ({
               <span
                 className={`relative z-10 rounded-full px-2 py-0.5 text-[10px] font-mono font-bold ${
                   isActive
-                    ? "bg-blue-500/20 text-blue-300 border border-blue-500/20"
-                    : "bg-white/10 text-zinc-400"
+                    ? "bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-500/20"
+                    : "bg-gray-200 dark:bg-white/10 text-gray-500 dark:text-zinc-400"
                 }`}
               >
                 {cat.count}

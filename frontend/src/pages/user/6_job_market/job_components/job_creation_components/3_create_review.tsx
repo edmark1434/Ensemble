@@ -55,26 +55,26 @@ const CustomDropdown: React.FC<CustomSelectProps> = ({
 
   return (
     <div className="space-y-1.5 relative">
-      <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+      <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block">
         {label} <span className="text-red-500">*</span>
       </label>
       <div className="relative">
         <button
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
-          className={`w-full flex items-center justify-between rounded-xl border bg-[#0d0f1a] px-3.5 py-2.5 text-xs text-left transition-all ${
+          className={`w-full flex items-center justify-between rounded-xl border bg-white dark:bg-[#0d0f1a] px-3.5 py-2.5 text-xs text-left transition-all ${
             error
               ? "border-red-500/50 focus:border-red-500"
               : isOpen
               ? "border-blue-500 ring-2 ring-blue-500/10"
-              : "border-white/10 hover:border-white/20"
+              : "border-gray-200 dark:border-white/10 hover:border-white/20"
           }`}
         >
-          <span className={value ? "text-white font-medium" : "text-zinc-500"}>
+          <span className={value ? "text-gray-900 dark:text-white font-medium" : "text-gray-500 dark:text-zinc-500"}>
             {value || placeholder}
           </span>
           <ChevronDown
-            className={`h-4 w-4 text-zinc-400 transition-transform duration-200 ${
+            className={`h-4 w-4 text-gray-500 dark:text-zinc-400 transition-transform duration-200 ${
               isOpen ? "rotate-180 text-blue-400" : ""
             }`}
           />
@@ -92,7 +92,7 @@ const CustomDropdown: React.FC<CustomSelectProps> = ({
                 animate={{ opacity: 1, y: 4, scale: 1 }}
                 exit={{ opacity: 0, y: -6, scale: 0.98 }}
                 transition={{ duration: 0.15, ease: "easeOut" }}
-                className="absolute left-0 right-0 z-30 max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-[#0d0f1a] p-1.5 shadow-2xl space-y-0.5 custom-scrollbar"
+                className="absolute left-0 right-0 z-30 max-h-48 overflow-y-auto rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-1.5 shadow-2xl space-y-0.5 custom-scrollbar"
               >
                 {options.map((opt) => {
                   const isSelected = value === opt;
@@ -107,7 +107,7 @@ const CustomDropdown: React.FC<CustomSelectProps> = ({
                       className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
                         isSelected
                           ? "bg-blue-500/15 text-blue-400"
-                          : "text-zinc-300 hover:bg-white/5 hover:text-white"
+                          : "text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:text-white"
                       }`}
                     >
                       <span>{opt}</span>
@@ -170,47 +170,47 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
   return (
     <div className="space-y-5 text-left">
       <div>
-        <h2 className="text-lg font-bold text-white mb-0.5">Review & Post</h2>
-        <p className="text-xs text-zinc-400">Confirm parameters and select your posting identity before deploying.</p>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-0.5">Review & Post</h2>
+        <p className="text-xs text-gray-500 dark:text-zinc-400">Confirm parameters and select your posting identity before deploying.</p>
       </div>
 
       <div className="space-y-3.5 text-xs">
         {/* Core Specifications Box */}
-        <div className="p-4 rounded-xl border border-white/5 bg-white/[0.01] space-y-3">
-          <div className="flex justify-between items-center border-b border-white/5 pb-2">
+        <div className="p-4 rounded-xl border border-gray-100 dark:border-white/5 bg-white/[0.01] space-y-3">
+          <div className="flex justify-between items-center border-b border-gray-100 dark:border-white/5 pb-2">
             <span className="font-bold text-blue-400 uppercase tracking-wider text-[10px]">01. Core Specifications</span>
             <button type="button" onClick={() => onEditStep(1)} className="text-[10px] text-blue-500 hover:underline font-bold transition focus:outline-none">Edit</button>
           </div>
 
           <div className="flex items-start gap-3.5">
             {previewUrl && (
-              <div className="h-20 w-20 shrink-0 aspect-square rounded-xl overflow-hidden border border-white/10 bg-zinc-900">
+              <div className="h-20 w-20 shrink-0 aspect-square rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 bg-zinc-900">
                 <img src={previewUrl} alt="Thumbnail Preview" className="w-full h-full object-cover" />
               </div>
             )}
             <div className="flex-1 space-y-1 min-w-0">
-              <h4 className="text-xs font-bold text-white truncate">{title || <span className="text-red-400 italic">No Title Given</span>}</h4>
+              <h4 className="text-xs font-bold text-gray-900 dark:text-white truncate">{title || <span className="text-red-400 italic">No Title Given</span>}</h4>
               <div className="line-clamp-3">
                 <JobRichText content={description} />
               </div>
-              <div className="flex gap-4 pt-1 text-zinc-500 text-[10px]">
-                <span>Category: <strong className="text-zinc-300">{category}</strong></span>
-                <span>Competency Target: <strong className="text-zinc-300">{difficulty}</strong></span>
+              <div className="flex gap-4 pt-1 text-gray-500 dark:text-zinc-500 text-[10px]">
+                <span>Category: <strong className="text-gray-600 dark:text-zinc-300">{category}</strong></span>
+                <span>Competency Target: <strong className="text-gray-600 dark:text-zinc-300">{difficulty}</strong></span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Budget & Scope Parameters */}
-        <div className="p-4 rounded-xl border border-white/5 bg-white/[0.01] space-y-3">
-          <div className="flex justify-between items-center border-b border-white/5 pb-2">
+        <div className="p-4 rounded-xl border border-gray-100 dark:border-white/5 bg-white/[0.01] space-y-3">
+          <div className="flex justify-between items-center border-b border-gray-100 dark:border-white/5 pb-2">
             <span className="font-bold text-blue-400 uppercase tracking-wider text-[10px]">02. Budget Framework & Parameters</span>
             <button type="button" onClick={() => onEditStep(2)} className="text-[10px] text-blue-500 hover:underline font-bold transition focus:outline-none">Edit</button>
           </div>
 
           {/* ROW 1: Dedicated Budget Pool Range */}
           <div className="p-3 rounded-xl border border-yellow-500/10 bg-yellow-500/5 flex items-center justify-between">
-            <span className="text-zinc-400 text-[11px] font-semibold">Budget Pool Range</span>
+            <span className="text-gray-500 dark:text-zinc-400 text-[11px] font-semibold">Budget Pool Range</span>
             <span className="text-sm font-extrabold text-yellow-500 flex items-center gap-1.5">
               <CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />
               {formatCommaString(minBudget)} ~ {formatCommaString(maxBudget)}
@@ -219,19 +219,19 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
 
           {/* ROW 2: Timeline Envelope & Positions Open */}
           <div className="grid grid-cols-2 gap-3 pt-1">
-            <div className="p-2.5 rounded-xl border border-white/5 bg-white/[0.02]">
-              <span className="text-zinc-500 block mb-0.5 text-[10px]">Timeline Envelope</span>
-              <span className="text-xs font-bold text-white font-mono">{minTimeline} - {maxTimeline} Days</span>
+            <div className="p-2.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02]">
+              <span className="text-gray-500 dark:text-zinc-500 block mb-0.5 text-[10px]">Timeline Envelope</span>
+              <span className="text-xs font-bold text-gray-900 dark:text-white font-mono">{minTimeline} - {maxTimeline} Days</span>
             </div>
-            <div className="p-2.5 rounded-xl border border-white/5 bg-white/[0.02]">
-              <span className="text-zinc-500 block mb-0.5 text-[10px]">Positions Open</span>
-              <span className="text-xs font-bold text-white font-mono">{positions} Slots</span>
+            <div className="p-2.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02]">
+              <span className="text-gray-500 dark:text-zinc-500 block mb-0.5 text-[10px]">Positions Open</span>
+              <span className="text-xs font-bold text-gray-900 dark:text-white font-mono">{positions} Slots</span>
             </div>
           </div>
 
           {/* Mandatory Skills */}
-          <div className="pt-2 border-t border-white/5">
-            <span className="text-zinc-500 block mb-1 text-[10px]">Target Mandatory Skills:</span>
+          <div className="pt-2 border-t border-gray-100 dark:border-white/5">
+            <span className="text-gray-500 dark:text-zinc-500 block mb-1 text-[10px]">Target Mandatory Skills:</span>
             <div className="flex flex-wrap gap-1">
               {skills.map(s => (
                 <span key={s} className="px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-semibold">{s}</span>
@@ -241,35 +241,35 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
         </div>
 
         {/* Posting Identity Selection (Moved to Review & Post Step, Defaults to Self) */}
-        <div className="p-4 rounded-xl border border-white/5 bg-white/[0.01] space-y-3">
-          <span className="font-bold text-blue-400 uppercase tracking-wider text-[10px] block border-b border-white/5 pb-2">03. Posting Identity</span>
+        <div className="p-4 rounded-xl border border-gray-100 dark:border-white/5 bg-white/[0.01] space-y-3">
+          <span className="font-bold text-blue-400 uppercase tracking-wider text-[10px] block border-b border-gray-100 dark:border-white/5 pb-2">03. Posting Identity</span>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div
               onClick={() => {
                 setPostingAs("self");
                 clearError("selectedTeam");
               }}
-              className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${postingAs === 'self' ? 'border-blue-500 bg-blue-500/10' : 'border-white/10 bg-white/5 hover:border-white/20'}`}
+              className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${postingAs === 'self' ? 'border-blue-500 bg-blue-500/10' : 'border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:border-white/20'}`}
             >
-              <div className={`p-2 rounded-lg border ${postingAs === 'self' ? 'bg-blue-500/20 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/10 text-zinc-400'}`}>
+              <div className={`p-2 rounded-lg border ${postingAs === 'self' ? 'bg-blue-500/20 border-blue-500/30 text-blue-400' : 'bg-white dark:bg-white/5 shadow-sm dark:shadow-none border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400'}`}>
                 <User className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-xs font-bold text-white">Individual (Self)</p>
-                <p className="text-[10px] text-zinc-400">Post directly from your profile</p>
+                <p className="text-xs font-bold text-gray-900 dark:text-white">Individual (Self)</p>
+                <p className="text-[10px] text-gray-500 dark:text-zinc-400">Post directly from your profile</p>
               </div>
             </div>
 
             <div
               onClick={() => setPostingAs("team")}
-              className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${postingAs === 'team' ? 'border-blue-500 bg-blue-500/10' : 'border-white/10 bg-white/5 hover:border-white/20'}`}
+              className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${postingAs === 'team' ? 'border-blue-500 bg-blue-500/10' : 'border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:border-white/20'}`}
             >
-              <div className={`p-2 rounded-lg border ${postingAs === 'team' ? 'bg-blue-500/20 border-blue-500/30 text-blue-400' : 'bg-white/5 border-white/10 text-zinc-400'}`}>
+              <div className={`p-2 rounded-lg border ${postingAs === 'team' ? 'bg-blue-500/20 border-blue-500/30 text-blue-400' : 'bg-white dark:bg-white/5 shadow-sm dark:shadow-none border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400'}`}>
                 <Users className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-xs font-bold text-white">Shared Studio Team</p>
-                <p className="text-[10px] text-zinc-400">Post on behalf of a team</p>
+                <p className="text-xs font-bold text-gray-900 dark:text-white">Shared Studio Team</p>
+                <p className="text-[10px] text-gray-500 dark:text-zinc-400">Post on behalf of a team</p>
               </div>
             </div>
           </div>
@@ -293,8 +293,8 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
       </div>
 
       {/* Navigation Footer */}
-      <div className="pt-4 border-t border-white/5 flex gap-2.5">
-        <button type="button" onClick={onBack} className="px-4 py-2.5 rounded-xl border border-white/10 text-zinc-400 font-bold hover:text-white transition text-xs focus:outline-none">Go Back</button>
+      <div className="pt-4 border-t border-gray-100 dark:border-white/5 flex gap-2.5">
+        <button type="button" onClick={onBack} className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 font-bold hover:text-gray-900 dark:text-white transition text-xs focus:outline-none">Go Back</button>
         <button
           type="button"
           onClick={handlePublishClick}

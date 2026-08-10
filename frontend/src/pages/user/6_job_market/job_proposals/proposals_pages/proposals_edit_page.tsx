@@ -125,12 +125,12 @@ export const ProposalsEditPage: React.FC = () => {
 
   if (!proposal) {
     return (
-      <div className="min-h-screen bg-[#080a12] text-white flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white flex items-center justify-center p-6">
         <div className="text-center space-y-3">
-          <p className="text-sm text-zinc-400 font-medium">Proposal application not found.</p>
+          <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">Proposal application not found.</p>
           <button
             onClick={() => navigate("/jobs/proposals/sent")}
-            className="px-4 py-2 rounded-xl bg-blue-500 text-xs font-bold text-white hover:bg-blue-600 transition"
+            className="px-4 py-2 rounded-xl bg-blue-500 text-xs font-bold text-gray-900 dark:text-white hover:bg-blue-600 transition"
           >
             Return to My Proposals
           </button>
@@ -140,7 +140,7 @@ export const ProposalsEditPage: React.FC = () => {
   }
 
   return (
-    <div className="relative w-full min-h-screen bg-[#080a12] text-white overflow-x-hidden pt-6 pb-12">
+    <div className="relative w-full min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-12">
       {/* Background Animated Grid */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
         <ShapeGrid
@@ -161,10 +161,10 @@ export const ProposalsEditPage: React.FC = () => {
         className="relative z-10 mx-auto max-w-3xl p-6 md:p-8 w-full space-y-6"
       >
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Editing Proposal Application</h1>
-          <p className="text-xs text-zinc-400 mt-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Editing Proposal Application</h1>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
             Updating proposal for Job ID <span className="font-mono text-blue-400">{proposal.jobId}</span>:{" "}
-            <strong className="text-white">{proposal.jobTitle}</strong>
+            <strong className="text-gray-900 dark:text-white">{proposal.jobTitle}</strong>
           </p>
         </div>
 
@@ -172,7 +172,7 @@ export const ProposalsEditPage: React.FC = () => {
         <ProposalEditHeader currentSlide={currentSlide} onReturn={handleReturnTrigger} />
 
         {/* Wizard Slide Container */}
-        <div className="rounded-3xl border border-white/10 bg-[#0d0f1a]/80 p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6">
+        <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6">
           <AnimatePresence mode="wait">
             {currentSlide === 1 && (
               <motion.div

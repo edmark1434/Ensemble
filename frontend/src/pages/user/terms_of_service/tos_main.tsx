@@ -11,43 +11,43 @@ import { useTerms, type TosTemplate } from "@/hooks/useTerms";
 const TosSkeletonLoader: React.FC = () => (
   <div className="mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-pulse">
     {/* Banner Skeleton */}
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-6 md:p-8">
-      <div className="h-8 w-64 rounded-lg bg-white/10" />
-      <div className="mt-2 h-4 w-96 max-w-full rounded-lg bg-white/5" />
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-6 md:p-8">
+      <div className="h-8 w-64 rounded-lg bg-gray-100 dark:bg-white/10" />
+      <div className="mt-2 h-4 w-96 max-w-full rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
     </div>
 
     {/* Layout Grid Skeleton */}
     <div className="grid gap-8 lg:grid-cols-12">
       {/* Left Form Skeleton */}
       <div className="lg:col-span-5">
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 space-y-4">
-          <div className="h-5 w-40 rounded bg-white/10" />
+        <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-6 space-y-4">
+          <div className="h-5 w-40 rounded bg-gray-100 dark:bg-white/10" />
           <div className="space-y-2">
-            <div className="h-3 w-20 rounded bg-white/5" />
-            <div className="h-10 w-full rounded-xl bg-white/5" />
+            <div className="h-3 w-20 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
+            <div className="h-10 w-full rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
           </div>
           <div className="space-y-2">
-            <div className="h-3 w-28 rounded bg-white/5" />
-            <div className="h-40 w-full rounded-xl bg-white/5" />
+            <div className="h-3 w-28 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
+            <div className="h-40 w-full rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
           </div>
-          <div className="h-10 w-full rounded-xl bg-white/10" />
+          <div className="h-10 w-full rounded-xl bg-gray-100 dark:bg-white/10" />
         </div>
       </div>
 
       {/* Right List Skeleton */}
       <div className="lg:col-span-7 space-y-4">
-        <div className="h-5 w-32 rounded bg-white/10" />
+        <div className="h-5 w-32 rounded bg-gray-100 dark:bg-white/10" />
         <div className="space-y-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
-              className="h-16 w-full rounded-2xl border border-white/10 bg-white/5 p-4 flex items-center justify-between"
+              className="h-16 w-full rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-4 flex items-center justify-between"
             >
               <div className="flex items-center gap-3">
-                <div className="h-4 w-4 rounded-full bg-white/10" />
-                <div className="h-4 w-48 rounded bg-white/10" />
+                <div className="h-4 w-4 rounded-full bg-gray-100 dark:bg-white/10" />
+                <div className="h-4 w-48 rounded bg-gray-100 dark:bg-white/10" />
               </div>
-              <div className="h-4 w-12 rounded bg-white/5" />
+              <div className="h-4 w-12 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
             </div>
           ))}
         </div>
@@ -134,7 +134,7 @@ export const TosMain: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#080a12] text-white">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white">
       {/* Top Header */}
       <UserHeader pageTitle="Terms of Service" credits={1250} />
 
@@ -144,15 +144,15 @@ export const TosMain: React.FC = () => {
         /* Animated Main Container */
         <div className="mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in">
           {/* Banner Title */}
-          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/60 p-6 md:p-8 backdrop-blur-xl">
+          <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 shadow-sm dark:shadow-none p-6 md:p-8 backdrop-blur-xl">
             <div className="relative z-10">
               <h1
-                className="text-2xl font-extrabold tracking-tight text-white md:text-3xl"
+                className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white md:text-3xl"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 My Terms of Service Presets
               </h1>
-              <p className="mt-1 text-sm text-zinc-400">
+              <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">
                 Create and manage custom TOS templates to select when submitting proposal contracts to clients.
               </p>
             </div>
@@ -162,11 +162,11 @@ export const TosMain: React.FC = () => {
           <div className="grid gap-8 lg:grid-cols-12">
             {/* LEFT: TOS Form Creator */}
             <div className="lg:col-span-5">
-              <div className="rounded-2xl border border-white/10 bg-zinc-900/40 p-6 shadow-xl backdrop-blur-xl">
+              <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900/40 shadow-sm dark:shadow-none p-6 shadow-xl backdrop-blur-xl">
                 <div className="mb-5 flex items-center gap-2">
                   <Plus className="h-4 w-4 text-blue-400" />
                   <h2
-                    className="text-base font-bold text-white"
+                    className="text-base font-bold text-gray-900 dark:text-white"
                     style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                   >
                     {editingId ? "Edit TOS Template" : "Create New TOS Template"}
@@ -176,7 +176,7 @@ export const TosMain: React.FC = () => {
                 <form onSubmit={handleSaveTOS} className="space-y-4">
                   {/* Title */}
                   <div>
-                    <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                    <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
                       Terms Title
                     </label>
                     <input
@@ -185,14 +185,14 @@ export const TosMain: React.FC = () => {
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
                       placeholder="e.g., Short Turnaround & Revisions TOS"
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-xs text-white placeholder-zinc-500 transition focus:border-blue-500/50 focus:outline-none"
+                      className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3.5 py-2.5 text-xs text-gray-900 dark:text-white placeholder-zinc-500 transition focus:border-blue-500/50 focus:outline-none"
                       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                     />
                   </div>
 
                   {/* Terms List / Body */}
                   <div>
-                    <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                    <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
                       Terms & Clauses (List)
                     </label>
                     <textarea
@@ -201,7 +201,7 @@ export const TosMain: React.FC = () => {
                       value={content}
                       onChange={(e) => setContent(e.target.value)}
                       placeholder="1. Source files delivered upon project completion.&#10;2. Milestone revisions limited to 2 rounds."
-                      className="w-full rounded-xl border border-white/10 bg-white/5 p-3.5 text-xs font-mono text-white placeholder-zinc-500 transition focus:border-blue-500/50 focus:outline-none resize-y leading-relaxed"
+                      className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3.5 text-xs font-mono text-gray-900 dark:text-white placeholder-zinc-500 transition focus:border-blue-500/50 focus:outline-none resize-y leading-relaxed"
                     />
                   </div>
 
@@ -211,14 +211,14 @@ export const TosMain: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleCancelEdit}
-                        className="rounded-xl border border-white/10 px-4 py-2.5 text-xs font-bold text-zinc-400 transition hover:text-white"
+                        className="rounded-xl border border-gray-200 dark:border-white/10 px-4 py-2.5 text-xs font-bold text-gray-500 dark:text-zinc-400 transition hover:text-gray-900 dark:text-white"
                       >
                         Cancel
                       </button>
                     )}
                     <button
                       type="submit"
-                      className="flex-1 rounded-xl bg-blue-500 py-2.5 text-xs font-bold text-white transition hover:bg-blue-600 shadow-lg shadow-blue-500/20"
+                      className="flex-1 rounded-xl bg-blue-500 py-2.5 text-xs font-bold text-gray-900 dark:text-white transition hover:bg-blue-600 shadow-lg shadow-blue-500/20"
                       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                     >
                       {editingId ? "Update Template" : "Save TOS Template"}
@@ -231,14 +231,14 @@ export const TosMain: React.FC = () => {
             {/* RIGHT: Saved TOS Templates List */}
             <div className="lg:col-span-7 space-y-4">
               <h2
-                className="text-base font-bold text-white"
+                className="text-base font-bold text-gray-900 dark:text-white"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 Saved Presets ({tosList.length})
               </h2>
 
               {tosList.length === 0 ? (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8 text-center text-xs text-zinc-500">
+                <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02] p-8 text-center text-xs text-gray-500 dark:text-zinc-500">
                   No custom terms templates created yet. Create one on the left!
                 </div>
               ) : (
@@ -249,19 +249,19 @@ export const TosMain: React.FC = () => {
                     return (
                       <div
                         key={tos.id}
-                        className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/30 transition hover:border-white/20"
+                        className="overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900/30 transition hover:border-white/20"
                       >
                         {/* Accordion Header */}
                         <div
                           onClick={() =>
                             setExpandedId(isExpanded ? null : tos.id)
                           }
-                          className="flex cursor-pointer items-center justify-between p-4 text-left transition hover:bg-white/5"
+                          className="flex cursor-pointer items-center justify-between p-4 text-left transition hover:bg-white dark:bg-white/5 shadow-sm dark:shadow-none"
                         >
                           <div className="flex items-center gap-3">
                             <FileText className="h-4 w-4 shrink-0 text-blue-400" />
                             <h3
-                              className="text-sm font-bold text-white"
+                              className="text-sm font-bold text-gray-900 dark:text-white"
                               style={{
                                 fontFamily: "'Plus Jakarta Sans', sans-serif",
                               }}
@@ -277,7 +277,7 @@ export const TosMain: React.FC = () => {
                                 e.stopPropagation();
                                 handleEdit(tos);
                               }}
-                              className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+                              className="rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-1.5 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
                               title={tos.is_default ? "Clone & Edit Template" : "Edit Template"}
                             >
                               <Edit3 className="h-3.5 w-3.5" />
@@ -286,15 +286,15 @@ export const TosMain: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={(e) => handleDelete(tos.id, e)}
-                                className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-zinc-400 transition hover:bg-red-500/20 hover:text-red-400"
+                                className="rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-1.5 text-gray-500 dark:text-zinc-400 transition hover:bg-red-500/20 hover:text-red-400"
                                 title="Delete Template"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             )}
                             <ChevronDown
-                              className={`h-4 w-4 text-zinc-400 transition-transform duration-300 ${
-                                isExpanded ? "rotate-180 text-white" : ""
+                              className={`h-4 w-4 text-gray-500 dark:text-zinc-400 transition-transform duration-300 ${
+                                isExpanded ? "rotate-180 text-gray-900 dark:text-white" : ""
                               }`}
                             />
                           </div>
@@ -309,7 +309,7 @@ export const TosMain: React.FC = () => {
                           }`}
                         >
                           <div className="overflow-hidden">
-                            <div className="border-t border-white/5 bg-zinc-950/60 p-4 text-xs leading-relaxed text-zinc-300 font-mono whitespace-pre-wrap">
+                            <div className="border-t border-gray-100 dark:border-white/5 bg-white/80 dark:bg-zinc-950/60 shadow-sm dark:shadow-none p-4 text-xs leading-relaxed text-gray-600 dark:text-zinc-300 font-mono whitespace-pre-wrap">
                               {tos.terms_content}
                             </div>
                           </div>

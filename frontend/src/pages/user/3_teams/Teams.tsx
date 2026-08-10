@@ -142,13 +142,13 @@ export default function Teams() {
   };
 
   return (
-    <div className="min-h-screen bg-[#080a12]">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
       <UserHeader pageTitle="Teams" />
 
       <main className="mx-auto max-w-7xl p-6 md:p-8">
         <header className="mb-8">
-          <h1 className="text-2xl font-bold text-white">Teams</h1>
-          <p className="text-sm text-zinc-400">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Teams</h1>
+          <p className="text-sm text-gray-500 dark:text-zinc-400">
             Collaborate with your Team members on projects
           </p>
         </header>
@@ -164,7 +164,7 @@ export default function Teams() {
 
           <button
             onClick={() => setIsBrowseMode((current) => !current)}
-            className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm text-white"
+            className="flex items-center gap-2 rounded-full border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-5 py-2.5 text-sm text-gray-900 dark:text-white"
           >
             {isBrowseMode ? (
               <X className="h-4 w-4" />
@@ -176,31 +176,31 @@ export default function Teams() {
 
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm text-white"
+            className="flex items-center gap-2 rounded-full border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-5 py-2.5 text-sm text-gray-900 dark:text-white"
           >
             <Plus className="h-4 w-4" />
             Create a Team
           </button>
 
-          <label className="ml-auto flex rounded-full border border-white/15 bg-white/5 px-4 py-2 text-zinc-400">
+          <label className="ml-auto flex rounded-full border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-4 py-2 text-gray-500 dark:text-zinc-400">
             <Search className="mr-2 h-4 w-4" />
             <input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Search Teams"
-              className="bg-transparent text-sm text-white outline-none"
+              className="bg-transparent text-sm text-gray-900 dark:text-white outline-none"
             />
           </label>
         </div>
 
-        <h2 className="mb-4 text-lg font-semibold text-white">
+        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
           {isBrowseMode ? "Browse Teams" : "My Teams"}
         </h2>
 
         {isLoading ? (
-          <div className="p-8 text-zinc-400">Loading Teams...</div>
+          <div className="p-8 text-gray-500 dark:text-zinc-400">Loading Teams...</div>
         ) : teams.length === 0 ? (
-          <div className="rounded-xl border border-white/10 p-12 text-center text-zinc-400">
+          <div className="rounded-xl border border-gray-200 dark:border-white/10 p-12 text-center text-gray-500 dark:text-zinc-400">
             No Teams found.
           </div>
         ) : (
@@ -209,7 +209,7 @@ export default function Teams() {
               <article
                 key={team.team_id}
                 onClick={() => navigate(`/teams/${team.team_id}`)}
-                className="group cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent transition hover:scale-[1.02] hover:border-white/20"
+                className="group cursor-pointer overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent transition hover:scale-[1.02] hover:border-white/20"
               >
                 <div className="relative h-24 overflow-hidden bg-[#1e2130]">
                   {team.avatar_path ? (
@@ -219,7 +219,7 @@ export default function Teams() {
                       className="h-full w-full object-cover transition group-hover:scale-110"
                     />
                   ) : (
-                    <div className="grid h-full place-items-center text-3xl text-white/30">
+                    <div className="grid h-full place-items-center text-3xl text-gray-900 dark:text-white/30">
                       {team.display_name.slice(0, 2).toUpperCase()}
                     </div>
                   )}
@@ -229,10 +229,10 @@ export default function Teams() {
                 <div className="p-4">
                   <div className="flex justify-between gap-3">
                     <div>
-                      <h3 className="text-sm font-semibold text-white">
+                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
                         {team.display_name}
                       </h3>
-                      <p className="text-xs text-zinc-500">
+                      <p className="text-xs text-gray-500 dark:text-zinc-500">
                         @{team.handle} · {team.member_count} members
                       </p>
                     </div>
@@ -244,7 +244,7 @@ export default function Teams() {
                     )}
                   </div>
 
-                  <p className="mt-2 line-clamp-2 text-xs text-zinc-400">
+                  <p className="mt-2 line-clamp-2 text-xs text-gray-500 dark:text-zinc-400">
                     {team.description || "No description"}
                   </p>
                 </div>
@@ -264,30 +264,30 @@ export default function Teams() {
 
       {isJoinModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d0f1a] p-6">
-            <h3 className="mb-2 text-xl font-semibold text-white">
+          <div className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-6">
+            <h3 className="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
               Join a Team
             </h3>
-            <p className="mb-4 text-sm text-zinc-400">
+            <p className="mb-4 text-sm text-gray-500 dark:text-zinc-400">
               Enter the Team invite code to join.
             </p>
             <input
               value={joinCode}
               onChange={(event) => setJoinCode(event.target.value)}
-              className="mb-4 w-full rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-white outline-none"
+              className="mb-4 w-full rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-4 py-2 text-gray-900 dark:text-white outline-none"
               placeholder="Invite code"
             />
             <div className="flex gap-3">
               <button
                 disabled={isSaving || !joinCode.trim()}
                 onClick={() => void joinTeam()}
-                className="flex-1 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 py-2 text-white disabled:opacity-50"
+                className="flex-1 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 py-2 text-gray-900 dark:text-white disabled:opacity-50"
               >
                 {isSaving ? "Joining..." : "Join Team"}
               </button>
               <button
                 onClick={() => setIsJoinModalOpen(false)}
-                className="flex-1 rounded-full border border-white/15 py-2 text-zinc-400"
+                className="flex-1 rounded-full border border-gray-200 dark:border-white/15 py-2 text-gray-500 dark:text-zinc-400"
               >
                 Cancel
               </button>

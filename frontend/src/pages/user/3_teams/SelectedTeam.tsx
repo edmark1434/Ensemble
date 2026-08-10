@@ -282,13 +282,13 @@ export default function SelectedTeam() {
   if (loading)
     return (
       <Page title="Team">
-        <div className="p-8 text-zinc-400">Loading Team…</div>
+        <div className="p-8 text-gray-500 dark:text-zinc-400">Loading Team…</div>
       </Page>
     );
   if (!team)
     return (
       <Page title="Team">
-        <div className="p-8 text-zinc-400">Team not found.</div>
+        <div className="p-8 text-gray-500 dark:text-zinc-400">Team not found.</div>
       </Page>
     );
 
@@ -313,7 +313,7 @@ export default function SelectedTeam() {
         <div className="absolute inset-0 bg-gradient-to-t from-[#080a12] via-transparent to-transparent" />
         <button
           onClick={() => navigate("/teams")}
-          className="absolute left-4 top-4 rounded-full bg-black/50 p-2 text-white"
+          className="absolute left-4 top-4 rounded-full bg-black/50 p-2 text-gray-900 dark:text-white"
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
@@ -337,7 +337,7 @@ export default function SelectedTeam() {
                   },
                 });
               }}
-              className="flex items-center gap-2 rounded-full border border-white/15 bg-black/60 px-4 py-2 text-sm font-medium text-white transition hover:border-emerald-400/40 hover:bg-emerald-500/15 hover:text-emerald-200"
+              className="flex items-center gap-2 rounded-full border border-gray-200 dark:border-white/15 bg-black/60 px-4 py-2 text-sm font-medium text-gray-900 dark:text-white transition hover:border-emerald-400/40 hover:bg-emerald-500/15 hover:text-emerald-200"
             >
               <ShieldCheck className="h-4 w-4" />
               Verify Business
@@ -367,7 +367,7 @@ export default function SelectedTeam() {
           {activeMember && (
             <button
               onClick={() => void openChat()}
-              className="flex items-center gap-2 rounded-full bg-blue-500 px-4 py-2 text-sm font-medium text-white"
+              className="flex items-center gap-2 rounded-full bg-blue-500 px-4 py-2 text-sm font-medium text-gray-900 dark:text-white"
             >
               <MessageCircle className="h-4 w-4" />
               Message
@@ -376,7 +376,7 @@ export default function SelectedTeam() {
           {permissions.can_manage_requests && (
             <button
               onClick={() => setShowRequests(true)}
-              className="relative rounded-full bg-black/50 p-2 text-white"
+              className="relative rounded-full bg-black/50 p-2 text-gray-900 dark:text-white"
             >
               <Bell className="h-5 w-5" />
               {pendingRequests.length > 0 && (
@@ -392,7 +392,7 @@ export default function SelectedTeam() {
       <main className="mx-auto max-w-7xl p-6 md:p-8">
         <header className="mb-6 flex items-start justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
               {team.display_name}
             </h1>
             {team.is_business_verified && (
@@ -401,8 +401,8 @@ export default function SelectedTeam() {
                 Verified Business
               </div>
             )}
-            <p className="mt-2 text-zinc-400">{team.description}</p>
-            <p className="mt-3 text-sm text-zinc-500">
+            <p className="mt-2 text-gray-500 dark:text-zinc-400">{team.description}</p>
+            <p className="mt-3 text-sm text-gray-500 dark:text-zinc-500">
               @{team.handle} · {team.member_count} members · Owner:{" "}
               {team.owner_name}
             </p>
@@ -410,16 +410,16 @@ export default function SelectedTeam() {
           <div className="relative">
             <button
               onClick={() => setShowMenu(!showMenu)}
-              className="rounded-lg p-2 text-zinc-400 hover:bg-white/10"
+              className="rounded-lg p-2 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:bg-white/10"
             >
               <MoreVertical className="h-5 w-5" />
             </button>
             {showMenu && (
-              <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-white/10 bg-[#0d0f1a] p-2 shadow-2xl">
+              <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-2 shadow-2xl">
                 {permissions.can_update_team && (
                   <button
                     onClick={() => setShowEdit(true)}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 hover:bg-white/10"
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:bg-white/10"
                   >
                     <Edit3 className="h-4 w-4" />
                     Edit Team
@@ -428,7 +428,7 @@ export default function SelectedTeam() {
                 {permissions.can_manage_members && (
                   <button
                     onClick={() => void inviteMember()}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 hover:bg-white/10"
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:bg-white/10"
                   >
                     <UserPlus className="h-4 w-4" />
                     Invite Member
@@ -436,7 +436,7 @@ export default function SelectedTeam() {
                 )}
                 <button
                   onClick={() => setShowReport(true)}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 hover:bg-white/10"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:bg-white/10"
                 >
                   <Flag className="h-4 w-4" />
                   Report Team
@@ -468,7 +468,7 @@ export default function SelectedTeam() {
           <button
             onClick={() => void mutate("/join")}
             disabled={saving}
-            className="mb-6 rounded-full bg-blue-500 px-5 py-2 text-white disabled:opacity-50"
+            className="mb-6 rounded-full bg-blue-500 px-5 py-2 text-gray-900 dark:text-white disabled:opacity-50"
           >
             Ask to Join
           </button>
@@ -477,7 +477,7 @@ export default function SelectedTeam() {
           <div className="mb-6 flex gap-2">
             <button
               onClick={() => void mutate("/invitations/accept", "patch")}
-              className="rounded-full bg-emerald-500 px-5 py-2 text-white"
+              className="rounded-full bg-emerald-500 px-5 py-2 text-gray-900 dark:text-white"
             >
               Accept invitation
             </button>
@@ -490,12 +490,12 @@ export default function SelectedTeam() {
           </div>
         )}
         {team.join_code && (
-          <div className="mb-6 rounded-xl border border-white/10 bg-white/[0.03] p-4 sm:flex sm:items-center sm:justify-between">
+          <div className="mb-6 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.03] p-4 sm:flex sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
+              <p className="text-xs font-medium uppercase tracking-[0.18em] text-gray-500 dark:text-zinc-500">
                 Team Code
               </p>
-              <p className="mt-1 font-mono text-lg font-semibold tracking-[0.16em] text-white">
+              <p className="mt-1 font-mono text-lg font-semibold tracking-[0.16em] text-gray-900 dark:text-white">
                 {team.join_code}
               </p>
             </div>
@@ -506,7 +506,7 @@ export default function SelectedTeam() {
               className={`group mt-3 inline-flex min-w-32 items-center justify-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-all duration-200 ease-out hover:-translate-y-0.5 hover:scale-105 active:translate-y-0 active:scale-95 sm:mt-0 ${
                 codeCopied
                   ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-300 shadow-[0_0_20px_rgba(52,211,153,0.15)]"
-                  : "border-white/15 bg-white/5 text-zinc-300 hover:border-blue-400/40 hover:bg-blue-500/10 hover:text-white"
+                  : "border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-600 dark:text-zinc-300 hover:border-blue-400/40 hover:bg-blue-500/10 hover:text-gray-900 dark:text-white"
               }`}
             >
               {codeCopied ? (
@@ -631,12 +631,12 @@ function TeamTabs({
   ];
   if (showWallet) tabs.push({ id: "wallet", label: "Wallet", icon: Briefcase });
   return (
-    <div className="mb-6 flex flex-wrap gap-1 border-b border-white/10">
+    <div className="mb-6 flex flex-wrap gap-1 border-b border-gray-200 dark:border-white/10">
       {tabs.map(({ id, label, icon: Icon }) => (
         <button
           key={id}
           onClick={() => onSelect(id)}
-          className={`flex items-center gap-2 rounded-t-lg px-4 py-2 text-sm ${active === id ? "border-b-2 border-blue-500 bg-blue-500/5 text-blue-400" : "text-zinc-400 hover:bg-white/5"}`}
+          className={`flex items-center gap-2 rounded-t-lg px-4 py-2 text-sm ${active === id ? "border-b-2 border-blue-500 bg-blue-500/5 text-blue-400" : "text-gray-500 dark:text-zinc-400 hover:bg-white dark:bg-white/5 shadow-sm dark:shadow-none"}`}
         >
           <Icon className="h-4 w-4" />
           {label}
@@ -679,17 +679,17 @@ function TeamTabContent({
 }) {
   if (active === "about")
     return (
-      <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+      <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-6">
         <h3 className="mb-2 text-lg font-semibold">About this Team</h3>
-        <p className="text-zinc-400">{team.description}</p>
-        <p className="mt-4 text-sm text-zinc-500">
+        <p className="text-gray-500 dark:text-zinc-400">{team.description}</p>
+        <p className="mt-4 text-sm text-gray-500 dark:text-zinc-500">
           Category: {team.category || "—"} · Location: {team.location || "—"}
         </p>
       </div>
     );
   if (["jobs", "gigs", "assets"].includes(active))
     return (
-      <div className="rounded-xl border border-white/10 bg-white/5 p-12 text-center text-zinc-400">
+      <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-12 text-center text-gray-500 dark:text-zinc-400">
         No {active} posts available from the Teams API.
       </div>
     );
@@ -699,7 +699,7 @@ function TeamTabContent({
         <button
           disabled={saving}
           onClick={onReview}
-          className="rounded-full bg-blue-500 px-5 py-2 text-sm text-white disabled:opacity-50"
+          className="rounded-full bg-blue-500 px-5 py-2 text-sm text-gray-900 dark:text-white disabled:opacity-50"
         >
           Add Review
         </button>
@@ -707,15 +707,15 @@ function TeamTabContent({
           reviews.map((review) => (
             <div
               key={review.team_review_id}
-              className="rounded-xl border border-white/10 bg-white/5 p-4"
+              className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-4"
             >
               <b>{review.display_name}</b>
               <p className="text-amber-300">{"★".repeat(review.rating)}</p>
-              <p className="text-zinc-400">{review.comment}</p>
+              <p className="text-gray-500 dark:text-zinc-400">{review.comment}</p>
             </div>
           ))
         ) : (
-          <div className="rounded-xl border border-white/10 p-12 text-center text-zinc-400">
+          <div className="rounded-xl border border-gray-200 dark:border-white/10 p-12 text-center text-gray-500 dark:text-zinc-400">
             No reviews yet.
           </div>
         )}
@@ -725,8 +725,8 @@ function TeamTabContent({
     return wallet ? (
       <div className="grid gap-3 sm:grid-cols-4">
         {Object.entries(wallet).map(([key, value]) => (
-          <div key={key} className="rounded-xl border border-white/10 p-4">
-            <p className="text-xs capitalize text-zinc-500">
+          <div key={key} className="rounded-xl border border-gray-200 dark:border-white/10 p-4">
+            <p className="text-xs capitalize text-gray-500 dark:text-zinc-500">
               {key.replaceAll("_", " ")}
             </p>
             <b>{value} credits</b>
@@ -734,14 +734,14 @@ function TeamTabContent({
         ))}
       </div>
     ) : (
-      <p className="text-zinc-400">Loading wallet…</p>
+      <p className="text-gray-500 dark:text-zinc-400">Loading wallet…</p>
     );
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {members.map((member) => (
         <div
           key={member.account_id}
-          className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-4"
+          className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-4"
         >
           {member.avatar_path ? (
             <img
@@ -756,7 +756,7 @@ function TeamTabContent({
           )}
           <div className="min-w-0 flex-1">
             <p className="font-semibold">{member.display_name}</p>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-gray-500 dark:text-zinc-500">
               @{member.handle} · {member.role} · {member.status}
             </p>
             {canManage && member.role !== "Owner" && (
@@ -767,7 +767,7 @@ function TeamTabContent({
                   onChange={(event) =>
                     onRole(member.account_id, event.target.value)
                   }
-                  className="rounded bg-white/10 px-1 text-zinc-300"
+                  className="rounded bg-gray-100 dark:bg-white/10 px-1 text-gray-600 dark:text-zinc-300"
                 >
                   <option>Admin</option>
                   <option>Manager</option>
@@ -823,7 +823,7 @@ function Page({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-[#080a12] text-white">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white">
       <UserHeader pageTitle={title} />
       {children}
     </div>

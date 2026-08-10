@@ -69,7 +69,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
       )}
 
       {/* --- MAIN MODAL CARD CONTAINER --- */}
-      <div className="relative w-full max-w-sm rounded-3xl border border-white/10 bg-[#0d0f1a]/90 p-8 text-center shadow-2xl min-h-[320px] flex flex-col justify-center items-center backdrop-blur-xl z-10 overflow-hidden">
+      <div className="relative w-full max-w-sm rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/90 p-8 text-center shadow-2xl min-h-[320px] flex flex-col justify-center items-center backdrop-blur-xl z-10 overflow-hidden">
 
         {status === "loading" ? (
           <div className="space-y-4 animate-fade-in flex flex-col items-center">
@@ -78,8 +78,8 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
               <div className="absolute inset-0 rounded-full bg-blue-500/10 blur-md animate-ping" />
             </div>
             <div>
-              <p className="text-sm font-bold text-zinc-200 tracking-wide">Syncing with Marketplace...</p>
-              <p className="text-[11px] text-zinc-500 mt-1">Deploying platform structural data parameters</p>
+              <p className="text-sm font-bold text-gray-700 dark:text-zinc-200 tracking-wide">Syncing with Marketplace...</p>
+              <p className="text-[11px] text-gray-500 dark:text-zinc-500 mt-1">Deploying platform structural data parameters</p>
             </div>
           </div>
         ) : (
@@ -90,10 +90,10 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
               </div>
             </div>
 
-            <h3 className="text-xl font-bold text-white mb-2 tracking-tight">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 tracking-tight">
               {title}
             </h3>
-            <p className="text-sm text-zinc-400 leading-relaxed mb-6 max-w-[280px] mx-auto">
+            <p className="text-sm text-gray-500 dark:text-zinc-400 leading-relaxed mb-6 max-w-[280px] mx-auto">
               {message}
             </p>
 

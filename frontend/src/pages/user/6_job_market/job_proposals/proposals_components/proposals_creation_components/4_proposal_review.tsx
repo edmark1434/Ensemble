@@ -38,55 +38,55 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
   return (
     <div className="space-y-5 text-left">
       <div>
-        <h2 className="text-lg font-bold text-white mb-0.5">Review Proposal Application</h2>
-        <p className="text-xs text-zinc-400">Review all proposed terms and milestone schedules before submitting.</p>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-0.5">Review Proposal Application</h2>
+        <p className="text-xs text-gray-500 dark:text-zinc-400">Review all proposed terms and milestone schedules before submitting.</p>
       </div>
 
       <div className="space-y-3.5 text-xs">
         {/* 01. Cover Pitch & Financials */}
-        <div className="p-4 rounded-xl border border-white/5 bg-white/[0.01] space-y-3">
-          <div className="flex justify-between items-center border-b border-white/5 pb-2">
+        <div className="p-4 rounded-xl border border-gray-100 dark:border-white/5 bg-white/[0.01] space-y-3">
+          <div className="flex justify-between items-center border-b border-gray-100 dark:border-white/5 pb-2">
             <span className="font-bold text-blue-400 uppercase tracking-wider text-[10px]">01. Cover Pitch & Pricing</span>
             <button type="button" onClick={() => onEditStep(1)} className="text-[10px] text-blue-500 hover:underline font-bold">Edit</button>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="p-2.5 rounded-xl border border-white/5 bg-white/[0.02]">
-              <span className="text-zinc-500 block text-[10px]">Proposed Bid</span>
+            <div className="p-2.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02]">
+              <span className="text-gray-500 dark:text-zinc-500 block text-[10px]">Proposed Bid</span>
               <span className="text-sm font-extrabold text-yellow-500 flex items-center gap-1">
                 <CreditIcon className="h-4 w-4" /> {totalBid.toLocaleString()}
               </span>
             </div>
 
-            <div className="p-2.5 rounded-xl border border-white/5 bg-white/[0.02]">
-              <span className="text-zinc-500 block text-[10px]">Additional Work Rate</span>
+            <div className="p-2.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02]">
+              <span className="text-gray-500 dark:text-zinc-500 block text-[10px]">Additional Work Rate</span>
               <span className="text-sm font-extrabold text-blue-400 flex items-center gap-1">
                 <Percent className="h-3.5 w-3.5" /> +{additionalWorkRate}% / Revision Pass
               </span>
             </div>
           </div>
 
-          <div className="bg-white/[0.02] p-3 rounded-xl border border-white/5">
+          <div className="bg-gray-50 dark:bg-white/[0.02] p-3 rounded-xl border border-gray-100 dark:border-white/5">
             <JobRichText content={coverLetter} />
           </div>
         </div>
 
         {/* 02. Terms of Service */}
-        <div className="p-4 rounded-xl border border-white/5 bg-white/[0.01] space-y-2">
-          <div className="flex justify-between items-center border-b border-white/5 pb-2">
+        <div className="p-4 rounded-xl border border-gray-100 dark:border-white/5 bg-white/[0.01] space-y-2">
+          <div className="flex justify-between items-center border-b border-gray-100 dark:border-white/5 pb-2">
             <span className="font-bold text-blue-400 uppercase tracking-wider text-[10px] flex items-center gap-1">
               <FileText className="h-3 w-3" /> 02. Terms of Service
             </span>
             <button type="button" onClick={() => onEditStep(2)} className="text-[10px] text-blue-500 hover:underline font-bold">Edit</button>
           </div>
-          <p className="font-mono text-[11px] text-zinc-400 leading-relaxed whitespace-pre-line bg-white/[0.02] p-3 rounded-xl border border-white/5">
+          <p className="font-mono text-[11px] text-gray-500 dark:text-zinc-400 leading-relaxed whitespace-pre-line bg-gray-50 dark:bg-white/[0.02] p-3 rounded-xl border border-gray-100 dark:border-white/5">
             {tosContent}
           </p>
         </div>
 
         {/* 03. Milestone Delivery Roadmap */}
-        <div className="p-4 rounded-xl border border-white/5 bg-white/[0.01] space-y-3">
-          <div className="flex justify-between items-center border-b border-white/5 pb-2">
+        <div className="p-4 rounded-xl border border-gray-100 dark:border-white/5 bg-white/[0.01] space-y-3">
+          <div className="flex justify-between items-center border-b border-gray-100 dark:border-white/5 pb-2">
             <span className="font-bold text-blue-400 uppercase tracking-wider text-[10px] flex items-center gap-1">
               <Layers className="h-3 w-3" /> 03. Milestone Roadmap ({milestones.length} Steps)
             </span>
@@ -95,17 +95,17 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
 
           <div className="space-y-2">
             {milestones.map((m, idx) => (
-              <div key={m.id} className="p-3 rounded-xl border border-white/5 bg-white/[0.02] space-y-1">
-                <div className="flex justify-between items-center text-xs font-bold text-white">
+              <div key={m.id} className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] space-y-1">
+                <div className="flex justify-between items-center text-xs font-bold text-gray-900 dark:text-white">
                   <span>Step {idx + 1}: {m.name}</span>
                   <span className="text-emerald-400 font-mono">{milestonePayout.toLocaleString()}</span>
                 </div>
-                {m.description && <p className="text-[11px] text-zinc-400 break-all whitespace-pre-wrap">{m.description}</p>}
-                <div className="flex gap-4 text-[10px] text-zinc-500 pt-1">
-                  <span>Hours: <strong className="text-zinc-300">{m.hours} hrs</strong></span>
+                {m.description && <p className="text-[11px] text-gray-500 dark:text-zinc-400 break-all whitespace-pre-wrap">{m.description}</p>}
+                <div className="flex gap-4 text-[10px] text-gray-500 dark:text-zinc-500 pt-1">
+                  <span>Hours: <strong className="text-gray-600 dark:text-zinc-300">{m.hours} hrs</strong></span>
                   <span className="flex items-center gap-1">
                     <RefreshCcw className="h-2.5 w-2.5 text-emerald-400" />
-                    Included Revisions: <strong className="text-zinc-300">{m.revisions}</strong>
+                    Included Revisions: <strong className="text-gray-600 dark:text-zinc-300">{m.revisions}</strong>
                   </span>
                   <span>Overage Price: <strong className="text-blue-400">{(milestonePayout + overageRateBonus).toLocaleString()}</strong></span>
                 </div>
@@ -116,11 +116,11 @@ export const ProposalReviewStep: React.FC<ProposalReviewProps> = ({
       </div>
 
       {/* Navigation Footer */}
-      <div className="pt-4 border-t border-white/5 flex gap-2.5">
+      <div className="pt-4 border-t border-gray-100 dark:border-white/5 flex gap-2.5">
         <button
           type="button"
           onClick={onBack}
-          className="px-4 py-2.5 rounded-xl border border-white/10 text-zinc-400 font-bold hover:text-white transition text-xs"
+          className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 font-bold hover:text-gray-900 dark:text-white transition text-xs"
         >
           Go Back
         </button>

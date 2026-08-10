@@ -172,22 +172,22 @@ const getTagColor = (tagId: number) => {
 // ==================== MARKDOWN COMPONENTS ====================
 const MarkdownComponents = {
   h1: ({ children }: { children: React.ReactNode }) => (
-    <h1 className="text-2xl font-bold text-white mt-4 mb-2 border-b border-white/10 pb-2">{children}</h1>
+    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-4 mb-2 border-b border-gray-200 dark:border-white/10 pb-2">{children}</h1>
   ),
   h2: ({ children }: { children: React.ReactNode }) => (
-    <h2 className="text-xl font-bold text-white mt-3 mb-2">{children}</h2>
+    <h2 className="text-xl font-bold text-gray-900 dark:text-white mt-3 mb-2">{children}</h2>
   ),
   h3: ({ children }: { children: React.ReactNode }) => (
-    <h3 className="text-lg font-bold text-white mt-2 mb-1">{children}</h3>
+    <h3 className="text-lg font-bold text-gray-900 dark:text-white mt-2 mb-1">{children}</h3>
   ),
   p: ({ children }: { children: React.ReactNode }) => (
-    <p className="text-zinc-300 mb-2 leading-relaxed">{children}</p>
+    <p className="text-gray-600 dark:text-zinc-300 mb-2 leading-relaxed">{children}</p>
   ),
   strong: ({ children }: { children: React.ReactNode }) => (
-    <strong className="font-bold text-white">{children}</strong>
+    <strong className="font-bold text-gray-900 dark:text-white">{children}</strong>
   ),
   em: ({ children }: { children: React.ReactNode }) => (
-    <em className="italic text-zinc-300">{children}</em>
+    <em className="italic text-gray-600 dark:text-zinc-300">{children}</em>
   ),
   code: ({ children, className }: { children: React.ReactNode; className?: string }) => {
     const inline = !className;
@@ -207,7 +207,7 @@ const MarkdownComponents = {
     <ol className="my-2 space-y-1 list-decimal list-inside">{children}</ol>
   ),
   li: ({ children }: { children: React.ReactNode }) => (
-    <li className="text-zinc-300">{children}</li>
+    <li className="text-gray-600 dark:text-zinc-300">{children}</li>
   ),
   a: ({ href, children }: { href?: string; children: React.ReactNode }) => (
     <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline transition-colors">
@@ -215,7 +215,7 @@ const MarkdownComponents = {
     </a>
   ),
   blockquote: ({ children }: { children: React.ReactNode }) => (
-    <blockquote className="border-l-4 border-blue-500 pl-4 my-2 text-zinc-400 italic">{children}</blockquote>
+    <blockquote className="border-l-4 border-blue-500 pl-4 my-2 text-gray-500 dark:text-zinc-400 italic">{children}</blockquote>
   ),
 };
 
@@ -276,7 +276,7 @@ const ImageGallery = ({ attachments, imageKeys }: {
           <button
             key={idx}
             onClick={() => setSelectedImage(getImageUrl(filePath))}
-            className="group relative overflow-hidden rounded-lg border border-white/10 bg-white/5 transition-all hover:scale-105 hover:border-white/20"
+            className="group relative overflow-hidden rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none transition-all hover:scale-105 hover:border-white/20"
           >
             <img
               src={getImageUrl(filePath)}
@@ -287,7 +287,7 @@ const ImageGallery = ({ attachments, imageKeys }: {
               }}
             />
             <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition group-hover:opacity-100">
-              <ImageIcon className="h-6 w-6 text-white" />
+              <ImageIcon className="h-6 w-6 text-gray-900 dark:text-white" />
             </div>
           </button>
         ))}
@@ -300,7 +300,7 @@ const ImageGallery = ({ attachments, imageKeys }: {
         >
           <button
             onClick={() => setSelectedImage(null)}
-            className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20"
+            className="absolute right-4 top-4 rounded-full bg-gray-100 dark:bg-white/10 p-2 text-gray-900 dark:text-white transition hover:bg-white/20"
           >
             <X className="h-6 w-6" />
           </button>
@@ -394,11 +394,11 @@ const ReplyInput = ({
           className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20 flex-shrink-0"
         />
         <div className="flex-1">
-          <div className="flex flex-wrap items-center gap-1 rounded-t-lg border border-white/15 border-b-0 bg-white/5 px-2 py-1">
+          <div className="flex flex-wrap items-center gap-1 rounded-t-lg border border-gray-200 dark:border-white/15 border-b-0 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-2 py-1">
             <button
               type="button"
               onClick={() => applyFormatting("bold")}
-              className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
               title="Bold"
             >
               <strong className="text-xs">B</strong>
@@ -406,7 +406,7 @@ const ReplyInput = ({
             <button
               type="button"
               onClick={() => applyFormatting("italic")}
-              className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
               title="Italic"
             >
               <em className="text-xs">I</em>
@@ -414,7 +414,7 @@ const ReplyInput = ({
             <button
               type="button"
               onClick={() => applyFormatting("bullet-list")}
-              className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
               title="Bullet List"
             >
               <span className="text-xs">•</span>
@@ -422,7 +422,7 @@ const ReplyInput = ({
             <button
               type="button"
               onClick={() => applyFormatting("code")}
-              className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
               title="Code"
             >
               <span className="text-xs">{'<>'}</span>
@@ -430,7 +430,7 @@ const ReplyInput = ({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
               title="Upload Image"
             >
               <ImageIcon className="h-3 w-3" />
@@ -438,7 +438,7 @@ const ReplyInput = ({
             <button
               type="button"
               onClick={() => setShowPreview(!showPreview)}
-              className="ml-auto rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              className="ml-auto rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
               title={showPreview ? "Edit" : "Preview"}
             >
               {showPreview ? <Edit2 className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
@@ -451,17 +451,17 @@ const ReplyInput = ({
               value={replyText}
               onChange={(e) => updateReplyText(e.target.value)}
               placeholder={placeholder}
-              className="w-full rounded-b-lg border border-white/15 border-t-0 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 resize-none"
+              className="w-full rounded-b-lg border border-gray-200 dark:border-white/15 border-t-0 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-500 dark:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 resize-none"
               rows={3}
             />
           ) : (
-            <div className="min-h-[80px] rounded-b-lg border border-white/15 border-t-0 bg-white/5 p-3">
+            <div className="min-h-[80px] rounded-b-lg border border-gray-200 dark:border-white/15 border-t-0 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3">
               {replyText.trim() ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
                   {replyText}
                 </ReactMarkdown>
               ) : (
-                <p className="text-sm text-zinc-500 italic">Nothing to preview...</p>
+                <p className="text-sm text-gray-500 dark:text-zinc-500 italic">Nothing to preview...</p>
               )}
             </div>
           )}
@@ -473,16 +473,16 @@ const ReplyInput = ({
                   <img
                     src={image.preview}
                     alt="Upload preview"
-                    className="h-16 w-16 rounded-lg object-cover border border-white/10"
+                    className="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-white/10"
                   />
                   {image.uploading && (
                     <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/70">
-                      <Loader2 className="h-4 w-4 animate-spin text-white" />
+                      <Loader2 className="h-4 w-4 animate-spin text-gray-900 dark:text-white" />
                     </div>
                   )}
                   <button
                     onClick={() => removeImage(image.id)}
-                    className="absolute -top-1 -right-1 rounded-full bg-red-500 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
+                    className="absolute -top-1 -right-1 rounded-full bg-red-500 p-0.5 text-gray-900 dark:text-white opacity-0 transition group-hover:opacity-100"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -494,7 +494,7 @@ const ReplyInput = ({
           <div className="mt-2 flex justify-end gap-2">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-1.5 text-xs text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
             >
               <ImageIcon className="h-3 w-3" />
               Add Image
@@ -502,7 +502,7 @@ const ReplyInput = ({
             <button
               onClick={handleReply}
               disabled={(!replyText.trim() && images.length === 0) || isUploading}
-              className="flex items-center gap-1 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-1 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-gray-900 dark:text-white transition hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isUploading ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -637,7 +637,7 @@ const CommentItem = ({
   const childrenVisible = !isCollapsed && showChildren;
 
   return (
-    <div className={`${depthClass} mt-2 ${!isLastInThread ? "border-l-2 border-white/10 ml-2 pl-2" : ""}`}>
+    <div className={`${depthClass} mt-2 ${!isLastInThread ? "border-l-2 border-gray-200 dark:border-white/10 ml-2 pl-2" : ""}`}>
       <div className="flex gap-3 py-2">
         <img
           src={commentAuthor.avatar}
@@ -647,8 +647,8 @@ const CommentItem = ({
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-medium text-white">{commentAuthor.name}</p>
-              <span className="text-xs text-zinc-500">{getTimeAgo(comment.created_at)}</span>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">{commentAuthor.name}</p>
+              <span className="text-xs text-gray-500 dark:text-zinc-500">{getTimeAgo(comment.created_at)}</span>
               {comment.is_edited && (
                 <span className="text-[10px] text-zinc-600">(edited)</span>
               )}
@@ -662,7 +662,7 @@ const CommentItem = ({
               {shouldShowCollapse && (
                 <button
                   onClick={handleToggleChildren}
-                  className="rounded p-1 text-zinc-500 hover:bg-white/10 transition"
+                  className="rounded p-1 text-gray-500 dark:text-zinc-500 hover:bg-gray-100 dark:bg-white/10 transition"
                   title={isCollapsed || !showChildren ? "Expand thread" : "Collapse thread"}
                 >
                   {isCollapsed || !showChildren ? (
@@ -678,18 +678,18 @@ const CommentItem = ({
                 <div className="relative">
                   <button
                     onClick={() => setShowCommentMenu(!showCommentMenu)}
-                    className="rounded p-1 text-zinc-500 hover:bg-white/10"
+                    className="rounded p-1 text-gray-500 dark:text-zinc-500 hover:bg-gray-100 dark:bg-white/10"
                   >
                     <MoreVertical className="h-3 w-3" />
                   </button>
                   {showCommentMenu && (
-                    <div className="absolute right-0 mt-1 w-28 rounded-lg border border-white/10 bg-[#0d0f1a] shadow-xl z-20">
+                    <div className="absolute right-0 mt-1 w-28 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-xl z-20">
                       <button
                         onClick={() => {
                           setIsEditing(true);
                           setShowCommentMenu(false);
                         }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-xs text-zinc-300 hover:bg-white/10"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:bg-white/10"
                       >
                         <Edit2 className="h-3 w-3" />
                         Edit
@@ -714,19 +714,19 @@ const CommentItem = ({
               <textarea
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
-                className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white"
+                className="w-full rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-2 text-sm text-gray-900 dark:text-white"
                 rows={3}
               />
               <div className="mt-2 flex gap-2">
                 <button
                   onClick={handleEditSubmit}
-                  className="rounded bg-blue-500 px-3 py-1 text-xs text-white"
+                  className="rounded bg-blue-500 px-3 py-1 text-xs text-gray-900 dark:text-white"
                 >
                   Save
                 </button>
                 <button
                   onClick={() => setIsEditing(false)}
-                  className="rounded bg-white/10 px-3 py-1 text-xs text-zinc-400"
+                  className="rounded bg-gray-100 dark:bg-white/10 px-3 py-1 text-xs text-gray-500 dark:text-zinc-400"
                 >
                   Cancel
                 </button>
@@ -734,7 +734,7 @@ const CommentItem = ({
             </div>
           ) : (
             <>
-              <div className="mt-1 text-sm text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
+              <div className="mt-1 text-sm text-gray-600 dark:text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
                   {comment.deleted_at ? "[deleted]" : comment.comment}
                 </ReactMarkdown>
@@ -750,7 +750,7 @@ const CommentItem = ({
               <button
                 onClick={() => onLike(postId, comment.comment_id)}
                 className={`inline-flex items-center gap-1 text-xs transition ${
-                  isLiked ? "text-red-400" : "text-zinc-500 hover:text-white"
+                  isLiked ? "text-red-400" : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
                 }`}
               >
                 <Heart className={`h-3 w-3 ${isLiked ? "fill-red-400" : ""}`} />
@@ -758,7 +758,7 @@ const CommentItem = ({
               </button>
               <button
                 onClick={() => onReply(postId, comment.comment_id, commentAuthor.name, comment.user_id)}
-                className="inline-flex items-center gap-1 text-xs text-zinc-500 transition hover:text-white"
+                className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white"
               >
                 <Reply className="h-3 w-3" />
                 <span>Reply</span>
@@ -766,7 +766,7 @@ const CommentItem = ({
               {hasChildren && (
                 <button
                   onClick={handleToggleChildren}
-                  className="inline-flex items-center gap-1 text-xs text-zinc-500 transition hover:text-white"
+                  className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white"
                 >
                   {showChildren ? (
                     <ChevronUp className="h-3 w-3" />
@@ -786,7 +786,7 @@ const CommentItem = ({
                 <span className="text-xs text-blue-400">Replying to @{replyingTo.authorName}</span>
                 <button
                   onClick={() => setReplyingTo(null)}
-                  className="text-xs text-zinc-500 hover:text-white"
+                  className="text-xs text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -807,10 +807,10 @@ const CommentItem = ({
 
           {/* Collapsed state - show summary */}
           {isCollapsed && hasChildren && (
-            <div className="mt-2 text-xs text-zinc-500">
+            <div className="mt-2 text-xs text-gray-500 dark:text-zinc-500">
               <button
                 onClick={handleToggleChildren}
-                className="hover:text-white transition"
+                className="hover:text-gray-900 dark:text-white transition"
               >
                 View {childCount} {childCount === 1 ? 'reply' : 'replies'}
               </button>
@@ -909,14 +909,14 @@ const renderPostCard = (post: any, showGroupName: boolean = true) => {
   };
 
   return (
-    <div key={post.id} className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 transition hover:border-white/20">
+    <div key={post.id} className="rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 transition hover:border-white/20">
       <div className="flex gap-3">
         <img src={post.authorAvatar} alt={post.author} className="h-10 w-10 rounded-full object-cover ring-2 ring-white/20" />
         <div className="flex-1">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-medium text-white">{post.author}</p>
-              <span className="text-xs text-zinc-500">{post.ago}</span>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">{post.author}</p>
+              <span className="text-xs text-gray-500 dark:text-zinc-500">{post.ago}</span>
               {showGroupName && group && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] text-cyan-400">
                   {group.group_name}
@@ -940,18 +940,18 @@ const renderPostCard = (post: any, showGroupName: boolean = true) => {
               <div className="relative">
                 <button
                   onClick={() => setPostMenuOpen(postMenuOpen === post.id ? null : post.id)}
-                  className="rounded-lg p-1 text-zinc-500 transition hover:bg-white/10 hover:text-white"
+                  className="rounded-lg p-1 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
                 >
                   <MoreVertical className="h-4 w-4" />
                 </button>
                 {postMenuOpen === post.id && (
-                  <div className="absolute right-0 mt-1 w-36 rounded-lg border border-white/10 bg-[#0d0f1a] shadow-xl overflow-hidden z-20">
+                  <div className="absolute right-0 mt-1 w-36 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-xl overflow-hidden z-20">
                     <button
                       onClick={() => {
                         setEditingPost(post);
                         setPostMenuOpen(null);
                       }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 transition hover:bg-gray-100 dark:bg-white/10"
                     >
                       <Edit2 className="h-3.5 w-3.5" />
                       Edit
@@ -970,15 +970,15 @@ const renderPostCard = (post: any, showGroupName: boolean = true) => {
                 )}
               </div>
             ) : (
-              <button onClick={() => setReportingPost(post)} className="text-xs text-zinc-500 hover:text-red-400">
+              <button onClick={() => setReportingPost(post)} className="text-xs text-gray-500 dark:text-zinc-500 hover:text-red-400">
                 Report
               </button>
             )}
           </div>
 
-          <h3 className="mt-1 text-base font-semibold text-white">{post.title}</h3>
+          <h3 className="mt-1 text-base font-semibold text-gray-900 dark:text-white">{post.title}</h3>
 
-          <div className="mt-2 text-sm text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
+          <div className="mt-2 text-sm text-gray-600 dark:text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
               {post.content}
             </ReactMarkdown>
@@ -989,7 +989,7 @@ const renderPostCard = (post: any, showGroupName: boolean = true) => {
           <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
             <button
               onClick={() => toggleExpand(post.id)}
-              className="inline-flex items-center gap-1 text-zinc-500 transition hover:text-white"
+              className="inline-flex items-center gap-1 text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white"
             >
               <MessageCircle className="h-3.5 w-3.5" />
               <span>{post.commentCount} replies</span>
@@ -1001,7 +1001,7 @@ const renderPostCard = (post: any, showGroupName: boolean = true) => {
               className={`inline-flex items-center gap-1 transition-all duration-200 ${
                 isLiked 
                   ? "text-red-400 hover:text-red-300" 
-                  : "text-zinc-500 hover:text-white"
+                  : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
               }`}
               type="button"
             >
@@ -1014,7 +1014,7 @@ const renderPostCard = (post: any, showGroupName: boolean = true) => {
               className={`inline-flex items-center gap-1 transition-all duration-200 ${
                 isSaved 
                   ? "text-yellow-400 hover:text-yellow-300" 
-                  : "text-zinc-500 hover:text-white"
+                  : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
               }`}
               type="button"
             >
@@ -1024,7 +1024,7 @@ const renderPostCard = (post: any, showGroupName: boolean = true) => {
           </div>
 
           {isExpanded && (
-            <div className="mt-4 border-t border-white/10 pt-4">
+            <div className="mt-4 border-t border-gray-200 dark:border-white/10 pt-4">
               <div className="space-y-4">
                 {post.commentTree && post.commentTree.length > 0 ? (
                   post.commentTree.map((comment: Comment, commentIndex: number) => {
@@ -1070,11 +1070,11 @@ const renderPostCard = (post: any, showGroupName: boolean = true) => {
                     );
                   })
                 ) : (
-                  <p className="text-center text-sm text-zinc-500">No comments yet.</p>
+                  <p className="text-center text-sm text-gray-500 dark:text-zinc-500">No comments yet.</p>
                 )}
               </div>
 
-              <div className="mt-4 pt-4 border-t border-white/10">
+              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-white/10">
                 <ReplyInput
                   replyText={replyText[post.id] || ""}
                   updateReplyText={(text) => updateReplyText(post.id, text)}
@@ -1903,7 +1903,7 @@ const Forums = () => {
       <div className="flex items-center justify-between">
         <button
           onClick={() => setIsFilterVisible(!isFilterVisible)}
-          className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-zinc-400 transition hover:border-white/30 hover:text-white"
+          className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-1.5 text-sm text-gray-500 dark:text-zinc-400 transition hover:border-white/30 hover:text-gray-900 dark:text-white"
         >
           <Filter className="h-4 w-4" />
           {isFilterVisible ? "Hide Filters" : "Show Filters"}
@@ -1912,7 +1912,7 @@ const Forums = () => {
 
         {selectedGroupIds.length !== joinedGroups.length && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-zinc-500">{Math.abs(selectedGroupIds.length - joinedGroups.length)}</span>
+            <span className="text-xs text-gray-500 dark:text-zinc-500">{Math.abs(selectedGroupIds.length - joinedGroups.length)}</span>
             <button onClick={clearAllGroups} className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300">
               <X className="h-3 w-3" />
               Clear
@@ -1923,15 +1923,15 @@ const Forums = () => {
 
       {isFilterVisible && (
         <div className="space-y-4 animate-slide-in">
-          <div className="rounded-xl border border-white/10 bg-linear-to-br from-white/5 to-transparent p-4 backdrop-blur-sm">
+          <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-linear-to-br from-white/5 to-transparent p-4 backdrop-blur-sm">
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-white">My Groups</h3>
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">My Groups</h3>
               <div className="flex gap-2">
                 <button onClick={selectAllGroups} className="text-[10px] text-blue-400 hover:text-blue-300">Select All</button>
                 <button onClick={clearAllGroups} className="text-[10px] text-red-400 hover:text-red-300">Clear</button>
               </div>
             </div>
-            <p className="mb-3 text-[11px] text-zinc-500">Show discussions from selected groups</p>
+            <p className="mb-3 text-[11px] text-gray-500 dark:text-zinc-500">Show discussions from selected groups</p>
             <div className="flex flex-wrap gap-2">
               {availableFilterGroups.map((group) => (
                 <button
@@ -1939,22 +1939,22 @@ const Forums = () => {
                   onClick={() => toggleGroupFilter(group.id)}
                   className={`rounded-full px-3 py-1 text-xs transition-all duration-200 ${
                     selectedGroupIds.includes(group.id)
-                      ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
-                      : "border border-white/15 bg-white/5 text-zinc-400 hover:border-white/30 hover:text-white"
+                      ? "bg-blue-500 text-gray-900 dark:text-white shadow-lg shadow-blue-500/25"
+                      : "border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-500 dark:text-zinc-400 hover:border-white/30 hover:text-gray-900 dark:text-white"
                   }`}
                 >
                   {group.group_name}
                 </button>
               ))}
               {availableFilterGroups.length === 0 && (
-                <p className="text-xs text-zinc-500">You haven't joined any groups yet.</p>
+                <p className="text-xs text-gray-500 dark:text-zinc-500">You haven't joined any groups yet.</p>
               )}
             </div>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-linear-to-br from-white/5 to-transparent p-4 backdrop-blur-sm">
-            <h3 className="text-sm font-semibold text-white">Sort By</h3>
-            <p className="mb-3 text-[11px] text-zinc-500">Order discussions</p>
+          <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-linear-to-br from-white/5 to-transparent p-4 backdrop-blur-sm">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Sort By</h3>
+            <p className="mb-3 text-[11px] text-gray-500 dark:text-zinc-500">Order discussions</p>
             <div className="flex flex-wrap gap-2">
               {sortOptions.map((option) => (
                 <button
@@ -1962,8 +1962,8 @@ const Forums = () => {
                   onClick={() => setSortBy(option.value)}
                   className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs transition-all duration-200 ${
                     sortBy === option.value
-                      ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
-                      : "border border-white/15 bg-white/5 text-zinc-400 hover:border-white/30 hover:text-white"
+                      ? "bg-blue-500 text-gray-900 dark:text-white shadow-lg shadow-blue-500/25"
+                      : "border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-500 dark:text-zinc-400 hover:border-white/30 hover:text-gray-900 dark:text-white"
                   }`}
                 >
                   {option.icon}
@@ -1984,14 +1984,14 @@ const Forums = () => {
     const isSaved = post.isSaved;
 
     return (
-      <div key={post.id} className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 transition hover:border-white/20">
+      <div key={post.id} className="rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 transition hover:border-white/20">
         <div className="flex gap-3">
           <img src={post.authorAvatar} alt={post.author} className="h-10 w-10 rounded-full object-cover ring-2 ring-white/20" />
           <div className="flex-1">
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-sm font-medium text-white">{post.author}</p>
-                <span className="text-xs text-zinc-500">{post.ago}</span>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">{post.author}</p>
+                <span className="text-xs text-gray-500 dark:text-zinc-500">{post.ago}</span>
                 {showGroupName && group && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] text-cyan-400">
                     {group.group_name}
@@ -2015,18 +2015,18 @@ const Forums = () => {
                 <div className="relative">
                   <button
                     onClick={() => setPostMenuOpen(postMenuOpen === post.id ? null : post.id)}
-                    className="rounded-lg p-1 text-zinc-500 transition hover:bg-white/10 hover:text-white"
+                    className="rounded-lg p-1 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
                   >
                     <MoreVertical className="h-4 w-4" />
                   </button>
                   {postMenuOpen === post.id && (
-                    <div className="absolute right-0 mt-1 w-36 rounded-lg border border-white/10 bg-[#0d0f1a] shadow-xl overflow-hidden z-20">
+                    <div className="absolute right-0 mt-1 w-36 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-xl overflow-hidden z-20">
                       <button
                         onClick={() => {
                           setEditingPost(post);
                           setPostMenuOpen(null);
                         }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 transition hover:bg-gray-100 dark:bg-white/10"
                       >
                         <Edit2 className="h-3.5 w-3.5" />
                         Edit
@@ -2045,15 +2045,15 @@ const Forums = () => {
                   )}
                 </div>
               ) : (
-                <button onClick={() => setReportingPost(post)} className="text-xs text-zinc-500 hover:text-red-400">
+                <button onClick={() => setReportingPost(post)} className="text-xs text-gray-500 dark:text-zinc-500 hover:text-red-400">
                   Report
                 </button>
               )}
             </div>
 
-            <h3 className="mt-1 text-base font-semibold text-white">{post.title}</h3>
+            <h3 className="mt-1 text-base font-semibold text-gray-900 dark:text-white">{post.title}</h3>
 
-            <div className="mt-2 text-sm text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
+            <div className="mt-2 text-sm text-gray-600 dark:text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
                 {post.content}
               </ReactMarkdown>
@@ -2064,7 +2064,7 @@ const Forums = () => {
             <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
               <button
                 onClick={() => toggleExpand(post.id)}
-                className="inline-flex items-center gap-1 text-zinc-500 transition hover:text-white"
+                className="inline-flex items-center gap-1 text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white"
               >
                 <MessageCircle className="h-3.5 w-3.5" />
                 <span>{post.commentCount} replies</span>
@@ -2076,7 +2076,7 @@ const Forums = () => {
                 className={`inline-flex items-center gap-1 transition-all duration-200 ${
                   isLiked 
                     ? "text-red-400 hover:text-red-300" 
-                    : "text-zinc-500 hover:text-white"
+                    : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
                 }`}
                 type="button"
               >
@@ -2089,7 +2089,7 @@ const Forums = () => {
                 className={`inline-flex items-center gap-1 transition-all duration-200 ${
                   isSaved 
                     ? "text-yellow-400 hover:text-yellow-300" 
-                    : "text-zinc-500 hover:text-white"
+                    : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
                 }`}
                 type="button"
               >
@@ -2099,7 +2099,7 @@ const Forums = () => {
             </div>
 
             {isExpanded && (
-              <div className="mt-4 border-t border-white/10 pt-4">
+              <div className="mt-4 border-t border-gray-200 dark:border-white/10 pt-4">
                 <div className="space-y-4">
                   {post.commentTree && post.commentTree.length > 0 ? (
                     post.commentTree.map((comment: Comment, commentIndex: number) => (
@@ -2128,11 +2128,11 @@ const Forums = () => {
                       />
                     ))
                   ) : (
-                    <p className="text-center text-sm text-zinc-500">No comments yet.</p>
+                    <p className="text-center text-sm text-gray-500 dark:text-zinc-500">No comments yet.</p>
                   )}
                 </div>
 
-                <div className="mt-4 pt-4 border-t border-white/10">
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-white/10">
                   <ReplyInput
                     replyText={replyText[post.id] || ""}
                     updateReplyText={(text) => updateReplyText(post.id, text)}
@@ -2159,7 +2159,7 @@ const Forums = () => {
         <div
           key={group.id}
           onClick={() => navigate(`/forums/group/${group.id}`)}
-          className="group relative cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-linear-to-br from-white/5 to-transparent transition-all duration-300 hover:scale-[1.02] hover:border-white/20 hover:bg-white/10"
+          className="group relative cursor-pointer overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-linear-to-br from-white/5 to-transparent transition-all duration-300 hover:scale-[1.02] hover:border-white/20 hover:bg-gray-100 dark:bg-white/10"
         >
           {group.image_url ? (
             <img src={`${import.meta.env.VITE_CLOUDFRONT_URL}/${group.image_url}`} alt={group.group_name} className="h-24 w-full object-cover" />
@@ -2169,8 +2169,8 @@ const Forums = () => {
           <div className="p-4">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <p className="text-xs text-zinc-500">Forum Group</p>
-                <h3 className="mt-1 text-sm font-semibold text-white">{group.group_name}</h3>
+                <p className="text-xs text-gray-500 dark:text-zinc-500">Forum Group</p>
+                <h3 className="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{group.group_name}</h3>
               </div>
               {!group.joined ? (
                 <button
@@ -2195,17 +2195,17 @@ const Forums = () => {
                 </span>
               )}
             </div>
-            <p className="mt-1 line-clamp-2 text-xs text-zinc-400">{group.content}</p>
+            <p className="mt-1 line-clamp-2 text-xs text-gray-500 dark:text-zinc-400">{group.content}</p>
             <div className="mt-2 flex items-center gap-2">
-              <Users className="h-3 w-3 text-zinc-500" />
-              <p className="text-xs text-zinc-500">{group.members?.length || 0} members</p>
+              <Users className="h-3 w-3 text-gray-500 dark:text-zinc-500" />
+              <p className="text-xs text-gray-500 dark:text-zinc-500">{group.members?.length || 0} members</p>
             </div>
             <div className="mt-3 flex flex-wrap gap-1">
               {group.tags?.slice(0, 3).map((tag) => (
                 <span key={tag.tag_id} className="rounded-full bg-blue-500/20 px-2 py-0.5 text-[9px] text-blue-400">{tag.tag}</span>
               ))}
               {group.tags?.length > 3 && (
-                <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] text-zinc-400">+{group.tags.length - 3}</span>
+                <span className="rounded-full bg-gray-100 dark:bg-white/10 px-2 py-0.5 text-[9px] text-gray-500 dark:text-zinc-400">+{group.tags.length - 3}</span>
               )}
             </div>
           </div>
@@ -2215,12 +2215,12 @@ const Forums = () => {
   );
 
   const renderEmptyState = (icon: React.ReactNode, title: string, message: string, buttonText?: string, onButtonClick?: () => void) => (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-white/10 bg-white/5 p-12 text-center">
+    <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-12 text-center">
       {icon}
-      <h3 className="text-lg font-semibold text-white">{title}</h3>
-      <p className="mt-1 text-sm text-zinc-400">{message}</p>
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
+      <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">{message}</p>
       {buttonText && onButtonClick && (
-        <button onClick={onButtonClick} className="mt-4 rounded-full bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-600">
+        <button onClick={onButtonClick} className="mt-4 rounded-full bg-blue-500 px-4 py-2 text-sm font-medium text-gray-900 dark:text-white transition hover:bg-blue-600">
           {buttonText}
         </button>
       )}
@@ -2230,56 +2230,56 @@ const Forums = () => {
   // ==================== LOADING STATE ====================
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#080a12]">
+      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
         <UserHeader pageTitle="Forums" credits={1250} />
         <div className="mx-auto max-w-7xl p-6 md:p-8">
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <div className="h-8 w-48 animate-pulse rounded-lg bg-white/10" />
-              <div className="mt-1 h-4 w-64 animate-pulse rounded-lg bg-white/5" />
+              <div className="h-8 w-48 animate-pulse rounded-lg bg-gray-100 dark:bg-white/10" />
+              <div className="mt-1 h-4 w-64 animate-pulse rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
             </div>
           </div>
           <div className="mb-6 flex justify-end">
-            <div className="h-10 w-36 animate-pulse rounded-full bg-white/10" />
+            <div className="h-10 w-36 animate-pulse rounded-full bg-gray-100 dark:bg-white/10" />
           </div>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
-            <div><div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-4">
-              <div className="mb-2 h-5 w-24 animate-pulse rounded bg-white/10" />
-              <div className="mb-3 h-3 w-32 animate-pulse rounded bg-white/5" />
+            <div><div className="space-y-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-4">
+              <div className="mb-2 h-5 w-24 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
+              <div className="mb-3 h-3 w-32 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
               <div className="flex flex-wrap gap-2">
                 {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="h-7 w-16 animate-pulse rounded-full bg-white/10" />
+                  <div key={i} className="h-7 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-white/10" />
                 ))}
               </div>
             </div></div>
             <div>
-              <div className="mb-4 h-10 w-full animate-pulse rounded-full bg-white/5" />
-              <div className="mb-4 flex gap-2 border-b border-white/10 pb-3">
+              <div className="mb-4 h-10 w-full animate-pulse rounded-full bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
+              <div className="mb-4 flex gap-2 border-b border-gray-200 dark:border-white/10 pb-3">
                 {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="h-8 w-20 animate-pulse rounded-full bg-white/10" />
+                  <div key={i} className="h-8 w-20 animate-pulse rounded-full bg-gray-100 dark:bg-white/10" />
                 ))}
               </div>
-              <div className="mb-4 h-4 w-48 animate-pulse rounded bg-white/5" />
+              <div className="mb-4 h-4 w-48 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
               <div className="space-y-4">
                 {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div key={i} className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-4">
                     <div className="flex gap-3">
-                      <div className="h-10 w-10 animate-pulse rounded-full bg-white/10" />
+                      <div className="h-10 w-10 animate-pulse rounded-full bg-gray-100 dark:bg-white/10" />
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <div className="h-4 w-32 animate-pulse rounded bg-white/10" />
-                          <div className="h-3 w-20 animate-pulse rounded bg-white/5" />
+                          <div className="h-4 w-32 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
+                          <div className="h-3 w-20 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
                         </div>
-                        <div className="mt-2 h-5 w-3/4 animate-pulse rounded bg-white/10" />
+                        <div className="mt-2 h-5 w-3/4 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
                         <div className="mt-2 space-y-2">
-                          <div className="h-4 w-full animate-pulse rounded bg-white/5" />
-                          <div className="h-4 w-2/3 animate-pulse rounded bg-white/5" />
+                          <div className="h-4 w-full animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
+                          <div className="h-4 w-2/3 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
                         </div>
                         <div className="mt-3 flex gap-4">
-                          <div className="h-6 w-16 animate-pulse rounded-full bg-white/10" />
-                          <div className="h-4 w-20 animate-pulse rounded bg-white/5" />
-                          <div className="h-4 w-16 animate-pulse rounded bg-white/5" />
-                          <div className="h-4 w-12 animate-pulse rounded bg-white/5" />
+                          <div className="h-6 w-16 animate-pulse rounded-full bg-gray-100 dark:bg-white/10" />
+                          <div className="h-4 w-20 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
+                          <div className="h-4 w-16 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
+                          <div className="h-4 w-12 animate-pulse rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
                         </div>
                       </div>
                     </div>
@@ -2297,14 +2297,14 @@ const Forums = () => {
   const feedBlocked = activeTab === "feed" && selectedGroupIds.length === 0;
 
   return (
-    <div className="min-h-screen bg-[#080a12]">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
       <UserHeader pageTitle="Forums" credits={1250} />
 
       <div className="mx-auto max-w-7xl p-6 md:p-8">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white">Community Forums</h1>
-            <p className="text-sm text-zinc-400">Live forum groups and discussions from the backend</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Community Forums</h1>
+            <p className="text-sm text-gray-500 dark:text-zinc-400">Live forum groups and discussions from the backend</p>
           </div>
         </div>
 
@@ -2327,22 +2327,22 @@ const Forums = () => {
           )}
 
           <div className={activeTab === "feed" ? "" : "mx-auto w-full max-w-4xl"}>
-            <div className="mb-4 flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5">
-              <Search className="h-4 w-4 text-zinc-500" />
+            <div className="mb-4 flex items-center gap-2 rounded-full border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-1.5">
+              <Search className="h-4 w-4 text-gray-500 dark:text-zinc-500" />
               <input
-                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+                className="w-full bg-transparent text-sm text-gray-900 dark:text-white outline-none placeholder:text-gray-500 dark:text-zinc-500"
                 placeholder="Search discussions or groups..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery("")} className="text-zinc-500 hover:text-white">
+                <button onClick={() => setSearchQuery("")} className="text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white">
                   <X className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
 
-            <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-white/10 pb-3">
+            <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-gray-200 dark:border-white/10 pb-3">
               {tabOptions.map((tab) => (
                 <button
                   key={tab.key}
@@ -2353,8 +2353,8 @@ const Forums = () => {
                   }}
                   className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
                     activeTab === tab.key
-                      ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
-                      : "border border-white/15 bg-white/5 text-zinc-400 hover:border-white/30 hover:text-white"
+                      ? "bg-blue-500 text-gray-900 dark:text-white shadow-lg shadow-blue-500/25"
+                      : "border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-500 dark:text-zinc-400 hover:border-white/30 hover:text-gray-900 dark:text-white"
                   }`}
                 >
                   {tab.label}
@@ -2366,7 +2366,7 @@ const Forums = () => {
               <>
                 {visibleGroups.length === 0 ? (
                   renderEmptyState(
-                    <Users className="mb-3 h-8 w-8 text-zinc-500" />,
+                    <Users className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />,
                     "No groups found",
                     searchQuery ? `No groups matching "${searchQuery}"` : "No groups available",
                     activeTab === "my-groups" ? "Browse Groups" : undefined,
@@ -2375,7 +2375,7 @@ const Forums = () => {
                 ) : (
                   <>
                     {searchQuery && (
-                      <p className="mb-3 text-sm text-zinc-500">Found {visibleGroups.length} group{visibleGroups.length !== 1 ? "s" : ""} matching "{searchQuery}"</p>
+                      <p className="mb-3 text-sm text-gray-500 dark:text-zinc-500">Found {visibleGroups.length} group{visibleGroups.length !== 1 ? "s" : ""} matching "{searchQuery}"</p>
                     )}
                     {renderGroupsGrid()}
                   </>
@@ -2387,7 +2387,7 @@ const Forums = () => {
               <div className="space-y-4">
                 {feedBlocked ? (
                   renderEmptyState(
-                    <Users className="mb-3 h-8 w-8 text-zinc-500" />,
+                    <Users className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />,
                     "No groups selected",
                     "Select at least one group from the filters to see its discussions",
                     "Select All My Groups",
@@ -2395,7 +2395,7 @@ const Forums = () => {
                   )
                 ) : displayPosts.length === 0 ? (
                   renderEmptyState(
-                    <MessageCircle className="mb-3 h-8 w-8 text-zinc-500" />,
+                    <MessageCircle className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />,
                     searchQuery ? "No matching discussions" : "No discussions yet",
                     searchQuery ? `No discussions found matching "${searchQuery}"` : "Start a discussion in one of your selected groups",
                     !searchQuery ? "Create Discussion" : undefined,
@@ -2403,7 +2403,7 @@ const Forums = () => {
                   )
                 ) : (
                   <>
-                    <p className="text-sm text-zinc-500">
+                    <p className="text-sm text-gray-500 dark:text-zinc-500">
                       {searchQuery 
                         ? `Found ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
                         : `Showing ${displayPosts.length} discussions from your joined groups`}
@@ -2418,7 +2418,7 @@ const Forums = () => {
               <div className="space-y-4">
                 {displayPosts.length === 0 ? (
                   renderEmptyState(
-                    <MessageCircle className="mb-3 h-8 w-8 text-zinc-500" />,
+                    <MessageCircle className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />,
                     searchQuery ? "No matching discussions" : "No discussions yet",
                     searchQuery ? `No discussions found matching "${searchQuery}"` : "Start a new discussion in one of your groups!",
                     !searchQuery ? "Create Discussion" : undefined,
@@ -2426,7 +2426,7 @@ const Forums = () => {
                   )
                 ) : (
                   <>
-                    <p className="text-sm text-zinc-500">
+                    <p className="text-sm text-gray-500 dark:text-zinc-500">
                       {searchQuery 
                         ? `Found ${displayPosts.length} discussion${displayPosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
                         : `Showing ${displayPosts.length} discussions created by you`}
@@ -2441,13 +2441,13 @@ const Forums = () => {
               <div className="space-y-4">
                 {displayPosts.length === 0 ? (
                   renderEmptyState(
-                    <Bookmark className="mb-3 h-8 w-8 text-zinc-500" />,
+                    <Bookmark className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />,
                     searchQuery ? "No matching saved discussions" : "No saved discussions yet",
                     searchQuery ? `No saved discussions found matching "${searchQuery}"` : "Bookmark discussions to see them here"
                   )
                 ) : (
                   <>
-                    <p className="text-sm text-zinc-500">
+                    <p className="text-sm text-gray-500 dark:text-zinc-500">
                       {searchQuery 
                         ? `Found ${displayPosts.length} saved discussion${displayPosts.length !== 1 ? "s" : ""} matching "${searchQuery}"` 
                         : `${displayPosts.length} saved discussion${displayPosts.length !== 1 ? "s" : ""}`}
@@ -2459,7 +2459,7 @@ const Forums = () => {
             )}
 
             {["feed", "my-discussions", "saved"].includes(activeTab) && !feedBlocked && (
-              <div ref={feedSentinelRef} className="flex min-h-12 items-center justify-center py-4 text-sm text-zinc-500">
+              <div ref={feedSentinelRef} className="flex min-h-12 items-center justify-center py-4 text-sm text-gray-500 dark:text-zinc-500">
                 {loadingMore ? <Loader2 className="h-5 w-5 animate-spin" /> : hasMore ? "Scroll for more" : ""}
               </div>
             )}

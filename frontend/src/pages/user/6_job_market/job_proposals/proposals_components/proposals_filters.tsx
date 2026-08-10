@@ -33,14 +33,14 @@ export const ProposalsFilters: React.FC<ProposalsFiltersProps> = ({
   onClear,
 }) => {
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-4 backdrop-blur-sm space-y-4 text-left">
-      <div className="flex items-center justify-between border-b border-white/5 pb-2">
-        <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em]">
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/60 shadow-sm dark:shadow-none p-4 backdrop-blur-sm space-y-4 text-left">
+      <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-2">
+        <h2 className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase tracking-[0.2em]">
           Filter & Sorting
         </h2>
         <button
           onClick={onClear}
-          className="text-[10px] font-semibold text-zinc-500 hover:text-red-400 transition-colors flex items-center gap-1"
+          className="text-[10px] font-semibold text-gray-500 dark:text-zinc-500 hover:text-red-400 transition-colors flex items-center gap-1"
         >
           <RotateCcw className="h-3 w-3" /> Reset All
         </button>
@@ -49,10 +49,10 @@ export const ProposalsFilters: React.FC<ProposalsFiltersProps> = ({
       {/* 1. Bid Price Range & Asc/Desc Sort */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+          <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
             Escrow Bid Range (Credits)
           </label>
-          <div className="flex gap-1 bg-white/5 p-0.5 rounded-lg border border-white/5">
+          <div className="flex gap-1 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-0.5 rounded-lg border border-gray-100 dark:border-white/5">
             <button
               title="Lowest Bid First"
               onClick={() =>
@@ -61,7 +61,7 @@ export const ProposalsFilters: React.FC<ProposalsFiltersProps> = ({
               className={`p-1 rounded text-xs transition ${
                 filters.priceSort === "inc"
                   ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                  : "text-zinc-500 hover:text-zinc-300"
+                  : "text-gray-500 dark:text-zinc-500 hover:text-gray-600 dark:text-zinc-300"
               }`}
             >
               <ArrowUp className="h-3 w-3" />
@@ -74,7 +74,7 @@ export const ProposalsFilters: React.FC<ProposalsFiltersProps> = ({
               className={`p-1 rounded text-xs transition ${
                 filters.priceSort === "dec"
                   ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                  : "text-zinc-500 hover:text-zinc-300"
+                  : "text-gray-500 dark:text-zinc-500 hover:text-gray-600 dark:text-zinc-300"
               }`}
             >
               <ArrowDown className="h-3 w-3" />
@@ -88,25 +88,25 @@ export const ProposalsFilters: React.FC<ProposalsFiltersProps> = ({
             placeholder="Min Bid"
             value={filters.minPrice}
             onChange={(e) => setters.setMinPrice(e.target.value)}
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/50 placeholder:text-zinc-600"
+            className="w-full bg-white dark:bg-white/5 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 placeholder:text-zinc-600"
           />
           <input
             type="number"
             placeholder="Max Bid"
             value={filters.maxPrice}
             onChange={(e) => setters.setMaxPrice(e.target.value)}
-            className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/50 placeholder:text-zinc-600"
+            className="w-full bg-white dark:bg-white/5 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 placeholder:text-zinc-600"
           />
         </div>
       </div>
 
       {/* 2. No. of Milestones */}
-      <div className="space-y-2 pt-2 border-t border-white/5">
+      <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-white/5">
         <div className="flex items-center justify-between">
-          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+          <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
             No. of Milestones
           </label>
-          <div className="flex gap-1 bg-white/5 p-0.5 rounded-lg border border-white/5">
+          <div className="flex gap-1 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-0.5 rounded-lg border border-gray-100 dark:border-white/5">
             <button
               title="Fewer Milestones First"
               onClick={() =>
@@ -117,7 +117,7 @@ export const ProposalsFilters: React.FC<ProposalsFiltersProps> = ({
               className={`p-1 rounded text-xs transition ${
                 filters.milestonesSort === "inc"
                   ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                  : "text-zinc-500 hover:text-zinc-300"
+                  : "text-gray-500 dark:text-zinc-500 hover:text-gray-600 dark:text-zinc-300"
               }`}
             >
               <ArrowUp className="h-3 w-3" />
@@ -132,7 +132,7 @@ export const ProposalsFilters: React.FC<ProposalsFiltersProps> = ({
               className={`p-1 rounded text-xs transition ${
                 filters.milestonesSort === "dec"
                   ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                  : "text-zinc-500 hover:text-zinc-300"
+                  : "text-gray-500 dark:text-zinc-500 hover:text-gray-600 dark:text-zinc-300"
               }`}
             >
               <ArrowDown className="h-3 w-3" />
@@ -144,17 +144,17 @@ export const ProposalsFilters: React.FC<ProposalsFiltersProps> = ({
           placeholder="Exact count (e.g. 3)"
           value={filters.milestonesValue}
           onChange={(e) => setters.setMilestonesValue(e.target.value)}
-          className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/50 placeholder:text-zinc-600"
+          className="w-full bg-white dark:bg-white/5 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 placeholder:text-zinc-600"
         />
       </div>
 
       {/* 3. Additional Work / Revision Rate Sort */}
-      <div className="space-y-2 pt-2 border-t border-white/5">
+      <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-white/5">
         <div className="flex items-center justify-between">
-          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+          <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
             Overage Revision Rate (%)
           </label>
-          <div className="flex gap-1 bg-white/5 p-0.5 rounded-lg border border-white/5">
+          <div className="flex gap-1 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-0.5 rounded-lg border border-gray-100 dark:border-white/5">
             <button
               title="Lowest Rate First"
               onClick={() =>
@@ -165,7 +165,7 @@ export const ProposalsFilters: React.FC<ProposalsFiltersProps> = ({
               className={`p-1 rounded text-xs transition ${
                 filters.revisionRateSort === "inc"
                   ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                  : "text-zinc-500 hover:text-zinc-300"
+                  : "text-gray-500 dark:text-zinc-500 hover:text-gray-600 dark:text-zinc-300"
               }`}
             >
               <ArrowUp className="h-3 w-3" />
@@ -180,7 +180,7 @@ export const ProposalsFilters: React.FC<ProposalsFiltersProps> = ({
               className={`p-1 rounded text-xs transition ${
                 filters.revisionRateSort === "dec"
                   ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                  : "text-zinc-500 hover:text-zinc-300"
+                  : "text-gray-500 dark:text-zinc-500 hover:text-gray-600 dark:text-zinc-300"
               }`}
             >
               <ArrowDown className="h-3 w-3" />
@@ -190,12 +190,12 @@ export const ProposalsFilters: React.FC<ProposalsFiltersProps> = ({
       </div>
 
       {/* 4. Date Proposed Sort */}
-      <div className="space-y-2 pt-2 border-t border-white/5">
+      <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-white/5">
         <div className="flex items-center justify-between">
-          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+          <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
             Date Proposed
           </label>
-          <div className="flex gap-1 bg-white/5 p-0.5 rounded-lg border border-white/5">
+          <div className="flex gap-1 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-0.5 rounded-lg border border-gray-100 dark:border-white/5">
             <button
               title="Oldest First"
               onClick={() =>
@@ -204,7 +204,7 @@ export const ProposalsFilters: React.FC<ProposalsFiltersProps> = ({
               className={`p-1 rounded text-xs transition ${
                 filters.dateSort === "inc"
                   ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                  : "text-zinc-500 hover:text-zinc-300"
+                  : "text-gray-500 dark:text-zinc-500 hover:text-gray-600 dark:text-zinc-300"
               }`}
             >
               <ArrowUp className="h-3 w-3" />
@@ -217,7 +217,7 @@ export const ProposalsFilters: React.FC<ProposalsFiltersProps> = ({
               className={`p-1 rounded text-xs transition ${
                 filters.dateSort === "dec"
                   ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                  : "text-zinc-500 hover:text-zinc-300"
+                  : "text-gray-500 dark:text-zinc-500 hover:text-gray-600 dark:text-zinc-300"
               }`}
             >
               <ArrowDown className="h-3 w-3" />

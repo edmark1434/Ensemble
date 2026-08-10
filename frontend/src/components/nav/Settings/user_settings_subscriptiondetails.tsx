@@ -80,17 +80,17 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
   return (
     <div className="space-y-8 font-['Plus_Jakarta_Sans',sans-serif]">
       {/* Current Subscription Status Header */}
-      <div className="p-6 rounded-2xl border border-white/10 bg-gradient-to-r from-blue-900/20 via-indigo-900/10 to-transparent flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="p-6 rounded-2xl border border-gray-200 dark:border-white/10 bg-gradient-to-r from-blue-50/50 via-indigo-50/50 dark:from-blue-900/20 dark:via-indigo-900/10 to-transparent flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-300 border border-blue-500/30">
               {subscription.status || "Active"}
             </span>
           </div>
-          <h3 className="text-xl font-bold text-white flex items-center gap-2">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             {subscription.plan_name || "Free Tier"}
           </h3>
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs text-gray-600 dark:text-zinc-400">
             {subscription.renews_at
               ? `Renews automatically on ${new Date(subscription.renews_at).toLocaleDateString()}`
               : "Standard tier with default access limits."}
@@ -121,36 +121,36 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
 
       {/* Subscription Tier Cards Showcase */}
       <div>
-        <h3 className="text-sm font-semibold text-zinc-300 mb-4">Available Membership Plans</h3>
+        <h3 className="text-sm font-semibold text-gray-800 dark:text-zinc-300 mb-4">Available Membership Plans</h3>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {plans.map((plan, idx) => (
             <div
               key={idx}
               className={`relative rounded-2xl p-6 border flex flex-col justify-between transition-all ${
                 plan.current
-                  ? "border-emerald-500/60 bg-[#0d131f] shadow-[0_0_20px_rgba(16,185,129,0.1)]"
-                  : "border-white/10 bg-[#0d0f1a] hover:border-white/20"
+                  ? "border-emerald-500/60 bg-emerald-50/30 dark:bg-[#0d131f] shadow-[0_0_20px_rgba(16,185,129,0.1)]"
+                  : "border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] hover:border-gray-300 dark:hover:border-white/20"
               }`}
             >
               {/* Badges */}
               {plan.current && (
-                <div className="absolute -top-3 left-4 bg-emerald-500 text-[#080a12] text-[10px] font-extrabold tracking-wider uppercase px-2.5 py-0.5 rounded-full shadow-md">
+                <div className="absolute -top-3 left-4 bg-emerald-500 text-white dark:text-[#080a12] text-[10px] font-extrabold tracking-wider uppercase px-2.5 py-0.5 rounded-full shadow-md">
                   Current Plan
                 </div>
               )}
               {plan.popular && !plan.current && (
-                <div className="absolute -top-3 right-4 bg-white/10 border border-white/20 text-white text-[10px] font-medium px-2.5 py-0.5 rounded-full backdrop-blur-md">
+                <div className="absolute -top-3 right-4 bg-gray-100/80 dark:bg-white/10 border border-gray-200 dark:border-white/20 text-gray-800 dark:text-white text-[10px] font-medium px-2.5 py-0.5 rounded-full backdrop-blur-md">
                   Most popular
                 </div>
               )}
 
               <div>
                 <div className="flex items-center gap-1.5 mb-1">
-                  {!isFreePlan && <Crown className="h-4 w-4 text-amber-400" />}
-                  <h4 className="text-lg font-bold text-white">{plan.name}</h4>
+                  {!isFreePlan && <Crown className="h-4 w-4 text-amber-500 dark:text-amber-400" />}
+                  <h4 className="text-lg font-bold text-gray-900 dark:text-white">{plan.name}</h4>
                 </div>
-                <p className="text-xs text-zinc-400 mb-4">{plan.tagline}</p>
-                <div className="text-2xl font-extrabold text-white mb-6">
+                <p className="text-xs text-gray-500 dark:text-zinc-400 mb-4">{plan.tagline}</p>
+                <div className="text-2xl font-extrabold text-gray-900 dark:text-white mb-6">
                   {plan.price}
                 </div>
 
@@ -158,10 +158,10 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
                 <ul className="space-y-3 mb-6">
                   {plan.features.map((feat, fIdx) => (
                     <li key={fIdx} className="flex items-start gap-2 text-xs">
-                      <Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
-                      <span className="text-zinc-300">
+                      <Check className="h-4 w-4 text-emerald-500 dark:text-emerald-400 shrink-0 mt-0.5" />
+                      <span className="text-gray-700 dark:text-zinc-300">
                         {feat.label}{" "}
-                        <span className="font-semibold text-white bg-white/5 border border-white/10 px-1.5 py-0.5 rounded text-[11px] ml-1 inline-block">
+                        <span className="font-semibold text-gray-900 dark:text-white bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 px-1.5 py-0.5 rounded text-[11px] ml-1 inline-block">
                           {feat.val}
                         </span>
                       </span>
@@ -174,7 +174,7 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
               {plan.current ? (
                 <button
                   disabled
-                  className="w-full py-2.5 rounded-xl border border-white/10 bg-white/5 text-zinc-500 text-xs font-semibold cursor-not-allowed"
+                  className="w-full py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-400 dark:text-zinc-500 text-xs font-semibold cursor-not-allowed"
                 >
                   Current Plan
                 </button>
@@ -184,8 +184,8 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
                   onClick={() => navigate("/credits-subscriptions")}
                   className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all shadow-md ${
                     plan.popular
-                      ? "bg-white text-black hover:bg-zinc-200"
-                      : "bg-white/10 border border-white/10 text-white hover:bg-white/20"
+                      ? "bg-gray-900 text-white hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                      : "bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-white/20"
                   }`}
                 >
                   Subscribe / Upgrade

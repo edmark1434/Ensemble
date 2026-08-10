@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { lazy, Suspense, type ComponentType } from 'react'
+import { lazy, Suspense, type ComponentType, useEffect } from 'react'
 import {ToastProvider} from "@/components/utility/toast_provider.tsx";
+import useGlobalState from '@/lib/global_state';
 import RouteMiddleware from './lib/RouteMiddleware'
 import StaffMiddleware from './lib/StaffMiddleware'
 
@@ -114,6 +115,18 @@ const PageSubmitATicket = lazyPage(() => import('./pages/landing/pages/page_Subm
 const PageSupportUs = lazyPage(() => import('./pages/landing/pages/page_SupportUs'));
 
 function App() {
+  const theme = useGlobalState((state) => state.theme);
+  const setTheme = useGlobalState((state) => state.setTheme);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && (e.key === 'p' || e.key === 'P')) {
+        setTheme(theme === 'dark' ? 'light' : 'dark');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [theme, setTheme]);
 
   return (
     <>

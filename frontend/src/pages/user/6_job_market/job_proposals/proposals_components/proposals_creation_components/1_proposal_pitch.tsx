@@ -91,14 +91,14 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
   return (
     <div className="space-y-5 text-left">
       <div>
-        <h2 className="text-lg font-bold text-white mb-0.5">Cover Pitch & Pricing</h2>
-        <p className="text-xs text-zinc-400">Specify your proposal bid within the client's budget and state your pitch.</p>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-0.5">Cover Pitch & Pricing</h2>
+        <p className="text-xs text-gray-500 dark:text-zinc-400">Specify your proposal bid within the client's budget and state your pitch.</p>
       </div>
 
       {/* Target Client Budget Banner */}
       {job && (
         <div className="p-3.5 rounded-xl border border-yellow-500/20 bg-yellow-500/5 flex items-center justify-between">
-          <span className="text-xs text-zinc-400 font-medium">Target Job Budget Pool</span>
+          <span className="text-xs text-gray-500 dark:text-zinc-400 font-medium">Target Job Budget Pool</span>
           <span className="text-sm font-extrabold text-yellow-500 flex items-center gap-1.5">
             <CreditIcon className="h-4 w-4" /> {job.priceRange}
           </span>
@@ -109,7 +109,7 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* Bid Input */}
         <div className="space-y-1.5">
-          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+          <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
             Your Proposed Bid (PHP) <span className="text-red-500">*</span>
           </label>
           <div className="relative">
@@ -126,8 +126,8 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
                   return rest;
                 });
               }}
-              className={`w-full rounded-xl border bg-white/5 pl-10 pr-3.5 py-2.5 text-xs text-white outline-none transition-all ${
-                errors.bidAmount ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-blue-500/50"
+              className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-3.5 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
+                errors.bidAmount ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
               }`}
             />
           </div>
@@ -136,7 +136,7 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
           {/* Platform Fee Indicator */}
           {bidAmount && Number(bidAmount) > 0 && (
             <div className="pt-2 space-y-1.5">
-              <div className="flex justify-between items-center text-[10px] text-zinc-500">
+              <div className="flex justify-between items-center text-[10px] text-gray-500 dark:text-zinc-500">
                 <span>10% Platform Fee</span>
                 <span>- {formatCommaString(String(Number(bidAmount) * 0.10))}</span>
               </div>
@@ -150,20 +150,20 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
 
         {/* Additional Work Rate Dropdown */}
         <div className="space-y-1.5 relative">
-          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+          <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block">
             Additional Work Rate <span className="text-red-500">*</span>
           </label>
           <div className="relative">
             <button
               type="button"
               onClick={() => setIsRateOpen(!isRateOpen)}
-              className="w-full flex items-center justify-between rounded-xl border border-white/10 bg-[#0d0f1a] px-3.5 py-2.5 text-xs text-left transition hover:border-white/20"
+              className="w-full flex items-center justify-between rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] px-3.5 py-2.5 text-xs text-left transition hover:border-white/20"
             >
-              <span className="text-white font-medium flex items-center gap-2">
+              <span className="text-gray-900 dark:text-white font-medium flex items-center gap-2">
                 <Percent className="h-3.5 w-3.5 text-blue-400" />
                 {selectedRateLabel}
               </span>
-              <ChevronDown className={`h-4 w-4 text-zinc-400 transition-transform ${isRateOpen ? "rotate-180 text-blue-400" : ""}`} />
+              <ChevronDown className={`h-4 w-4 text-gray-500 dark:text-zinc-400 transition-transform ${isRateOpen ? "rotate-180 text-blue-400" : ""}`} />
             </button>
 
             <AnimatePresence>
@@ -174,7 +174,7 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
                     initial={{ opacity: 0, y: -6 }}
                     animate={{ opacity: 1, y: 4 }}
                     exit={{ opacity: 0, y: -6 }}
-                    className="absolute left-0 right-0 z-30 rounded-xl border border-white/10 bg-[#0d0f1a] p-1.5 shadow-2xl space-y-0.5"
+                    className="absolute left-0 right-0 z-30 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-1.5 shadow-2xl space-y-0.5"
                   >
                     {additionalWorkRates.map((rate) => {
                       const isSelected = additionalWorkRate === rate.value;
@@ -187,7 +187,7 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
                             setIsRateOpen(false);
                           }}
                           className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
-                            isSelected ? "bg-blue-500/15 text-blue-400" : "text-zinc-300 hover:bg-white/5 hover:text-white"
+                            isSelected ? "bg-blue-500/15 text-blue-400" : "text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:text-white"
                           }`}
                         >
                           <span>{rate.label}</span>
@@ -200,41 +200,41 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
               )}
             </AnimatePresence>
           </div>
-          <p className="text-[10px] text-zinc-500">Rate added if client requests revisions beyond a milestone's quota.</p>
+          <p className="text-[10px] text-gray-500 dark:text-zinc-500">Rate added if client requests revisions beyond a milestone's quota.</p>
         </div>
       </div>
 
       {/* Cover Letter Pitch */}
       <div className="space-y-1.5">
         <div className="flex justify-between items-end mb-1">
-          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+          <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block mb-1">
             Cover Letter / Pitch <span className="text-red-500">*</span>
           </label>
           <div className="flex items-center gap-1">
-            <button type="button" onClick={() => insertMarkdown('**', '**')} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 transition-colors" title="Bold" disabled={isPreviewMode}>
+            <button type="button" onClick={() => insertMarkdown('**', '**')} className="p-1 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors" title="Bold" disabled={isPreviewMode}>
               <Bold className="w-3.5 h-3.5" />
             </button>
-            <button type="button" onClick={() => insertMarkdown('*', '*')} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 transition-colors" title="Italic" disabled={isPreviewMode}>
+            <button type="button" onClick={() => insertMarkdown('*', '*')} className="p-1 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors" title="Italic" disabled={isPreviewMode}>
               <Italic className="w-3.5 h-3.5" />
             </button>
-            <button type="button" onClick={() => insertMarkdown('- ')} className="p-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 transition-colors" title="Bullet List" disabled={isPreviewMode}>
+            <button type="button" onClick={() => insertMarkdown('- ')} className="p-1 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-300 transition-colors" title="Bullet List" disabled={isPreviewMode}>
               <List className="w-3.5 h-3.5" />
             </button>
-            <div className="w-px h-4 bg-white/10 mx-1" />
-            <button type="button" onClick={() => setIsPreviewMode(!isPreviewMode)} className={`p-1 rounded transition-colors flex items-center gap-1 px-2 ${isPreviewMode ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 hover:bg-white/10 text-zinc-300'}`} title="Toggle Preview">
+            <div className="w-px h-4 bg-gray-100 dark:bg-white/10 mx-1" />
+            <button type="button" onClick={() => setIsPreviewMode(!isPreviewMode)} className={`p-1 rounded transition-colors flex items-center gap-1 px-2 ${isPreviewMode ? 'bg-blue-500/20 text-blue-400' : 'bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-300'}`} title="Toggle Preview">
               {isPreviewMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               <span className="text-[10px] font-bold uppercase">{isPreviewMode ? 'Edit' : 'Preview'}</span>
             </button>
-            <span className="text-[10px] font-mono text-zinc-500 ml-2">{coverLetter.length}/2000</span>
+            <span className="text-[10px] font-mono text-gray-500 dark:text-zinc-500 ml-2">{coverLetter.length}/2000</span>
           </div>
         </div>
 
         {isPreviewMode ? (
-          <div className="w-full min-h-[160px] rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs overflow-y-auto custom-scrollbar">
+          <div className="w-full min-h-[160px] rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-4 py-3 text-xs overflow-y-auto custom-scrollbar">
             {coverLetter ? (
               <JobRichText content={coverLetter} />
             ) : (
-              <span className="text-zinc-500 italic">Nothing to preview</span>
+              <span className="text-gray-500 dark:text-zinc-500 italic">Nothing to preview</span>
             )}
           </div>
         ) : (
@@ -253,8 +253,8 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
                 });
               }
             }}
-            className={`w-full min-h-[160px] rounded-xl border bg-white/5 p-3.5 text-xs text-white outline-none transition-all resize-y leading-relaxed custom-scrollbar ${
-              errors.coverLetter ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-blue-500/50"
+            className={`w-full min-h-[160px] rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3.5 text-xs text-gray-900 dark:text-white outline-none transition-all resize-y leading-relaxed custom-scrollbar ${
+              errors.coverLetter ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
             }`}
           />
         )}
@@ -263,11 +263,11 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
       </div>
 
       {/* Footer Controls */}
-      <div className="pt-4 border-t border-white/5 flex gap-2.5">
+      <div className="pt-4 border-t border-gray-100 dark:border-white/5 flex gap-2.5">
         <button
           type="button"
           onClick={onDiscard}
-          className="px-4 py-2.5 rounded-xl border border-white/10 text-zinc-400 font-bold hover:text-red-400 transition text-xs"
+          className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 font-bold hover:text-red-400 transition text-xs"
         >
           Discard
         </button>

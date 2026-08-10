@@ -11,7 +11,7 @@ const SectionPlaceholder = ({
   subtitle = "This section is currently under construction." 
 }: SectionPlaceholderProps) => {
   return (
-    <div className="min-h-screen bg-[#080a12]">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
       {/* Top Header */}
       <UserHeader pageTitle={title} credits={1250} />
 
@@ -19,7 +19,7 @@ const SectionPlaceholder = ({
       <div className="mx-auto max-w-7xl p-6 md:p-8">
         
         {/* Placeholder Card */}
-        <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/5 via-white/5 to-transparent p-12 backdrop-blur-sm transition-all duration-500 hover:border-cyan-500/30 hover:shadow-2xl hover:shadow-cyan-500/10">
+        <div className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 via-white/5 to-transparent p-12 backdrop-blur-sm transition-all duration-500 hover:border-cyan-500/30 hover:shadow-2xl hover:shadow-cyan-500/10">
           
           {/* Animated Gradient Border */}
           <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-cyan-500/30 via-yellow-500/30 to-purple-500/30 opacity-40 animate-gradient-xy" />
@@ -41,7 +41,7 @@ const SectionPlaceholder = ({
 
           {/* Title */}
           <h1 
-            className="mb-3 text-center text-3xl font-bold text-white md:text-4xl animate-slide-right-subtle"
+            className="mb-3 text-center text-3xl font-bold text-gray-900 dark:text-white md:text-4xl animate-slide-right-subtle"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
             {title}
@@ -49,7 +49,7 @@ const SectionPlaceholder = ({
 
           {/* Subtitle */}
           <p 
-            className="text-center text-sm text-zinc-400 md:text-base animate-slide-right-subtle-delayed"
+            className="text-center text-sm text-gray-500 dark:text-zinc-400 md:text-base animate-slide-right-subtle-delayed"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
             {subtitle}

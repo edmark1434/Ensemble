@@ -16,7 +16,7 @@ const JobListViewType: React.FC<JobListViewTypeProps> = ({ viewType, onViewTypeC
   ];
 
   return (
-    <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 p-1 backdrop-blur-sm">
+    <div className="flex items-center gap-1 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 p-1 backdrop-blur-sm">
       {options.map((opt) => {
         const isActive = viewType === opt.type;
 
@@ -25,13 +25,13 @@ const JobListViewType: React.FC<JobListViewTypeProps> = ({ viewType, onViewTypeC
             key={opt.type}
             onClick={() => onViewTypeChange(opt.type)}
             className={`relative flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors duration-200 ${
-              isActive ? "text-blue-400" : "text-zinc-400 hover:text-white"
+              isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
             }`}
           >
             {isActive && (
               <motion.div
                 layoutId="activeViewType"
-                className="absolute inset-0 rounded-lg bg-blue-500/15 border border-blue-500/30"
+                className="absolute inset-0 rounded-lg bg-blue-50 dark:bg-blue-500/15 border border-blue-200 dark:border-blue-500/30"
                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
               />
             )}

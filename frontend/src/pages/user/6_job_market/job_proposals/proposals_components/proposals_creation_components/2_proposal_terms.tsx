@@ -48,25 +48,25 @@ export const ProposalTermsStep: React.FC<ProposalTermsProps> = ({
   return (
     <div className="space-y-5 text-left">
       <div>
-        <h2 className="text-lg font-bold text-white mb-0.5">Terms of Service (TOS)</h2>
-        <p className="text-xs text-zinc-400">Select an existing TOS template or edit standard agreement terms for the client.</p>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-0.5">Terms of Service (TOS)</h2>
+        <p className="text-xs text-gray-500 dark:text-zinc-400">Select an existing TOS template or edit standard agreement terms for the client.</p>
       </div>
 
       {/* Template Selector Dropdown */}
       <div className="space-y-1.5 relative">
-        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+        <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block">
           Select TOS Preset
         </label>
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="w-full flex items-center justify-between rounded-xl border border-white/10 bg-[#0d0f1a] px-3.5 py-2.5 text-xs text-left transition hover:border-white/20"
+          className="w-full flex items-center justify-between rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] px-3.5 py-2.5 text-xs text-left transition hover:border-white/20"
         >
-          <span className="text-white font-medium flex items-center gap-2">
+          <span className="text-gray-900 dark:text-white font-medium flex items-center gap-2">
             <FileText className="h-3.5 w-3.5 text-blue-400" />
             {selectedName}
           </span>
-          <ChevronDown className={`h-4 w-4 text-zinc-400 transition-transform ${isOpen ? "rotate-180 text-blue-400" : ""}`} />
+          <ChevronDown className={`h-4 w-4 text-gray-500 dark:text-zinc-400 transition-transform ${isOpen ? "rotate-180 text-blue-400" : ""}`} />
         </button>
 
         <AnimatePresence>
@@ -77,7 +77,7 @@ export const ProposalTermsStep: React.FC<ProposalTermsProps> = ({
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 4 }}
                 exit={{ opacity: 0, y: -6 }}
-                className="absolute left-0 right-0 z-30 rounded-xl border border-white/10 bg-[#0d0f1a] p-1.5 shadow-2xl space-y-0.5"
+                className="absolute left-0 right-0 z-30 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-1.5 shadow-2xl space-y-0.5"
               >
                 {sampleTosTemplates.map((tmpl) => {
                   const isSelected = selectedTosId === tmpl.id;
@@ -90,7 +90,7 @@ export const ProposalTermsStep: React.FC<ProposalTermsProps> = ({
                         setIsOpen(false);
                       }}
                       className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
-                        isSelected ? "bg-blue-500/15 text-blue-400" : "text-zinc-300 hover:bg-white/5 hover:text-white"
+                        isSelected ? "bg-blue-500/15 text-blue-400" : "text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:text-white"
                       }`}
                     >
                       <span>{tmpl.name}</span>
@@ -107,24 +107,24 @@ export const ProposalTermsStep: React.FC<ProposalTermsProps> = ({
       {/* Editable TOS Area */}
       <div className="space-y-1.5">
         <div className="flex justify-between items-center">
-          <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1">
-            <Edit3 className="h-3 w-3 text-zinc-400" /> Active Contract Terms (Editable)
+          <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1">
+            <Edit3 className="h-3 w-3 text-gray-500 dark:text-zinc-400" /> Active Contract Terms (Editable)
           </label>
         </div>
         <textarea
           rows={9}
           value={tosContent}
           onChange={(e) => setTosContent(e.target.value)}
-          className="w-full min-h-[180px] rounded-xl border border-white/10 bg-white/5 p-3.5 text-xs text-white outline-none focus:border-blue-500/50 transition-all resize-y leading-relaxed font-mono"
+          className="w-full min-h-[180px] rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3.5 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500/50 transition-all resize-y leading-relaxed font-mono"
         />
       </div>
 
       {/* Actions */}
-      <div className="pt-4 border-t border-white/5 flex gap-2.5">
+      <div className="pt-4 border-t border-gray-100 dark:border-white/5 flex gap-2.5">
         <button
           type="button"
           onClick={onBack}
-          className="px-4 py-2.5 rounded-xl border border-white/10 text-zinc-400 font-bold hover:text-white transition text-xs"
+          className="px-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 font-bold hover:text-gray-900 dark:text-white transition text-xs"
         >
           Go Back
         </button>
