@@ -38,6 +38,14 @@ async function ensureChatIndexes(database) {
       { conversation_type: 1, gig_id: 1 },
       { name: 'chat_inbox_gig_context', sparse: true }
     ),
+    database.collection('google_meet_connections').createIndex(
+      { account_id: 1 },
+      { name: 'google_meet_connections_account', unique: true }
+    ),
+    database.collection('google_meetings').createIndex(
+      { conversation_id: 1, status: 1, started_at: -1 },
+      { name: 'google_meetings_conversation_status' }
+    ),
   ]);
 }
 

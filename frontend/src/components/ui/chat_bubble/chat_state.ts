@@ -31,6 +31,7 @@ interface SocketAck<T> {
 }
 
 export interface ChatCall {
+  provider?: "webrtc" | "google-meet";
   callId: string;
   conversationId: string;
   peerAccountId: string;
@@ -46,6 +47,7 @@ export interface ChatCall {
   callerName?: string;
   callerId?: string;
   participantIds?: string[];
+  startedByAccountId?: string;
 }
 
 export interface GroupCallSummary {
@@ -91,6 +93,20 @@ interface CallSignal {
   media_states?: Record<string, { video: boolean; audio: boolean }>;
 }
 
+export interface GoogleMeetingEvent {
+  meeting_id: string;
+  conversation_id: string;
+  requested_by_account_id: string;
+  requester_name?: string | null;
+  requester_avatar?: string | null;
+  provider: "google-meet";
+  status: "scheduled" | "requested" | "active" | "ended";
+  participant_ids?: string[];
+  started_at: string;
+  scheduled_at?: string | null;
+  ended_at?: string | null;
+}
+
 interface ChatState {
   conversations: Inbox[];
   messagesByConversation: Record<string, Message[]>;
@@ -104,6 +120,13 @@ interface ChatState {
   loadingConversations: boolean;
   loadingMessages: Record<string, boolean>;
   activeCall: ChatCall | null;
+  meetingCreationPrompt: {
+    conversationId: string;
+    targetAccountId: string;
+    peerName?: string;
+    peerAvatar?: string;
+  } | null;
+  googleMeetingsByConversation: Record<string, GoogleMeetingEvent>;
   groupCallsByConversation: Record<string, GroupCallSummary>;
   localCallStream: MediaStream | null;
   remoteCallStream: MediaStream | null;
@@ -176,11 +199,21 @@ interface ChatState {
   startCall: (
     conversationId: string,
     targetAccountId: string,
-    peer?: { name?: string; avatar?: string }
+    peer?: {
+      name?: string;
+      avatar?: string;
+      oauthResumed?: boolean;
+      creationMode?: "instant" | "scheduled";
+      scheduledAt?: string;
+    }
   ) => Promise<void>;
+  cancelMeetingCreation: () => void;
+  submitMeetingCreation: (mode: "instant" | "scheduled", scheduledAt?: string) => Promise<void>;
   acceptCall: () => Promise<void>;
   rejectCall: () => Promise<void>;
   endCall: () => Promise<void>;
+  joinGoogleMeeting: (meeting: GoogleMeetingEvent) => Promise<void>;
+  endGoogleMeeting: (meeting: GoogleMeetingEvent) => Promise<void>;
   endCallForEveryone: () => Promise<void>;
   joinGroupCall: (conversationId: string) => Promise<void>;
   toggleCallCamera: () => Promise<boolean>;
@@ -199,6 +232,8 @@ const chatMediaUrl = (key: string) => {
 };
 let authenticatedAccountId: string | null = null;
 let listenersBound = false;
+let presenceRefreshInterval: ReturnType<typeof setInterval> | null = null;
+let pendingGoogleMeetingWindow: Window | null = null;
 let conversationsRequest: Promise<void> | null = null;
 const messageRequests = new Map<string, Promise<void>>();
 const loadedConversationIds = new Set<string>();
@@ -505,7 +540,10 @@ export function formatCallDuration(totalSeconds: number) {
 }
 
 export function formatCallCardText(content = "") {
-  const text = content.replace(/^\[video-call:(?:missed|ended)\]\s*/, "");
+  const text = content.replace(
+    /^(?:\[video-call:(?:missed|ended)\]|\[meeting:(?:requested|ended):[^\]]+\]|\[zoom-call:(?:started|ended):[^\]]+\])\s*/,
+    ""
+  );
   return text.replace(/(\d+)\s+secs?\b/i, (_match, seconds) =>
     formatCallDuration(Number(seconds))
   );
@@ -640,8 +678,16 @@ function reconcileMessage(message: Message, isNewMessage = false) {
   });
 
   const state = useChatState.getState();
+  const isConversationOpen =
+    state.activeConversationId === conversationId ||
+    (state.isFloatingOpen &&
+      state.floatingWindows.some((chatWindow) =>
+        [chatWindow.id, chatWindow.inbox_id].some(
+          (id) => String(id) === conversationId
+        )
+      ));
   if (
-    state.activeConversationId === conversationId &&
+    isConversationOpen &&
     isNewMessage &&
     !existedBefore &&
     authenticatedAccountId &&
@@ -655,15 +701,42 @@ function reconcileMessage(message: Message, isNewMessage = false) {
 function bindSocketListeners() {
   if (listenersBound) return;
   listenersBound = true;
+  const requestPresenceSnapshot = () => {
+    if (socket.connected) socket.emit("getPresenceSnapshot", {});
+  };
+  socket.on("connect", requestPresenceSnapshot);
+  const refreshPresenceWhenVisible = () => {
+    if (document.visibilityState === "visible") requestPresenceSnapshot();
+  };
+  document.addEventListener("visibilitychange", refreshPresenceWhenVisible);
+  presenceRefreshInterval ||= setInterval(requestPresenceSnapshot, 20_000);
+
+  const markVisibleConversationRead = () => {
+    if (document.visibilityState !== "visible") return;
+    const state = useChatState.getState();
+    const openConversationIds = new Set<string>();
+    if (state.activeConversationId) openConversationIds.add(String(state.activeConversationId));
+    if (state.isFloatingOpen) {
+      state.floatingWindows.forEach((chatWindow) =>
+        openConversationIds.add(String(chatWindow.inbox_id || chatWindow.id))
+      );
+    }
+    openConversationIds.forEach((conversationId) =>
+      state.markConversationRead(conversationId)
+    );
+  };
 
   socket.on("connect", () => {
     if (authenticatedAccountId) {
       void useChatState
         .getState()
         .fetchConversations()
+        .then(markVisibleConversationRead)
         .catch((error) => console.error("Unable to refresh chats:", error));
     }
   });
+  window.addEventListener("focus", markVisibleConversationRead);
+  document.addEventListener("visibilitychange", markVisibleConversationRead);
   socket.on("newMessage", (message: Message) =>
     reconcileMessage(message, true)
   );
@@ -828,6 +901,19 @@ function bindSocketListeners() {
     }
   );
   socket.on(
+    "presenceSnapshot",
+    ({ members }: { members: Array<{ account_id: string; is_online: boolean }> }) => {
+      useChatState.setState((state) => ({
+        onlineAccounts: {
+          ...state.onlineAccounts,
+          ...Object.fromEntries(
+            members.map((member) => [String(member.account_id), member.is_online])
+          ),
+        },
+      }));
+    }
+  );
+  socket.on(
     "presenceChanged",
     ({
       account_id,
@@ -887,6 +973,81 @@ function bindSocketListeners() {
       }));
     }
   );
+  socket.on("googleMeetingRequested", (event: GoogleMeetingEvent) => {
+    useChatState.setState((state) => ({
+      googleMeetingsByConversation: {
+        ...state.googleMeetingsByConversation,
+        [String(event.conversation_id)]: event,
+      },
+    }));
+    if (String(event.requested_by_account_id) === String(authenticatedAccountId)) return;
+    if (event.status === "scheduled") {
+      toast(`${event.requester_name || "Someone"} scheduled a meeting.`);
+      return;
+    }
+    const state = useChatState.getState();
+    if (state.activeCall) return;
+    const conversation = state.conversations.find(
+      (item) => String(item._id) === String(event.conversation_id)
+    );
+    startRing();
+    useChatState.setState({
+      activeCall: {
+        provider: "google-meet",
+        callId: String(event.meeting_id),
+        conversationId: String(event.conversation_id),
+        peerAccountId: String(event.requested_by_account_id),
+        peerName: event.requester_name || conversation?.conversation_name || "Someone",
+        peerAvatar: event.requester_avatar || undefined,
+        direction: "incoming",
+        status: "ringing",
+        startedAt: new Date(event.started_at).getTime(),
+        conversationType: conversation?.conversation_type,
+        groupName: conversation?.conversation_name,
+        callerId: String(event.requested_by_account_id),
+        callerName: event.requester_name || undefined,
+        startedByAccountId: String(event.requested_by_account_id),
+        participantIds: event.participant_ids || [],
+      },
+    });
+  });
+
+  window.addEventListener("message", (event) => {
+    if (event.origin !== window.location.origin || event.data?.type !== "ensemble:google-meeting-closed") return;
+    const activeCall = useChatState.getState().activeCall;
+    if (activeCall?.provider === "google-meet") useChatState.setState({ activeCall: null });
+  });
+
+  socket.on("googleMeetingEnded", (event: GoogleMeetingEvent) => {
+    useChatState.setState((state) => {
+      const googleMeetingsByConversation = { ...state.googleMeetingsByConversation };
+      delete googleMeetingsByConversation[String(event.conversation_id)];
+      return { googleMeetingsByConversation };
+    });
+    const activeCall = useChatState.getState().activeCall;
+    if (activeCall?.provider !== "google-meet" || activeCall.callId !== String(event.meeting_id)) return;
+    stopRing();
+    useChatState.setState({ activeCall: null });
+    toast("The meeting has ended.");
+  });
+  socket.on("googleMeetingUpdated", (event: GoogleMeetingEvent) => {
+    useChatState.setState((state) => ({
+      googleMeetingsByConversation: {
+        ...state.googleMeetingsByConversation,
+        [String(event.conversation_id)]: event,
+      },
+    }));
+    const activeCall = useChatState.getState().activeCall;
+    if (activeCall?.provider !== "google-meet" || activeCall.callId !== String(event.meeting_id)) return;
+    useChatState.setState({
+      activeCall: {
+        ...activeCall,
+        participantIds: event.participant_ids || activeCall.participantIds,
+        status: "active",
+      },
+    });
+  });
+
   socket.on("callSignal", async (callSignal: CallSignal) => {
     const state = useChatState.getState();
     if (callSignal.signal_type === "offer") {
@@ -1177,6 +1338,8 @@ const useChatState = create<ChatState>((set, get) => ({
   loadingConversations: false,
   loadingMessages: {},
   activeCall: null,
+  meetingCreationPrompt: null,
+  googleMeetingsByConversation: {},
   groupCallsByConversation: {},
   localCallStream: null,
   remoteCallStream: null,
@@ -1197,6 +1360,7 @@ const useChatState = create<ChatState>((set, get) => ({
         typingByConversation: {},
         onlineAccounts: {},
         activeCall: null,
+        googleMeetingsByConversation: {},
         groupCallsByConversation: {},
         localCallStream: null,
         remoteCallStream: null,
@@ -1295,6 +1459,43 @@ const useChatState = create<ChatState>((set, get) => ({
         }));
         loadedConversationIds.add(id);
         socket.emit("joinRoom", { conversation_id: id });
+        const activeGoogleMeeting = await api
+          .get<GoogleMeetingEvent | null>(`/api/google-meet/conversations/${id}/active`)
+          .then((result) => result.data)
+          .catch(() => null);
+        set((state) => {
+          const meetings = { ...state.googleMeetingsByConversation };
+          if (activeGoogleMeeting) meetings[id] = activeGoogleMeeting;
+          else delete meetings[id];
+          return { googleMeetingsByConversation: meetings };
+        });
+        if (
+          !get().activeCall &&
+          activeGoogleMeeting?.status === "requested" &&
+          String(activeGoogleMeeting.requested_by_account_id) !== String(authenticatedAccountId)
+        ) {
+            const conversation = get().conversations.find(
+              (item) => String(item._id) === id
+            );
+            set({
+              activeCall: {
+                provider: "google-meet",
+                callId: String(activeGoogleMeeting.meeting_id),
+                conversationId: id,
+                peerAccountId: String(activeGoogleMeeting.requested_by_account_id),
+                peerName: activeGoogleMeeting.requester_name || conversation?.conversation_name || "Someone",
+                peerAvatar: activeGoogleMeeting.requester_avatar || undefined,
+                direction: "incoming",
+                status: "ringing",
+                startedAt: new Date(activeGoogleMeeting.started_at).getTime(),
+                conversationType: conversation?.conversation_type,
+                callerId: String(activeGoogleMeeting.requested_by_account_id),
+                callerName: activeGoogleMeeting.requester_name || undefined,
+                startedByAccountId: String(activeGoogleMeeting.requested_by_account_id),
+                participantIds: activeGoogleMeeting.participant_ids || [],
+              },
+            });
+        }
       } finally {
         set((state) => ({
           loadingMessages: { ...state.loadingMessages, [id]: false },
@@ -1638,58 +1839,167 @@ const useChatState = create<ChatState>((set, get) => ({
 
   startCall: async (conversationId, targetAccountId, peer = {}) => {
     if (get().activeCall) return;
-    const callId = crypto.randomUUID();
-    const conversation = get().conversations.find(
-      (item) => String(item._id) === String(conversationId)
-    );
-    const isGroup = conversation?.conversation_type === "group";
-    const call: ChatCall = {
-      callId,
-      conversationId: String(conversationId),
-      peerAccountId: String(targetAccountId),
-      peerName: peer.name,
-      peerAvatar: peer.avatar,
-      direction: "outgoing",
-      status: "ringing",
-      startedAt: Date.now(),
-      conversationType: conversation?.conversation_type,
-      groupName: isGroup ? conversation?.conversation_name : undefined,
-      groupAvatar: isGroup ? conversation?.conversation_image_key : undefined,
-      callerName: authenticatedAccountId || undefined,
-      callerId: authenticatedAccountId || undefined,
-      participantIds: authenticatedAccountId ? [authenticatedAccountId] : [],
-    };
-    set({
-      activeCall: call,
-    });
-    try {
-      let offer: RTCSessionDescriptionInit | null = null;
-      if (!isGroup) {
-        const peerConnection = await createCallPeer(call);
-        offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-      }
-      const response = await emitWithAck<CallSignal>("callSignal", {
-        call_id: callId,
-        conversation_id: String(conversationId),
-        target_account_id: isGroup ? undefined : String(targetAccountId),
-        signal_type: "offer",
-        signal: offer,
+    if (!peer.creationMode) {
+      set({
+        meetingCreationPrompt: {
+          conversationId: String(conversationId),
+          targetAccountId: String(targetAccountId),
+          peerName: peer.name,
+          peerAvatar: peer.avatar,
+        },
       });
-      if (response.signal_type === "busy") {
-        releaseCallMedia();
-        set((state) => ({
-          activeCall: state.activeCall
-            ? { ...state.activeCall, status: "busy" }
-            : null,
-        }));
+      return;
+    }
+    try {
+      const response = await api.post<GoogleMeetingEvent>("/api/google-meet/meetings", {
+        conversation_id: String(conversationId),
+        mode: peer.creationMode,
+        scheduled_at: peer.scheduledAt,
+      });
+      const meeting = response.data;
+      set((state) => ({
+        googleMeetingsByConversation: {
+          ...state.googleMeetingsByConversation,
+          [String(conversationId)]: meeting,
+        },
+      }));
+      if (peer.creationMode === "instant") {
+        await get().joinGoogleMeeting(meeting);
+        toast.success("Instant meeting created.");
       } else {
-        scheduleCallTimeout(callId, response.expires_at);
+        pendingGoogleMeetingWindow?.close();
+        pendingGoogleMeetingWindow = null;
+        toast.success("Meeting scheduled and shared with the conversation.");
       }
-    } catch (error) {
-      releaseCallMedia();
-      set({ activeCall: null });
-      throw error;
+    } catch (error: any) {
+      if (
+        error?.response?.status === 409 &&
+        /already has an active meeting/i.test(error?.response?.data?.error || "")
+      ) {
+        const active = await api
+          .get<GoogleMeetingEvent | null>(`/api/google-meet/conversations/${conversationId}/active`)
+          .then((response) => response.data)
+          .catch(() => null);
+        if (active) {
+          set((state) => ({
+            googleMeetingsByConversation: {
+              ...state.googleMeetingsByConversation,
+              [String(conversationId)]: active,
+            },
+          }));
+          pendingGoogleMeetingWindow?.close();
+          pendingGoogleMeetingWindow = null;
+          toast("Restored the active meeting display.");
+          return;
+        }
+      }
+      if (
+        error?.response?.status === 409 &&
+        /(?:connect your google|reconnect your google)/i.test(error?.response?.data?.error || "")
+      ) {
+        const connection = await api.get<{ authorization_url: string }>("/api/google-meet/connect");
+        const authWindow = pendingGoogleMeetingWindow && !pendingGoogleMeetingWindow.closed
+          ? pendingGoogleMeetingWindow
+          : window.open("about:blank", "ensemble-google-connect", "popup=yes,width=600,height=760,resizable=yes");
+        if (authWindow) {
+          pendingGoogleMeetingWindow = authWindow;
+          authWindow.location.replace(connection.data.authorization_url);
+          const redirect = new URL(connection.data.authorization_url).searchParams.get("redirect_uri");
+          const callbackOrigin = redirect ? new URL(redirect).origin : "";
+          let resumed = false;
+          const resumeMeetingRequest = () => {
+            if (resumed) return;
+            resumed = true;
+            window.removeEventListener("message", resumeAfterGoogleConnect);
+            void get().startCall(conversationId, targetAccountId, { ...peer, oauthResumed: true });
+          };
+          const resumeAfterGoogleConnect = (messageEvent: MessageEvent) => {
+            if (messageEvent.origin !== callbackOrigin) return;
+            if (messageEvent.data?.type !== "ensemble:google-meet-connected") return;
+            resumeMeetingRequest();
+          };
+          window.addEventListener("message", resumeAfterGoogleConnect);
+          const closeWatcher = window.setInterval(async () => {
+            if (!authWindow.closed) return;
+            window.clearInterval(closeWatcher);
+            if (resumed) return;
+            const status = await api.get<{ connected: boolean }>("/api/google-meet/status").catch(() => null);
+            if (status?.data.connected) resumeMeetingRequest();
+          }, 750);
+        } else {
+          toast.error("Allow pop-ups for Ensemble to connect Google.");
+        }
+        return;
+      }
+      pendingGoogleMeetingWindow?.close();
+      pendingGoogleMeetingWindow = null;
+      toast.error(error?.response?.data?.error || "Unable to request the meeting.");
+      return;
+    }
+  },
+
+  cancelMeetingCreation: () => set({ meetingCreationPrompt: null }),
+
+  submitMeetingCreation: async (mode, scheduledAt) => {
+    const prompt = get().meetingCreationPrompt;
+    if (!prompt) return;
+    if (mode === "instant") {
+      pendingGoogleMeetingWindow = window.open("about:blank", "ensemble-google-meet", "popup=yes,width=1100,height=760,resizable=yes,scrollbars=yes");
+      if (!pendingGoogleMeetingWindow) {
+        toast.error("Allow pop-ups for Ensemble to create the meeting.");
+        return;
+      }
+      pendingGoogleMeetingWindow.document.write('<body style="margin:0;background:#080808;color:white;font:14px sans-serif;display:grid;place-items:center;height:100vh">Creating Google Meet...</body>');
+    }
+    set({ meetingCreationPrompt: null });
+    await get().startCall(prompt.conversationId, prompt.targetAccountId, {
+      name: prompt.peerName,
+      avatar: prompt.peerAvatar,
+      creationMode: mode,
+      scheduledAt,
+    });
+  },
+
+  joinGoogleMeeting: async (meeting) => {
+    const popup = pendingGoogleMeetingWindow && !pendingGoogleMeetingWindow.closed
+      ? pendingGoogleMeetingWindow
+      : window.open("about:blank", "ensemble-google-meet", "popup=yes,width=1100,height=760,resizable=yes,scrollbars=yes");
+    pendingGoogleMeetingWindow = null;
+    if (!popup) {
+      toast.error("Allow pop-ups for Ensemble to join the meeting.");
+      return;
+    }
+    try {
+      const response = await api.post<GoogleMeetingEvent & { meeting_url: string }>(
+        `/api/google-meet/meetings/${meeting.meeting_id}/join`
+      );
+      set((state) => ({
+        googleMeetingsByConversation: {
+          ...state.googleMeetingsByConversation,
+          [String(meeting.conversation_id)]: response.data,
+        },
+      }));
+      popup.location.replace(response.data.meeting_url);
+      popup.focus();
+      const watcher = window.setInterval(() => {
+        if (!popup.closed) return;
+        window.clearInterval(watcher);
+        void api.post(`/api/google-meet/meetings/${meeting.meeting_id}/leave`).catch(() => undefined);
+      }, 1000);
+    } catch (error: any) {
+      popup.close();
+      toast.error(error?.response?.data?.error || "Unable to join the meeting.");
+    }
+  },
+
+  endGoogleMeeting: async (meeting) => {
+    try {
+      const response = await api.post<{ provider_end_error?: string | null }>(`/api/google-meet/meetings/${meeting.meeting_id}/end`);
+      if (response.data.provider_end_error) {
+        toast.error(`Ensemble ended the meeting, but Google Meet reported: ${response.data.provider_end_error}`);
+      }
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || "Unable to end the meeting.");
     }
   },
 
@@ -1698,6 +2008,12 @@ const useChatState = create<ChatState>((set, get) => ({
     if (!call || call.direction !== "incoming") return;
     clearCallTimeout();
     stopRing();
+    if (call.provider === "google-meet") {
+      const meeting = get().googleMeetingsByConversation[call.conversationId];
+      if (meeting) await get().joinGoogleMeeting(meeting);
+      set({ activeCall: null });
+      return;
+    }
     try {
       const peerConnection =
         call.conversationType === "group"
@@ -1737,6 +2053,11 @@ const useChatState = create<ChatState>((set, get) => ({
   rejectCall: async () => {
     const call = get().activeCall;
     if (!call) return;
+    if (call.provider === "google-meet") {
+      stopRing();
+      set({ activeCall: null });
+      return;
+    }
     try {
       await emitWithAck<CallSignal>("callSignal", {
         call_id: call.callId,
@@ -1758,6 +2079,16 @@ const useChatState = create<ChatState>((set, get) => ({
   endCall: async () => {
     const call = get().activeCall;
     if (!call) return;
+    if (call.provider === "google-meet") {
+      try {
+        if (String(call.startedByAccountId) === String(authenticatedAccountId)) {
+          await api.post(`/api/google-meet/meetings/${call.callId}/end`);
+        }
+      } finally {
+        set({ activeCall: null });
+      }
+      return;
+    }
     try {
       const response = await emitWithAck<CallSignal>("callSignal", {
         call_id: call.callId,

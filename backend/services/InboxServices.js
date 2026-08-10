@@ -498,13 +498,15 @@ async function createMessageServices(payload, accountId, options = {}) {
     const { inbox, document } = await buildMessage(payload, accountId);
     const insertedId = await createMessageRepositories(document);
     const message = await getMessageByIdRepositories(insertedId);
-    await persistChatNotifications({
-        inbox,
-        actorId: accountId,
-        message: 'sent you a message.',
-        prefix: 'CHAT_MESSAGE',
-        onNotification: options.onNotification,
-    });
+    if (!options.suppressNotifications) {
+        await persistChatNotifications({
+            inbox,
+            actorId: accountId,
+            message: 'sent you a message.',
+            prefix: 'CHAT_MESSAGE',
+            onNotification: options.onNotification,
+        });
+    }
     return message;
 }
 

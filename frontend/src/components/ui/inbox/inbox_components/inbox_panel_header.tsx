@@ -95,18 +95,23 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
   return (
     <div className="sticky top-0 z-10 bg-[#0d0f1a]/95 backdrop-blur-sm border-b border-white/10 p-4 flex items-center justify-between flex-shrink-0">
       <div className="flex min-w-0 items-center gap-3">
-        <img
-          src={avatar}
-          alt={name}
-          className="h-10 w-10 rounded-full object-cover"
-          onError={(e) => {
-            const target = e.target as HTMLImageElement;
-            target.src = `https://ui-avatars.com/api/?name=${name.substring(
-              0,
-              2
-            )}&background=6366f1&color=fff&bold=true`;
-          }}
-        />
+        <div className="relative flex-shrink-0">
+          <img
+            src={avatar}
+            alt={name}
+            className="h-10 w-10 rounded-full object-cover"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.src = `https://ui-avatars.com/api/?name=${name.substring(
+                0,
+                2
+              )}&background=6366f1&color=fff&bold=true`;
+            }}
+          />
+          {!isGroup && !isTicket && (
+            <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-[#0d0f1a] ${isOnline ? "bg-green-500" : "bg-zinc-600"}`} />
+          )}
+        </div>
         <div className="min-w-0">
           <h2
             className="font-semibold text-white text-sm"
@@ -181,7 +186,7 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
                 { name, avatar }
               )
             }
-            title={canCall ? "Start video call" : "No other member is available to call"}
+            title={canCall ? "Request a meeting" : "No other member is available to meet"}
             className="rounded-lg p-2 text-zinc-400 hover:bg-white/10 hover:text-white transition disabled:opacity-40"
           >
             <Video className="h-5 w-5" />

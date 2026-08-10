@@ -2,6 +2,8 @@
 import React, { useState, useCallback } from "react";
 import { Pin, X } from "lucide-react";
 import type { Inbox, Message, PinnedMessage } from "../inbox_dataset";
+import useChatState from "../../chat_bubble/chat_state";
+import LiveGoogleMeetingBanner from "../../chat_bubble/chat_bubble_components/LiveGoogleMeetingBanner";
 
 export const useInboxPinMessage = () => {
   const [pinnedMessages, setPinnedMessages] = useState<PinnedMessage[]>([]);
@@ -43,6 +45,9 @@ export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
   onUnpin,
   onJumpTo,
 }) => {
+  const liveGoogleMeeting = useChatState(
+    (state) => state.googleMeetingsByConversation[String(selectedConversation._id)]
+  );
   const conversationType = String(
     selectedConversation.conversation_type || ""
   ).toLowerCase();
@@ -63,12 +68,14 @@ export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
         String(message.author_type || "user").toLowerCase() !== "staff"
     )?.message_content;
 
-  if (!isTicket && (hasRestrictedMessageTools || pinnedMessages.length === 0)) {
+  if (!liveGoogleMeeting && !isTicket && (hasRestrictedMessageTools || pinnedMessages.length === 0)) {
     return null;
   }
 
   return (
-    <div className="inbox-scroll-thin border-b border-white/10 bg-[#0d0f1a] px-4 py-2 flex-shrink-0 max-h-28 overflow-y-auto">
+    <div className="inbox-scroll-thin flex-shrink-0 max-h-36 overflow-y-auto bg-[#0d0f1a]">
+      {liveGoogleMeeting && <LiveGoogleMeetingBanner call={liveGoogleMeeting} />}
+      <div className="px-4 py-2">
       {isTicket && (
         <div className="mb-1 rounded-lg border border-violet-400/20 bg-violet-500/5 px-3 py-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -131,6 +138,7 @@ export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
           </div>
         );
       })}
+      </div>
     </div>
   );
 };

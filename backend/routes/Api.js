@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const googleMeetRoutes = require('./GoogleMeet');
 const userRoutes = require('./User');
 const staffRoutes = require('./Staff');
 const forumRoutes = require('./Forum');
@@ -26,6 +27,7 @@ const { getAllCountriesController,
 } = require('../controllers/SystemControllers')
 
 router.use('/inbox', inboxRoutes);
+router.use('/google-meet', googleMeetRoutes);
 router.use('/payment', paymentRoutes);
 router.use('/subscription', subscriptionRoutes);
 router.use('/forum', forumRoutes);

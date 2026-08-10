@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Lock, Mic, MicOff, PhoneOff, Video, VideoOff, X } from "lucide-react";
+import { CalendarClock, Lock, Mic, MicOff, PhoneOff, Video, VideoOff, X, Zap } from "lucide-react";
 import useChatState, { formatCallDuration } from "../chat_state";
 import useGlobalState from "@/lib/global_state";
 
@@ -109,6 +109,9 @@ const CallAudio = ({ stream }: { stream: MediaStream | null }) => {
 
 export const CallOverlay = () => {
   const activeCall = useChatState((state) => state.activeCall);
+  const meetingCreationPrompt = useChatState((state) => state.meetingCreationPrompt);
+  const cancelMeetingCreation = useChatState((state) => state.cancelMeetingCreation);
+  const submitMeetingCreation = useChatState((state) => state.submitMeetingCreation);
   const localStream = useChatState((state) => state.localCallStream);
   const remoteStream = useChatState((state) => state.remoteCallStream);
   const remoteStreams = useChatState((state) => state.remoteCallStreams);
@@ -133,6 +136,8 @@ export const CallOverlay = () => {
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [meetingMode, setMeetingMode] = useState<"instant" | "scheduled">("instant");
+  const [scheduledAt, setScheduledAt] = useState("");
   const remoteIsSpeaking = useIsSpeaking(remoteStream);
 
   useEffect(() => {
@@ -181,7 +186,61 @@ export const CallOverlay = () => {
     return () => window.clearInterval(interval);
   }, [activeCall?.callId, activeCall?.startedAt, activeCall?.status]);
 
+  if (!activeCall && meetingCreationPrompt) {
+    const minimumDate = new Date(Date.now() + 60_000).toISOString().slice(0, 16);
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#171717] p-5 text-white shadow-2xl">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold">Create a meeting</h2>
+              <p className="mt-1 text-sm text-zinc-400">
+                Invite {meetingCreationPrompt.peerName || "the conversation members"} through Google Meet.
+              </p>
+            </div>
+            <button type="button" onClick={cancelMeetingCreation} className="rounded-full p-2 text-zinc-400 hover:bg-white/10 hover:text-white">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <button type="button" onClick={() => setMeetingMode("instant")} className={`rounded-xl border p-4 text-left transition ${meetingMode === "instant" ? "border-green-500 bg-green-500/10" : "border-white/10 hover:bg-white/5"}`}>
+              <Zap className="h-5 w-5 text-green-400" />
+              <p className="mt-3 text-sm font-semibold">Instant meeting</p>
+              <p className="mt-1 text-xs text-zinc-400">Create a Meet link and notify everyone now.</p>
+            </button>
+            <button type="button" onClick={() => setMeetingMode("scheduled")} className={`rounded-xl border p-4 text-left transition ${meetingMode === "scheduled" ? "border-blue-500 bg-blue-500/10" : "border-white/10 hover:bg-white/5"}`}>
+              <CalendarClock className="h-5 w-5 text-blue-400" />
+              <p className="mt-3 text-sm font-semibold">Schedule meeting</p>
+              <p className="mt-1 text-xs text-zinc-400">Choose a time and share it with the conversation.</p>
+            </button>
+          </div>
+
+          {meetingMode === "scheduled" && (
+            <label className="mt-4 block text-xs font-medium text-zinc-300">
+              Meeting date and time
+              <input type="datetime-local" min={minimumDate} value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500" />
+            </label>
+          )}
+
+          <div className="mt-5 flex justify-end gap-2">
+            <button type="button" onClick={cancelMeetingCreation} className="rounded-lg px-4 py-2 text-sm text-zinc-300 hover:bg-white/10">Cancel</button>
+            <button
+              type="button"
+              disabled={meetingMode === "scheduled" && !scheduledAt}
+              onClick={() => void submitMeetingCreation(meetingMode, scheduledAt ? new Date(scheduledAt).toISOString() : undefined)}
+              className="rounded-lg bg-green-500 px-4 py-2 text-sm font-semibold text-white hover:bg-green-400 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {meetingMode === "instant" ? "Create meeting" : "Schedule meeting"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (!activeCall) return null;
+  if (activeCall.provider === "google-meet" && activeCall.status === "active") return null;
+  const isGoogleMeeting = activeCall.provider === "google-meet";
   const isGroupCall = activeCall.conversationType === "group";
   const activeConversation = conversations.find(
     (conversation) => String(conversation._id) === activeCall.conversationId
@@ -417,7 +476,7 @@ export const CallOverlay = () => {
           {isGroupCall && activeCall.direction === "incoming"
             ? `${activeCall.groupName || activeCall.peerName || "Group chat"} requested a video call`
             : activeCall.direction === "incoming"
-            ? "Incoming call"
+            ? isGoogleMeeting ? "Meeting request" : "Incoming call"
             : "Video call"}
         </p>
         <img
@@ -431,11 +490,13 @@ export const CallOverlay = () => {
             : isGroupCall && activeCall.direction === "incoming"
             ? `${activeCall.callerName || "A group member"} started the video call`
             : activeCall.direction === "incoming"
-            ? `${activeCall.peerName || "Someone"} is calling you`
+            ? isGoogleMeeting
+              ? `${activeCall.peerName || "Someone"} requested a meeting`
+              : `${activeCall.peerName || "Someone"} is calling you`
             : `Calling ${activeCall.peerName || "user"}...`}
         </p>
         <p className="mt-3 flex items-center justify-center gap-1 text-xs text-zinc-400">
-          <Lock className="h-3 w-3" /> {isGroupCall ? "Group video call" : "Private video call"}
+          <Lock className="h-3 w-3" /> {isGoogleMeeting ? "Google Meet meeting" : isGroupCall ? "Group video call" : "Private video call"}
         </p>
         {permissionError && (
           <p className="mt-4 rounded-xl bg-red-500/10 p-3 text-xs text-red-300">
@@ -465,13 +526,13 @@ export const CallOverlay = () => {
                 <span className="rounded-full bg-green-500 p-4 hover:bg-green-400">
                   <Video className="h-6 w-6" />
                 </span>
-                Accept
+                {isGoogleMeeting ? "Join meeting" : "Accept"}
               </button>
             )}
         </div>
         {activeCall.status === "ringing" && (
           <p className="mt-6 text-[11px] text-zinc-500">
-            Unanswered calls end automatically after one minute.
+            {isGoogleMeeting ? "You can join this meeting while the request remains active." : "Unanswered calls end automatically after one minute."}
           </p>
         )}
       </div>
