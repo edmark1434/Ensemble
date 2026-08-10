@@ -71,7 +71,6 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
   onFollowingClick
 }) => {
   const [isMetadataOpen, setIsMetadataOpen] = useState(false);
-  const [isBioExpanded, setIsBioExpanded] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -123,18 +122,23 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
           {/* Row 2: Full Name Header Block */}
           <div className="relative inline-flex items-center justify-center md:justify-start gap-3 w-full md:w-auto mt-1" ref={dropdownRef}>
 
-            <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight md:text-3xl">
-              {(() => {
-                const nameParts = name ? name.split(/\s+/) : [];
-                const firstName = nameParts.length > 0 ? nameParts[0] : "";
-                const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
-                
-                const firstMid = [firstName, middleName].filter(Boolean).join(" ");
-                if (lastName) {
-                  return `${firstMid}, ${lastName} ${suffix || ""}`.trim();
-                }
-                return firstMid;
-              })()}
+            <h1 className="flex items-center flex-wrap gap-2 text-2xl font-black text-gray-900 dark:text-white tracking-tight md:text-3xl">
+              <span>
+                {(() => {
+                  const nameParts = name ? name.split(/\s+/) : [];
+                  const firstName = nameParts.length > 0 ? nameParts[0] : "";
+                  const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
+                  
+                  const firstMid = [firstName, middleName].filter(Boolean).join(" ");
+                  if (lastName) {
+                    return `${firstMid}, ${lastName} ${suffix || ""}`.trim();
+                  }
+                  return firstMid;
+                })()}
+              </span>
+              <span className="text-sm font-bold text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 px-2.5 py-0.5 rounded-lg ml-1">
+                {tagline || "Add Tagline"}
+              </span>
             </h1>
 
             {/* Tooltip & Trigger Node Group Wrapper */}
@@ -194,10 +198,12 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             </div>
           </div>
 
-          {/* Row 4: Tagline / Title */}
-          <p className="text-xs text-blue-400/90 font-bold tracking-wide pt-0.5">
-            {tagline || "Editor"}
-          </p>
+          {/* Row 4: Bio / Tagline */}
+          <div className="pt-2 pb-1 max-w-xl">
+            <p className="text-sm text-gray-700 dark:text-zinc-300 leading-relaxed font-normal">
+              {bio || "This person seems shy on introducing themselves..."}
+            </p>
+          </div>
           
           {/* Row 5: Followers Stats */}
           <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 pt-1 text-sm font-semibold text-gray-700 dark:text-zinc-300">
@@ -262,50 +268,6 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
         </div>
 
       </div>
-
-      {/* Introduction Accordion Block */}
-      <div className="mt-5 border-t border-gray-200 dark:border-white/5 pt-3">
-        <button
-          onClick={() => setIsBioExpanded(!isBioExpanded)}
-          className="group flex items-center justify-between w-full text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5 hover:text-gray-800 dark:hover:text-zinc-300 transition-colors duration-200"
-        >
-          <span>Introduction</span>
-
-          {/* Click Indicator Badge & Animated Arrow */}
-          <div className="flex items-center gap-1.5 text-zinc-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">
-            <span className="text-[9px] lowercase font-mono opacity-80 group-hover:opacity-100">
-              {isBioExpanded ? "(click to collapse)" : "(click to expand)"}
-            </span>
-            <div
-              className="transition-transform duration-300 ease-in-out"
-              style={{ transform: isBioExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
-            >
-              <ChevronDown className="h-3 w-3" />
-            </div>
-          </div>
-        </button>
-
-        <div
-          onClick={() => setIsBioExpanded(!isBioExpanded)}
-          className="relative bg-gray-50 dark:bg-white/[0.01] border border-gray-200 dark:border-white/5 p-3 rounded-xl cursor-pointer hover:border-gray-300 dark:hover:border-white/10 transition-colors"
-        >
-          <div
-            className={`overflow-hidden transition-all duration-500 ease-in-out ${
-              !isBioExpanded ? "max-h-[7.2rem]" : "max-h-[1000px]"
-            }`}
-          >
-            <p className="text-xs text-gray-700 dark:text-zinc-300 leading-relaxed font-normal whitespace-pre-wrap">
-              {bio || "This person seems shy on introducing itself..."}
-            </p>
-          </div>
-
-          {/* Fade-out Gradient when Collapsed */}
-          {!isBioExpanded && (
-            <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-50 dark:from-[#080a12]/90 to-transparent rounded-b-xl pointer-events-none" />
-          )}
-        </div>
-      </div>
-
     </div>
   );
 };

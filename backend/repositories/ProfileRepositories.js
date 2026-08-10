@@ -36,7 +36,7 @@ async function updateProfileAccountRepositories(accountId, updates) {
             UPDATE accounts 
             SET ${setClauses.join(', ')} 
             WHERE account_id = $${index}
-            RETURNING tagline, description, display_name
+            RETURNING tagline, description, display_name, introduction
         `;
 
         const result = await pool.query(queryText, values);
@@ -199,6 +199,7 @@ async function getProfileByAccountId(accountId) {
                 A.MERIT_SCORE as merit_Score,
                 A.AVATAR_FILE_ID as avatar_file_id,
                 A.DESCRIPTION as bio,
+                A.INTRODUCTION as introduction,
                 F.PATH AS avatar_preset_url,
                 P.NAME AS subscriptionType,
                 U.USER_ID as user_id,

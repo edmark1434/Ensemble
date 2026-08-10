@@ -71,6 +71,7 @@ interface UserDetail {
   verification_status: boolean;
   bio: string;
   tagline: string;
+  introduction?: string;
   merit_score: number;
   avatar_file_id: number | null;
   avatar_preset_url?: string;
@@ -110,7 +111,7 @@ interface Preset {
 export default function Profile() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabType>("portfolio");
+  const [activeTab, setActiveTab] = useState<TabType>("introduction");
   const { user } = useGlobalState();
   const { id: profileAccountId } = useParams<{ id?: string }>();
   const id = profileAccountId || user?.account_id;
@@ -669,6 +670,7 @@ export default function Profile() {
             verification_status: profileData.verification_status,
             bio: profileData.bio || profileData.description,
             tagline: profileData.tagline,
+            introduction: profileData.introduction,
             merit_score: profileData.merit_score || 0,
             avatar_file_id: profileData.avatar_file_id,
             avatar_preset_url: avatarUrl,
@@ -812,19 +814,6 @@ export default function Profile() {
           onChatClick={handleOpenChat}
           onVerificationClick={() => navigate("/account-verification-status")}
         />
-
-        {/* Merit Performance & Reviews Section */}
-        <MeritSection_ProfileDisplay
-          loading={loading}
-          meritScore={userDetails?.merit_score}
-          avgRating={4.8}
-          totalReviews={portfolioItems.length}
-          clientRating={4.9}
-          freelancerRating={4.8}
-          assetRating={4.7}
-          successfulJobsCount={6}
-        />
-
         {/* Layout Matrix Grid Panels Split */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr]">
 
@@ -864,6 +853,8 @@ export default function Profile() {
               onUploadPDF={handleUploadResume}
               onAddExternalLink={handleAddWebsite}
               onDeletePortfolioItem={handleDeletePortfolioItem}
+              userDetails={userDetails}
+              onUpdateIntroduction={(intro) => setUserDetails(prev => prev ? { ...prev, introduction: intro } : prev)}
             />
           </div>
 

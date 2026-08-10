@@ -78,6 +78,11 @@ async function updateProfileDetailsServices(accountId, originalUpdates, updates)
             accountUpdates.display_name = updates.display_name;
             hasChanges = true;
         }
+
+        if (updates.introduction !== undefined && updates.introduction !== originalUpdates.introduction) {
+            accountUpdates.introduction = updates.introduction;
+            hasChanges = true;
+        }
         
         // Check user fields
         if (updates.country !== undefined && updates.country !== originalUpdates.country) {

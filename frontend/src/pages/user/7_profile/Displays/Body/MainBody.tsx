@@ -9,8 +9,11 @@ import { Profile_JobPosts } from "./Profile_JobPosts";
 import { Profile_Projects } from "./Profile_Projects";
 import { Profile_Assets } from "./Profile_Assets";
 import { Profile_History } from "./Profile_History";
+import { Profile_Introduction } from "./Profile_Introduction";
+import { MeritSection_ProfileDisplay } from "../MeritSection_ProfileDisplay";
+import { User, Activity } from "lucide-react";
 
-export type TabType = "portfolio" | "services" | "job-posts" | "projects" | "assets" | "history";
+export type TabType = "introduction" | "performance" | "portfolio" | "services" | "job-posts" | "assets";
 
 interface DetailsListBodyProps {
   loading?: boolean;
@@ -22,15 +25,16 @@ interface DetailsListBodyProps {
   onUploadPDF?: (file: File) => Promise<void>;
   onAddExternalLink?: (data: { name: string; url: string; description: string }) => Promise<void>;
   onDeletePortfolioItem?: (id: string) => Promise<void>;
+  userDetails?: any;
 }
 
 const tabOptions: { key: TabType; label: string; icon: React.ReactNode }[] = [
+  { key: "introduction", label: "Introduction", icon: <User className="h-3.5 w-3.5" /> },
+  { key: "performance", label: "Performance", icon: <Activity className="h-3.5 w-3.5" /> },
   { key: "portfolio", label: "Portfolio", icon: <FolderOpen className="h-3.5 w-3.5" /> },
   { key: "services", label: "Services", icon: <Briefcase className="h-3.5 w-3.5" /> },
   { key: "job-posts", label: "Job Posts", icon: <FileText className="h-3.5 w-3.5" /> },
-  { key: "projects", label: "Projects", icon: <TrendingUp className="h-3.5 w-3.5" /> },
   { key: "assets", label: "Assets", icon: <ImageIcon className="h-3.5 w-3.5" /> },
-  { key: "history", label: "History", icon: <Clock className="h-3.5 w-3.5" /> },
 ];
 
 export const DetailsListBodySkeleton: React.FC = () => (
@@ -53,6 +57,8 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
   onUploadPDF,
   onAddExternalLink,
   onDeletePortfolioItem,
+  userDetails,
+  onUpdateIntroduction,
 }) => {
   if (loading) return <DetailsListBodySkeleton />;
 
@@ -100,6 +106,22 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
             transition={{ duration: 0.2, ease: "easeInOut" }}
             className="flex-1 flex flex-col"
           >
+            {activeTab === "introduction" && <Profile_Introduction introduction={userDetails?.introduction} isOwner={isOwner} onSave={onUpdateIntroduction} />}
+            {activeTab === "performance" && (
+              <div className="flex flex-col space-y-6">
+                <MeritSection_ProfileDisplay
+                  loading={loading}
+                  meritScore={userDetails?.merit_score}
+                  avgRating={4.8}
+                  totalReviews={portfolioItems.length}
+                  clientRating={4.9}
+                  freelancerRating={4.8}
+                  assetRating={4.7}
+                  successfulJobsCount={6}
+                />
+                <Profile_History />
+              </div>
+            )}
             {activeTab === "portfolio" && (
               <Profile_Portfolio
                 portfolioItems={portfolioItems}
@@ -111,9 +133,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
             )}
             {activeTab === "services" && <Profile_Services services={services} />}
             {activeTab === "job-posts" && <Profile_JobPosts />}
-            {activeTab === "projects" && <Profile_Projects />}
             {activeTab === "assets" && <Profile_Assets />}
-            {activeTab === "history" && <Profile_History />}
           </motion.div>
         </AnimatePresence>
       </div>
