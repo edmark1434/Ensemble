@@ -11,7 +11,8 @@ const { createNewAccount, fetchAllAccounts, getAccountByHandleService,
     unfollowUserService,
     getFollowersService,
     getFollowingService,
-    checkIsFollowingService
+    checkIsFollowingService,
+    curateBadgesService
 } = require("../services/AccountServices");
 const { getUserOnboardingStep,
      updateUserDetails
@@ -303,6 +304,23 @@ async function checkIsFollowingController(req, res) {
     }
 }
 
+async function curateBadgesController(req, res) {
+    try {
+        const accountId = req.user.account_id;
+        const { registryIds } = req.body;
+        
+        if (!accountId) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+        
+        const result = await curateBadgesService(accountId, registryIds);
+        res.status(200).json(result);
+    } catch (err) {
+        console.error('Error in curateBadgesController:', err);
+        res.status(500).json({ error: err.message || 'Internal server error' });
+    }
+}
+
 module.exports = {
     createAccount,
     getAccountByHandle,
@@ -321,4 +339,5 @@ module.exports = {
     getFollowersController,
     getFollowingController,
     checkIsFollowingController,
+    curateBadgesController,
 };

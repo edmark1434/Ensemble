@@ -75,31 +75,49 @@ async function seedBadges(userAccountIds) {
 
   const cats = catRes.rows;
   const badgeDefs = [
-    ['First Contract', 'Complete your first contract', 'contract_completed', 'count', 1, cats[0].badge_category_id],
-    ['Reliable Seller', 'Finish 5 gigs on time', 'gig_completed', 'count', 5, cats[0].badge_category_id],
-    ['Helpful Peer', 'Leave 10 helpful comments', 'comment_helpful', 'count', 10, cats[1].badge_category_id],
-    ['Asset Curator', 'Publish 3 marketplace assets', 'asset_published', 'count', 3, cats[2].badge_category_id],
+    ['acc-alpha', 'Alpha Tester', 'Granted to core ecosystem pioneers who tested the platform during its early alpha stages.', 'alpha_access', 'boolean', 1, cats[0].badge_category_id],
+    ['acc-beta', 'Beta Tester', 'Granted to core ecosystem pioneers who tested the platform during its early beta stages.', 'beta_access', 'boolean', 1, cats[0].badge_category_id],
+    ['acc-freelance-1', 'Fresh Freelancer', 'Granted to users who have newly started becoming a freelancer on this platform.', 'gig_completed', 'count', 1, cats[0].badge_category_id],
+    ['acc-freelance-2', 'Rising Freelancer', 'Granted to active freelancers establishing a consistent workspace pipeline.', 'gig_completed', 'count', 10, cats[0].badge_category_id],
+    ['acc-freelance-3', 'Elite Freelancer', 'Granted to high-tier freelancers delivering premium-grade production deliverables.', 'gig_completed', 'count', 50, cats[0].badge_category_id],
+    ['acc-freelance-4', 'Grand Freelancer', 'The absolute pinnacle of freelance production excellence across the platform ecosystem.', 'gig_completed', 'count', 100, cats[0].badge_category_id],
+    ['acc-client-1', 'Fresh Client', 'Granted to users who have successfully become a Client for the first time.', 'contract_funded', 'count', 1, cats[0].badge_category_id],
+    ['acc-client-2', 'Rising Client', 'Granted to clients expanding their workforce layout and regular contract deployments.', 'contract_funded', 'count', 10, cats[0].badge_category_id],
+    ['acc-client-3', 'Elite Client', 'Granted to trusted high-volume spenders and milestone managers inside the hub.', 'contract_funded', 'count', 50, cats[0].badge_category_id],
+    ['acc-client-4', 'Grand Client', 'Ecosystem power client commanding substantial studio pipelines and commercial arrays.', 'contract_funded', 'count', 100, cats[0].badge_category_id],
+    ['acc-asset-1', 'Fresh Creator', 'Granted to users who have successfully uploaded their first production asset.', 'asset_published', 'count', 1, cats[2].badge_category_id],
+    ['acc-asset-2', 'Rising Creator', 'Granted to assets creators with growing distribution tracking metrics.', 'asset_published', 'count', 10, cats[2].badge_category_id],
+    ['acc-asset-3', 'Elite Creator', 'Granted to top-tier library authors crafting high-fidelity design standards.', 'asset_published', 'count', 50, cats[2].badge_category_id],
+    ['acc-asset-4', 'Grand Creator', 'Legendary library architect setting the structural baseline style across the global market.', 'asset_published', 'count', 100, cats[2].badge_category_id],
   ];
 
   const badgeIds = [];
+  let alphaBadgeId = null;
+
   for (const b of badgeDefs) {
     const res = await pool.query(
       `INSERT INTO badges (
-         name, description, is_secret, trigger_event_code, condition_type, condition_value, badge_category_id
-       ) VALUES ($1,$2,false,$3,$4,$5,$6)
-       RETURNING badge_id`,
+         registry_id, name, description, is_secret, trigger_event_code, condition_type, condition_value, badge_category_id
+       ) VALUES ($1,$2,$3,false,$4,$5,$6,$7)
+       RETURNING badge_id, registry_id`,
       b
     );
     badgeIds.push(res.rows[0].badge_id);
+    if (res.rows[0].registry_id === 'acc-alpha') {
+      alphaBadgeId = res.rows[0].badge_id;
+    }
   }
 
-  for (let i = 0; i < Math.min(4, userAccountIds.length); i++) {
-    await pool.query(
-      `INSERT INTO account_badges (badge_id, account_id)
-       VALUES ($1, $2)
-       ON CONFLICT DO NOTHING`,
-      [badgeIds[i % badgeIds.length], userAccountIds[i]]
-    );
+  // Grant the Alpha Badge to all seeded users
+  if (alphaBadgeId) {
+    for (const accountId of userAccountIds) {
+      await pool.query(
+        `INSERT INTO account_badges (badge_id, account_id, display_order)
+         VALUES ($1, $2, $3)
+         ON CONFLICT DO NOTHING`,
+        [alphaBadgeId, accountId, 1] // Display order 1 by default
+      );
+    }
   }
 
   console.log(`✅ Seeded ${cats.length} badge categories, ${badgeIds.length} badges`);

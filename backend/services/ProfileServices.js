@@ -13,7 +13,7 @@ const {
 } = require('../repositories/ProfileRepositories');
 const { getAccountLinkByAccountIdService } = require('../services/AccountServices');
 const {getUserByIdFromAccountId} = require('../repositories/UserRepositories');
-const {checkAccountId} = require('../repositories/AccountRepositories');
+const {checkAccountId, getAccountBadges} = require('../repositories/AccountRepositories');
 const redisClient = require('../lib/Redis');
 
 
@@ -260,6 +260,13 @@ async function getProfileByAccountIdService(accountId) {
     }
     try {
         const profile = await getProfileByAccountId(accountId);
+        if (profile) {
+            const badges = await getAccountBadges(accountId);
+            profile.badges = badges.map(b => ({
+                id: b.registry_id,
+                display_order: b.display_order
+            }));
+        }
         return profile;
     } catch (err) {
         console.error(`Error fetching profile for accountId ${accountId}:`, err);

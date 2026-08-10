@@ -11,7 +11,9 @@ const { getAllAccounts, createAccount, getAccountByHandle, getAccountWalletRepos
     unfollowUser,
     getFollowers,
     getFollowing,
-    checkIsFollowing
+    checkIsFollowing,
+    getAccountBadges,
+    updateAccountBadgeDisplayOrder
 } = require("../repositories/AccountRepositories");
 const {
     updateUserDetailsByAccountId,
@@ -104,6 +106,14 @@ async function getProfileServices(accountId) {
     }
     try {
         const profile = await getProfileRepositories(accountId);
+        if (profile) {
+            const badges = await getAccountBadges(accountId);
+            // Format badges as an array of objects to map easily in the frontend
+            profile.badges = badges.map(b => ({
+                id: b.registry_id,
+                display_order: b.display_order
+            }));
+        }
         return profile;
     } catch (err) {
         console.error('Error fetching profile:', err);
@@ -275,6 +285,22 @@ async function checkIsFollowingService(followerId, followedId) {
     }
 }
 
+async function curateBadgesService(accountId, registryIds) {
+    if (!checkAccountIdService(accountId)) {
+        throw new Error('Invalid account ID');
+    }
+    if (!Array.isArray(registryIds) || registryIds.length > 5) {
+        throw new Error('You can only curate up to 5 badges.');
+    }
+    try {
+        await updateAccountBadgeDisplayOrder(accountId, registryIds);
+        return { success: true, message: 'Badges curated successfully' };
+    } catch (err) {
+        console.error('Error curating badges:', err);
+        throw err;
+    }
+}
+
 module.exports = {
     fetchAllAccounts,
     createNewAccount,
@@ -294,5 +320,6 @@ module.exports = {
     unfollowUserService,
     getFollowersService,
     getFollowingService,
-    checkIsFollowingService
+    checkIsFollowingService,
+    curateBadgesService
 };

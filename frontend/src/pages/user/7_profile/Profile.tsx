@@ -491,12 +491,31 @@ export default function Profile() {
     }
   };
 
-  const saveSelectedBadges = (updatedBadgesList: BadgeMetadata[]) => {
-    setUserDetails((prev) => (prev ? { ...prev, badges: updatedBadgesList } : null));
-    toast.success("Account showcase badge selection updated.");
-    setIsBadgeModalOpen(false);
+  const saveSelectedBadges = async (updatedBadgesList: BadgeMetadata[]) => {
+    try {
+      const registryIds = updatedBadgesList.map(b => b.id);
+      const response = await api.put('/api/accounts/profile/badges/curate', { registryIds });
+      if (response.data.success) {
+        // Update local user details state to reflect new display_order
+        setUserDetails((prev) => {
+          if (!prev) return prev;
+          const newBadges = (prev.badges || []).map(b => ({ ...b, display_order: null }));
+          registryIds.forEach((rid, index) => {
+            const b = newBadges.find(x => x.id === rid);
+            if (b) b.display_order = index + 1;
+          });
+          return { ...prev, badges: newBadges };
+        });
+        toast.success("Account showcase badge selection updated.");
+        setIsBadgeModalOpen(false);
+      } else {
+        toast.error("Failed to update badges.");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed executing operations pipeline data push.");
+    }
   };
-
   const saveSkillsCuration = async (originalSkills: SkillObject[], updatedSkills: SkillObject[]) => {
     setIsSavingSkills(true);
 
@@ -813,7 +832,11 @@ export default function Profile() {
           <div className="space-y-4 h-fit">
             <BadgeSideSection_ProfileDisplay
               loading={loading}
-              badges={userDetails?.badges}
+              badges={(userDetails?.badges || [])
+                .filter(b => b.display_order !== null)
+                .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+                .map(b => badgesRegistry.find(reg => reg.id === b.id))
+                .filter(Boolean) as BadgeMetadata[]}
               isOwner={isOwner}
               onEditClick={() => setIsBadgeModalOpen(true)}
             />
@@ -879,7 +902,12 @@ export default function Profile() {
       <BadgeEditModal
         isOpen={isBadgeModalOpen}
         onClose={() => setIsBadgeModalOpen(false)}
-        currentlyDisplayedBadges={userDetails?.badges || []}
+        unlockedBadges={(userDetails?.badges || []).map(b => badgesRegistry.find(reg => reg.id === b.id)).filter(Boolean) as BadgeMetadata[]}
+        currentlyDisplayedBadges={(userDetails?.badges || [])
+          .filter(b => b.display_order !== null)
+          .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+          .map(b => badgesRegistry.find(reg => reg.id === b.id))
+          .filter(Boolean) as BadgeMetadata[]}
         onSave={saveSelectedBadges}
       />
 

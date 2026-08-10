@@ -16,7 +16,8 @@ const {
     unfollowUserController,
     getFollowersController,
     getFollowingController,
-    checkIsFollowingController
+    checkIsFollowingController,
+    curateBadgesController
 } = require('../controllers/AccountControllers');
 const {
     updateTaglineAndDescriptionController,
@@ -59,4 +60,5 @@ router.put('/update-profile-social-media', [checkSession, requireAuth], updatePr
 router.put('/update-profile-onboarding', [checkSession, requireAuth], updateProfileOnboardingController);
 router.put('/update-profile-details', [checkSession, requireAuth], updateProfileDetailsController);
 router.put('/setting-account-info', [checkSession, requireAuth], settingAccountInfoUpdateController);
+router.put('/profile/badges/curate', [checkSession, requireAuth], curateBadgesController);
 module.exports = router;

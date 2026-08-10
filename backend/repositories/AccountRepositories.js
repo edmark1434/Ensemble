@@ -404,6 +404,72 @@ async function checkIsFollowing(followerId, followedId) {
     }
 }
 
+async function getAccountBadges(accountId) {
+    try {
+        const query = `
+            SELECT b.registry_id, ab.display_order
+            FROM account_badges ab
+            JOIN badges b ON b.badge_id = ab.badge_id
+            WHERE ab.account_id = $1
+        `;
+        const result = await pool.query(query, [accountId]);
+        return result.rows;
+    } catch (err) {
+        console.error(`Error fetching badges for account ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function grantBadgeToAccount(accountId, registryId, displayOrder = null) {
+    try {
+        const query = `
+            INSERT INTO account_badges (account_id, badge_id, display_order)
+            SELECT $1, badge_id, $3
+            FROM badges
+            WHERE registry_id = $2
+            ON CONFLICT DO NOTHING
+        `;
+        await pool.query(query, [accountId, registryId, displayOrder]);
+    } catch (err) {
+        console.error(`Error granting badge ${registryId} to account ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function updateAccountBadgeDisplayOrder(accountId, registryIds) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        // First, clear all display_order for this account
+        await client.query(`
+            UPDATE account_badges
+            SET display_order = NULL
+            WHERE account_id = $1
+        `, [accountId]);
+
+        // Then, update the display_order for the selected badges
+        for (let i = 0; i < registryIds.length; i++) {
+            await client.query(`
+                UPDATE account_badges
+                SET display_order = $1
+                FROM badges
+                WHERE account_badges.badge_id = badges.badge_id
+                  AND account_badges.account_id = $2
+                  AND badges.registry_id = $3
+            `, [i + 1, accountId, registryIds[i]]);
+        }
+        
+        await client.query('COMMIT');
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(`Error updating badge display order for account ${accountId}:`, err);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
 module.exports = {
     getAllAccounts,
     getAccountById,
@@ -423,5 +489,8 @@ module.exports = {
     unfollowUser,
     getFollowers,
     getFollowing,
-    checkIsFollowing
+    checkIsFollowing,
+    getAccountBadges,
+    grantBadgeToAccount,
+    updateAccountBadgeDisplayOrder
 };
