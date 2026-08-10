@@ -46,10 +46,16 @@ export default function ProfileEditModal({
   data, 
   onSave
 }: ProfileEditModalProps) {
-  const [formData, setFormData] = useState<UserDetail>({
+  const [formData, setFormData] = useState<UserDetail & { firstName?: string; middleName?: string; lastName?: string; birthMonth?: string; birthDay?: string; birthYear?: string }>({
     username: "",
     name: "",
+    firstName: "",
+    middleName: "",
+    lastName: "",
     birthdate: "",
+    birthMonth: "",
+    birthDay: "",
+    birthYear: "",
     role: "Freelancer",
     email_address: "",
     address: "",
@@ -94,10 +100,39 @@ export default function ProfileEditModal({
   // Reset form data when modal opens
   useEffect(() => {
     if (isOpen && data) {
+      const nameParts = (data.name || "").split(" ");
+      let fName = "", mName = "", lName = "";
+      if (nameParts.length === 1) {
+        fName = nameParts[0];
+      } else if (nameParts.length === 2) {
+        fName = nameParts[0];
+        lName = nameParts[1];
+      } else if (nameParts.length > 2) {
+        fName = nameParts[0];
+        lName = nameParts[nameParts.length - 1];
+        mName = nameParts.slice(1, -1).join(" ");
+      }
+
+      let bMonth = "", bDay = "", bYear = "";
+      if (data.birthdate) {
+        const d = new Date(data.birthdate);
+        if (!isNaN(d.getTime())) {
+          bMonth = String(d.getMonth() + 1);
+          bDay = String(d.getDate());
+          bYear = String(d.getFullYear());
+        }
+      }
+
       const safeData = {
         username: data.username || "",
         name: data.name || "",
+        firstName: fName,
+        middleName: data.middleName || mName,
+        lastName: lName,
         birthdate: data.birthdate || "",
+        birthMonth: bMonth,
+        birthDay: bDay,
+        birthYear: bYear,
         role: data.role || "Freelancer",
         email_address: data.email_address || "",
         joinedDate: data.joinedDate || "",
@@ -112,7 +147,7 @@ export default function ProfileEditModal({
         social_links: data.social_links || []
       };
       
-      setFormData(safeData);
+      setFormData(safeData as any);
       setOriginalFormData(safeData);
       setIsInitialized(true);
       
@@ -259,6 +294,11 @@ export default function ProfileEditModal({
     try {
       // Prepare the payload with the correct structure
       // Your backend expects: { original: {...}, updates: {...} }
+      const newDisplayName = [formData.firstName, formData.middleName, formData.lastName].filter(Boolean).join(" ");
+      const newBirthDate = (formData.birthYear && formData.birthMonth && formData.birthDay) 
+        ? `${formData.birthYear}-${String(formData.birthMonth).padStart(2, '0')}-${String(formData.birthDay).padStart(2, '0')}` 
+        : "";
+
       const original = {
         display_name: originalFormData.name || "",
         birth_date: originalFormData.birthdate || "",
@@ -270,8 +310,8 @@ export default function ProfileEditModal({
       };
       
       const updates = {
-        display_name: formData.name || "",
-        birth_date: formData.birthdate || "",
+        display_name: newDisplayName || "",
+        birth_date: newBirthDate || "",
         address: formData.address || "",
         country: formData.country || "",
         zip_code: formData.zipCode || "",
@@ -322,62 +362,125 @@ export default function ProfileEditModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 font-['Plus Jakarta Sans',sans-serif]">
-      <div className="relative w-full max-w-2xl rounded-2xl border border-white/10 bg-[#080a12] p-6 shadow-2xl text-white transition-all duration-300 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-[200000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 font-['Plus Jakarta Sans',sans-serif]">
+      <div className="relative w-full max-w-2xl rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12] p-6 shadow-2xl text-gray-900 dark:text-white transition-all duration-300 max-h-[90vh] overflow-y-auto">
 
         <button 
           onClick={onClose} 
           disabled={isLoading}
-          className="absolute right-4 top-4 text-zinc-400 hover:text-white rounded-lg p-1.5 hover:bg-white/5 transition disabled:opacity-50"
+          className="absolute right-4 top-4 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white rounded-lg p-1.5 hover:bg-gray-100 dark:hover:bg-white/5 transition disabled:opacity-50"
         >
           <X className="h-5 w-5" />
         </button>
 
-        <h2 className="text-xl font-bold tracking-tight mb-6">Edit Profile</h2>
+        <h2 className="text-lg font-bold tracking-tight mb-5">Edit Profile</h2>
 
         <div className="space-y-4">
-          {/* Basic Information */}
+          {/* Row 1: Username and Email (Locked) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Display Name</label>
+              <label className="block text-[11px] font-medium text-gray-600 dark:text-zinc-400 mb-1">Username</label>
               <input 
                 type="text" 
-                name="name" 
-                value={formData.name || ""} 
-                onChange={handleInputChange} 
-                disabled={isLoading}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm focus:border-blue-500/50 outline-none transition disabled:opacity-50" 
+                value={formData.username || ""} 
+                readOnly
+                className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 px-3 py-2 text-[13px] text-gray-500 dark:text-zinc-400 outline-none cursor-not-allowed" 
               />
             </div>
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Email</label>
+              <label className="block text-[11px] font-medium text-gray-600 dark:text-zinc-400 mb-1">Email</label>
               <input 
                 type="email" 
-                name="email_address" 
                 value={formData.email_address || ""} 
-                onChange={handleInputChange} 
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm focus:border-blue-500/50 outline-none transition" 
-                disabled
+                readOnly
+                className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 px-3 py-2 text-[13px] text-gray-500 dark:text-zinc-400 outline-none cursor-not-allowed" 
               />
             </div>
           </div>
 
-          {/* Birthdate Field */}
+          {/* Row 2: First Name, Middle Name, Last Name */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[11px] font-medium text-gray-600 dark:text-zinc-400 mb-1">First Name</label>
+              <input 
+                type="text" 
+                name="firstName" 
+                value={formData.firstName || ""} 
+                onChange={handleInputChange} 
+                disabled={isLoading}
+                className="w-full rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-[13px] focus:border-blue-500/50 outline-none transition disabled:opacity-50" 
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-gray-600 dark:text-zinc-400 mb-1">Middle Name</label>
+              <input 
+                type="text" 
+                name="middleName" 
+                value={formData.middleName || ""} 
+                onChange={handleInputChange} 
+                disabled={isLoading}
+                className="w-full rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-[13px] focus:border-blue-500/50 outline-none transition disabled:opacity-50" 
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-medium text-gray-600 dark:text-zinc-400 mb-1">Last Name</label>
+              <input 
+                type="text" 
+                name="lastName" 
+                value={formData.lastName || ""} 
+                onChange={handleInputChange} 
+                disabled={isLoading}
+                className="w-full rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-[13px] focus:border-blue-500/50 outline-none transition disabled:opacity-50" 
+              />
+            </div>
+          </div>
+
+          {/* Row 3: Birthdate (Dropdowns) */}
           <div>
-            <label className="block text-xs text-zinc-400 mb-1">Birthdate</label>
-            <input 
-              type="date" 
-              name="birthdate" 
-              value={formData.birthdate ? formData.birthdate.split('T')[0] : ""} 
-              onChange={handleInputChange} 
-              disabled={isLoading}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm focus:border-blue-500/50 outline-none transition disabled:opacity-50" 
-            />
+            <label className="block text-[11px] font-medium text-gray-600 dark:text-zinc-400 mb-1">Birthdate</label>
+            <div className="grid grid-cols-3 gap-3">
+              <select 
+                name="birthMonth" 
+                value={formData.birthMonth || ""} 
+                onChange={handleInputChange}
+                disabled={isLoading}
+                className="w-full rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-[13px] focus:border-blue-500/50 outline-none transition disabled:opacity-50 appearance-none"
+              >
+                <option value="">Month</option>
+                {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((m, i) => (
+                  <option key={m} value={i + 1}>{m}</option>
+                ))}
+              </select>
+              <select 
+                name="birthDay" 
+                value={formData.birthDay || ""} 
+                onChange={handleInputChange}
+                disabled={isLoading}
+                className="w-full rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-[13px] focus:border-blue-500/50 outline-none transition disabled:opacity-50 appearance-none"
+              >
+                <option value="">Day</option>
+                {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+              <select 
+                name="birthYear" 
+                value={formData.birthYear || ""} 
+                onChange={handleInputChange}
+                disabled={isLoading}
+                className="w-full rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-[13px] focus:border-blue-500/50 outline-none transition disabled:opacity-50 appearance-none"
+              >
+                <option value="">Year</option>
+                {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Address with Autocomplete - Pre-filled with existing address */}
           <div className="relative">
-            <label className="block text-xs text-zinc-400 mb-1">Street Address</label>
+            <label className="block text-[11px] font-medium text-gray-600 dark:text-zinc-400 mb-1">Street Address</label>
             
             <div className="relative">
               <input 
@@ -389,12 +492,12 @@ export default function ProfileEditModal({
                 onFocus={handleAddressFocus}
                 onBlur={handleAddressBlur}
                 disabled={isLoading}
-                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none transition disabled:opacity-50 ${
+                className={`w-full rounded-lg border px-3 py-2 text-[13px] focus:outline-none transition disabled:opacity-50 ${
                   addressStatus === "selected" 
-                    ? "border-emerald-500/50 bg-emerald-500/5 pr-12" 
+                    ? "border-emerald-500/50 bg-emerald-50 dark:bg-emerald-500/5 pr-12 text-emerald-900 dark:text-white" 
                     : addressStatus === "manual"
-                    ? "border-yellow-500/50 bg-yellow-500/5 pr-12"
-                    : "border-white/10 bg-white/5 focus:border-blue-500/50"
+                    ? "border-yellow-500/50 bg-yellow-50 dark:bg-yellow-500/5 pr-12 text-yellow-900 dark:text-white"
+                    : "border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 focus:border-blue-500/50"
                 }`}
                 placeholder="Start typing your address..."
               />
@@ -452,9 +555,9 @@ export default function ProfileEditModal({
 
             {/* Places Autocomplete Dropdown */}
             {showSuggestions && places.length > 0 && (
-              <div className="absolute z-50 w-full mt-1 bg-[#13151f] border border-white/10 rounded-lg max-h-60 overflow-y-auto shadow-xl">
-                <div className="sticky top-0 bg-[#13151f] px-3 py-1.5 border-b border-white/5">
-                  <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">
+              <div className="absolute z-50 w-full mt-1 bg-white dark:bg-[#13151f] border border-gray-200 dark:border-white/10 rounded-lg max-h-60 overflow-y-auto shadow-xl">
+                <div className="sticky top-0 bg-gray-50 dark:bg-[#13151f] px-3 py-1.5 border-b border-gray-200 dark:border-white/5">
+                  <span className="text-[10px] text-gray-500 dark:text-zinc-500 font-medium uppercase tracking-wider">
                     Select location to auto-fill country & ZIP
                   </span>
                 </div>
@@ -465,10 +568,10 @@ export default function ProfileEditModal({
                       e.preventDefault();
                       handlePlaceSelect(place);
                     }}
-                    className="px-3 py-2 hover:bg-white/5 cursor-pointer border-b border-white/5 last:border-0 group transition-colors"
+                    className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-white/5 cursor-pointer border-b border-gray-100 dark:border-white/5 last:border-0 group transition-colors"
                   >
                     <div className="flex items-center justify-between">
-                      <div className="text-sm text-white group-hover:text-blue-400 transition-colors">
+                      <div className="text-[13px] text-gray-900 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">
                         {place.properties.name || "Unnamed location"}
                         {place.properties.city && (
                           <span className="text-xs text-zinc-400 ml-1">
@@ -501,12 +604,12 @@ export default function ProfileEditModal({
 
             {/* No Results Message */}
             {showSuggestions && formData.address?.trim() && places.length === 0 && addressStatus === "manual" && (
-              <div className="absolute z-50 w-full mt-1 bg-[#13151f] border border-yellow-500/20 rounded-lg p-3 shadow-xl">
+              <div className="absolute z-50 w-full mt-1 bg-white dark:bg-[#13151f] border border-yellow-500/20 rounded-lg p-3 shadow-xl">
                 <div className="flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="h-4 w-4 text-yellow-500 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm text-zinc-300">No locations found</p>
-                    <p className="text-xs text-zinc-500 mt-0.5">
+                    <p className="text-[13px] text-gray-900 dark:text-zinc-300 font-medium">No locations found</p>
+                    <p className="text-[11px] text-gray-500 dark:text-zinc-500 mt-0.5">
                       You can still save this address manually, but country and ZIP code won't be auto-filled.
                     </p>
                   </div>
@@ -517,21 +620,21 @@ export default function ProfileEditModal({
 
           {/* Tagline */}
           <div>
-            <label className="block text-xs text-zinc-400 mb-1">Tagline</label>
+            <label className="block text-[11px] font-medium text-gray-600 dark:text-zinc-400 mb-1">Tagline</label>
             <input
               type="text"
               name="tagline"
               value={formData.tagline || ""}
               onChange={handleInputChange}
               disabled={isLoading}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm focus:border-blue-500/50 outline-none transition disabled:opacity-50"
+              className="w-full rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-[13px] focus:border-blue-500/50 outline-none transition disabled:opacity-50"
               placeholder="e.g., Full-Stack Developer | UI/UX Designer"
             />
           </div>
 
           {/* Bio / About Me */}
           <div>
-            <label className="block text-xs text-zinc-400 mb-1">Bio / About Me</label>
+            <label className="block text-[11px] font-medium text-gray-600 dark:text-zinc-400 mb-1">Bio / About Me</label>
             <textarea
               name="bio"
               value={formData.bio || ""}
@@ -539,22 +642,22 @@ export default function ProfileEditModal({
               disabled={isLoading}
               rows={4}
               maxLength={120}
-              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm focus:border-blue-500/50 outline-none resize-none leading-relaxed disabled:opacity-50"
+              className="w-full rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-[13px] focus:border-blue-500/50 outline-none resize-none leading-relaxed disabled:opacity-50"
               placeholder="Tell the community about yourself (max 120 characters)..."
             />
-            <div className="text-right text-[10px] text-zinc-500 mt-1">
+            <div className="text-right text-[10px] text-gray-500 dark:text-zinc-500 mt-1">
               {(formData.bio || "").length}/120
             </div>
           </div>
         </div>
 
         {/* Footer Actions */}
-        <div className="flex justify-end gap-3 mt-6 border-t border-white/10 pt-4">
+        <div className="flex justify-end gap-3 mt-6 border-t border-gray-200 dark:border-white/10 pt-4">
           <button 
             type="button" 
             onClick={onClose} 
             disabled={isLoading}
-            className="px-4 py-2 border border-white/10 bg-white/5 text-zinc-400 text-xs font-semibold rounded-lg hover:text-white transition disabled:opacity-50"
+            className="px-4 py-2 border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-zinc-400 text-xs font-semibold rounded-lg hover:text-gray-900 dark:hover:text-white transition disabled:opacity-50"
           >
             Cancel
           </button>
