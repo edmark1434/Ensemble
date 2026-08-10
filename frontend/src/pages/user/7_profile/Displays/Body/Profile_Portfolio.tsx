@@ -81,7 +81,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
     <div className="space-y-6 flex-1 TrulyRawFixUnsetOverflow">
 
       {/* ==================== ACTION UTILITY BAR ==================== */}
-      {isOwner && <div className="flex flex-wrap gap-2 pb-1 border-b border-white/5">
+      {isOwner && <div className="flex flex-wrap gap-2 pb-1 border-b border-gray-200 dark:border-white/5">
         <input
           type="file"
           ref={fileInputRef}
@@ -92,7 +92,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
 
         <button
           onClick={() => fileInputRef.current?.click()}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/5 bg-white/[0.02] text-[11px] font-bold text-zinc-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] text-[11px] font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-all cursor-pointer"
         >
           <Upload className="h-3 w-3" />
           <span>Upload CV / Resume (PDF)</span>
@@ -100,7 +100,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
 
         <button
           onClick={() => setShowLinkModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/5 bg-white/[0.02] text-[11px] font-bold text-zinc-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] text-[11px] font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-all cursor-pointer"
         >
           <Plus className="h-3 w-3" />
           <span>Embed Website Link</span>
@@ -108,7 +108,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
 
         <button
           onClick={onEditTermsOfService}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/5 bg-white/[0.02] text-[11px] font-bold text-zinc-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] text-[11px] font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-all cursor-pointer"
         >
           <Scale className="h-3 w-3" />
           <span>Configure Terms of Service</span>
@@ -126,7 +126,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
             <div
               key={item.id}
               onClick={() => setActiveViewItem(item)}
-              className="group relative flex flex-col aspect-square justify-between bg-[#121420]/30 rounded-2xl border border-white/5 overflow-hidden transition-all duration-300 hover:border-white/15 hover:bg-[#121420]/50 cursor-pointer shadow-lg"
+              className="group relative flex flex-col aspect-square justify-between bg-white dark:bg-[#121420]/30 rounded-2xl border border-gray-200 dark:border-white/5 overflow-hidden transition-all duration-300 hover:border-gray-300 dark:hover:border-white/15 hover:bg-gray-50 dark:hover:bg-[#121420]/50 cursor-pointer shadow-lg"
             >
               {isOwner && onDeleteItem && (
                 <button
@@ -135,13 +135,13 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                     event.stopPropagation();
                     void onDeleteItem(String(item.id));
                   }}
-                  className="absolute right-2 top-2 z-20 rounded-lg border border-red-500/20 bg-black/60 p-1.5 text-red-300 opacity-0 transition group-hover:opacity-100 hover:bg-red-500/20"
+                  className="absolute right-2 top-2 z-20 rounded-lg border border-red-200 dark:border-red-500/20 bg-white/90 dark:bg-black/60 p-1.5 text-red-500 dark:text-red-300 opacity-0 transition group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-500/20"
                   title="Remove attachment"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
               )}
-              <div className="relative flex-1 w-full bg-zinc-900/40 border-b border-white/5 flex items-center justify-center overflow-hidden">
+              <div className="relative flex-1 w-full bg-gray-100 dark:bg-zinc-900/40 border-b border-gray-200 dark:border-white/5 flex items-center justify-center overflow-hidden">
                 {item.type === "project" && item.thumbnail ? (
                   <img
                     src={item.thumbnail}
@@ -156,7 +156,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                     loading="lazy"
                   />
                 ) : item.type === "link" && item.externalUrl ? (
-                  <div className="relative h-full w-full bg-zinc-950">
+                  <div className="relative h-full w-full bg-gray-100 dark:bg-zinc-950">
                     <div className="absolute inset-0 flex items-center justify-center">
                       <div className={`p-4 rounded-2xl ${cfg.bg} ${cfg.color} border ${cfg.border}`}>
                         <CardIcon className="h-6 w-6" />
@@ -183,25 +183,25 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                 </div>
               </div>
 
-              <div className="p-3.5 space-y-1 bg-[#0b0e17]/20 relative z-10">
+              <div className="p-3.5 space-y-1 bg-white dark:bg-[#0b0e17]/20 relative z-10">
                 <div className="flex items-center justify-between gap-2">
                   <span className={`text-[8px] font-mono font-black uppercase tracking-widest ${cfg.color}`}>
                     {cfg.label}
                   </span>
                   {item.type === "project" && (
-                    <span className="text-[9px] text-zinc-500 font-bold flex items-center gap-1">
+                    <span className="text-[9px] text-gray-500 dark:text-zinc-500 font-bold flex items-center gap-1">
                       <Heart className="h-2.5 w-2.5 text-red-400/70" /> {item.likes || 0}
                     </span>
                   )}
                 </div>
-                <h4 className="text-xs font-extrabold text-white tracking-wide truncate group-hover:text-blue-400 transition-colors">
+                <h4 className="text-xs font-extrabold text-gray-900 dark:text-white tracking-wide truncate group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">
                   {item.title}
                 </h4>
-                <p className="text-[10px] text-zinc-400 font-medium leading-normal line-clamp-1 opacity-70">
+                <p className="text-[10px] text-gray-600 dark:text-zinc-400 font-medium leading-normal line-clamp-1 opacity-70">
                   {item.description}
                 </p>
                 {item.createdAt && (
-                  <p className="text-[9px] text-zinc-600">
+                  <p className="text-[9px] text-gray-400 dark:text-zinc-600">
                     Added {new Date(item.createdAt).toLocaleDateString()}
                   </p>
                 )}
@@ -236,28 +236,28 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
               onSubmit={submitLink}
-              className="relative w-full max-w-md space-y-4 rounded-2xl border border-white/10 bg-[#12141f] p-5 shadow-2xl"
+              className="relative w-full max-w-md space-y-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#12141f] p-5 shadow-2xl"
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-white">Embed Website Link</h3>
-                  <p className="mt-1 text-xs text-zinc-500">Add a public portfolio or professional website.</p>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">Embed Website Link</h3>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-zinc-500">Add a public portfolio or professional website.</p>
                 </div>
-                <button type="button" onClick={() => setShowLinkModal(false)} className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white">
+                <button type="button" onClick={() => setShowLinkModal(false)} className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white">
                   <X className="h-4 w-4" />
                 </button>
               </div>
-              <label className="block text-xs text-zinc-400">
-                Display name <span className="text-red-400">*</span>
-                <input required maxLength={255} value={linkName} onChange={(e) => setLinkName(e.target.value)} className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#0b0e17] px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500" placeholder="My portfolio website" />
+              <label className="block text-xs text-gray-600 dark:text-zinc-400">
+                Display name <span className="text-red-500 dark:text-red-400">*</span>
+                <input required maxLength={255} value={linkName} onChange={(e) => setLinkName(e.target.value)} className="mt-1.5 w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-[#0b0e17] px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500" placeholder="My portfolio website" />
               </label>
-              <label className="block text-xs text-zinc-400">
-                Website URL <span className="text-red-400">*</span>
-                <input required type="url" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#0b0e17] px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500" placeholder="https://example.com" />
+              <label className="block text-xs text-gray-600 dark:text-zinc-400">
+                Website URL <span className="text-red-500 dark:text-red-400">*</span>
+                <input required type="url" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} className="mt-1.5 w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-[#0b0e17] px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500" placeholder="https://example.com" />
               </label>
-              <label className="block text-xs text-zinc-400">
+              <label className="block text-xs text-gray-600 dark:text-zinc-400">
                 Description
-                <textarea maxLength={2000} rows={3} value={linkDescription} onChange={(e) => setLinkDescription(e.target.value)} className="mt-1.5 w-full resize-none rounded-xl border border-white/10 bg-[#0b0e17] px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500" placeholder="Describe what visitors will find." />
+                <textarea maxLength={2000} rows={3} value={linkDescription} onChange={(e) => setLinkDescription(e.target.value)} className="mt-1.5 w-full resize-none rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-[#0b0e17] px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500" placeholder="Describe what visitors will find." />
               </label>
               <button disabled={isSubmitting} type="submit" className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50">
                 {isSubmitting ? "Adding..." : "Add Website"}
@@ -280,35 +280,35 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ type: "spring", duration: 0.4 }}
-              className="relative w-full max-w-4xl bg-[#0b0e17]/95 border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden z-10 font-['Plus Jakarta Sans',sans-serif]"
+              className="relative w-full max-w-4xl bg-white/95 dark:bg-[#0b0e17]/95 border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden z-10 font-['Plus Jakarta Sans',sans-serif]"
             >
-              <div className="flex items-center justify-between p-4 border-b border-white/5 bg-white/[0.01]">
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-white/5 bg-gray-50 dark:bg-white/[0.01]">
                 <div className="min-w-0">
                   <span className={`text-[9px] font-mono font-black uppercase tracking-widest ${(typeConfig[activeViewItem.type] || typeConfig.fallback).color}`}>
                     {(typeConfig[activeViewItem.type] || typeConfig.fallback).label}
                   </span>
-                  <h3 className="text-sm font-black text-white truncate tracking-wide">
+                  <h3 className="text-sm font-black text-gray-900 dark:text-white truncate tracking-wide">
                     {activeViewItem.title}
                   </h3>
                 </div>
 
                 <button
                   onClick={() => setActiveViewItem(null)}
-                  className="p-1.5 rounded-xl border border-white/5 bg-white/[0.02] text-zinc-400 hover:bg-white/10 hover:text-white transition-all cursor-pointer"
+                  className="p-1.5 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] text-gray-500 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white transition-all cursor-pointer"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-zinc-950/20 [scrollbar-width:thin]">
+              <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50 dark:bg-zinc-950/20 [scrollbar-width:thin]">
                 {activeViewItem.type === "project" && activeViewItem.thumbnail && (
-                  <div className="w-full rounded-xl overflow-hidden border border-white/5 bg-zinc-900/40">
+                  <div className="w-full rounded-xl overflow-hidden border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-zinc-900/40">
                     <img src={activeViewItem.thumbnail} alt={activeViewItem.title} className="w-full h-auto max-h-[450px] object-contain mx-auto" />
                   </div>
                 )}
 
                 {activeViewItem.type === "document" && activeViewItem.fileUrl && (
-                  <div className="w-full h-[500px] rounded-xl overflow-hidden border border-white/5 bg-[#121420]/30">
+                  <div className="w-full h-[500px] rounded-xl overflow-hidden border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-[#121420]/30">
                     <iframe
                       src={`${activeViewItem.fileUrl}#toolbar=0`}
                       className="w-full h-full border-none"
@@ -329,8 +329,8 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                         referrerPolicy="no-referrer"
                       />
                     </div>
-                    <div className="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.02] p-3">
-                      <p className="min-w-0 truncate text-xs text-zinc-400">
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] p-3">
+                      <p className="min-w-0 truncate text-xs text-gray-500 dark:text-zinc-400">
                         If the website blocks embedded previews, open it in a new tab.
                       </p>
                     <a
@@ -347,15 +347,15 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                 )}
 
                 {activeViewItem.type === "tos" && (
-                  <div className="p-5 md:p-6 rounded-xl border border-white/5 bg-[#0d111d]/50 font-sans text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap max-h-[450px] overflow-y-auto">
+                  <div className="p-5 md:p-6 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-[#0d111d]/50 font-sans text-xs text-gray-800 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap max-h-[450px] overflow-y-auto">
                     {activeViewItem.description}
                   </div>
                 )}
 
                 {activeViewItem.type !== "tos" && (
-                  <div className="space-y-1 pt-2 border-t border-white/5">
-                    <h5 className="text-[11px] font-black uppercase text-zinc-500 tracking-wider">Item Documentation Logs</h5>
-                    <p className="text-xs text-zinc-400 leading-relaxed font-medium">
+                  <div className="space-y-1 pt-2 border-t border-gray-200 dark:border-white/5">
+                    <h5 className="text-[11px] font-black uppercase text-gray-500 dark:text-zinc-500 tracking-wider">Item Documentation Logs</h5>
+                    <p className="text-xs text-gray-600 dark:text-zinc-400 leading-relaxed font-medium">
                       {activeViewItem.description}
                     </p>
                   </div>

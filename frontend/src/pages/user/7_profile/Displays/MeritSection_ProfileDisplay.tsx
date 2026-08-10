@@ -248,14 +248,14 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn text-gray-900 dark:text-white">
           <div className="relative w-full max-w-lg rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12] p-5 shadow-2xl space-y-4">
 
-            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-3">
               <div className="flex items-center gap-2">
                 <ShieldAlert className="h-5 w-5 text-amber-500" />
                 <h3 className="text-base font-bold tracking-tight">Ecosystem Dispute Registry Log</h3>
               </div>
               <button
                 onClick={() => setIsDisputeModalOpen(false)}
-                className="text-zinc-400 hover:text-white rounded-lg p-1 hover:bg-white/5 transition"
+                className="text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white rounded-lg p-1 hover:bg-gray-100 dark:hover:bg-white/5 transition"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -264,21 +264,21 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="border-b border-white/5 text-zinc-500 font-bold uppercase tracking-wider text-[10px]">
+                  <tr className="border-b border-gray-200 dark:border-white/5 text-gray-500 dark:text-zinc-500 font-bold uppercase tracking-wider text-[10px]">
                     <th className="pb-2">Ticket ID</th>
                     <th className="pb-2">Classification</th>
                     <th className="pb-2">Date</th>
                     <th className="pb-2 text-right">Outcome</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/[0.03] text-zinc-300 font-mono">
+                <tbody className="divide-y divide-gray-200 dark:divide-white/[0.03] text-gray-700 dark:text-zinc-300 font-mono">
                   {mockDisputes.map((dispute) => (
-                    <tr key={dispute.id} className="hover:bg-white/[0.01] transition">
-                      <td className="py-2.5 font-bold text-blue-400">{dispute.id}</td>
-                      <td className="py-2.5 font-sans text-zinc-400">{dispute.type}</td>
-                      <td className="py-2.5 text-zinc-500">{dispute.date}</td>
+                    <tr key={dispute.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.01] transition">
+                      <td className="py-2.5 font-bold text-blue-500 dark:text-blue-400">{dispute.id}</td>
+                      <td className="py-2.5 font-sans text-gray-600 dark:text-zinc-400">{dispute.type}</td>
+                      <td className="py-2.5 text-gray-500 dark:text-zinc-500">{dispute.date}</td>
                       <td className="py-2.5 text-right font-sans">
-                        <span className="bg-emerald-500/5 border border-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded text-[10px] font-medium">
+                        <span className="bg-emerald-50 dark:bg-emerald-500/5 border border-emerald-200 dark:border-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded text-[10px] font-medium">
                           {dispute.outcome}
                         </span>
                       </td>
@@ -288,10 +288,10 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
               </table>
             </div>
 
-            <div className="flex justify-end pt-2 border-t border-white/5">
+            <div className="flex justify-end pt-2 border-t border-gray-200 dark:border-white/5">
               <button
                 onClick={() => setIsDisputeModalOpen(false)}
-                className="px-4 py-1.5 rounded-lg bg-white/5 border border-white/10 text-zinc-300 hover:text-white text-xs font-semibold transition"
+                className="px-4 py-1.5 rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white text-xs font-semibold transition"
               >
                 Close Registry
               </button>
