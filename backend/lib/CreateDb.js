@@ -23,7 +23,7 @@ async function createDatabase() {
   );
 
   if (result.rowCount === 0) {
-    await client.query(`CREATE DATABASE ${dbName}`);
+    await client.query(`CREATE DATABASE "${dbName}"`);
     console.log(`Database "${dbName}" created.`);
   } else {
     console.log(`Database "${dbName}" already exists.`);
