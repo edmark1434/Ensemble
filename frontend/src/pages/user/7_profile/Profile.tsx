@@ -133,6 +133,7 @@ export default function Profile() {
   const [currentAvatar, setCurrentAvatar] = useState<Preset | null>(null);
   
   const [isFollowing, setIsFollowing] = useState(false);
+  const [isFollowedBy, setIsFollowedBy] = useState(false);
   const [followersModalType, setFollowersModalType] = useState<"followers" | "following" | null>(null);
 
   const isOwner = id == user?.account_id;
@@ -596,6 +597,7 @@ export default function Profile() {
           try {
              const followStatus = await api.get(`/api/accounts/${id}/follow-status`);
              setIsFollowing(followStatus.data.isFollowing);
+             setIsFollowedBy(followStatus.data.isFollowedBy);
           } catch(e) {
              console.error('Error fetching follow status:', e);
           }
@@ -753,7 +755,7 @@ export default function Profile() {
   }, [id, navigate]);
 
   return (
-    <div className="min-h-screen bg-[#080a12] font-['Plus Jakarta Sans',sans-serif] text-zinc-300 antialiased selection:bg-blue-500/30">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] font-['Plus Jakarta Sans',sans-serif] text-gray-900 dark:text-zinc-300 antialiased selection:bg-blue-500/30">
       <UserHeader pageTitle="Profile" credits={1250} />
 
       <div className="mx-auto max-w-7xl p-4 md:p-8 space-y-5">
@@ -781,6 +783,7 @@ export default function Profile() {
           followersCount={userDetails?.followers_count}
           followingCount={userDetails?.following_count}
           isFollowing={isFollowing}
+          isFollowedBy={isFollowedBy}
           onFollow={handleFollow}
           onUnfollow={handleUnfollow}
           onFollowersClick={() => setFollowersModalType("followers")}

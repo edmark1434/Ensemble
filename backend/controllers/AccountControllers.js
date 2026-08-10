@@ -293,10 +293,10 @@ async function getFollowingController(req, res) {
 async function checkIsFollowingController(req, res) {
     const followerId = req.session.account_id;
     const { accountId: followedId } = req.params;
-    if (!followerId) return res.status(200).json({ success: true, isFollowing: false });
+    if (!followerId) return res.status(200).json({ success: true, isFollowing: false, isFollowedBy: false });
     try {
-        const isFollowing = await checkIsFollowingService(followerId, followedId);
-        return res.status(200).json({ success: true, isFollowing });
+        const followStatus = await checkIsFollowingService(followerId, followedId);
+        return res.status(200).json({ success: true, isFollowing: followStatus.isFollowing, isFollowedBy: followStatus.isFollowedBy });
     } catch (err) {
         console.error('Error in checkIsFollowingController:', err);
         return res.status(500).json({ success: false, message: err.message });

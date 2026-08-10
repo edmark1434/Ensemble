@@ -374,7 +374,14 @@ useEffect(() => {
                         >
                           <img src={creator.avatar} alt="" className="h-9 w-9 shrink-0 rounded-full bg-gray-200 dark:bg-zinc-800 object-cover" />
                           <span className="min-w-0">
-                            <span className="block truncate text-xs font-semibold text-gray-900 dark:text-white">{creator.name}</span>
+                            <span className="flex items-center gap-1.5 truncate text-xs font-semibold text-gray-900 dark:text-white">
+                              {creator.name}
+                              {creator.accountId === userInfo?.account_id && (
+                                <span className="rounded bg-blue-100 dark:bg-blue-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                                  You
+                                </span>
+                              )}
+                            </span>
                             <span className="block truncate text-[10px] text-gray-500 dark:text-zinc-400">{creator.username}</span>
                           </span>
                         </button>

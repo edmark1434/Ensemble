@@ -19,8 +19,8 @@ const mockDisputes = [
 
 export const MeritSectionSkeleton: React.FC = () => (
   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-pulse">
-    <div className="rounded-xl border border-white/10 bg-white/5 h-[88px]" />
-    <div className="md:col-span-2 rounded-xl border border-white/10 bg-white/5 h-[88px]" />
+    <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 h-[88px]" />
+    <div className="md:col-span-2 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 h-[88px]" />
   </div>
 );
 
@@ -54,7 +54,7 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
       <div className="flex justify-end">
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-wider hover:text-zinc-300 transition"
+          className="flex items-center gap-1.5 text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase tracking-wider hover:text-gray-800 dark:hover:text-zinc-300 transition"
         >
           <span>{isCollapsed ? "Expand Metrics" : "Collapse Metrics"}</span>
           {isCollapsed ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
@@ -64,7 +64,7 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
         {/* ==================== LEFT CARD: PERFORMANCE MERIT SCORE ==================== */}
-        <div className={`rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.03] to-transparent relative overflow-hidden group shadow-xl transition-all duration-300 ${
+        <div className={`rounded-2xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white dark:from-white/[0.03] to-transparent relative overflow-hidden group shadow-xl transition-all duration-300 ${
           isCollapsed ? "p-3 flex flex-row items-center justify-between" : "p-5 flex flex-col justify-between gap-5 min-h-[220px]"
         }`}>
           <div
@@ -75,16 +75,16 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
           <div className="space-y-1 relative z-10">
             <div className="flex items-center gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5 transition-colors duration-500" style={{ color: hpColor }} />
-              <span className="text-[10px] text-zinc-400 font-extrabold uppercase tracking-wider block">Performance Merit Score</span>
+              <span className="text-[10px] text-gray-600 dark:text-zinc-400 font-extrabold uppercase tracking-wider block">Performance Merit Score</span>
             </div>
             {!isCollapsed && (
-              <span className="text-xs text-zinc-400 font-normal block">Ecosystem Node Trust Index: Verified.</span>
+              <span className="text-xs text-gray-600 dark:text-zinc-400 font-normal block">Ecosystem Node Trust Index: Verified.</span>
             )}
           </div>
 
           <div className={`flex items-center justify-between relative z-10 ${isCollapsed ? "gap-4" : "mt-2"}`}>
             {!isCollapsed && (
-              <span className="text-[10px] text-zinc-500 italic font-medium max-w-[130px] leading-normal">Accumulated performance total of {totalReviews} reviews</span>
+              <span className="text-[10px] text-gray-500 dark:text-zinc-500 italic font-medium max-w-[130px] leading-normal">Accumulated performance total of {totalReviews} reviews</span>
             )}
 
             <div
@@ -130,10 +130,10 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
 
           {/* Dispute Action Trigger Button */}
           {!isCollapsed && (
-            <div className="relative z-10 pt-2 border-t border-white/5 mt-1 animate-fadeIn">
+            <div className="relative z-10 pt-2 border-t border-gray-200 dark:border-white/5 mt-1 animate-fadeIn">
               <button
                 onClick={() => setIsDisputeModalOpen(true)}
-                className="w-full py-1.5 px-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-zinc-200 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition"
+                className="w-full py-1.5 px-3 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-200 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition"
               >
                 <AlertCircle className="h-3.5 w-3.5 text-amber-500/80" />
                 <span>View Dispute History</span>
@@ -143,29 +143,29 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
         </div>
 
         {/* ==================== RIGHT CARD: RATING BREAKDOWN TABLE ==================== */}
-        <div className={`md:col-span-2 rounded-2xl border border-white/10 bg-[#0b0e17]/60 backdrop-blur-md text-zinc-300 shadow-xl flex flex-col justify-between transition-all duration-300 ${
+        <div className={`md:col-span-2 rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-[#0b0e17]/60 backdrop-blur-md text-gray-800 dark:text-zinc-300 shadow-xl flex flex-col justify-between transition-all duration-300 ${
           isCollapsed ? "p-3 justify-center gap-2" : "p-5 gap-4"
         }`}>
 
           <div className={`text-xs ${isCollapsed ? "space-y-2" : "space-y-3.5"}`}>
 
             {/* Category 1: Uploaded Assets */}
-            <div className={`grid grid-cols-[1fr_auto_auto] items-center border-b border-white/5 ${isCollapsed ? "pb-1.5" : "pb-2"}`}>
+            <div className={`grid grid-cols-[1fr_auto_auto] items-center border-b border-gray-200 dark:border-white/5 ${isCollapsed ? "pb-1.5" : "pb-2"}`}>
               <div className="flex items-center gap-2">
                 <Package className="h-4 w-4 text-zinc-500" />
-                <span className="font-semibold text-zinc-200">Uploaded Assets</span>
+                <span className="font-semibold text-gray-800 dark:text-zinc-200">Uploaded Assets</span>
               </div>
 
-              <div className={`flex items-center text-zinc-500 ${isCollapsed ? "pr-2 sm:pr-4" : "pr-4 sm:pr-8"}`}>
+              <div className={`flex items-center text-gray-500 dark:text-zinc-500 ${isCollapsed ? "pr-2 sm:pr-4" : "pr-4 sm:pr-8"}`}>
                 <span>Vol:</span>
-                <span className="text-zinc-300 font-mono font-bold ml-1.5 w-6 text-right">4</span>
-                <span className="text-zinc-700 ml-4">|</span>
+                <span className="text-gray-700 dark:text-zinc-300 font-mono font-bold ml-1.5 w-6 text-right">4</span>
+                <span className="text-gray-300 dark:text-zinc-700 ml-4">|</span>
               </div>
 
               <div className="flex items-center gap-1.5 justify-end w-24">
                 <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400 flex-shrink-0" />
-                <span className="text-white font-bold w-6 text-right">{assetRating.toFixed(1)}</span>
-                <span className="text-zinc-500 font-normal text-[10px] w-8 text-left ml-0.5">(1k)</span>
+                <span className="text-gray-900 dark:text-white font-bold w-6 text-right">{assetRating.toFixed(1)}</span>
+                <span className="text-gray-500 dark:text-zinc-500 font-normal text-[10px] w-8 text-left ml-0.5">(1k)</span>
               </div>
             </div>
 
@@ -174,51 +174,51 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
               <div className="grid grid-cols-[1fr_auto_auto] items-center">
                 <div className="flex items-center gap-2">
                   <Briefcase className="h-4 w-4 text-zinc-400" />
-                  <span className="font-bold text-zinc-100">Total Successful Works</span>
+                  <span className="font-bold text-gray-900 dark:text-zinc-100">Total Successful Works</span>
                 </div>
 
-                <div className={`flex items-center text-zinc-500 ${isCollapsed ? "pr-2 sm:pr-4" : "pr-4 sm:pr-8"}`}>
+                <div className={`flex items-center text-gray-500 dark:text-zinc-500 ${isCollapsed ? "pr-2 sm:pr-4" : "pr-4 sm:pr-8"}`}>
                   <span>Vol:</span>
-                  <span className="text-zinc-300 font-mono font-bold ml-1.5 w-6 text-right">{successfulJobsCount}</span>
-                  <span className="text-zinc-700 ml-4">|</span>
+                  <span className="text-gray-700 dark:text-zinc-300 font-mono font-bold ml-1.5 w-6 text-right">{successfulJobsCount}</span>
+                  <span className="text-gray-300 dark:text-zinc-700 ml-4">|</span>
                 </div>
 
                 <div className="flex items-center gap-1.5 justify-end w-24">
                   <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400 flex-shrink-0" />
-                  <span className="text-white font-bold w-6 text-right">{avgRating.toFixed(1)}</span>
-                  <span className="text-zinc-500 font-normal text-[10px] w-8 text-left ml-0.5">({successfulJobsCount})</span>
+                  <span className="text-gray-900 dark:text-white font-bold w-6 text-right">{avgRating.toFixed(1)}</span>
+                  <span className="text-gray-500 dark:text-zinc-500 font-normal text-[10px] w-8 text-left ml-0.5">({successfulJobsCount})</span>
                 </div>
               </div>
 
               {!isCollapsed && (
-                <div className="border-l border-white/10 ml-2 space-y-2.5 animate-fadeIn">
+                <div className="border-l border-gray-200 dark:border-white/10 ml-2 space-y-2.5 animate-fadeIn">
                   {/* Sub-row: As a Client */}
                   <div className="grid grid-cols-[1fr_auto_auto] items-center pl-4">
-                    <span className="text-zinc-500">As a Client</span>
-                    <div className="flex items-center text-zinc-500 pr-4 sm:pr-8">
+                    <span className="text-gray-600 dark:text-zinc-500">As a Client</span>
+                    <div className="flex items-center text-gray-500 dark:text-zinc-500 pr-4 sm:pr-8">
                       <span>Vol:</span>
-                      <span className="text-zinc-400 font-mono ml-1.5 w-6 text-right">6</span>
-                      <span className="text-zinc-700 ml-4">|</span>
+                      <span className="text-gray-600 dark:text-zinc-400 font-mono ml-1.5 w-6 text-right">6</span>
+                      <span className="text-gray-300 dark:text-zinc-700 ml-4">|</span>
                     </div>
                     <div className="flex items-center gap-1.5 justify-end w-24">
                       <Star className="h-3 w-3 fill-amber-400/60 text-amber-400/60 flex-shrink-0" />
-                      <span className="text-zinc-400 font-semibold w-6 text-right">{clientRating.toFixed(1)}</span>
-                      <span className="text-zinc-600 font-normal text-[10px] w-8 text-left ml-0.5">(6)</span>
+                      <span className="text-gray-700 dark:text-zinc-400 font-semibold w-6 text-right">{clientRating.toFixed(1)}</span>
+                      <span className="text-gray-500 dark:text-zinc-600 font-normal text-[10px] w-8 text-left ml-0.5">(6)</span>
                     </div>
                   </div>
 
                   {/* Sub-row: As a Freelancer */}
                   <div className="grid grid-cols-[1fr_auto_auto] items-center pl-4">
-                    <span className="text-zinc-500">As a Freelancer</span>
-                    <div className="flex items-center text-zinc-500 pr-4 sm:pr-8">
+                    <span className="text-gray-600 dark:text-zinc-500">As a Freelancer</span>
+                    <div className="flex items-center text-gray-500 dark:text-zinc-500 pr-4 sm:pr-8">
                       <span>Vol:</span>
-                      <span className="text-zinc-400 font-mono ml-1.5 w-6 text-right">80</span>
-                      <span className="text-zinc-700 ml-4">|</span>
+                      <span className="text-gray-600 dark:text-zinc-400 font-mono ml-1.5 w-6 text-right">80</span>
+                      <span className="text-gray-300 dark:text-zinc-700 ml-4">|</span>
                     </div>
                     <div className="flex items-center gap-1.5 justify-end w-24">
                       <Star className="h-3 w-3 fill-amber-400/60 text-amber-400/60 flex-shrink-0" />
-                      <span className="text-zinc-400 font-semibold w-6 text-right">{freelancerRating.toFixed(1)}</span>
-                      <span className="text-zinc-600 font-normal text-[10px] w-8 text-left ml-0.5">(80)</span>
+                      <span className="text-gray-700 dark:text-zinc-400 font-semibold w-6 text-right">{freelancerRating.toFixed(1)}</span>
+                      <span className="text-gray-500 dark:text-zinc-600 font-normal text-[10px] w-8 text-left ml-0.5">(80)</span>
                     </div>
                   </div>
                 </div>
@@ -231,7 +231,7 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
             <div className="bg-gradient-to-r from-amber-500/10 via-transparent to-transparent border border-amber-500/10 rounded-xl p-2.5 flex items-center justify-between mt-1 animate-fadeIn">
               <div className="flex items-center gap-2">
                 <Trophy className="h-3.5 w-3.5 text-amber-400" />
-                <span className="text-[11px] font-bold text-zinc-300">Overall Rating Index Matrix:</span>
+                <span className="text-[11px] font-bold text-gray-800 dark:text-zinc-300">Overall Rating Index Matrix:</span>
               </div>
               <div className="flex items-center gap-1 text-xs font-black text-amber-400 tracking-tight">
                 <Star className="h-3.5 w-3.5 fill-current text-amber-400" />
@@ -245,8 +245,8 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
 
       {/* ==================== SYSTEM POPUP OVERLAY MODAL: DISPUTE HISTORY ==================== */}
       {isDisputeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn text-white">
-          <div className="relative w-full max-w-lg rounded-2xl border border-white/10 bg-[#080a12] p-5 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn text-gray-900 dark:text-white">
+          <div className="relative w-full max-w-lg rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12] p-5 shadow-2xl space-y-4">
 
             <div className="flex items-center justify-between border-b border-white/5 pb-3">
               <div className="flex items-center gap-2">

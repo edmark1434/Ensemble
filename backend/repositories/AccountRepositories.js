@@ -85,18 +85,32 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 10) 
         `SELECT
             a.account_id,
             a.display_name,
+            u.first_name || ' ' || u.last_name AS full_name,
             a.handle,
-            f.path AS avatar_preset_url
+            f.path AS avatar_preset_url,
+            COALESCE(v.is_verified, FALSE) AS verification_status,
+            p.name AS subscriptiontype,
+            a.merit_score,
+            (SELECT COUNT(*) FROM account_followers WHERE followed_id = a.account_id) AS followers_count,
+            (SELECT COUNT(*) FROM account_followers WHERE follower_id = a.account_id) AS following_count,
+            EXISTS(SELECT 1 FROM account_followers WHERE follower_id = $3::uuid AND followed_id = a.account_id) AS is_following,
+            EXISTS(SELECT 1 FROM account_followers WHERE follower_id = a.account_id AND followed_id = $3::uuid) AS is_followed_by,
+            a.description AS bio,
+            a.tagline AS tagline,
+            COALESCE(
+                (SELECT json_agg(json_build_object('role_id', pp.plpu_id, 'role_name', pp.purpose_name))
+                 FROM platform_purpose pp JOIN user_platform_purpose upp ON pp.plpu_id = upp.plpu_id WHERE upp.user_id = u.user_id),
+                '[]'::json
+            ) AS roles
          FROM accounts a
-         INNER JOIN (
-            SELECT DISTINCT account_id
-            FROM users
-         ) u ON u.account_id = a.account_id
+         JOIN users u ON u.account_id = a.account_id
          LEFT JOIN files f ON f.file_id = a.avatar_file_id
+         LEFT JOIN verifications v ON a.account_id = v.account_id
+         LEFT JOIN subscriptions s ON u.user_id = s.user_id
+         LEFT JOIN plans p ON s.plan_id = p.plan_id
          WHERE a.type = 'User'
            AND LOWER(a.status) = 'active'
            AND a.deleted_at IS NULL
-           AND ($3::uuid IS NULL OR a.account_id <> $3::uuid)
            AND (
                 LOWER(a.handle) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
                 OR LOWER(a.display_name) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
@@ -375,13 +389,15 @@ async function checkIsFollowing(followerId, followedId) {
     if (!followerId || !followedId) return false;
     try {
         const query = `
-            SELECT EXISTS (
-                SELECT 1 FROM account_followers
-                WHERE follower_id = $1 AND followed_id = $2
-            );
+            SELECT 
+                EXISTS (SELECT 1 FROM account_followers WHERE follower_id = $1 AND followed_id = $2) AS is_following,
+                EXISTS (SELECT 1 FROM account_followers WHERE follower_id = $2 AND followed_id = $1) AS is_followed_by
         `;
         const result = await pool.query(query, [followerId, followedId]);
-        return result.rows[0].exists;
+        return {
+            isFollowing: result.rows[0].is_following,
+            isFollowedBy: result.rows[0].is_followed_by
+        };
     } catch (err) {
         console.error('Error checking follow status:', err);
         throw err;

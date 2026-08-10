@@ -2,8 +2,11 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Search, User, MapPin, ArrowRight, Sparkles } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
+import useGlobalState from "@/lib/global_state";
 
 import api from "@/lib/axios";
+import { toast } from "react-hot-toast";
+import { ProfileTags } from "@/pages/user/7_profile/Utilities/ProfileTags";
 
 // --- STRUCTURAL INTERFACE ---
 interface UserProfile {
@@ -11,16 +14,25 @@ interface UserProfile {
   name: string;
   username: string;
   avatar: string;
-  role: string;
   location: string;
   bio: string;
   skills: string[];
   isPremium: boolean;
+  verified: boolean;
+  subscriptionType: "Free" | "Premium" | "Business";
+  roles: { role_id: number | string; role_name: string }[];
+  meritScore: number | string;
+  followersCount: number;
+  followingCount: number;
+  isFollowing: boolean;
+  isFollowedBy: boolean;
+  tagline: string;
 }
 
 export const UserProfilesList: React.FC = () => {
   const { query } = useParams<{ query: string }>();
   const navigate = useNavigate();
+  const userInfo = useGlobalState((state) => state.user);
 
   const decodedQuery = query ? decodeURIComponent(query) : "";
   const [searchInput, setSearchInput] = useState(decodedQuery);
@@ -49,7 +61,7 @@ export const UserProfilesList: React.FC = () => {
         
         const results = accounts.map((account: any) => {
           const avatarPath = account.avatar_preset_url || "";
-          const name = account.display_name || account.handle;
+          const name = account.full_name || account.display_name || account.handle;
           return {
             id: String(account.account_id),
             name,
@@ -59,11 +71,19 @@ export const UserProfilesList: React.FC = () => {
                 ? avatarPath
                 : `${cloudfront}/${avatarPath.replace(/^\/+/, "")}`
               : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`,
-            role: "Platform Creator",
             location: "Global",
-            bio: "Check out my profile for more details.",
+            bio: account.bio || "",
+            tagline: account.tagline || "Editor",
             skills: [],
-            isPremium: false,
+            isPremium: account.subscriptiontype?.toLowerCase() === "premium" || account.subscriptiontype?.toLowerCase() === "business",
+            verified: !!account.verification_status,
+            subscriptionType: account.subscriptiontype || "Free",
+            roles: Array.isArray(account.roles) ? account.roles : [],
+            meritScore: parseFloat(account.merit_score) > 0 ? parseFloat(account.merit_score).toFixed(1) : "5.0",
+            followersCount: parseInt(account.followers_count || "0", 10),
+            followingCount: parseInt(account.following_count || "0", 10),
+            isFollowing: !!account.is_following,
+            isFollowedBy: !!account.is_followed_by,
           };
         });
         setProfiles(results);
@@ -84,8 +104,47 @@ export const UserProfilesList: React.FC = () => {
     }
   };
 
+  const handleFollowToggle = async (e: React.MouseEvent, profileId: string, currentlyFollowing: boolean) => {
+    e.stopPropagation();
+    
+    // Optimistic Update
+    setProfiles(prev => prev.map(p => {
+      if (p.id === profileId) {
+        return {
+          ...p,
+          isFollowing: !currentlyFollowing,
+          followersCount: currentlyFollowing ? Math.max(0, p.followersCount - 1) : p.followersCount + 1
+        };
+      }
+      return p;
+    }));
+
+    try {
+      if (currentlyFollowing) {
+        await api.delete(`/api/accounts/${profileId}/follow`);
+        toast.success("Unfollowed");
+      } else {
+        await api.post(`/api/accounts/${profileId}/follow`);
+        toast.success("Followed successfully");
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Action failed");
+      // Revert on error
+      setProfiles(prev => prev.map(p => {
+        if (p.id === profileId) {
+          return {
+            ...p,
+            isFollowing: currentlyFollowing,
+            followersCount: currentlyFollowing ? p.followersCount : Math.max(0, p.followersCount - 1)
+          };
+        }
+        return p;
+      }));
+    }
+  };
+
   return (
-    <div className="w-full min-h-screen bg-[#080a12] text-white overflow-x-hidden">
+    <div className="w-full min-h-screen bg-zinc-50 dark:bg-[#080a12] text-zinc-900 dark:text-white overflow-x-hidden">
       <UserHeader pageTitle="User List" credits={1250} />
 
       <div className="mx-auto max-w-5xl p-6 md:p-8 w-full">
@@ -95,19 +154,19 @@ export const UserProfilesList: React.FC = () => {
           <form onSubmit={handleSearchSubmit} className="relative w-full group">
             <Search
               onClick={handleSearchSubmit}
-              className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500 group-hover:text-blue-400 transition-colors cursor-pointer"
+              className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors cursor-pointer"
             />
             <input
               type="text"
               placeholder="Search platform creators by name, username, or skills..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full rounded-full border border-white/10 bg-white/5 pl-11 pr-4 py-3.5 text-sm text-white focus:outline-none focus:border-blue-500/50 transition-all"
+              className="w-full rounded-full border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 pl-11 pr-4 py-3.5 text-sm text-zinc-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all shadow-sm dark:shadow-none"
             />
           </form>
           {decodedQuery && !loading && (
             <p className="text-xs text-zinc-500 mt-3 pl-1">
-              Showing results for: <span className="text-blue-400 font-medium">"{decodedQuery}"</span> ({profiles.length} creators found)
+              Showing results for: <span className="text-blue-500 dark:text-blue-400 font-medium">"{decodedQuery}"</span> ({profiles.length} creators found)
             </p>
           )}
         </div>
@@ -118,10 +177,10 @@ export const UserProfilesList: React.FC = () => {
             <div className="text-center text-zinc-500 py-12">Searching for creators...</div>
           ) : profiles.length === 0 ? (
             /* Elegant Empty State Block */
-            <div className="rounded-3xl border border-dashed border-white/10 bg-[#0d0f1a]/40 p-12 text-center max-w-md mx-auto space-y-3 mt-12">
-              <User className="h-8 w-8 mx-auto text-zinc-600" />
+            <div className="rounded-3xl border border-dashed border-zinc-200 dark:border-white/10 bg-white/50 dark:bg-[#0d0f1a]/40 p-12 text-center max-w-md mx-auto space-y-3 mt-12">
+              <User className="h-8 w-8 mx-auto text-zinc-400 dark:text-zinc-600" />
               <div>
-                <h3 className="text-sm font-bold text-zinc-300">No Creators Found</h3>
+                <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-300">No Creators Found</h3>
                 <p className="text-xs text-zinc-500 mt-1">We couldn't find any profiles matching your search query.</p>
               </div>
             </div>
@@ -130,62 +189,86 @@ export const UserProfilesList: React.FC = () => {
               <div
                 key={profile.id}
                 onClick={() => navigate(`/profile/${profile.id}`)}
-                className="group rounded-2xl border border-white/10 bg-[#0d0f1a]/40 p-5 md:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 transition-all hover:border-white/20 hover:bg-[#0d0f1a]/60 cursor-pointer animate-fade-in"
+                className="group rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/40 p-5 md:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 transition-all hover:border-zinc-300 dark:hover:border-white/20 hover:shadow-md dark:hover:bg-[#0d0f1a]/60 cursor-pointer animate-fade-in"
               >
                 {/* Left Side: Avatar + Meta Specs */}
-                <div className="flex items-start gap-4 min-w-0">
-                  <div className="h-14 w-14 rounded-full border border-white/10 overflow-hidden shrink-0 bg-zinc-900 relative">
+                <div className="flex items-start gap-4 min-w-0 w-full sm:w-auto flex-1">
+                  <div className="h-16 w-16 md:h-20 md:w-20 rounded-full border border-white/10 overflow-hidden shrink-0 bg-zinc-900 relative">
                     <img src={profile.avatar} alt="" className="h-full w-full object-cover" />
                   </div>
 
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-base font-bold text-white group-hover:text-blue-400 transition-colors truncate">
+                  <div className="min-w-0 space-y-2.5 w-full">
+                    {/* Header Row */}
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <h3 className="text-lg font-bold text-zinc-900 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors truncate">
                         {profile.name}
                       </h3>
                       <span className="text-xs text-zinc-500 font-mono">@{profile.username}</span>
 
-                      {profile.isPremium && (
-                        <span className="inline-flex items-center gap-1 rounded bg-[#1a1407] border border-[#b48924] px-1.5 py-0.5 text-[9px] font-bold text-[#f2e29f] uppercase tracking-wider">
-                          <Sparkles className="h-2.5 w-2.5 fill-current" /> Pro
-                        </span>
-                      )}
+                      {/* Verified & Role Tags Wrapper */}
+                      <ProfileTags 
+                        role={profile.roles as any}
+                        verificationLevel={profile.verified}
+                        subscriptionType={profile.subscriptionType}
+                      />
                     </div>
 
-                    <p className="text-xs font-semibold text-zinc-300">{profile.role}</p>
-
-                    <div className="flex items-center gap-1 text-[11px] text-zinc-500">
-                      <MapPin className="h-3 w-3 shrink-0" />
-                      <span>{profile.location}</span>
+                    {/* Stats Row */}
+                    <div className="flex items-center gap-4 text-xs text-zinc-500 dark:text-zinc-400">
+                      <div className="flex items-center gap-1">
+                        <span className="font-bold text-zinc-900 dark:text-white">{profile.meritScore}</span>
+                        <span>Rating</span>
+                      </div>
+                      <div className="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700"></div>
+                      <div className="flex items-center gap-1">
+                        <span className="font-bold text-zinc-900 dark:text-white">{profile.followersCount}</span>
+                        <span>Followers</span>
+                      </div>
+                      <div className="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700"></div>
+                      <div className="flex items-center gap-1">
+                        <span className="font-bold text-zinc-900 dark:text-white">{profile.followingCount}</span>
+                        <span>Following</span>
+                      </div>
                     </div>
 
-                    <p className="text-xs text-zinc-400 line-clamp-2 pt-1 max-w-xl leading-relaxed">
-                      {profile.bio}
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400 font-medium">
+                      {profile.tagline}
                     </p>
 
-                    {/* Skill Badges Set */}
-                    {profile.skills.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 pt-2">
-                        {profile.skills.map((skill) => (
-                          <span
-                            key={skill}
-                            className="px-2 py-0.5 rounded bg-white/5 border border-white/5 text-[10px] font-medium text-zinc-400"
-                          >
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 pt-1 max-w-xl leading-relaxed">
+                      {profile.bio.length > 40 ? (
+                        <>
+                          {profile.bio.substring(0, 40)}... <span className="text-blue-500 cursor-pointer hover:underline">See More</span>
+                        </>
+                      ) : (
+                        profile.bio || "No introduction provided."
+                      )}
+                    </p>
                   </div>
                 </div>
 
-                {/* Right Side: Navigation Trigger Button */}
-                <button
-                  className="sm:self-center flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-zinc-400 transition-all group-hover:border-blue-500/30 group-hover:bg-blue-500/10 group-hover:text-blue-400 outline-none"
-                  title="View Profile Details"
-                >
-                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                </button>
+                {/* Right Side: Actions */}
+                <div className="flex items-center gap-3 w-full sm:w-auto justify-end mt-4 sm:mt-0">
+                  {userInfo?.account_id !== profile.id && (
+                    <button
+                      onClick={(e) => handleFollowToggle(e, profile.id, profile.isFollowing)}
+                      className={`px-5 py-2 text-xs font-bold rounded-full transition-all flex-shrink-0 border shadow-sm ${
+                        profile.isFollowing
+                          ? "bg-zinc-100 dark:bg-white/5 border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-white hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:hover:bg-red-500/10 dark:hover:text-red-400 dark:hover:border-red-500/30"
+                          : "bg-blue-600 border-blue-600 text-white hover:bg-blue-700 shadow-[0_0_15px_rgba(37,99,235,0.3)] hover:shadow-[0_0_20px_rgba(37,99,235,0.5)]"
+                      }`}
+                    >
+                      {profile.isFollowing ? "Following" : profile.isFollowedBy ? "Follow Back" : "Follow"}
+                    </button>
+                  )}
+
+                  <button
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5 text-zinc-400 dark:text-zinc-500 transition-all hover:border-blue-500/30 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:text-blue-500 dark:hover:text-blue-400 outline-none"
+                    title="View Profile Details"
+                  >
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                  </button>
+                </div>
 
               </div>
             ))
