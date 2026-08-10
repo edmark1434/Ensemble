@@ -299,7 +299,7 @@ const JobMain: React.FC = () => {
               onClick={() => setShowFilters(!showFilters)}
               className={`flex items-center justify-center p-2 rounded-lg transition-colors border ${
                 showFilters 
-                  ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' 
+                  ? 'bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400' 
                   : 'bg-white dark:bg-white/5 shadow-sm dark:shadow-none border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-100 dark:bg-white/10'
               }`}
               title="Toggle Filters"

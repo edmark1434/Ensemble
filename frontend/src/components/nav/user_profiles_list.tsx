@@ -3,6 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Search, User, MapPin, ArrowRight, Sparkles } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 
+import api from "@/lib/axios";
+
 // --- STRUCTURAL INTERFACE ---
 interface UserProfile {
   id: string;
@@ -16,44 +18,6 @@ interface UserProfile {
   isPremium: boolean;
 }
 
-// --- MOCK CREATOR DATABASE ---
-const sampleProfiles: UserProfile[] = [
-  {
-    id: "U001",
-    name: "John Paul P. Mahilom",
-    username: "rexshimura",
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80",
-    role: "Full-Stack Developer",
-    location: "Cebu City, Philippines",
-    bio: "Building interactive, high-end static & dynamic web applications. Specializing in React, Laravel, and custom database automation tools.",
-    skills: ["React.js", "Python", "Laravel", "PostgreSQL", "Tailwind CSS"],
-    isPremium: true
-  },
-  {
-    id: "U002",
-    // Handled relationship mapping context cleanly
-    name: "Charlyn Shaw",
-    username: "charlyn.shaw",
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80",
-    role: "UI/UX & Video Editor",
-    location: "Mandaue City, Cebu",
-    bio: "Cinematic narrative editing specialist. Crafting fluid dynamic audio sync timelines and modern digital interfaces in Figma.",
-    skills: ["Figma", "Adobe Premiere", "After Effects", "Color Grading"],
-    isPremium: true
-  },
-  {
-    id: "U003",
-    name: "Dave Almeda",
-    username: "dave_dev",
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80",
-    role: "Systems Automation Engineer",
-    location: "Cebu City, Philippines",
-    bio: "Hardware practitioner and IoT developer. Messing around with solderless breadboards, sensor arrays, and communication modules.",
-    skills: ["Arduino", "C++", "Python", "IoT Frameworks"],
-    isPremium: false
-  }
-];
-
 export const UserProfilesList: React.FC = () => {
   const { query } = useParams<{ query: string }>();
   const navigate = useNavigate();
@@ -61,10 +25,56 @@ export const UserProfilesList: React.FC = () => {
   const decodedQuery = query ? decodeURIComponent(query) : "";
   const [searchInput, setSearchInput] = useState(decodedQuery);
   const [loading, setLoading] = useState(false);
+  const [profiles, setProfiles] = useState<UserProfile[]>([]);
 
   // Sync state if routing query parameters change upstream
   useEffect(() => {
     setSearchInput(decodedQuery);
+  }, [decodedQuery]);
+
+  useEffect(() => {
+    const fetchProfiles = async () => {
+      if (!decodedQuery.trim()) {
+        setProfiles([]);
+        return;
+      }
+      
+      setLoading(true);
+      try {
+        const response = await api.get("/api/accounts/search-users", {
+          params: { handle: decodedQuery.replace(/^@/, "").trim() },
+        });
+        const cloudfront = String(import.meta.env.VITE_CLOUDFRONT_URL || "").replace(/\/$/, "");
+        const accounts = response.data?.data || [];
+        
+        const results = accounts.map((account: any) => {
+          const avatarPath = account.avatar_preset_url || "";
+          const name = account.display_name || account.handle;
+          return {
+            id: String(account.account_id),
+            name,
+            username: account.handle,
+            avatar: avatarPath
+              ? /^https?:\/\//i.test(avatarPath)
+                ? avatarPath
+                : `${cloudfront}/${avatarPath.replace(/^\/+/, "")}`
+              : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`,
+            role: "Platform Creator",
+            location: "Global",
+            bio: "Check out my profile for more details.",
+            skills: [],
+            isPremium: false,
+          };
+        });
+        setProfiles(results);
+      } catch (err) {
+        console.error("Failed to search users:", err);
+        setProfiles([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProfiles();
   }, [decodedQuery]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -73,19 +83,6 @@ export const UserProfilesList: React.FC = () => {
       navigate(`/search/user/${encodeURIComponent(searchInput.trim())}`);
     }
   };
-
-  // --- COMPUTE FILTERED MATCHES ---
-  const matchedProfiles = useMemo(() => {
-    if (!decodedQuery.trim()) return sampleProfiles;
-
-    const target = decodedQuery.toLowerCase();
-    return sampleProfiles.filter(profile =>
-      profile.name.toLowerCase().includes(target) ||
-      profile.username.toLowerCase().includes(target) ||
-      profile.role.toLowerCase().includes(target) ||
-      profile.skills.some(skill => skill.toLowerCase().includes(target))
-    );
-  }, [decodedQuery]);
 
   return (
     <div className="w-full min-h-screen bg-[#080a12] text-white overflow-x-hidden">
@@ -108,26 +105,28 @@ export const UserProfilesList: React.FC = () => {
               className="w-full rounded-full border border-white/10 bg-white/5 pl-11 pr-4 py-3.5 text-sm text-white focus:outline-none focus:border-blue-500/50 transition-all"
             />
           </form>
-          {decodedQuery && (
+          {decodedQuery && !loading && (
             <p className="text-xs text-zinc-500 mt-3 pl-1">
-              Showing results for: <span className="text-blue-400 font-medium">"{decodedQuery}"</span> ({matchedProfiles.length} creators found)
+              Showing results for: <span className="text-blue-400 font-medium">"{decodedQuery}"</span> ({profiles.length} creators found)
             </p>
           )}
         </div>
 
         {/* Profiles Feed List Stack */}
         <div className="space-y-4">
-          {matchedProfiles.length === 0 ? (
+          {loading ? (
+            <div className="text-center text-zinc-500 py-12">Searching for creators...</div>
+          ) : profiles.length === 0 ? (
             /* Elegant Empty State Block */
             <div className="rounded-3xl border border-dashed border-white/10 bg-[#0d0f1a]/40 p-12 text-center max-w-md mx-auto space-y-3 mt-12">
               <User className="h-8 w-8 mx-auto text-zinc-600" />
               <div>
                 <h3 className="text-sm font-bold text-zinc-300">No Creators Found</h3>
-                <p className="text-xs text-zinc-500 mt-1">We couldn't find any profiles matching your active query parameter variables.</p>
+                <p className="text-xs text-zinc-500 mt-1">We couldn't find any profiles matching your search query.</p>
               </div>
             </div>
           ) : (
-            matchedProfiles.map((profile) => (
+            profiles.map((profile) => (
               <div
                 key={profile.id}
                 onClick={() => navigate(`/profile/${profile.id}`)}
@@ -165,16 +164,18 @@ export const UserProfilesList: React.FC = () => {
                     </p>
 
                     {/* Skill Badges Set */}
-                    <div className="flex flex-wrap gap-1.5 pt-2">
-                      {profile.skills.map((skill) => (
-                        <span
-                          key={skill}
-                          className="px-2 py-0.5 rounded bg-white/5 border border-white/5 text-[10px] font-medium text-zinc-400"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
+                    {profile.skills.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-2">
+                        {profile.skills.map((skill) => (
+                          <span
+                            key={skill}
+                            className="px-2 py-0.5 rounded bg-white/5 border border-white/5 text-[10px] font-medium text-zinc-400"
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 

@@ -66,6 +66,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
   const creatorSearchRef = useRef<HTMLFormElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const userInfo = useGlobalState((state) => state.user);
   const [showHeader, setShowHeader] = useState(false);
@@ -272,6 +273,17 @@ useEffect(() => {
     return () => document.removeEventListener("mousedown", closeCreatorSearch);
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const handleTopUp = () => {
     navigate("/credits");
   };
@@ -330,6 +342,7 @@ useEffect(() => {
                 className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500 dark:text-zinc-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors cursor-pointer"
               />
               <input
+                ref={searchInputRef}
                 type="text"
                 placeholder="Search creators..."
                 value={headerSearchInput}
@@ -338,8 +351,13 @@ useEffect(() => {
                   setHeaderSearchInput(e.target.value);
                   setIsCreatorSearchOpen(true);
                 }}
-                className="w-full rounded-full border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 pl-9 pr-4 py-1.5 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder-gray-400 dark:placeholder-zinc-500"
+                className="w-full rounded-full border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 pl-9 pr-14 py-1.5 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder-gray-400 dark:placeholder-zinc-500"
               />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
+                <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400 bg-gray-200 dark:bg-white/10 border border-gray-300 dark:border-white/20 rounded">
+                  Alt+K
+                </kbd>
+              </div>
 
               {isCreatorSearchOpen && headerSearchInput.replace(/^@/, "").trim().length >= 2 && (
                 <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#151824] shadow-xl dark:shadow-2xl">
