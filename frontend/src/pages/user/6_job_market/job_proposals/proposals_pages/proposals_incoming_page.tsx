@@ -135,7 +135,7 @@ export const ProposalsIncomingPage: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-4">
         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-zinc-400 text-sm animate-pulse">Loading incoming proposals...</p>
+        <p className="text-gray-500 dark:text-zinc-400 text-sm animate-pulse">Loading incoming proposals...</p>
       </div>
     );
   }
@@ -143,14 +143,14 @@ export const ProposalsIncomingPage: React.FC = () => {
   if (proposals.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-4 text-center">
-        <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-2">
+        <div className="w-16 h-16 bg-white dark:bg-white/5 shadow-sm dark:shadow-none rounded-full flex items-center justify-center mb-2">
           <Briefcase className="h-8 w-8 text-blue-400" />
         </div>
-        <h3 className="text-lg font-bold text-white">No Proposals Received Yet</h3>
-        <p className="text-xs text-zinc-400 max-w-sm">You haven't received any proposals for this job post yet, or you haven't created a job post.</p>
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white">No Proposals Received Yet</h3>
+        <p className="text-xs text-gray-500 dark:text-zinc-400 max-w-sm">You haven't received any proposals for this job post yet, or you haven't created a job post.</p>
         <button
           onClick={() => navigate('/jobs/create')}
-          className="mt-4 px-6 py-2.5 rounded-xl bg-blue-500 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20"
+          className="mt-4 px-6 py-2.5 rounded-xl bg-blue-500 text-xs font-bold text-gray-900 dark:text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20"
         >
           Create a Job Post
         </button>
@@ -161,11 +161,11 @@ export const ProposalsIncomingPage: React.FC = () => {
   return (
     <div className="space-y-4 text-left">
       {/* Target Job Header Bar */}
-      <div className="flex items-center justify-between gap-4 p-4 rounded-2xl border border-white/10 bg-[#0d0f1a]/80 backdrop-blur-sm">
+      <div className="flex items-center justify-between gap-4 p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 backdrop-blur-sm">
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => navigate("/jobs/proposals")}
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition shrink-0"
+            className="p-2 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
             title="Return to Job Posts Selection"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -175,17 +175,17 @@ export const ProposalsIncomingPage: React.FC = () => {
               <img 
                 src={targetJob.thumbnail} 
                 alt="" 
-                className="h-10 w-10 rounded-lg object-cover border border-white/10 shrink-0" 
+                className="h-10 w-10 rounded-lg object-cover border border-gray-200 dark:border-white/10 shrink-0" 
               />
             )}
             <div>
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-0.5">
+              <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block mb-0.5">
                 Viewing Proposals
               </span>
               <button
                 type="button"
                 onClick={() => navigate(`/jobs/my-job-post/${jobPostId}`)}
-                className="text-sm font-bold text-white hover:text-blue-400 transition-colors flex items-center gap-2 truncate text-left"
+                className="text-sm font-bold text-gray-900 dark:text-white hover:text-blue-400 transition-colors flex items-center gap-2 truncate text-left"
                 title="View My Job Post Details"
               >
                 <span className="truncate">{targetJob?.title || "Job Post"}</span>
@@ -195,16 +195,16 @@ export const ProposalsIncomingPage: React.FC = () => {
           </div>
         </div>
 
-        <span className="text-xs font-semibold text-zinc-400 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 shrink-0">
+        <span className="text-xs font-semibold text-gray-500 dark:text-zinc-400 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-1.5 rounded-xl border border-gray-100 dark:border-white/5 shrink-0">
           {filtered.length} Total Applicants
         </span>
       </div>
 
-      <div className="flex items-center justify-between border-b border-white/5 pb-2 mt-4">
-        <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+      <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-2 mt-4">
+        <h2 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
           Received Proposal Applications ({filtered.length})
         </h2>
-        <span className="text-xs text-zinc-400 font-mono">Incoming</span>
+        <span className="text-xs text-gray-500 dark:text-zinc-400 font-mono">Incoming</span>
       </div>
 
       <ProposalsList

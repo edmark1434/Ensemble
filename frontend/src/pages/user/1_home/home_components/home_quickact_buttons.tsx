@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 
 export const ActionButtonSkeleton: React.FC = () => (
-  <div className="h-10 w-10 animate-pulse rounded-xl border border-white/5 bg-white/[0.03]" />
+  <div className="h-10 w-10 animate-pulse rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.03]" />
 );
 
 export const HomeQuickActButtons: React.FC = () => {
@@ -150,18 +150,18 @@ export const HomeQuickActButtons: React.FC = () => {
             key={act.label}
             onClick={() => navigate(act.path)}
             title={act.label}
-            className={`group flex h-10 items-center rounded-xl border border-white/10 bg-white/[0.04] p-2 transition-all duration-300 ease-out hover:-translate-y-0.5 active:translate-y-0 active:scale-95 ${style.borderHover} ${style.bgHover} ${style.glow}`}
+            className={`group flex h-10 items-center rounded-xl border border-gray-300 shadow-sm dark:shadow-none dark:border-white/10 bg-white dark:bg-white/[0.04] p-2 transition-all duration-300 ease-out hover:-translate-y-0.5 active:translate-y-0 active:scale-95 ${style.borderHover} ${style.bgHover} ${style.glow}`}
           >
             {/* Icon Container */}
             <div
-              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white/5 text-zinc-400 transition-all duration-300 group-hover:scale-105 ${style.iconBgHover}`}
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-gray-200 dark:bg-white/5 text-gray-700 dark:text-zinc-400 transition-all duration-300 group-hover:scale-105 ${style.iconBgHover}`}
             >
               <Icon className={`h-3.5 w-3.5 ${act.fill ? "fill-current" : ""}`} />
             </div>
 
             {/* Smooth Expanding Text Label */}
             <span
-              className={`max-w-0 overflow-hidden whitespace-nowrap text-xs font-semibold tracking-tight text-zinc-400 opacity-0 transition-all duration-300 ease-in-out group-hover:ml-2 group-hover:max-w-xs group-hover:opacity-100 ${style.textColorHover}`}
+              className={`max-w-0 overflow-hidden whitespace-nowrap text-xs font-semibold tracking-tight text-gray-700 dark:text-zinc-400 opacity-0 transition-all duration-300 ease-in-out group-hover:ml-2 group-hover:max-w-xs group-hover:opacity-100 ${style.textColorHover}`}
               style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
             >
               {act.label}

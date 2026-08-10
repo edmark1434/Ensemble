@@ -372,25 +372,25 @@ type ViewType = "grid" | "compact";
 // Skeleton Components
 const ProjectCardSkeleton = ({ view = "grid" }: { view?: ViewType }) => (
   view === "compact" ? (
-    <div className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-3">
-      <div className="h-16 w-24 animate-pulse rounded-lg bg-white/10" />
+    <div className="flex items-center gap-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-3">
+      <div className="h-16 w-24 animate-pulse rounded-lg bg-gray-200 dark:bg-white/10" />
       <div className="flex-1">
-        <div className="h-4 w-32 animate-pulse rounded bg-white/10" />
-        <div className="mt-1 h-3 w-24 animate-pulse rounded bg-white/5" />
+        <div className="h-4 w-32 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
+        <div className="mt-1 h-3 w-24 animate-pulse rounded bg-gray-100 dark:bg-white/5" />
       </div>
-      <div className="h-8 w-20 animate-pulse rounded-full bg-white/10" />
+      <div className="h-8 w-20 animate-pulse rounded-full bg-gray-200 dark:bg-white/10" />
     </div>
   ) : (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-      <div className="mb-3 h-36 w-full animate-pulse rounded-lg bg-white/10" />
-      <div className="h-5 w-3/4 animate-pulse rounded-lg bg-white/10" />
+    <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-4">
+      <div className="mb-3 h-36 w-full animate-pulse rounded-lg bg-gray-200 dark:bg-white/10" />
+      <div className="h-5 w-3/4 animate-pulse rounded-lg bg-gray-200 dark:bg-white/10" />
       <div className="mt-2 flex gap-3">
-        <div className="h-4 w-16 animate-pulse rounded-lg bg-white/5" />
-        <div className="h-4 w-12 animate-pulse rounded-lg bg-white/5" />
+        <div className="h-4 w-16 animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
+        <div className="h-4 w-12 animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
       </div>
       <div className="mt-3 flex gap-2">
-        <div className="h-8 w-8 animate-pulse rounded-lg bg-white/5" />
-        <div className="h-8 w-8 animate-pulse rounded-lg bg-white/5" />
+        <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
+        <div className="h-8 w-8 animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
       </div>
     </div>
   )
@@ -473,17 +473,17 @@ const Projects: React.FC = () => {
   const renderProjectCard = (project: Project) => (
     <div
       key={project.id}
-      className="group relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent transition-all duration-300 hover:border-white/20 hover:bg-white/10 hover:scale-[1.02]"
+      className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-gradient-to-br dark:from-white/5 dark:to-transparent transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/10 hover:scale-[1.02] shadow-sm hover:shadow-md dark:shadow-none"
       onMouseEnter={() => setHoveredProject(project.id)}
       onMouseLeave={() => setHoveredProject(null)}
     >
-      <div className="relative h-36 w-full overflow-hidden bg-gradient-to-br from-[#1a1f2e] to-[#0d0f1a]">
+      <div className="relative h-36 w-full overflow-hidden bg-gray-200 dark:bg-gradient-to-br dark:from-[#1a1f2e] dark:to-[#0d0f1a]">
         <img
           src={project.thumbnail}
           alt={project.name}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#080a12] via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 dark:from-[#080a12] via-transparent to-transparent" />
 
         <div className="absolute left-3 top-3">
           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${getTypeColor(project.type)}`}>
@@ -516,18 +516,18 @@ const Projects: React.FC = () => {
       </div>
 
       <div className="p-4">
-        <h3 className="mb-2 text-sm font-semibold text-white truncate">
+        <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-white truncate">
           {project.name}
         </h3>
 
         {/* Progress Bar for Contract Projects */}
         {activeTab === "contract" && project.progress !== undefined && (
           <div className="mb-2">
-            <div className="flex items-center justify-between text-xs text-zinc-500 mb-1">
+            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-500 mb-1">
               <span>Progress</span>
               <span>{project.progress}%</span>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-white/10">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-blue-500 to-purple-500"
                 style={{ width: `${project.progress}%` }}
@@ -538,13 +538,13 @@ const Projects: React.FC = () => {
 
         {/* Contract Amount */}
         {activeTab === "contract" && project.contractAmount && (
-          <div className="mb-2 flex items-center gap-1 text-xs text-green-400">
+          <div className="mb-2 flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
             <DollarSign className="h-3 w-3" />
             <span>{project.contractAmount}</span>
           </div>
         )}
 
-        <div className="flex items-center justify-between text-xs text-zinc-500">
+        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-500">
           <div className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
             <span>{project.lastUpdated}</span>
@@ -552,11 +552,11 @@ const Projects: React.FC = () => {
           <div>{project.size}</div>
         </div>
 
-        <div className="mt-3 flex items-center gap-2 border-t border-white/10 pt-3">
-          <button className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/10 hover:text-white">
+        <div className="mt-3 flex items-center gap-2 border-t border-gray-100 dark:border-white/10 pt-3">
+          <button className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white">
             <Share2 className="h-3.5 w-3.5" />
           </button>
-          <button className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/10 hover:text-white">
+          <button className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white">
             <Edit className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -572,9 +572,9 @@ const Projects: React.FC = () => {
   const renderCompactProjectCard = (project: Project) => (
     <div
       key={project.id}
-      className="flex items-center gap-4 rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-3 transition-all duration-300 hover:border-white/20 hover:bg-white/10"
+      className="flex items-center gap-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-gradient-to-br dark:from-white/5 dark:to-transparent p-3 transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/10 shadow-sm hover:shadow-md dark:shadow-none"
     >
-      <div className="relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-gradient-to-br from-[#1a1f2e] to-[#0d0f1a]">
+      <div className="relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-gray-200 dark:bg-gradient-to-br dark:from-[#1a1f2e] dark:to-[#0d0f1a]">
         <img
           src={project.thumbnail}
           alt={project.name}
@@ -588,15 +588,15 @@ const Projects: React.FC = () => {
       </div>
 
       <div className="flex-1 min-w-0">
-        <h3 className="text-sm font-semibold text-white truncate">{project.name}</h3>
-        <div className="flex items-center gap-3 mt-1 text-xs text-zinc-500">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{project.name}</h3>
+        <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-zinc-500">
           <div className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
             <span>{project.lastUpdated}</span>
           </div>
           <div>{project.size}</div>
           {project.sharedBy && (
-            <span className="text-zinc-400">by {project.sharedBy.split(" ")[0]}</span>
+            <span className="text-gray-400 dark:text-zinc-400">by {project.sharedBy.split(" ")[0]}</span>
           )}
         </div>
 
@@ -604,23 +604,23 @@ const Projects: React.FC = () => {
         {activeTab === "contract" && project.progress !== undefined && (
           <div className="mt-2">
             <div className="flex items-center gap-2">
-              <div className="flex-1 h-1 overflow-hidden rounded-full bg-white/10">
+              <div className="flex-1 h-1 overflow-hidden rounded-full bg-gray-200 dark:bg-white/10">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-blue-500 to-purple-500"
                   style={{ width: `${project.progress}%` }}
                 />
               </div>
-              <span className="text-xs text-zinc-500">{project.progress}%</span>
+              <span className="text-xs text-gray-500 dark:text-zinc-500">{project.progress}%</span>
             </div>
           </div>
         )}
       </div>
 
       <div className="flex items-center gap-1">
-        <button className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/10 hover:text-white">
+        <button className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white">
           <Share2 className="h-3.5 w-3.5" />
         </button>
-        <button className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/10 hover:text-white">
+        <button className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white">
           <Edit className="h-3.5 w-3.5" />
         </button>
       </div>
@@ -631,37 +631,37 @@ const Projects: React.FC = () => {
   const renderTeamFolderCard = (project: TeamProject) => (
     <div
       key={project.id}
-      className="group relative overflow-hidden rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent transition-all duration-300 hover:border-white/20 hover:bg-white/10 hover:scale-[1.02] cursor-pointer"
+      className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-gradient-to-br dark:from-white/5 dark:to-transparent transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/10 hover:scale-[1.02] cursor-pointer shadow-sm hover:shadow-md dark:shadow-none"
       onMouseEnter={() => setHoveredProject(project.id + 200)}
       onMouseLeave={() => setHoveredProject(null)}
       onClick={() => navigate(`/projects/team/${project.id}`)}
     >
-      <div className="relative h-36 w-full overflow-hidden bg-gradient-to-br from-blue-500/20 to-purple-500/20">
+      <div className="relative h-36 w-full overflow-hidden bg-blue-50 dark:bg-gradient-to-br dark:from-blue-500/20 dark:to-purple-500/20">
         <div className="absolute inset-0 flex items-center justify-center">
-          <Folder className="h-20 w-20 text-blue-400/30" />
+          <Folder className="h-20 w-20 text-blue-500/20 dark:text-blue-400/30" />
         </div>
 
         <div className="absolute bottom-2 right-2 flex -space-x-2">
-          <div className="h-8 w-8 rounded-md bg-black/60 backdrop-blur-sm flex items-center justify-center">
-            <FileVideo className="h-4 w-4 text-blue-400" />
+          <div className="h-8 w-8 rounded-md bg-white/80 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center border border-gray-200 dark:border-none">
+            <FileVideo className="h-4 w-4 text-blue-600 dark:text-blue-400" />
           </div>
-          <div className="h-8 w-8 rounded-md bg-black/60 backdrop-blur-sm flex items-center justify-center">
-            <FileVideo className="h-4 w-4 text-blue-400" />
+          <div className="h-8 w-8 rounded-md bg-white/80 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center border border-gray-200 dark:border-none">
+            <FileVideo className="h-4 w-4 text-blue-600 dark:text-blue-400" />
           </div>
-          <div className="h-8 w-8 rounded-md bg-black/60 backdrop-blur-sm flex items-center justify-center">
-            <span className="text-[10px] text-white">+{project.videoCount}</span>
+          <div className="h-8 w-8 rounded-md bg-white/80 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center border border-gray-200 dark:border-none">
+            <span className="text-[10px] text-gray-700 dark:text-white">+{project.videoCount}</span>
           </div>
         </div>
 
         <div className="absolute left-3 top-3">
-          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/20 px-2 py-0.5 text-[10px] font-medium text-blue-400">
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 dark:bg-blue-500/20 px-2 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-none">
             <Users className="h-3 w-3" />
             Team Project
           </span>
         </div>
 
         <button
-          className="absolute right-3 top-3 rounded-full bg-black/50 p-1.5 text-zinc-400 transition hover:text-white backdrop-blur-sm"
+          className="absolute right-3 top-3 rounded-full bg-white/80 dark:bg-black/50 p-1.5 text-gray-600 dark:text-zinc-400 transition hover:text-gray-900 dark:hover:text-white backdrop-blur-sm border border-gray-200 dark:border-none"
           onClick={(e) => e.stopPropagation()}
         >
           <MoreVertical className="h-3.5 w-3.5" />
@@ -669,9 +669,9 @@ const Projects: React.FC = () => {
       </div>
 
       <div className="p-4">
-        <h3 className="mb-1 text-sm font-semibold text-white truncate">{project.name}</h3>
-        <p className="text-xs text-zinc-500 mb-2">Shared by {project.sharedBy.split(" ")[0]}</p>
-        <div className="flex items-center justify-between text-xs text-zinc-500">
+        <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white truncate">{project.name}</h3>
+        <p className="text-xs text-gray-500 dark:text-zinc-500 mb-2">Shared by {project.sharedBy.split(" ")[0]}</p>
+        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-500">
           <div className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
             <span>{project.lastUpdated}</span>
@@ -683,15 +683,15 @@ const Projects: React.FC = () => {
           <div>{project.size}</div>
         </div>
 
-        <div className="mt-3 flex items-center gap-2 border-t border-white/10 pt-3">
-          <button className="flex items-center gap-1 rounded-lg bg-purple-500/20 px-2.5 py-1 text-xs font-medium text-purple-400 transition hover:bg-purple-500/30">
+        <div className="mt-3 flex items-center gap-2 border-t border-gray-100 dark:border-white/10 pt-3">
+          <button className="flex items-center gap-1 rounded-lg bg-purple-50 dark:bg-purple-500/20 px-2.5 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 transition hover:bg-purple-100 dark:hover:bg-purple-500/30 border border-purple-200 dark:border-none">
             <FolderKanban className="h-3 w-3" />
             Open Folder
           </button>
-          <button className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/10 hover:text-white">
+          <button className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white">
             <Share2 className="h-3.5 w-3.5" />
           </button>
-          <button className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/10 hover:text-white">
+          <button className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white">
             <Users className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -707,17 +707,17 @@ const Projects: React.FC = () => {
   const renderCompactTeamFolderCard = (project: TeamProject) => (
     <div
       key={project.id}
-      className="flex items-center gap-4 rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-3 transition-all duration-300 hover:border-white/20 hover:bg-white/10 cursor-pointer"
+      className="flex items-center gap-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-gradient-to-br dark:from-white/5 dark:to-transparent p-3 transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/10 cursor-pointer shadow-sm hover:shadow-md dark:shadow-none"
       onClick={() => navigate(`/projects/team/${project.id}`)}
     >
-      <div className="relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
-        <Folder className="h-8 w-8 text-blue-400/50" />
+      <div className="relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-blue-50 dark:bg-gradient-to-br dark:from-blue-500/20 dark:to-purple-500/20 flex items-center justify-center border border-blue-100 dark:border-none">
+        <Folder className="h-8 w-8 text-blue-500/50 dark:text-blue-400/50" />
       </div>
 
       <div className="flex-1 min-w-0">
-        <h3 className="text-sm font-semibold text-white truncate">{project.name}</h3>
-        <p className="text-xs text-zinc-500">Shared by {project.sharedBy.split(" ")[0]}</p>
-        <div className="flex items-center gap-3 mt-1 text-xs text-zinc-500">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{project.name}</h3>
+        <p className="text-xs text-gray-500 dark:text-zinc-500">Shared by {project.sharedBy.split(" ")[0]}</p>
+        <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-zinc-500">
           <div className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
             <span>{project.lastUpdated}</span>
@@ -730,7 +730,7 @@ const Projects: React.FC = () => {
         </div>
       </div>
 
-      <button className="flex items-center gap-1 rounded-lg bg-purple-500/20 px-3 py-1.5 text-xs font-medium text-purple-400 transition hover:bg-purple-500/30">
+      <button className="flex items-center gap-1 rounded-lg bg-purple-50 dark:bg-purple-500/20 px-3 py-1.5 text-xs font-medium text-purple-600 dark:text-purple-400 transition hover:bg-purple-100 dark:hover:bg-purple-500/30 border border-purple-200 dark:border-none">
         <FolderKanban className="h-3 w-3" />
         Open
       </button>
@@ -773,23 +773,23 @@ const Projects: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#080a12]">
+      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
         <UserHeader pageTitle="Projects" credits={1250} />
         <div className="mx-auto max-w-7xl p-6 md:p-8">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="h-10 w-40 animate-pulse rounded-full bg-white/10" />
+            <div className="h-10 w-40 animate-pulse rounded-full bg-gray-200 dark:bg-white/10" />
             <div className="flex gap-3">
-              <div className="h-10 w-64 animate-pulse rounded-full bg-white/5" />
-              <div className="h-10 w-24 animate-pulse rounded-full bg-white/5" />
+              <div className="h-10 w-64 animate-pulse rounded-full bg-gray-100 dark:bg-white/5" />
+              <div className="h-10 w-24 animate-pulse rounded-full bg-gray-100 dark:bg-white/5" />
             </div>
           </div>
-          <div className="mb-6 flex flex-wrap gap-2 border-b border-white/10 pb-2">
+          <div className="mb-6 flex flex-wrap gap-2 border-b border-gray-200 dark:border-white/10 pb-2">
             {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-10 w-24 animate-pulse rounded-lg bg-white/10" />
+              <div key={i} className="h-10 w-24 animate-pulse rounded-lg bg-gray-200 dark:bg-white/10" />
             ))}
           </div>
           <div className="flex justify-end mb-4">
-            <div className="h-10 w-20 animate-pulse rounded-full bg-white/10" />
+            <div className="h-10 w-20 animate-pulse rounded-full bg-gray-200 dark:bg-white/10" />
           </div>
           {viewMode === "compact" ? (
             <div className="space-y-3">
@@ -810,7 +810,7 @@ const Projects: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#080a12]">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
       <UserHeader pageTitle="Projects" credits={1250} />
 
       <div className="mx-auto max-w-7xl p-6 md:p-8">
@@ -819,7 +819,7 @@ const Projects: React.FC = () => {
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <button
             onClick={() => navigate("/projects/select")}
-            className="group flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl active:scale-95 active:bg-gradient-to-r active:from-cyan-500 active:via-yellow-500 active:to-purple-600 active:text-white"
+            className="group flex items-center gap-2 rounded-full bg-gray-900 dark:bg-white px-5 py-2.5 text-sm font-medium text-white dark:text-black shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl active:scale-95 active:bg-gradient-to-r active:from-cyan-500 active:via-yellow-500 active:to-purple-600 active:text-white"
           >
             <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
             <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Create a Project</span>
@@ -827,16 +827,16 @@ const Projects: React.FC = () => {
 
           <div className="flex gap-3">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-zinc-500" />
               <input
                 type="text"
                 placeholder="Search projects..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="rounded-full border border-white/15 bg-white/5 pl-9 pr-4 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                className="rounded-full border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 pl-9 pr-4 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
               />
             </div>
-            <button className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-zinc-400 transition hover:border-white/30 hover:text-white">
+            <button className="flex items-center gap-2 rounded-full border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 px-4 py-2 text-sm text-gray-600 dark:text-zinc-400 transition hover:border-gray-300 dark:hover:border-white/30 hover:text-gray-900 dark:hover:text-white">
               <Filter className="h-4 w-4" />
               Filter
               <ChevronDown className="h-3.5 w-3.5" />
@@ -845,15 +845,15 @@ const Projects: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="mb-6 flex flex-wrap gap-1 border-b border-white/10">
+        <div className="mb-6 flex flex-wrap gap-1 border-b border-gray-200 dark:border-white/10">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all duration-200 rounded-t-lg ${
                 activeTab === tab.id
-                  ? "text-blue-400 border-b-2 border-blue-500 bg-blue-500/5"
-                  : "text-zinc-400 hover:text-white hover:bg-white/5"
+                  ? "text-blue-600 dark:text-blue-400 border-b-2 border-blue-500 bg-blue-50 dark:bg-blue-500/5"
+                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
               }`}
             >
               {tab.icon}
@@ -865,18 +865,18 @@ const Projects: React.FC = () => {
         {/* View Toggle and Header */}
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-white">{getTabTitle()}</h2>
-            <p className="text-xs text-zinc-500">{getTabDescription()}</p>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{getTabTitle()}</h2>
+            <p className="text-xs text-gray-500 dark:text-zinc-500">{getTabDescription()}</p>
           </div>
 
           {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 rounded-lg border border-white/15 bg-white/5 p-1">
+          <div className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 p-1">
             <button
               onClick={() => setViewMode("grid")}
               className={`rounded-md p-1.5 transition-all duration-200 ${
                 viewMode === "grid"
                   ? "bg-blue-500 text-white"
-                  : "text-zinc-400 hover:text-white hover:bg-white/10"
+                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10"
               }`}
               title="Grid View"
             >
@@ -887,7 +887,7 @@ const Projects: React.FC = () => {
               className={`rounded-md p-1.5 transition-all duration-200 ${
                 viewMode === "compact"
                   ? "bg-blue-500 text-white"
-                  : "text-zinc-400 hover:text-white hover:bg-white/10"
+                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10"
               }`}
               title="Compact View"
             >
@@ -903,10 +903,10 @@ const Projects: React.FC = () => {
 
         {/* Empty State */}
         {getContent().length === 0 && (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-white/10 bg-white/5 p-12 text-center">
-            <FolderKanban className="mb-3 h-12 w-12 text-zinc-500" />
-            <h3 className="text-lg font-semibold text-white">No projects found</h3>
-            <p className="mt-1 text-sm text-zinc-400">
+          <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-12 text-center">
+            <FolderKanban className="mb-3 h-12 w-12 text-gray-400 dark:text-zinc-500" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No projects found</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">
               {activeTab === "contract"
                 ? "No active contracts yet. Start collaborating to create contracts."
                 : "Create your first project to get started"}

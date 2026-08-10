@@ -128,22 +128,22 @@ function SummaryCard({
   color: string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/70 p-5 shadow-xl">
-      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/70 shadow-sm dark:shadow-none p-5 shadow-xl">
+      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-gray-500 dark:text-zinc-500">{label}</p>
       <p className={`mt-3 flex items-center gap-2 text-2xl font-bold tabular-nums ${color}`}>
         <CircleDollarSign className="h-5 w-5" aria-hidden="true" />
         {credits(value)}
       </p>
-      <p className="mt-2 text-xs text-zinc-500">{detail}</p>
+      <p className="mt-2 text-xs text-gray-500 dark:text-zinc-500">{detail}</p>
     </div>
   );
 }
 
 function DetailItem({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="rounded-xl border border-white/5 bg-white/[0.025] p-3.5">
+    <div className="rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.025] p-3.5">
       <dt className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-600">{label}</dt>
-      <dd className={`mt-1.5 break-all text-sm text-zinc-200 ${mono ? "font-mono text-xs" : ""}`}>{value || "—"}</dd>
+      <dd className={`mt-1.5 break-all text-sm text-gray-700 dark:text-zinc-200 ${mono ? "font-mono text-xs" : ""}`}>{value || "—"}</dd>
     </div>
   );
 }
@@ -254,7 +254,7 @@ export const TransactionHistoryMain = () => {
   }, [selectedTransaction]);
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-[#080a12] text-white">
+    <div className="min-h-screen w-full overflow-x-hidden bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white">
       <UserHeader pageTitle="Transaction History" />
 
       <main className="mx-auto w-full max-w-7xl p-5 md:p-8">
@@ -265,7 +265,7 @@ export const TransactionHistoryMain = () => {
               <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Account ledger</span>
             </div>
             <h1 className="text-2xl font-bold">Credit transaction history</h1>
-            <p className="mt-1 max-w-2xl text-sm text-zinc-400">
+            <p className="mt-1 max-w-2xl text-sm text-gray-500 dark:text-zinc-400">
               Review purchases, transfers, held credits, releases, refunds, and fees in one ledger.
             </p>
           </div>
@@ -279,8 +279,8 @@ export const TransactionHistoryMain = () => {
           </button>
         </div>
 
-        <section className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 shadow-2xl">
-          <div className="border-b border-white/10 p-3" role="tablist" aria-label="Transaction views">
+        <section className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/60 shadow-sm dark:shadow-none shadow-2xl">
+          <div className="border-b border-gray-200 dark:border-white/10 p-3" role="tablist" aria-label="Transaction views">
             <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-5">
               {(["Summary", "Credits", "Assets", "Fund Transfer", "Fee"] as MainTab[]).map((tab) => {
                 const isActive = activeMainTab === tab;
@@ -302,11 +302,11 @@ export const TransactionHistoryMain = () => {
                       if (tab === "Credits") setActiveChildTab("All Credits");
                       if (tab === "Assets") setActiveChildTab("All Assets");
                     }}
-                    className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isActive ? "border-blue-500/40 bg-blue-500/10 text-blue-300" : "border-transparent text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-200"}`}
+                    className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isActive ? "border-blue-500/40 bg-blue-500/10 text-blue-300" : "border-transparent text-gray-500 dark:text-zinc-500 hover:bg-gray-50 dark:bg-white/[0.03] hover:text-gray-700 dark:text-zinc-200"}`}
                   >
                     <TabIcon className="h-3.5 w-3.5" aria-hidden="true" />
                     {tab}
-                    {count !== null && <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-zinc-500">{count}</span>}
+                    {count !== null && <span className="rounded-full bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-2 py-0.5 text-[10px] text-gray-500 dark:text-zinc-500">{count}</span>}
                   </button>
                 );
               })}
@@ -314,7 +314,7 @@ export const TransactionHistoryMain = () => {
           </div>
 
           {(activeMainTab === "Credits" || activeMainTab === "Assets") && (
-            <div className="border-b border-white/10 bg-white/[0.015] p-3" role="tablist" aria-label={`${activeMainTab} transaction types`}>
+            <div className="border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.015] p-3" role="tablist" aria-label={`${activeMainTab} transaction types`}>
               <div className="flex flex-wrap gap-1.5">
                 {[
                   activeMainTab === "Assets" ? "All Assets" : "All Credits",
@@ -335,11 +335,11 @@ export const TransactionHistoryMain = () => {
                       role="tab"
                       aria-selected={isActive}
                       onClick={() => setActiveChildTab(tab)}
-                      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isActive ? "border-blue-500/40 bg-blue-500/10 text-blue-300" : "border-white/5 text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-200"}`}
+                      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isActive ? "border-blue-500/40 bg-blue-500/10 text-blue-300" : "border-gray-100 dark:border-white/5 text-gray-500 dark:text-zinc-500 hover:bg-gray-50 dark:bg-white/[0.03] hover:text-gray-700 dark:text-zinc-200"}`}
                     >
                       <List className="h-3.5 w-3.5" aria-hidden="true" />
                       {tab.startsWith("All ") ? tab : displayType(tab)}
-                      <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-zinc-500">{count}</span>
+                      <span className="rounded-full bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-2 py-0.5 text-[10px] text-gray-500 dark:text-zinc-500">{count}</span>
                     </button>
                   );
                 })}
@@ -348,7 +348,7 @@ export const TransactionHistoryMain = () => {
           )}
 
           {loading && (
-            <div className="flex min-h-72 flex-col items-center justify-center gap-3 text-zinc-400" role="status">
+            <div className="flex min-h-72 flex-col items-center justify-center gap-3 text-gray-500 dark:text-zinc-400" role="status">
               <LoaderCircle className="h-7 w-7 animate-spin text-blue-400" aria-hidden="true" />
               <p className="text-sm">Loading your credit ledger…</p>
             </div>
@@ -371,10 +371,10 @@ export const TransactionHistoryMain = () => {
                 <SummaryCard label="Credits on hold" value={totals.held} detail="Credits currently waiting for release or refund" color="text-amber-200" />
               </section>
 
-              <section aria-labelledby="activity-breakdown-title" className="rounded-2xl border border-white/10 bg-white/[0.015]">
-                <div className="border-b border-white/10 px-5 py-4">
-                  <h2 id="activity-breakdown-title" className="font-semibold text-zinc-100">Activity by transaction type</h2>
-                  <p className="mt-1 text-xs text-zinc-500">All-time transaction volume in your account ledger.</p>
+              <section aria-labelledby="activity-breakdown-title" className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.015]">
+                <div className="border-b border-gray-200 dark:border-white/10 px-5 py-4">
+                  <h2 id="activity-breakdown-title" className="font-semibold text-gray-900 dark:text-zinc-100">Activity by transaction type</h2>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-zinc-500">All-time transaction volume in your account ledger.</p>
                 </div>
                 <div className="grid sm:grid-cols-2 lg:grid-cols-4">
                   {typeTotals.map((item) => (
@@ -389,11 +389,11 @@ export const TransactionHistoryMain = () => {
                         );
                         setActiveChildTab(item.type);
                       }}
-                      className="border-b border-white/5 p-4 text-left transition hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:border-r"
+                      className="border-b border-gray-100 dark:border-white/5 p-4 text-left transition hover:bg-gray-50 dark:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 sm:border-r"
                     >
-                      <span className="text-xs font-semibold text-zinc-300">{displayType(item.type)}</span>
+                      <span className="text-xs font-semibold text-gray-600 dark:text-zinc-300">{displayType(item.type)}</span>
                       <span className="mt-3 flex items-end justify-between gap-3">
-                        <span className="text-xl font-bold tabular-nums text-white">{credits(item.credits)}</span>
+                        <span className="text-xl font-bold tabular-nums text-gray-900 dark:text-white">{credits(item.credits)}</span>
                         <span className="text-[10px] uppercase tracking-wide text-zinc-600">{item.count} entries</span>
                       </span>
                     </button>
@@ -407,8 +407,8 @@ export const TransactionHistoryMain = () => {
             <div className="flex min-h-72 flex-col items-center justify-center gap-3 px-5 text-center">
               <CircleDollarSign className="h-9 w-9 text-zinc-700" aria-hidden="true" />
               <div>
-                <p className="font-semibold text-zinc-200">No transactions found</p>
-                <p className="mt-1 text-sm text-zinc-500">There are no entries in this transaction tab yet.</p>
+                <p className="font-semibold text-gray-700 dark:text-zinc-200">No transactions found</p>
+                <p className="mt-1 text-sm text-gray-500 dark:text-zinc-500">There are no entries in this transaction tab yet.</p>
               </div>
             </div>
           )}
@@ -418,7 +418,7 @@ export const TransactionHistoryMain = () => {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[960px] border-collapse text-left text-sm">
                   <thead>
-                    <tr className="border-b border-white/10 bg-white/[0.02] text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">
+                    <tr className="border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02] text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500 dark:text-zinc-500">
                       <th className="px-5 py-3.5">Date & time</th>
                       <th className="px-5 py-3.5">Type</th>
                       <th className="px-5 py-3.5">Direction</th>
@@ -447,12 +447,12 @@ export const TransactionHistoryMain = () => {
                               setSelectedTransaction(transaction);
                             }
                           }}
-                          className="cursor-pointer transition hover:bg-white/[0.04] focus-visible:bg-blue-500/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+                          className="cursor-pointer transition hover:bg-gray-100 dark:hover:bg-white/[0.04] focus-visible:bg-blue-500/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
                         >
-                          <td className="whitespace-nowrap px-5 py-4 text-xs text-zinc-400">
+                          <td className="whitespace-nowrap px-5 py-4 text-xs text-gray-500 dark:text-zinc-400">
                             {validDate ? createdAt.toLocaleString() : "—"}
                           </td>
-                          <td className="px-5 py-4 font-semibold text-zinc-100">{displayType(transactionCategory(transaction))}</td>
+                          <td className="px-5 py-4 font-semibold text-gray-900 dark:text-zinc-100">{displayType(transactionCategory(transaction))}</td>
                           <td className="px-5 py-4">
                             <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${meta.color}`}>
                               <DirectionIcon className="h-4 w-4" aria-hidden="true" /> {meta.label}
@@ -464,15 +464,15 @@ export const TransactionHistoryMain = () => {
                               {formatStatus(transaction.status)}
                             </span>
                           </td>
-                          <td className="max-w-52 px-5 py-4 text-xs text-zinc-400">
+                          <td className="max-w-52 px-5 py-4 text-xs text-gray-500 dark:text-zinc-400">
                             {transaction.referenceTable || transaction.referenceId ? (
                               <div title={transaction.referenceId || undefined}>
-                                <p className="capitalize text-zinc-300">{transaction.referenceTable?.replace(/_/g, " ") || "Reference"}</p>
+                                <p className="capitalize text-gray-600 dark:text-zinc-300">{transaction.referenceTable?.replace(/_/g, " ") || "Reference"}</p>
                                 <p className="mt-0.5 font-mono text-[10px] text-zinc-600">{transaction.referenceId ? shortId(transaction.referenceId) : "—"}</p>
                               </div>
                             ) : "—"}
                           </td>
-                          <td className="px-5 py-4 font-mono text-xs text-zinc-500" title={transaction.id}>{shortId(transaction.id)}</td>
+                          <td className="px-5 py-4 font-mono text-xs text-gray-500 dark:text-zinc-500" title={transaction.id}>{shortId(transaction.id)}</td>
                         </tr>
                       );
                     })}
@@ -480,20 +480,20 @@ export const TransactionHistoryMain = () => {
                 </table>
               </div>
 
-              <div className="flex flex-col items-center justify-between gap-4 border-t border-white/10 p-4 text-xs text-zinc-400 sm:flex-row">
+              <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-200 dark:border-white/10 p-4 text-xs text-gray-500 dark:text-zinc-400 sm:flex-row">
                 <label className="flex items-center gap-2">
                   <span>Rows per page</span>
-                  <select value={rowsPerPage} onChange={(event) => setRowsPerPage(Number(event.target.value) as RowLimit)} className="rounded-lg border border-white/10 bg-[#151722] px-2 py-1.5 text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                  <select value={rowsPerPage} onChange={(event) => setRowsPerPage(Number(event.target.value) as RowLimit)} className="rounded-lg border border-gray-200 dark:border-white/10 bg-[#151722] px-2 py-1.5 text-gray-900 dark:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                     <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option>
                   </select>
                 </label>
                 <div className="flex items-center gap-4">
                   <span>{tabTransactions.length} result{tabTransactions.length === 1 ? "" : "s"} · Page {page} of {totalPages}</span>
                   <div className="flex gap-1">
-                    <button type="button" aria-label="Previous page" disabled={page === 1} onClick={() => setCurrentPage((value) => Math.max(1, value - 1))} className="rounded-lg border border-white/10 bg-white/5 p-2 text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-30">
+                    <button type="button" aria-label="Previous page" disabled={page === 1} onClick={() => setCurrentPage((value) => Math.max(1, value - 1))} className="rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-2 text-gray-900 dark:text-white hover:bg-gray-100 dark:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-30">
                       <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                     </button>
-                    <button type="button" aria-label="Next page" disabled={page === totalPages} onClick={() => setCurrentPage((value) => Math.min(totalPages, value + 1))} className="rounded-lg border border-white/10 bg-white/5 p-2 text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-30">
+                    <button type="button" aria-label="Next page" disabled={page === totalPages} onClick={() => setCurrentPage((value) => Math.min(totalPages, value + 1))} className="rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-2 text-gray-900 dark:text-white hover:bg-gray-100 dark:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-30">
                       <ChevronRight className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </div>
@@ -516,25 +516,25 @@ export const TransactionHistoryMain = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="transaction-detail-title"
-            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/10 bg-[#0d0f1a] shadow-2xl"
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-2xl"
           >
-            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-white/10 bg-[#0d0f1a]/95 p-5 backdrop-blur-md">
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/95 p-5 backdrop-blur-md">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-400">Transaction details</p>
-                <h2 id="transaction-detail-title" className="mt-1 text-xl font-bold text-white">{displayType(transactionCategory(selectedTransaction))}</h2>
+                <h2 id="transaction-detail-title" className="mt-1 text-xl font-bold text-gray-900 dark:text-white">{displayType(transactionCategory(selectedTransaction))}</h2>
               </div>
               <button
                 type="button"
                 aria-label="Close transaction details"
                 onClick={() => setSelectedTransaction(null)}
-                className="rounded-lg border border-white/10 bg-white/5 p-2 text-zinc-400 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-2 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
 
             <div className="p-5">
-              <div className="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.025] p-4">
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.025] p-4">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-600">Credit amount</p>
                   <div className="mt-2 text-xl"><CreditAmount transaction={selectedTransaction} /></div>

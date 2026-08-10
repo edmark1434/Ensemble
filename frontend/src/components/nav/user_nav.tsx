@@ -86,7 +86,7 @@ const UserNav: React.FC<UserNavProps> = () => {
     };
 
     const sectionHeaderClassName = () =>
-       `flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 text-zinc-400 hover:text-white hover:bg-white/5 ${
+       `flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 ${
           isCollapsed ? "justify-center px-2" : ""
        }`;
 
@@ -107,7 +107,7 @@ const UserNav: React.FC<UserNavProps> = () => {
     return (
        <>
           <aside
-             className={`fixed inset-y-0 left-0 z-20 flex flex-col border-r border-white/10 bg-[#080a12] transition-all duration-300 ${
+             className={`fixed inset-y-0 left-0 z-20 flex flex-col border-r border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12] transition-all duration-300 ${
                 isCollapsed ? "w-20" : "w-64"
              }`}
           >
@@ -115,18 +115,18 @@ const UserNav: React.FC<UserNavProps> = () => {
              <button
                 type="button"
                 onClick={handleLogoClick}
-                className={`flex items-center border-b border-white/10 px-5 py-5 text-left transition hover:bg-white/5 ${
+                className={`flex items-center border-b border-gray-200 dark:border-white/10 px-5 py-5 text-left transition hover:bg-gray-50 dark:hover:bg-white/5 ${
                    isCollapsed ? "justify-center px-2" : "gap-2.5"
                 }`}
              >
                 <img
                    src="/ensemble_lg.svg"
                    alt="Ensemble Logo"
-                   className="h-9 w-9 shrink-0"
+                   className="h-9 w-9 shrink-0 invert dark:invert-0"
                 />
                 {!isCollapsed && (
                    <div className="overflow-hidden whitespace-nowrap px-2">
-                      <p className="text-base font-semibold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                      <p className="text-base font-semibold text-gray-900 dark:text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                          Ensemble
                       </p>
                    </div>
@@ -140,7 +140,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                    {/* 1. Main Menu */}
                    <div>
                       {!isCollapsed && (
-                         <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                         <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-500">
                             Main Menu
                          </p>
                       )}
@@ -152,7 +152,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                      {({ isActive }) => (
                                         <div
                                            className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200 ${
-                                              isActive ? "text-blue-400 font-medium" : "text-zinc-400 hover:text-white hover:bg-white/5"
+                                              isActive ? "text-blue-600 dark:text-blue-400 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
                                            }`}
                                         >
                                            {isActive && (
@@ -174,7 +174,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                         {({ isActive }) => (
                                            <div
                                               className={`relative flex items-center justify-center rounded-lg p-2 text-sm transition-colors duration-200 ${
-                                                 isActive ? "text-blue-400" : "text-zinc-400 hover:text-white hover:bg-white/5"
+                                                 isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
                                               }`}
                                            >
                                               {isActive && (
@@ -203,12 +203,12 @@ const UserNav: React.FC<UserNavProps> = () => {
                    </div>
 
                    {/* Section Separator Line */}
-                   {isCollapsed && <div className="my-4 border-t border-white/10 mx-2" />}
+                   {isCollapsed && <div className="my-4 border-t border-gray-200 dark:border-white/10 mx-2" />}
 
                    {/* 2. Marketplace Section */}
                    <div className={isCollapsed ? "mt-0 space-y-3" : "mt-6"}>
                       {!isCollapsed && (
-                         <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                         <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-500">
                             Marketplace
                          </p>
                       )}
@@ -223,7 +223,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                             </button>
 
                             <div className={`grid transition-all duration-300 ease-in-out ${isJobsOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
-                               <ul className="ml-6 overflow-hidden space-y-1 border-l border-white/10 pl-2">
+                               <ul className="ml-6 overflow-hidden space-y-1 border-l border-gray-200 dark:border-white/10 pl-2">
                                   {jobsState.map(({ label, icon: Icon, to }) => {
                                      const isActive = isJobItemActive(to);
                                      return (
@@ -231,13 +231,13 @@ const UserNav: React.FC<UserNavProps> = () => {
                                            <NavLink to={to}>
                                               <div
                                                  className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors duration-200 ${
-                                                    isActive ? "text-blue-400 font-medium" : "text-zinc-400 hover:text-white hover:bg-white/5"
+                                                    isActive ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
                                                  }`}
                                               >
                                                  {isActive && (
                                                     <motion.div
                                                        layoutId="activeNavBackground"
-                                                       className="absolute inset-0 rounded-lg bg-blue-500/10 border-l-2 border-blue-500"
+                                                       className="absolute inset-0 rounded-lg"
                                                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
                                                     />
                                                  )}
@@ -254,19 +254,19 @@ const UserNav: React.FC<UserNavProps> = () => {
                       ) : (
                          /* Collapsed Menu Flyout Item for Jobs */
                          <div className="group relative w-full flex justify-center hover:z-50">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors group-hover:bg-white/5 group-hover:text-white cursor-pointer">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 dark:text-zinc-400 transition-colors group-hover:bg-gray-100 dark:group-hover:bg-white/5 group-hover:text-gray-900 dark:group-hover:text-white cursor-pointer">
                                <BriefcaseBusiness className="h-4 w-4" />
                             </div>
 
                             <div className="absolute left-full pl-2 hidden w-52 group-hover:block z-50">
-                               <div className="rounded-xl border border-white/10 bg-[#0d0f1a] p-1.5 shadow-2xl animate-fade-in">
-                                  <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 border-b border-white/5 mb-1">Jobs</p>
+                               <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-1.5 shadow-xl dark:shadow-2xl animate-fade-in">
+                                  <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-500 border-b border-gray-100 dark:border-white/5 mb-1">Jobs</p>
                                   <ul className="space-y-0.5">
                                      {jobsState.map(({ label, icon: Icon, to }) => {
                                         const isActive = isJobItemActive(to);
                                         return (
                                            <li key={label}>
-                                              <NavLink to={to} className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-blue-500/10 text-blue-400 font-medium" : "text-zinc-400 hover:text-white hover:bg-white/5"}`}>
+                                              <NavLink to={to} className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"}`}>
                                                  <Icon className="h-3.5 w-3.5 shrink-0" />
                                                  <span>{label}</span>
                                               </NavLink>
@@ -289,20 +289,20 @@ const UserNav: React.FC<UserNavProps> = () => {
                             </button>
 
                             <div className={`grid transition-all duration-300 ease-in-out ${isGigsOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
-                               <ul className="ml-6 overflow-hidden space-y-1 border-l border-white/10 pl-2">
+                               <ul className="ml-6 overflow-hidden space-y-1 border-l border-gray-200 dark:border-white/10 pl-2">
                                   {gigsState.map(({ label, icon: Icon, to }) => (
                                      <li key={label}>
                                         <NavLink to={to}>
                                            {({ isActive }) => (
                                               <div
                                                  className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors duration-200 ${
-                                                    isActive ? "text-blue-400 font-medium" : "text-zinc-400 hover:text-white hover:bg-white/5"
+                                                    isActive ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
                                                  }`}
                                               >
                                                  {isActive && (
                                                     <motion.div
                                                        layoutId="activeNavBackground"
-                                                       className="absolute inset-0 rounded-lg bg-blue-500/10 border-l-2 border-blue-500"
+                                                       className="absolute inset-0 rounded-lg"
                                                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
                                                     />
                                                  )}
@@ -319,17 +319,17 @@ const UserNav: React.FC<UserNavProps> = () => {
                       ) : (
                          /* Collapsed Menu Flyout Item for Gigs */
                          <div className="group relative w-full flex justify-center hover:z-50">
-                            <div className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors group-hover:bg-white/5 group-hover:text-white cursor-pointer">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 dark:text-zinc-400 transition-colors group-hover:bg-gray-100 dark:group-hover:bg-white/5 group-hover:text-gray-900 dark:group-hover:text-white cursor-pointer">
                                <MicVocal className="h-4 w-4" />
                             </div>
 
                             <div className="absolute left-full pl-2 hidden w-52 group-hover:block z-50">
-                               <div className="rounded-xl border border-white/10 bg-[#0d0f1a] p-1.5 shadow-2xl animate-fade-in">
-                                  <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 border-b border-white/5 mb-1">Gigs</p>
+                               <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-1.5 shadow-xl dark:shadow-2xl animate-fade-in">
+                                  <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-500 border-b border-gray-100 dark:border-white/5 mb-1">Gigs</p>
                                   <ul className="space-y-0.5">
                                      {gigsState.map(({ label, icon: Icon, to }) => (
                                         <li key={label}>
-                                           <NavLink to={to} className={({ isActive }) => `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-blue-500/10 text-blue-400 font-medium" : "text-zinc-400 hover:text-white hover:bg-white/5"}`}>
+                                           <NavLink to={to} className={({ isActive }) => `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"}`}>
                                               <Icon className="h-3.5 w-3.5 shrink-0" />
                                               <span>{label}</span>
                                            </NavLink>
@@ -343,12 +343,12 @@ const UserNav: React.FC<UserNavProps> = () => {
                    </div>
 
                    {/* Section Separator Line */}
-                   {isCollapsed && <div className="my-4 border-t border-white/10 mx-2" />}
+                   {isCollapsed && <div className="my-4 border-t border-gray-200 dark:border-white/10 mx-2" />}
 
                    {/* 3. Activity & Records Section */}
                    <div className={isCollapsed ? "mt-0 space-y-1" : "mt-6"}>
                       {!isCollapsed && (
-                         <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                         <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-500">
                             Activity & Records
                          </p>
                       )}
@@ -360,7 +360,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                      {({ isActive }) => (
                                         <div
                                            className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200 ${
-                                              isActive ? "text-blue-400 font-medium" : "text-zinc-400 hover:text-white hover:bg-white/5"
+                                              isActive ? "text-blue-600 dark:text-blue-400 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
                                            }`}
                                         >
                                            {isActive && (
@@ -382,7 +382,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                         {({ isActive }) => (
                                            <div
                                               className={`relative flex items-center justify-center rounded-lg p-2 text-sm transition-colors duration-200 ${
-                                                 isActive ? "text-blue-400" : "text-zinc-400 hover:text-white hover:bg-white/5"
+                                                 isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
                                               }`}
                                            >
                                               {isActive && (
@@ -413,10 +413,10 @@ const UserNav: React.FC<UserNavProps> = () => {
              </LayoutGroup>
 
              {/* Collapse Button */}
-             <div className="border-t border-white/10 p-3">
+             <div className="border-t border-gray-200 dark:border-white/10 p-3">
                 <button
                    onClick={() => setIsCollapsed(!isCollapsed)}
-                   className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-400 transition hover:bg-white/10 hover:text-white ${
+                   className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white ${
                       isCollapsed ? "justify-center" : ""
                    }`}
                    title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}

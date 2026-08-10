@@ -18,7 +18,7 @@ export const ProposalsTabs: React.FC = () => {
       <button
         onClick={() => navigate("/jobs/proposals")}
         className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
-          isIncoming ? "text-blue-400 font-bold" : "text-zinc-400 hover:text-white"
+          isIncoming ? "text-blue-600 dark:text-blue-400 font-bold" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
         }`}
       >
         <span className="relative z-10 flex items-center gap-2">
@@ -44,7 +44,7 @@ export const ProposalsTabs: React.FC = () => {
       <button
         onClick={() => navigate("/jobs/proposals/sent")}
         className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
-          isSent ? "text-blue-400 font-bold" : "text-zinc-400 hover:text-white"
+          isSent ? "text-blue-600 dark:text-blue-400 font-bold" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
         }`}
       >
         <span className="relative z-10 flex items-center gap-2">

@@ -1,6 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 body {
   font-family: 'Plus Jakarta Sans', sans-serif;
 }
@@ -22,19 +24,19 @@ body {
   animation: slideInFromRight 0.3s ease-out !important;
 }
 /* For dark theme selects */
-select {
+.dark select {
   background-color: #1a1d2e !important;
   color: white !important;
 }
 
-select option {
+.dark select option {
   background-color: #1a1d2e !important;
   color: white !important;
 }
 
-select option:hover,
-select option:focus,
-select option:active {
+.dark select option:hover,
+.dark select option:focus,
+.dark select option:active {
   background-color: #3b82f6 !important;
 }
 

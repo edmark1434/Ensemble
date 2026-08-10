@@ -167,22 +167,22 @@ const getTagColor = (tagId: number) => {
 
 const MarkdownComponents = {
   h1: ({ children }: { children: React.ReactNode }) => (
-    <h1 className="text-2xl font-bold text-white mt-4 mb-2 border-b border-white/10 pb-2">{children}</h1>
+    <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-4 mb-2 border-b border-gray-200 dark:border-white/10 pb-2">{children}</h1>
   ),
   h2: ({ children }: { children: React.ReactNode }) => (
-    <h2 className="text-xl font-bold text-white mt-3 mb-2">{children}</h2>
+    <h2 className="text-xl font-bold text-gray-900 dark:text-white mt-3 mb-2">{children}</h2>
   ),
   h3: ({ children }: { children: React.ReactNode }) => (
-    <h3 className="text-lg font-bold text-white mt-2 mb-1">{children}</h3>
+    <h3 className="text-lg font-bold text-gray-900 dark:text-white mt-2 mb-1">{children}</h3>
   ),
   p: ({ children }: { children: React.ReactNode }) => (
-    <p className="text-zinc-300 mb-2 leading-relaxed">{children}</p>
+    <p className="text-gray-600 dark:text-zinc-300 mb-2 leading-relaxed">{children}</p>
   ),
   strong: ({ children }: { children: React.ReactNode }) => (
-    <strong className="font-bold text-white">{children}</strong>
+    <strong className="font-bold text-gray-900 dark:text-white">{children}</strong>
   ),
   em: ({ children }: { children: React.ReactNode }) => (
-    <em className="italic text-zinc-300">{children}</em>
+    <em className="italic text-gray-600 dark:text-zinc-300">{children}</em>
   ),
   code: ({ children, className }: { children: React.ReactNode; className?: string }) => {
     const inline = !className;
@@ -202,7 +202,7 @@ const MarkdownComponents = {
     <ol className="my-2 space-y-1 list-decimal list-inside">{children}</ol>
   ),
   li: ({ children }: { children: React.ReactNode }) => (
-    <li className="text-zinc-300">{children}</li>
+    <li className="text-gray-600 dark:text-zinc-300">{children}</li>
   ),
   a: ({ href, children }: { href?: string; children: React.ReactNode }) => (
     <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline transition-colors">
@@ -210,7 +210,7 @@ const MarkdownComponents = {
     </a>
   ),
   blockquote: ({ children }: { children: React.ReactNode }) => (
-    <blockquote className="border-l-4 border-blue-500 pl-4 my-2 text-zinc-400 italic">{children}</blockquote>
+    <blockquote className="border-l-4 border-blue-500 pl-4 my-2 text-gray-500 dark:text-zinc-400 italic">{children}</blockquote>
   ),
 };
 
@@ -277,7 +277,7 @@ const ImageGallery = ({ attachments, imageKeys }: { attachments?: { file_path: s
           <button
             key={idx}
             onClick={() => setSelectedImage(getImageUrl(filePath))}
-            className="group relative overflow-hidden rounded-lg border border-white/10 bg-white/5 transition-all hover:scale-105 hover:border-white/20"
+            className="group relative overflow-hidden rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none transition-all hover:scale-105 hover:border-white/20"
           >
             <img
               src={getImageUrl(filePath)}
@@ -288,7 +288,7 @@ const ImageGallery = ({ attachments, imageKeys }: { attachments?: { file_path: s
               }}
             />
             <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition group-hover:opacity-100">
-              <ImageIcon className="h-6 w-6 text-white" />
+              <ImageIcon className="h-6 w-6 text-gray-900 dark:text-white" />
             </div>
           </button>
         ))}
@@ -301,7 +301,7 @@ const ImageGallery = ({ attachments, imageKeys }: { attachments?: { file_path: s
         >
           <button
             onClick={() => setSelectedImage(null)}
-            className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white transition hover:bg-white/20"
+            className="absolute right-4 top-4 rounded-full bg-gray-100 dark:bg-white/10 p-2 text-gray-900 dark:text-white transition hover:bg-white/20"
           >
             <X className="h-6 w-6" />
           </button>
@@ -395,11 +395,11 @@ const ReplyInput = ({
           className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20 flex-shrink-0"
         />
         <div className="flex-1">
-          <div className="flex flex-wrap items-center gap-1 rounded-t-lg border border-white/15 border-b-0 bg-white/5 px-2 py-1">
+          <div className="flex flex-wrap items-center gap-1 rounded-t-lg border border-gray-200 dark:border-white/15 border-b-0 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-2 py-1">
             <button
               type="button"
               onClick={() => applyFormatting("bold")}
-              className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
               title="Bold"
             >
               <strong className="text-xs">B</strong>
@@ -407,7 +407,7 @@ const ReplyInput = ({
             <button
               type="button"
               onClick={() => applyFormatting("italic")}
-              className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
               title="Italic"
             >
               <em className="text-xs">I</em>
@@ -415,7 +415,7 @@ const ReplyInput = ({
             <button
               type="button"
               onClick={() => applyFormatting("bullet-list")}
-              className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
               title="Bullet List"
             >
               <span className="text-xs">•</span>
@@ -423,7 +423,7 @@ const ReplyInput = ({
             <button
               type="button"
               onClick={() => applyFormatting("code")}
-              className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
               title="Code"
             >
               <span className="text-xs">{'<>'}</span>
@@ -431,7 +431,7 @@ const ReplyInput = ({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              className="rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
               title="Upload Image"
             >
               <ImageIcon className="h-3 w-3" />
@@ -439,7 +439,7 @@ const ReplyInput = ({
             <button
               type="button"
               onClick={() => setShowPreview(!showPreview)}
-              className="ml-auto rounded p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              className="ml-auto rounded p-1 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
               title={showPreview ? "Edit" : "Preview"}
             >
               {showPreview ? <Edit2 className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
@@ -452,17 +452,17 @@ const ReplyInput = ({
               value={replyText}
               onChange={(e) => updateReplyText(e.target.value)}
               placeholder={placeholder}
-              className="w-full rounded-b-lg border border-white/15 border-t-0 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 resize-none"
+              className="w-full rounded-b-lg border border-gray-200 dark:border-white/15 border-t-0 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-500 dark:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 resize-none"
               rows={3}
             />
           ) : (
-            <div className="min-h-[80px] rounded-b-lg border border-white/15 border-t-0 bg-white/5 p-3">
+            <div className="min-h-[80px] rounded-b-lg border border-gray-200 dark:border-white/15 border-t-0 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3">
               {replyText.trim() ? (
                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
                   {replyText}
                 </ReactMarkdown>
               ) : (
-                <p className="text-sm text-zinc-500 italic">Nothing to preview...</p>
+                <p className="text-sm text-gray-500 dark:text-zinc-500 italic">Nothing to preview...</p>
               )}
             </div>
           )}
@@ -474,16 +474,16 @@ const ReplyInput = ({
                   <img
                     src={image.preview}
                     alt="Upload preview"
-                    className="h-16 w-16 rounded-lg object-cover border border-white/10"
+                    className="h-16 w-16 rounded-lg object-cover border border-gray-200 dark:border-white/10"
                   />
                   {image.uploading && (
                     <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/70">
-                      <Loader2 className="h-4 w-4 animate-spin text-white" />
+                      <Loader2 className="h-4 w-4 animate-spin text-gray-900 dark:text-white" />
                     </div>
                   )}
                   <button
                     onClick={() => removeImage(image.id)}
-                    className="absolute -top-1 -right-1 rounded-full bg-red-500 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
+                    className="absolute -top-1 -right-1 rounded-full bg-red-500 p-0.5 text-gray-900 dark:text-white opacity-0 transition group-hover:opacity-100"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -495,7 +495,7 @@ const ReplyInput = ({
           <div className="mt-2 flex justify-end gap-2">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1 rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-1.5 text-xs text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
             >
               <ImageIcon className="h-3 w-3" />
               Add Image
@@ -503,7 +503,7 @@ const ReplyInput = ({
             <button
               onClick={handleReply}
               disabled={(!replyText.trim() && images.length === 0) || isUploading}
-              className="flex items-center gap-1 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-1 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-medium text-gray-900 dark:text-white transition hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isUploading ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -597,7 +597,7 @@ const CommentItem = ({
   };
 
   return (
-    <div className={`${depthClass} mt-2 ${!isLastInThread ? "border-l-2 border-white/10 ml-2 pl-2" : ""}`}>
+    <div className={`${depthClass} mt-2 ${!isLastInThread ? "border-l-2 border-gray-200 dark:border-white/10 ml-2 pl-2" : ""}`}>
       <div className="flex gap-3 py-2">
         <img
           src={commentAuthor.avatar}
@@ -607,8 +607,8 @@ const CommentItem = ({
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-medium text-white">{commentAuthor.name}</p>
-              <span className="text-xs text-zinc-500">{getTimeAgo(comment.created_at)}</span>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">{commentAuthor.name}</p>
+              <span className="text-xs text-gray-500 dark:text-zinc-500">{getTimeAgo(comment.created_at)}</span>
               {comment.is_edited && (
                 <span className="text-[10px] text-zinc-600">(edited)</span>
               )}
@@ -621,18 +621,18 @@ const CommentItem = ({
               <div className="relative">
                 <button
                   onClick={() => setShowCommentMenu(!showCommentMenu)}
-                  className="rounded p-1 text-zinc-500 hover:bg-white/10"
+                  className="rounded p-1 text-gray-500 dark:text-zinc-500 hover:bg-gray-100 dark:bg-white/10"
                 >
                   <MoreVertical className="h-3 w-3" />
                 </button>
                 {showCommentMenu && (
-                  <div className="absolute right-0 mt-1 w-28 rounded-lg border border-white/10 bg-[#0d0f1a] shadow-xl z-20">
+                  <div className="absolute right-0 mt-1 w-28 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-xl z-20">
                     <button
                       onClick={() => {
                         setIsEditing(true);
                         setShowCommentMenu(false);
                       }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-xs text-zinc-300 hover:bg-white/10"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-xs text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:bg-white/10"
                     >
                       <Edit2 className="h-3 w-3" />
                       Edit
@@ -655,19 +655,19 @@ const CommentItem = ({
               <textarea
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
-                className="w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white"
+                className="w-full rounded-lg border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-2 text-sm text-gray-900 dark:text-white"
                 rows={3}
               />
               <div className="mt-2 flex gap-2">
                 <button
                   onClick={handleEditSubmit}
-                  className="rounded bg-blue-500 px-3 py-1 text-xs text-white"
+                  className="rounded bg-blue-500 px-3 py-1 text-xs text-gray-900 dark:text-white"
                 >
                   Save
                 </button>
                 <button
                   onClick={() => setIsEditing(false)}
-                  className="rounded bg-white/10 px-3 py-1 text-xs text-zinc-400"
+                  className="rounded bg-gray-100 dark:bg-white/10 px-3 py-1 text-xs text-gray-500 dark:text-zinc-400"
                 >
                   Cancel
                 </button>
@@ -675,7 +675,7 @@ const CommentItem = ({
             </div>
           ) : (
             <>
-              <div className="mt-1 text-sm text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
+              <div className="mt-1 text-sm text-gray-600 dark:text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
                   {comment.deleted_at ? "[deleted]" : comment.comment}
                 </ReactMarkdown>
@@ -690,7 +690,7 @@ const CommentItem = ({
               <button
                 onClick={() => onLike(postId, comment.comment_id)}
                 className={`inline-flex items-center gap-1 text-xs transition ${
-                  isLiked ? "text-red-400" : "text-zinc-500 hover:text-white"
+                  isLiked ? "text-red-400" : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
                 }`}
               >
                 <Heart className={`h-3 w-3 ${isLiked ? "fill-red-400" : ""}`} />
@@ -698,7 +698,7 @@ const CommentItem = ({
               </button>
               <button
                 onClick={() => onReply(postId, comment.comment_id, commentAuthor.name, comment.user_id)}
-                className="inline-flex items-center gap-1 text-xs text-zinc-500 transition hover:text-white"
+                className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white"
               >
                 <Reply className="h-3 w-3" />
                 <span>Reply</span>
@@ -706,7 +706,7 @@ const CommentItem = ({
               {hasChildren && (
                 <button
                   onClick={() => setShowChildren((visible) => !visible)}
-                  className="inline-flex items-center gap-1 text-xs text-zinc-500 transition hover:text-white"
+                  className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white"
                 >
                   {showChildren ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                   <span>{showChildren ? "Hide" : "View"} {childCount} {childCount === 1 ? "reply" : "replies"}</span>
@@ -721,7 +721,7 @@ const CommentItem = ({
                 <span className="text-xs text-blue-400">Replying to @{replyingTo.authorName}</span>
                 <button
                   onClick={() => setReplyingTo(null)}
-                  className="text-xs text-zinc-500 hover:text-white"
+                  className="text-xs text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -1754,14 +1754,14 @@ const SelectedGroup = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#080a12]">
+      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
         <UserHeader pageTitle="Group" credits={1250} />
         <div className="mx-auto max-w-7xl p-6 md:p-8">
-          <div className="h-48 w-full animate-pulse rounded-xl bg-white/10" />
-          <div className="mt-6 h-10 w-48 animate-pulse rounded-lg bg-white/10" />
+          <div className="h-48 w-full animate-pulse rounded-xl bg-gray-100 dark:bg-white/10" />
+          <div className="mt-6 h-10 w-48 animate-pulse rounded-lg bg-gray-100 dark:bg-white/10" />
           <div className="mt-4 space-y-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-32 w-full animate-pulse rounded-xl bg-white/5" />
+              <div key={i} className="h-32 w-full animate-pulse rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
             ))}
           </div>
         </div>
@@ -1771,13 +1771,13 @@ const SelectedGroup = () => {
 
   if (!group) {
     return (
-      <div className="min-h-screen bg-[#080a12]">
+      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
         <UserHeader pageTitle="Group" credits={1250} />
         <div className="mx-auto max-w-7xl p-6 md:p-8 text-center">
-          <p className="text-zinc-400">Group not found</p>
+          <p className="text-gray-500 dark:text-zinc-400">Group not found</p>
           <button
             onClick={() => navigate("/forums")}
-            className="mt-4 rounded-full bg-blue-500 px-4 py-2 text-sm text-white"
+            className="mt-4 rounded-full bg-blue-500 px-4 py-2 text-sm text-gray-900 dark:text-white"
           >
             Back to Forums
           </button>
@@ -1787,14 +1787,14 @@ const SelectedGroup = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#080a12]">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
       <UserHeader pageTitle={group.group_name} credits={1250} />
 
       <div className="mx-auto max-w-7xl p-6 md:p-8">
         <div className="mb-6 flex items-center justify-between">
           <button
             onClick={() => navigate("/forums")}
-            className="flex items-center gap-2 text-sm text-zinc-400 transition hover:text-white"
+            className="flex items-center gap-2 text-sm text-gray-500 dark:text-zinc-400 transition hover:text-gray-900 dark:text-white"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Forums
@@ -1803,13 +1803,13 @@ const SelectedGroup = () => {
           <div className="relative">
             <button
               onClick={() => setShowMenu(!showMenu)}
-              className="rounded-lg p-2 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              className="rounded-lg p-2 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
             >
               <MoreVertical className="h-5 w-5" />
             </button>
 
             {showMenu && (
-              <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/10 bg-[#0d0f1a] shadow-2xl backdrop-blur-xl overflow-hidden z-20">
+              <div className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-2xl backdrop-blur-xl overflow-hidden z-20">
                 <div className="p-2">
                   {canEditGroup && (
                     <button
@@ -1817,7 +1817,7 @@ const SelectedGroup = () => {
                         setShowEditGroupModal(true);
                         setShowMenu(false);
                       }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 transition hover:bg-gray-100 dark:bg-white/10"
                     >
                       <Edit3 className="h-4 w-4" />
                       Edit Group
@@ -1829,7 +1829,7 @@ const SelectedGroup = () => {
                         setShowEditPermissionsModal(true);
                         setShowMenu(false);
                       }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 transition hover:bg-gray-100 dark:bg-white/10"
                     >
                       <Shield className="h-4 w-4" />
                       Edit Roles
@@ -1841,7 +1841,7 @@ const SelectedGroup = () => {
                         setShowReportGroupModal(true);
                         setShowMenu(false);
                       }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 transition hover:bg-gray-100 dark:bg-white/10"
                     >
                       <Flag className="h-4 w-4" />
                       Report Group
@@ -1890,11 +1890,11 @@ const SelectedGroup = () => {
                 />
               )}
               <div>
-                <h1 className="text-3xl font-bold text-white">{group.group_name}</h1>
-                <p className="mt-2 text-zinc-200 max-w-2xl">{group.description}</p>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{group.group_name}</h1>
+                <p className="mt-2 text-gray-700 dark:text-zinc-200 max-w-2xl">{group.description}</p>
               </div>
             </div>
-            <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-zinc-300">
+            <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-zinc-300">
               <div className="flex items-center gap-1">
                 <span>Created at {group.created_at.split('T')[0]}</span>
               </div>
@@ -1910,14 +1910,14 @@ const SelectedGroup = () => {
           </div>
         </div>
 
-        <div className="mt-6 border-b border-white/10">
+        <div className="mt-6 border-b border-gray-200 dark:border-white/10">
           <div className="flex gap-6">
             <button
               onClick={() => setActiveTab("posts")}
               className={`pb-3 text-sm font-medium transition ${
                 activeTab === "posts"
                   ? "border-b-2 border-blue-500 text-blue-400"
-                  : "text-zinc-400 hover:text-white"
+                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white"
               }`}
             >
               Posts
@@ -1927,7 +1927,7 @@ const SelectedGroup = () => {
               className={`pb-3 text-sm font-medium transition ${
                 activeTab === "members"
                   ? "border-b-2 border-blue-500 text-blue-400"
-                  : "text-zinc-400 hover:text-white"
+                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white"
               }`}
             >
               Members
@@ -1937,7 +1937,7 @@ const SelectedGroup = () => {
               className={`pb-3 text-sm font-medium transition ${
                 activeTab === "about"
                   ? "border-b-2 border-blue-500 text-blue-400"
-                  : "text-zinc-400 hover:text-white"
+                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white"
               }`}
             >
               About
@@ -1959,10 +1959,10 @@ const SelectedGroup = () => {
               </div>}
 
               <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 sm:w-64">
-                  <Search className="h-4 w-4 text-zinc-500" />
+                <div className="flex items-center gap-2 rounded-full border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-1.5 sm:w-64">
+                  <Search className="h-4 w-4 text-gray-500 dark:text-zinc-500" />
                   <input
-                    className="w-full bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+                    className="w-full bg-transparent text-sm text-gray-900 dark:text-white outline-none placeholder:text-gray-500 dark:text-zinc-500"
                     placeholder="Search discussions..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -1970,7 +1970,7 @@ const SelectedGroup = () => {
                   {searchQuery && (
                     <button
                       onClick={() => setSearchQuery("")}
-                      className="text-zinc-500 hover:text-white"
+                      className="text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -1979,7 +1979,7 @@ const SelectedGroup = () => {
 
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-500">Sort by:</span>
+                    <span className="text-xs text-gray-500 dark:text-zinc-500">Sort by:</span>
                     <div className="flex gap-2">
                       {sortOptions.map((option) => (
                         <button
@@ -1987,8 +1987,8 @@ const SelectedGroup = () => {
                           onClick={() => setSortBy(option.value)}
                           className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs transition ${
                             sortBy === option.value
-                              ? "bg-blue-500 text-white"
-                              : "border border-white/15 bg-white/5 text-zinc-400 hover:text-white"
+                              ? "bg-blue-500 text-gray-900 dark:text-white"
+                              : "border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white"
                           }`}
                         >
                           {option.icon}
@@ -2002,17 +2002,17 @@ const SelectedGroup = () => {
 
               <div className="space-y-4">
                 {displayPosts.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center rounded-xl border border-white/10 bg-white/5 p-12 text-center">
-                    <MessageCircle className="mb-3 h-8 w-8 text-zinc-500" />
-                    <h3 className="text-lg font-semibold text-white">No posts yet</h3>
-                    <p className="mt-1 text-sm text-zinc-400">Be the first to start a discussion!</p>
+                  <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-12 text-center">
+                    <MessageCircle className="mb-3 h-8 w-8 text-gray-500 dark:text-zinc-500" />
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">No posts yet</h3>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">Be the first to start a discussion!</p>
                   </div>
                 ) : (
                   displayPosts.map((post, idx) => {
                     const isAuthor = post.user_id === currentUserId;
 
                     return (
-                      <div key={post.id} className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 transition hover:border-white/20">
+                      <div key={post.id} className="rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4 transition hover:border-white/20">
                         <div className="flex gap-3">
                           <img
                             src={post.authorAvatar}
@@ -2022,8 +2022,8 @@ const SelectedGroup = () => {
                           <div className="flex-1">
                             <div className="flex items-center justify-between flex-wrap gap-2">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <p className="text-sm font-medium text-white">{post.author}</p>
-                                <span className="text-xs text-zinc-500">{post.ago}</span>
+                                <p className="text-sm font-medium text-gray-900 dark:text-white">{post.author}</p>
+                                <span className="text-xs text-gray-500 dark:text-zinc-500">{post.ago}</span>
                                 {post.tagsList && post.tagsList.length > 0 && (
                                   <div className="flex items-center gap-1 flex-wrap">
                                     {post.tagsList.map((tag, tagIdx) => (
@@ -2042,18 +2042,18 @@ const SelectedGroup = () => {
                                 <div className="relative">
                                   <button
                                     onClick={() => setPostMenuOpen(postMenuOpen === post.id ? null : post.id)}
-                                    className="rounded-lg p-1 text-zinc-500 transition hover:bg-white/10 hover:text-white"
+                                    className="rounded-lg p-1 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
                                   >
                                     <MoreVertical className="h-4 w-4" />
                                   </button>
                                   {postMenuOpen === post.id && (
-                                    <div className="absolute right-0 mt-1 w-36 rounded-lg border border-white/10 bg-[#0d0f1a] shadow-xl overflow-hidden z-20">
+                                    <div className="absolute right-0 mt-1 w-36 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-xl overflow-hidden z-20">
                                       <button
                                         onClick={() => {
                                           setEditingPost(post);
                                           setPostMenuOpen(null);
                                         }}
-                                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10"
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 transition hover:bg-gray-100 dark:bg-white/10"
                                       >
                                         <Edit2 className="h-3.5 w-3.5" />
                                         Edit
@@ -2074,7 +2074,7 @@ const SelectedGroup = () => {
                               ) : (
                                 <button
                                   onClick={() => setReportingPost(post)}
-                                  className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-red-400"
+                                  className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 hover:text-red-400"
                                 >
                                   <Flag className="h-3.5 w-3.5" />
                                   Report
@@ -2082,9 +2082,9 @@ const SelectedGroup = () => {
                               )}
                             </div>
 
-                            <h3 className="mt-1 text-base font-semibold text-white">{post.title}</h3>
+                            <h3 className="mt-1 text-base font-semibold text-gray-900 dark:text-white">{post.title}</h3>
 
-                            <div className="mt-2 text-sm text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
+                            <div className="mt-2 text-sm text-gray-600 dark:text-zinc-300 prose prose-invert prose-sm max-w-none break-words">
                               <ReactMarkdown remarkPlugins={[remarkGfm]} components={MarkdownComponents}>
                                 {post.content || post.description}
                               </ReactMarkdown>
@@ -2095,7 +2095,7 @@ const SelectedGroup = () => {
                             <div className="mt-3 flex flex-wrap items-center gap-4 text-xs">
                               <button
                                 onClick={() => toggleExpand(post.id)}
-                                className="inline-flex items-center gap-1 text-zinc-500 transition hover:text-white"
+                                className="inline-flex items-center gap-1 text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white"
                               >
                                 <MessageCircle className="h-3.5 w-3.5" />
                                 <span>{post.commentCount} replies</span>
@@ -2111,7 +2111,7 @@ const SelectedGroup = () => {
                                 className={`inline-flex items-center gap-1 transition-all duration-200 ${
                                   post.isLiked 
                                     ? "text-red-400 hover:text-red-300" 
-                                    : "text-zinc-500 hover:text-white"
+                                    : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
                                 }`}
                                 type="button"
                               >
@@ -2124,7 +2124,7 @@ const SelectedGroup = () => {
                                 className={`inline-flex items-center gap-1 transition-all duration-200 ${
                                   post.isSaved 
                                     ? "text-yellow-400 hover:text-yellow-300" 
-                                    : "text-zinc-500 hover:text-white"
+                                    : "text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
                                 }`}
                                 type="button"
                               >
@@ -2134,7 +2134,7 @@ const SelectedGroup = () => {
                             </div>
 
                             {expandedPostId === post.id && (
-                              <div className="mt-4 border-t border-white/10 pt-4">
+                              <div className="mt-4 border-t border-gray-200 dark:border-white/10 pt-4">
                                 <div className="space-y-4">
                                   {post.commentTree && post.commentTree.length > 0 ? (
                                     post.commentTree.map((comment, commentIndex) => (
@@ -2162,11 +2162,11 @@ const SelectedGroup = () => {
                                       />
                                     ))
                                   ) : (
-                                    <p className="text-center text-sm text-zinc-500">No comments yet.</p>
+                                    <p className="text-center text-sm text-gray-500 dark:text-zinc-500">No comments yet.</p>
                                   )}
                                 </div>
 
-                                <div className="mt-4 pt-4 border-t border-white/10">
+                                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-white/10">
                                   <ReplyInput
                                     replyText={replyText[post.id] || ""}
                                     updateReplyText={(text) => updateReplyText(post.id, text)}
@@ -2187,7 +2187,7 @@ const SelectedGroup = () => {
                     );
                   })
                 )}
-                <div ref={feedSentinelRef} className="flex min-h-12 items-center justify-center py-4 text-sm text-zinc-500">
+                <div ref={feedSentinelRef} className="flex min-h-12 items-center justify-center py-4 text-sm text-gray-500 dark:text-zinc-500">
                   {loadingMore ? <Loader2 className="h-5 w-5 animate-spin" /> : hasMore ? "Scroll for more" : ""}
                 </div>
               </div>
@@ -2197,16 +2197,16 @@ const SelectedGroup = () => {
           {activeTab === "members" && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {membersWithDetails.map((member) => (
-                <div key={member.userId} className="flex items-center gap-3 rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4">
+                <div key={member.userId} className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-4">
                   <img
                     src={member.avatar}
                     alt={member.name}
                     className="h-12 w-12 rounded-full object-cover ring-2 ring-white/20"
                   />
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-white">{member.name}</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">{member.name}</p>
                     <div className="flex items-center gap-2">
-                      <p className="text-xs text-zinc-500">Joined {member.joinedAt.split('T')[0]}</p>
+                      <p className="text-xs text-gray-500 dark:text-zinc-500">Joined {member.joinedAt.split('T')[0]}</p>
                       {member.role === "Admin" && (
                         <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-400">Admin</span>
                       )}
@@ -2217,12 +2217,12 @@ const SelectedGroup = () => {
                     <div className="relative">
                       <button
                         onClick={() => setShowMemberMenu(showMemberMenu === member.userId ? null : member.userId)}
-                        className="rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/10 hover:text-white"
+                        className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-500 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
                       >
                         <MoreVertical className="h-4 w-4" />
                       </button>
                       {showMemberMenu === member.userId && (
-                        <div className="absolute right-0 mt-2 w-48 rounded-xl border border-white/10 bg-[#0d0f1a] shadow-2xl backdrop-blur-xl overflow-hidden z-20">
+                        <div className="absolute right-0 mt-2 w-48 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-2xl backdrop-blur-xl overflow-hidden z-20">
                           <div className="p-2">
                             <button
                               onClick={() => {
@@ -2230,7 +2230,7 @@ const SelectedGroup = () => {
                                 setShowReportMemberModal(true);
                                 setShowMemberMenu(null);
                               }}
-                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10"
+                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-600 dark:text-zinc-300 transition hover:bg-gray-100 dark:bg-white/10"
                             >
                               <Flag className="h-4 w-4" />
                               Report Member
@@ -2260,13 +2260,13 @@ const SelectedGroup = () => {
 
           {activeTab === "about" && (
             <div className="space-y-6">
-              <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-6">
-                <h3 className="text-lg font-semibold text-white">About this group</h3>
-                <p className="mt-2 text-zinc-400">{group.description}</p>
+              <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">About this group</h3>
+                <p className="mt-2 text-gray-500 dark:text-zinc-400">{group.description}</p>
               </div>
 
-              <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-6">
-                <h3 className="text-lg font-semibold text-white">Tags</h3>
+              <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Tags</h3>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {group.tags.map((tag) => (
                     <span key={tag.tag_id} className="rounded-full bg-blue-500/20 px-3 py-1 text-xs text-blue-400">
@@ -2276,16 +2276,16 @@ const SelectedGroup = () => {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-white/10 bg-gradient-to-br from-white/5 to-transparent p-6">
-                <h3 className="text-lg font-semibold text-white">Group Info</h3>
+              <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent p-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Group Info</h3>
                 <div className="mt-3 space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-zinc-500">Total Members</span>
-                    <span className="text-white">{group.members.length}</span>
+                    <span className="text-gray-500 dark:text-zinc-500">Total Members</span>
+                    <span className="text-gray-900 dark:text-white">{group.members.length}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-zinc-500">Total Tags</span>
-                    <span className="text-white">{group.tags.length}</span>
+                    <span className="text-gray-500 dark:text-zinc-500">Total Tags</span>
+                    <span className="text-gray-900 dark:text-white">{group.tags.length}</span>
                   </div>
                 </div>
               </div>

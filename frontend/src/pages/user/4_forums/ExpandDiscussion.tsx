@@ -68,7 +68,7 @@ const CommentImages = ({ attachments }: { attachments: { file_path: string }[] }
           key={attachment.file_path}
           src={forumImageUrl(attachment.file_path)}
           alt="Comment attachment"
-          className="h-24 w-24 rounded-lg border border-white/10 object-cover"
+          className="h-24 w-24 rounded-lg border border-gray-200 dark:border-white/10 object-cover"
         />
       ))}
     </div>
@@ -127,13 +127,13 @@ const ReplyComposer = ({
   };
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+    <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3">
       <textarea
         value={comment}
         onChange={(event) => setComment(event.target.value)}
         placeholder={placeholder}
         rows={3}
-        className="w-full resize-none rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-zinc-500"
+        className="w-full resize-none rounded-lg border border-gray-200 dark:border-white/10 bg-black/20 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-500 dark:text-zinc-500"
       />
       {attachments.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
@@ -147,7 +147,7 @@ const ReplyComposer = ({
                     current.filter((item) => item.key !== attachment.key)
                   );
                 }}
-                className="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white"
+                className="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-gray-900 dark:text-white"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -156,7 +156,7 @@ const ReplyComposer = ({
         </div>
       )}
       <div className="mt-2 flex justify-end gap-2">
-        <label className="cursor-pointer rounded-lg p-2 text-zinc-400 hover:bg-white/10">
+        <label className="cursor-pointer rounded-lg p-2 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:bg-white/10">
           <ImageIcon className="h-4 w-4" />
           <input
             type="file"
@@ -169,7 +169,7 @@ const ReplyComposer = ({
         <button
           onClick={() => void submit()}
           disabled={(!comment.trim() && attachments.length === 0) || uploading || submitting}
-          className="flex items-center gap-1 rounded-lg bg-blue-500 px-3 py-2 text-xs text-white disabled:opacity-50"
+          className="flex items-center gap-1 rounded-lg bg-blue-500 px-3 py-2 text-xs text-gray-900 dark:text-white disabled:opacity-50"
         >
           {uploading || submitting
             ? <Loader2 className="h-3 w-3 animate-spin" />
@@ -210,13 +210,13 @@ const CommentNode = ({
   const isLiked = comment.likes?.some((like) => sameUser(like.user_id, currentUserId));
 
   return (
-    <div className={comment.depth ? "ml-5 border-l border-white/10 pl-4" : ""}>
-      <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+    <div className={comment.depth ? "ml-5 border-l border-gray-200 dark:border-white/10 pl-4" : ""}>
+      <div className="mt-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.03] p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
             <img src={identities[String(comment.user_id)]?.avatar} alt="" className="h-8 w-8 rounded-full object-cover" />
             <div>
-            <p className="text-xs font-medium text-zinc-300">{identities[String(comment.user_id)]?.name || "Forum member"}</p>
+            <p className="text-xs font-medium text-gray-600 dark:text-zinc-300">{identities[String(comment.user_id)]?.name || "Forum member"}</p>
             <p className="text-[11px] text-zinc-600">
               {new Date(comment.created_at).toLocaleString()}
               {comment.is_edited ? " (edited)" : ""}
@@ -225,12 +225,12 @@ const CommentNode = ({
           </div>
           {isAuthor && !comment.deleted_at && (
             <div className="flex gap-1">
-              <button onClick={() => setEditing(true)} className="p-1 text-zinc-500 hover:text-white">
+              <button onClick={() => setEditing(true)} className="p-1 text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white">
                 <Edit2 className="h-3.5 w-3.5" />
               </button>
               <button
                 onClick={() => void onDelete(comment.comment_id)}
-                className="p-1 text-zinc-500 hover:text-red-400"
+                className="p-1 text-gray-500 dark:text-zinc-500 hover:text-red-400"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -244,24 +244,24 @@ const CommentNode = ({
               value={editText}
               onChange={(event) => setEditText(event.target.value)}
               rows={3}
-              className="w-full rounded-lg border border-white/10 bg-black/20 p-2 text-sm text-white"
+              className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-black/20 p-2 text-sm text-gray-900 dark:text-white"
             />
             <div className="mt-2 flex gap-2">
               <button
                 onClick={() => {
                   void onEdit(comment.comment_id, editText).then(() => setEditing(false));
                 }}
-                className="rounded bg-blue-500 px-3 py-1 text-xs text-white"
+                className="rounded bg-blue-500 px-3 py-1 text-xs text-gray-900 dark:text-white"
               >
                 Save
               </button>
-              <button onClick={() => setEditing(false)} className="text-xs text-zinc-400">
+              <button onClick={() => setEditing(false)} className="text-xs text-gray-500 dark:text-zinc-400">
                 Cancel
               </button>
             </div>
           </div>
         ) : (
-          <div className="mt-3 text-sm text-zinc-300">
+          <div className="mt-3 text-sm text-gray-600 dark:text-zinc-300">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {comment.deleted_at ? "[deleted]" : comment.comment}
             </ReactMarkdown>
@@ -273,20 +273,20 @@ const CommentNode = ({
           <div className="mt-3 flex gap-4">
             <button
               onClick={() => void onLike(comment.comment_id)}
-              className={isLiked ? "flex items-center gap-1 text-xs text-red-400" : "flex items-center gap-1 text-xs text-zinc-500"}
+              className={isLiked ? "flex items-center gap-1 text-xs text-red-400" : "flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500"}
             >
               <Heart className={isLiked ? "h-3.5 w-3.5 fill-current" : "h-3.5 w-3.5"} />
               {comment.likes?.length || 0}
             </button>
             <button
               onClick={() => setReplying((value) => !value)}
-              className="flex items-center gap-1 text-xs text-zinc-500 hover:text-white"
+              className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white"
             >
               <Reply className="h-3.5 w-3.5" />
               Reply
             </button>
             {(comment.children || []).length > 0 && (
-              <button onClick={() => setShowChildren((value) => !value)} className="text-xs text-zinc-500 hover:text-white">
+              <button onClick={() => setShowChildren((value) => !value)} className="text-xs text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white">
                 {showChildren ? "Hide" : "View"} {(comment.children || []).length} {(comment.children || []).length === 1 ? "reply" : "replies"}
               </button>
             )}
@@ -527,10 +527,10 @@ const ExpandDiscussion = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#080a12]">
+      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
         <UserHeader pageTitle="Discussion" credits={1250} />
         <div className="mx-auto max-w-4xl p-8">
-          <div className="h-80 animate-pulse rounded-xl bg-white/10" />
+          <div className="h-80 animate-pulse rounded-xl bg-gray-100 dark:bg-white/10" />
         </div>
       </div>
     );
@@ -538,9 +538,9 @@ const ExpandDiscussion = () => {
 
   if (!discussion) {
     return (
-      <div className="min-h-screen bg-[#080a12]">
+      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
         <UserHeader pageTitle="Discussion" credits={1250} />
-        <div className="mx-auto max-w-4xl p-8 text-center text-zinc-400">
+        <div className="mx-auto max-w-4xl p-8 text-center text-gray-500 dark:text-zinc-400">
           Discussion not found.
         </div>
       </div>
@@ -583,30 +583,30 @@ const ExpandDiscussion = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#080a12]">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
       <UserHeader pageTitle="Discussion" credits={1250} />
       <main className="mx-auto max-w-4xl p-6 md:p-8">
-        <button onClick={() => navigate(-1)} className="mb-5 flex items-center gap-2 text-sm text-zinc-400">
+        <button onClick={() => navigate(-1)} className="mb-5 flex items-center gap-2 text-sm text-gray-500 dark:text-zinc-400">
           <ArrowLeft className="h-4 w-4" /> Back
         </button>
 
-        <article className="rounded-xl border border-white/10 bg-white/[0.04] p-6">
+        <article className="rounded-xl border border-gray-200 dark:border-white/10 bg-white/[0.04] p-6">
           <div className="flex items-start justify-between">
             <div>
               <p className="text-xs text-blue-400">{group?.group_name || "Forum"}</p>
               <div className="mt-1 flex items-center gap-2">
                 <img src={identities[String(discussion.user_id)]?.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
-                <p className="text-xs text-zinc-500">{identities[String(discussion.user_id)]?.name || "Forum member"}</p>
+                <p className="text-xs text-gray-500 dark:text-zinc-500">{identities[String(discussion.user_id)]?.name || "Forum member"}</p>
               </div>
             </div>
             {isAuthor ? (
               <div className="relative">
-                <button onClick={() => setMenuOpen((value) => !value)} className="p-2 text-zinc-400">
+                <button onClick={() => setMenuOpen((value) => !value)} className="p-2 text-gray-500 dark:text-zinc-400">
                   <MoreVertical className="h-5 w-5" />
                 </button>
                 {menuOpen && (
-                  <div className="absolute right-0 z-10 w-32 rounded-lg border border-white/10 bg-[#0d0f1a] py-1">
-                    <button onClick={() => setEditingPost(true)} className="flex w-full gap-2 px-3 py-2 text-sm text-zinc-300">
+                  <div className="absolute right-0 z-10 w-32 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] py-1">
+                    <button onClick={() => setEditingPost(true)} className="flex w-full gap-2 px-3 py-2 text-sm text-gray-600 dark:text-zinc-300">
                       <Edit2 className="h-4 w-4" /> Edit
                     </button>
                     <button onClick={() => setDeletingPost(true)} className="flex w-full gap-2 px-3 py-2 text-sm text-red-400">
@@ -616,13 +616,13 @@ const ExpandDiscussion = () => {
                 )}
               </div>
             ) : (
-              <button onClick={() => setReportingPost(true)} className="text-xs text-zinc-500 hover:text-red-400">
+              <button onClick={() => setReportingPost(true)} className="text-xs text-gray-500 dark:text-zinc-500 hover:text-red-400">
                 Report discussion
               </button>
             )}
           </div>
-          <h1 className="mt-4 text-2xl font-bold text-white">{discussion.title}</h1>
-          <div className="prose prose-invert mt-4 max-w-none text-zinc-300">
+          <h1 className="mt-4 text-2xl font-bold text-gray-900 dark:text-white">{discussion.title}</h1>
+          <div className="prose prose-invert mt-4 max-w-none text-gray-600 dark:text-zinc-300">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{discussion.content}</ReactMarkdown>
           </div>
           {(discussion.imageKeys || []).length > 0 && (
@@ -632,20 +632,20 @@ const ExpandDiscussion = () => {
               ))}
             </div>
           )}
-          <div className="mt-5 flex gap-5 border-t border-white/10 pt-4">
+          <div className="mt-5 flex gap-5 border-t border-gray-200 dark:border-white/10 pt-4">
             <button
               onClick={() => void toggleDiscussionCollection("likes", isLiked)}
-              className={isLiked ? "flex items-center gap-2 text-red-400" : "flex items-center gap-2 text-zinc-500"}
+              className={isLiked ? "flex items-center gap-2 text-red-400" : "flex items-center gap-2 text-gray-500 dark:text-zinc-500"}
             >
               <Heart className={isLiked ? "h-5 w-5 fill-current" : "h-5 w-5"} />
               {discussion.likes.length}
             </button>
-            <span className="flex items-center gap-2 text-zinc-500">
+            <span className="flex items-center gap-2 text-gray-500 dark:text-zinc-500">
               <MessageCircle className="h-5 w-5" /> {discussion.comments.length}
             </span>
             <button
               onClick={() => void toggleDiscussionCollection("saves", isSaved)}
-              className={isSaved ? "flex items-center gap-2 text-yellow-400" : "flex items-center gap-2 text-zinc-500"}
+              className={isSaved ? "flex items-center gap-2 text-yellow-400" : "flex items-center gap-2 text-gray-500 dark:text-zinc-500"}
             >
               <Bookmark className={isSaved ? "h-5 w-5 fill-current" : "h-5 w-5"} /> Save
             </button>
@@ -653,7 +653,7 @@ const ExpandDiscussion = () => {
         </article>
 
         <section className="mt-8">
-          <h2 className="mb-4 text-lg font-semibold text-white">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
             Comments ({discussion.comments.length})
           </h2>
           <ReplyComposer
@@ -662,7 +662,7 @@ const ExpandDiscussion = () => {
           />
           <div className="mt-5">
             {commentTree.length === 0 ? (
-              <p className="py-8 text-center text-sm text-zinc-500">No comments yet.</p>
+              <p className="py-8 text-center text-sm text-gray-500 dark:text-zinc-500">No comments yet.</p>
             ) : (
               commentTree.map((comment) => (
                 <CommentNode

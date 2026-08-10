@@ -537,10 +537,14 @@ export default function ProfileEditModal({
               value={formData.bio || ""}
               onChange={handleInputChange}
               disabled={isLoading}
-              rows={6}
+              rows={4}
+              maxLength={120}
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm focus:border-blue-500/50 outline-none resize-none leading-relaxed disabled:opacity-50"
-              placeholder="Tell the community about yourself..."
+              placeholder="Tell the community about yourself (max 120 characters)..."
             />
+            <div className="text-right text-[10px] text-zinc-500 mt-1">
+              {(formData.bio || "").length}/120
+            </div>
           </div>
         </div>
 

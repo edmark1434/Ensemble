@@ -24,6 +24,7 @@ import AvatarEditModal from "@/pages/user/7_profile/Edits/AvatarEditModal.tsx";
 import ProfileEditModal from "@/pages/user/7_profile/Edits/ProfileEditModal.tsx";
 import { BadgeEditModal } from "./Edits/BadgeEditModal.tsx";
 import SkillsEditModal from "@/pages/user/7_profile/Edits/SkillsEditModal.tsx";
+import { FollowersModal } from "./Displays/FollowersModal.tsx";
 
 // Chat Interface Context Types
 import type { ChatTarget } from "@/components/ui/Layout";
@@ -70,6 +71,7 @@ interface UserDetail {
   verification_status: boolean;
   bio: string;
   tagline: string;
+  introduction?: string;
   merit_score: number;
   avatar_file_id: number | null;
   avatar_preset_url?: string;
@@ -77,6 +79,8 @@ interface UserDetail {
   badges?: BadgeMetadata[];
   social_links?: SocialLink[];
   subscriptionType?: "Free" | "Premium" | "Business";
+  followers_count?: number;
+  following_count?: number;
 }
 
 const services = [
@@ -107,7 +111,8 @@ interface Preset {
 export default function Profile() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabType>("portfolio");
+  const [activeTab, setActiveTab] = useState<TabType>("introduction");
+
   const { user } = useGlobalState();
   const { id: profileAccountId } = useParams<{ id?: string }>();
   const id = profileAccountId || user?.account_id;
@@ -128,6 +133,10 @@ export default function Profile() {
 
   const [avatarPresets, setAvatarPresets] = useState<Preset[]>([]);
   const [currentAvatar, setCurrentAvatar] = useState<Preset | null>(null);
+  
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [isFollowedBy, setIsFollowedBy] = useState(false);
+  const [followersModalType, setFollowersModalType] = useState<"followers" | "following" | null>(null);
 
   const isOwner = id == user?.account_id;
 
@@ -161,6 +170,30 @@ export default function Profile() {
       avatarUrl: userDetails.avatar_preset_url,
       account_id: id
     });
+  };
+
+  const handleFollow = async () => {
+    if (!id || !user) return;
+    try {
+      await api.post(`/api/accounts/${id}/follow`);
+      setIsFollowing(true);
+      setUserDetails(prev => prev ? { ...prev, followers_count: (Number(prev.followers_count) || 0) + 1 } : null);
+      toast.success("Followed user!");
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || "Failed to follow user");
+    }
+  };
+
+  const handleUnfollow = async () => {
+    if (!id || !user) return;
+    try {
+      await api.delete(`/api/accounts/${id}/follow`);
+      setIsFollowing(false);
+      setUserDetails(prev => prev ? { ...prev, followers_count: Math.max(0, (Number(prev.followers_count) || 1) - 1) } : null);
+      toast.success("Unfollowed user!");
+    } catch (e: any) {
+      toast.error(e.response?.data?.message || "Failed to unfollow user");
+    }
   };
 
   const uploadFile = async (file: File): Promise<string> => {
@@ -460,12 +493,31 @@ export default function Profile() {
     }
   };
 
-  const saveSelectedBadges = (updatedBadgesList: BadgeMetadata[]) => {
-    setUserDetails((prev) => (prev ? { ...prev, badges: updatedBadgesList } : null));
-    toast.success("Account showcase badge selection updated.");
-    setIsBadgeModalOpen(false);
+  const saveSelectedBadges = async (updatedBadgesList: BadgeMetadata[]) => {
+    try {
+      const registryIds = updatedBadgesList.map(b => b.id);
+      const response = await api.put('/api/accounts/profile/badges/curate', { registryIds });
+      if (response.data.success) {
+        // Update local user details state to reflect new display_order
+        setUserDetails((prev) => {
+          if (!prev) return prev;
+          const newBadges = (prev.badges || []).map(b => ({ ...b, display_order: null }));
+          registryIds.forEach((rid, index) => {
+            const b = newBadges.find(x => x.id === rid);
+            if (b) b.display_order = index + 1;
+          });
+          return { ...prev, badges: newBadges };
+        });
+        toast.success("Account showcase badge selection updated.");
+        setIsBadgeModalOpen(false);
+      } else {
+        toast.error("Failed to update badges.");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed executing operations pipeline data push.");
+    }
   };
-
   const saveSkillsCuration = async (originalSkills: SkillObject[], updatedSkills: SkillObject[]) => {
     setIsSavingSkills(true);
 
@@ -556,11 +608,21 @@ export default function Profile() {
         }
 
         const [profileResponse, tagsResponse, accountLinkResponse, attachmentsResponse] = await Promise.all([
-          api.get(`/api/accounts/profile/${id}`),
+          api.get(`/api/accounts/profile/${id}?t=${new Date().getTime()}`),
           api.get(`/api/tags/`),
           api.get(`api/accounts/links/${id}`),
           api.get(`/api/accounts/profile/${id}/attachments`),
         ]);
+        
+        if (!isOwner) {
+          try {
+             const followStatus = await api.get(`/api/accounts/${id}/follow-status`);
+             setIsFollowing(followStatus.data.isFollowing);
+             setIsFollowedBy(followStatus.data.isFollowedBy);
+          } catch(e) {
+             console.error('Error fetching follow status:', e);
+          }
+        }
         setPortfolioItems(
           (attachmentsResponse.data?.attachments || []).map(mapAttachmentToPortfolioItem)
         );
@@ -575,7 +637,10 @@ export default function Profile() {
         if (!profileData || typeof profileData !== "object") {
           throw new Error("Profile data was not returned by the server");
         }
-        console.log("Fetched profile data:", profileData);
+        
+        console.log("PROFILE DATA RECEIVED: ", profileData);
+
+        const avatarUrl = constructAvatarUrl(profileData.avatar_preset_url);
 
         setAvailableSkills(tagsResponse.data.data || []);
 
@@ -606,13 +671,16 @@ export default function Profile() {
             verification_status: profileData.verification_status,
             bio: profileData.bio || profileData.description,
             tagline: profileData.tagline,
+            introduction: profileData.introduction,
             merit_score: profileData.merit_score || 0,
             avatar_file_id: profileData.avatar_file_id,
             avatar_preset_url: avatarUrl,
             skills: compiledCompoundSkills,
             badges: profileData.badges || [],
             social_links: accountLinkResponse.data.links || accountLinkResponse.data || [],
-            subscriptionType: profileData.subscriptiontype || "Free"
+            subscriptionType: profileData.subscriptiontype || "Free",
+            followers_count: Number(profileData.followers_count) || 0,
+            following_count: Number(profileData.following_count) || 0
           });
         } catch (skillsError) {
           console.error("Error fetching user skills:", skillsError);
@@ -650,7 +718,10 @@ export default function Profile() {
               avatar_preset_url: avatarUrl,
               skills: compiledCompoundSkills,
               badges: profileData.badges || [],
-              social_links: accountLinkResponse.data.links || accountLinkResponse.data || []
+              social_links: accountLinkResponse.data.links || accountLinkResponse.data || [],
+              subscriptionType: profileData.subscriptiontype || "Free",
+              followers_count: Number(profileData.followers_count) || 0,
+              following_count: Number(profileData.following_count) || 0
             });
           } catch (fallbackError) {
             console.error("Error fetching user skills from fallback:", fallbackError);
@@ -677,7 +748,10 @@ export default function Profile() {
               avatar_preset_url: avatarUrl,
               skills: [],
               badges: profileData.badges || [],
-              social_links: accountLinkResponse.data.links || accountLinkResponse.data || []
+              social_links: accountLinkResponse.data.links || accountLinkResponse.data || [],
+              subscriptionType: profileData.subscriptiontype || "Free",
+              followers_count: Number(profileData.followers_count) || 0,
+              following_count: Number(profileData.following_count) || 0
             });
           }
         }
@@ -703,7 +777,7 @@ export default function Profile() {
   }, [id, navigate]);
 
   return (
-    <div className="min-h-screen bg-[#080a12] font-['Plus Jakarta Sans',sans-serif] text-zinc-300 antialiased selection:bg-blue-500/30">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] font-['Plus Jakarta Sans',sans-serif] text-gray-900 dark:text-zinc-300 antialiased selection:bg-blue-500/30">
       <UserHeader pageTitle="Profile" credits={1250} />
 
       <div className="mx-auto max-w-7xl p-4 md:p-8 space-y-5">
@@ -728,24 +802,19 @@ export default function Profile() {
           birthdate={userDetails?.birthdate}
           verificationLevel={userDetails?.verification_status}
           subscriptionType={userDetails?.subscriptionType || "Free"}
+          followersCount={userDetails?.followers_count}
+          followingCount={userDetails?.following_count}
+          isFollowing={isFollowing}
+          isFollowedBy={isFollowedBy}
+          onFollow={handleFollow}
+          onUnfollow={handleUnfollow}
+          onFollowersClick={() => setFollowersModalType("followers")}
+          onFollowingClick={() => setFollowersModalType("following")}
           onEditAvatar={() => setIsAvatarModalOpen(true)}
           onEditProfile={() => setIsProfileModalOpen(true)}
           onChatClick={handleOpenChat}
           onVerificationClick={() => navigate("/account-verification-status")}
         />
-
-        {/* Merit Performance & Reviews Section */}
-        <MeritSection_ProfileDisplay
-          loading={loading}
-          meritScore={userDetails?.merit_score}
-          avgRating={4.8}
-          totalReviews={portfolioItems.length}
-          clientRating={4.9}
-          freelancerRating={4.8}
-          assetRating={4.7}
-          successfulJobsCount={6}
-        />
-
         {/* Layout Matrix Grid Panels Split */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr]">
 
@@ -753,7 +822,11 @@ export default function Profile() {
           <div className="space-y-4 h-fit">
             <BadgeSideSection_ProfileDisplay
               loading={loading}
-              badges={userDetails?.badges}
+              badges={(userDetails?.badges || [])
+                .filter(b => b.display_order !== null)
+                .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+                .map(b => badgesRegistry.find(reg => reg.id === b.id))
+                .filter(Boolean) as BadgeMetadata[]}
               isOwner={isOwner}
               onEditClick={() => setIsBadgeModalOpen(true)}
             />
@@ -774,13 +847,21 @@ export default function Profile() {
             <MainBody
               loading={loading}
               activeTab={activeTab}
-              onTabChange={(tab) => setActiveTab(tab)}
+              onTabChange={(tab) => {
+                setActiveTab(tab);
+              }}
               portfolioItems={portfolioItems}
               services={services}
               isOwner={isOwner}
               onUploadPDF={handleUploadResume}
               onAddExternalLink={handleAddWebsite}
               onDeletePortfolioItem={handleDeletePortfolioItem}
+              onUpdateIntroduction={async (intro) => {
+                await api.put(`/api/accounts/profile`, { introduction: intro });
+                setUserDetails(prev => prev ? { ...prev, introduction: intro } : null);
+              }}
+              userDetails={userDetails}
+              accountId={id}
             />
           </div>
 
@@ -807,10 +888,24 @@ export default function Profile() {
         />
       )}
 
+      {followersModalType && id && (
+        <FollowersModal
+          isOpen={!!followersModalType}
+          onClose={() => setFollowersModalType(null)}
+          accountId={id}
+          type={followersModalType}
+        />
+      )}
+
       <BadgeEditModal
         isOpen={isBadgeModalOpen}
         onClose={() => setIsBadgeModalOpen(false)}
-        currentlyDisplayedBadges={userDetails?.badges || []}
+        unlockedBadges={(userDetails?.badges || []).map(b => badgesRegistry.find(reg => reg.id === b.id)).filter(Boolean) as BadgeMetadata[]}
+        currentlyDisplayedBadges={(userDetails?.badges || [])
+          .filter(b => b.display_order !== null)
+          .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+          .map(b => badgesRegistry.find(reg => reg.id === b.id))
+          .filter(Boolean) as BadgeMetadata[]}
         onSave={saveSelectedBadges}
       />
 

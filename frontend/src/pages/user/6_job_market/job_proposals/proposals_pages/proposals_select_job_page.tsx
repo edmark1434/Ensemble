@@ -23,30 +23,30 @@ const getTimeAgo = (date: Date): string => {
 };
 
 export const SelectJobCardSkeleton: React.FC = () => (
-  <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/40 overflow-hidden animate-pulse space-y-4 flex flex-col justify-between">
+  <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/40 overflow-hidden animate-pulse space-y-4 flex flex-col justify-between">
     {/* Skeleton Thumbnail */}
-    <div className="h-36 w-full bg-white/5" />
+    <div className="h-36 w-full bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
 
     <div className="p-5 space-y-4">
       {/* Category Pills & Title */}
       <div className="space-y-2">
         <div className="flex gap-2">
-          <div className="h-4 w-16 rounded bg-white/10" />
-          <div className="h-4 w-16 rounded bg-white/5" />
+          <div className="h-4 w-16 rounded bg-gray-100 dark:bg-white/10" />
+          <div className="h-4 w-16 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
         </div>
-        <div className="h-5 w-3/4 rounded bg-white/10" />
+        <div className="h-5 w-3/4 rounded bg-gray-100 dark:bg-white/10" />
       </div>
 
       {/* Budget & Applicants Grid */}
       <div className="grid grid-cols-2 gap-2">
-        <div className="h-12 rounded-xl bg-white/5" />
-        <div className="h-12 rounded-xl bg-white/5" />
+        <div className="h-12 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
+        <div className="h-12 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
       </div>
 
       {/* Footer */}
-      <div className="pt-3 border-t border-white/5 flex items-center justify-between">
-        <div className="h-3 w-28 rounded bg-white/5" />
-        <div className="h-3 w-20 rounded bg-white/10" />
+      <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between">
+        <div className="h-3 w-28 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
+        <div className="h-3 w-20 rounded bg-gray-100 dark:bg-white/10" />
       </div>
     </div>
   </div>
@@ -104,14 +104,14 @@ export const ProposalsSelectJobPage: React.FC = () => {
 
   return (
     <div className="space-y-5 text-left w-full">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 dark:border-white/5 pb-3">
         <div>
-          <h2 className="text-lg font-bold text-white tracking-tight">Select a Job Listing</h2>
-          <p className="text-xs text-zinc-400 mt-0.5">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white tracking-tight">Select a Job Listing</h2>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
             Choose one of your published job posts to view its incoming proposal submissions.
           </p>
         </div>
-        <span className="text-xs font-semibold text-zinc-400 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 self-start sm:self-auto">
+        <span className="text-xs font-semibold text-gray-500 dark:text-zinc-400 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3 py-1.5 rounded-xl border border-gray-100 dark:border-white/5 self-start sm:self-auto">
           {isFetching || loading ? "Loading..." : `${filteredJobs.length} Active Listings`}
         </span>
       </div>
@@ -123,8 +123,8 @@ export const ProposalsSelectJobPage: React.FC = () => {
           ))}
         </div>
       ) : filteredJobs.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-12 text-center">
-          <p className="text-sm text-zinc-400 font-medium">No job postings found matching your search.</p>
+        <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/60 shadow-sm dark:shadow-none p-12 text-center">
+          <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">No job postings found matching your search.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -134,10 +134,10 @@ export const ProposalsSelectJobPage: React.FC = () => {
               whileHover={{ y: -3 }}
               transition={{ duration: 0.2 }}
               onClick={() => navigate(`/jobs/proposals/incoming/${job.id}`)}
-              className="group rounded-2xl border border-white/10 bg-[#0d0f1a]/80 overflow-hidden backdrop-blur-sm shadow-xl hover:border-white/20 cursor-pointer transition flex flex-col justify-between"
+              className="group rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 overflow-hidden backdrop-blur-sm shadow-xl hover:border-white/20 cursor-pointer transition flex flex-col justify-between"
             >
               {/* Thumbnail Image Header */}
-              <div className="relative h-36 w-full bg-zinc-950 overflow-hidden border-b border-white/5 shrink-0">
+              <div className="relative h-36 w-full bg-zinc-950 overflow-hidden border-b border-gray-100 dark:border-white/5 shrink-0">
                 <img
                   src={job.thumbnail}
                   alt={job.title}
@@ -160,49 +160,49 @@ export const ProposalsSelectJobPage: React.FC = () => {
               {/* Job Info Body */}
               <div className="p-5 space-y-4 flex-1 flex flex-col justify-between">
                 <div className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold text-zinc-400">
-                    <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10">{job.category}</span>
-                    <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10">{job.difficulty}</span>
-                    <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10">{job.positionsNeeded} Positions Needed</span>
+                  <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold text-gray-500 dark:text-zinc-400">
+                    <span className="px-2 py-0.5 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10">{job.category}</span>
+                    <span className="px-2 py-0.5 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10">{job.difficulty}</span>
+                    <span className="px-2 py-0.5 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10">{job.positionsNeeded} Positions Needed</span>
                   </div>
 
-                  <h3 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors line-clamp-1 leading-snug">
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white group-hover:text-blue-400 transition-colors line-clamp-1 leading-snug">
                     {job.title}
                   </h3>
                   
-                  <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+                  <p className="text-xs text-gray-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">
                     {job.description}
                   </p>
                 </div>
 
                 {/* Financial & Applicants Stats */}
                 <div className="flex flex-wrap items-center gap-2 text-xs pt-2">
-                  <div className="flex-1 min-w-0 p-2.5 rounded-xl bg-white/[0.02] border border-white/5">
-                    <span className="text-[9px] font-bold text-zinc-500 uppercase block">Budget Range</span>
+                  <div className="flex-1 min-w-0 p-2.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5">
+                    <span className="text-[9px] font-bold text-gray-500 dark:text-zinc-500 uppercase block">Budget Range</span>
                     <span className="font-extrabold text-yellow-500 flex items-center gap-1 text-xs mt-0.5">
                       <CreditIcon className="h-3.5 w-3.5 shrink-0" /> {job.priceRange}
                     </span>
                   </div>
 
-                  <div className="flex-1 min-w-0 p-2.5 rounded-xl bg-white/[0.02] border border-white/5">
-                    <span className="text-[9px] font-bold text-zinc-500 uppercase block">Proposals</span>
-                    <span className="font-bold text-white flex items-center gap-1 text-xs mt-0.5">
+                  <div className="flex-1 min-w-0 p-2.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5">
+                    <span className="text-[9px] font-bold text-gray-500 dark:text-zinc-500 uppercase block">Proposals</span>
+                    <span className="font-bold text-gray-900 dark:text-white flex items-center gap-1 text-xs mt-0.5">
                       <ClipboardList className="h-3.5 w-3.5 text-blue-400 shrink-0" /> {job.applicantsCount}
                     </span>
                   </div>
                   
-                  <div className="flex-1 min-w-0 p-2.5 rounded-xl bg-white/[0.02] border border-white/5">
-                    <span className="text-[9px] font-bold text-zinc-500 uppercase block">Hired</span>
-                    <span className="font-bold text-white flex items-center gap-1 text-xs mt-0.5">
+                  <div className="flex-1 min-w-0 p-2.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5">
+                    <span className="text-[9px] font-bold text-gray-500 dark:text-zinc-500 uppercase block">Hired</span>
+                    <span className="font-bold text-gray-900 dark:text-white flex items-center gap-1 text-xs mt-0.5">
                       <Briefcase className="h-3.5 w-3.5 text-emerald-400 shrink-0" /> {job.hiredCount}
                     </span>
                   </div>
                 </div>
 
                 {/* Action Link Footer */}
-                <div className="pt-3 border-t border-white/5 flex items-center justify-between text-xs font-semibold text-blue-400">
-                  <span className="flex items-center gap-1 text-zinc-400 text-[10px]">
-                    <Clock className="h-3.5 w-3.5 text-zinc-500 shrink-0" /> 
+                <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-xs font-semibold text-blue-400">
+                  <span className="flex items-center gap-1 text-gray-500 dark:text-zinc-400 text-[10px]">
+                    <Clock className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-500 shrink-0" /> 
                     <span className="truncate">Posted {job.postedAt} ({job.timeAgo})</span>
                   </span>
                   <span className="flex items-center gap-1 group-hover:underline shrink-0 ml-2">

@@ -175,7 +175,7 @@ const ProposalsCreatePage: React.FC = () => {
   };
 
   return (
-    <div className="relative w-full min-h-screen bg-[#080a12] text-white overflow-x-hidden pt-6 pb-12">
+    <div className="relative w-full min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-12">
       {/* Background Grid */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
         <ShapeGrid
@@ -196,16 +196,16 @@ const ProposalsCreatePage: React.FC = () => {
         className="relative z-10 mx-auto max-w-3xl p-6 md:p-8 w-full space-y-6"
       >
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Creating Proposal Application</h1>
-          <p className="text-xs text-zinc-400 mt-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Creating Proposal Application</h1>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
             Applying for Job ID <span className="font-mono text-blue-400">{id}</span>:{" "}
-            <strong className="text-white">{job?.title || "Job Listing"}</strong>
+            <strong className="text-gray-900 dark:text-white">{job?.title || "Job Listing"}</strong>
           </p>
         </div>
 
         <ProposalCreateHeader currentSlide={currentSlide} onReturn={handleReturnTrigger} />
 
-        <div className="rounded-3xl border border-white/10 bg-[#0d0f1a]/80 p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6">
+        <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6">
           <AnimatePresence mode="wait">
             {currentSlide === 1 && (
               <motion.div key="step-1" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}>

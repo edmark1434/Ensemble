@@ -85,18 +85,32 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 10) 
         `SELECT
             a.account_id,
             a.display_name,
+            u.first_name || ' ' || u.last_name AS full_name,
             a.handle,
-            f.path AS avatar_preset_url
+            f.path AS avatar_preset_url,
+            COALESCE(v.is_verified, FALSE) AS verification_status,
+            p.name AS subscriptiontype,
+            a.merit_score,
+            (SELECT COUNT(*) FROM account_followers WHERE followed_id = a.account_id) AS followers_count,
+            (SELECT COUNT(*) FROM account_followers WHERE follower_id = a.account_id) AS following_count,
+            EXISTS(SELECT 1 FROM account_followers WHERE follower_id = $3::uuid AND followed_id = a.account_id) AS is_following,
+            EXISTS(SELECT 1 FROM account_followers WHERE follower_id = a.account_id AND followed_id = $3::uuid) AS is_followed_by,
+            a.description AS bio,
+            a.tagline AS tagline,
+            COALESCE(
+                (SELECT json_agg(json_build_object('role_id', pp.plpu_id, 'role_name', pp.purpose_name))
+                 FROM platform_purpose pp JOIN user_platform_purpose upp ON pp.plpu_id = upp.plpu_id WHERE upp.user_id = u.user_id),
+                '[]'::json
+            ) AS roles
          FROM accounts a
-         INNER JOIN (
-            SELECT DISTINCT account_id
-            FROM users
-         ) u ON u.account_id = a.account_id
+         JOIN users u ON u.account_id = a.account_id
          LEFT JOIN files f ON f.file_id = a.avatar_file_id
+         LEFT JOIN verifications v ON a.account_id = v.account_id
+         LEFT JOIN subscriptions s ON u.user_id = s.user_id
+         LEFT JOIN plans p ON s.plan_id = p.plan_id
          WHERE a.type = 'User'
            AND LOWER(a.status) = 'active'
            AND a.deleted_at IS NULL
-           AND ($3::uuid IS NULL OR a.account_id <> $3::uuid)
            AND (
                 LOWER(a.handle) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
                 OR LOWER(a.display_name) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
@@ -186,7 +200,9 @@ async function getProfileRepositories(accountId) {
                         WHERE AL.ACCOUNT_ID = A.ACCOUNT_ID
                     ), 
                     '[]'::json
-                ) AS SOCIAL_LINKS
+                ) AS SOCIAL_LINKS,
+                (SELECT COUNT(*) FROM account_followers WHERE followed_id = A.ACCOUNT_ID) AS followers_count,
+                (SELECT COUNT(*) FROM account_followers WHERE follower_id = A.ACCOUNT_ID) AS following_count
             FROM ACCOUNTS A
             LEFT JOIN USERS U ON A.ACCOUNT_ID = U.ACCOUNT_ID
             LEFT JOIN VERIFICATIONS V ON V.ACCOUNT_ID = A.ACCOUNT_ID
@@ -294,6 +310,166 @@ async function getRecentUserAvatarsRepositories(limit = 5) {
     }
 }
 
+async function followUser(followerId, followedId) {
+    try {
+        const query = `
+            INSERT INTO account_followers (follower_id, followed_id)
+            VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+            RETURNING *;
+        `;
+        const result = await pool.query(query, [followerId, followedId]);
+        return result.rows[0];
+    } catch (err) {
+        console.error(`Error following user ${followedId}:`, err);
+        throw err;
+    }
+}
+
+async function unfollowUser(followerId, followedId) {
+    try {
+        const query = `
+            DELETE FROM account_followers
+            WHERE follower_id = $1 AND followed_id = $2
+            RETURNING *;
+        `;
+        const result = await pool.query(query, [followerId, followedId]);
+        return result.rows[0];
+    } catch (err) {
+        console.error(`Error unfollowing user ${followedId}:`, err);
+        throw err;
+    }
+}
+
+async function getFollowers(accountId) {
+    try {
+        const query = `
+            SELECT 
+                a.account_id,
+                a.display_name,
+                a.handle,
+                f.path AS avatar_preset_url
+            FROM account_followers af
+            INNER JOIN accounts a ON a.account_id = af.follower_id
+            LEFT JOIN files f ON f.file_id = a.avatar_file_id
+            WHERE af.followed_id = $1
+            ORDER BY af.created_at DESC;
+        `;
+        const result = await pool.query(query, [accountId]);
+        return result.rows;
+    } catch (err) {
+        console.error(`Error fetching followers for ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function getFollowing(accountId) {
+    try {
+        const query = `
+            SELECT 
+                a.account_id,
+                a.display_name,
+                a.handle,
+                f.path AS avatar_preset_url
+            FROM account_followers af
+            INNER JOIN accounts a ON a.account_id = af.followed_id
+            LEFT JOIN files f ON f.file_id = a.avatar_file_id
+            WHERE af.follower_id = $1
+            ORDER BY af.created_at DESC;
+        `;
+        const result = await pool.query(query, [accountId]);
+        return result.rows;
+    } catch (err) {
+        console.error(`Error fetching following for ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function checkIsFollowing(followerId, followedId) {
+    if (!followerId || !followedId) return false;
+    try {
+        const query = `
+            SELECT 
+                EXISTS (SELECT 1 FROM account_followers WHERE follower_id = $1 AND followed_id = $2) AS is_following,
+                EXISTS (SELECT 1 FROM account_followers WHERE follower_id = $2 AND followed_id = $1) AS is_followed_by
+        `;
+        const result = await pool.query(query, [followerId, followedId]);
+        return {
+            isFollowing: result.rows[0].is_following,
+            isFollowedBy: result.rows[0].is_followed_by
+        };
+    } catch (err) {
+        console.error('Error checking follow status:', err);
+        throw err;
+    }
+}
+
+async function getAccountBadges(accountId) {
+    try {
+        const query = `
+            SELECT b.registry_id, ab.display_order
+            FROM account_badges ab
+            JOIN badges b ON b.badge_id = ab.badge_id
+            WHERE ab.account_id = $1
+        `;
+        const result = await pool.query(query, [accountId]);
+        return result.rows;
+    } catch (err) {
+        console.error(`Error fetching badges for account ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function grantBadgeToAccount(accountId, registryId, displayOrder = null) {
+    try {
+        const query = `
+            INSERT INTO account_badges (account_id, badge_id, display_order)
+            SELECT $1, badge_id, $3
+            FROM badges
+            WHERE registry_id = $2
+            ON CONFLICT DO NOTHING
+        `;
+        await pool.query(query, [accountId, registryId, displayOrder]);
+    } catch (err) {
+        console.error(`Error granting badge ${registryId} to account ${accountId}:`, err);
+        throw err;
+    }
+}
+
+async function updateAccountBadgeDisplayOrder(accountId, registryIds) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        // First, clear all display_order for this account
+        await client.query(`
+            UPDATE account_badges
+            SET display_order = NULL
+            WHERE account_id = $1
+        `, [accountId]);
+
+        // Then, update the display_order for the selected badges
+        for (let i = 0; i < registryIds.length; i++) {
+            await client.query(`
+                UPDATE account_badges
+                SET display_order = $1
+                FROM badges
+                WHERE account_badges.badge_id = badges.badge_id
+                  AND account_badges.account_id = $2
+                  AND badges.registry_id = $3
+            `, [i + 1, accountId, registryIds[i]]);
+        }
+        
+        await client.query('COMMIT');
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(`Error updating badge display order for account ${accountId}:`, err);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
 module.exports = {
     getAllAccounts,
     getAccountById,
@@ -308,5 +484,13 @@ module.exports = {
     getDisplayNameByAccountId,
     updateAndInsertAccountProfile,
     updateAccountProfile,
-    getRecentUserAvatarsRepositories
+    getRecentUserAvatarsRepositories,
+    followUser,
+    unfollowUser,
+    getFollowers,
+    getFollowing,
+    checkIsFollowing,
+    getAccountBadges,
+    grantBadgeToAccount,
+    updateAccountBadgeDisplayOrder
 };

@@ -19,7 +19,8 @@ const {
 } = require('../repositories/UserRepositories');
 const {
     createAccount,
-    getAccountByHandle
+    getAccountByHandle,
+    grantBadgeToAccount
 } = require('../repositories/AccountRepositories');
 const {
     getStaffByEmail,
@@ -193,6 +194,14 @@ async function registerUser(signupPayload = {}) {
         firebaseUserUuid,
         isEmailVerified: true,
     });
+    
+    // Automatically grant the Alpha Tester badge to all new accounts
+    try {
+        await grantBadgeToAccount(account.account_id, 'acc-alpha', 1); // displayOrder = 1
+    } catch (e) {
+        console.error("Failed to grant Alpha badge to new user", e);
+    }
+
     await redisClient.del(`sessionCredentials:${emailAddress}`);
     await redisClient.del(`verificationCode:${emailAddress}`);
     //return the created user and account information

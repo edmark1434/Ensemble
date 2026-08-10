@@ -19,7 +19,7 @@ export const ProposalCreateHeader: React.FC<ProposalCreateHeaderProps> = ({ curr
       <button
         type="button"
         onClick={onReturn}
-        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/10 text-xs font-semibold text-zinc-300 hover:text-white transition shrink-0 focus:outline-none"
+        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gray-100 dark:bg-zinc-800/80 hover:bg-gray-200 dark:hover:bg-zinc-700/80 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white transition shrink-0 focus:outline-none"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
         <span>Return</span>
@@ -39,14 +39,14 @@ export const ProposalCreateHeader: React.FC<ProposalCreateHeaderProps> = ({ curr
                       ? "bg-emerald-500 border-emerald-500 text-[#080a12]"
                       : isActive
                       ? "bg-blue-500/20 border-blue-500 text-blue-400 ring-4 ring-blue-500/10"
-                      : "bg-[#0d0f1a] border-white/10 text-zinc-500"
+                      : "bg-white dark:bg-[#0d0f1a] border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-500"
                   }`}
                 >
                   {isCompleted ? <Check className="h-4 w-4" /> : step.id}
                 </div>
                 <span
                   className={`text-[10px] font-bold uppercase tracking-wider mt-2 transition-colors absolute -bottom-5 whitespace-nowrap ${
-                    isActive ? "text-blue-400" : isCompleted ? "text-emerald-400" : "text-zinc-500"
+                    isActive ? "text-blue-400" : isCompleted ? "text-emerald-400" : "text-gray-500 dark:text-zinc-500"
                   }`}
                 >
                   {step.label}
@@ -54,7 +54,7 @@ export const ProposalCreateHeader: React.FC<ProposalCreateHeaderProps> = ({ curr
               </div>
 
               {idx < PROPOSAL_WIZARD_STEPS.length - 1 && (
-                <div className="flex-1 h-[2px] bg-white/5 mx-3 relative top-[-6px] z-0">
+                <div className="flex-1 h-[2px] bg-white dark:bg-white/5 shadow-sm dark:shadow-none mx-3 relative top-[-6px] z-0">
                   <div
                     className="absolute inset-y-0 left-0 bg-emerald-500 transition-all duration-500"
                     style={{ width: isCompleted ? "100%" : "0%" }}

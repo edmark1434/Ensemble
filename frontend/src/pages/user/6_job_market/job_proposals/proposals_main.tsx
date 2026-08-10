@@ -32,19 +32,19 @@ export interface ProposalsMainContext {
 
 const ProposalSidebarSkeleton = () => (
   <div className="space-y-6">
-    <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-5 backdrop-blur-sm space-y-3">
-      <div className="h-3 w-28 animate-pulse rounded bg-white/10" />
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/60 shadow-sm dark:shadow-none p-5 backdrop-blur-sm space-y-3">
+      <div className="h-3 w-28 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
       <div className="space-y-2">
         {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="h-8 w-full animate-pulse rounded-xl bg-white/5" />
+          <div key={i} className="h-8 w-full animate-pulse rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
         ))}
       </div>
     </div>
-    <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-5 backdrop-blur-sm space-y-4">
-      <div className="h-3 w-24 animate-pulse rounded bg-white/10" />
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/60 shadow-sm dark:shadow-none p-5 backdrop-blur-sm space-y-4">
+      <div className="h-3 w-24 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
       <div className="space-y-3">
-        <div className="h-8 flex-1 animate-pulse rounded-lg bg-white/5" />
-        <div className="h-8 flex-1 animate-pulse rounded-lg bg-white/5" />
+        <div className="h-8 flex-1 animate-pulse rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
+        <div className="h-8 flex-1 animate-pulse rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
       </div>
     </div>
   </div>
@@ -121,7 +121,7 @@ export const ProposalsMain: React.FC = () => {
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#080a12] relative">
+    <div className="w-full min-h-screen bg-gray-50 dark:bg-[#080a12] relative">
       {/* Sticky User Header */}
       <div className="sticky top-0 z-50">
         <UserHeader pageTitle="Job Proposals" credits={1250} />
@@ -132,20 +132,20 @@ export const ProposalsMain: React.FC = () => {
         <ProposalsSearchbar searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
 
         {/* Navigation Tabs & View Switcher */}
-        <div className="mb-8 flex flex-wrap items-center justify-between border-b border-white/10 gap-4 pb-2">
+        <div className="mb-8 flex flex-wrap items-center justify-between border-b border-gray-200 dark:border-white/10 gap-4 pb-2">
           <ProposalsTabs />
           {!isJobSelectionPage && (
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${
+                className={`flex items-center justify-center p-2 rounded-lg transition-colors border ${
                   showFilters
-                    ? "bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20"
-                    : "bg-white/5 border-white/10 text-zinc-400 hover:text-white hover:bg-white/10"
+                    ? "bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400"
+                    : "bg-white dark:bg-white/5 shadow-sm dark:shadow-none border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-100 dark:bg-white/10"
                 }`}
+                title="Toggle Filters"
               >
                 <Filter className="h-4 w-4" />
-                <span>Filters</span>
               </button>
               <ProposalsListViewType viewType={viewType} onViewTypeChange={setViewType} />
             </div>
