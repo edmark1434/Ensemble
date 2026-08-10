@@ -198,7 +198,7 @@ export const SocialLinksSection_ProfileDisplay: React.FC<SocialLinksProps> = ({
               {!socialLinks || socialLinks.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-4 px-4 bg-gray-50 dark:bg-white/[0.01] border border-dashed border-gray-200 dark:border-white/5 rounded-xl text-center space-y-1">
                   <ShieldAlert className="h-4 w-4 text-gray-400 dark:text-zinc-600" />
-                  <p className="text-[11px] text-gray-500 dark:text-zinc-500 font-medium">No custom link routing coordinates attached.[cite: 4]</p>
+                  <p className="text-[11px] text-gray-500 dark:text-zinc-500 font-medium">No custom link routing coordinates attached.</p>
                 </div>
               ) : (
                 socialLinks.map((link, idx) => {

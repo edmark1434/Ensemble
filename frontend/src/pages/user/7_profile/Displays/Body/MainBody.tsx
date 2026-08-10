@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { FolderOpen, Briefcase, FileText, TrendingUp, Image as ImageIcon, Clock } from "lucide-react";
 
@@ -30,11 +30,11 @@ interface DetailsListBodyProps {
 
 const tabOptions: { key: TabType; label: string; icon: React.ReactNode }[] = [
   { key: "introduction", label: "Introduction", icon: <User className="h-3.5 w-3.5" /> },
-  { key: "performance", label: "Performance", icon: <Activity className="h-3.5 w-3.5" /> },
   { key: "portfolio", label: "Portfolio", icon: <FolderOpen className="h-3.5 w-3.5" /> },
   { key: "services", label: "Services", icon: <Briefcase className="h-3.5 w-3.5" /> },
   { key: "job-posts", label: "Job Posts", icon: <FileText className="h-3.5 w-3.5" /> },
   { key: "assets", label: "Assets", icon: <ImageIcon className="h-3.5 w-3.5" /> },
+  { key: "performance", label: "Performance", icon: <Activity className="h-3.5 w-3.5" /> },
 ];
 
 export const DetailsListBodySkeleton: React.FC = () => (
@@ -60,6 +60,8 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
   userDetails,
   onUpdateIntroduction,
 }) => {
+  const [performanceTab, setPerformanceTab] = useState<"merit" | "ratings" | "history">("merit");
+
   if (loading) return <DetailsListBodySkeleton />;
 
   return (
@@ -108,18 +110,66 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
           >
             {activeTab === "introduction" && <Profile_Introduction introduction={userDetails?.introduction} isOwner={isOwner} onSave={onUpdateIntroduction} />}
             {activeTab === "performance" && (
-              <div className="flex flex-col space-y-6">
-                <MeritSection_ProfileDisplay
-                  loading={loading}
-                  meritScore={userDetails?.merit_score}
-                  avgRating={4.8}
-                  totalReviews={portfolioItems.length}
-                  clientRating={4.9}
-                  freelancerRating={4.8}
-                  assetRating={4.7}
-                  successfulJobsCount={6}
-                />
-                <Profile_History />
+              <div className="flex flex-col h-full space-y-4">
+                {/* Subtabs for Performance */}
+                <div className="flex border-b border-gray-200 dark:border-white/10">
+                  <button 
+                    onClick={() => setPerformanceTab("merit")}
+                    className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 ${performanceTab === "merit" ? "border-blue-600 text-blue-600 dark:text-blue-400" : "border-transparent text-gray-500 hover:text-gray-800 dark:text-zinc-400 dark:hover:text-zinc-200"}`}
+                  >
+                    Merit Score
+                  </button>
+                  <button 
+                    onClick={() => setPerformanceTab("ratings")}
+                    className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 ${performanceTab === "ratings" ? "border-blue-600 text-blue-600 dark:text-blue-400" : "border-transparent text-gray-500 hover:text-gray-800 dark:text-zinc-400 dark:hover:text-zinc-200"}`}
+                  >
+                    Ratings
+                  </button>
+                  <button 
+                    onClick={() => setPerformanceTab("history")}
+                    className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 ${performanceTab === "history" ? "border-blue-600 text-blue-600 dark:text-blue-400" : "border-transparent text-gray-500 hover:text-gray-800 dark:text-zinc-400 dark:hover:text-zinc-200"}`}
+                  >
+                    History
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 pb-4">
+                  {performanceTab === "merit" && (
+                    <div className="pt-2">
+                      <MeritSection_ProfileDisplay
+                        loading={loading}
+                        meritScore={userDetails?.merit_score}
+                        avgRating={4.8}
+                        totalReviews={portfolioItems.length}
+                        clientRating={4.9}
+                        freelancerRating={4.8}
+                        assetRating={4.7}
+                        successfulJobsCount={6}
+                        viewMode="merit"
+                      />
+                    </div>
+                  )}
+                  {performanceTab === "ratings" && (
+                    <div className="pt-2">
+                      <MeritSection_ProfileDisplay
+                        loading={loading}
+                        meritScore={userDetails?.merit_score}
+                        avgRating={4.8}
+                        totalReviews={portfolioItems.length}
+                        clientRating={4.9}
+                        freelancerRating={4.8}
+                        assetRating={4.7}
+                        successfulJobsCount={6}
+                        viewMode="ratings"
+                      />
+                    </div>
+                  )}
+                  {performanceTab === "history" && (
+                    <div className="pt-2">
+                      <Profile_History />
+                    </div>
+                  )}
+                </div>
               </div>
             )}
             {activeTab === "portfolio" && (

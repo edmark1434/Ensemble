@@ -10,6 +10,7 @@ interface MeritSectionProps {
   freelancerRating?: number;
   assetRating?: number;
   successfulJobsCount?: number;
+  viewMode?: "merit" | "ratings" | "both";
 }
 
 const mockDisputes = [
@@ -17,10 +18,14 @@ const mockDisputes = [
   { id: "DSP-8832", type: "Milestone Delivery", status: "Resolved", date: "2025-11-02", outcome: "Mutually Settled" }
 ];
 
-export const MeritSectionSkeleton: React.FC = () => (
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-pulse">
-    <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 h-[88px]" />
-    <div className="md:col-span-2 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 h-[88px]" />
+export const MeritSectionSkeleton: React.FC<{ viewMode?: "merit" | "ratings" | "both" }> = ({ viewMode = "both" }) => (
+  <div className={`grid grid-cols-1 gap-4 animate-pulse ${viewMode === "both" ? "md:grid-cols-3" : "max-w-2xl mx-auto w-full"}`}>
+    {(viewMode === "both" || viewMode === "merit") && (
+      <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 h-[88px]" />
+    )}
+    {(viewMode === "both" || viewMode === "ratings") && (
+      <div className={`${viewMode === "both" ? "md:col-span-2" : ""} rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 h-[88px]`} />
+    )}
   </div>
 );
 
@@ -32,12 +37,13 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
   clientRating = 4.9,
   freelancerRating = 4.8,
   assetRating = 4.7,
-  successfulJobsCount = 86
+  successfulJobsCount = 86,
+  viewMode = "both"
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [isDisputeModalOpen, setIsDisputeModalOpen] = useState(false);
 
-  if (loading) return <MeritSectionSkeleton />;
+  if (loading) return <MeritSectionSkeleton viewMode={viewMode} />;
 
   // Hardcoded Fallback Logic: Evaluates to 100 if incoming data is 0, null, or undefined
   const safeScore = meritScore ? Math.min(Math.max(meritScore, 0), 100) : 100;
@@ -61,9 +67,10 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className={`grid grid-cols-1 gap-4 ${viewMode === "both" ? "md:grid-cols-3" : "max-w-2xl mx-auto w-full"}`}>
 
         {/* ==================== LEFT CARD: PERFORMANCE MERIT SCORE ==================== */}
+        {(viewMode === "both" || viewMode === "merit") && (
         <div className={`rounded-2xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white dark:from-white/[0.03] to-transparent relative overflow-hidden group shadow-xl transition-all duration-300 ${
           isCollapsed ? "p-3 flex flex-row items-center justify-between" : "p-5 flex flex-col justify-between gap-5 min-h-[220px]"
         }`}>
@@ -141,9 +148,11 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
             </div>
           )}
         </div>
+        )}
 
         {/* ==================== RIGHT CARD: RATING BREAKDOWN TABLE ==================== */}
-        <div className={`md:col-span-2 rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-[#0b0e17]/60 backdrop-blur-md text-gray-800 dark:text-zinc-300 shadow-xl flex flex-col justify-between transition-all duration-300 ${
+        {(viewMode === "both" || viewMode === "ratings") && (
+        <div className={`${viewMode === "both" ? "md:col-span-2" : ""} rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-[#0b0e17]/60 backdrop-blur-md text-gray-800 dark:text-zinc-300 shadow-xl flex flex-col justify-between transition-all duration-300 ${
           isCollapsed ? "p-3 justify-center gap-2" : "p-5 gap-4"
         }`}>
 
@@ -190,7 +199,7 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
                 </div>
               </div>
 
-              {!isCollapsed && (
+              {!isCollapsed && viewMode !== "ratings" && (
                 <div className="border-l border-gray-200 dark:border-white/10 ml-2 space-y-2.5 animate-fadeIn">
                   {/* Sub-row: As a Client */}
                   <div className="grid grid-cols-[1fr_auto_auto] items-center pl-4">
@@ -241,6 +250,7 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
           )}
 
         </div>
+        )}
       </div>
 
       {/* ==================== SYSTEM POPUP OVERLAY MODAL: DISPUTE HISTORY ==================== */}

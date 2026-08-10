@@ -117,17 +117,8 @@ export const SkillsSideSection_ProfileDisplay: React.FC<SkillsSectionProps> = ({
                   return (
                     <div
                       key={`pill-${skill.tag_id}`}
-                      className="group relative flex items-center justify-center bg-white dark:bg-[#121420]/60 px-3 py-1 rounded-lg border transition-all duration-300 box-border overflow-hidden select-none"
+                      className="group relative flex items-center justify-center bg-white dark:bg-[#121420]/60 hover:bg-gray-100 dark:hover:bg-[#121420]/80 px-3 py-1 rounded-lg border transition-all duration-300 box-border overflow-hidden select-none"
                       style={{ borderColor: currentConfig.color }}
-                      onMouseMove={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const x = e.clientX - rect.left;
-                        const y = e.clientY - rect.top;
-                        e.currentTarget.style.background = `radial-gradient(60px circle at ${x}px ${y}px, rgba(255,255,255,0.08), transparent 80%), rgba(18,20,32,0.6)`;
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = '';
-                      }}
                     >
                       <span className="text-[11px] font-bold text-gray-700 dark:text-zinc-200 tracking-wide transition-colors group-hover:text-gray-900 dark:group-hover:text-white relative z-10 whitespace-nowrap">
                         {skill.name}
@@ -152,17 +143,12 @@ export const SkillsSideSection_ProfileDisplay: React.FC<SkillsSectionProps> = ({
                     return (
                       <div
                         key={`card-${skill.tag_id}`}
-                        className="group relative flex flex-col justify-between bg-gray-50 dark:bg-[#121420]/60 p-2.5 rounded-xl border border-transparent dark:border-white/5 transition-all duration-300 w-full box-border overflow-hidden"
-                        onMouseMove={(e) => {
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          const x = e.clientX - rect.left;
-                          const y = e.clientY - rect.top;
+                        className="group relative flex flex-col justify-between bg-gray-50 dark:bg-[#121420]/60 hover:bg-gray-100 dark:hover:bg-[#121420]/80 p-2.5 rounded-xl border border-transparent dark:border-white/5 transition-all duration-300 w-full box-border overflow-hidden"
+                        onMouseEnter={(e) => {
                           e.currentTarget.style.borderColor = currentConfig.color;
-                          e.currentTarget.style.background = `radial-gradient(100px circle at ${x}px ${y}px, rgba(255,255,255,0.06), transparent 80%), rgba(18,20,32,0.6)`;
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.borderColor = '';
-                          e.currentTarget.style.background = '';
                         }}
                       >
                         {/* Title & Proficiency Pill */}

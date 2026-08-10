@@ -66,8 +66,14 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
     }
   };
 
+  const getSanitizedContent = (text: string) => {
+    if (!text) return text;
+    // Fix markdown bold syntax where user leaves spaces (e.g., "** text **" -> "**text**")
+    return text.replace(/\*\*([^*]+)\*\*/g, (match, p1) => `**${p1.trim()}**`);
+  };
+
   return (
-    <div className="flex flex-col h-full py-4 relative">
+    <div className="flex flex-col h-full relative pt-1">
       <div className="w-full text-left">
         {isEditing ? (
           <div className="space-y-3">
@@ -121,7 +127,7 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
                       h3: ({ node, ...props }) => <h3 className="text-base font-bold text-gray-900 dark:text-white mt-2 mb-1" {...props} />,
                     }}
                   >
-                    {content}
+                    {getSanitizedContent(content)}
                   </ReactMarkdown>
                 ) : (
                   <span className="text-gray-500 dark:text-zinc-500 italic">Nothing to preview</span>
@@ -169,15 +175,15 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
                     ul: ({ node, ...props }) => <ul className="list-disc list-outside ml-4 my-2 marker:text-gray-400 dark:marker:text-zinc-500" {...props} />,
                     ol: ({ node, ...props }) => <ol className="list-decimal list-outside ml-4 my-2 marker:text-gray-400 dark:marker:text-zinc-500" {...props} />,
                     li: ({ node, ...props }) => <li className="pl-1 mb-1 last:mb-0" {...props} />,
-                    p: ({ node, ...props }) => <p className="whitespace-pre-wrap mb-3 last:mb-0" {...props} />,
+                    p: ({ node, ...props }) => <p className="whitespace-pre-wrap mb-3 last:mb-0 first-of-type:mt-0" {...props} />,
                     a: ({ node, ...props }) => <a className="text-blue-600 dark:text-blue-400 hover:underline" {...props} />,
-                    h1: ({ node, ...props }) => <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-5 mb-2" {...props} />,
-                    h2: ({ node, ...props }) => <h2 className="text-xl font-bold text-gray-900 dark:text-white mt-4 mb-2" {...props} />,
-                    h3: ({ node, ...props }) => <h3 className="text-lg font-bold text-gray-900 dark:text-white mt-3 mb-1" {...props} />,
-                    h4: ({ node, ...props }) => <h4 className="text-base font-bold text-gray-900 dark:text-white mt-2 mb-1" {...props} />,
+                    h1: ({ node, ...props }) => <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-5 mb-2 first-of-type:mt-0" {...props} />,
+                    h2: ({ node, ...props }) => <h2 className="text-xl font-bold text-gray-900 dark:text-white mt-4 mb-2 first-of-type:mt-0" {...props} />,
+                    h3: ({ node, ...props }) => <h3 className="text-lg font-bold text-gray-900 dark:text-white mt-3 mb-1 first-of-type:mt-0" {...props} />,
+                    h4: ({ node, ...props }) => <h4 className="text-base font-bold text-gray-900 dark:text-white mt-2 mb-1 first-of-type:mt-0" {...props} />,
                   }}
                 >
-                  {content}
+                  {getSanitizedContent(content)}
                 </ReactMarkdown>
               </div>
             ) : (
