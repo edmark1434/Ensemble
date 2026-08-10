@@ -124,7 +124,17 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
           <div className="relative inline-flex items-center justify-center md:justify-start gap-3 w-full md:w-auto mt-1" ref={dropdownRef}>
 
             <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight md:text-3xl">
-              {name} {middleName} {suffix}
+              {(() => {
+                const nameParts = name ? name.split(/\s+/) : [];
+                const firstName = nameParts.length > 0 ? nameParts[0] : "";
+                const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
+                
+                const firstMid = [firstName, middleName].filter(Boolean).join(" ");
+                if (lastName) {
+                  return `${firstMid}, ${lastName} ${suffix || ""}`.trim();
+                }
+                return firstMid;
+              })()}
             </h1>
 
             {/* Tooltip & Trigger Node Group Wrapper */}
@@ -146,6 +156,17 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
               {isMetadataOpen && (
                 <div className="absolute top-full left-1/2 md:left-0 transform -translate-x-1/2 md:translate-x-0 mt-2 w-80 rounded-xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0b0e17] p-3 shadow-2xl z-50 animate-fadeIn font-mono text-[11px] text-gray-600 dark:text-zinc-400 space-y-1.5">
                   <div className="absolute -top-1 left-1/2 md:left-4 transform -translate-x-1/2 md:translate-x-0 w-2 h-2 bg-white dark:bg-[#0b0e17] border-t border-l border-gray-200 dark:border-white/15 rotate-45" />
+                  <div className="flex items-start gap-2 border-b border-gray-200 dark:border-white/10 pb-1.5 mb-1.5">
+                    <span className="font-bold text-gray-700 dark:text-zinc-300">Full Name:</span>
+                    <span className="leading-normal text-gray-800 dark:text-white">
+                      {(() => {
+                        const nameParts = name ? name.split(/\s+/) : [];
+                        const firstName = nameParts.length > 0 ? nameParts[0] : "";
+                        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
+                        return [firstName, middleName, lastName, suffix].filter(Boolean).join(" ");
+                      })()}
+                    </span>
+                  </div>
                   <div className="flex items-start gap-2">
                     <MapPin className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0 mt-0.5" />
                     <span className="leading-normal text-gray-800 dark:text-zinc-300">{`${location}, ${country} ${zipCode}`}</span>
