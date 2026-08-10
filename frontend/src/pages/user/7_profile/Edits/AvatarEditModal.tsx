@@ -290,35 +290,34 @@ export default function AvatarEditModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#080a12]/95 backdrop-blur-md p-6 shadow-2xl font-['Plus Jakarta Sans',sans-serif] max-h-[90vh] overflow-y-auto">
+      <div className="relative w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-[#080a12]/95 backdrop-blur-md p-6 shadow-2xl font-['Plus Jakarta Sans',sans-serif] max-h-[90vh] overflow-y-auto">
         <button
           onClick={handleClose}
           disabled={isUploading}
-          className="absolute right-4 top-4 rounded-full bg-white/10 p-1.5 text-zinc-400 transition hover:bg-white/20 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+          className="absolute right-4 top-4 rounded-full bg-gray-100 dark:bg-white/10 p-1.5 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-200 dark:hover:bg-white/20 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <X className="h-5 w-5" />
         </button>
 
         <div className="flex flex-col items-center text-center">
-          <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-blue-400 mb-4">
+          <div className="w-12 h-12 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 flex items-center justify-center text-blue-500 dark:text-blue-400 mb-4">
             <ImageIcon className="h-5 w-5" />
           </div>
 
-          <h3 className="text-xl font-bold text-white mb-2">Update Avatar Profile</h3>
-          <p className="text-zinc-400 text-xs mb-6 max-w-xs leading-relaxed">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Update Avatar Profile</h3>
+          <p className="text-gray-500 dark:text-zinc-400 text-xs mb-6 max-w-xs leading-relaxed">
             Upload a customized image asset or select one of our curated design system profile presets.
           </p>
 
           {currentAvatarUrl && !isCustomFile && (
-            <div className="flex items-center gap-2 mb-2 text-emerald-400 text-xs">
+            <div className="flex items-center gap-2 mb-2 text-emerald-600 dark:text-emerald-400 text-xs">
               <Check className="h-3 w-3" />
               <span>Current avatar selected</span>
             </div>
           )}
 
-          <div className="relative w-28 h-28 rounded-full border-2 border-dashed p-1 bg-[#080a12] mb-6 transition-all duration-300"
-               style={{ borderColor: isCustomFile ? '#4a6fa5' : selectedPresetId ? '#4a6fa5' : '#2a2d3e' }}>
-            <div className="w-full h-full rounded-full overflow-hidden bg-[#13151f] flex items-center justify-center">
+          <div className={`relative w-28 h-28 rounded-full border-2 border-dashed p-1 bg-white dark:bg-[#080a12] mb-6 transition-all duration-300 ${isCustomFile || selectedPresetId ? 'border-[#4a6fa5]' : 'border-gray-300 dark:border-[#2a2d3e]'}`}>
+            <div className="w-full h-full rounded-full overflow-hidden bg-gray-100 dark:bg-[#13151f] flex items-center justify-center">
               {previewUrl ? (
                 <img 
                   src={previewUrl} 
@@ -329,14 +328,14 @@ export default function AvatarEditModal({
                   }}
                 />
               ) : (
-                <span className="text-2xl font-bold text-white">{currentAvatarName?.charAt(0) || "U"}</span>
+                <span className="text-2xl font-bold text-gray-400 dark:text-white">{currentAvatarName?.charAt(0) || "U"}</span>
               )}
             </div>
 
             <button
               onClick={triggerFileUpload}
               disabled={isUploading || isSaved}
-              className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-white text-[#080a12] flex items-center justify-center cursor-pointer shadow-lg hover:bg-zinc-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-gray-900 dark:bg-white text-white dark:text-[#080a12] flex items-center justify-center cursor-pointer shadow-lg hover:bg-gray-800 dark:hover:bg-zinc-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
               title="Upload Custom Image"
             >
               <Upload className="h-3.5 w-3.5" />
@@ -360,17 +359,17 @@ export default function AvatarEditModal({
           )}
 
           {isCustomFile && selectedFile && !fileError && (
-            <div className="flex items-center gap-2 mb-4 text-blue-400 text-xs bg-blue-500/10 px-3 py-1.5 rounded-full">
+            <div className="flex items-center gap-2 mb-4 text-blue-600 dark:text-blue-400 text-xs bg-blue-50 dark:bg-blue-500/10 px-3 py-1.5 rounded-full border border-blue-100 dark:border-transparent">
               <Check className="h-3 w-3" />
               <span className="truncate max-w-[120px]">{selectedFile.name}</span>
-              <span className="text-zinc-500 whitespace-nowrap">
+              <span className="text-gray-500 dark:text-zinc-500 whitespace-nowrap">
                 ({(selectedFile.size / 1024).toFixed(1)} KB)
               </span>
             </div>
           )}
 
           <div className="w-full text-left">
-            <label className="block text-zinc-500 text-xs font-semibold mb-3 tracking-wider uppercase">
+            <label className="block text-gray-500 dark:text-zinc-500 text-xs font-semibold mb-3 tracking-wider uppercase">
               System Presets
             </label>
 
@@ -384,10 +383,10 @@ export default function AvatarEditModal({
                     type="button"
                     onClick={() => handlePresetSelect(preset.file_id, preset.path)}
                     disabled={isUploading || isSaved}
-                    className={`relative w-full aspect-square rounded-full bg-[#13151f] overflow-hidden p-0 border-2 transition-all duration-200 hover:scale-105 ${
+                    className={`relative w-full aspect-square rounded-full bg-gray-100 dark:bg-[#13151f] overflow-hidden p-0 border-2 transition-all duration-200 hover:scale-105 ${
                       isActive 
                         ? "border-[#4a6fa5] shadow-[0_0_12px_rgba(74,111,165,0.3)] scale-105" 
-                        : "border-transparent hover:border-zinc-500"
+                        : "border-transparent hover:border-gray-300 dark:hover:border-zinc-500"
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     {fullUrl && (
@@ -415,7 +414,7 @@ export default function AvatarEditModal({
             <button
               onClick={handleClose}
               disabled={isUploading}
-              className="flex-1 rounded-full border border-white/10 bg-white/5 py-2.5 text-xs font-semibold text-zinc-400 transition hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 rounded-full border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 py-2.5 text-xs font-semibold text-gray-600 dark:text-zinc-400 transition hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
@@ -427,7 +426,7 @@ export default function AvatarEditModal({
                   ? 'bg-emerald-500 text-white cursor-default'
                   : isUploading
                   ? 'bg-blue-500 text-white cursor-wait'
-                  : 'bg-white text-[#080a12] hover:bg-zinc-200 active:scale-95 hover:shadow-lg hover:shadow-white/10'
+                  : 'bg-gray-900 text-white dark:bg-white dark:text-[#080a12] hover:bg-gray-800 dark:hover:bg-zinc-200 active:scale-95 hover:shadow-lg hover:shadow-gray-900/10 dark:hover:shadow-white/10'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               {isSaved ? (
