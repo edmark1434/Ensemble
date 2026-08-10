@@ -112,6 +112,7 @@ export default function Profile() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>("introduction");
+
   const { user } = useGlobalState();
   const { id: profileAccountId } = useParams<{ id?: string }>();
   const id = profileAccountId || user?.account_id;
@@ -846,15 +847,21 @@ export default function Profile() {
             <MainBody
               loading={loading}
               activeTab={activeTab}
-              onTabChange={(tab) => setActiveTab(tab)}
+              onTabChange={(tab) => {
+                setActiveTab(tab);
+              }}
               portfolioItems={portfolioItems}
               services={services}
               isOwner={isOwner}
               onUploadPDF={handleUploadResume}
               onAddExternalLink={handleAddWebsite}
               onDeletePortfolioItem={handleDeletePortfolioItem}
+              onUpdateIntroduction={async (intro) => {
+                await api.put(`/api/accounts/profile`, { introduction: intro });
+                setUserDetails(prev => prev ? { ...prev, introduction: intro } : null);
+              }}
               userDetails={userDetails}
-              onUpdateIntroduction={(intro) => setUserDetails(prev => prev ? { ...prev, introduction: intro } : prev)}
+              accountId={id}
             />
           </div>
 

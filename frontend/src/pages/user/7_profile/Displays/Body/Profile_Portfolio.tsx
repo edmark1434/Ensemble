@@ -1,4 +1,5 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Eye, Heart, ArrowUpRight, Layers, FileText, Globe, Scale, Upload, Plus, X, ExternalLink, HelpCircle
@@ -41,6 +42,11 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
   const [linkUrl, setLinkUrl] = useState("");
   const [linkDescription, setLinkDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0] && onUploadPDF) {
@@ -106,13 +112,6 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
           <span>Embed Website Link</span>
         </button>
 
-        <button
-          onClick={onEditTermsOfService}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] text-[11px] font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-all cursor-pointer"
-        >
-          <Scale className="h-3 w-3" />
-          <span>Configure Terms of Service</span>
-        </button>
       </div>}
 
       {/* ==================== UNIFORM SQUARE GRID ==================== */}
@@ -149,15 +148,19 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                     className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
                   />
                 ) : item.type === "document" && item.fileUrl ? (
-                  <iframe
-                    src={`${item.fileUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0`}
-                    title={`${item.title} PDF preview`}
-                    className="pointer-events-none h-full w-full border-0 bg-white"
-                    loading="lazy"
-                  />
+                  <>
+                    <iframe
+                      src={`${item.fileUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0`}
+                      title={`${item.title} PDF preview`}
+                      className="pointer-events-none h-full w-full border-0 bg-white"
+                      loading="lazy"
+                    />
+                    {/* Transparent overlay to intercept clicks from the iframe */}
+                    <div className="absolute inset-0 z-10" />
+                  </>
                 ) : item.type === "link" && item.externalUrl ? (
                   <div className="relative h-full w-full bg-gray-100 dark:bg-zinc-950">
-                    <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="absolute inset-0 flex items-center justify-center z-10">
                       <div className={`p-4 rounded-2xl ${cfg.bg} ${cfg.color} border ${cfg.border}`}>
                         <CardIcon className="h-6 w-6" />
                       </div>
@@ -170,14 +173,15 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                       sandbox="allow-scripts allow-same-origin allow-forms"
                       referrerPolicy="no-referrer"
                     />
+                    <div className="absolute inset-0 z-10" />
                   </div>
                 ) : (
-                  <div className={`p-4 rounded-2xl ${cfg.bg} ${cfg.color} border ${cfg.border} transition-transform duration-300 group-hover:scale-110 shadow-inner`}>
+                  <div className={`p-4 rounded-2xl ${cfg.bg} ${cfg.color} border ${cfg.border} transition-transform duration-300 group-hover:scale-110 shadow-inner z-10`}>
                     <CardIcon className="h-6 w-6" />
                   </div>
                 )}
 
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-1 text-[11px] font-bold text-white backdrop-blur-[2px]">
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-1 text-[11px] font-bold text-white backdrop-blur-[2px] z-20">
                   <span>Expand Item</span>
                   <ArrowUpRight className="h-3.5 w-3.5 ml-0.5" />
                 </div>
@@ -219,61 +223,62 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
       </div>
 
       {/* ==================== EXPANDED IMMERSIVE DISPLAY MODAL ==================== */}
-      <AnimatePresence>
-        {showLinkModal && (
-          <div className="fixed inset-0 z-[200001] flex items-center justify-center p-4">
-            <motion.button
-              type="button"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowLinkModal(false)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-              aria-label="Close website link form"
-            />
-            <motion.form
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              onSubmit={submitLink}
-              className="relative w-full max-w-md space-y-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#12141f] p-5 shadow-2xl"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-gray-900 dark:text-white">Embed Website Link</h3>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-zinc-500">Add a public portfolio or professional website.</p>
+      {mounted && document.body && createPortal(
+        <AnimatePresence>
+          {showLinkModal && (
+            <div key="link-modal" className="fixed inset-0 z-[200001] flex items-center justify-center p-4">
+              <motion.button
+                type="button"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowLinkModal(false)}
+                className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+                aria-label="Close website link form"
+              />
+              <motion.form
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.96 }}
+                onSubmit={submitLink}
+                className="relative w-full max-w-md space-y-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#12141f] p-5 shadow-2xl"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-white">Embed Website Link</h3>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-zinc-500">Add a public portfolio or professional website.</p>
+                  </div>
+                  <button type="button" onClick={() => setShowLinkModal(false)} className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white">
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
-                <button type="button" onClick={() => setShowLinkModal(false)} className="rounded-lg p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white">
-                  <X className="h-4 w-4" />
+                <label className="block text-xs text-gray-600 dark:text-zinc-400">
+                  Display name <span className="text-red-500 dark:text-red-400">*</span>
+                  <input required maxLength={255} value={linkName} onChange={(e) => setLinkName(e.target.value)} className="mt-1.5 w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-[#0b0e17] px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500" placeholder="My portfolio website" />
+                </label>
+                <label className="block text-xs text-gray-600 dark:text-zinc-400">
+                  Website URL <span className="text-red-500 dark:text-red-400">*</span>
+                  <input required type="url" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} className="mt-1.5 w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-[#0b0e17] px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500" placeholder="https://example.com" />
+                </label>
+                <label className="block text-xs text-gray-600 dark:text-zinc-400">
+                  Description
+                  <textarea maxLength={2000} rows={3} value={linkDescription} onChange={(e) => setLinkDescription(e.target.value)} className="mt-1.5 w-full resize-none rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-[#0b0e17] px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500" placeholder="Describe what visitors will find." />
+                </label>
+                <button disabled={isSubmitting} type="submit" className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50">
+                  {isSubmitting ? "Adding..." : "Add Website"}
                 </button>
-              </div>
-              <label className="block text-xs text-gray-600 dark:text-zinc-400">
-                Display name <span className="text-red-500 dark:text-red-400">*</span>
-                <input required maxLength={255} value={linkName} onChange={(e) => setLinkName(e.target.value)} className="mt-1.5 w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-[#0b0e17] px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500" placeholder="My portfolio website" />
-              </label>
-              <label className="block text-xs text-gray-600 dark:text-zinc-400">
-                Website URL <span className="text-red-500 dark:text-red-400">*</span>
-                <input required type="url" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} className="mt-1.5 w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-[#0b0e17] px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500" placeholder="https://example.com" />
-              </label>
-              <label className="block text-xs text-gray-600 dark:text-zinc-400">
-                Description
-                <textarea maxLength={2000} rows={3} value={linkDescription} onChange={(e) => setLinkDescription(e.target.value)} className="mt-1.5 w-full resize-none rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-[#0b0e17] px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500" placeholder="Describe what visitors will find." />
-              </label>
-              <button disabled={isSubmitting} type="submit" className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50">
-                {isSubmitting ? "Adding..." : "Add Website"}
-              </button>
-            </motion.form>
-          </div>
-        )}
-        {activeViewItem && (
-          <div className="fixed inset-0 flex items-center justify-center z-[200000] p-4 md:p-6">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setActiveViewItem(null)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-md"
-            />
+              </motion.form>
+            </div>
+          )}
+          {activeViewItem && (
+            <div key="view-modal" className="fixed inset-0 flex items-center justify-center z-[200000] p-4 md:p-6">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setActiveViewItem(null)}
+                className="absolute inset-0 bg-black/80 backdrop-blur-md"
+              />
 
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -364,7 +369,9 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+        document.body
+      )}
 
     </div>
   );

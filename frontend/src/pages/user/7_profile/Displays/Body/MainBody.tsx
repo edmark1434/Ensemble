@@ -26,6 +26,8 @@ interface DetailsListBodyProps {
   onAddExternalLink?: (data: { name: string; url: string; description: string }) => Promise<void>;
   onDeletePortfolioItem?: (id: string) => Promise<void>;
   userDetails?: any;
+  onUpdateIntroduction?: (intro: string) => Promise<void>;
+  accountId?: string;
 }
 
 const tabOptions: { key: TabType; label: string; icon: React.ReactNode }[] = [
@@ -59,6 +61,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
   onDeletePortfolioItem,
   userDetails,
   onUpdateIntroduction,
+  accountId,
 }) => {
   const [performanceTab, setPerformanceTab] = useState<"merit" | "ratings" | "history">("merit");
 
@@ -182,7 +185,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
               />
             )}
             {activeTab === "services" && <Profile_Services services={services} />}
-            {activeTab === "job-posts" && <Profile_JobPosts />}
+            {activeTab === "job-posts" && <Profile_JobPosts userDetails={userDetails} accountId={accountId} />}
             {activeTab === "assets" && <Profile_Assets />}
           </motion.div>
         </AnimatePresence>
