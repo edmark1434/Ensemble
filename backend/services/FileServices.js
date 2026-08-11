@@ -138,6 +138,26 @@ async function generateUploadUrl(folder, filename, contentType, cacheControl = "
     }
 }
 
+async function generateOnboardingAvatarUploadUrl(userId, filename, contentType) {
+    const safeUserId = String(userId || '').trim();
+    if (!/^[0-9a-f-]{36}$/i.test(safeUserId)) throw new Error('Invalid onboarding upload owner');
+
+    const result = await generateUploadUrl('profile', filename, contentType, 'private, max-age=0, no-cache');
+    const basename = result.key.slice('profile/'.length);
+    const key = `profile/onboarding/${safeUserId}/${basename}`;
+    const command = new PutObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: key,
+        ContentType: contentType,
+        CacheControl: 'private, max-age=0, no-cache'
+    });
+    return {
+        ...result,
+        key,
+        uploadUrl: await getSignedUrl(s3, command, { expiresIn: URL_EXPIRY })
+    };
+}
+
 // This function is only used for server-side uploads (not pre-signed URL flow)
 async function uploadFileToS3(uploadUrl, file) {
     try {
@@ -207,5 +227,6 @@ module.exports = {
     generateUploadUrl,
     uploadFileToS3,
     getUploadConfig,
-    registerFileService
+    registerFileService,
+    generateOnboardingAvatarUploadUrl
 };

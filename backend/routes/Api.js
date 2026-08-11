@@ -23,10 +23,14 @@ const teamRoutes = require('./Teams');
 const contractRoutes = require('./Contract');
 const dashboardRoutes = require('./Dashboard');
 const cashoutRoutes = require('./Cashout');
+const onboardingRoutes = require('./Onboarding');
+const requireCompletedOnboarding = require('../middleware/RequireCompletedOnboarding');
 const { getAllCountriesController,
     getAllPlacesController
 } = require('../controllers/SystemControllers')
 
+router.use(requireCompletedOnboarding);
+router.use('/onboarding', onboardingRoutes);
 router.use('/inbox', inboxRoutes);
 router.use('/google-meet', googleMeetRoutes);
 router.use('/payment', paymentRoutes);

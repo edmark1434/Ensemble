@@ -142,14 +142,12 @@ function App() {
       <Route path="/admin" element={<AdminLoginPage />} />
       <Route path="/staff" element={<StaffLoginPage />} />
 
-        <Route path="/setup">
-          <Route path="verify-email" element={<VerifyEmail />} />
-          <Route path="personal-details" element={<PersonalDetails />} />
-          <Route path="upload-image" element={<UploadImage />} />
-          <Route path="survey" element={<Survey />} />
-        </Route>
+        <Route path="/setup/verify-email" element={<VerifyEmail />} />
 
       <Route element={<RouteMiddleware />}>
+        <Route path="/setup/personal-details" element={<PersonalDetails />} />
+        <Route path="/setup/upload-image" element={<UploadImage />} />
+        <Route path="/setup/survey" element={<Survey />} />
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path='*' element={<NotFound/>} />

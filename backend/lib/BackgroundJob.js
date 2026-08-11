@@ -28,6 +28,7 @@ const { CREDIT_TRANSACTION_TYPE } = require("./CreditTransactionEnums");
 
 const {getIo} = require('../lib/WebSocket');
 const { reconcileCashoutsServices } = require('../services/CashoutServices');
+const { cleanupExpiredOnboardingAvatars } = require('../services/OnboardingServices');
 
 const config = {
     auth: {
@@ -311,6 +312,16 @@ let isSubscriptionJobRunning = false;
 let isCashoutJobRunning = false;
 
 function startPaymentReconciliationJob() {
+
+    // Delete only expired onboarding uploads that were never committed to the files table.
+    cron.schedule("17 3 * * *", async () => {
+        try {
+            const result = await cleanupExpiredOnboardingAvatars();
+            if (result.deleted) console.log(`Removed ${result.deleted} expired onboarding avatar upload(s).`);
+        } catch (err) {
+            console.error('Onboarding avatar cleanup failed:', err.message);
+        }
+    });
 
     // Payment reconciliation every 30 seconds
     cron.schedule("*/30 * * * * *", async () => {
