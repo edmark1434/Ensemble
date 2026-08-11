@@ -10,6 +10,7 @@ const {
 const { CONVERSATION_TYPE: DISPUTE_CHAT_TYPE } = require('../repositories/DisputeChatRepositories');
 const { seedDomainExamples } = require('./SeedDomains');
 const { CREDIT_TRANSACTION_TYPES, CREDIT_TRANSACTION_TYPE } = require('./CreditTransactionEnums');
+const { generatePublicId } = require('./PublicId');
 
 function cap(value, max) {
   if (value == null) return value;
@@ -1317,10 +1318,10 @@ async function seedTeams(userAccountIds) {
 
   for (const def of teamDefs) {
     const accountRes = await pool.query(
-      `INSERT INTO accounts (display_name, handle, type, merit_score, status, created_at)
-       VALUES ($1, $2, 'Team', 75, 'Active', NOW())
+      `INSERT INTO accounts (public_id, display_name, handle, type, merit_score, status, created_at)
+       VALUES ($1, $2, $3, 'Team', 75, 'Active', NOW())
        RETURNING account_id`,
-      [cap(def.name, 50), cap(def.handle, 50)]
+      [generatePublicId(), cap(def.name, 50), cap(def.handle, 50)]
     );
     const teamAccountId = accountRes.rows[0].account_id;
 
@@ -1447,9 +1448,9 @@ async function seed() {
     // 1. Seed STAFF (fixed named moderators — always the same after seed)
     for (const staff of STAFF_SEED) {
       const accountRes = await pool.query(
-        `INSERT INTO ACCOUNTS (display_name, handle, type, merit_score, status, created_at) 
-         VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING account_id`,
-        [cap(staff.displayName, 50), cap(staff.handle, 50), 'Staff', 100, 'Active']
+        `INSERT INTO ACCOUNTS (public_id, display_name, handle, type, merit_score, status, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING account_id`,
+        [generatePublicId(), cap(staff.displayName, 50), cap(staff.handle, 50), 'Staff', 100, 'Active']
       );
 
       const accountId = accountRes.rows[0].account_id;
@@ -1479,9 +1480,9 @@ async function seed() {
       const userEmail = cap(buildShortEmail(`${firstName}${lastName}`), 50);
 
       const accountRes = await pool.query(
-        `INSERT INTO ACCOUNTS (display_name, handle, type, merit_score, status, created_at) 
-         VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING account_id`,
-        [cap(`${firstName} ${lastName}`, 50), userHandle, 'User', 50, 'Active']
+        `INSERT INTO ACCOUNTS (public_id, display_name, handle, type, merit_score, status, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING account_id`,
+        [generatePublicId(), cap(`${firstName} ${lastName}`, 50), userHandle, 'User', 50, 'Active']
       );
 
       const accountId = accountRes.rows[0].account_id;
