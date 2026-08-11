@@ -149,28 +149,28 @@ const SAMPLE_DETAILED_CONTRACTS: DetailedContract[] = [
 // ============================================================================
 const ContractsSkeletonLoader: React.FC = () => (
   <div className="mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-pulse font-['Plus_Jakarta_Sans']">
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-6 md:p-8">
-      <div className="h-8 w-64 rounded-lg bg-white/10" />
-      <div className="mt-2 h-4 w-96 max-w-full rounded-lg bg-white/5" />
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-6 md:p-8">
+      <div className="h-8 w-64 rounded-lg bg-gray-100 dark:bg-white/10" />
+      <div className="mt-2 h-4 w-96 max-w-full rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
     </div>
 
     <div className="space-y-4">
-      <div className="flex gap-6 border-b border-white/10 pb-2">
-        <div className="h-8 w-32 rounded bg-white/10" />
-        <div className="h-8 w-36 rounded bg-white/5" />
+      <div className="flex gap-6 border-b border-gray-200 dark:border-white/10 pb-2">
+        <div className="h-8 w-32 rounded bg-gray-100 dark:bg-white/10" />
+        <div className="h-8 w-36 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         {Array.from({ length: 4 }).map((_, i) => (
           <div
             key={i}
-            className="h-32 w-full rounded-2xl border border-white/10 bg-white/5 p-5 flex items-center justify-between"
+            className="h-32 w-full rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-5 flex items-center justify-between"
           >
             <div className="space-y-2">
-              <div className="h-4 w-48 rounded bg-white/10" />
-              <div className="h-3 w-32 rounded bg-white/5" />
+              <div className="h-4 w-48 rounded bg-gray-100 dark:bg-white/10" />
+              <div className="h-3 w-32 rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
             </div>
-            <div className="h-6 w-20 rounded-full bg-white/10" />
+            <div className="h-6 w-20 rounded-full bg-gray-100 dark:bg-white/10" />
           </div>
         ))}
       </div>
@@ -308,7 +308,7 @@ export const Contracts: React.FC = () => {
   );  
 
   const getStatusBadge = (status: ContractStatus) => {
-    let color = 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20';
+    let color = 'bg-zinc-500/10 text-gray-500 dark:text-zinc-400 border-zinc-500/20';
     if (status === 'Active') color = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
     else if (status === 'Waiting') color = 'bg-blue-500/10 text-blue-400 border-blue-500/20';
     else if (status === 'Closed' || status === 'Done') color = 'bg-purple-500/10 text-purple-400 border-purple-500/20';
@@ -321,7 +321,7 @@ export const Contracts: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#080a12] text-white font-['Plus_Jakarta_Sans']">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white font-['Plus_Jakarta_Sans']">
       {/* Top Header */}
       <UserHeader pageTitle="My Contracts" credits={1250} />
 
@@ -330,21 +330,21 @@ export const Contracts: React.FC = () => {
       ) : (
         <div className="mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in">
           {/* Banner */}
-          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/60 p-6 md:p-8 backdrop-blur-xl">
+          <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 shadow-sm dark:shadow-none p-6 md:p-8 backdrop-blur-xl">
             <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <h1
-                  className="text-2xl font-extrabold tracking-tight text-white md:text-3xl"
+                  className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white md:text-3xl"
                   style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 >
                   My Contracts & Agreements
                 </h1>
-                <p className="mt-1 text-sm text-zinc-400">
+                <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">
                   Select any contract card to view its full formal agreement, escrow breakdown, and TOS terms.
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-zinc-300">
+              <div className="flex items-center gap-2 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3 text-xs text-gray-600 dark:text-zinc-300">
                 <Shield className="h-4 w-4 text-blue-400" />
                 <span>Protected by Ensemble Escrow & Platform Policy</span>
               </div>
@@ -352,17 +352,17 @@ export const Contracts: React.FC = () => {
           </div>
 
           {/* Smooth Framer Motion Underline Tab Navigation */}
-          <div className="border-b border-white/10 flex gap-1 relative">
+          <div className="border-b border-gray-200 dark:border-white/10 flex gap-1 relative">
             <button
               onClick={() => setActiveTab("active")}
               className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
-                activeTab === "active" ? "text-blue-400 font-bold" : "text-zinc-400 hover:text-white"
+                activeTab === "active" ? "text-blue-400 font-bold" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white"
               }`}
               style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
             >
               <span className="relative z-10 flex items-center gap-2">
                 <Shield className="h-4 w-4" /> Active Contracts
-                <span className="rounded-full bg-white/10 px-2 py-0.2 text-[10px] text-zinc-300">
+                <span className="rounded-full bg-gray-100 dark:bg-white/10 px-2 py-0.2 text-[10px] text-gray-600 dark:text-zinc-300">
                   {contracts.filter((c) => !c.isArchived).length}
                 </span>
               </span>
@@ -386,13 +386,13 @@ export const Contracts: React.FC = () => {
             <button
               onClick={() => setActiveTab("archived")}
               className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
-                activeTab === "archived" ? "text-blue-400 font-bold" : "text-zinc-400 hover:text-white"
+                activeTab === "archived" ? "text-blue-400 font-bold" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white"
               }`}
               style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
             >
               <span className="relative z-10 flex items-center gap-2">
                 <Archive className="h-4 w-4" /> Archived Contracts
-                <span className="rounded-full bg-white/10 px-2 py-0.2 text-[10px] text-zinc-300">
+                <span className="rounded-full bg-gray-100 dark:bg-white/10 px-2 py-0.2 text-[10px] text-gray-600 dark:text-zinc-300">
                   {contracts.filter((c) => c.isArchived).length}
                 </span>
               </span>
@@ -424,7 +424,7 @@ export const Contracts: React.FC = () => {
               transition={{ duration: 0.25, ease: "easeInOut" }}
             >
               {filteredContracts.length === 0 ? (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-12 text-center text-xs text-zinc-500">
+                <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02] p-12 text-center text-xs text-gray-500 dark:text-zinc-500">
                   No contracts found under this tab.
                 </div>
               ) : (
@@ -448,7 +448,7 @@ export const Contracts: React.FC = () => {
                           setSelectedContract(contract);
                           navigate(`/contracts/${contract.id}`);
                         }}
-                        className={`group relative cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/40 p-5 transition-all duration-300 hover:border-blue-500/50 hover:bg-zinc-900/80 hover:shadow-xl hover:shadow-blue-500/5 ${
+                        className={`group relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900/40 shadow-sm dark:shadow-none p-5 transition-all duration-300 hover:border-blue-500/50 hover:bg-zinc-900/80 hover:shadow-xl hover:shadow-blue-500/5 ${
                           isArchived ? "opacity-40 grayscale-[50%] hover:opacity-100 hover:grayscale-0" : ""
                         }`}
                       >
@@ -456,18 +456,18 @@ export const Contracts: React.FC = () => {
                         <div className="flex items-start justify-between mb-4 gap-4">
                           <div className="flex items-center gap-4 flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <h3 className="font-bold text-white text-lg tracking-tight truncate group-hover:text-blue-400 transition-colors">
+                              <h3 className="font-bold text-gray-900 dark:text-white text-lg tracking-tight truncate group-hover:text-blue-400 transition-colors">
                                 "{contract.title}"
                               </h3>
                               {contract.jobId && (
-                                <a href={`/jobs/postings/${contract.jobId}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-zinc-500 hover:text-white transition-colors shrink-0" title="View Original Job Post">
+                                <a href={`/jobs/postings/${contract.jobId}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white transition-colors shrink-0" title="View Original Job Post">
                                   <ExternalLink className="h-4 w-4" />
                                 </a>
                               )}
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="rounded bg-white/5 px-2 py-0.5 text-[10px] font-bold text-zinc-400 uppercase tracking-wider border border-white/5">
+                            <span className="rounded bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-2 py-0.5 text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider border border-gray-100 dark:border-white/5">
                               {contract.contractType}
                             </span>
                             {getStatusBadge(contract.status)}
@@ -476,15 +476,15 @@ export const Contracts: React.FC = () => {
 
                         {/* Credits Display */}
                         <div className="mb-4 flex items-center gap-1 text-xs font-extrabold text-yellow-500">
-                          <span className="text-zinc-400 font-medium mr-1 uppercase text-[10px]">{isArchived ? "Claimed:" : "Agreed Bid:"}</span>
+                          <span className="text-gray-500 dark:text-zinc-400 font-medium mr-1 uppercase text-[10px]">{isArchived ? "Claimed:" : "Agreed Bid:"}</span>
                           <CreditIcon className="h-3.5 w-3.5 text-yellow-500" />
                           <span>{contract.totalValueCredits.toLocaleString()} Credits</span>
                         </div>
 
                         {/* Contract Document Preview (Compressed) */}
-                        <div className="mb-4 relative rounded-xl border border-white/5 bg-[#080a12]/80 opacity-70 group-hover:opacity-100 transition-opacity overflow-hidden pointer-events-none mx-2 shadow-[0_2px_10px_rgba(0,0,0,0.5)]" style={{ transform: 'rotate(-1deg)' }}>
-                          <div className="p-3 text-[7px] text-zinc-500 font-sans leading-[10px] h-[90px] overflow-hidden whitespace-pre-wrap">
-                            <h4 className="font-bold text-[8px] border-b border-white/10 pb-1 mb-1 uppercase tracking-widest text-zinc-400">Contract Agreement</h4>
+                        <div className="mb-4 relative rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-[#080a12]/80 opacity-70 group-hover:opacity-100 transition-opacity overflow-hidden pointer-events-none mx-2 shadow-[0_2px_10px_rgba(0,0,0,0.5)]" style={{ transform: 'rotate(-1deg)' }}>
+                          <div className="p-3 text-[7px] text-gray-500 dark:text-zinc-500 font-sans leading-[10px] h-[90px] overflow-hidden whitespace-pre-wrap">
+                            <h4 className="font-bold text-[8px] border-b border-gray-200 dark:border-white/10 pb-1 mb-1 uppercase tracking-widest text-gray-500 dark:text-zinc-400">Contract Agreement</h4>
                             {contract.jobDescription || "No contract description provided."}
                           </div>
                           <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#080a12] to-transparent" />
@@ -492,11 +492,11 @@ export const Contracts: React.FC = () => {
 
                         {/* Milestone Progress Bar Segmented */}
                         <div className="space-y-1">
-                          <div className="flex justify-between items-center text-[10px] text-zinc-400">
-                            <span className="font-semibold uppercase tracking-wider text-zinc-500">
+                          <div className="flex justify-between items-center text-[10px] text-gray-500 dark:text-zinc-400">
+                            <span className="font-semibold uppercase tracking-wider text-gray-500 dark:text-zinc-500">
                               Milestones Progress
                             </span>
-                            <span className="font-mono text-zinc-300 font-bold">
+                            <span className="font-mono text-gray-600 dark:text-zinc-300 font-bold">
                               {claimedCount}/{totalMilestones} Completed
                             </span>
                           </div>
@@ -506,7 +506,7 @@ export const Contracts: React.FC = () => {
                                 const getVal = (s: string) => s === "Claimed" ? 2 : s === "In Progress" ? 1 : 0;
                                 return getVal(b.status) - getVal(a.status);
                             }).map((m, idx) => {
-                              let barColor = "bg-white/10";
+                              let barColor = "bg-gray-100 dark:bg-white/10";
                               if (m.status === "Claimed") barColor = "bg-emerald-400";
                               else if (m.status === "In Progress") barColor = "bg-amber-400 animate-pulse";
 
@@ -521,9 +521,9 @@ export const Contracts: React.FC = () => {
                         </div>
 
                         {/* Footer Stats */}
-                        <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between text-xs text-zinc-400">
+                        <div className="mt-4 pt-4 border-t border-gray-100 dark:border-white/5 flex items-center justify-between text-xs text-gray-500 dark:text-zinc-400">
                           <div className="flex items-center gap-3">
-                            <div className="flex items-center text-zinc-300 font-medium">
+                            <div className="flex items-center text-gray-600 dark:text-zinc-300 font-medium">
                               {(() => {
                                 const isClient = user?.account_id === contract.clientAccountId;
                                 const displayAvatar = isClient ? contract.freelancerAvatar : contract.clientAvatar;
@@ -533,7 +533,7 @@ export const Contracts: React.FC = () => {
                                     <img
                                       src={displayAvatar || "https://i.pravatar.cc/150?u=a042581f4e29026704d"}
                                       alt="User avatar"
-                                      className="h-5 w-5 rounded-full mr-2 object-cover border border-zinc-700"
+                                      className="h-5 w-5 rounded-full mr-2 object-cover border border-gray-300 dark:border-zinc-700"
                                     />
                                     <span>{displayName}</span>
                                   </>
@@ -572,14 +572,14 @@ export const Contracts: React.FC = () => {
           }}
         >
           <div
-            className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-white/15 bg-[#0a0d18] shadow-2xl"
+            className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0a0d18] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-white/10 bg-zinc-950/80 px-6 py-4">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-950/80 px-6 py-4">
               <div className="flex items-center gap-2.5">
                 <FileText className="h-5 w-5 text-blue-400" />
-                <span className="text-xs font-bold uppercase tracking-widest text-zinc-300">
+                <span className="text-xs font-bold uppercase tracking-widest text-gray-600 dark:text-zinc-300">
                   Formal Contract Details
                 </span>
               </div>
@@ -588,61 +588,61 @@ export const Contracts: React.FC = () => {
                   setSelectedContract(null);
                   navigate('/contracts');
                 }}
-                className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+                className="rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-1.5 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             {/* Scrollable Formal Contract Body */}
-            <div className="p-6 md:p-8 space-y-8 max-h-[78vh] overflow-y-auto custom-scrollbar bg-[#0f1115]">
+            <div className="p-6 md:p-8 space-y-8 max-h-[78vh] overflow-y-auto custom-scrollbar bg-gray-50 dark:bg-[#0f1115]">
               {/* Header Title & Financial Summary */}
-              <div className="text-center space-y-2 border-b border-zinc-800 pb-5">
+              <div className="text-center space-y-2 border-b border-gray-200 dark:border-zinc-800 pb-5">
                 <div className="flex justify-center mb-2">
                   {getStatusBadge(selectedContract.status)}
                 </div>
                 
                 <h2
-                  className="text-xl font-bold tracking-tight text-zinc-100 uppercase"
+                  className="text-xl font-bold tracking-tight text-gray-900 dark:text-zinc-100 uppercase"
                   style={{ fontFamily: "'Inter', sans-serif" }}
                 >
                   Contract Agreement
                 </h2>
                 
-                <div className="flex flex-col items-center gap-1 pt-1 text-[11px] text-zinc-400 uppercase tracking-widest">
-                  <span>Contract Type: <strong className="text-zinc-200">{selectedContract.contractType}</strong></span>
+                <div className="flex flex-col items-center gap-1 pt-1 text-[11px] text-gray-500 dark:text-zinc-400 uppercase tracking-widest">
+                  <span>Contract Type: <strong className="text-gray-700 dark:text-zinc-200">{selectedContract.contractType}</strong></span>
                   <span className="flex items-center gap-1.5">
-                    <Calendar className="h-3 w-3 text-zinc-500" /> Date Created: <strong className="text-zinc-200">{selectedContract.dateCreated}</strong>
+                    <Calendar className="h-3 w-3 text-gray-500 dark:text-zinc-500" /> Date Created: <strong className="text-gray-700 dark:text-zinc-200">{selectedContract.dateCreated}</strong>
                   </span>
                   {selectedContract.status === "Waiting" && selectedContract.dateStarted && (
-                    <span className="flex items-center gap-1.5 text-zinc-300 font-bold mt-1">
-                      <Clock className="h-3 w-3 text-zinc-500" /> Starts In: {selectedContract.dateStarted}
+                    <span className="flex items-center gap-1.5 text-gray-600 dark:text-zinc-300 font-bold mt-1">
+                      <Clock className="h-3 w-3 text-gray-500 dark:text-zinc-500" /> Starts In: {selectedContract.dateStarted}
                     </span>
                   )}
                 </div>
 
                 <div className="pt-4 max-w-sm mx-auto space-y-1 text-center">
-                  <p className="text-xs font-semibold text-zinc-300 flex items-center justify-center gap-1.5 uppercase tracking-wider">
+                  <p className="text-xs font-semibold text-gray-600 dark:text-zinc-300 flex items-center justify-center gap-1.5 uppercase tracking-wider">
                     Total Contract Value:
-                    <span className="text-zinc-100 font-bold">
+                    <span className="text-gray-900 dark:text-zinc-100 font-bold">
                       {selectedContract.totalValueCredits.toLocaleString()} Credits
                     </span>
                   </p>
 
-                  <div className="text-[10px] space-y-1 pt-1.5 font-mono text-zinc-500 mx-auto">
+                  <div className="text-[10px] space-y-1 pt-1.5 font-mono text-gray-500 dark:text-zinc-500 mx-auto">
                     <div className="flex justify-between items-center px-2 py-0.5">
                       <span className="uppercase">Client Range:</span>
-                      <span className="text-zinc-400">{selectedContract.clientRange}</span>
+                      <span className="text-gray-500 dark:text-zinc-400">{selectedContract.clientRange}</span>
                     </div>
                     <div className="flex justify-between items-center px-2 py-0.5">
                       <span className="uppercase">Accepted Bid:</span>
-                      <span className="text-zinc-300">{selectedContract.totalValueCredits.toLocaleString()}</span>
+                      <span className="text-gray-600 dark:text-zinc-300">{selectedContract.totalValueCredits.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center px-2 py-0.5">
                       <span className="uppercase">Platform Fee ({selectedContract.platformFeePercent}%):</span>
-                      <span className="text-zinc-400">- {Math.floor(selectedContract.totalValueCredits * 0.2).toLocaleString()}</span>
+                      <span className="text-gray-500 dark:text-zinc-400">- {Math.floor(selectedContract.totalValueCredits * 0.2).toLocaleString()}</span>
                     </div>
-                    <div className="flex justify-between items-center font-bold text-zinc-200 border-t border-zinc-800 px-2 py-1.5 mt-1">
+                    <div className="flex justify-between items-center font-bold text-gray-700 dark:text-zinc-200 border-t border-gray-200 dark:border-zinc-800 px-2 py-1.5 mt-1">
                       <span className="uppercase tracking-widest">Net Value:</span>
                       <span>{Math.floor(selectedContract.totalValueCredits * 0.8).toLocaleString()}</span>
                     </div>
@@ -652,55 +652,55 @@ export const Contracts: React.FC = () => {
 
               {/* I. PARTIES */}
               <div className="space-y-1.5">
-                <h3 className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">
+                <h3 className="text-[9px] font-bold uppercase tracking-widest text-gray-500 dark:text-zinc-500">
                   I. Parties Involved
                 </h3>
-                <div className="overflow-hidden border-y border-zinc-800 bg-transparent text-[10px] font-mono">
-                  <div className="flex items-center justify-between border-b border-zinc-800/50 px-3 py-2">
-                    <span className="text-zinc-500 uppercase tracking-wider">Client</span>
-                    <span className="font-semibold text-zinc-200">{selectedContract.clientName}</span>
+                <div className="overflow-hidden border-y border-gray-200 dark:border-zinc-800 bg-transparent text-[10px] font-mono">
+                  <div className="flex items-center justify-between border-b border-gray-200 dark:border-zinc-800/50 px-3 py-2">
+                    <span className="text-gray-500 dark:text-zinc-500 uppercase tracking-wider">Client</span>
+                    <span className="font-semibold text-gray-700 dark:text-zinc-200">{selectedContract.clientName}</span>
                   </div>
                   <div className="flex items-center justify-between px-3 py-2">
-                    <span className="text-zinc-500 uppercase tracking-wider">Freelancer</span>
-                    <span className="font-semibold text-zinc-200">{selectedContract.freelancerName}</span>
+                    <span className="text-gray-500 dark:text-zinc-500 uppercase tracking-wider">Freelancer</span>
+                    <span className="font-semibold text-gray-700 dark:text-zinc-200">{selectedContract.freelancerName}</span>
                   </div>
                 </div>
               </div>
 
               {/* II. SCOPE OF WORK */}
               <div className="space-y-1.5">
-                <h3 className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">
+                <h3 className="text-[9px] font-bold uppercase tracking-widest text-gray-500 dark:text-zinc-500">
                   II. Scope of Work
                 </h3>
-                <div className="overflow-hidden border-y border-zinc-800 bg-transparent text-[10px] font-mono">
-                  <div className="px-3 py-3 border-b border-zinc-800/50 space-y-2">
-                    <span className="text-zinc-500 uppercase tracking-wider block">Job Post Title</span>
-                    <p className="text-zinc-200 font-semibold leading-relaxed whitespace-pre-line text-xs font-sans">
+                <div className="overflow-hidden border-y border-gray-200 dark:border-zinc-800 bg-transparent text-[10px] font-mono">
+                  <div className="px-3 py-3 border-b border-gray-200 dark:border-zinc-800/50 space-y-2">
+                    <span className="text-gray-500 dark:text-zinc-500 uppercase tracking-wider block">Job Post Title</span>
+                    <p className="text-gray-700 dark:text-zinc-200 font-semibold leading-relaxed whitespace-pre-line text-xs font-sans">
                       "{selectedContract.title}"
                     </p>
                   </div>
-                  <div className="px-3 py-3 border-b border-zinc-800/50 space-y-2">
-                    <span className="text-zinc-500 uppercase tracking-wider block">Job Description</span>
-                    <p className="text-zinc-300 leading-relaxed whitespace-pre-line">
+                  <div className="px-3 py-3 border-b border-gray-200 dark:border-zinc-800/50 space-y-2">
+                    <span className="text-gray-500 dark:text-zinc-500 uppercase tracking-wider block">Job Description</span>
+                    <p className="text-gray-600 dark:text-zinc-300 leading-relaxed whitespace-pre-line">
                       {selectedContract.jobDescription}
                     </p>
                   </div>
                   <div className="flex items-center justify-between px-3 py-2">
-                    <span className="text-zinc-500 uppercase tracking-wider">Add-On Work Rate</span>
-                    <span className="font-semibold text-zinc-300">{selectedContract.addOnRate}</span>
+                    <span className="text-gray-500 dark:text-zinc-500 uppercase tracking-wider">Add-On Work Rate</span>
+                    <span className="font-semibold text-gray-600 dark:text-zinc-300">{selectedContract.addOnRate}</span>
                   </div>
                 </div>
               </div>
 
               {/* III. LOCKED MILESTONES WITH CLAIMED INDICATORS */}
               <div className="space-y-1.5">
-                <h3 className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">
+                <h3 className="text-[9px] font-bold uppercase tracking-widest text-gray-500 dark:text-zinc-500">
                   III. Milestones Schedule
                 </h3>
-                <div className="overflow-x-auto border-y border-zinc-800 bg-transparent">
+                <div className="overflow-x-auto border-y border-gray-200 dark:border-zinc-800 bg-transparent">
                   <table className="w-full text-left text-[10px] font-mono">
                     <thead>
-                      <tr className="border-b border-zinc-800/50 text-zinc-500">
+                      <tr className="border-b border-gray-200 dark:border-zinc-800/50 text-gray-500 dark:text-zinc-500">
                         <th className="px-3 py-2 text-center w-8 uppercase font-normal">#</th>
                         <th className="px-3 py-2 uppercase font-normal">Milestone Name</th>
                         <th className="px-3 py-2 text-center uppercase font-normal">Status</th>
@@ -709,24 +709,24 @@ export const Contracts: React.FC = () => {
                         <th className="px-3 py-2 text-right uppercase font-normal">Credits</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-zinc-800/30 text-zinc-300">
+                    <tbody className="divide-y divide-zinc-800/30 text-gray-600 dark:text-zinc-300">
                       {selectedContract.milestones.map((m, index) => {
                         const isClaimed = m.status === "Claimed";
                         const isInProgress = m.status === "In Progress";
 
                         return (
                           <tr key={m.id} className="hover:bg-zinc-800/10 transition-colors">
-                            <td className="px-3 py-2 text-center text-zinc-500">{index + 1}</td>
-                            <td className="px-3 py-2 font-medium text-zinc-200">{m.name}</td>
+                            <td className="px-3 py-2 text-center text-gray-500 dark:text-zinc-500">{index + 1}</td>
+                            <td className="px-3 py-2 font-medium text-gray-700 dark:text-zinc-200">{m.name}</td>
                             <td className="px-3 py-2 text-center">
-                              <span className="uppercase tracking-widest text-[8px] text-zinc-400">
+                              <span className="uppercase tracking-widest text-[8px] text-gray-500 dark:text-zinc-400">
                                 {m.status}
                               </span>
                             </td>
                             <td className="px-3 py-2 text-center">{m.revisions}</td>
                             <td className="px-3 py-2 text-center">{m.deadline}</td>
                             <td className="px-3 py-2 text-right font-medium">
-                              <div className="flex items-center justify-end gap-1.5 text-zinc-300">
+                              <div className="flex items-center justify-end gap-1.5 text-gray-600 dark:text-zinc-300">
                                 <CreditIcon className="h-2.5 w-2.5 opacity-50 grayscale" />
                                 <span>{m.credits.toLocaleString()}</span>
                               </div>
@@ -742,22 +742,22 @@ export const Contracts: React.FC = () => {
               {/* IV. TERMS OF SERVICE & ESCROW */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">
+                  <h3 className="text-[9px] font-bold uppercase tracking-widest text-gray-500 dark:text-zinc-500">
                     IV. Agreed Terms of Service (TOS)
                   </h3>
-                  <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">
+                  <span className="text-[9px] font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider">
                     Preset: {selectedContract.freelancerTosTitle}
                   </span>
                 </div>
-                <div className="border-y border-zinc-800 bg-transparent p-4 text-[9px] font-mono text-zinc-400 whitespace-pre-wrap leading-relaxed">
+                <div className="border-y border-gray-200 dark:border-zinc-800 bg-transparent p-4 text-[9px] font-mono text-gray-500 dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">
                   {selectedContract.freelancerTosContent}
                 </div>
               </div>
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between border-t border-white/5 bg-[#0a0c10] px-6 py-4">
-              <span className="text-xs text-zinc-500 hidden sm:block">
+            <div className="flex items-center justify-between border-t border-gray-100 dark:border-white/5 bg-gray-100 dark:bg-[#0a0c10] px-6 py-4">
+              <span className="text-xs text-gray-500 dark:text-zinc-500 hidden sm:block">
                 Press ESC or click close to exit
               </span>
               <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
@@ -785,7 +785,7 @@ export const Contracts: React.FC = () => {
                     setSelectedContract(null);
                     navigate('/contracts');
                   }}
-                  className="rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/20"
+                  className="rounded-xl border border-gray-200 dark:border-white/15 bg-gray-100 dark:bg-white/10 px-4 py-2 text-xs font-semibold text-gray-900 dark:text-white transition hover:bg-white/20"
                   style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 >
                   Close Contract View

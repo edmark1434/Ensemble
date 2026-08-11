@@ -28,6 +28,14 @@ interface TopSectionProps {
   onEditProfile?: () => void;
   onChatClick?: () => void;
   onVerificationClick?: () => void;
+  followersCount?: number;
+  followingCount?: number;
+  isFollowing?: boolean;
+  isFollowedBy?: boolean;
+  onFollow?: () => void;
+  onUnfollow?: () => void;
+  onFollowersClick?: () => void;
+  onFollowingClick?: () => void;
 }
 
 export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
@@ -52,10 +60,17 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
   onEditAvatar,
   onEditProfile,
   onChatClick,
-  onVerificationClick
+  onVerificationClick,
+  followersCount = 0,
+  followingCount = 0,
+  isFollowing = false,
+  isFollowedBy = false,
+  onFollow,
+  onUnfollow,
+  onFollowersClick,
+  onFollowingClick
 }) => {
   const [isMetadataOpen, setIsMetadataOpen] = useState(false);
-  const [isBioExpanded, setIsBioExpanded] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -68,28 +83,22 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  if (loading) return <div className="h-48 w-full bg-white/5 animate-pulse rounded-2xl" />;
+  if (loading) return <div className="h-48 w-full bg-gray-200 dark:bg-white/5 animate-pulse rounded-2xl" />;
 
-  const getSubscriptionIcon = (type: string) => {
-    switch (type.toLowerCase()) {
-      case "premium": return "/icons/subscription/premium.png";
-      case "business": return "/icons/subscription/studio.png";
-      default: return "/icons/subscription/freemium.png";
-    }
-  };
+
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.03] to-transparent p-6 shadow-xl font-['Plus Jakarta Sans',sans-serif]">
+    <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white dark:from-white/[0.03] to-transparent p-6 shadow-xl font-['Plus Jakarta Sans',sans-serif]">
       <div className="flex flex-col gap-6 md:flex-row items-center md:items-start">
 
         {/* Left Side: Avatar Asset Element */}
         <div className="relative flex-shrink-0">
           <div className="h-28 w-28 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 p-0.5 shadow-xl shadow-blue-500/5">
-            <div className="h-full w-full rounded-full bg-[#080a12] overflow-hidden flex items-center justify-center">
+            <div className="h-full w-full rounded-full bg-gray-100 dark:bg-[#080a12] overflow-hidden flex items-center justify-center">
               {avatarUrl ? (
                 <img src={avatarUrl} alt="Profile Media" className="w-full h-full object-cover" />
               ) : (
-                <span className="text-3xl font-bold text-white">{name?.charAt(0)}</span>
+                <span className="text-3xl font-bold text-gray-400 dark:text-white">{name?.charAt(0)}</span>
               )}
             </div>
           </div>
@@ -110,17 +119,26 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             subscriptionType={subscriptionType}
           />
 
-          {/* Row 2: Full Name Header Block + Left-Aligned Subscription Icon */}
-          <div className="relative inline-flex items-center justify-center md:justify-start gap-3 w-full md:w-auto" ref={dropdownRef}>
-            <img
-              src={getSubscriptionIcon(subscriptionType)}
-              alt="Tier Identity Icon"
-              className="h-10 w-10 object-contain flex-shrink-0 select-none hidden sm:block drop-shadow-[0_0_10px_rgba(255,255,255,0.08)]"
-              title={`${subscriptionType} Member`}
-            />
+          {/* Row 2: Full Name Header Block */}
+          <div className="relative inline-flex items-center justify-center md:justify-start gap-3 w-full md:w-auto mt-1" ref={dropdownRef}>
 
-            <h1 className="text-2xl font-black text-white tracking-tight md:text-3xl">
-              {name} {middleName} {suffix}
+            <h1 className="flex items-center flex-wrap gap-2 text-2xl font-black text-gray-900 dark:text-white tracking-tight md:text-3xl">
+              <span>
+                {(() => {
+                  const nameParts = name ? name.split(/\s+/) : [];
+                  const firstName = nameParts.length > 0 ? nameParts[0] : "";
+                  const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
+                  
+                  const firstMid = [firstName, middleName].filter(Boolean).join(" ");
+                  if (lastName) {
+                    return `${firstMid}, ${lastName} ${suffix || ""}`.trim();
+                  }
+                  return firstMid;
+                })()}
+              </span>
+              <span className="text-sm font-bold text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 px-2.5 py-0.5 rounded-lg ml-1">
+                {tagline || "Add Tagline"}
+              </span>
             </h1>
 
             {/* Tooltip & Trigger Node Group Wrapper */}
@@ -133,18 +151,29 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
               </button>
 
               <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block pointer-events-none z-30">
-                <div className="bg-zinc-950/90 text-white border border-white/15 px-2 py-1 rounded text-[10px] font-semibold whitespace-nowrap tracking-wide shadow-md backdrop-blur-sm">
+                <div className="bg-gray-800 dark:bg-zinc-950/90 text-white border border-gray-700 dark:border-white/15 px-2 py-1 rounded text-[10px] font-semibold whitespace-nowrap tracking-wide shadow-md backdrop-blur-sm">
                   Click for Info
                 </div>
               </div>
 
               {/* Floating Meta Dashboard Pane */}
               {isMetadataOpen && (
-                <div className="absolute top-full left-1/2 md:left-0 transform -translate-x-1/2 md:translate-x-0 mt-2 w-80 rounded-xl border border-white/15 bg-[#0b0e17] p-3 shadow-2xl z-50 animate-fadeIn font-mono text-[11px] text-zinc-400 space-y-1.5">
-                  <div className="absolute -top-1 left-1/2 md:left-4 transform -translate-x-1/2 md:translate-x-0 w-2 h-2 bg-[#0b0e17] border-t border-l border-white/15 rotate-45" />
+                <div className="absolute top-full left-1/2 md:left-0 transform -translate-x-1/2 md:translate-x-0 mt-2 w-80 rounded-xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0b0e17] p-3 shadow-2xl z-50 animate-fadeIn font-mono text-[11px] text-gray-600 dark:text-zinc-400 space-y-1.5">
+                  <div className="absolute -top-1 left-1/2 md:left-4 transform -translate-x-1/2 md:translate-x-0 w-2 h-2 bg-white dark:bg-[#0b0e17] border-t border-l border-gray-200 dark:border-white/15 rotate-45" />
+                  <div className="flex items-start gap-2 border-b border-gray-200 dark:border-white/10 pb-1.5 mb-1.5">
+                    <span className="font-bold text-gray-700 dark:text-zinc-300">Full Name:</span>
+                    <span className="leading-normal text-gray-800 dark:text-white">
+                      {(() => {
+                        const nameParts = name ? name.split(/\s+/) : [];
+                        const firstName = nameParts.length > 0 ? nameParts[0] : "";
+                        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
+                        return [firstName, middleName, lastName, suffix].filter(Boolean).join(" ");
+                      })()}
+                    </span>
+                  </div>
                   <div className="flex items-start gap-2">
                     <MapPin className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0 mt-0.5" />
-                    <span className="leading-normal text-zinc-300">{`${location}, ${country} ${zipCode}`}</span>
+                    <span className="leading-normal text-gray-800 dark:text-zinc-300">{`${location}, ${country} ${zipCode}`}</span>
                   </div>
                   <div className="flex items-center gap-2"><Cake className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" /> <span>Born: {birthdate ? new Date(birthdate).toLocaleDateString() : "Not Specified"}</span></div>
                   <div className="flex items-center gap-2"><Calendar className="h-3.5 w-3.5 text-zinc-500 flex-shrink-0" /> <span>Joined: {joinedDate ? new Date(joinedDate).toLocaleDateString() : "N/A"}</span></div>
@@ -160,19 +189,31 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
               <span>{emailAddress}</span>
             </div>
             <span className="text-zinc-600 hidden sm:inline select-none">|</span>
-            <span className="text-zinc-500 font-medium tracking-wide bg-white/5 px-1.5 py-0.5 rounded text-[11px]">@{username}</span>
+            <span className="text-gray-800 dark:text-zinc-500 font-medium tracking-wide bg-gray-100 dark:bg-white/5 px-1.5 py-0.5 rounded text-[11px]">@{username}</span>
             <span className="text-zinc-600 hidden sm:inline select-none">|</span>
 
-            <div className="flex items-center gap-1 text-zinc-400 font-medium tracking-wide bg-blue-500/5 border border-blue-500/10 px-2 py-0.5 rounded text-[11px]">
-              <MapPin className="h-3 w-3 text-blue-400 flex-shrink-0" />
+            <div className="flex items-center gap-1 text-gray-700 dark:text-zinc-400 font-medium tracking-wide bg-blue-50 dark:bg-blue-500/5 border border-blue-200 dark:border-blue-500/10 px-2 py-0.5 rounded text-[11px]">
+              <MapPin className="h-3 w-3 text-blue-500 dark:text-blue-400 flex-shrink-0" />
               <span>Cebu City | Cebu | Philippines</span>
             </div>
           </div>
 
-          {/* Row 4: Tagline / Title */}
-          <p className="text-xs text-blue-400/90 font-bold tracking-wide pt-0.5">
-            {tagline || "No specialized tagline configured"}
-          </p>
+          {/* Row 4: Bio / Tagline */}
+          <div className="pt-2 pb-1 max-w-xl">
+            <p className="text-sm text-gray-700 dark:text-zinc-300 leading-relaxed font-normal">
+              {bio || "This person seems shy on introducing themselves..."}
+            </p>
+          </div>
+          
+          {/* Row 5: Followers Stats */}
+          <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 pt-1 text-sm font-semibold text-gray-700 dark:text-zinc-300">
+            <button onClick={onFollowersClick} className="hover:text-blue-500 dark:hover:text-blue-400 hover:underline decoration-blue-400/50 underline-offset-4 transition">
+              <span className="text-gray-900 dark:text-white">{followersCount}</span> <span className="text-gray-500 dark:text-zinc-500 font-normal">Followers</span>
+            </button>
+            <button onClick={onFollowingClick} className="hover:text-blue-500 dark:hover:text-blue-400 hover:underline decoration-blue-400/50 underline-offset-4 transition">
+              <span className="text-gray-900 dark:text-white">{followingCount}</span> <span className="text-gray-500 dark:text-zinc-500 font-normal">Following</span>
+            </button>
+          </div>
 
         </div>
 
@@ -181,7 +222,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
           {isOwner && (
             <button
               onClick={onEditProfile}
-              className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-300 hover:text-white hover:bg-white/10 hover:border-white/20 transition shadow-sm"
+              className="p-2.5 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 hover:border-gray-300 dark:hover:border-white/20 transition shadow-sm"
               title="Modify Properties"
             >
               <Edit2 className="h-4 w-4" />
@@ -190,22 +231,36 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
 
           <button
             onClick={onChatClick}
-            className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-300 hover:text-white hover:bg-white/10 hover:border-white/20 transition shadow-sm"
+            className="p-2.5 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 hover:border-gray-300 dark:hover:border-white/20 transition shadow-sm"
             title="Open Communications Hub"
           >
             <MessageCircle className="h-4 w-4" />
           </button>
+          
+          {!isOwner && (
+            <button
+              onClick={isFollowing ? onUnfollow : onFollow}
+              className={`px-4 py-2 text-sm font-bold rounded-xl border transition shadow-sm ${
+                isFollowing
+                  ? "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-red-500/10 hover:border-red-500/30 hover:text-red-500 dark:hover:text-red-400"
+                  : "bg-blue-600 border-blue-500 text-white hover:bg-blue-500 hover:border-blue-400"
+              }`}
+            >
+              {isFollowing ? "Following" : isFollowedBy ? "Follow Back" : "Follow"}
+            </button>
+          )}
+
           {!verificationLevel && isOwner && (
           <button
             onClick={onVerificationClick}
-            className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-emerald-500 hover:text-emerald-400 hover:bg-white/10 hover:border-emerald-500/20 transition shadow-sm"
+            className="p-2.5 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-emerald-600 dark:text-emerald-500 hover:text-emerald-500 dark:hover:text-emerald-400 hover:bg-gray-200 dark:hover:bg-white/10 hover:border-emerald-500/20 transition shadow-sm"
             title="Account Verification Status"
           >
             <ShieldCheck className="h-4 w-4" />
           </button>
           )}
           <button
-            className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-400 hover:text-white hover:bg-white/10 hover:border-white/20 transition"
+            className="p-2.5 rounded-xl bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 hover:border-gray-300 dark:hover:border-white/20 transition"
             title="Share Profile Workspace"
           >
             <Share2 className="h-4 w-4" />
@@ -213,50 +268,6 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
         </div>
 
       </div>
-
-      {/* Introduction Accordion Block */}
-      <div className="mt-5 border-t border-white/5 pt-3">
-        <button
-          onClick={() => setIsBioExpanded(!isBioExpanded)}
-          className="group flex items-center justify-between w-full text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1.5 hover:text-zinc-300 transition-colors duration-200"
-        >
-          <span>Introduction</span>
-
-          {/* Click Indicator Badge & Animated Arrow */}
-          <div className="flex items-center gap-1.5 text-zinc-500 group-hover:text-blue-400 transition-colors">
-            <span className="text-[9px] lowercase font-mono opacity-80 group-hover:opacity-100">
-              {isBioExpanded ? "(click to collapse)" : "(click to expand)"}
-            </span>
-            <div
-              className="transition-transform duration-300 ease-in-out"
-              style={{ transform: isBioExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
-            >
-              <ChevronDown className="h-3 w-3" />
-            </div>
-          </div>
-        </button>
-
-        <div
-          onClick={() => setIsBioExpanded(!isBioExpanded)}
-          className="relative bg-white/[0.01] border border-white/5 p-3 rounded-xl cursor-pointer hover:border-white/10 transition-colors"
-        >
-          <div
-            className={`overflow-hidden transition-all duration-500 ease-in-out ${
-              !isBioExpanded ? "max-h-[7.2rem]" : "max-h-[1000px]"
-            }`}
-          >
-            <p className="text-xs text-zinc-300 leading-relaxed font-normal whitespace-pre-wrap">
-              {bio || "This person seems shy on introducing itself..."}
-            </p>
-          </div>
-
-          {/* Fade-out Gradient when Collapsed */}
-          {!isBioExpanded && (
-            <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-[#080a12]/90 to-transparent rounded-b-xl pointer-events-none" />
-          )}
-        </div>
-      </div>
-
     </div>
   );
 };

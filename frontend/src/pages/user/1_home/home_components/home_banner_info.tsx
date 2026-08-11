@@ -115,14 +115,14 @@ export const HomeBannerInfo: React.FC<HomeBannerInfoProps> = ({
       <div className="relative w-full max-w-lg">
         {/* Soft Ambient Radial Back Glow */}
         <div
-          className={`absolute -inset-4 rounded-3xl bg-zinc-400/10 transition-all duration-300 blur-3xl pointer-events-none ${
+          className={`absolute -inset-4 rounded-3xl bg-black/10 dark:bg-zinc-400/10 transition-all duration-300 blur-3xl pointer-events-none ${
             active ? "opacity-60 scale-100" : "opacity-0 scale-50"
           }`}
         />
 
         {/* Modal Card */}
         <div
-          className={`relative w-full overflow-hidden rounded-2xl border border-white/15 bg-[#0a0d18]/95 p-6 md:p-8 shadow-[0_25px_100px_rgba(0,0,0,0.95)] backdrop-blur-2xl transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] origin-top-right ${
+          className={`relative w-full overflow-hidden rounded-2xl border border-gray-200 dark:border-white/15 bg-white/95 dark:bg-[#0a0d18]/95 p-6 md:p-8 shadow-[0_25px_100px_rgba(0,0,0,0.1)] dark:shadow-[0_25px_100px_rgba(0,0,0,0.95)] backdrop-blur-2xl transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] origin-top-right ${
             active
               ? "scale-100 translate-y-0 opacity-100"
               : "scale-50 -translate-y-12 opacity-0"
@@ -130,10 +130,10 @@ export const HomeBannerInfo: React.FC<HomeBannerInfoProps> = ({
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-start justify-between border-b border-white/10 pb-4">
+          <div className="flex items-start justify-between border-b border-gray-200 dark:border-white/10 pb-4">
             <div>
               <span
-                className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400"
+                className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 dark:text-zinc-400"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 System Release Logs
@@ -141,7 +141,7 @@ export const HomeBannerInfo: React.FC<HomeBannerInfoProps> = ({
 
               {/* DYNAMIC TITLE DIRECTLY READING FROM LATEST VERSION FILE */}
               <h2
-                className="mt-1 text-2xl font-extrabold tracking-tight text-white"
+                className="mt-1 text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 What's New in {latestVersion}?
@@ -149,7 +149,7 @@ export const HomeBannerInfo: React.FC<HomeBannerInfoProps> = ({
             </div>
             <button
               onClick={onClose}
-              className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+              className="rounded-lg border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 p-1.5 text-gray-500 dark:text-zinc-400 transition hover:bg-gray-200 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
             >
               <X className="h-4 w-4" />
             </button>
@@ -158,8 +158,8 @@ export const HomeBannerInfo: React.FC<HomeBannerInfoProps> = ({
           {/* Scrollable Version Logs List - Fixed Max Height for Compact Viewing */}
           <div className="my-5 space-y-2.5 max-h-[280px] md:max-h-[320px] overflow-y-auto pr-1.5 custom-scrollbar">
             {versionLogs.length === 0 ? (
-              <p className="py-4 text-center text-xs text-zinc-500">
-                No version log files found in <code className="text-zinc-400">/versions</code>
+              <p className="py-4 text-center text-xs text-gray-500 dark:text-zinc-500">
+                No version log files found in <code className="text-gray-400 dark:text-zinc-400">/versions</code>
               </p>
             ) : (
               versionLogs.map((log, index) => {
@@ -169,31 +169,31 @@ export const HomeBannerInfo: React.FC<HomeBannerInfoProps> = ({
                 return (
                   <div
                     key={log.version}
-                    className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.02] transition-colors hover:border-white/20"
+                    className="overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.02] transition-colors hover:border-gray-300 dark:hover:border-white/20 shadow-sm dark:shadow-none"
                   >
                     {/* Accordion Header */}
                     <button
                       onClick={() =>
                         setExpandedVersion(isExpanded ? null : log.version)
                       }
-                      className="flex w-full items-center justify-between p-3 text-left transition hover:bg-white/5"
+                      className="flex w-full items-center justify-between p-3 text-left transition hover:bg-gray-50 dark:hover:bg-white/5"
                     >
                       <div className="flex items-center gap-2">
                         <span
-                          className="text-xs font-bold text-white"
+                          className="text-xs font-bold text-gray-900 dark:text-white"
                           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                         >
                           {log.version}
                         </span>
                         {isLatest && (
-                          <span className="rounded-md border border-zinc-700 bg-zinc-800/60 px-1.5 py-0.5 text-[9px] font-medium text-zinc-300 uppercase tracking-wider">
+                          <span className="rounded-md border border-gray-200 dark:border-zinc-700 bg-gray-100 dark:bg-zinc-800/60 px-1.5 py-0.5 text-[9px] font-medium text-gray-600 dark:text-zinc-300 uppercase tracking-wider">
                             Latest
                           </span>
                         )}
                       </div>
                       <ChevronDown
-                        className={`h-3.5 w-3.5 text-zinc-400 transition-transform duration-300 ${
-                          isExpanded ? "rotate-180 text-white" : ""
+                        className={`h-3.5 w-3.5 text-gray-400 dark:text-zinc-400 transition-transform duration-300 ${
+                          isExpanded ? "rotate-180 text-gray-900 dark:text-white" : ""
                         }`}
                       />
                     </button>
@@ -207,11 +207,11 @@ export const HomeBannerInfo: React.FC<HomeBannerInfoProps> = ({
                       }`}
                     >
                       <div className="overflow-hidden">
-                        <div className="border-t border-white/5 bg-zinc-950/40 p-3 pt-2 space-y-1">
+                        <div className="border-t border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-zinc-950/40 p-3 pt-2 space-y-1">
                           {log.changes.map((change, i) => (
                             <p
                               key={i}
-                              className="text-[11px] leading-relaxed text-zinc-300"
+                              className="text-[11px] leading-relaxed text-gray-600 dark:text-zinc-300"
                               style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                             >
                               {change}
@@ -227,13 +227,13 @@ export const HomeBannerInfo: React.FC<HomeBannerInfoProps> = ({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between border-t border-white/10 pt-4">
-            <span className="text-[11px] text-zinc-500">
+          <div className="flex items-center justify-between border-t border-gray-200 dark:border-white/10 pt-4">
+            <span className="text-[11px] text-gray-500 dark:text-zinc-500">
               Press ESC or click Got It to dismiss
             </span>
             <button
               onClick={onClose}
-              className="rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/20"
+              className="rounded-xl border border-gray-200 dark:border-white/15 bg-gray-100 dark:bg-white/10 px-4 py-2 text-xs font-semibold text-gray-900 dark:text-white transition hover:bg-gray-200 dark:hover:bg-white/20"
               style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
             >
               Got it

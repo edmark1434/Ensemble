@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, CreditCard, HelpCircle, FileText, ArrowLeft, AlertCircle, Ticket, Wallet } from "lucide-react";
+import { User, CreditCard, HelpCircle, FileText, ArrowLeft, AlertCircle,  Ticket, Monitor, Wallet } from "lucide-react";
 
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
@@ -16,9 +16,10 @@ import { UserSettingsAccountDetails } from "./user_settings_accountdetails";
 import { UserSettingsSubscriptionDetails } from "./user_settings_subscriptiondetails";
 import { UserSettingsHelp } from "./user_settings_help";
 import { UserSettingsLegalPolicies } from "./user_settings_legalpolicies";
+import { UserSettingsDisplay } from "./user_settings_display";
 import PageSubmitATicket from '@/pages/landing/pages/page_SubmitATicket';
 import { UserSettingsWallet } from "./user_settings_wallet";
-type TabType = "account" | "wallet" | "subscription" | "help" | "legal" | "ticket";
+type TabType = "account" | "wallet" | "subscription" | "help" | "legal" | "ticket" | "display";
 
 interface Preset {
   file_id: number;
@@ -30,7 +31,7 @@ export default function UserSettings() {
   const navigate = useNavigate();
   const globalUser = useGlobalState((state) => state.user);
 
-  const [activeTab, setActiveTab] = useState<TabType>("account");
+  const [activeTab, setActiveTab] = useState<TabType>("display");
   const [loading, setLoading] = useState(true);
 
   // Unsaved changes state
@@ -265,8 +266,8 @@ export default function UserSettings() {
       }
     }
   };
-
   const navItems = [
+    { id: "display", label: "Display Settings", icon: Monitor },
     { id: "account", label: "Account Details", icon: User },
     { id: "wallet", label: "Wallet", icon: Wallet },
     { id: "subscription", label: "Subscription Details", icon: CreditCard },
@@ -276,15 +277,15 @@ export default function UserSettings() {
   ] as const;
 
   return (
-    <div className="min-h-screen w-full bg-[#080a12] text-zinc-200 p-6 md:p-12 font-['Plus_Jakarta_Sans',sans-serif]">
+    <div className="min-h-screen w-full bg-white dark:bg-[#080a12] text-gray-900 dark:text-zinc-200 p-6 md:p-12 font-['Plus_Jakarta_Sans',sans-serif]">
       <div className="max-w-7xl mx-auto space-y-8">
 
         {/* Fullscreen Header & Expandable Circle Back Button */}
-        <div className="flex items-center justify-between pb-6 border-b border-white/10">
+        <div className="flex items-center justify-between pb-6 border-b border-gray-200 dark:border-white/10">
           <div className="flex items-center gap-4">
             <button
               onClick={handleGoBack}
-              className="group relative flex items-center h-10 rounded-full border border-white/10 bg-white/5 text-zinc-300 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all duration-300 px-2.5 hover:px-4 overflow-hidden"
+              className="group relative flex items-center h-10 rounded-full border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 hover:border-gray-300 dark:hover:border-white/20 transition-all duration-300 px-2.5 hover:px-4 overflow-hidden"
             >
               <ArrowLeft className="h-4 w-4 shrink-0 transition-transform duration-300 group-hover:-translate-x-0.5" />
               <span className="max-w-0 opacity-0 group-hover:max-w-xs group-hover:opacity-100 group-hover:ml-2 transition-all duration-300 ease-in-out whitespace-nowrap text-xs font-semibold">
@@ -293,8 +294,8 @@ export default function UserSettings() {
             </button>
 
             <div>
-              <h1 className="text-3xl font-bold text-white">System Settings</h1>
-              <p className="text-xs text-zinc-400 mt-0.5">Manage your user profile, subscription, support, and legal terms.</p>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">System Settings</h1>
+              <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">Manage your user profile, subscription, support, and legal terms.</p>
             </div>
           </div>
           {isDirty && (
@@ -318,11 +319,11 @@ export default function UserSettings() {
                   onClick={() => handleTabChange(item.id)}
                   className={`relative w-full flex items-center gap-3.5 px-5 py-3.5 rounded-xl text-sm font-medium transition-all ${
                     isActive
-                      ? "text-blue-400 bg-blue-500/10 border border-blue-500/20 shadow-md"
-                      : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5 border border-transparent"
+                      ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 shadow-sm dark:shadow-md"
+                      : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-200 hover:bg-gray-50 dark:hover:bg-white/5 border border-transparent"
                   }`}
                 >
-                  <Icon className={`h-4 w-4 ${isActive ? "text-blue-400" : "text-zinc-400"}`} />
+                  <Icon className={`h-4 w-4 ${isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-zinc-400"}`} />
                   <span className="z-10">{item.label}</span>
                   {isActive && (
                     <motion.div
@@ -345,7 +346,7 @@ export default function UserSettings() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -15 }}
                 transition={{ duration: 0.22, ease: "easeInOut" }}
-                className="bg-[#0d0f1a] p-8 rounded-2xl border border-white/10 shadow-2xl"
+                className="bg-white dark:bg-[#0d0f1a] p-8 rounded-2xl border border-gray-200 dark:border-white/10 shadow-lg dark:shadow-2xl"
               >
                 {activeTab === "account" && (
                   <UserSettingsAccountDetails
@@ -379,6 +380,8 @@ export default function UserSettings() {
 
                 {activeTab === "help" && <UserSettingsHelp />}
 
+                {activeTab === "display" && <UserSettingsDisplay />}
+
                 {activeTab === "legal" && <UserSettingsLegalPolicies />}
                 {activeTab === "ticket" && <PageSubmitATicket />}
               </motion.div>
@@ -390,12 +393,12 @@ export default function UserSettings() {
       {/* Unsaved Changes Confirmation Modal */}
       {showUnsavedModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-[#0d0f1a] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-3 text-amber-400">
+          <div className="w-full max-w-md bg-white dark:bg-[#0d0f1a] border border-gray-200 dark:border-white/10 rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-amber-500 dark:text-amber-400">
               <AlertCircle className="h-6 w-6 shrink-0" />
-              <h3 className="text-lg font-bold text-white">Unsaved Changes</h3>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Unsaved Changes</h3>
             </div>
-            <p className="text-sm text-zinc-300">
+            <p className="text-sm text-gray-600 dark:text-zinc-300">
               You have unsaved changes in your account details. Would you like to save or discard your changes before leaving?
             </p>
             <div className="flex justify-end gap-3 pt-2">

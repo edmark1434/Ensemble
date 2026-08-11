@@ -6,7 +6,13 @@ const { createNewAccount, fetchAllAccounts, getAccountByHandleService,
     updateAndInsertAccountProfileServices,
     updateAccountProfileServices,
     settingAccountInfoUpdate,
-    getRecentUserAvatarsService
+    getRecentUserAvatarsService,
+    followUserService,
+    unfollowUserService,
+    getFollowersService,
+    getFollowingService,
+    checkIsFollowingService,
+    curateBadgesService
 } = require("../services/AccountServices");
 const { getUserOnboardingStep,
      updateUserDetails
@@ -237,6 +243,84 @@ async function getRecentUserAvatarsController(req, res) {
     }
 }
 
+async function followUserController(req, res) {
+    const followerId = req.session.account_id;
+    const { accountId: followedId } = req.params;
+    if (!followerId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    try {
+        await followUserService(followerId, followedId);
+        return res.status(200).json({ success: true, message: 'Successfully followed user' });
+    } catch (err) {
+        console.error('Error in followUserController:', err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+async function unfollowUserController(req, res) {
+    const followerId = req.session.account_id;
+    const { accountId: followedId } = req.params;
+    if (!followerId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    try {
+        await unfollowUserService(followerId, followedId);
+        return res.status(200).json({ success: true, message: 'Successfully unfollowed user' });
+    } catch (err) {
+        console.error('Error in unfollowUserController:', err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+async function getFollowersController(req, res) {
+    const { accountId } = req.params;
+    try {
+        const followers = await getFollowersService(accountId);
+        return res.status(200).json({ success: true, followers });
+    } catch (err) {
+        console.error('Error in getFollowersController:', err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+async function getFollowingController(req, res) {
+    const { accountId } = req.params;
+    try {
+        const following = await getFollowingService(accountId);
+        return res.status(200).json({ success: true, following });
+    } catch (err) {
+        console.error('Error in getFollowingController:', err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+async function checkIsFollowingController(req, res) {
+    const followerId = req.session.account_id;
+    const { accountId: followedId } = req.params;
+    if (!followerId) return res.status(200).json({ success: true, isFollowing: false, isFollowedBy: false });
+    try {
+        const followStatus = await checkIsFollowingService(followerId, followedId);
+        return res.status(200).json({ success: true, isFollowing: followStatus.isFollowing, isFollowedBy: followStatus.isFollowedBy });
+    } catch (err) {
+        console.error('Error in checkIsFollowingController:', err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+async function curateBadgesController(req, res) {
+    try {
+        const accountId = req.user.account_id;
+        const { registryIds } = req.body;
+        
+        if (!accountId) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+        
+        const result = await curateBadgesService(accountId, registryIds);
+        res.status(200).json(result);
+    } catch (err) {
+        console.error('Error in curateBadgesController:', err);
+        res.status(500).json({ error: err.message || 'Internal server error' });
+    }
+}
+
 module.exports = {
     createAccount,
     getAccountByHandle,
@@ -250,4 +334,10 @@ module.exports = {
     updateAndInsertAccountProfileController,
     updateAccountProfileIdController,
     getRecentUserAvatarsController,
+    followUserController,
+    unfollowUserController,
+    getFollowersController,
+    getFollowingController,
+    checkIsFollowingController,
+    curateBadgesController,
 };

@@ -6,7 +6,14 @@ const { getAllAccounts, createAccount, getAccountByHandle, getAccountWalletRepos
     updateAndInsertAccountProfile,
     updateAccountProfile,
     searchUserAccountsByHandle,
-    getRecentUserAvatarsRepositories
+    getRecentUserAvatarsRepositories,
+    followUser,
+    unfollowUser,
+    getFollowers,
+    getFollowing,
+    checkIsFollowing,
+    getAccountBadges,
+    updateAccountBadgeDisplayOrder
 } = require("../repositories/AccountRepositories");
 const {
     updateUserDetailsByAccountId,
@@ -99,6 +106,14 @@ async function getProfileServices(accountId) {
     }
     try {
         const profile = await getProfileRepositories(accountId);
+        if (profile) {
+            const badges = await getAccountBadges(accountId);
+            // Format badges as an array of objects to map easily in the frontend
+            profile.badges = badges.map(b => ({
+                id: b.registry_id,
+                display_order: b.display_order
+            }));
+        }
         return profile;
     } catch (err) {
         console.error('Error fetching profile:', err);
@@ -219,6 +234,73 @@ async function getRecentUserAvatarsService() {
     }
 }
 
+async function followUserService(followerId, followedId) {
+    if (!followerId || !followedId) throw new Error('Follower and followed IDs are required');
+    if (followerId === followedId) throw new Error('Cannot follow yourself');
+    try {
+        return await followUser(followerId, followedId);
+    } catch (err) {
+        console.error('Error in followUserService:', err);
+        throw err;
+    }
+}
+
+async function unfollowUserService(followerId, followedId) {
+    if (!followerId || !followedId) throw new Error('Follower and followed IDs are required');
+    try {
+        return await unfollowUser(followerId, followedId);
+    } catch (err) {
+        console.error('Error in unfollowUserService:', err);
+        throw err;
+    }
+}
+
+async function getFollowersService(accountId) {
+    if (!accountId) throw new Error('Account ID is required');
+    try {
+        return await getFollowers(accountId);
+    } catch (err) {
+        console.error('Error in getFollowersService:', err);
+        throw err;
+    }
+}
+
+async function getFollowingService(accountId) {
+    if (!accountId) throw new Error('Account ID is required');
+    try {
+        return await getFollowing(accountId);
+    } catch (err) {
+        console.error('Error in getFollowingService:', err);
+        throw err;
+    }
+}
+
+async function checkIsFollowingService(followerId, followedId) {
+    if (!followerId || !followedId) return false;
+    try {
+        return await checkIsFollowing(followerId, followedId);
+    } catch (err) {
+        console.error('Error in checkIsFollowingService:', err);
+        throw err;
+    }
+}
+
+async function curateBadgesService(accountId, registryIds) {
+    if (!checkAccountIdService(accountId)) {
+        throw new Error('Invalid account ID');
+    }
+    if (!Array.isArray(registryIds) || registryIds.length > 5) {
+        throw new Error('You can only curate up to 5 badges.');
+    }
+    try {
+        await updateAccountBadgeDisplayOrder(accountId, registryIds);
+        return { success: true, message: 'Badges curated successfully' };
+    } catch (err) {
+        console.error('Error curating badges:', err);
+        throw err;
+    }
+}
+
 module.exports = {
     fetchAllAccounts,
     createNewAccount,
@@ -233,5 +315,11 @@ module.exports = {
     updateAndInsertAccountProfileServices,
     updateAccountProfileServices,
     settingAccountInfoUpdate,
-    getRecentUserAvatarsService
+    getRecentUserAvatarsService,
+    followUserService,
+    unfollowUserService,
+    getFollowersService,
+    getFollowingService,
+    checkIsFollowingService,
+    curateBadgesService
 };

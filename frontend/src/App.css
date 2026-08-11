@@ -1,17 +1,1 @@
-@import "tailwindcss";
-/* For dark theme selects */
-select {
-  background-color: #1a1d2e !important;
-  color: white !important;
-}
-
-select option {
-  background-color: #1a1d2e !important;
-  color: white !important;
-}
-
-select option:hover,
-select option:focus,
-select option:active {
-  background-color: #3b82f6 !important;
-}
+/* Styles moved to index.css */

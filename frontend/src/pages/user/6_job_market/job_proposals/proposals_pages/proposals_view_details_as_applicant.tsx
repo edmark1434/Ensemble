@@ -277,10 +277,10 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
 
   if (isInitializing) {
     return (
-      <div className="min-h-screen bg-[#080a12] text-white flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white flex items-center justify-center p-6">
         <div className="text-center space-y-3">
           <div className="h-8 w-8 rounded-full border-4 border-blue-500/20 border-t-blue-500 animate-spin mx-auto" />
-          <p className="text-sm text-zinc-400 font-medium animate-pulse">Loading proposal details...</p>
+          <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium animate-pulse">Loading proposal details...</p>
         </div>
       </div>
     );
@@ -288,9 +288,9 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
 
   if (!proposal) {
     return (
-      <div className="min-h-screen bg-[#080a12] text-white flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white flex items-center justify-center p-6">
         <div className="text-center space-y-3">
-          <p className="text-sm text-zinc-400 font-medium">Proposal application not found.</p>
+          <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">Proposal application not found.</p>
           {debugInfo && (
              <div className="text-xs text-red-400 mt-2 p-2 bg-red-500/10 rounded">
                 Debug: {JSON.stringify(debugInfo)}
@@ -298,7 +298,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
           )}
           <button
             onClick={() => navigate("/jobs/proposals")}
-            className="px-4 py-2 mt-4 rounded-xl bg-blue-500 text-xs font-bold text-white hover:bg-blue-600 transition"
+            className="px-4 py-2 mt-4 rounded-xl bg-blue-500 text-xs font-bold text-gray-900 dark:text-white hover:bg-blue-600 transition"
           >
             Return to Proposals Overview
           </button>
@@ -320,7 +320,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
   const isJobDeleted = proposal?.jobStatus === "Deleted" || !!proposal?.jobDeletedAt;
 
   return (
-    <div className="relative w-full min-h-screen bg-[#080a12] text-white overflow-x-hidden pt-6 pb-16">
+    <div className="relative w-full min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-16">
       {/* Animated Background Grid */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-30">
         <ShapeGrid
@@ -361,13 +361,13 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                   : "/jobs/proposals/sent"
               )
             }
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-zinc-800/80 hover:bg-zinc-700/80 border border-white/10 text-xs font-semibold text-zinc-300 hover:text-white transition shrink-0 shadow-sm"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gray-100 dark:bg-zinc-800/80 hover:bg-gray-200 dark:hover:bg-zinc-700/80 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0 shadow-sm"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             <span>Return</span>
           </button>
 
-          <span className="text-xs font-mono text-zinc-500">Proposal ID: {proposal.id}</span>
+          <span className="text-xs font-mono text-gray-500 dark:text-zinc-500">Proposal ID: {proposal.id}</span>
         </div>
 
         {/* --- 2-COLUMN MAIN CONTENT GRID --- */}
@@ -377,10 +377,10 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
           <div className="lg:col-span-7 space-y-6">
 
             {/* SECTION 1: Applicant Profile Header, Target Job & Financial Metrics */}
-            <div className="rounded-3xl border border-white/10 bg-[#0d0f1a]/80 p-6 backdrop-blur-xl shadow-2xl space-y-5">
+            <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-6 backdrop-blur-xl shadow-2xl space-y-5">
 
               {/* 1. APPLICANT (PROPOSER) AT TOP */}
-              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 pb-5">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 dark:border-white/5 pb-5">
                 <div className="flex items-center gap-3.5 min-w-0">
                   {proposal.freelancerAvatar ? (
                     <img
@@ -395,27 +395,27 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                   )}
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h1 className="text-lg font-bold text-white tracking-tight truncate">
+                      <h1 className="text-lg font-bold text-gray-900 dark:text-white tracking-tight truncate">
                         {proposerName}
                       </h1>
                       <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
                         Applicant
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-zinc-400 mt-0.5">
+                    <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
                       <span className="flex items-center gap-1 text-yellow-500 font-bold">
                         <Star className="h-3.5 w-3.5 fill-yellow-500" />
                         {proposal.rating ? proposal.rating.toFixed(1) : "5.0"}
                       </span>
                       <span>•</span>
-                      <span className="text-zinc-300">Freelancer Rating</span>
+                      <span className="text-gray-600 dark:text-zinc-300">Freelancer Rating</span>
                     </div>
                   </div>
                 </div>
 
                 <button
                   onClick={() => handleViewProfile(proposerName)}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-zinc-300 hover:text-white transition shrink-0"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
                 >
                   <User className="h-3.5 w-3.5 text-emerald-400" />
                   <span>{proposal.type === "sent" ? "View Your Profile" : "View Applicant Profile"}</span>
@@ -423,9 +423,9 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               </div>
 
               {/* 2. TARGET JOB POST (WITH AUTHOR INTEGRATED INSIDE) */}
-              <div className="p-4 rounded-2xl border border-white/5 bg-white/[0.02] space-y-4">
+              <div className="p-4 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] space-y-4">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                  <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase tracking-wider">
                     Target Job Post
                   </span>
 
@@ -459,14 +459,14 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 </div>
 
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-bold text-white truncate flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white truncate flex items-center gap-2">
                     <Briefcase className="h-4 w-4 text-blue-400 shrink-0" />
                     {proposal.jobTitle}
                   </h3>
 
                   <button
                     onClick={handleViewTargetJob}
-                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition shrink-0"
+                    className="p-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition shrink-0"
                     title="View Target Job Post"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
@@ -474,7 +474,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 </div>
 
                 {/* Author Info Embedded Inside Job Post Card */}
-                <div className="p-3 rounded-xl border border-white/5 bg-white/[0.01] flex items-center justify-between gap-3">
+                <div className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-white/[0.01] flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5 min-w-0">
                     {proposal.clientAvatar ? (
                       <img
@@ -488,14 +488,14 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                       </div>
                     )}
                     <div className="min-w-0">
-                      <span className="text-[10px] font-bold text-zinc-500 uppercase block">Job Author</span>
-                      <h4 className="text-xs font-bold text-white truncate">{jobAuthorName}</h4>
+                      <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase block">Job Author</span>
+                      <h4 className="text-xs font-bold text-gray-900 dark:text-white truncate">{jobAuthorName}</h4>
                     </div>
                   </div>
 
                   <button
                     onClick={() => handleViewProfile(jobAuthorName)}
-                    className="px-2.5 py-1 text-[10px] font-semibold text-zinc-300 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 transition shrink-0 flex items-center gap-1"
+                    className="px-2.5 py-1 text-[10px] font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 rounded-lg border border-gray-200 dark:border-white/10 transition shrink-0 flex items-center gap-1"
                   >
                     <User className="h-3 w-3 text-blue-400" />
                     <span>{proposal.type === "incoming" ? "View Your Profile" : "View Client Profile"}</span>
@@ -503,24 +503,24 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 </div>
 
                 {/* Explicit Timestamps */}
-                <div className="space-y-1 pt-2 border-t border-white/5 text-[11px] text-zinc-400">
+                <div className="space-y-1 pt-2 border-t border-gray-100 dark:border-white/5 text-[11px] text-gray-500 dark:text-zinc-400">
                   <div className="flex items-center justify-between">
-                    <span className="text-zinc-500 flex items-center gap-1">
-                      <Calendar className="h-3 w-3 text-zinc-500" /> Job Posted Date:
+                    <span className="text-gray-500 dark:text-zinc-500 flex items-center gap-1">
+                      <Calendar className="h-3 w-3 text-gray-500 dark:text-zinc-500" /> Job Posted Date:
                     </span>
-                    <strong className="text-zinc-300 font-mono">{proposal.jobPostedAt}</strong>
+                    <strong className="text-gray-600 dark:text-zinc-300 font-mono">{proposal.jobPostedAt}</strong>
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <span className="text-zinc-500 flex items-center gap-1">
+                    <span className="text-gray-500 dark:text-zinc-500 flex items-center gap-1">
                       <Send className="h-3 w-3 text-blue-400" /> Proposal Sent Date:
                     </span>
-                    <strong className="text-zinc-300 font-mono">{proposal.submittedAt} ({proposal.submittedAgo || "Recently"})</strong>
+                    <strong className="text-gray-600 dark:text-zinc-300 font-mono">{proposal.submittedAt} ({proposal.submittedAgo || "Recently"})</strong>
                   </div>
 
                   {proposal.updatedAt && (
                     <div className="flex items-center justify-between">
-                      <span className="text-zinc-500 flex items-center gap-1">
+                      <span className="text-gray-500 dark:text-zinc-500 flex items-center gap-1">
                         <Clock className="h-3 w-3 text-emerald-400" /> Last Proposal Update:
                       </span>
                       <strong className="text-blue-400 font-mono">{proposal.updatedAt} ({proposal.updatedAgo || ""})</strong>
@@ -530,24 +530,24 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               </div>
 
               {/* Financial Metrics Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl border border-white/5 bg-white/[0.02]">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02]">
                 <div>
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase block">Proposed Bid</span>
+                  <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase block">Proposed Bid</span>
                   <p className="text-base font-extrabold text-yellow-500 flex items-center gap-1 mt-0.5">
                     <CreditIcon className="h-4 w-4" /> {proposal.bidAmount.toLocaleString()}
                   </p>
                 </div>
 
                 <div>
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase block">Additional Work Rate</span>
+                  <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase block">Additional Work Rate</span>
                   <p className="text-xs font-bold text-blue-400 flex items-center gap-1 mt-1">
                     <Percent className="h-3.5 w-3.5" /> +{proposal.additionalWorkRate}% / Revision
                   </p>
                 </div>
 
                 <div>
-                  <span className="text-[10px] font-bold text-zinc-500 uppercase block">Milestone Count</span>
-                  <p className="text-xs font-bold text-white flex items-center gap-1 mt-1">
+                  <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase block">Milestone Count</span>
+                  <p className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1 mt-1">
                     <Layers className="h-3.5 w-3.5 text-emerald-400" /> {proposal.milestones.length} Steps
                   </p>
                 </div>
@@ -555,11 +555,11 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             </div>
 
             {/* SECTION 2: Cover Letter Pitch */}
-            <div className="rounded-3xl border border-white/10 bg-[#0d0f1a]/80 p-6 backdrop-blur-xl shadow-2xl space-y-3">
-              <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+            <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-6 backdrop-blur-xl shadow-2xl space-y-3">
+              <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
                 Cover Letter & Pitch Rationale
               </h3>
-              <div className="p-4 rounded-2xl border border-white/5 bg-white/[0.01]">
+              <div className="p-4 rounded-2xl border border-gray-100 dark:border-white/5 bg-white/[0.01]">
                 <JobRichText content={proposal.coverLetter} />
               </div>
             </div>
@@ -570,18 +570,18 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
           <div className="lg:col-span-5 space-y-6">
 
             {/* SECTION 3: Milestone Roadmap */}
-            <div className="rounded-3xl border border-white/10 bg-[#0d0f1a]/80 p-6 backdrop-blur-xl shadow-2xl space-y-4">
-              <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+            <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-6 backdrop-blur-xl shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
+                <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
                   <Layers className="h-4 w-4 text-emerald-400" /> Milestone Roadmap
                 </h3>
-                <span className="text-xs font-mono text-zinc-400">{totalHours}h Total</span>
+                <span className="text-xs font-mono text-gray-500 dark:text-zinc-400">{totalHours}h Total</span>
               </div>
 
               <div className="space-y-3">
                 {proposal.milestones.map((m, idx) => (
-                  <div key={m.id || idx} className="p-4 rounded-2xl border border-white/5 bg-white/[0.02] space-y-2 text-xs">
-                    <div className="flex items-center justify-between font-bold text-white">
+                  <div key={m.id || idx} className="p-4 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] space-y-2 text-xs">
+                    <div className="flex items-center justify-between font-bold text-gray-900 dark:text-white">
                       <span>Step {idx + 1}: {m.name}</span>
                       <span className="text-yellow-500 font-mono flex items-center">
                         <CreditIcon className="h-3.5 w-3.5 text-yellow-500 inline mr-1 shrink-0" />
@@ -589,12 +589,12 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                       </span>
                     </div>
 
-                    {m.description && <p className="text-zinc-400 text-[11px] leading-relaxed">{m.description}</p>}
+                    {m.description && <p className="text-gray-500 dark:text-zinc-400 text-[11px] leading-relaxed">{m.description}</p>}
 
-                    <div className="flex flex-wrap items-center gap-3 text-[10px] text-zinc-500 pt-2 border-t border-white/5">
-                      <span>Est. Hours: <strong className="text-zinc-300">{m.hours} hrs</strong></span>
+                    <div className="flex flex-wrap items-center gap-3 text-[10px] text-gray-500 dark:text-zinc-500 pt-2 border-t border-gray-100 dark:border-white/5">
+                      <span>Est. Hours: <strong className="text-gray-600 dark:text-zinc-300">{m.hours} hrs</strong></span>
                       <span className="flex items-center gap-1">
-                        <RefreshCcw className="h-2.5 w-2.5 text-emerald-400" /> Revisions: <strong className="text-zinc-300">{m.revisions} pass</strong>
+                        <RefreshCcw className="h-2.5 w-2.5 text-emerald-400" /> Revisions: <strong className="text-gray-600 dark:text-zinc-300">{m.revisions} pass</strong>
                       </span>
                       <span className="flex items-center gap-1">
                         Added Overage Rate:
@@ -610,21 +610,21 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             </div>
 
             {/* SECTION 4: Terms of Service */}
-            <div className="rounded-3xl border border-white/10 bg-[#0d0f1a]/80 p-6 backdrop-blur-xl shadow-2xl space-y-4">
-              <div className="flex items-center gap-3 pb-3 border-b border-white/5">
+            <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-6 backdrop-blur-xl shadow-2xl space-y-4">
+              <div className="flex items-center gap-3 pb-3 border-b border-gray-100 dark:border-white/5">
                 <div className="h-10 w-10 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
                   <FileText className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white tracking-wider">
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-white tracking-wider">
                     {proposal.tosTitle}
                   </h3>
-                  <p className="text-[11px] text-zinc-400">
+                  <p className="text-[11px] text-gray-500 dark:text-zinc-400">
                     {proposal.tosDescription}
                   </p>
                 </div>
               </div>
-              <div className="p-4 rounded-2xl border border-white/5 bg-white/[0.01] text-xs text-zinc-400 font-mono leading-relaxed whitespace-pre-line">
+              <div className="p-4 rounded-2xl border border-gray-100 dark:border-white/5 bg-white/[0.01] text-xs text-gray-500 dark:text-zinc-400 font-mono leading-relaxed whitespace-pre-line">
                 {proposal.tosContent}
               </div>
             </div>
@@ -633,13 +633,13 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
         </div>
 
         {/* ================= SECTION 5: EXPANDABLE HOVER DECISION CONTROLS (BOTTOM) ================= */}
-        <div className="rounded-3xl border border-white/10 bg-[#0d0f1a]/80 p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-4">
+        <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-4">
 
-          <div className="flex items-center justify-between border-b border-white/5 pb-3">
-            <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+          <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
+            <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
               Decision & Action Controls
             </h3>
-            <span className="text-xs text-zinc-500 font-mono">Current Status: {proposal.status}</span>
+            <span className="text-xs text-gray-500 dark:text-zinc-500 font-mono">Current Status: {proposal.status}</span>
           </div>
 
           {proposal.status === "Rejected" && proposal.rejectionReason && (
@@ -647,7 +647,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               <span className="font-bold text-red-400 uppercase flex items-center gap-1 text-[10px]">
                 <ShieldAlert className="h-3.5 w-3.5" /> Rejection Rationale
               </span>
-              <p className="text-zinc-300">{proposal.rejectionReason}</p>
+              <p className="text-gray-600 dark:text-zinc-300">{proposal.rejectionReason}</p>
             </div>
           )}
 
@@ -661,7 +661,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                   {/* Expandable Withdraw Button */}
                   <button
                     onClick={() => setIsWithdrawModalOpen(true)}
-                    className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-400 transition-all duration-300 hover:bg-red-500/20 hover:shadow-lg hover:shadow-red-500/10"
+                    className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-red-200 dark:border-red-500/30 bg-red-100 dark:bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-600 dark:text-red-400 transition-all duration-300 hover:bg-red-200 dark:hover:bg-red-500/20 hover:shadow-lg hover:shadow-red-500/10"
                   >
                     <XCircle className="h-4 w-4 shrink-0" />
                     <span className="whitespace-nowrap max-w-[65px] transition-all duration-300 group-hover:max-w-[150px]">
@@ -679,7 +679,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                     onClick={() =>
                       navigate(`/inbox?user=${encodeURIComponent(proposal.partyName)}`)
                     }
-                    className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-xs font-semibold text-zinc-300 transition-all duration-300 hover:bg-white/10 hover:text-white"
+                    className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3.5 py-2.5 text-xs font-semibold text-gray-600 dark:text-zinc-300 transition-all duration-300 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
                   >
                     <MessageSquare className="h-4 w-4 text-blue-400 shrink-0" />
                     <span className="whitespace-nowrap max-w-[35px] transition-all duration-300 group-hover:max-w-[160px]">
@@ -691,7 +691,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                   {/* Expandable Withdraw Button */}
                   <button
                     onClick={() => setIsWithdrawModalOpen(true)}
-                    className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-400 transition-all duration-300 hover:bg-red-500/20 hover:shadow-lg hover:shadow-red-500/10"
+                    className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-red-200 dark:border-red-500/30 bg-red-100 dark:bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-600 dark:text-red-400 transition-all duration-300 hover:bg-red-200 dark:hover:bg-red-500/20 hover:shadow-lg hover:shadow-red-500/10"
                   >
                     <XCircle className="h-4 w-4 shrink-0" />
                     <span className="whitespace-nowrap max-w-[65px] transition-all duration-300 group-hover:max-w-[150px]">
@@ -732,7 +732,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               ) : proposal.status === "Pending" ? (
                 <button
                   onClick={() => setIsWithdrawModalOpen(true)}
-                  className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-400 transition-all duration-300 hover:bg-red-500/20 hover:shadow-lg hover:shadow-red-500/10"
+                  className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-red-200 dark:border-red-500/30 bg-red-100 dark:bg-red-500/10 px-4 py-2.5 text-xs font-bold text-red-600 dark:text-red-400 transition-all duration-300 hover:bg-red-200 dark:hover:bg-red-500/20 hover:shadow-lg hover:shadow-red-500/10"
                 >
                   <XCircle className="h-4 w-4 shrink-0" />
                   <span className="whitespace-nowrap max-w-[65px] transition-all duration-300 group-hover:max-w-[150px]">
@@ -757,16 +757,16 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0d0f1a] p-6 shadow-2xl space-y-4 text-left"
+              className="w-full max-w-md rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-6 shadow-2xl space-y-4 text-left"
             >
               <div className="space-y-2">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
                   <XCircle className="h-4 w-4 text-red-400" /> Withdraw Proposal
                 </h3>
-                <p className="text-xs text-zinc-300 leading-relaxed">
+                <p className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed">
                   Are you sure you want to withdraw this proposal?
                 </p>
-                <p className="text-[11px] text-zinc-400 bg-white/5 p-3 rounded-xl border border-white/5">
+                <p className="text-[11px] text-gray-500 dark:text-zinc-400 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3 rounded-xl border border-gray-100 dark:border-white/5">
                   Withdrawing your proposal will permanently cancel it and remove it from the client's inbox. This action cannot be undone.
                 </p>
               </div>
@@ -775,14 +775,14 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 <button
                   onClick={() => setIsWithdrawModalOpen(false)}
                   disabled={isWithdrawing}
-                  className="px-4 py-2 rounded-xl border border-white/10 text-xs font-bold text-zinc-400 hover:text-white transition"
+                  className="px-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition"
                 >
                   Keep Proposal
                 </button>
                 <button
                   onClick={handleWithdrawProposal}
                   disabled={isWithdrawing}
-                  className="px-5 py-2 rounded-xl bg-red-500 text-xs font-bold text-white hover:bg-red-600 transition shadow-lg shadow-red-500/20 disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl bg-red-500 text-xs font-bold text-gray-900 dark:text-white hover:bg-red-600 transition shadow-lg shadow-red-500/20 disabled:opacity-50"
                 >
                   {isWithdrawing ? "Withdrawing..." : "Yes, Withdraw"}
                 </button>
@@ -796,16 +796,16 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#0d0f1a] p-6 shadow-2xl space-y-6 text-left my-8"
+              className="w-full max-w-2xl rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-6 shadow-2xl space-y-6 text-left my-8"
             >
               {/* Header */}
-              <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                <h3 className="text-lg font-extrabold text-white flex items-center gap-2">
+              <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 pb-4">
+                <h3 className="text-lg font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
                   <FileText className="h-5 w-5 text-emerald-400" /> Formal Contract Details
                 </h3>
                 <button
                   onClick={() => setIsAcceptConfirmOpen(false)}
-                  className="text-zinc-500 hover:text-white transition-colors"
+                  className="text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white transition-colors"
                 >
                   <XCircle className="h-5 w-5" />
                 </button>
@@ -814,25 +814,25 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
                 {/* I. Parties Involved */}
                 <div className="space-y-2">
-                  <h4 className="text-sm font-bold text-white uppercase tracking-wider">I. Parties Involved</h4>
-                  <div className="grid grid-cols-2 gap-4 bg-white/5 p-4 rounded-xl border border-white/5">
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">I. Parties Involved</h4>
+                  <div className="grid grid-cols-2 gap-4 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-4 rounded-xl border border-gray-100 dark:border-white/5">
                     <div>
-                      <p className="text-[10px] text-zinc-500 font-semibold mb-1">CLIENT</p>
-                      <p className="text-xs text-white font-medium">{proposal.clientName}</p>
+                      <p className="text-[10px] text-gray-500 dark:text-zinc-500 font-semibold mb-1">CLIENT</p>
+                      <p className="text-xs text-gray-900 dark:text-white font-medium">{proposal.clientName}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-zinc-500 font-semibold mb-1">FREELANCER</p>
-                      <p className="text-xs text-white font-medium">{proposal.freelancerName}</p>
+                      <p className="text-[10px] text-gray-500 dark:text-zinc-500 font-semibold mb-1">FREELANCER</p>
+                      <p className="text-xs text-gray-900 dark:text-white font-medium">{proposal.freelancerName}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* II. Scope of Work */}
                 <div className="space-y-2">
-                  <h4 className="text-sm font-bold text-white uppercase tracking-wider">II. Scope of Work</h4>
-                  <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                    <p className="text-xs font-semibold text-white mb-2">{proposal.jobTitle}</p>
-                    <p className="text-xs text-zinc-400 leading-relaxed whitespace-pre-wrap">
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">II. Scope of Work</h4>
+                  <div className="bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-4 rounded-xl border border-gray-100 dark:border-white/5">
+                    <p className="text-xs font-semibold text-gray-900 dark:text-white mb-2">{proposal.jobTitle}</p>
+                    <p className="text-xs text-gray-500 dark:text-zinc-400 leading-relaxed whitespace-pre-wrap">
                       {targetJob?.description || "Description not available. The scope is defined by the job posting and subsequent communications."}
                     </p>
                   </div>
@@ -840,46 +840,46 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
 
                 {/* III. Locked Milestones */}
                 <div className="space-y-2">
-                  <h4 className="text-sm font-bold text-white uppercase tracking-wider">III. Locked Milestones</h4>
-                  <div className="bg-white/5 rounded-xl border border-white/5 overflow-hidden">
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">III. Locked Milestones</h4>
+                  <div className="bg-white dark:bg-white/5 shadow-sm dark:shadow-none rounded-xl border border-gray-100 dark:border-white/5 overflow-hidden">
                     {proposal.milestones.length > 0 ? (
                       <table className="w-full text-left">
-                        <thead className="border-b border-white/10 bg-black/20">
+                        <thead className="border-b border-gray-200 dark:border-white/10 bg-black/20">
                           <tr>
-                            <th className="px-4 py-2 text-[10px] font-semibold text-zinc-400 uppercase">Phase</th>
-                            <th className="px-4 py-2 text-[10px] font-semibold text-zinc-400 uppercase text-right">Revisions</th>
-                            <th className="px-4 py-2 text-[10px] font-semibold text-zinc-400 uppercase text-right">Hours</th>
+                            <th className="px-4 py-2 text-[10px] font-semibold text-gray-500 dark:text-zinc-400 uppercase">Phase</th>
+                            <th className="px-4 py-2 text-[10px] font-semibold text-gray-500 dark:text-zinc-400 uppercase text-right">Revisions</th>
+                            <th className="px-4 py-2 text-[10px] font-semibold text-gray-500 dark:text-zinc-400 uppercase text-right">Hours</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
                           {proposal.milestones.map((m, i) => (
-                            <tr key={i} className="hover:bg-white/5 transition-colors">
-                              <td className="px-4 py-2 text-xs text-zinc-300 font-medium">{m.name}</td>
-                              <td className="px-4 py-2 text-xs text-zinc-400 text-right">{m.revisions}</td>
+                            <tr key={i} className="hover:bg-white dark:bg-white/5 shadow-sm dark:shadow-none transition-colors">
+                              <td className="px-4 py-2 text-xs text-gray-600 dark:text-zinc-300 font-medium">{m.name}</td>
+                              <td className="px-4 py-2 text-xs text-gray-500 dark:text-zinc-400 text-right">{m.revisions}</td>
                               <td className="px-4 py-2 text-xs text-emerald-400 font-medium text-right">{m.hours}h</td>
                             </tr>
                           ))}
                         </tbody>
-                        <tfoot className="border-t border-white/10 bg-black/20">
+                        <tfoot className="border-t border-gray-200 dark:border-white/10 bg-black/20">
                           <tr>
-                            <td className="px-4 py-3 text-xs font-bold text-white" colSpan={3}>
+                            <td className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-white" colSpan={3}>
                               Agreed Bid Amount: <span className="text-emerald-400">{proposal.bidAmount.toLocaleString()}</span>
                             </td>
                           </tr>
                         </tfoot>
                       </table>
                     ) : (
-                      <div className="p-4 text-xs text-zinc-400 text-center">No milestone phases defined.</div>
+                      <div className="p-4 text-xs text-gray-500 dark:text-zinc-400 text-center">No milestone phases defined.</div>
                     )}
                   </div>
                 </div>
 
                 {/* IV. Agreed TOS */}
                 <div className="space-y-2">
-                  <h4 className="text-sm font-bold text-white uppercase tracking-wider">IV. Agreed Terms of Service (TOS)</h4>
-                  <div className="bg-zinc-950 p-4 rounded-xl border border-white/5 space-y-2">
-                    <h5 className="text-xs font-bold text-white">{proposal.tosTitle}</h5>
-                    <p className="text-[11px] text-zinc-400 leading-relaxed font-mono whitespace-pre-wrap">{proposal.tosContent}</p>
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">IV. Agreed Terms of Service (TOS)</h4>
+                  <div className="bg-zinc-950 p-4 rounded-xl border border-gray-100 dark:border-white/5 space-y-2">
+                    <h5 className="text-xs font-bold text-gray-900 dark:text-white">{proposal.tosTitle}</h5>
+                    <p className="text-[11px] text-gray-500 dark:text-zinc-400 leading-relaxed font-mono whitespace-pre-wrap">{proposal.tosContent}</p>
                   </div>
                 </div>
               </div>
@@ -913,12 +913,12 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                         checked={agreedToTerms}
                         onChange={(e) => setAgreedToTerms(e.target.checked)}
                       />
-                      <div className="w-5 h-5 rounded border-2 border-white/20 bg-white/5 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-all flex items-center justify-center group-hover:border-emerald-400">
-                        <Check className={`w-3.5 h-3.5 text-white transition-opacity ${agreedToTerms ? 'opacity-100' : 'opacity-0'}`} strokeWidth={3} />
+                      <div className="w-5 h-5 rounded border-2 border-white/20 bg-white dark:bg-white/5 shadow-sm dark:shadow-none peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-all flex items-center justify-center group-hover:border-emerald-400">
+                        <Check className={`w-3.5 h-3.5 text-gray-900 dark:text-white transition-opacity ${agreedToTerms ? 'opacity-100' : 'opacity-0'}`} strokeWidth={3} />
                       </div>
                     </div>
-                    <div className="text-xs text-zinc-300 leading-relaxed flex-1">
-                      <strong className="text-white block mb-0.5">I Agree to Platform Terms</strong>
+                    <div className="text-xs text-gray-600 dark:text-zinc-300 leading-relaxed flex-1">
+                      <strong className="text-gray-900 dark:text-white block mb-0.5">I Agree to Platform Terms</strong>
                       I acknowledge that clicking accept forms a legally binding agreement. Escrow funds for the agreed bid will be locked into the contract, and work is expected to commence as per the stated scope and terms.
                     </div>
                   </label>
@@ -926,18 +926,18 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               )}
 
               {/* Action Buttons */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-white/10">
                 {proposal.status === "Hired" ? (
                   <>
                     <button
                       onClick={() => navigate(`/jobs/proposals/sent/${proposal.id}`)}
-                      className="px-5 py-2.5 rounded-xl border border-white/10 text-xs font-bold text-zinc-400 hover:text-white transition"
+                      className="px-5 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition"
                     >
                       Return to Proposal
                     </button>
                     <button
                       onClick={() => navigate(`/contracts/${proposal.contractId}`)}
-                      className="px-6 py-2.5 rounded-xl bg-emerald-500 text-xs font-bold text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 flex items-center gap-2"
+                      className="px-6 py-2.5 rounded-xl bg-emerald-500 text-xs font-bold text-gray-900 dark:text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 flex items-center gap-2"
                     >
                       <FileText className="w-4 h-4" />
                       View Contract
@@ -946,7 +946,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 ) : proposal.status === "Pending" ? (
                   <button
                     onClick={() => navigate(`/jobs/proposals/sent/${proposal.id}`)}
-                    className="px-5 py-2.5 rounded-xl border border-white/10 text-xs font-bold text-zinc-400 hover:text-white transition"
+                    className="px-5 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition"
                   >
                     Return to Proposal
                   </button>
@@ -962,7 +962,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                     <button
                       onClick={() => navigate(`/jobs/proposals/sent/${proposal.id}`)}
                       disabled={isProcessing}
-                      className="px-5 py-2.5 rounded-xl border border-white/10 text-xs font-bold text-zinc-400 hover:text-white transition disabled:opacity-50"
+                      className="px-5 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition disabled:opacity-50"
                     >
                       Close & Review Later
                     </button>
@@ -971,7 +971,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                         await handleConfirmAccept();
                       }}
                       disabled={isProcessing || !agreedToTerms}
-                      className="px-6 py-2.5 rounded-xl bg-emerald-500 text-xs font-bold text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 flex items-center gap-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
+                      className="px-6 py-2.5 rounded-xl bg-emerald-500 text-xs font-bold text-gray-900 dark:text-white hover:bg-emerald-600 transition shadow-lg shadow-emerald-500/20 flex items-center gap-2 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
                     >
                       <CheckCircle2 className="w-4 h-4" />
                       {isProcessing ? "Processing..." : "Sign & Accept Contract"}
@@ -990,13 +990,13 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0d0f1a] p-6 shadow-2xl space-y-4 text-left"
+              className="w-full max-w-md rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-6 shadow-2xl space-y-4 text-left"
             >
-              <div className="flex items-center gap-3 text-red-400 pb-2 border-b border-white/5">
+              <div className="flex items-center gap-3 text-red-400 pb-2 border-b border-gray-100 dark:border-white/5">
                 <XCircle className="h-6 w-6" />
                 <h3 className="text-lg font-bold">Reject Contract Offer</h3>
               </div>
-              <p className="text-xs text-zinc-400 leading-relaxed">
+              <p className="text-xs text-gray-500 dark:text-zinc-400 leading-relaxed">
                 You are about to reject this contract offer. You can optionally provide a reason to the client so they can send a revised offer.
               </p>
               <textarea
@@ -1004,20 +1004,20 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 onChange={(e) => setOfferRejectReason(e.target.value)}
                 placeholder="Optional: Please adjust the timeline..."
                 rows={3}
-                className="w-full rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white outline-none focus:border-red-500/50"
+                className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3 text-xs text-gray-900 dark:text-white outline-none focus:border-red-500/50"
               />
               <div className="flex justify-end gap-3 pt-2">
                 <button
                   onClick={() => setIsRejectOfferModalOpen(false)}
                   disabled={isProcessing}
-                  className="px-4 py-2 rounded-xl border border-white/10 text-white font-bold text-xs hover:bg-white/5 transition-colors disabled:opacity-50"
+                  className="px-4 py-2 rounded-xl border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white font-bold text-xs hover:bg-white dark:bg-white/5 shadow-sm dark:shadow-none transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmRejectOffer}
                   disabled={isProcessing || !offerRejectReason.trim()}
-                  className="px-6 py-2 rounded-xl bg-red-500 hover:bg-red-400 text-white font-bold text-xs shadow-[0_0_15px_rgba(239,68,68,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-6 py-2 rounded-xl bg-red-500 hover:bg-red-400 text-gray-900 dark:text-white font-bold text-xs shadow-[0_0_15px_rgba(239,68,68,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isProcessing ? "Rejecting..." : "Reject Offer"}
                 </button>

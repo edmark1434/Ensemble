@@ -13,7 +13,7 @@ const {
 } = require('../repositories/ProfileRepositories');
 const { getAccountLinkByAccountIdService } = require('../services/AccountServices');
 const {getUserByIdFromAccountId} = require('../repositories/UserRepositories');
-const {checkAccountId} = require('../repositories/AccountRepositories');
+const {checkAccountId, getAccountBadges} = require('../repositories/AccountRepositories');
 const redisClient = require('../lib/Redis');
 
 
@@ -76,6 +76,11 @@ async function updateProfileDetailsServices(accountId, originalUpdates, updates)
         
         if (updates.display_name !== undefined && updates.display_name !== originalUpdates.display_name) {
             accountUpdates.display_name = updates.display_name;
+            hasChanges = true;
+        }
+
+        if (updates.introduction !== undefined && updates.introduction !== originalUpdates.introduction) {
+            accountUpdates.introduction = updates.introduction;
             hasChanges = true;
         }
         
@@ -260,6 +265,13 @@ async function getProfileByAccountIdService(accountId) {
     }
     try {
         const profile = await getProfileByAccountId(accountId);
+        if (profile) {
+            const badges = await getAccountBadges(accountId);
+            profile.badges = badges.map(b => ({
+                id: b.registry_id,
+                display_order: b.display_order
+            }));
+        }
         return profile;
     } catch (err) {
         console.error(`Error fetching profile for accountId ${accountId}:`, err);

@@ -113,32 +113,32 @@ export default function SkillsEditModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 font-['Plus Jakarta Sans',sans-serif] text-zinc-300 select-none animate-fadeIn">
-      <div className="relative w-full max-w-xl rounded-2xl border border-white/10 bg-[#080a12] p-5 md:p-6 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] space-y-4">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 dark:bg-black/80 backdrop-blur-md p-4 font-['Plus Jakarta Sans',sans-serif] text-gray-800 dark:text-zinc-300 select-none animate-fadeIn">
+      <div className="relative w-full max-w-xl rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12] p-5 md:p-6 shadow-xl dark:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] space-y-4">
 
         {/* Header Component Controls */}
-        <div className="flex items-center justify-between border-b border-white/5 pb-3">
+        <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
           <div className="flex items-center gap-2">
             <div>
-              <h3 className="text-sm font-black tracking-wider uppercase text-white">Manage Skills Registry</h3>
-              <p className="text-[11px] text-zinc-400 font-medium">Update your professional competence profile parameters.</p>
+              <h3 className="text-sm font-black tracking-wider uppercase text-gray-900 dark:text-white">Manage Skills Registry</h3>
+              <p className="text-[11px] text-gray-500 dark:text-zinc-400 font-medium">Update your professional competence profile parameters.</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-zinc-400 hover:text-white rounded-lg p-1.5 hover:bg-white/5 transition">
+          <button onClick={onClose} className="text-gray-400 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white rounded-lg p-1.5 hover:bg-gray-100 dark:hover:bg-white/5 transition">
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {/* Input Parameters Allocation Bar Box */}
-        <div className="bg-white/[0.01] border border-white/5 p-4 rounded-xl space-y-3">
+        <div className="bg-gray-50 dark:bg-white/[0.01] border border-gray-200 dark:border-white/5 p-4 rounded-xl space-y-3">
           <div className="flex justify-between items-center">
-            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Add Capability Matrix Block</span>
-            <span className="text-[10px] font-mono text-zinc-500 font-bold">{skillsList.length} / 12 Max</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 dark:text-zinc-400">Add Capability Matrix Block</span>
+            <span className="text-[10px] font-mono text-gray-400 dark:text-zinc-500 font-bold">{skillsList.length} / 12 Max</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 items-end">
             <div className="sm:col-span-2 relative">
-              <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">Skill Name Tag</label>
+              <label className="block text-[10px] uppercase font-bold text-gray-500 dark:text-zinc-500 mb-1">Skill Name Tag</label>
               
               {/* Dropdown Trigger */}
               <div className="relative">
@@ -158,14 +158,14 @@ export default function SkillsEditModal({
                     // Delay closing to allow click on dropdown items
                     setTimeout(() => setIsDropdownOpen(false), 200);
                   }}
-                  className="w-full rounded-lg border border-white/10 bg-[#121420] px-3 py-1.5 text-xs outline-none text-white focus:border-blue-500/30 pr-8"
+                  className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#121420] px-3 py-1.5 text-xs outline-none text-gray-900 dark:text-white focus:border-blue-500/30 pr-8 shadow-sm"
                   placeholder={isLoading ? "Loading skills..." : "Search or select skill..."}
                   disabled={isLoading}
                 />
                 <button
                   type="button"
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition"
                 >
                   <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
@@ -173,13 +173,13 @@ export default function SkillsEditModal({
 
               {/* Dropdown List */}
               {isDropdownOpen && filteredSkills.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-[#121420] border border-white/10 rounded-lg max-h-40 overflow-y-auto shadow-xl">
+                <div className="absolute z-50 w-full mt-1 bg-white dark:bg-[#121420] border border-gray-200 dark:border-white/10 rounded-lg max-h-40 overflow-y-auto shadow-xl">
                   {filteredSkills.map((skill) => (
                     <button
                       key={skill.tag_id}
                       type="button"
                       onClick={() => handleSkillSelect(skill.name)}
-                      className="w-full text-left px-3 py-2 text-xs text-white hover:bg-white/5 transition-colors border-b border-white/5 last:border-0"
+                      className="w-full text-left px-3 py-2 text-xs text-gray-800 dark:text-white hover:bg-gray-100 dark:hover:bg-white/5 transition-colors border-b border-gray-100 dark:border-white/5 last:border-0"
                     >
                       {skill.name}
                     </button>
@@ -189,19 +189,19 @@ export default function SkillsEditModal({
 
               {/* No Results Message */}
               {isDropdownOpen && searchTerm && filteredSkills.length === 0 && suggestedSkills.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-[#121420] border border-white/10 rounded-lg p-3 text-center">
-                  <p className="text-xs text-zinc-400">No matching skills found</p>
-                  <p className="text-[10px] text-zinc-500 mt-1">You can still add it manually</p>
+                <div className="absolute z-50 w-full mt-1 bg-white dark:bg-[#121420] border border-gray-200 dark:border-white/10 rounded-lg p-3 text-center shadow-xl">
+                  <p className="text-xs text-gray-500 dark:text-zinc-400">No matching skills found</p>
+                  <p className="text-[10px] text-gray-400 dark:text-zinc-500 mt-1">You can still add it manually</p>
                 </div>
               )}
             </div>
 
             <div>
-              <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">Proficiency</label>
+              <label className="block text-[10px] uppercase font-bold text-gray-500 dark:text-zinc-500 mb-1">Proficiency</label>
               <select
                 value={newSkill.proficiency}
                 onChange={(e) => setNewSkill(p => ({ ...p, proficiency: e.target.value as Proficiency }))}
-                className="w-full rounded-lg border border-white/10 bg-[#121420] px-2 py-1.5 text-xs outline-none text-white h-[32px] font-medium"
+                className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#121420] px-2 py-1.5 text-xs outline-none text-gray-900 dark:text-white h-[32px] font-medium shadow-sm"
               >
                 <option value="beginner">Beginner</option>
                 <option value="intermediate">Intermediate</option>
@@ -211,20 +211,20 @@ export default function SkillsEditModal({
             </div>
 
             <div>
-              <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1 text-center">Years of Experience</label>
-              <div className="flex items-center justify-between border border-white/10 bg-white/5 rounded-lg h-[32px] overflow-hidden p-0.5">
+              <label className="block text-[10px] uppercase font-bold text-gray-500 dark:text-zinc-500 mb-1 text-center">Years of Experience</label>
+              <div className="flex items-center justify-between border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 rounded-lg h-[32px] overflow-hidden p-0.5">
                 <button 
                   type="button" 
                   onClick={() => setNewSkill(p => ({ ...p, years: Math.max(1, p.years - 1) }))} 
-                  className="h-full aspect-square flex items-center justify-center rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition"
+                  className="h-full aspect-square flex items-center justify-center rounded bg-gray-200 dark:bg-white/5 hover:bg-gray-300 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition"
                 >
                   <Minus className="h-2.5 w-2.5" />
                 </button>
-                <span className="text-xs font-mono font-bold text-zinc-200">{newSkill.years}</span>
+                <span className="text-xs font-mono font-bold text-gray-800 dark:text-zinc-200">{newSkill.years}</span>
                 <button 
                   type="button" 
                   onClick={() => setNewSkill(p => ({ ...p, years: p.years + 1 }))} 
-                  className="h-full aspect-square flex items-center justify-center rounded bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition"
+                  className="h-full aspect-square flex items-center justify-center rounded bg-gray-200 dark:bg-white/5 hover:bg-gray-300 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition"
                 >
                   <Plus className="h-2.5 w-2.5" />
                 </button>
@@ -243,21 +243,21 @@ export default function SkillsEditModal({
         </div>
 
         {/* Current Active List Track Area */}
-        <div className="max-h-44 overflow-y-auto space-y-1.5 bg-black/20 p-2.5 rounded-xl border border-white/5 scrollbar-thin scrollbar-thumb-white/5 scrollbar-track-transparent">
+        <div className="max-h-44 overflow-y-auto space-y-1.5 bg-gray-50 dark:bg-black/20 p-2.5 rounded-xl border border-gray-200 dark:border-white/5 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-white/5 scrollbar-track-transparent">
           {skillsList.map((skill, index) => (
-            <div key={index} className="flex justify-between items-center text-xs bg-white/[0.01] p-2 rounded-lg border border-white/5">
-              <span className="font-bold text-zinc-200 pl-1">{skill.name}</span>
+            <div key={index} className="flex justify-between items-center text-xs bg-white dark:bg-white/[0.01] p-2 rounded-lg border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none">
+              <span className="font-bold text-gray-800 dark:text-zinc-200 pl-1">{skill.name}</span>
               <div className="flex items-center gap-3">
-                <span className="capitalize text-blue-400 font-mono text-[10px] bg-blue-500/5 px-1.5 py-0.5 rounded border border-blue-500/10">
+                <span className="capitalize text-blue-600 dark:text-blue-400 font-mono text-[10px] bg-blue-50 dark:bg-blue-500/5 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-500/10">
                   {skill.proficiency}
                 </span>
-                <span className="text-[11px] text-zinc-400 font-medium">
+                <span className="text-[11px] text-gray-500 dark:text-zinc-400 font-medium">
                   {skill.years} {skill.years === 1 ? 'yr' : 'yrs'}
                 </span>
                 <button 
                   type="button" 
                   onClick={() => removeSkill(skill.name)} 
-                  className="text-red-400 hover:text-red-300 p-1 rounded-md hover:bg-red-500/10 transition"
+                  className="text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 p-1 rounded-md hover:bg-red-50 dark:hover:bg-red-500/10 transition"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -265,7 +265,7 @@ export default function SkillsEditModal({
             </div>
           ))}
           {skillsList.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-6 text-zinc-600 space-y-1">
+            <div className="flex flex-col items-center justify-center py-6 text-gray-400 dark:text-zinc-600 space-y-1">
               <AlertCircle className="h-4 w-4 opacity-40" />
               <p className="text-xs font-medium italic">No capability matrix points mapped.</p>
             </div>
@@ -273,11 +273,11 @@ export default function SkillsEditModal({
         </div>
 
         {/* Footer Navigation controls */}
-        <div className="flex justify-end gap-2.5 pt-3 border-t border-white/5">
+        <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-100 dark:border-white/5">
           <button 
             type="button" 
             onClick={onClose} 
-            className="px-4 py-2 border border-white/10 bg-white/5 text-zinc-400 text-xs font-semibold rounded-lg hover:text-white transition"
+            className="px-4 py-2 border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-zinc-400 text-xs font-semibold rounded-lg hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 transition"
           >
             Cancel
           </button>

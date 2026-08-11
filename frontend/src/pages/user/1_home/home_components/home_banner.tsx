@@ -7,11 +7,11 @@ import { HomeBannerInfo } from "./home_banner_info";
 import useGlobalState from "@/lib/global_state";
 
 export const WelcomeCardSkeleton: React.FC = () => (
-  <div className="mb-12 overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-8">
-    <div className="h-10 w-48 animate-pulse rounded-lg bg-white/10" />
-    <div className="mt-2 h-12 w-96 animate-pulse rounded-lg bg-white/10" />
-    <div className="mt-4 h-5 w-full max-w-2xl animate-pulse rounded-lg bg-white/5" />
-    <div className="mt-6 h-px w-32 animate-pulse bg-white/10" />
+  <div className="mb-12 overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-8">
+    <div className="h-10 w-48 animate-pulse rounded-lg bg-gray-200 dark:bg-white/10" />
+    <div className="mt-2 h-12 w-96 animate-pulse rounded-lg bg-gray-200 dark:bg-white/10" />
+    <div className="mt-4 h-5 w-full max-w-2xl animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
+    <div className="mt-6 h-px w-32 animate-pulse bg-gray-200 dark:bg-white/10" />
   </div>
 );
 
@@ -144,7 +144,7 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
   }, [activeClipIndex]);
 
   return (
-    <div className="relative mb-8 overflow-hidden rounded-2xl border border-white/15 bg-zinc-950 p-6 shadow-2xl transition-all duration-500 md:p-10">
+    <div className="relative mb-8 overflow-hidden rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-zinc-950 p-6 shadow-2xl transition-all duration-500 md:p-10">
       {/* BASE VIDEO LAYER (Currently Active) */}
       <video
         ref={activeVideoRef}
@@ -170,8 +170,8 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
       />
 
       {/* Gradients tailored to reveal video on the right & protect text on the left */}
-      <div className="absolute inset-0 bg-gradient-to-r from-zinc-950 via-zinc-950/70 to-transparent/10 backdrop-blur-[1px]" />
-      <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-zinc-950/20" />
+      <div className="absolute inset-0 bg-gradient-to-r from-white dark:from-zinc-950 via-white/70 dark:via-zinc-950/70 to-transparent/10 backdrop-blur-[1px]" />
+      <div className="absolute inset-0 bg-gradient-to-t from-white/80 dark:from-zinc-950/80 via-transparent to-white/20 dark:to-zinc-950/20" />
 
       {/* Controls Container - Upper Right Corner */}
       <div className="absolute top-6 right-6 z-20 flex items-center gap-2">
@@ -181,10 +181,10 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
         {/* Circular Question Mark "What's New?" Trigger Button */}
         <button
           onClick={() => setIsInfoOpen(!isInfoOpen)}
-          className={`group relative flex h-7 w-7 items-center justify-center rounded-full border bg-zinc-950/70 text-zinc-400 backdrop-blur-md transition-all duration-300 hover:scale-105 ${
+          className={`group relative flex h-7 w-7 items-center justify-center rounded-full border bg-white/70 dark:bg-zinc-950/70 text-gray-500 dark:text-zinc-400 backdrop-blur-md transition-all duration-300 hover:scale-105 ${
             isInfoOpen
-              ? "border-zinc-300 bg-white/15 text-white shadow-lg shadow-white/5"
-              : "border-white/15 hover:border-zinc-300/80 hover:bg-white/10 hover:text-zinc-200"
+              ? "border-gray-400 dark:border-zinc-300 bg-gray-100 dark:bg-white/15 text-gray-900 dark:text-white shadow-lg shadow-black/5 dark:shadow-white/5"
+              : "border-gray-200 dark:border-white/15 hover:border-gray-400 dark:hover:border-zinc-300/80 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-zinc-200"
           }`}
           title="What's New in this update?"
         >
@@ -194,7 +194,7 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
         {/* Collapse / Expand Toggle Button */}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-zinc-950/70 text-zinc-400 backdrop-blur-md transition hover:border-white/30 hover:bg-white/10 hover:text-white"
+          className="flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 dark:border-white/15 bg-white/70 dark:bg-zinc-950/70 text-gray-500 dark:text-zinc-400 backdrop-blur-md transition hover:border-gray-400 dark:hover:border-white/30 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
           title={isCollapsed ? "Expand banner" : "Collapse banner"}
         >
           {isCollapsed ? (
@@ -215,7 +215,7 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
       <div className="relative z-10 max-w-3xl">
         {/* Always Visible Header */}
         <h1
-          className="text-2xl font-extrabold tracking-tight text-white md:text-4xl"
+          className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white md:text-4xl"
           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
         >
           {displayedText}
@@ -232,14 +232,14 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
         >
           <div className="overflow-hidden">
             <p
-              className="mt-3 text-base font-medium leading-relaxed text-zinc-200 md:text-lg"
+              className="mt-3 text-base font-medium leading-relaxed text-gray-800 dark:text-zinc-200 md:text-lg"
               style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
             >
               The premier platform for high-end video production and creative talent.
             </p>
 
             <p
-              className="mt-1 text-sm leading-relaxed text-zinc-400"
+              className="mt-1 text-sm leading-relaxed text-gray-500 dark:text-zinc-400"
               style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
             >
               Streamline your pipeline—find top clients, access studio-grade assets, and scale your craft.
@@ -247,8 +247,8 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
 
             {/* Embedded Search Bar */}
             <div className="mt-6 mb-2">
-              <div className="relative flex items-center rounded-xl border border-white/15 bg-white/10 p-1.5 shadow-2xl backdrop-blur-xl transition duration-300 focus-within:border-cyan-500/50 focus-within:bg-white/15 focus-within:shadow-cyan-500/10">
-                <div className="flex items-center justify-center pl-3 pr-2 text-zinc-400">
+              <div className="relative flex items-center rounded-xl border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/10 p-1.5 shadow-xl dark:shadow-2xl backdrop-blur-xl transition duration-300 focus-within:border-blue-500/50 dark:focus-within:border-cyan-500/50 focus-within:bg-gray-100 dark:focus-within:bg-white/15 focus-within:shadow-blue-500/10 dark:focus-within:shadow-cyan-500/10">
+                <div className="flex items-center justify-center pl-3 pr-2 text-gray-400 dark:text-zinc-400">
                   <Search className="h-5 w-5" />
                 </div>
                 <input
@@ -256,13 +256,13 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search assets, libraries, effects, or templates across the ecosystem..."
-                  className="w-full bg-transparent px-2 py-2 text-sm text-white placeholder-zinc-400 focus:outline-none"
+                  className="w-full bg-transparent px-2 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-400 focus:outline-none"
                   style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 />
                 {searchQuery && (
                   <button
                     onClick={() => setSearchQuery("")}
-                    className="mr-1 rounded-lg p-2 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+                    className="mr-1 rounded-lg p-2 text-gray-400 dark:text-zinc-400 transition hover:bg-gray-200 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
                   >
                     <X className="h-4 w-4" />
                   </button>

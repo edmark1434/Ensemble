@@ -18,6 +18,7 @@ interface GlobalState {
   isLoading:       boolean
   accessToken:     string | null
   signUpData:      any | null
+  theme:           'light' | 'dark'
 
   // Actions
   setUser:            (user: any) => void
@@ -26,6 +27,7 @@ interface GlobalState {
   clearUser:          () => void
   setAccessToken: (accessToken: string) => void
   setSignUpData: (data: any) => void
+  setTheme: (theme: 'light' | 'dark') => void
 }
 
 // Pass type to create<GlobalState>
@@ -36,6 +38,7 @@ const useGlobalState = create<GlobalState>((set) => ({
   isLoading:       false,
   accessToken: null,
   signUpData: null,
+  theme: (localStorage.getItem('theme') as 'light' | 'dark') || 'dark',
 
   // Actions
   setUser:            (user) => set({ user, isAuthenticated: true }),
@@ -44,6 +47,22 @@ const useGlobalState = create<GlobalState>((set) => ({
   clearUser:          () => set({ user: null, isAuthenticated: false }),
   setAccessToken: (accessToken) => set({ accessToken }),
   setSignUpData: (data) => set({ signUpData: data }),
+  setTheme: (theme) => {
+    localStorage.setItem('theme', theme);
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    set({ theme });
+  },
 }))
+
+const initialTheme = (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
+if (initialTheme === 'dark') {
+  document.documentElement.classList.add('dark');
+} else {
+  document.documentElement.classList.remove('dark');
+}
 
 export default useGlobalState

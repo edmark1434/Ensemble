@@ -126,7 +126,7 @@ export const ProposalsSentPage: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-4">
         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-zinc-400 text-sm animate-pulse">Loading sent proposals...</p>
+        <p className="text-gray-500 dark:text-zinc-400 text-sm animate-pulse">Loading sent proposals...</p>
       </div>
     );
   }
@@ -134,14 +134,14 @@ export const ProposalsSentPage: React.FC = () => {
   if (proposals.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-4 text-center">
-        <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-2">
+        <div className="w-16 h-16 bg-white dark:bg-white/5 shadow-sm dark:shadow-none rounded-full flex items-center justify-center mb-2">
           <span className="text-2xl">🚀</span>
         </div>
-        <h3 className="text-lg font-bold text-white">No Proposals Sent Yet</h3>
-        <p className="text-xs text-zinc-400 max-w-sm">You haven't applied to any jobs yet. Start exploring the job market to find your next gig!</p>
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white">No Proposals Sent Yet</h3>
+        <p className="text-xs text-gray-500 dark:text-zinc-400 max-w-sm">You haven't applied to any jobs yet. Start exploring the job market to find your next gig!</p>
         <button
           onClick={() => navigate('/jobs/postings')}
-          className="mt-4 px-6 py-2.5 rounded-xl bg-blue-500 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20"
+          className="mt-4 px-6 py-2.5 rounded-xl bg-blue-500 text-xs font-bold text-gray-900 dark:text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20"
         >
           Look for Jobs
         </button>
@@ -151,11 +151,11 @@ export const ProposalsSentPage: React.FC = () => {
 
   return (
     <div className="space-y-4 text-left">
-      <div className="flex items-center justify-between border-b border-white/5 pb-2">
-        <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+      <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-2">
+        <h2 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">
           Submitted Proposal Applications ({filtered.length})
         </h2>
-        <span className="text-xs text-zinc-400 font-mono">My Proposals</span>
+        <span className="text-xs text-gray-500 dark:text-zinc-400 font-mono">My Proposals</span>
       </div>
 
       <ProposalsList

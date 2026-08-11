@@ -66,6 +66,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
   const creatorSearchRef = useRef<HTMLFormElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const userInfo = useGlobalState((state) => state.user);
   const [showHeader, setShowHeader] = useState(false);
@@ -272,6 +273,17 @@ useEffect(() => {
     return () => document.removeEventListener("mousedown", closeCreatorSearch);
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const handleTopUp = () => {
     navigate("/credits");
   };
@@ -313,23 +325,24 @@ useEffect(() => {
   return showHeader ? (
     <>
       <header
-        className={`sticky top-0 z-50 border-b border-white/10 bg-[#080a12]/95 backdrop-blur-md transition-all duration-300 ${
+        className={`sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12]/95 backdrop-blur-md transition-all duration-300 ${
             (!isCollapsed ? "md:p-0" : "md:pl-20")
         }`}
       >
         <div className="flex items-center justify-between px-6 py-4 md:px-8 gap-4">
 
           <div className="flex items-center gap-8 flex-1 min-w-0">
-            <h1 className="text-xl font-semibold text-white shrink-0 hidden sm:block" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+            <h1 className="text-xl font-semibold text-gray-900 dark:text-white shrink-0 hidden sm:block" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
               {pageTitle}
             </h1>
 
             <form ref={creatorSearchRef} onSubmit={handleHeaderSearchSubmit} className="relative w-full max-w-xs group">
               <Search
                 onClick={handleHeaderSearchSubmit}
-                className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500 group-hover:text-blue-400 transition-colors cursor-pointer"
+                className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500 dark:text-zinc-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors cursor-pointer"
               />
               <input
+                ref={searchInputRef}
                 type="text"
                 placeholder="Search creators..."
                 value={headerSearchInput}
@@ -338,13 +351,18 @@ useEffect(() => {
                   setHeaderSearchInput(e.target.value);
                   setIsCreatorSearchOpen(true);
                 }}
-                className="w-full rounded-full border border-white/10 bg-white/5 pl-9 pr-4 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder-zinc-500"
+                className="w-full rounded-full border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 pl-9 pr-14 py-1.5 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder-gray-400 dark:placeholder-zinc-500"
               />
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
+                <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400 bg-gray-200 dark:bg-white/10 border border-gray-300 dark:border-white/20 rounded">
+                  Alt+K
+                </kbd>
+              </div>
 
               {isCreatorSearchOpen && headerSearchInput.replace(/^@/, "").trim().length >= 2 && (
-                <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-white/10 bg-[#151824] shadow-2xl">
+                <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#151824] shadow-xl dark:shadow-2xl">
                   {isSearchingCreators ? (
-                    <p className="px-4 py-3 text-center text-xs text-zinc-400">Searching creators...</p>
+                    <p className="px-4 py-3 text-center text-xs text-gray-500 dark:text-zinc-400">Searching creators...</p>
                   ) : creatorSearchResults.length > 0 ? (
                     <div className="max-h-72 overflow-y-auto p-1.5">
                       {creatorSearchResults.map((creator) => (
@@ -352,18 +370,25 @@ useEffect(() => {
                           key={creator.accountId}
                           type="button"
                           onClick={() => handleCreatorSelect(creator)}
-                          className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                          className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition hover:bg-gray-100 dark:hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                         >
-                          <img src={creator.avatar} alt="" className="h-9 w-9 shrink-0 rounded-full bg-zinc-800 object-cover" />
+                          <img src={creator.avatar} alt="" className="h-9 w-9 shrink-0 rounded-full bg-gray-200 dark:bg-zinc-800 object-cover" />
                           <span className="min-w-0">
-                            <span className="block truncate text-xs font-semibold text-white">{creator.name}</span>
-                            <span className="block truncate text-[10px] text-zinc-400">{creator.username}</span>
+                            <span className="flex items-center gap-1.5 truncate text-xs font-semibold text-gray-900 dark:text-white">
+                              {creator.name}
+                              {creator.accountId === userInfo?.account_id && (
+                                <span className="rounded bg-blue-100 dark:bg-blue-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                                  You
+                                </span>
+                              )}
+                            </span>
+                            <span className="block truncate text-[10px] text-gray-500 dark:text-zinc-400">{creator.username}</span>
                           </span>
                         </button>
                       ))}
                     </div>
                   ) : (
-                    <p className="px-4 py-3 text-center text-xs text-zinc-500">No creators found.</p>
+                    <p className="px-4 py-3 text-center text-xs text-gray-500 dark:text-zinc-500">No creators found.</p>
                   )}
                 </div>
               )}
@@ -381,7 +406,7 @@ useEffect(() => {
               >
                 <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
                 <CreditIcon className="h-4 w-4 text-yellow-500" />
-                <span className="text-sm font-bold text-yellow-200">{userCredits.toLocaleString()}</span>
+                <span className="text-sm font-bold text-amber-600 dark:text-yellow-200">{userCredits.toLocaleString()}</span>
                 {isHovered && (
                   <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] text-white shadow-lg animate-fade-in">
                     Go to Credit Shop
@@ -398,12 +423,12 @@ useEffect(() => {
                   setIsProfileOpen(false);
                 }}
                 className={`relative rounded-lg p-2 transition duration-200 ${
-                  isNotificationsOpen ? "bg-white/10 text-white" : "text-zinc-400 hover:bg-white/10 hover:text-white"
+                  isNotificationsOpen ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white" : "text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
                 }`}
               >
                 <Bell className="h-5 w-5" />
                 {hasUnreadNotifications && (
-                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-[#080a12]" />
+                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#080a12]" />
                 )}
               </button>
               <UserNotificationModal isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} notificationsData={notifications} 
@@ -418,46 +443,46 @@ useEffect(() => {
                   setIsProfileOpen(!isProfileOpen);
                   setIsNotificationsOpen(false);
                 }}
-                className="flex items-center gap-2 rounded-lg p-1 transition hover:bg-white/10"
+                className="flex items-center gap-2 rounded-lg p-1 transition hover:bg-gray-100 dark:hover:bg-white/10"
               >
                 <img 
                   src={userAvatarState || userAvatar} 
                   alt={userInfo?.username || "User"} 
-                  className="h-8 w-8 rounded-full object-cover ring-2 ring-white/20"
+                  className="h-8 w-8 rounded-full object-cover ring-2 ring-gray-200 dark:ring-white/20"
                   onError={(e) => {
                     // ✅ Fallback if image fails to load
                     (e.target as HTMLImageElement).src = userAvatar;
                   }}
                 />
                 <div className="text-left hidden md:block">
-                  <p className="text-sm font-medium text-white">{userInfo?.display_name || userInfo?.displayName || userInfo?.username || "User"}</p>
-                  <p className="text-xs text-zinc-500">{userSubscriptionPlan} Member</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{userInfo?.display_name || userInfo?.displayName || userInfo?.username || "User"}</p>
+                  <p className="text-xs text-gray-500 dark:text-zinc-500">{userSubscriptionPlan} Member</p>
                 </div>
-                <ChevronDown className={`h-4 w-4 text-zinc-400 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-4 w-4 text-gray-400 dark:text-zinc-400 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`} />
               </button>
 
               {isProfileOpen && (
-                <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/10 bg-[#0d0f1a] shadow-2xl backdrop-blur-xl animate-fade-in">
-                  <div className="border-b border-white/10 p-3">
-                    <p className="text-sm font-medium text-white">{userInfo?.username || "User"}</p>
-                    <p className="text-xs text-zinc-500">{userInfo?.email || "user@ensemble.com"}</p>
+                <div className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-xl dark:shadow-2xl backdrop-blur-xl animate-fade-in">
+                  <div className="border-b border-gray-200 dark:border-white/10 p-3">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{userInfo?.username || "User"}</p>
+                    <p className="text-xs text-gray-500 dark:text-zinc-500">{userInfo?.email || "user@ensemble.com"}</p>
                   </div>
                   <div className="p-2">
                     <button onClick={() => { navigate("/profile"); setIsProfileOpen(false); }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10">
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/10">
                       <User className="h-4 w-4" /> Profile
                     </button>
                     <button
                       onClick={() => { navigate("/settings"); setIsProfileOpen(false); }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/10"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/10"
                     >
                       <Settings className="h-4 w-4" /> Settings
                     </button>
                   </div>
-                  <div className="border-t border-white/10 p-2">
+                  <div className="border-t border-gray-200 dark:border-white/10 p-2">
                     <button
                       onClick={(e) => { e.preventDefault(); setIsLogoutModalOpen(true); setIsProfileOpen(false); }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 transition hover:bg-red-500/10"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-500 dark:text-red-400 transition hover:bg-red-50 dark:hover:bg-red-500/10"
                     >
                       <LogOut className="h-4 w-4" /> Logout
                     </button>

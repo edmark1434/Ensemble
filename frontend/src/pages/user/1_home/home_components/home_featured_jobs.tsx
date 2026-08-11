@@ -123,12 +123,12 @@ export const HomeFeaturedJobs: React.FC = () => {
           <section>
               <div className="mb-6 flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-bold text-white">Latest Job Posts</h2>
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Latest Job Posts</h2>
                 </div>
               </div>
               <div className="grid gap-5 grid-cols-1 md:grid-cols-3">
                   {[1, 2, 3].map(i => (
-                      <div key={i} className="h-72 bg-white/5 animate-pulse rounded-2xl border border-white/10" />
+                      <div key={i} className="h-72 bg-gray-100 dark:bg-white/5 animate-pulse rounded-2xl border border-gray-200 dark:border-white/10" />
                   ))}
               </div>
           </section>
@@ -144,13 +144,13 @@ export const HomeFeaturedJobs: React.FC = () => {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h2
-            className="text-xl font-bold tracking-tight text-white"
+            className="text-xl font-bold tracking-tight text-gray-900 dark:text-white"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
             Latest Job Posts
           </h2>
           <p
-            className="text-xs text-zinc-400"
+            className="text-xs text-gray-500 dark:text-zinc-400"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
             Fresh opportunities from verified clients seeking editors
@@ -158,7 +158,7 @@ export const HomeFeaturedJobs: React.FC = () => {
         </div>
         <button
           onClick={() => navigate("/jobs/postings")}
-          className="flex items-center gap-1 text-xs font-semibold text-white transition hover:text-zinc-300"
+          className="flex items-center gap-1 text-xs font-semibold text-gray-700 dark:text-white transition hover:text-gray-900 dark:hover:text-zinc-300"
           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
         >
           Browse All Jobs <ArrowRight className="h-3.5 w-3.5" />
@@ -170,24 +170,24 @@ export const HomeFeaturedJobs: React.FC = () => {
           <div
             key={job.id}
             onClick={() => navigate(`/jobs/postings/${job.id}`)}
-            className="group flex flex-col justify-between rounded-2xl border border-white/10 bg-[#0d0f1a]/40 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-white/30 hover:bg-white/[0.06] cursor-pointer"
+            className="group flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/40 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 dark:hover:border-white/30 hover:bg-gray-50 dark:hover:bg-white/[0.06] cursor-pointer shadow-sm dark:shadow-none"
           >
             <div>
               {/* Thumbnail Image */}
-              <div className="relative mb-3 h-36 w-full overflow-hidden rounded-xl border border-white/5 bg-zinc-900">
+              <div className="relative mb-3 h-36 w-full overflow-hidden rounded-xl border border-gray-100 dark:border-white/5 bg-gray-200 dark:bg-zinc-900">
                 <img
                   src={job.thumbnail}
                   alt={job.title}
                   className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleToggleSave(job.id);
                   }}
-                  className={`absolute top-2 right-2 rounded-full bg-black/50 p-1.5 backdrop-blur-sm transition ${
-                    job.isSaved ? "text-yellow-500" : "text-zinc-400 hover:text-white"
+                  className={`absolute top-2 right-2 rounded-full bg-white/80 dark:bg-black/50 p-1.5 backdrop-blur-sm transition ${
+                    job.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
                   }`}
                 >
                   <Bookmark className={`h-3.5 w-3.5 ${job.isSaved ? "fill-current" : ""}`} />
@@ -199,16 +199,16 @@ export const HomeFeaturedJobs: React.FC = () => {
                 <span
                   className={`rounded border px-2 py-0.5 text-[10px] font-medium ${
                     job.status === "Open"
-                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                      : "border-red-500/20 bg-red-500/10 text-red-400"
+                      ? "border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
+                      : "border-red-300 bg-red-100 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
                   }`}
                 >
                   {job.status}
                 </span>
-                <span className="rounded border border-white/10 bg-zinc-800 px-2 py-0.5 text-[10px] font-medium text-zinc-300">
+                <span className="rounded border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-800 dark:text-zinc-300">
                   {job.difficulty}
                 </span>
-                <span className="rounded border border-white/10 bg-zinc-800 px-2 py-0.5 text-[10px] font-medium text-zinc-300">
+                <span className="rounded border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-800 dark:text-zinc-300">
                   {job.category}
                 </span>
               </div>
@@ -221,7 +221,7 @@ export const HomeFeaturedJobs: React.FC = () => {
 
               {/* Title & Description */}
               <h3
-                className="mb-1 line-clamp-1 text-base font-bold text-white transition-colors group-hover:text-white"
+                className="mb-1 line-clamp-1 text-base font-bold text-gray-900 dark:text-white transition-colors group-hover:text-gray-900 dark:group-hover:text-white"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 {job.title}
@@ -233,17 +233,17 @@ export const HomeFeaturedJobs: React.FC = () => {
               {/* Skill Badges */}
               {Array.isArray(job.skills) && job.skills.length > 0 && (
                 <div className="mb-3 flex flex-wrap items-center gap-1.5">
-                  <Wrench className="h-3 w-3 shrink-0 text-zinc-400" />
+                  <Wrench className="h-3 w-3 shrink-0 text-gray-400 dark:text-zinc-400" />
                   {job.skills.slice(0, 3).map((skill) => (
                     <span
                       key={skill}
-                      className="rounded-md border border-white/10 bg-zinc-800/80 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-300"
+                      className="rounded-md border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800/80 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 dark:text-zinc-300"
                     >
                       {skill}
                     </span>
                   ))}
                   {job.skills.length > 3 && (
-                    <span className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
+                    <span className="rounded-md border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400">
                       +{job.skills.length - 3}
                     </span>
                   )}
@@ -252,20 +252,20 @@ export const HomeFeaturedJobs: React.FC = () => {
             </div>
 
             {/* Footer */}
-            <div className="mt-2 flex items-center justify-between border-t border-white/5 pt-3 text-[11px] font-medium text-zinc-400">
+            <div className="mt-2 flex items-center justify-between border-t border-gray-200 dark:border-white/5 pt-3 text-[11px] font-medium text-gray-500 dark:text-zinc-400">
               <div className="flex items-center gap-1.5 truncate">
                 {job.clientAvatar ? (
-                  <img src={job.clientAvatar} alt={job.postedBy} className="h-5 w-5 shrink-0 rounded-full border border-zinc-700 object-cover" />
+                  <img src={job.clientAvatar} alt={job.postedBy} className="h-5 w-5 shrink-0 rounded-full border border-gray-300 dark:border-zinc-700 object-cover" />
                 ) : (
-                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 bg-zinc-800 text-[9px] font-bold text-white">
+                  <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 text-[9px] font-bold text-gray-700 dark:text-white">
                     {job.postedBy.charAt(0)}
                   </div>
                 )}
-                <span className="truncate font-semibold text-zinc-300">{job.postedBy}</span>
+                <span className="truncate font-semibold text-gray-700 dark:text-zinc-300">{job.postedBy}</span>
               </div>
 
-              <div className="ml-2 flex shrink-0 items-center gap-1 text-[10px] text-zinc-400">
-                <Clock className="h-3 w-3 text-zinc-500" />
+              <div className="ml-2 flex shrink-0 items-center gap-1 text-[10px] text-gray-400 dark:text-zinc-400">
+                <Clock className="h-3 w-3 text-gray-400 dark:text-zinc-500" />
                 <span>{job.timeAgo}</span>
               </div>
             </div>

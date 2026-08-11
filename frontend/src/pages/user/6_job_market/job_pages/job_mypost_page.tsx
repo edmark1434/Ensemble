@@ -25,8 +25,8 @@ const JobMyPostPage: React.FC = () => {
             onClick={() => setStatusFilter(status)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${
               statusFilter === status
-                ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
-                : "bg-white/5 text-zinc-400 border-white/10 hover:bg-white/10 hover:text-zinc-200"
+                ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30"
+                : "bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-zinc-400 border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-700 dark:hover:text-zinc-200"
             }`}
           >
             {status}

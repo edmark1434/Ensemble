@@ -51,13 +51,13 @@ export const HomeFeaturedGigs: React.FC = () => {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h2
-            className="text-xl font-bold tracking-tight text-white"
+            className="text-xl font-bold tracking-tight text-gray-900 dark:text-white"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
             Top Services
           </h2>
           <p
-            className="text-xs text-zinc-400"
+            className="text-xs text-gray-500 dark:text-zinc-400"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
             Top-rated freelance services offered by elite creators
@@ -65,7 +65,7 @@ export const HomeFeaturedGigs: React.FC = () => {
         </div>
         <button
           onClick={() => navigate("/gigs")}
-          className="flex items-center gap-1 text-xs font-semibold text-white transition hover:text-zinc-300"
+          className="flex items-center gap-1 text-xs font-semibold text-gray-700 dark:text-white transition hover:text-gray-900 dark:hover:text-zinc-300"
           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
         >
           Explore Services <ArrowRight className="h-3.5 w-3.5" />
@@ -77,15 +77,15 @@ export const HomeFeaturedGigs: React.FC = () => {
           <div
             key={service.id}
             onClick={() => navigate(`/gigs/${service.id}`)}
-            className="group flex flex-col justify-between overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] transition-all duration-300 hover:-translate-y-1 hover:border-white/30 hover:bg-white/[0.06] cursor-pointer"
+            className="group flex flex-col justify-between overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.03] shadow-sm dark:shadow-none transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 dark:hover:border-white/30 hover:bg-gray-50 dark:hover:bg-white/[0.06] cursor-pointer"
           >
-            <div className="relative aspect-[16/9] w-full overflow-hidden bg-zinc-900">
+            <div className="relative aspect-[16/9] w-full overflow-hidden bg-gray-200 dark:bg-zinc-900">
               <img
                 src={service.imagePlaceholder}
                 alt={service.title}
                 className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
               />
-              <div className="absolute top-2 right-2 rounded-full bg-black/60 px-2.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-md border border-white/10">
+              <div className="absolute top-2 right-2 rounded-full bg-white/80 dark:bg-black/60 px-2.5 py-0.5 text-[10px] font-medium text-gray-900 dark:text-white backdrop-blur-md border border-gray-200 dark:border-white/10">
                 Starting at ${service.price}
               </div>
             </div>
@@ -93,27 +93,27 @@ export const HomeFeaturedGigs: React.FC = () => {
             <div className="flex flex-1 flex-col justify-between p-4">
               <div>
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-medium text-zinc-400">
+                  <span className="text-xs font-medium text-gray-500 dark:text-zinc-400">
                     {service.provider}
                   </span>
-                  <div className="flex items-center gap-1 text-xs text-yellow-400">
+                  <div className="flex items-center gap-1 text-xs text-yellow-500 dark:text-yellow-400">
                     <Star className="h-3 w-3 fill-current" />
-                    <span>{service.rating}</span>
-                    <span className="text-zinc-500">({service.ordersCount})</span>
+                    <span className="text-gray-900 dark:text-white">{service.rating}</span>
+                    <span className="text-gray-400 dark:text-zinc-500">({service.ordersCount})</span>
                   </div>
                 </div>
 
                 <h3
-                  className="mb-3 text-sm font-semibold leading-snug text-white line-clamp-2 transition-colors group-hover:text-white"
+                  className="mb-3 text-sm font-semibold leading-snug text-gray-900 dark:text-white line-clamp-2 transition-colors group-hover:text-gray-900 dark:group-hover:text-white"
                   style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 >
                   {service.title}
                 </h3>
               </div>
 
-              <div className="mt-2 flex items-center justify-between border-t border-white/10 pt-3">
-                <span className="text-xs text-zinc-500">Verified Seller</span>
-                <button className="flex items-center gap-1 text-xs font-medium text-white transition hover:text-zinc-300">
+              <div className="mt-2 flex items-center justify-between border-t border-gray-200 dark:border-white/10 pt-3">
+                <span className="text-xs text-gray-500 dark:text-zinc-500">Verified Seller</span>
+                <button className="flex items-center gap-1 text-xs font-medium text-gray-700 dark:text-white transition hover:text-gray-900 dark:hover:text-zinc-300">
                   View Gig <ArrowRight className="h-3 w-3" />
                 </button>
               </div>

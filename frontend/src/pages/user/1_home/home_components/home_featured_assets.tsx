@@ -61,14 +61,14 @@ export const suggestedAssets: Asset[] = [
 ];
 
 export const AssetCardSkeleton: React.FC = () => (
-  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-    <div className="mb-3 aspect-square w-full animate-pulse rounded-lg bg-white/10" />
-    <div className="h-5 w-24 animate-pulse rounded-lg bg-white/10" />
-    <div className="mt-2 h-4 w-full animate-pulse rounded-lg bg-white/5" />
-    <div className="mt-2 h-4 w-3/4 animate-pulse rounded-lg bg-white/5" />
+  <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 p-4">
+    <div className="mb-3 aspect-square w-full animate-pulse rounded-lg bg-gray-200 dark:bg-white/10" />
+    <div className="h-5 w-24 animate-pulse rounded-lg bg-gray-200 dark:bg-white/10" />
+    <div className="mt-2 h-4 w-full animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
+    <div className="mt-2 h-4 w-3/4 animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
     <div className="mt-3 flex items-center justify-between">
-      <div className="h-5 w-20 animate-pulse rounded-lg bg-white/5" />
-      <div className="h-8 w-16 animate-pulse rounded-lg bg-white/10" />
+      <div className="h-5 w-20 animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
+      <div className="h-8 w-16 animate-pulse rounded-lg bg-gray-200 dark:bg-white/10" />
     </div>
   </div>
 );
@@ -103,13 +103,13 @@ export const HomeFeaturedAssets: React.FC<HomeFeaturedAssetsProps> = ({
   const getTypeColor = (type: Asset["type"]) => {
     switch (type) {
       case "audio":
-        return "bg-purple-500/20 text-purple-400";
+        return "bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400";
       case "image":
-        return "bg-green-500/20 text-green-400";
+        return "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400";
       case "video":
-        return "bg-red-500/20 text-red-400";
+        return "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400";
       default:
-        return "bg-blue-500/20 text-blue-400";
+        return "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400";
     }
   };
 
@@ -121,13 +121,13 @@ export const HomeFeaturedAssets: React.FC<HomeFeaturedAssetsProps> = ({
     return (
       <div className="flex items-center gap-0.5">
         {[...Array(fullStars)].map((_, i) => (
-          <Star key={`full-${i}`} className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+          <Star key={`full-${i}`} className="h-3 w-3 fill-yellow-500 text-yellow-500 dark:fill-yellow-400 dark:text-yellow-400" />
         ))}
-        {hasHalfStar && <StarHalf className="h-3 w-3 fill-yellow-400 text-yellow-400" />}
+        {hasHalfStar && <StarHalf className="h-3 w-3 fill-yellow-500 text-yellow-500 dark:fill-yellow-400 dark:text-yellow-400" />}
         {[...Array(emptyStars)].map((_, i) => (
-          <Star key={`empty-${i}`} className="h-3 w-3 text-zinc-600" />
+          <Star key={`empty-${i}`} className="h-3 w-3 text-gray-300 dark:text-zinc-600" />
         ))}
-        <span className="ml-1 text-xs text-zinc-400">{rating}</span>
+        <span className="ml-1 text-xs text-gray-500 dark:text-zinc-400">{rating}</span>
       </div>
     );
   };
@@ -149,13 +149,13 @@ export const HomeFeaturedAssets: React.FC<HomeFeaturedAssetsProps> = ({
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h2
-            className="text-xl font-bold tracking-tight text-white"
+            className="text-xl font-bold tracking-tight text-gray-900 dark:text-white"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
             Popular Assets
           </h2>
           <p
-            className="text-xs text-zinc-400"
+            className="text-xs text-gray-500 dark:text-zinc-400"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
             Top-rated assets trending across the platform
@@ -163,7 +163,7 @@ export const HomeFeaturedAssets: React.FC<HomeFeaturedAssetsProps> = ({
         </div>
         <button
           onClick={() => navigate("/assets")}
-          className="flex items-center gap-1 text-xs font-semibold text-white transition hover:text-zinc-300"
+          className="flex items-center gap-1 text-xs font-semibold text-gray-700 dark:text-white transition hover:text-gray-900 dark:hover:text-zinc-300"
           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
         >
           View More on Asset Library <ArrowRight className="h-3.5 w-3.5" />
@@ -174,17 +174,17 @@ export const HomeFeaturedAssets: React.FC<HomeFeaturedAssetsProps> = ({
         {filteredAssets.slice(0, 3).map((asset) => (
           <div
             key={asset.id}
-            className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] transition-all duration-300 hover:-translate-y-1 hover:border-white/30 hover:bg-white/[0.06] cursor-pointer"
+            className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/[0.03] shadow-sm dark:shadow-none transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 dark:hover:border-white/30 hover:bg-gray-50 dark:hover:bg-white/[0.06] cursor-pointer"
             onMouseEnter={() => setHoveredAsset(asset.id)}
             onMouseLeave={() => setHoveredAsset(null)}
           >
-            <div className="relative aspect-square w-full overflow-hidden bg-gradient-to-br from-[#1a1f2e] to-[#0d0f1a]">
+            <div className="relative aspect-square w-full overflow-hidden bg-gray-200 dark:bg-gradient-to-br dark:from-[#1a1f2e] dark:to-[#0d0f1a]">
               <img
                 src={asset.imagePlaceholder}
                 alt={asset.title}
                 className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#080a12] via-transparent to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-[#080a12] via-transparent to-transparent" />
 
               <div className="absolute left-3 top-3">
                 <span
@@ -200,7 +200,7 @@ export const HomeFeaturedAssets: React.FC<HomeFeaturedAssetsProps> = ({
 
               <button
                 onClick={(e) => e.stopPropagation()}
-                className="absolute right-3 top-3 rounded-full bg-black/50 p-1.5 text-zinc-400 backdrop-blur-sm transition hover:text-red-400"
+                className="absolute right-3 top-3 rounded-full bg-white/80 dark:bg-black/50 p-1.5 text-gray-500 dark:text-zinc-400 backdrop-blur-sm transition hover:text-red-500 dark:hover:text-red-400"
               >
                 <Heart className="h-3.5 w-3.5" />
               </button>
@@ -209,7 +209,7 @@ export const HomeFeaturedAssets: React.FC<HomeFeaturedAssetsProps> = ({
             <div className="p-4">
               <div className="mb-2 flex items-center justify-between">
                 <span
-                  className="text-[10px] text-zinc-500"
+                  className="text-[10px] text-gray-500 dark:text-zinc-500"
                   style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 >
                   {asset.category}
@@ -219,13 +219,13 @@ export const HomeFeaturedAssets: React.FC<HomeFeaturedAssetsProps> = ({
 
               <div className="mb-2 flex items-baseline gap-1">
                 <span
-                  className="text-xl font-bold text-white"
+                  className="text-xl font-bold text-gray-900 dark:text-white"
                   style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 >
                   {asset.credits}
                 </span>
                 <span
-                  className="text-xs text-zinc-500"
+                  className="text-xs text-gray-500 dark:text-zinc-500"
                   style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 >
                   Credits
@@ -233,27 +233,27 @@ export const HomeFeaturedAssets: React.FC<HomeFeaturedAssetsProps> = ({
               </div>
 
               <h3
-                className="mb-2 line-clamp-2 text-sm font-semibold leading-tight text-white transition-colors group-hover:text-white"
+                className="mb-2 line-clamp-2 text-sm font-semibold leading-tight text-gray-900 dark:text-white transition-colors group-hover:text-gray-900 dark:group-hover:text-white"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 {asset.title}
               </h3>
 
               <p
-                className="mb-3 line-clamp-2 text-xs text-zinc-400"
+                className="mb-3 line-clamp-2 text-xs text-gray-600 dark:text-zinc-400"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
                 {asset.description}
               </p>
 
-              <div className="flex items-center justify-between border-t border-white/10 pt-3">
+              <div className="flex items-center justify-between border-t border-gray-200 dark:border-white/10 pt-3">
                 <span
-                  className="text-xs text-zinc-500 transition hover:text-white"
+                  className="text-xs text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:hover:text-white"
                   style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 >
                   {asset.author}
                 </span>
-                <button className="flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-white/20">
+                <button className="flex items-center gap-1 rounded-lg bg-gray-100 dark:bg-white/10 px-2.5 py-1 text-xs font-medium text-gray-900 dark:text-white transition hover:bg-gray-200 dark:hover:bg-white/20">
                   <Download className="h-3 w-3" />
                   Get
                 </button>

@@ -49,7 +49,7 @@ const Home: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#080a12]">
+      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
         <UserHeader pageTitle="Home" credits={1250} />
         <div className="mx-auto max-w-7xl p-6 md:p-8">
           <WelcomeCardSkeleton />
@@ -57,27 +57,27 @@ const Home: React.FC = () => {
           <div>
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <div className="h-7 w-40 animate-pulse rounded-lg bg-white/10" />
-                <div className="mt-1 h-4 w-48 animate-pulse rounded-lg bg-white/5" />
+                <div className="h-7 w-40 animate-pulse rounded-lg bg-gray-200 dark:bg-white/10" />
+                <div className="mt-1 h-4 w-48 animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
               </div>
-              <div className="h-5 w-32 animate-pulse rounded-lg bg-white/5" />
+              <div className="h-5 w-32 animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
             </div>
 
             <div className="flex flex-col gap-6 lg:flex-row">
               {/* Sidebar Filters Skeletons */}
               <div className="lg:w-64">
-                <div className="sticky top-48 rounded-xl border border-white/10 bg-white/5 p-4">
+                <div className="sticky top-48 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-4">
                   <div className="mb-4">
-                    <div className="mb-2 h-4 w-16 animate-pulse rounded bg-white/10" />
+                    <div className="mb-2 h-4 w-16 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
                     <div className="flex flex-wrap gap-2">
                       {Array.from({ length: 4 }).map((_, i) => (
                         <FilterButtonSkeleton key={i} />
                       ))}
                     </div>
                   </div>
-                  <div className="my-4 h-px bg-white/10" />
+                  <div className="my-4 h-px bg-gray-200 dark:bg-white/10" />
                   <div className="mb-4">
-                    <div className="mb-2 h-4 w-20 animate-pulse rounded bg-white/10" />
+                    <div className="mb-2 h-4 w-20 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
                     <div className="flex flex-wrap gap-2">
                       {Array.from({ length: 4 }).map((_, i) => (
                         <FilterButtonSkeleton key={i} />
@@ -89,7 +89,7 @@ const Home: React.FC = () => {
 
               {/* Asset Grid Skeletons */}
               <div className="flex-1">
-                <div className="mb-4 h-5 w-48 animate-pulse rounded-lg bg-white/5" />
+                <div className="mb-4 h-5 w-48 animate-pulse rounded-lg bg-gray-200 dark:bg-white/5" />
                 <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
                   {Array.from({ length: 4 }).map((_, i) => (
                     <AssetCardSkeleton key={i} />
@@ -104,7 +104,7 @@ const Home: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#080a12]">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
       {/* Top Header */}
       <UserHeader pageTitle="Home" credits={1250} />
 
