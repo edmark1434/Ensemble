@@ -16,7 +16,9 @@ exports.up = (pgm) => {
       notNull: true, 
       default: pgm.func('gen_random_uuid()') 
     },
-    xendit_disbursement_id: { type: 'varchar(50)', notNull: true },
+    reference_id: { type: 'varchar(100)', notNull: true },
+    idempotency_key: { type: 'varchar(100)', notNull: true },
+    xendit_disbursement_id: { type: 'varchar(100)' },
     xendit_channel_code: { type: 'varchar(50)', notNull: true },
     account_no: { type: 'varchar(50)', notNull: true },
     account_name: { type: 'varchar(50)' },
@@ -24,7 +26,14 @@ exports.up = (pgm) => {
     fee_php_cents: { type: 'integer', notNull: true },
     net_amount_php_cents: { type: 'integer', notNull: true },
     status: { type: 'varchar(50)', notNull: true },
+    failure_code: { type: 'varchar(100)' },
+    refunded_at: { type: 'timestamp without time zone' },
     created_at: {
+      type: 'timestamp without time zone',
+      notNull: true,
+      default: pgm.func('CURRENT_TIMESTAMP')
+    },
+    updated_at: {
       type: 'timestamp without time zone',
       notNull: true,
       default: pgm.func('CURRENT_TIMESTAMP')
@@ -33,6 +42,7 @@ exports.up = (pgm) => {
   });
 
   pgm.addConstraint('cashouts', 'cashouts_user_id_fkey', 'FOREIGN KEY (user_id) REFERENCES users(user_id)');
+  pgm.createIndex('cashouts', ['user_id', 'created_at'], { name: 'idx_cashouts_user_created_at' });
 };
 
 /**

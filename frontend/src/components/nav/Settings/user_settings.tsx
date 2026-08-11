@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, CreditCard, HelpCircle, FileText, ArrowLeft, AlertCircle,Ticket } from "lucide-react";
+import { User, CreditCard, HelpCircle, FileText, ArrowLeft, AlertCircle, Ticket, Wallet } from "lucide-react";
 
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
@@ -17,7 +17,8 @@ import { UserSettingsSubscriptionDetails } from "./user_settings_subscriptiondet
 import { UserSettingsHelp } from "./user_settings_help";
 import { UserSettingsLegalPolicies } from "./user_settings_legalpolicies";
 import PageSubmitATicket from '@/pages/landing/pages/page_SubmitATicket';
-type TabType = "account" | "subscription" | "help" | "legal" | "ticket";
+import { UserSettingsWallet } from "./user_settings_wallet";
+type TabType = "account" | "wallet" | "subscription" | "help" | "legal" | "ticket";
 
 interface Preset {
   file_id: number;
@@ -267,6 +268,7 @@ export default function UserSettings() {
 
   const navItems = [
     { id: "account", label: "Account Details", icon: User },
+    { id: "wallet", label: "Wallet", icon: Wallet },
     { id: "subscription", label: "Subscription Details", icon: CreditCard },
     { id: "ticket", label: "Submit a Ticket", icon: Ticket },
     { id: "help", label: "Help & Support", icon: HelpCircle },
@@ -372,6 +374,8 @@ export default function UserSettings() {
                     onCancelSubscription={handleCancelSubscription}
                   />
                 )}
+
+                {activeTab === "wallet" && <UserSettingsWallet />}
 
                 {activeTab === "help" && <UserSettingsHelp />}
 
