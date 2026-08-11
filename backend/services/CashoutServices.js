@@ -14,11 +14,8 @@ const { createCashoutNotificationOnce } = require('../repositories/NotificationR
 const { getIo } = require('../lib/WebSocket');
 
 const CHANNELS = {
-    PH_GCASH: { label: 'GCash', routingType: 'WALLET' },
-    PH_PAYMAYA: { label: 'Maya', routingType: 'WALLET' },
-    PH_BPI: { label: 'BPI', routingType: 'WALLET' },
-    PH_BDO: { label: 'BDO', routingType: 'WALLET' },
-    PH_UBP: { label: 'UnionBank', routingType: 'WALLET' },
+    GCASH: { label: 'GCash', routingType: 'WALLET', routingValue: 'PH_GCASH' },
+    PAYMAYA: { label: 'Maya', routingType: 'WALLET', routingValue: 'PH_PAYMAYA' },
 };
 
 class CashoutError extends Error {
@@ -141,7 +138,7 @@ function buildPayoutPayload(cashout) {
             account_details: {
                 currency: 'PHP', account_country: 'PH', account_holder_name: cashout.account_name,
                 account_number: cashout.account_no, routing_type_1: channel.routingType,
-                routing_value_1: cashout.xendit_channel_code,
+                routing_value_1: channel.routingValue,
             },
         },
         payout_details: { source_currency: 'PHP', source_amount: Number(cashout.net_amount_php_cents), destination_currency: 'PHP' },
@@ -204,15 +201,17 @@ async function settleCashout(update) {
 
 async function getWalletOverviewServices(userId, query = {}) {
     const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
-    const pageSize = Math.min(50, Math.max(5, Number.parseInt(query.page_size, 10) || 10));
+    const pageSize = 10;
     const search = String(query.search || '').trim().slice(0, 100);
     const sort = query.sort === 'asc' ? 'asc' : 'desc';
     const allowedStatuses = new Set(['PENDING', 'PROCESSING', 'PENDING_COMPLIANCE', 'SUCCEEDED', 'FAILED', 'REJECTED', 'REVERSED', 'CANCELLED', 'EXPIRED']);
     const requestedStatus = String(query.status || '').trim().toUpperCase();
     const status = allowedStatuses.has(requestedStatus) ? requestedStatus : '';
+    const requestedChannel = String(query.channel || '').trim().toUpperCase();
+    const channel = CHANNELS[requestedChannel] ? requestedChannel : '';
     const [wallets, cashoutResult] = await Promise.all([
         getWalletsByUserId(userId),
-        getCashoutsByUserId(userId, { page, pageSize, search, sort, status }),
+        getCashoutsByUserId(userId, { page, pageSize, search, sort, status, channel }),
     ]);
     return {
         wallets,

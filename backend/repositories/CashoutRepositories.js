@@ -19,7 +19,7 @@ async function getWalletBalanceByUserId(userId) {
     return wallets.find((wallet) => wallet.type === 'account wallets') || null;
 }
 
-async function getCashoutsByUserId(userId, { page = 1, pageSize = 10, search = '', sort = 'desc', status = '' } = {}) {
+async function getCashoutsByUserId(userId, { page = 1, pageSize = 10, search = '', sort = 'desc', status = '', channel = '' } = {}) {
     const offset = (page - 1) * pageSize;
     const order = sort === 'asc' ? 'ASC' : 'DESC';
     const searchValue = search ? `%${search}%` : null;
@@ -31,16 +31,18 @@ async function getCashoutsByUserId(userId, { page = 1, pageSize = 10, search = '
          WHERE user_id = $1
            AND ($2::text IS NULL OR cashout_id::text ILIKE $2 OR reference_id ILIKE $2 OR xendit_disbursement_id ILIKE $2)
            AND ($3::text IS NULL OR status = $3)
+           AND ($4::text IS NULL OR xendit_channel_code = $4)
          ORDER BY created_at ${order}
-         LIMIT $4 OFFSET $5`,
-        [userId, searchValue, status || null, pageSize, offset]
+         LIMIT $5 OFFSET $6`,
+        [userId, searchValue, status || null, channel || null, pageSize, offset]
     );
     const count = await pool.query(
         `SELECT COUNT(*)::integer AS total FROM cashouts
          WHERE user_id = $1
            AND ($2::text IS NULL OR cashout_id::text ILIKE $2 OR reference_id ILIKE $2 OR xendit_disbursement_id ILIKE $2)
-           AND ($3::text IS NULL OR status = $3)`,
-        [userId, searchValue, status || null]
+           AND ($3::text IS NULL OR status = $3)
+           AND ($4::text IS NULL OR xendit_channel_code = $4)`,
+        [userId, searchValue, status || null, channel || null]
     );
     const total = count.rows[0]?.total || 0;
     return { rows: result.rows, total, page, page_size: pageSize, total_pages: Math.max(1, Math.ceil(total / pageSize)) };

@@ -3,6 +3,8 @@ import { ChevronLeft, ChevronRight, Landmark, Loader2, RefreshCw, Search, Shield
 import toast from "react-hot-toast";
 import api from "@/lib/axios";
 import socket from "@/lib/socket";
+import gcashCashoutLogo from "@/assets/gcash-cashout-logo.jpg";
+import mayaCashoutLogo from "@/assets/maya-cashout-logo.png";
 
 type WalletRecord = {
   wallet_id: string;
@@ -28,6 +30,7 @@ type CashoutConfig = { php_cents_per_credit: number; fee_php_cents: number; mini
 type CashoutPagination = { total: number; page: number; page_size: number; total_pages: number };
 type AddressSuggestion = { id: string; label: string; street_line_1: string; city: string; province_state: string; postal_code: string };
 type AddressErrors = Partial<Record<"street_line_1" | "city" | "province_state" | "postal_code", string>>;
+type ContactErrors = Partial<Record<"personal_mobile_number" | "receipt_email", string>>;
 
 const statusStyles: Record<string, string> = {
   SUCCEEDED: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
@@ -37,6 +40,19 @@ const statusStyles: Record<string, string> = {
   PROCESSING: "border-blue-500/30 bg-blue-500/10 text-blue-400",
   PENDING: "border-amber-500/30 bg-amber-500/10 text-amber-400",
 };
+
+const supportedCashoutMethods = [
+  {
+    code: "GCASH",
+    label: "GCash",
+    logo: gcashCashoutLogo,
+  },
+  {
+    code: "PAYMAYA",
+    label: "Maya",
+    logo: mayaCashoutLogo,
+  },
+] as const;
 
 function credits(value: number | string | undefined) {
   return Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
@@ -62,6 +78,7 @@ export function UserSettingsWallet() {
   const [debouncedCashoutSearch, setDebouncedCashoutSearch] = useState("");
   const [cashoutSort, setCashoutSort] = useState<"desc" | "asc">("desc");
   const [cashoutStatus, setCashoutStatus] = useState("");
+  const [cashoutChannel, setCashoutChannel] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
@@ -69,12 +86,13 @@ export function UserSettingsWallet() {
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
   const [addressLoading, setAddressLoading] = useState(false);
   const [addressErrors, setAddressErrors] = useState<AddressErrors>({});
+  const [contactErrors, setContactErrors] = useState<ContactErrors>({});
   const [addressSelected, setAddressSelected] = useState(false);
-  const [form, setForm] = useState({ channel_code: "PH_GCASH", account_name: "", account_no: "", personal_mobile_number: "", receipt_email: "", street_line_1: "", city: "", province_state: "", postal_code: "", amount_credits: "" });
+  const [form, setForm] = useState({ channel_code: "GCASH", account_name: "", account_no: "", personal_mobile_number: "", receipt_email: "", street_line_1: "", city: "", province_state: "", postal_code: "", amount_credits: "" });
 
   const fetchWallets = useCallback(async () => {
     try {
-      const { data } = await api.get("/api/cashouts/wallets", { params: { page: cashoutPage, page_size: 10, search: debouncedCashoutSearch, sort: cashoutSort, status: cashoutStatus } });
+      const { data } = await api.get("/api/cashouts/wallets", { params: { page: cashoutPage, page_size: 10, search: debouncedCashoutSearch, sort: cashoutSort, status: cashoutStatus, channel: cashoutChannel } });
       setWallets(data.wallets || []);
       setCashouts(data.cashouts || []);
       if (data.cashout_pagination) setCashoutPagination(data.cashout_pagination);
@@ -86,7 +104,7 @@ export function UserSettingsWallet() {
     } finally {
       setLoading(false);
     }
-  }, [cashoutPage, debouncedCashoutSearch, cashoutSort, cashoutStatus]);
+  }, [cashoutPage, debouncedCashoutSearch, cashoutSort, cashoutStatus, cashoutChannel]);
 
   useEffect(() => { void fetchWallets(); }, [fetchWallets]);
 
@@ -139,13 +157,18 @@ export function UserSettingsWallet() {
   const submitCashout = async (event: React.FormEvent) => {
     event.preventDefault();
     const nextAddressErrors: AddressErrors = {};
+    const nextContactErrors: ContactErrors = {};
     if (!form.street_line_1.trim()) nextAddressErrors.street_line_1 = "Address is required.";
     if (!form.city.trim()) nextAddressErrors.city = "City is required.";
     if (!form.province_state.trim()) nextAddressErrors.province_state = "Province or region is required.";
     if (!/^\d{4}$/.test(form.postal_code)) nextAddressErrors.postal_code = "Enter a valid 4-digit ZIP code.";
+    const normalizedMobile = form.personal_mobile_number.replace(/[\s-]/g, "");
+    if (!/^(?:\+63|0)9\d{9}$/.test(normalizedMobile)) nextContactErrors.personal_mobile_number = "Enter a valid Philippine mobile number (09XXXXXXXXX or +639XXXXXXXXX).";
+    const normalizedEmail = form.receipt_email.trim();
+    if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) nextContactErrors.receipt_email = "Enter a valid email address.";
     setAddressErrors(nextAddressErrors);
-    if (Object.keys(nextAddressErrors).length > 0) return toast.error("Complete the required address fields.");
-    if (form.receipt_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.receipt_email)) return toast.error("Enter a valid receipt email address.");
+    setContactErrors(nextContactErrors);
+    if (Object.keys(nextAddressErrors).length > 0 || Object.keys(nextContactErrors).length > 0) return toast.error("Correct the highlighted cashout fields.");
     const amount = Number(form.amount_credits);
     if (!Number.isInteger(amount) || amount <= 0) return toast.error("Enter a valid whole credit amount.");
     if (amount < cashoutConfig.minimum_credits) return toast.error(`Minimum cashout is ${credits(cashoutConfig.minimum_credits)} credits.`);
@@ -160,6 +183,7 @@ export function UserSettingsWallet() {
       setForm((current) => ({ ...current, account_name: "", account_no: "", personal_mobile_number: "", receipt_email: "", street_line_1: "", city: "", province_state: "", postal_code: "", amount_credits: "" }));
       setAddressQuery("");
       setAddressErrors({});
+      setContactErrors({});
       setAddressSelected(false);
       await fetchWallets();
     } catch (error: any) {
@@ -186,6 +210,19 @@ export function UserSettingsWallet() {
         </div>
       </div>
 
+      <section>
+        <p className="text-xs font-semibold text-white">Supported cashout methods</p>
+        <p className="mt-1 text-[11px] text-zinc-500">These payment methods are currently supported for cashouts on the platform.</p>
+        <ul className="mt-3 flex list-none flex-wrap items-center gap-2 p-0">
+          {supportedCashoutMethods.map((method) => (
+            <li key={method.code} className="text-center">
+              <img src={method.logo} alt={`${method.label} logo`} className="h-20 w-32 object-contain object-center" />
+              <span className="mt-1 block text-xs font-semibold text-zinc-200">{method.label}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       {loading ? (
         <div className="flex min-h-44 items-center justify-center text-zinc-400"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading wallets…</div>
       ) : (
@@ -207,6 +244,7 @@ export function UserSettingsWallet() {
         <div className="border-b border-white/10 bg-[#121521] px-5 py-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><h3 className="text-sm font-semibold text-white">Cashout transactions</h3><div className="flex flex-col gap-2 sm:flex-row">
             <label className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" /><input value={cashoutSearch} onChange={(e) => setCashoutSearch(e.target.value)} className="w-full rounded-lg border border-white/10 bg-[#171a26] py-2 pl-9 pr-3 text-xs text-white outline-none placeholder:text-zinc-600 focus:border-blue-500 sm:w-64" placeholder="Search transaction ID" /></label>
+            <select value={cashoutChannel} onChange={(e) => { setCashoutChannel(e.target.value); setCashoutPage(1); }} className="rounded-lg border border-white/10 bg-[#171a26] px-3 py-2 text-xs text-white outline-none focus:border-blue-500"><option value="">All methods</option>{channels.map((channel) => <option key={channel.code} value={channel.code}>{channel.label}</option>)}</select>
             <select value={cashoutStatus} onChange={(e) => { setCashoutStatus(e.target.value); setCashoutPage(1); }} className="rounded-lg border border-white/10 bg-[#171a26] px-3 py-2 text-xs text-white outline-none focus:border-blue-500"><option value="">All statuses</option><option value="PENDING">Pending</option><option value="PROCESSING">Processing</option><option value="PENDING_COMPLIANCE">Compliance review</option><option value="SUCCEEDED">Succeeded</option><option value="FAILED">Failed</option><option value="REJECTED">Rejected</option><option value="REVERSED">Reversed</option><option value="CANCELLED">Cancelled</option><option value="EXPIRED">Expired</option></select>
             <select value={cashoutSort} onChange={(e) => { setCashoutSort(e.target.value as "desc" | "asc"); setCashoutPage(1); }} className="rounded-lg border border-white/10 bg-[#171a26] px-3 py-2 text-xs text-white outline-none focus:border-blue-500"><option value="desc">Newest first</option><option value="asc">Oldest first</option></select>
           </div></div>
@@ -230,7 +268,7 @@ export function UserSettingsWallet() {
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
-          <form onSubmit={submitCashout} className="max-h-[85vh] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl border border-white/10 bg-[#0d0f1a] p-5 shadow-2xl [scrollbar-color:#3f3f46_#18181b] [scrollbar-width:thin]">
+          <form noValidate onSubmit={submitCashout} className="max-h-[85vh] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl border border-white/10 bg-[#0d0f1a] p-5 shadow-2xl [scrollbar-color:#3f3f46_#18181b] [scrollbar-width:thin]">
             <div className="flex items-start justify-between"><div><h3 className="text-lg font-bold text-white">Request cashout</h3><p className="mt-1 text-xs text-zinc-400">Funds are sent through Xendit to your selected account.</p></div><button type="button" onClick={() => setOpen(false)} className="rounded-lg p-2 text-zinc-400 hover:bg-white/5 hover:text-white"><X className="h-4 w-4" /></button></div>
             <div className="mt-5 rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-3.5">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-400">Available account-wallet balance</p>
@@ -241,8 +279,8 @@ export function UserSettingsWallet() {
               <label className="block text-xs font-medium text-zinc-300">Cashout method<select value={form.channel_code} onChange={(e) => setForm({ ...form, channel_code: e.target.value })} className="mt-2 w-full rounded-lg border border-white/10 bg-[#171a26] px-3 py-3 text-sm text-white outline-none focus:border-blue-500">{channels.map((channel) => <option key={channel.code} value={channel.code}>{channel.label}</option>)}</select></label>
               <label className="block text-xs font-medium text-zinc-300">Account holder name<input required maxLength={100} value={form.account_name} onChange={(e) => setForm({ ...form, account_name: e.target.value })} className="mt-2 w-full rounded-lg border border-white/10 bg-[#171a26] px-3 py-3 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-blue-500" placeholder="Name registered with your bank or wallet" /></label>
               <label className="block text-xs font-medium text-zinc-300">Account or mobile number<input required inputMode="numeric" value={form.account_no} onChange={(e) => setForm({ ...form, account_no: e.target.value })} className="mt-2 w-full rounded-lg border border-white/10 bg-[#171a26] px-3 py-3 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-blue-500" placeholder="Enter account number" /></label>
-              <label className="block text-xs font-medium text-zinc-300">Contact mobile number<input required inputMode="tel" value={form.personal_mobile_number} onChange={(e) => setForm({ ...form, personal_mobile_number: e.target.value })} className="mt-2 w-full rounded-lg border border-white/10 bg-[#171a26] px-3 py-3 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-blue-500" placeholder="09XXXXXXXXX or +639XXXXXXXXX" /></label>
-              <label className="block text-xs font-medium text-zinc-300">Receipt email <span className="font-normal text-zinc-500">(optional)</span><input type="email" maxLength={254} value={form.receipt_email} onChange={(e) => setForm({ ...form, receipt_email: e.target.value })} className="mt-2 w-full rounded-lg border border-white/10 bg-[#171a26] px-3 py-3 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-blue-500" placeholder="Email for the Xendit payout receipt" /></label>
+              <label className="block text-xs font-medium text-zinc-300">Contact mobile number<input required inputMode="tel" aria-invalid={Boolean(contactErrors.personal_mobile_number)} value={form.personal_mobile_number} onChange={(e) => { setForm({ ...form, personal_mobile_number: e.target.value }); setContactErrors((current) => ({ ...current, personal_mobile_number: undefined })); }} className={`mt-2 w-full rounded-lg border bg-[#171a26] px-3 py-3 text-sm text-white outline-none placeholder:text-zinc-600 ${contactErrors.personal_mobile_number ? "border-red-500 focus:border-red-500" : "border-white/10 focus:border-blue-500"}`} placeholder="09XXXXXXXXX or +639XXXXXXXXX" />{contactErrors.personal_mobile_number && <span className="mt-1.5 block text-[11px] font-normal text-red-400">{contactErrors.personal_mobile_number}</span>}</label>
+              <label className="block text-xs font-medium text-zinc-300">Receipt email <span className="font-normal text-zinc-500">(optional)</span><input type="email" maxLength={254} aria-invalid={Boolean(contactErrors.receipt_email)} value={form.receipt_email} onChange={(e) => { setForm({ ...form, receipt_email: e.target.value }); setContactErrors((current) => ({ ...current, receipt_email: undefined })); }} className={`mt-2 w-full rounded-lg border bg-[#171a26] px-3 py-3 text-sm text-white outline-none placeholder:text-zinc-600 ${contactErrors.receipt_email ? "border-red-500 focus:border-red-500" : "border-white/10 focus:border-blue-500"}`} placeholder="Email for the Xendit payout receipt" />{contactErrors.receipt_email && <span className="mt-1.5 block text-[11px] font-normal text-red-400">{contactErrors.receipt_email}</span>}</label>
               <label className="relative block text-xs font-medium text-zinc-300">Address
                 <div className="relative mt-2">
                   <input required maxLength={160} autoComplete="off" value={addressQuery} onChange={(e) => { const value = e.target.value; setAddressQuery(value); setAddressSelected(false); setForm({ ...form, street_line_1: value }); setAddressErrors((current) => ({ ...current, street_line_1: undefined })); }} className={`w-full rounded-lg border bg-[#171a26] px-3 py-3 pr-10 text-sm text-white outline-none placeholder:text-zinc-600 ${addressErrors.street_line_1 ? "border-red-500 focus:border-red-500" : "border-white/10 focus:border-blue-500"}`} placeholder="Search or enter your street address" />

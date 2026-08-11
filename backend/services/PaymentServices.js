@@ -1229,17 +1229,25 @@ async function processSubscriptionPayment(req, res) {
 }
 
 async function cancelSubscription(req,res){
-    const {userId} = req.body;
-
+    const { userId } = req.session;
     const subscriptionDetails = await getSubcriptionByUserIdRepositories(userId);
-    const planDetails = await getPlandetailsByPlanIdRepositories(subscriptionDetails[0]?.plan_id);
-    if (!subscriptionDetails) {
+    const subscription = subscriptionDetails[0];
+    if (!subscription) {
         return res.status(404).json({ error: "No subscription found for this user" });
     }
+    const planDetails = await getPlandetailsByPlanIdRepositories(subscription.plan_id);
+    if (!planDetails || Number(planDetails.amount_php_cents || 0) <= 0) {
+        return res.status(422).json({ error: "Free subscriptions cannot be cancelled." });
+    }
+    if (subscription.cancel_at_period_end) {
+        return res.status(200).json({ message: "Subscription cancellation is already scheduled.", cancel_at_period_end: true });
+    }
+    if (!subscription.xendit_plan_id) {
+        return res.status(409).json({ error: "This subscription has no active recurring plan to cancel." });
+    }
     try{
-        const [responseCancel, updatedInvoice] = await Promise.all([
-            axios.post(
-                `https://api.xendit.co/recurring/plans/${subscriptionDetails[0].xendit_plan_id}/deactivate`,{},{
+        const responseCancel = await axios.post(
+                `https://api.xendit.co/recurring/plans/${subscription.xendit_plan_id}/deactivate`,{},{
                     auth: {
                         username: process.env.XENDIT_API_KEY,
                         password: ""
@@ -1249,9 +1257,10 @@ async function cancelSubscription(req,res){
                         "api-version": "2026-01-01"
                     }
                 }
-            ),
-            updateSubscriptionInvoiceByXenditPlanIdRepositories(subscriptionDetails[0].xendit_plan_id),
-            updateSubscriptionBySubscriptionId(subscriptionDetails[0].subscription_id, {
+            );
+        const [updatedInvoice] = await Promise.all([
+            updateSubscriptionInvoiceByXenditPlanIdRepositories(subscription.xendit_plan_id),
+            updateSubscriptionBySubscriptionId(subscription.subscription_id, {
                 cancel_at_period_end: true,
                 next_billing_at: null,
                 canceled_at: new Date().toISOString(),
@@ -1263,7 +1272,7 @@ async function cancelSubscription(req,res){
             reference_table: "subscriptions",
             reference_prefix: "SUBSCRIPTION",
             reference_path: `${process.env.FRONTEND_URL}/credits-subscriptions`,
-            reference_id: subscriptionDetails[0].subscription_id,
+            reference_id: subscription.subscription_id,
             user_id: userId
         });
         const io = getIo();
@@ -1271,6 +1280,7 @@ async function cancelSubscription(req,res){
         console.log("Subscription canceled successfully");
         res.status(200).json({
             message: "Subscription canceled successfully",
+            cancel_at_period_end: true,
             responseCancel: responseCancel.data,
             updatedInvoice: updatedInvoice
         });

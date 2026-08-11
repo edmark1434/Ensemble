@@ -67,10 +67,12 @@ export default function UserSettings() {
     plan_name: string;
     status: string;
     renews_at?: string;
+    cancel_at_period_end?: boolean;
   }>({
     plan_name: "Free Member",
     status: "Active",
   });
+  const [isCancellingSubscription, setIsCancellingSubscription] = useState(false);
 
   const constructAvatarUrl = (path: string | undefined): string => {
     if (!path) return "https://i.pravatar.cc/150?u=user";
@@ -134,6 +136,7 @@ export default function UserSettings() {
             plan_name: subRes.data.planDetails.plan_name || "Free Member",
             status: subRes.data.planDetails.status || "Active",
             renews_at: subRes.data.planDetails.renews_at,
+            cancel_at_period_end: Boolean(subRes.data.planDetails.cancel_at_period_end),
           });
         }
       }
@@ -258,11 +261,14 @@ export default function UserSettings() {
   const handleCancelSubscription = async () => {
     if (confirm("Are you sure you want to cancel your current subscription?")) {
       try {
-        await api.post("/api/subscription/cancel");
-        setSubscription((prev) => ({ ...prev, status: "Cancelled" }));
-        toast.success("Subscription cancelled successfully.");
-      } catch (err) {
-        toast.error("Failed to cancel subscription.");
+        setIsCancellingSubscription(true);
+        const { data } = await api.post("/api/payment/cancel-subscription");
+        setSubscription((prev) => ({ ...prev, cancel_at_period_end: true }));
+        toast.success(data.message || "Subscription cancellation scheduled successfully.");
+      } catch (err: any) {
+        toast.error(err.response?.data?.error || err.response?.data?.message || "Failed to cancel subscription.");
+      } finally {
+        setIsCancellingSubscription(false);
       }
     }
   };
@@ -373,6 +379,7 @@ export default function UserSettings() {
                   <UserSettingsSubscriptionDetails
                     subscription={subscription}
                     onCancelSubscription={handleCancelSubscription}
+                    isCancelling={isCancellingSubscription}
                   />
                 )}
 
