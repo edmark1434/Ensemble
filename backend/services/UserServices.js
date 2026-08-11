@@ -40,6 +40,7 @@ const SALT_ROUNDS = 10;
 const MAX_ATTEMPTS = 3;
 //duration of lockout in milliseconds
 const LOCKOUT_DURATION = 3 * 60 * 1000; //3 minutes in milliseconds
+const STRONG_PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9\s]).{8,}$/;
 
 //create a custom error class for servicelevel errors that includes an HTTP status code for better error handling in controllers
 class ServiceError extends Error {
@@ -123,6 +124,9 @@ async function registerUser(signupPayload = {}) {
         }
         if (!emailAddress || !password) {
             throw new ServiceError('Email and password are required', 400);
+        }
+        if (!STRONG_PASSWORD_PATTERN.test(password)) {
+            throw new ServiceError('Password must be at least 8 characters and include one uppercase letter, one lowercase letter, and one special character.', 400);
         }
 
         if (!username) {

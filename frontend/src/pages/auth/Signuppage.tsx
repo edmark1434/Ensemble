@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { useGoogleAuth } from "./Oauth";
 import axios from "axios";
 import useGlobalState from "@/lib/global_state";
-import { Eye, EyeOff, User, Mail, Lock, UserCheck } from "lucide-react";
+import { Check, Eye, EyeOff, Mail, Lock, User, UserCheck } from "lucide-react";
 import TermsModal from "@/pages/auth/TermsModal";
 import PrivacyModal from "@/pages/auth/PrivacyModal";
 
@@ -222,37 +222,30 @@ function Input({
 }
 
 // ─── Password strength meter ──────────────────────────────────────────────────
-function StrengthMeter({ password }: { password: string }) {
-  const score = (() => {
-    if (!password) return 0;
-    let s = 0;
-    if (password.length >= 8)  s++;
-    if (/[A-Z]/.test(password)) s++;
-    if (/[0-9]/.test(password)) s++;
-    if (/[^A-Za-z0-9]/.test(password)) s++;
-    return s;
-  })();
+const STRONG_PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9\s]).{8,}$/;
 
-  const labels = ["", "Weak", "Fair", "Good", "Strong"];
-  const colors = ["#2a2d3e", "#e05252", "#f0a43a", "#4a9eff", "#52e0a0"];
+function StrengthMeter({ password }: { password: string }) {
+  const requirements = [
+    { label: "At least 8 characters", met: password.length >= 8 },
+    { label: "At least 1 uppercase letter", met: /[A-Z]/.test(password) },
+    { label: "At least 1 lowercase letter", met: /[a-z]/.test(password) },
+    { label: "At least 1 special character", met: /[^A-Za-z0-9\s]/.test(password) },
+  ];
 
   if (!password) return null;
+
   return (
-    <div style={{ marginTop: -8, marginBottom: 14 }}>
-      <div style={{ display: "flex", gap: 4, marginBottom: 5 }}>
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} style={{
-            flex: 1,
-            height: 3,
-            borderRadius: 2,
-            background: i <= score ? colors[score] : "#2a2d3e",
-            transition: "background .25s",
-          }} />
-        ))}
-      </div>
-      <span style={{ fontSize: 11, color: colors[score], fontFamily: T.fontBody }}>
-        {labels[score]}
-      </span>
+    <div aria-live="polite" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "7px 12px", marginTop: -8, marginBottom: 16 }}>
+      {requirements.map((requirement) => (
+        <div key={requirement.label} style={{ display: "flex", alignItems: "center", gap: 6, color: requirement.met ? T.success : T.text, fontSize: 11, fontFamily: T.fontBody }}>
+          {requirement.met ? (
+            <Check size={13} strokeWidth={2.5} aria-hidden="true" />
+          ) : (
+            <span aria-hidden="true" style={{ width: 13, textAlign: "center" }}>−</span>
+          )}
+          <span>{requirement.label}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -465,7 +458,7 @@ export default function SignupPage({
     if (!form.email) e.email = "Email is required.";
     else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = "Enter a valid email.";
     if (!form.password) e.password = "Password is required.";
-    else if (form.password.length < 8) e.password = "Must be at least 8 characters.";
+    else if (!STRONG_PASSWORD_PATTERN.test(form.password)) e.password = "Use at least 8 characters with uppercase, lowercase, and a special character.";
     if (!form.confirm) e.confirm = "Please confirm your password.";
     else if (form.confirm !== form.password) e.confirm = "Passwords don't match.";
     if (!agreed) e.agreed = "You must accept the terms.";
@@ -728,7 +721,7 @@ export default function SignupPage({
             <Input
               label="Password"
               type={showPassword ? "text" : "password"}
-              placeholder="At least 8 characters"
+              placeholder="8+ characters with upper, lower, and special"
               value={form.password}
               onChange={update("password")}
               error={errors.password}
