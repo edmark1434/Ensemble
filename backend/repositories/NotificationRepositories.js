@@ -58,6 +58,23 @@ async function createNotification(notification) {
     }
 }
 
+async function createCashoutNotificationOnce(notification) {
+    try {
+        return await createNotification(notification);
+    } catch (error) {
+        if (error.code !== '23505') throw error;
+        const result = await pool.query(
+            `SELECT * FROM notifications
+             WHERE reference_table = 'cashouts'
+               AND reference_id = $1
+               AND reference_prefix = $2
+             LIMIT 1`,
+            [notification.reference_id, notification.reference_prefix]
+        );
+        return result.rows[0] || null;
+    }
+}
+
 async function getNotificationsByAccountId(accountId) {
     try {
         const query = `
@@ -108,6 +125,7 @@ async function markAllNotificationsAsRead(accountId) {
 
 module.exports = {
     createNotification,
+    createCashoutNotificationOnce,
     getNotificationsByAccountId,
     markNotificationAsRead,
     markAllNotificationsAsRead

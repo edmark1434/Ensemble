@@ -1,4 +1,5 @@
 const { pool } = require('../lib/Database');
+const { insertWithPublicIdRetry } = require('../lib/PublicId');
 
 async function getAllAccounts() {
     try {
@@ -31,8 +32,9 @@ async function createAccount({
     deletedAt = null,
 } = {}) {
     try {
-        const result = await pool.query(
+        return await insertWithPublicIdRetry((publicId) => pool.query(
             `INSERT INTO accounts (
+                public_id,
                 display_name,
                 handle,
                 avatar_file_id,
@@ -42,9 +44,11 @@ async function createAccount({
                 status,
                 deleted_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING account_id, type, handle, status, display_name`,
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT (public_id) DO NOTHING
+            RETURNING account_id, public_id, type, handle, status, display_name`,
             [
+                publicId,
                 displayName,
                 handle,
                 avatarFileId,
@@ -54,8 +58,7 @@ async function createAccount({
                 status,
                 deletedAt,
             ]
-        );
-        return result.rows[0];
+        ));
     } catch (err) {
         console.error('Error creating account:', err);
         throw err;
@@ -65,7 +68,7 @@ async function createAccount({
 async function getAccountByHandle(handle) {
     try{
         const result = await pool.query(
-            'SELECT account_id, handle, display_name FROM accounts WHERE LOWER(handle) = LOWER($1)',
+            'SELECT account_id, public_id, handle, display_name FROM accounts WHERE LOWER(handle) = LOWER($1)',
             [handle]
         );
         return result.rows[0];
@@ -84,6 +87,7 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 10) 
     const result = await pool.query(
         `SELECT
             a.account_id,
+            a.public_id,
             a.display_name,
             u.first_name || ' ' || u.last_name AS full_name,
             a.handle,
@@ -180,6 +184,7 @@ async function getProfileRepositories(accountId) {
         const queryText = `
             SELECT 
                 A.DISPLAY_NAME AS NAME, 
+                A.PUBLIC_ID,
                 U.EMAIL_ADDRESS, 
                 A.TAGLINE, 
                 A.DESCRIPTION AS BIO, 

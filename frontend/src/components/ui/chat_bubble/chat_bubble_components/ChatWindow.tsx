@@ -26,6 +26,7 @@ import {
 import useChatState, { formatCallCardText, type ChatTarget } from "../chat_state";
 import { InboxEmojiPicker } from "@/components/ui/inbox/inbox_functions/inbox_emoji_picker";
 import { ChatImagePreview } from "@/components/ui/inbox/inbox_functions/chat_image_preview";
+import LiveGoogleMeetingBanner from "./LiveGoogleMeetingBanner";
 
 interface ChatWindowProps {
   onMinimize: () => void;
@@ -72,6 +73,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const activeCall = useChatState((state) => state.activeCall);
   const groupCall = useChatState(
     (state) => state.groupCallsByConversation[conversationId]
+  );
+  const liveGoogleMeeting = useChatState(
+    (state) => state.googleMeetingsByConversation[conversationId]
   );
   const joinGroupCall = useChatState((state) => state.joinGroupCall);
 
@@ -309,14 +313,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     <div ref={windowRef} className="flex h-[480px] w-[330px] flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-[#0c0f1d] text-zinc-100 shadow-2xl sm:w-[360px]">
       <div className="flex items-center justify-between border-b border-white/10 bg-[#080a12] p-3 px-4">
         <div className="flex min-w-0 items-center gap-2.5">
-          <img
-            src={
-              activeUser?.avatarUrl ||
-              `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=6366f1&color=fff`
-            }
-            alt={displayName}
-            className="h-8 w-8 rounded-full object-cover"
-          />
+          <div className="relative flex-shrink-0">
+            <img
+              src={
+                activeUser?.avatarUrl ||
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=6366f1&color=fff`
+              }
+              alt={displayName}
+              className="h-8 w-8 rounded-full object-cover"
+            />
+            <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-[#080a12] ${isOnline ? "bg-green-500" : "bg-zinc-600"}`} />
+          </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-bold">{displayName}</p>
             <p className="text-[10px] text-zinc-400">
@@ -335,7 +342,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 })
               }
               disabled={Boolean(activeCall)}
-              title="Start video call"
+              title="Request a meeting"
               className="p-1.5 text-blue-400 hover:text-blue-300 disabled:opacity-40"
             >
               <Video size={15} />
@@ -349,6 +356,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </button>
         </div>
       </div>
+
+      {liveGoogleMeeting && <LiveGoogleMeetingBanner call={liveGoogleMeeting} compact />}
 
       {conversation?.conversation_type === "group" && groupCall && (
         <div className="flex items-center justify-between gap-2 border-b border-green-500/20 bg-green-500/10 px-3 py-2">
@@ -453,7 +462,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         <span className="italic opacity-60">Message deleted</span>
                       ) : (
                         <>
-                          {/^\[video-call:(?:missed|ended)\]/.test(
+                          {/^(?:\[video-call:(?:missed|ended)\]|\[meeting:(?:requested|ended):[^\]]+\]|\[zoom-call:(?:started|ended):[^\]]+\])/.test(
                             message.message_content || ""
                           ) ? (
                             <div className="min-w-40">

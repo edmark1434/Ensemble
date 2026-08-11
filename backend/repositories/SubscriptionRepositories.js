@@ -64,7 +64,11 @@ async function getSubcriptionByUserIdRepositories(userId) {
 
 async function getSubscriptionPlanDetailsByUserIdRepositories(userId) {
     try{
-        const query = `SELECT P.NAME AS PLAN_NAME FROM SUBSCRIPTIONS S JOIN PLANS P ON S.PLAN_ID = P.PLAN_ID WHERE S.USER_ID = $1`;
+        const query = `SELECT P.NAME AS PLAN_NAME, S.STATUS, S.CURRENT_PERIOD_END AS RENEWS_AT,
+                              S.CANCEL_AT_PERIOD_END, S.CANCELED_AT
+                       FROM SUBSCRIPTIONS S
+                       JOIN PLANS P ON S.PLAN_ID = P.PLAN_ID
+                       WHERE S.USER_ID = $1`;
         const result = await pool.query(query, [userId]);
         return result.rows[0];
     }catch(err){

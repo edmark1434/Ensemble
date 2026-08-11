@@ -27,6 +27,7 @@ const {
 const { CREDIT_TRANSACTION_TYPE } = require("./CreditTransactionEnums");
 
 const {getIo} = require('../lib/WebSocket');
+const { reconcileCashoutsServices } = require('../services/CashoutServices');
 
 const config = {
     auth: {
@@ -307,6 +308,7 @@ async function updateForResubmission(sessionId){
  */
 let isPaymentJobRunning = false;
 let isSubscriptionJobRunning = false;
+let isCashoutJobRunning = false;
 
 function startPaymentReconciliationJob() {
 
@@ -350,6 +352,22 @@ function startPaymentReconciliationJob() {
             isSubscriptionJobRunning = false;
         }
 
+    });
+
+    // Recover payout updates missed while this server or its webhook tunnel was offline.
+    cron.schedule("*/2 * * * *", async () => {
+        if (isCashoutJobRunning) {
+            console.log("Skipping cashout reconciliation. Previous job still running.");
+            return;
+        }
+        isCashoutJobRunning = true;
+        try {
+            await reconcileCashoutsServices();
+        } catch (err) {
+            console.error("Cashout reconciliation failed:", err);
+        } finally {
+            isCashoutJobRunning = false;
+        }
     });
 
 }

@@ -16,6 +16,8 @@ const TYPE_LABELS = {
     asset_purchase: 'Asset Purchase',
     asset_refund: 'Asset Refund',
     fee: 'Fee',
+    cashout: 'Cashout',
+    cashout_refund: 'Cashout Refund',
 };
 
 function normalizeType(type) {

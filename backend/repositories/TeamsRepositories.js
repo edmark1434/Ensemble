@@ -1,12 +1,13 @@
 const { pool } = require('../lib/Database');
 const { lazyCollection } = require('../lib/MongoDb');
 const TeamInbox = lazyCollection('inbox');
+const { insertWithPublicIdRetry } = require('../lib/PublicId');
 
 async function createTeam(data, ownerUserId) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const account = (await client.query(`INSERT INTO accounts (display_name, handle, type, tagline, description, status, avatar_file_id) VALUES ($1,$2,'Team',$3,$4,'Active',$5) RETURNING *`, [data.name, data.handle, data.tagline || null, data.description || null, data.avatarFileId || null])).rows[0];
+    const account = await insertWithPublicIdRetry((publicId) => client.query(`INSERT INTO accounts (public_id, display_name, handle, type, tagline, description, status, avatar_file_id) VALUES ($1,$2,$3,'Team',$4,$5,'Active',$6) ON CONFLICT (public_id) DO NOTHING RETURNING account_id, display_name, handle, type, tagline, description, status, avatar_file_id, merit_score, created_at, deleted_at`, [publicId, data.name, data.handle, data.tagline || null, data.description || null, data.avatarFileId || null]));
     const team = (await client.query(`INSERT INTO teams (account_id, join_code, visibility, join_policy, category, website, location) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`, [account.account_id, data.joinCode, data.visibility, data.joinPolicy, data.category || null, data.website || null, data.location || null])).rows[0];
     await client.query(`INSERT INTO team_members (team_id,user_id,role,status) VALUES ($1,$2,'Owner','Active')`, [team.team_id, ownerUserId]);
     await client.query('COMMIT');

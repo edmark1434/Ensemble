@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const googleMeetRoutes = require('./GoogleMeet');
 const userRoutes = require('./User');
 const staffRoutes = require('./Staff');
 const forumRoutes = require('./Forum');
@@ -21,11 +22,13 @@ const transactionRoutes = require('./Transaction');
 const teamRoutes = require('./Teams');
 const contractRoutes = require('./Contract');
 const dashboardRoutes = require('./Dashboard');
+const cashoutRoutes = require('./Cashout');
 const { getAllCountriesController,
     getAllPlacesController
 } = require('../controllers/SystemControllers')
 
 router.use('/inbox', inboxRoutes);
+router.use('/google-meet', googleMeetRoutes);
 router.use('/payment', paymentRoutes);
 router.use('/subscription', subscriptionRoutes);
 router.use('/forum', forumRoutes);
@@ -46,6 +49,7 @@ router.use('/terms-of-service', termsRoutes);
 router.use('/transactions', transactionRoutes);
 router.use('/teams', teamRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/cashouts', cashoutRoutes);
 
 router.get('/countries', getAllCountriesController);
 router.get('/places', getAllPlacesController);

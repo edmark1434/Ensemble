@@ -28,5 +28,5 @@ router.post('/webhooks/payment-session-complete', [], paymentSessionCompleteWebh
 router.post('/webhooks/payment-session-expired', [], paymentSessionExpiredWebhookHandler);
 router.post('/create-payment-token', [checkSession, requireAuth], createPaymentToken);
 router.post('/webhooks/subscription', [], subscriptionWebhookHandler);
-router.post('/cancel-subscription', [], cancelSubscription);
+router.post('/cancel-subscription', [checkSession, requireAuth], cancelSubscription);
 module.exports = router;
