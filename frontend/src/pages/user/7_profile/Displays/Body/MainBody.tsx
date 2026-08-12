@@ -10,10 +10,11 @@ import { Profile_Projects } from "./Profile_Projects";
 import { Profile_Assets } from "./Profile_Assets";
 import { Profile_History } from "./Profile_History";
 import { Profile_Introduction } from "./Profile_Introduction";
+import { Profile_Gallery } from "./Profile_Gallery";
 import { MeritSection_ProfileDisplay } from "../MeritSection_ProfileDisplay";
-import { User, Activity } from "lucide-react";
+import { User, Activity, Image as ImageIcon2 } from "lucide-react";
 
-export type TabType = "introduction" | "performance" | "portfolio" | "services" | "job-posts" | "assets";
+export type TabType = "introduction" | "portfolio" | "gallery" | "services" | "job-posts" | "assets" | "performance";
 
 interface DetailsListBodyProps {
   loading?: boolean;
@@ -33,6 +34,7 @@ interface DetailsListBodyProps {
 const tabOptions: { key: TabType; label: string; icon: React.ReactNode }[] = [
   { key: "introduction", label: "Introduction", icon: <User className="h-3.5 w-3.5" /> },
   { key: "portfolio", label: "Portfolio", icon: <FolderOpen className="h-3.5 w-3.5" /> },
+  { key: "gallery", label: "Gallery", icon: <ImageIcon2 className="h-3.5 w-3.5" /> },
   { key: "services", label: "Services", icon: <Briefcase className="h-3.5 w-3.5" /> },
   { key: "job-posts", label: "Job Posts", icon: <FileText className="h-3.5 w-3.5" /> },
   { key: "assets", label: "Assets", icon: <ImageIcon className="h-3.5 w-3.5" /> },
@@ -111,7 +113,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
             transition={{ duration: 0.2, ease: "easeInOut" }}
             className="flex-1 flex flex-col"
           >
-            {activeTab === "introduction" && <Profile_Introduction introduction={userDetails?.introduction} isOwner={isOwner} onSave={onUpdateIntroduction} />}
+            {activeTab === "introduction" && <Profile_Introduction introduction={userDetails?.introduction} isOwner={isOwner} onSave={onUpdateIntroduction} accountId={accountId || ""} onViewMoreGallery={() => onTabChange("gallery")} />}
             {activeTab === "performance" && (
               <div className="flex flex-col h-full space-y-4">
                 {/* Subtabs for Performance */}
@@ -183,6 +185,9 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                 onAddExternalLink={onAddExternalLink}
                 onDeleteItem={onDeletePortfolioItem}
               />
+            )}
+            {activeTab === "gallery" && (
+              <Profile_Gallery accountId={accountId || ""} isOwner={isOwner} />
             )}
             {activeTab === "services" && <Profile_Services services={services} />}
             {activeTab === "job-posts" && <Profile_JobPosts userDetails={userDetails} accountId={accountId} />}

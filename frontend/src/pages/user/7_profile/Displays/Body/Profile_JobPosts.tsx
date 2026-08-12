@@ -3,6 +3,7 @@ import { FileText, Clock, DollarSign, Briefcase, Loader2, Wrench, Bookmark } fro
 import { useJobs } from "../../../../../hooks/useJobs";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 function getTimeAgo(date: Date) {
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
@@ -124,22 +125,14 @@ export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ userDetails, 
       </div>
       
       {myJobs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center space-y-4">
-          <div className="p-4 rounded-full bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 text-blue-500 dark:text-blue-400">
-            <Briefcase className="h-6 w-6" />
-          </div>
-          <div className="space-y-1">
-            <h4 className="text-sm font-bold text-gray-900 dark:text-white">No Job Posts Yet</h4>
-            <p className="text-[11px] text-gray-500 dark:text-zinc-400 max-w-xs mx-auto leading-relaxed">
-              You haven't posted any jobs. Create your first job post to connect with talented editors!
-            </p>
-          </div>
-          <button 
-            onClick={() => navigate('/jobs/create')}
-            className="mt-2 rounded-xl bg-blue-600 px-5 py-2 text-[11px] font-bold text-white hover:bg-blue-500 transition-colors shadow-sm shadow-blue-500/20"
-          >
-            Post a Job
-          </button>
+        <div className="py-12">
+          <EmptyState
+            icon={Briefcase}
+            title="No Job Posts Yet"
+            description="You haven't posted any jobs. Create your first job post to connect with talented editors!"
+            actionLabel="Post a Job"
+            onAction={() => navigate('/jobs/create')}
+          />
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">

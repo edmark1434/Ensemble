@@ -1,5 +1,6 @@
 import React from "react";
 import { Briefcase } from "lucide-react";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 interface ProfileServicesProps {
   services?: any[];
@@ -32,9 +33,12 @@ export const Profile_Services: React.FC<ProfileServicesProps> = ({ services = []
         </div>
       ))}
       {services.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-24 text-gray-500 dark:text-zinc-500 text-center gap-2 flex-1">
-          <Briefcase className="h-6 w-6 opacity-30 text-gray-400 dark:text-zinc-400" />
-          <p className="text-xs font-medium italic">No active system offer sheets running.</p>
+        <div className="py-12">
+          <EmptyState
+            icon={Briefcase}
+            title="No services offered"
+            description="This user hasn't set up any services yet."
+          />
         </div>
       )}
     </div>

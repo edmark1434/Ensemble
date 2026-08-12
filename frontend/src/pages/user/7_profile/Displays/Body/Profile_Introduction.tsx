@@ -1,21 +1,45 @@
-import React, { useState, useRef } from "react";
-import { Edit2, Check, Bold, Italic, List, Eye, EyeOff } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { Edit2, Check, Bold, Italic, List, Eye, EyeOff, Play } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import api from "@/lib/axios.ts";
 import { toast } from "react-hot-toast";
+import type { GalleryItem } from "./Profile_Gallery";
+import { GalleryLightbox } from "./GalleryLightbox";
 
 interface ProfileIntroductionProps {
   introduction?: string;
   isOwner?: boolean;
   onSave?: (newIntro: string) => void;
+  accountId?: string;
+  onViewMoreGallery?: () => void;
 }
 
-export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ introduction, isOwner, onSave }) => {
+// Helper to construct asset URL
+const constructAssetUrl = (path: string | undefined): string | undefined => {
+  if (!path) return undefined;
+  if (path.startsWith('http')) return path;
+  const cloudfrontUrl = import.meta.env.VITE_CLOUDFRONT_URL;
+  if (!cloudfrontUrl) return path;
+  const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+  return `${cloudfrontUrl}/${cleanPath}`;
+};
+
+export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ introduction, isOwner, onSave, accountId, onViewMoreGallery }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [content, setContent] = useState(introduction || "");
   const [isPreview, setIsPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [featuredWorks, setFeaturedWorks] = useState<GalleryItem[]>([]);
+  const [selectedGalleryItem, setSelectedGalleryItem] = useState<GalleryItem | null>(null);
+
+  useEffect(() => {
+    if (accountId) {
+      api.get(`/api/accounts/${accountId}/galleries`)
+        .then(res => setFeaturedWorks(res.data.slice(0, 3)))
+        .catch(err => console.error("Failed to fetch featured works:", err));
+    }
+  }, [accountId]);
 
   const insertMarkdown = (prefix: string, suffix: string = '') => {
     const textarea = textareaRef.current;
@@ -191,6 +215,70 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
                 This person seems shy on introducing themselves...
               </div>
             )}
+
+            {/* Featured Work Section */}
+            {featuredWorks.length > 0 && !isEditing && (
+              <div className="mt-12 pt-8 border-t border-gray-200 dark:border-white/10">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    Featured Work
+                  </h3>
+                  {onViewMoreGallery && (
+                    <button
+                      onClick={onViewMoreGallery}
+                      className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors flex items-center gap-1"
+                    >
+                      View More
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {featuredWorks.map(item => {
+                    const assetUrl = constructAssetUrl(item.file_url);
+                    const isVideo = item.file_mimetype?.startsWith("video/");
+
+                    return (
+                      <div 
+                        key={item.gallery_id} 
+                        className="group relative rounded-2xl overflow-hidden aspect-[4/3] bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 cursor-pointer shadow-sm hover:shadow-lg transition-all"
+                        onClick={() => setSelectedGalleryItem(item)}
+                      >
+                        {isVideo ? (
+                          <div className="relative w-full h-full">
+                            <video 
+                              src={assetUrl} 
+                              className="w-full h-full object-cover" 
+                              preload="metadata"
+                              muted
+                              loop
+                              onMouseEnter={(e) => e.currentTarget.play()}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.pause();
+                                e.currentTarget.currentTime = 0;
+                              }}
+                            />
+                            <div className="absolute top-2 right-2 bg-black/60 p-1 rounded-full backdrop-blur-md">
+                              <Play className="w-3 h-3 text-white" fill="currentColor" />
+                            </div>
+                          </div>
+                        ) : (
+                          <img src={assetUrl} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+                          <h4 className="text-white font-bold text-sm line-clamp-1">{item.title}</h4>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            
+            <GalleryLightbox 
+              items={featuredWorks} 
+              selectedItem={selectedGalleryItem} 
+              setSelectedItem={setSelectedGalleryItem} 
+            />
           </div>
         )}
       </div>

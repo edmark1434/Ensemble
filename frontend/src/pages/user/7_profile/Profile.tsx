@@ -130,6 +130,7 @@ export default function Profile() {
   const [isSkillsModalOpen, setIsSkillsModalOpen] = useState(false);
   const [isSavingSkills, setIsSavingSkills] = useState(false);
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
+  const [galleryCount, setGalleryCount] = useState(0);
 
   const [avatarPresets, setAvatarPresets] = useState<Preset[]>([]);
   const [currentAvatar, setCurrentAvatar] = useState<Preset | null>(null);
@@ -607,11 +608,12 @@ export default function Profile() {
           return;
         }
 
-        const [profileResponse, tagsResponse, accountLinkResponse, attachmentsResponse] = await Promise.all([
+        const [profileResponse, tagsResponse, accountLinkResponse, attachmentsResponse, galleriesResponse] = await Promise.all([
           api.get(`/api/accounts/profile/${id}?t=${new Date().getTime()}`),
           api.get(`/api/tags/`),
           api.get(`api/accounts/links/${id}`),
           api.get(`/api/accounts/profile/${id}/attachments`),
+          api.get(`/api/accounts/${id}/galleries`)
         ]);
         
         if (!isOwner) {
@@ -626,6 +628,7 @@ export default function Profile() {
         setPortfolioItems(
           (attachmentsResponse.data?.attachments || []).map(mapAttachmentToPortfolioItem)
         );
+        setGalleryCount(galleriesResponse.data?.length || 0);
 
         const profilePayload =
           profileResponse.data?.data ??
@@ -776,11 +779,56 @@ export default function Profile() {
     }
   }, [id, navigate]);
 
+  const completionSteps = [
+    { check: !!userDetails?.avatar_preset_url && !userDetails.avatar_preset_url.includes('default'), label: 'Upload an Avatar' },
+    { check: !!userDetails?.bio || !!userDetails?.introduction, label: 'Add an Introduction' },
+    { check: !!userDetails?.skills && userDetails.skills.length > 0, label: 'Add Skills' },
+    { check: portfolioItems.length > 0, label: 'Add a Portfolio item' },
+    { check: galleryCount > 0, label: 'Add a Gallery item' }
+  ];
+
+  const completionScore = completionSteps.filter(step => step.check).length * 20;
+  const nextStep = completionSteps.find(step => !step.check);
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] font-['Plus Jakarta Sans',sans-serif] text-gray-900 dark:text-zinc-300 antialiased selection:bg-blue-500/30">
       <UserHeader pageTitle="Profile" credits={1250} />
 
       <div className="mx-auto max-w-7xl p-4 md:p-8 space-y-5">
+        
+        {/* Profile Completion Widget (Owner Only) */}
+        {!loading && isOwner && completionScore < 100 && (
+          <div className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl p-5 shadow-sm flex flex-col md:flex-row items-center gap-6">
+            <div className="flex-1 w-full">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-bold text-gray-900 dark:text-white">Profile Setup ({completionScore}%)</h3>
+                <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                  {nextStep ? `Next: ${nextStep.label}` : 'All done!'}
+                </span>
+              </div>
+              <div className="h-2.5 w-full bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-blue-600 transition-all duration-1000 ease-out rounded-full" 
+                  style={{ width: `${completionScore}%` }}
+                />
+              </div>
+            </div>
+            {nextStep && (
+              <button 
+                onClick={() => {
+                  if (nextStep.label.includes('Avatar')) setIsAvatarModalOpen(true);
+                  if (nextStep.label.includes('Introduction')) { setActiveTab('introduction'); window.scrollTo({ top: 300, behavior: 'smooth' }); }
+                  if (nextStep.label.includes('Skills')) setIsSkillsModalOpen(true);
+                  if (nextStep.label.includes('Portfolio')) { setActiveTab('portfolio'); window.scrollTo({ top: 300, behavior: 'smooth' }); }
+                  if (nextStep.label.includes('Gallery')) { setActiveTab('gallery'); window.scrollTo({ top: 300, behavior: 'smooth' }); }
+                }}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-full transition-colors whitespace-nowrap shadow-sm"
+              >
+                Complete Now
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Top Personal Banner Details */}
         <TopSection_ProfileDisplay
