@@ -2,8 +2,9 @@ import React, { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Eye, Heart, ArrowUpRight, Layers, FileText, Globe, Scale, Upload, Plus, X, ExternalLink, HelpCircle
+  Eye, Heart, ArrowUpRight, Layers, FileText, Globe, Scale, Upload, Plus, X, ExternalLink, HelpCircle, FolderOpen
 } from "lucide-react";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export interface PortfolioItem {
   id: string | number;
@@ -215,9 +216,14 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
         })}
 
         {portfolioItems.length === 0 && (
-          <div className="col-span-full flex flex-col items-center justify-center py-24 text-zinc-500 text-center gap-2 flex-1">
-            <Layers className="h-6 w-6 opacity-30 text-zinc-400" />
-            <p className="text-xs font-medium italic">No workspace profile items running right now.</p>
+          <div className="col-span-full py-12">
+            <EmptyState
+              icon={FolderOpen}
+              title="No portfolio items"
+              description={isOwner ? "Showcase your professional background! Add links or documents to your portfolio." : "This user hasn't added any portfolio items yet."}
+              actionLabel={isOwner ? "Upload Resume / CV" : undefined}
+              onAction={isOwner ? () => fileInputRef.current?.click() : undefined}
+            />
           </div>
         )}
       </div>

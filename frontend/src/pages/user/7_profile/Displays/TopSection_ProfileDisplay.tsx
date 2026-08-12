@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
-import { MapPin, Mail, Calendar, ChevronDown, Edit2, MessageCircle, Share2, Cake, HelpCircle, ShieldCheck } from "lucide-react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { MapPin, Mail, Calendar, ChevronDown, Edit2, MessageCircle, Share2, Cake, HelpCircle, ShieldCheck, X } from "lucide-react";
 import { ProfileTags } from "../Utilities/ProfileTags.tsx";
 
 interface TopSectionProps {
@@ -71,6 +73,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
   onFollowingClick
 }) => {
   const [isMetadataOpen, setIsMetadataOpen] = useState(false);
+  const [isAvatarExpanded, setIsAvatarExpanded] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -93,7 +96,10 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
 
         {/* Left Side: Avatar Asset Element */}
         <div className="relative flex-shrink-0">
-          <div className="h-28 w-28 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-500 p-0.5 shadow-xl shadow-blue-500/5">
+          <div 
+            onClick={() => { if (avatarUrl) setIsAvatarExpanded(true); }}
+            className={`h-28 w-28 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 dark:from-zinc-700 dark:to-zinc-800 p-0.5 shadow-xl shadow-gray-500/5 ${avatarUrl ? 'cursor-pointer hover:scale-105 transition-transform' : ''}`}
+          >
             <div className="h-full w-full rounded-full bg-gray-100 dark:bg-[#080a12] overflow-hidden flex items-center justify-center">
               {avatarUrl ? (
                 <img src={avatarUrl} alt="Profile Media" className="w-full h-full object-cover" />
@@ -103,11 +109,50 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             </div>
           </div>
           {isOwner && (
-            <button onClick={onEditAvatar} className="absolute bottom-0 right-0 rounded-full bg-blue-500 p-2 text-white hover:bg-blue-600 transition shadow-md">
+            <button onClick={onEditAvatar} className="absolute bottom-0 right-0 rounded-full bg-blue-500 p-2 text-white hover:bg-blue-600 transition shadow-md z-10">
               <Edit2 className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
+
+        {/* ==================== EXPANDED AVATAR MODAL ==================== */}
+        {createPortal(
+          <AnimatePresence>
+            {isAvatarExpanded && avatarUrl && (
+              <div className="fixed inset-0 z-[200000] flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setIsAvatarExpanded(false)}
+                  className="absolute inset-0 bg-black/90 backdrop-blur-sm cursor-pointer"
+                  aria-label="Close avatar view"
+                />
+                
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                  transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                  className="relative max-w-2xl w-full max-h-[85vh] flex items-center justify-center pointer-events-none z-10"
+                >
+                  <button 
+                    onClick={() => setIsAvatarExpanded(false)}
+                    className="absolute -top-12 right-0 md:-right-12 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition pointer-events-auto"
+                  >
+                    <X className="h-6 w-6" />
+                  </button>
+                  <img 
+                    src={avatarUrl} 
+                    alt="Enlarged Profile" 
+                    className="rounded-full md:rounded-2xl w-full h-auto object-contain max-h-[80vh] shadow-2xl ring-1 ring-white/10 pointer-events-auto"
+                  />
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
 
         {/* Right Side: Primary Info Cluster Blocks */}
         <div className="flex-1 text-center md:text-left space-y-1.5 w-full">

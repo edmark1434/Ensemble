@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
+import useGlobalState from "@/lib/global_state";
 import { JobRichText } from "../../job_components/JobRichText";
 
 import { sampleIncomingProposals, sampleSentProposals } from "../proposals_datasets";
@@ -34,6 +35,7 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 export const ProposalsViewDetailsAsApplicant: React.FC = () => {
   const { proposalId, contractId } = useParams<{ proposalId: string, contractId?: string }>();
   const navigate = useNavigate();
+  const theme = useGlobalState((state) => state.theme);
   const { pathname } = useLocation();
   const { fetchProposalById, withdrawProposal, acceptJobOffer, rejectContract, loading } = useJobs();
 
@@ -328,8 +330,8 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
           squareSize={48}
           direction="diagonal"
           speed={0.4}
-          borderColor="rgba(255, 255, 255, 0.05)"
-          hoverFillColor="rgba(59, 130, 246, 0.15)"
+          borderColor={theme === 'dark' ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.06)"}
+          hoverFillColor={theme === 'dark' ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
           hoverTrailAmount={3}
         />
       </div>
@@ -844,14 +846,14 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                   <div className="bg-white dark:bg-white/5 shadow-sm dark:shadow-none rounded-xl border border-gray-100 dark:border-white/5 overflow-hidden">
                     {proposal.milestones.length > 0 ? (
                       <table className="w-full text-left">
-                        <thead className="border-b border-gray-200 dark:border-white/10 bg-black/20">
+                        <thead className="border-b border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-black/20">
                           <tr>
                             <th className="px-4 py-2 text-[10px] font-semibold text-gray-500 dark:text-zinc-400 uppercase">Phase</th>
                             <th className="px-4 py-2 text-[10px] font-semibold text-gray-500 dark:text-zinc-400 uppercase text-right">Revisions</th>
                             <th className="px-4 py-2 text-[10px] font-semibold text-gray-500 dark:text-zinc-400 uppercase text-right">Hours</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-white/5">
+                        <tbody className="divide-y divide-gray-100 dark:divide-white/5">
                           {proposal.milestones.map((m, i) => (
                             <tr key={i} className="hover:bg-white dark:bg-white/5 shadow-sm dark:shadow-none transition-colors">
                               <td className="px-4 py-2 text-xs text-gray-600 dark:text-zinc-300 font-medium">{m.name}</td>
@@ -860,7 +862,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                             </tr>
                           ))}
                         </tbody>
-                        <tfoot className="border-t border-gray-200 dark:border-white/10 bg-black/20">
+                        <tfoot className="border-t border-gray-200 dark:border-white/10 bg-gray-200 dark:bg-black/20">
                           <tr>
                             <td className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-white" colSpan={3}>
                               Agreed Bid Amount: <span className="text-emerald-400">{proposal.bidAmount.toLocaleString()}</span>
@@ -877,9 +879,9 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 {/* IV. Agreed TOS */}
                 <div className="space-y-2">
                   <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">IV. Agreed Terms of Service (TOS)</h4>
-                  <div className="bg-zinc-950 p-4 rounded-xl border border-gray-100 dark:border-white/5 space-y-2">
+                  <div className="bg-gray-50 dark:bg-zinc-950 p-4 rounded-xl border border-gray-200 dark:border-white/5 space-y-2">
                     <h5 className="text-xs font-bold text-gray-900 dark:text-white">{proposal.tosTitle}</h5>
-                    <p className="text-[11px] text-gray-500 dark:text-zinc-400 leading-relaxed font-mono whitespace-pre-wrap">{proposal.tosContent}</p>
+                    <p className="text-[11px] text-gray-600 dark:text-zinc-400 leading-relaxed font-mono whitespace-pre-wrap">{proposal.tosContent}</p>
                   </div>
                 </div>
               </div>

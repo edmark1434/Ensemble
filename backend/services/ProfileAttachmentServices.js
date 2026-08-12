@@ -1,5 +1,6 @@
 const {
   getProfileAttachmentsRepository,
+  getOwnedFinalizedFileRepository,
   createProfileAttachmentRepository,
   deleteProfileAttachmentRepository,
 } = require('../repositories/ProfileAttachmentRepositories');
@@ -20,18 +21,16 @@ function cleanText(value, maxLength, field) {
 }
 
 function validateFile(file) {
-  if (!file || typeof file !== 'object') {
-    throw new ProfileAttachmentError('File metadata is required');
-  }
+  if (!file) throw new ProfileAttachmentError('Verified file is required');
   const size = Number(file.size_bytes);
   if (file.mime_type !== 'application/pdf') {
     throw new ProfileAttachmentError('CV or resume must be a PDF file');
   }
-  if (!Number.isInteger(size) || size <= 0 || size > 5 * 1024 * 1024) {
-    throw new ProfileAttachmentError('PDF size must be between 1 byte and 5 MB');
+  if (!Number.isInteger(size) || size <= 0 || size > 25 * 1024 * 1024) {
+    throw new ProfileAttachmentError('PDF size must be between 1 byte and 25 MB');
   }
   const path = String(file.path || '').trim();
-  if (!path.startsWith('profile/') || path.includes('..')) {
+  if (!path.startsWith('documents/') || path.includes('..')) {
     throw new ProfileAttachmentError('Invalid profile attachment path');
   }
   return {
@@ -39,6 +38,7 @@ function validateFile(file) {
     path,
     mime_type: file.mime_type,
     size_bytes: size,
+    file_id: file.file_id,
   };
 }
 
@@ -61,7 +61,9 @@ async function createProfileAttachmentService(accountId, payload) {
   let file = null;
 
   if (kind === 'file') {
-    file = validateFile(payload.file);
+    const fileId = String(payload.file_id || '').trim();
+    if (!/^[0-9a-f-]{36}$/i.test(fileId)) throw new ProfileAttachmentError('Verified file is required');
+    file = validateFile(await getOwnedFinalizedFileRepository(accountId, fileId));
   } else {
     try {
       const parsed = new URL(String(payload.external_url || '').trim());

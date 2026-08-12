@@ -35,6 +35,7 @@ import api from "@/lib/axios";
 
 export const ProposalsViewDetailsAsAuthor: React.FC = () => {
   const { user } = useGlobalState();
+  const theme = useGlobalState((state) => state.theme);
   const { proposalId } = useParams<{ proposalId: string }>();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -315,8 +316,8 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
           squareSize={48}
           direction="diagonal"
           speed={0.4}
-          borderColor="rgba(255, 255, 255, 0.05)"
-          hoverFillColor="rgba(59, 130, 246, 0.15)"
+          borderColor={theme === 'dark' ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.06)"}
+          hoverFillColor={theme === 'dark' ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
           hoverTrailAmount={3}
         />
       </div>

@@ -59,13 +59,13 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
                 }
 
                 const statusBadgeColor = 
-                    computedStatus === 'Completed' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
-                    computedStatus === 'Done' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                    computedStatus === 'Ongoing' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                    'bg-zinc-500/10 text-gray-500 dark:text-zinc-400 border-zinc-500/20';
+                    computedStatus === 'Completed' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20' :
+                    computedStatus === 'Done' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' :
+                    computedStatus === 'Ongoing' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' :
+                    'bg-zinc-500/10 text-gray-600 dark:text-zinc-400 border-zinc-500/20';
 
                 return (
-                <div key={task.contract_id} className={`bg-white dark:bg-white/5 shadow-sm dark:shadow-none transition border rounded-xl p-4 sm:p-6 ${isArchivedTab ? 'opacity-60 border-gray-100 dark:border-white/5 hover:opacity-100 hover:bg-gray-100 dark:bg-white/10' : 'hover:bg-gray-100 dark:bg-white/10 border-gray-200 dark:border-white/10'}`}>
+                <div key={task.contract_id} className={`bg-white dark:bg-white/5 shadow-sm dark:shadow-none transition border rounded-xl p-4 sm:p-6 ${isArchivedTab ? 'opacity-60 border-gray-100 dark:border-white/5 hover:opacity-100 hover:bg-gray-50 dark:hover:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/10 border-gray-200 dark:border-white/10'}`}>
                     <div className="flex flex-col sm:flex-row gap-5 w-full">
                         {task.job_banner && (
                             <div className="w-full sm:w-48 h-32 sm:h-auto rounded-lg overflow-hidden shrink-0 border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#080a12]/50 flex items-center justify-center">
@@ -84,7 +84,7 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
                                     <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded border ${statusBadgeColor}`}>
                                         {computedStatus}
                                     </span>
-                                    <span className="text-[10px] uppercase font-bold px-2 py-1 rounded border bg-zinc-500/10 text-gray-500 dark:text-zinc-400 border-zinc-500/20">
+                                    <span className="text-[10px] uppercase font-bold px-2 py-1 rounded border bg-zinc-500/10 text-gray-600 dark:text-zinc-400 border-zinc-500/20">
                                         Job
                                     </span>
                                 </div>
@@ -120,11 +120,11 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
                             </div>
                             
                             <div className="flex items-center gap-3 mb-4 w-full max-w-sm">
-                                <div className="w-full h-1.5 bg-gray-100 dark:bg-white/10 rounded-full flex overflow-hidden">
+                                <div className="w-full h-1.5 bg-gray-200 dark:bg-white/10 rounded-full flex overflow-hidden">
                                     {task.milestones?.map((m: any, idx: number) => (
                                         <div 
                                             key={m.id} 
-                                            className={`h-full flex-1 ${idx !== 0 ? 'border-l border-[#0d0f1a]' : ''} ${m.status === 'completed' || m.status === 'approved' ? 'bg-emerald-500' : 'bg-transparent'}`}
+                                            className={`h-full flex-1 ${idx !== 0 ? 'border-l border-white dark:border-[#0d0f1a]' : ''} ${m.status === 'completed' || m.status === 'approved' ? 'bg-emerald-500' : 'bg-transparent'}`}
                                         />
                                     ))}
                                 </div>

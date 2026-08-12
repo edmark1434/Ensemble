@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
+import useGlobalState from "@/lib/global_state";
 
 // Sub-components & Popups
 import JobCreateHeader from "../job_components/job_creation_components/job_create_header";
@@ -14,6 +15,7 @@ import PopupConfirmReturn from "../job_components/job_popups/popup_confirm_retur
 
 const JobCreatePostPage: React.FC = () => {
   const navigate = useNavigate();
+  const theme = useGlobalState((state) => state.theme);
   const [currentSlide, setCurrentSlide] = useState<number>(1);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
@@ -105,9 +107,9 @@ const JobCreatePostPage: React.FC = () => {
     if (skills.length < 3) {
       stepErrors.skills = `At least 3 skills are required. You currently have ${skills.length}.`;
     }
-    if (!minBudget) stepErrors.minBudget = "Minimum budget is required.";
-    if (!maxBudget) stepErrors.maxBudget = "Maximum budget is required.";
-    if (minBudget && maxBudget && rawMaxBudget < rawMinBudget) {
+    if (!minBudget || rawMinBudget <= 0) stepErrors.minBudget = "Minimum budget must be greater than 0.";
+    if (!maxBudget || rawMaxBudget <= 0) stepErrors.maxBudget = "Maximum budget must be greater than 0.";
+    if (rawMinBudget > 0 && rawMaxBudget > 0 && rawMaxBudget < rawMinBudget) {
       stepErrors.maxBudget = "Maximum budget value cannot be lower than the minimum budget.";
     }
     if (!minTimeline) stepErrors.minTimeline = "Min timeline required.";
@@ -174,8 +176,8 @@ const JobCreatePostPage: React.FC = () => {
           squareSize={48}
           direction="diagonal"
           speed={0.4}
-          borderColor="rgba(255, 255, 255, 0.05)"
-          hoverFillColor="rgba(59, 130, 246, 0.15)"
+          borderColor={theme === 'dark' ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.06)"}
+          hoverFillColor={theme === 'dark' ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
           hoverTrailAmount={3}
         />
       </div>

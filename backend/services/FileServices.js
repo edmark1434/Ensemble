@@ -17,7 +17,7 @@ dotenv.config();
 // Read from environment variables with defaults
 const ALLOWED_FOLDERS = process.env.UPLOAD_ALLOWED_FOLDERS 
     ? process.env.UPLOAD_ALLOWED_FOLDERS.split(',').map(f => f.trim())
-    : ['profile', 'documents', 'assets', 'forum', 'jobs', 'chat-attachments', 'forum-discussions', 'forum-group', 'forum-covers'];
+    : ['profile', 'documents', 'assets', 'forum', 'gallery', 'jobs', 'jobs', 'chat-attachments', 'forum-discussions', 'forum-group', 'forum-covers'];
 
 const ALLOWED_CONTENT_TYPES = (process.env.UPLOAD_ALLOWED_TYPES
     ? process.env.UPLOAD_ALLOWED_TYPES.split(',').map(t => t.trim())
@@ -43,6 +43,7 @@ const MB = 1024 * 1024;
 const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/avif'];
 const UPLOAD_POLICIES = {
     profile: { types: IMAGE_TYPES, imageLimit: 5 * MB },
+    gallery: { types: [...IMAGE_TYPES, 'video/mp4'], imageLimit: 20 * MB, videoLimit: 25 * MB },
     forum: { types: IMAGE_TYPES, imageLimit: 8 * MB },
     'forum-discussions': { types: [...IMAGE_TYPES, 'application/pdf'], imageLimit: 8 * MB, pdfLimit: 15 * MB },
     'forum-group': { types: IMAGE_TYPES, imageLimit: 8 * MB },
@@ -114,7 +115,6 @@ async function generateStandaloneUploadUrl(folder, filename, contentType, cacheC
             /^\s+|\s+$/, // Leading/trailing whitespace
             /[\x00-\x1f]/, // Control characters
             /\/\*/, // SQL comment
-            /--/, // SQL comment
             /\%/, // URL encoding
         ];
 

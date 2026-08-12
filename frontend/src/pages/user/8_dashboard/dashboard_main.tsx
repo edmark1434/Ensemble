@@ -283,10 +283,10 @@ const DashboardMain = () => {
                                             if (computedStatus === 'Active') computedStatus = 'Ongoing';
                                             if (computedStatus === 'Waiting' || computedStatus === 'Pending Signature') computedStatus = 'Waiting';
                                             const statusBadgeColor = 
-                                                computedStatus === 'Completed' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
-                                                computedStatus === 'Done' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                                computedStatus === 'Ongoing' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                                'bg-zinc-500/10 text-gray-500 dark:text-zinc-400 border-zinc-500/20';
+                                                computedStatus === 'Completed' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20' :
+                                                computedStatus === 'Done' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' :
+                                                computedStatus === 'Ongoing' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' :
+                                                'bg-zinc-500/10 text-gray-600 dark:text-zinc-400 border-zinc-500/20';
 
                                             return (
                                                 <div 
@@ -326,7 +326,7 @@ const DashboardMain = () => {
                                                         <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${statusBadgeColor}`}>
                                                             {computedStatus}
                                                         </span>
-                                                        <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded border bg-zinc-500/10 text-gray-500 dark:text-zinc-400 border-zinc-500/20">
+                                                        <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded border bg-zinc-500/10 text-gray-600 dark:text-zinc-400 border-zinc-500/20">
                                                             Job
                                                         </span>
                                                     </div>
@@ -349,10 +349,10 @@ const DashboardMain = () => {
                                             if (computedStatus === 'Active') computedStatus = 'Ongoing';
                                             if (computedStatus === 'Waiting' || computedStatus === 'Pending Signature') computedStatus = 'Waiting';
                                             const statusBadgeColor = 
-                                                computedStatus === 'Completed' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
-                                                computedStatus === 'Done' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                                computedStatus === 'Ongoing' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                                'bg-zinc-500/10 text-gray-500 dark:text-zinc-400 border-zinc-500/20';
+                                                computedStatus === 'Completed' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20' :
+                                                computedStatus === 'Done' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' :
+                                                computedStatus === 'Ongoing' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' :
+                                                'bg-zinc-500/10 text-gray-600 dark:text-zinc-400 border-zinc-500/20';
 
                                             return (
                                                 <div 

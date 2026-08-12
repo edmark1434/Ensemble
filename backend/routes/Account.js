@@ -33,6 +33,13 @@ const {
     createProfileAttachmentController,
     deleteProfileAttachmentController
 } = require('../controllers/ProfileControllers');
+const {
+    getUserGalleries,
+    createGalleryItem,
+    deleteGalleryItem,
+    updateGalleryItem
+} = require('../controllers/GalleryControllers');
+const { adjustAccountCredits } = require('../repositories/AdminUserTeamRepositories');
 
 router.get('/recent-avatars', getRecentUserAvatarsController);
 router.put('/profile/tagline-description', [checkSession, requireAuth], updateTaglineAndDescriptionController);
@@ -48,6 +55,10 @@ router.get('/:accountId/follow-status', [checkSession], checkIsFollowingControll
 router.get('/profile/:accountId/attachments', [checkSession, requireAuth], getProfileAttachmentsController);
 router.post('/profile/attachments', [checkSession, requireAuth], createProfileAttachmentController);
 router.delete('/profile/attachments/:attachmentId', [checkSession, requireAuth], deleteProfileAttachmentController);
+router.get('/:accountId/galleries', [checkSession, requireAuth], getUserGalleries);
+router.post('/galleries', [checkSession, requireAuth], createGalleryItem);
+router.delete('/galleries/:galleryId', [checkSession, requireAuth], deleteGalleryItem);
+router.put('/galleries/:galleryId', [checkSession, requireAuth], updateGalleryItem);
 router.get('/profile/:accountId', [checkSession, requireAuth], getProfileByAccountIdController);
 router.get('/links/:accountId', [checkSession, requireAuth], getAccountLinkByAccountIdController);
 router.get('/profile/avatars/:accountId', [checkSession, requireAuth], getProfileAvatarsByAccountIdController);
@@ -61,4 +72,19 @@ router.put('/update-profile-onboarding', [checkSession, requireAuth], updateProf
 router.put('/update-profile-details', [checkSession, requireAuth], updateProfileDetailsController);
 router.put('/setting-account-info', [checkSession, requireAuth], settingAccountInfoUpdateController);
 router.put('/profile/badges/curate', [checkSession, requireAuth], curateBadgesController);
+
+router.post('/dev/add-credits', [checkSession, requireAuth], async (req, res) => {
+    try {
+        const accountId = req.user.account_id;
+        const { amount } = req.body;
+        if (!amount || amount <= 0) return res.status(400).json({ error: "Invalid amount" });
+        
+        await adjustAccountCredits(accountId, amount, "Dev Mode Injection", "00000000-0000-0000-0000-000000000000");
+        res.json({ success: true, message: `Successfully added ${amount} credits to your account.` });
+    } catch (err) {
+        console.error("Dev add credits error:", err);
+        res.status(500).json({ error: err.message || "Failed to add credits." });
+    }
+});
+
 module.exports = router;

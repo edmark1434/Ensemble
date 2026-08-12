@@ -71,29 +71,29 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-md bg-[#0b0e17] border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-md bg-white dark:bg-[#0b0e17] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-white/10">
-          <h2 className="text-lg font-bold text-white capitalize">{type}</h2>
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-white/10">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white capitalize">{type}</h2>
           <button 
             onClick={onClose}
-            className="p-1 text-zinc-400 hover:text-white rounded-lg hover:bg-white/5 transition"
+            className="p-1 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 transition"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Search */}
-        <div className="p-4 border-b border-white/5">
+        <div className="p-4 border-b border-gray-200 dark:border-white/5">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-zinc-500" />
             <input
               type="text"
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#151a2a] border border-white/5 rounded-xl py-2 pl-10 pr-4 text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition"
+              className="w-full bg-gray-50 dark:bg-[#151a2a] border border-gray-200 dark:border-white/5 rounded-xl py-2 pl-10 pr-4 text-sm text-gray-900 dark:text-zinc-200 placeholder:text-gray-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition"
             />
           </div>
         </div>
@@ -106,7 +106,7 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({
             </div>
           ) : filteredUsers.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-center px-4">
-              <p className="text-sm font-medium text-zinc-400">
+              <p className="text-sm font-medium text-gray-500 dark:text-zinc-400">
                 {searchQuery ? "No matches found." : `No ${type} yet.`}
               </p>
             </div>
@@ -121,9 +121,9 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({
                       onClose();
                       navigate(`/profile/${u.account_id}`);
                     }}
-                    className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition text-left group"
+                    className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-white/5 transition text-left group"
                   >
-                    <div className="h-10 w-10 rounded-full bg-zinc-800 flex-shrink-0 overflow-hidden border border-white/10 flex items-center justify-center text-zinc-400 font-bold">
+                    <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-zinc-800 flex-shrink-0 overflow-hidden border border-gray-300 dark:border-white/10 flex items-center justify-center text-gray-500 dark:text-zinc-400 font-bold">
                       {avatar ? (
                         <img src={avatar} alt={u.display_name} className="h-full w-full object-cover" />
                       ) : (
@@ -131,10 +131,10 @@ export const FollowersModal: React.FC<FollowersModalProps> = ({
                       )}
                     </div>
                     <div className="flex-1 overflow-hidden">
-                      <div className="text-sm font-bold text-zinc-200 group-hover:text-white truncate">
+                      <div className="text-sm font-bold text-gray-900 dark:text-zinc-200 group-hover:text-blue-600 dark:group-hover:text-white truncate">
                         {u.display_name}
                       </div>
-                      <div className="text-xs font-medium text-zinc-500 truncate">
+                      <div className="text-xs font-medium text-gray-500 dark:text-zinc-500 truncate">
                         @{u.handle}
                       </div>
                     </div>
