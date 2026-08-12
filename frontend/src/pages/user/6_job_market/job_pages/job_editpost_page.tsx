@@ -350,7 +350,7 @@ export const JobEditPostPage: React.FC = () => {
           squareSize={48}
           direction="diagonal"
           speed={0.4}
-          borderColor="rgba(255, 255, 255, 0.05)"
+          borderColor="rgba(150, 150, 150, 0.15)"
           hoverFillColor="rgba(59, 130, 246, 0.15)"
           hoverTrailAmount={3}
         />
@@ -413,59 +413,92 @@ export const JobEditPostPage: React.FC = () => {
           </div>
 
           {/* Read-Only Explanation Alert */}
-          <div className="flex items-start gap-2.5 rounded-xl border border-blue-500/20 bg-blue-500/5 p-3.5 mb-2 shadow-inner mt-1">
-            <div className="mt-0.5 rounded-full bg-blue-500/20 p-1 text-blue-400 shrink-0 shadow-[0_0_10px_rgba(59,130,246,0.3)]">
+          <div className="flex items-start gap-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02] p-3.5 mb-2 mt-1">
+            <div className="mt-0.5 rounded-full bg-gray-200 dark:bg-white/10 p-1 text-gray-600 dark:text-zinc-400 shrink-0">
               <Info className="h-3.5 w-3.5" />
             </div>
             <div>
-              <p className="text-xs font-bold text-blue-700 dark:text-blue-300">Why are these locked?</p>
-              <p className="text-[11px] text-blue-600 dark:text-blue-200/70 mt-1 leading-relaxed">
+              <p className="text-xs font-bold text-gray-900 dark:text-white">Why are these locked?</p>
+              <p className="text-[11px] text-gray-600 dark:text-zinc-400 mt-1 leading-relaxed">
                 Budget pools and available positions cannot be modified after a job is posted. This prevents disputes and ensures consistency for freelancers who have already submitted or are currently drafting proposals based on your original terms.
               </p>
             </div>
           </div>
 
-          {/* Editable Thumbnail */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between items-center">
-              <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
-                Job Thumbnail Image <span className="text-red-500">*</span>
+          {/* Thumbnail & Category/Difficulty Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-[140px_1fr] gap-5 items-start">
+            {/* Left: Square Image */}
+            <div className="flex flex-col">
+              <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1.5">
+                Job Thumbnail <span className="text-red-500">*</span>
               </label>
-            </div>
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={`relative h-32 w-full rounded-xl border border-dashed flex items-center justify-center p-3 cursor-pointer transition-all duration-200 group overflow-hidden ${
-                isDragging ? "border-blue-500 bg-blue-500/10" : errors.thumbnail ? "border-red-500 bg-red-500/5" : previewUrl ? "border-white/20 bg-zinc-900" : "border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:border-white/20"
-              }`}
-            >
-              <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`relative w-[140px] h-[140px] shrink-0 rounded-xl border border-dashed flex items-center justify-center p-3 cursor-pointer transition-all duration-200 group overflow-hidden ${
+                  isDragging ? "border-blue-500 bg-blue-500/10" : errors.thumbnail ? "border-red-500 bg-red-500/5" : previewUrl ? "border-white/20 bg-zinc-900" : "border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:border-white/20"
+                }`}
+              >
+                <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
               {previewUrl ? (
                 <>
                   <img src={previewUrl} alt="Thumbnail Preview" className="absolute inset-0 w-full h-full object-cover opacity-70 transition-all duration-300 group-hover:blur-sm group-hover:opacity-40" />
-                  <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl">
                     <div className="h-8 w-8 rounded-full bg-black/60 flex items-center justify-center mb-1">
-                      <ImageIcon className="h-4 w-4 text-gray-900 dark:text-white" />
+                      <ImageIcon className="h-4 w-4 text-white" />
                     </div>
-                    <span className="text-[10px] font-bold text-gray-900 dark:text-white uppercase tracking-wider">Change Image</span>
+                    <span className="text-[10px] font-bold text-white uppercase tracking-wider">Change Image</span>
                   </div>
                 </>
               ) : (
                 <div className="text-center space-y-1 pointer-events-none">
-                  <ImageIcon className="h-4 w-4 mx-auto text-gray-500 dark:text-zinc-400" />
-                  <div className="text-xs text-gray-500 dark:text-zinc-400"><span className="font-bold text-blue-400">Click to browse file</span> or drop asset here</div>
+                  <ImageIcon className="h-5 w-5 mx-auto text-gray-500 dark:text-zinc-400" />
+                  <div className="text-[10px] text-gray-600 dark:text-zinc-300 leading-tight">
+                    <span className="font-bold text-blue-500 dark:text-blue-400 block mb-0.5">Browse</span>
+                    or drop
+                  </div>
                 </div>
               )}
+              </div>
+              {errors.thumbnail && <p className="text-[11px] text-red-400 mt-1">{errors.thumbnail}</p>}
             </div>
-            {errors.thumbnail && <p className="text-[11px] text-red-400">{errors.thumbnail}</p>}
+
+            {/* Right: Stacked Dropdowns */}
+            <div className="flex flex-col gap-4 pt-[2px]">
+              <CustomDropdown
+                label="Job Category"
+                value={category}
+                options={categories}
+                placeholder="Select Category"
+                error={errors.category}
+                onSelect={(val) => {
+                  setCategory(val);
+                  setIsDirty(true);
+                  setErrors((prev) => { const { category: _, ...r } = prev; return r; });
+                }}
+              />
+
+              <CustomDropdown
+                label="Job Difficulty"
+                value={difficulty}
+                options={difficulties}
+                placeholder="Select Level"
+                error={errors.difficulty}
+                onSelect={(val) => {
+                  setDifficulty(val as "Beginner" | "Intermediate" | "Expert");
+                  setIsDirty(true);
+                  setErrors((prev) => { const { difficulty: _, ...r } = prev; return r; });
+                }}
+              />
+            </div>
           </div>
 
           {/* Job Title */}
           <div className="space-y-1.5">
             <div className="flex justify-between items-center">
-              <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
+              <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1">
                 Job Post Title <span className="text-red-500">*</span>
               </label>
               <span className="text-[10px] font-mono text-gray-500 dark:text-zinc-500">{title.length}/300</span>
@@ -490,7 +523,7 @@ export const JobEditPostPage: React.FC = () => {
           {/* Job Description */}
           <div className="space-y-1.5">
             <div className="flex justify-between items-end mb-1">
-              <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block mb-1">
+              <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1">
                 Job Post Description <span className="text-red-500">*</span>
               </label>
               <div className="flex items-center gap-1">
@@ -541,39 +574,12 @@ export const JobEditPostPage: React.FC = () => {
             {errors.description && <p className="text-[11px] text-red-400">{errors.description}</p>}
           </div>
 
-          {/* Category & Difficulty Dropdowns */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <CustomDropdown
-              label="Job Category"
-              value={category}
-              options={categories}
-              placeholder="Select Category"
-              error={errors.category}
-              onSelect={(val) => {
-                setCategory(val);
-                setIsDirty(true);
-                setErrors((prev) => { const { category: _, ...r } = prev; return r; });
-              }}
-            />
 
-            <CustomDropdown
-              label="Job Difficulty"
-              value={difficulty}
-              options={difficulties}
-              placeholder="Select Level"
-              error={errors.difficulty}
-              onSelect={(val) => {
-                setDifficulty(val as "Beginner" | "Intermediate" | "Expert");
-                setIsDirty(true);
-                setErrors((prev) => { const { difficulty: _, ...r } = prev; return r; });
-              }}
-            />
-          </div>
 
           {/* Required Skills Management */}
           <div className="space-y-1.5 pt-2">
-            <div className="flex justify-between items-center">
-              <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">
                 Required Skills <span className="text-red-500">*</span>
               </label>
               <span className="text-[10px] text-gray-500 dark:text-zinc-500">{skills.length}/6 Added</span>
@@ -671,6 +677,12 @@ export const JobEditPostPage: React.FC = () => {
         isOpen={isDeleteOpen}
         onConfirm={handleDelete}
         onCancel={() => setIsDeleteOpen(false)}
+        title="Delete Job Post"
+        subtitle="Are you sure you want to delete this?"
+        description="This job post will be permanently removed from the marketplace. This action cannot be undone."
+        confirmText="Yes, Delete Job"
+        cancelText="Cancel"
+        variant="destructive"
       />
     </div>
   );

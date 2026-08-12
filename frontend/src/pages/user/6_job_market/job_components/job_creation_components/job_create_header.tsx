@@ -44,9 +44,9 @@ export const JobCreateHeader: React.FC<JobCreateHeaderProps> = ({
                 <div
                   className={`h-9 w-9 rounded-full flex items-center justify-center border text-xs font-bold transition-all duration-300 shadow-md ${
                     isCompleted
-                      ? "bg-green-500 border-green-500 text-[#080a12]"
+                      ? "bg-green-500 border-green-500 text-white"
                       : isActive
-                      ? "bg-blue-500/20 border-blue-500 text-blue-400 ring-4 ring-blue-500/10"
+                      ? "bg-blue-500/20 border-blue-500 text-blue-600 dark:text-blue-400 ring-4 ring-blue-500/10"
                       : "bg-white dark:bg-[#0d0f1a] border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-500"
                   }`}
                 >
@@ -54,7 +54,7 @@ export const JobCreateHeader: React.FC<JobCreateHeaderProps> = ({
                 </div>
                 <span
                   className={`text-[10px] font-bold uppercase tracking-wider mt-2 transition-colors absolute -bottom-5 whitespace-nowrap ${
-                    isActive ? "text-blue-400" : isCompleted ? "text-green-400" : "text-gray-500 dark:text-zinc-500"
+                    isActive ? "text-blue-600 dark:text-blue-400" : isCompleted ? "text-green-600 dark:text-green-400" : "text-gray-500 dark:text-zinc-500"
                   }`}
                 >
                   {step.label}

@@ -83,14 +83,14 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
     <div className="space-y-5 text-left">
       <div>
         <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-0.5">Budget Allocation & Requirements</h2>
-        <p className="text-xs text-gray-500 dark:text-zinc-400">Establish operational metric scopes, timelines and targeted skill sets.</p>
+        <p className="text-xs text-gray-600 dark:text-zinc-300">Establish operational metric scopes, timelines and targeted skill sets.</p>
       </div>
 
       {/* Skills Tags */}
       <div className="space-y-1.5">
         <div className="flex justify-between items-center">
-          <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">Job Required Skills <span className="text-red-500">*</span></label>
-          <span className="text-[10px] text-gray-500 dark:text-zinc-500">{skills.length}/6 Added</span>
+          <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider">Job Required Skills <span className="text-red-500">*</span></label>
+          <span className="text-[10px] text-gray-600 dark:text-zinc-400">{skills.length}/6 Added</span>
         </div>
         <form onSubmit={handleAddSkill} className="flex gap-2">
           <input type="text" placeholder="e.g., Color Grading, Audio Sync" value={skillInput} onChange={e => setSkillInput(e.target.value)} className="flex-1 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3.5 py-2.5 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500/50 transition-all" />
@@ -99,8 +99,8 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
         {errors.skills && <p className="text-[11px] text-red-400">{errors.skills}</p>}
         <div className="flex flex-wrap gap-1.5 pt-1">
           {skills.map(s => (
-            <span key={s} className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400">
-              {s} <X className="h-3 w-3 cursor-pointer hover:text-gray-900 dark:text-white" onClick={() => handleRemoveSkill(s)} />
+            <span key={s} className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/20 text-gray-700 dark:text-zinc-300">
+              {s} <X className="h-3 w-3 cursor-pointer hover:text-gray-900 dark:text-white transition-colors" onClick={() => handleRemoveSkill(s)} />
             </span>
           ))}
         </div>
@@ -108,7 +108,7 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
 
       {/* Fixed Currency Icon Budget Inputs */}
       <div className="space-y-1.5">
-        <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">Budget Estimate Range <span className="text-red-500">*</span></label>
+        <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1.5">Budget Estimate Range <span className="text-red-500">*</span></label>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="relative">
             <div className="absolute left-3.5 top-3 text-yellow-500 pointer-events-none">
@@ -129,7 +129,7 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
 
       {/* Timelines Range */}
       <div className="space-y-1.5">
-        <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">Project Timeline Range (Days) <span className="text-red-500">*</span></label>
+        <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1.5">Project Timeline Range (Days) <span className="text-red-500">*</span></label>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
             <input type="number" placeholder="Min Days" value={minTimeline} onChange={e => { setMinTimeline(e.target.value); setErrors(prev => { const {minTimeline, ...r} = prev; return r; }); }} className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3.5 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${errors.minTimeline ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"}`} />
@@ -145,8 +145,8 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
       {/* Positions Count Block */}
       <div className="p-3.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] flex items-center justify-between">
         <div>
-          <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block">Positions Needed</label>
-          <span className="text-[10px] text-gray-500 dark:text-zinc-500">Number of open assignment slots.</span>
+          <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">Positions Needed</label>
+          <span className="text-[10px] text-gray-600 dark:text-zinc-400">Number of open assignment slots.</span>
         </div>
         <div className="flex items-center gap-2 border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-[#080a12] p-1">
           <button type="button" onClick={() => setPositions(prev => Math.max(1, prev - 1))} className="h-7 w-7 flex items-center justify-center rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-900 dark:text-white focus:outline-none"><Minus className="h-3 w-3" /></button>
