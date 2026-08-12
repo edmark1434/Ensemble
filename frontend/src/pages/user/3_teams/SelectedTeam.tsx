@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import axios from "axios";
 import {
   ArrowLeft,
   Bell,
@@ -21,6 +20,7 @@ import {
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "@/lib/axios";
+import { uploadFileWithIntent } from "@/lib/uploadFile";
 import UserHeader from "@/components/nav/user_header";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import JoinRequestsModal from "./team_modals/JoinRequestsModal";
@@ -109,8 +109,8 @@ export default function SelectedTeam() {
   const [codeCopied, setCodeCopied] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<Member | null>(null);
 
-  const loadTeam = useCallback(async () => {
-    setLoading(true);
+  const loadTeam = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const [teamResponse, membersResponse, reviewsResponse] =
         await Promise.all([
@@ -130,12 +130,12 @@ export default function SelectedTeam() {
       const message = axiosMessage(error, "Unable to load Team");
       showErrorToast(message);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   }, [id]);
 
   useEffect(() => {
-    void loadTeam();
+    void loadTeam(true);
   }, [loadTeam]);
 
   const mutate = async (
@@ -148,7 +148,7 @@ export default function SelectedTeam() {
     try {
       await api.request({ url: `/api/teams/${id}${path}`, method, data: body });
       showSuccessToast("Team updated");
-      await loadTeam();
+      void loadTeam(false);
     } catch (error: unknown) {
       showErrorToast(axiosMessage(error, "Action failed"));
     } finally {
@@ -198,26 +198,8 @@ export default function SelectedTeam() {
   };
 
   const uploadTeamPhoto = async (photo: File) => {
-    const uploadResponse = await api.post("/api/files/upload-url", {
-      folder: "profile",
-      filename: photo.name,
-      contentType: photo.type,
-    });
-
-    await axios.put(uploadResponse.data.uploadUrl, photo, {
-      headers: {
-        "Content-Type": photo.type,
-      },
-    });
-
-    const fileResponse = await api.post("/api/files/register", {
-      name: photo.name,
-      path: uploadResponse.data.key,
-      mimeType: photo.type,
-      sizeBytes: photo.size,
-    });
-
-    return fileResponse.data.fileId as string;
+    const uploaded = await uploadFileWithIntent(photo, "profile");
+    return uploaded.fileId;
   };
 
   const updateTeam = async (values: TeamFormValues) => {
@@ -230,7 +212,7 @@ export default function SelectedTeam() {
         ? await uploadTeamPhoto(values.photo)
         : undefined;
 
-      await api.patch(`/api/teams/${id}`, {
+      const response = await api.patch(`/api/teams/${id}`, {
         name: values.name,
         handle: values.handle,
         tagline: values.tagline,
@@ -240,7 +222,15 @@ export default function SelectedTeam() {
 
       showSuccessToast("Team updated");
       setShowEdit(false);
-      await loadTeam();
+      setTeam((current) => current ? {
+        ...current,
+        ...response.data.data,
+        display_name: values.name,
+        handle: values.handle,
+        tagline: values.tagline,
+        description: values.description,
+      } : current);
+      void loadTeam(false);
     } catch (error: unknown) {
       showErrorToast(axiosMessage(error, "Unable to update Team"));
     } finally {

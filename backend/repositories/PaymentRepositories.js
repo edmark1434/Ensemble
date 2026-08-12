@@ -317,7 +317,6 @@ async function getCustomerIdByUserId(userId) {
 }
 
 async function createPaymentMethodForUser(payload){
-    console.log("Creating payment method for user with payload:", payload);
     try{
         const query = `
             INSERT INTO payment_methods(

@@ -3,6 +3,7 @@ import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import UserHeader from "@/components/nav/user_header";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
+import { uploadFileWithIntent } from "@/lib/uploadFile";
 import toast from "react-hot-toast";
 
 // Modularized Profile Sub-Components
@@ -198,6 +199,7 @@ export default function Profile() {
 
   const uploadFile = async (file: File): Promise<string> => {
     try {
+      return (await uploadFileWithIntent(file, "profile")).key;
       const response = await api.post("/api/files/upload-url", {
         folder: "profile",
         filename: file.name,

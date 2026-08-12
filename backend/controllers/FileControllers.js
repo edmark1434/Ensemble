@@ -2,8 +2,7 @@
 const {
     getAllProfileFilesServices,
     generateUploadUrl,
-    uploadFileToS3,
-    registerFileService
+    finalizeUploadService
 } = require('../services/FileServices');
 
 async function getAllProfileFilesController(req, res) {
@@ -39,13 +38,13 @@ async function generateUploadUrlController(req, res) {
         }
 
         // 4. Generate upload URL with security
-        const result = await generateUploadUrl(folder, filename, contentType);
+        const result = await generateUploadUrl(userId, folder, filename, contentType);
 
         // 5. Return success with additional info
         res.status(200).json({
             success: true,
             uploadUrl: result.uploadUrl,
-            key: result.key,
+            uploadIntentId: result.uploadIntentId,
             expiresIn: result.expiresIn,
             maxFileSize: result.maxFileSize,
             allowedTypes: result.allowedTypes
@@ -55,7 +54,7 @@ async function generateUploadUrlController(req, res) {
         console.error('Error in generateUploadUrlController:', err);
         
         // Handle specific errors
-        if (err.message.includes('not allowed')) {
+        if (/not allowed|required|too long|invalid characters|does not match/i.test(err.message)) {
             return res.status(400).json({
                 success: false,
                 message: err.message
@@ -69,6 +68,7 @@ async function generateUploadUrlController(req, res) {
     }
 }
 
+/* Removed: accepting a client-supplied upload URL here enabled server-side requests to arbitrary hosts.
 async function uploadFileToS3Controller(req, res) {
     try {
         // 1. Check authentication
@@ -129,29 +129,32 @@ async function uploadFileToS3Controller(req, res) {
             message: 'Failed to upload file'
         });
     }
-}
+} */
 
 async function registerFileController(req, res) {
     try {
         const userId = req.user?.account_id;
         if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
-        const { name, path, mimeType, sizeBytes } = req.body;
-        if (!name || !path) {
-            return res.status(400).json({ success: false, message: 'Missing name or path' });
+        const { uploadIntentId } = req.body;
+        if (!uploadIntentId) {
+            return res.status(400).json({ success: false, message: 'Missing uploadIntentId' });
         }
 
-        const fileId = await registerFileService(name, path, mimeType, sizeBytes);
-        res.status(200).json({ success: true, fileId });
+        const result = await finalizeUploadService(userId, uploadIntentId);
+        res.status(200).json({ success: true, ...result });
     } catch (err) {
         console.error('Error in registerFileController:', err);
-        res.status(500).json({ success: false, message: 'Internal server error' });
+        const statusCode = [400, 404, 409, 410, 422].includes(err.statusCode) ? err.statusCode : 500;
+        res.status(statusCode).json({
+            success: false,
+            message: statusCode === 500 ? 'Failed to finalize upload' : err.message
+        });
     }
 }
 
 module.exports = {
     getAllProfileFilesController,
     generateUploadUrlController,
-    uploadFileToS3Controller,
     registerFileController
 };

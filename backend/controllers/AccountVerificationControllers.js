@@ -97,13 +97,15 @@ async function createBusinessVerificationController(req,res){
 
 async function handleVerificationWebhookStatusUpdated(req, res) {
     try {
-        console.log("Received verification webhook:", req.body);
         const io = getIo();
-        io.emit("verificationWebhook", req.body);
         const {
             session_id: sessionId,
             status,
         } = req.body;
+        if (!sessionId || !status) return res.status(400).json({ success: false, message: 'Invalid verification webhook payload' });
+        const session = await getAccountVerificationSessionBySessionId(sessionId);
+        if (!session?.account_id) return res.status(404).json({ success: false, message: 'Verification session not found' });
+        const accountId = session.account_id;
 
         // Ignore Kyc Expired completely
         if (status === "Kyc Expired") {
@@ -121,7 +123,6 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
             case "In Review": {
                 payload.verification_status = status;
                 if(status === "Approved"){
-                    const session = await getAccountVerificationSessionBySessionId(sessionId);
                     const existingExpiry = session?.expires_at ? new Date(session.expires_at) : null;
                     // Admin approval stores a custom future expiry before asking Didit to approve.
                     // A normal user-completed session has no expiry yet and receives the one-year default.
@@ -132,8 +133,7 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
                         expiresAt.setFullYear(expiresAt.getFullYear() + 1);
                         payload.expires_at = expiresAt;
                     }
-                    console.log("Updating account verification status to verified for account:", session.verification_session_id);
-                    const result = await updateAccountVerifications(req.body.metadata?.account_id, { is_verified: true, verified_at: new Date(),verification_session_id: session?.verification_session_id || null });
+                    const result = await updateAccountVerifications(accountId, { is_verified: true, verified_at: new Date(),verification_session_id: session?.verification_session_id || null });
                 
                     const notification = await createNotification({
                         message: `Your account verification has been approved.`,
@@ -142,7 +142,7 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
                         reference_prefix: "VERIFICATION",
                         reference_path: `${req.body?.decision?.session_url || `${process.env.FRONTEND_URL}/account-verification-status`}`,
                         reference_id: result.verification_id,
-                        account_id: req.body.metadata?.account_id
+                        account_id: accountId
                     });
                     io.to(notification.account_id).emit("notification", notification);
                 }
@@ -177,8 +177,7 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
                     if (verification.extra_fields?.suffix) {
                         verificationDetails.suffix = verification.extra_fields.suffix;
                     }
-                    console.log("Updating user details with verification details:", verificationDetails);
-                    await updateUserDetailsByAccountId(req.body.metadata?.account_id, verificationDetails);
+                    await updateUserDetailsByAccountId(accountId, verificationDetails);
 
                     // TODO:
                     // await saveVerificationDetails(sessionId, verificationDetails);
@@ -188,18 +187,18 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
             }
 
             case "Declined":
-                await updateAccountVerifications(req.body.metadata?.account_id, { is_verified: false, verified_at: null });
+                await updateAccountVerifications(accountId, { is_verified: false, verified_at: null });
                 const notificationDeclined = await createNotification({
                     message: `Your account verification has been declined. Please complete the verification again.`,
                     is_read: false,
                     reference_table: "verifications",
                     reference_prefix: "VERIFICATION",
                     reference_path: `${req.body?.decision?.session_url || `${process.env.FRONTEND_URL}/account-verification-status`}`,
-                    reference_id: req.body.metadata?.account_id,
-                    account_id: req.body.metadata?.account_id
+                    reference_id: accountId,
+                    account_id: accountId
                 });
                 io.to(notificationDeclined.account_id).emit("notification", notificationDeclined);
-                await applyForResubmission(sessionId, req.body.metadata?.account_id);
+                await applyForResubmission(sessionId, accountId);
                 payload.kyc_status = "Resubmitted";
                 payload.verification_status = "Pending";
                 payload.expires_at = null;
@@ -214,8 +213,8 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
                     reference_table: "verifications",
                     reference_prefix: "VERIFICATION",
                     reference_path: `${req.body?.decision?.session_url || `${process.env.FRONTEND_URL}/account-verification-status`}`,
-                    reference_id: req.body.metadata?.account_id,
-                    account_id: req.body.metadata?.account_id
+                    reference_id: accountId,
+                    account_id: accountId
                 });
                 io.to(notificationRejected.account_id).emit("notification", notificationRejected);
                 break;
@@ -225,7 +224,7 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
             case "Awaiting User":
             case "Resubmitted":
                 if(status === "Resubmitted"){
-                    await updateAccountVerifications(req.body.metadata?.account_id, { is_verified: false, verified_at: null });
+                    await updateAccountVerifications(accountId, { is_verified: false, verified_at: null });
                     payload.expires_at = null;
                 }
                 payload.verification_status = "Pending";
@@ -235,8 +234,8 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
                     reference_table: "verifications",
                     reference_prefix: "VERIFICATION",
                     reference_path: `${req.body?.decision?.session_url || `${process.env.FRONTEND_URL}/account-verification-status`}`,
-                    reference_id: req.body.metadata?.account_id,
-                    account_id: req.body.metadata?.account_id
+                    reference_id: accountId,
+                    account_id: accountId
                 });
                 io.to(notificationPending.account_id).emit("notification", notificationPending);
                 break;

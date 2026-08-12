@@ -2,817 +2,1127 @@
 
 ## Objective
 
-Refactor the account onboarding flow so that onboarding data is **not permanently written to the database after every step**.
+Perform a focused security hardening and bug-fix pass on the application based on vulnerabilities and bugs already discovered during the initial pentest, while also inspecting other crucial application areas for related vulnerabilities.
 
-The onboarding flow must temporarily store the user's progress and entered onboarding data in the application's existing **server-side session / Redis session storage** while onboarding is in progress.
+The primary goals are to:
 
-Only when the user successfully completes the **final onboarding step** should the accumulated onboarding data be validated and permanently saved to the appropriate database tables.
+* reduce exposed attack surface
+* prevent unauthorized data exposure
+* add IP-based rate limiting
+* add CSRF protection where applicable
+* prevent sensitive frontend environment leakage
+* eliminate duplicate API requests
+* inspect API responses for excessive or sensitive data exposure
+* identify additional vulnerabilities in critical parts of the system
+* fix only vulnerabilities and bugs directly related to this task
+* avoid unrelated refactors or feature changes
 
-The application must also enforce onboarding for authenticated users whose onboarding has not yet been completed.
+Before making any code changes, produce an initial security assessment containing:
 
-The database source of truth for onboarding completion is:
+1. known vulnerability or bug
+2. affected area
+3. root cause
+4. severity
+5. exploitation or failure scenario
+6. proposed solution
+7. exact files expected to change
+8. verification method
 
-```text
-users.completed_onboarding = 'completed'
-```
-
-If the authenticated user's `completed_onboarding` value is anything other than `completed`, the user must be required to continue or complete onboarding before accessing protected application areas.
-
-The onboarding session must additionally track the user's current onboarding step so that refreshing the browser, closing/reopening the page while the session remains valid, or navigating back to onboarding does not reset the user to the first step.
-
----
-
-# Scope
-
-## Frontend
-
-Primary onboarding directory:
-
-```text
-E:\EnsembleV2\Ensemble\frontend\src\pages\setup_account
-```
-
-Treat the pages/components inside this directory as the existing onboarding flow.
-
-Inspect the directory first and determine:
-
-* all onboarding pages
-* onboarding step order
-* existing forms
-* existing API requests
-* current navigation logic
-* current database-saving behavior
-* existing onboarding guards
-* existing authentication/session handling
-
-Do not assume the number or order of onboarding steps. Derive them from the current implementation.
-
-Modify only onboarding-related frontend code and directly related authentication/navigation code where necessary.
+Do not modify code until the affected execution paths have been traced and the proposed changes are understood.
 
 ---
 
-## Backend
+# Known Findings From Initial Pentest
 
-Trace the APIs currently called by:
+The following issues have already been discovered and must be investigated.
+
+## 1. `/api/recent-avatar` exposes account information to unauthenticated guests
+
+Observed behavior:
 
 ```text
-frontend/src/pages/setup_account
+GET /api/recent-avatar
 ```
 
-Identify their:
+can return account/user information even when the requester has not authenticated.
+
+This potentially allows guests to enumerate or discover users/accounts.
+
+Investigate:
 
 ```text
 route
+→ middleware
 → controller
 → service
 → repository
-→ database
+→ database query
+→ response serializer
 ```
 
-execution paths.
+Determine exactly which fields are exposed.
 
-Refactor the relevant onboarding APIs so intermediate onboarding steps store temporary state in the existing server-side session / Redis infrastructure instead of permanently updating onboarding-related database records.
+Potential risks include:
 
-Reuse the project's existing Redis/session infrastructure.
+* user enumeration
+* exposure of account IDs
+* exposure of profile information
+* exposure of avatars linked to identifiable users
+* unnecessary disclosure of internal identifiers
+* privacy leakage
+* information gathering for later attacks
 
-Do not introduce a second Redis client, duplicate session implementation, or new state-management system if an existing implementation can support this feature.
+Do not assume authentication is always the correct solution.
+
+Determine whether the endpoint should:
+
+* require authentication
+* return only explicitly public information
+* return anonymized information
+* be removed from guest-facing flows
+* enforce a stricter response schema
+
+Apply the smallest secure solution compatible with the existing product behavior.
 
 ---
 
-## Database
+## 2. Frontend `import.meta.env` exposure
 
-Inspect the existing `users` table and onboarding-related tables.
-
-The existing column:
+Inspect the frontend for usage of:
 
 ```text
-users.completed_onboarding
+import.meta.env
 ```
 
-must remain the authoritative persistent indicator of whether onboarding has been completed.
+Identify all environment variables referenced by frontend code.
 
-Completed state:
+Classify them into:
 
 ```text
-completed_onboarding = 'completed'
+PUBLIC
+SAFE FOR CLIENT
+
+or
+
+SECRET
+SERVER ONLY
 ```
 
-Do not change the existing database schema unless absolutely necessary.
+Look specifically for possible exposure of:
 
-Intermediate onboarding progress must NOT require a new database table if Redis/session can support it.
+* private API keys
+* provider secrets
+* database credentials
+* Redis credentials
+* JWT secrets
+* signing secrets
+* webhook secrets
+* cloud provider secrets
+* storage secrets
+* payment-provider private credentials
+* internal service credentials
+* private backend configuration
+
+Remember that any variable bundled into frontend JavaScript must be considered visible to the user.
+
+Frontend environment variables must contain only configuration explicitly safe for public exposure.
+
+If a secret is currently required by frontend code:
+
+```text
+frontend
+→ secret provider request
+```
+
+must be redesigned into:
+
+```text
+frontend
+→ application backend
+→ external provider
+```
+
+Do not merely rename a secret environment variable and leave it bundled in the frontend.
 
 ---
 
-## Redis / Session
+## 3. Duplicate API requests on landing page
 
-Store temporary onboarding state server-side.
+Investigate duplicate requests occurring when the landing page loads.
 
-Use a structure conceptually equivalent to:
-
-```text
-onboarding:{user_id}
-```
-
-or integrate the state into the project's existing authenticated session structure if that better matches the current architecture.
-
-The temporary onboarding state should contain at minimum:
+Trace:
 
 ```text
-{
-  current_step: <step identifier>,
-  data: {
-    ...accumulated onboarding fields
-  },
-  updated_at: <timestamp>
-}
+landing page
+→ component
+→ useEffect/hooks
+→ query library/API client
+→ API request
 ```
 
-The exact Redis/session representation should follow existing project conventions.
+Determine whether duplicate requests originate from:
 
-Do not store sensitive information unnecessarily.
+* React StrictMode
+* duplicate `useEffect`
+* incorrect dependencies
+* repeated component mounting
+* multiple components requesting identical data
+* manual request + query-library request
+* retry behavior
+* route transitions
+* state updates triggering another request
+* missing caching/deduplication
+* frontend race conditions
 
-Do not trust client-provided user IDs for identifying the onboarding owner. Derive the user/account identity from the authenticated server-side request context.
+Fix the actual root cause.
+
+Do not remove React StrictMode solely to hide duplicate-request behavior unless the project explicitly requires this and there is a strong technical justification.
+
+The final behavior should avoid unnecessary duplicate API requests in production and should not create stale or inconsistent UI state.
 
 ---
 
-# Required Onboarding Flow
+## 4. Missing IP-based rate limiting
 
-The intended architecture is:
+The application lacks sufficient rate limiting.
+
+Add centralized IP-based rate limiting using the project's existing backend architecture.
+
+Do not blindly apply one aggressive global limit to all endpoints.
+
+Create appropriate limits based on endpoint sensitivity.
+
+At minimum inspect:
 
 ```text
-Authenticated User
-        |
-        v
-Check users.completed_onboarding
-        |
-        +----------------------------+
-        |                            |
-   "completed"                 not "completed"
-        |                            |
-        v                            v
-Normal Application             Onboarding
-                                     |
-                                     v
-                              Load Session State
-                                     |
-                         +-----------+-----------+
-                         |                       |
-                    state exists             no state
-                         |                       |
-                         v                       v
-                    Resume Step              Step 1
-                         |
-                         v
-                 User submits a step
-                         |
-                         v
-               Validate submitted data
-                         |
-                         v
-                 Save to Redis/session
-                         |
-                         v
-                Update current_step
-                         |
-                         v
-                    Next Step
-                         |
-                         v
-                     ...
-                         |
-                         v
-                    Final Step
-                         |
-                         v
-              Validate complete payload
-                         |
-                         v
-                Database Transaction
-                         |
-              +----------+----------+
-              |                     |
-           SUCCESS                FAILURE
-              |                     |
-              v                     v
-      Save onboarding data      Rollback DB
-              |                 Keep session
-              v                     |
-users.completed_onboarding           v
-        = 'completed'           Return error
-              |
-              v
-      Commit transaction
-              |
-              v
-    Delete onboarding session
-              |
-              v
-       Enter Application
+authentication
+registration
+password reset
+email verification
+OTP
+KYC initiation
+payment initiation
+cashout/disbursement
+file upload
+search
+public APIs
+forms
+messaging
+resource creation
+expensive endpoints
 ```
+
+Sensitive endpoints should generally have stricter limits than normal API reads.
+
+Rate limiting should consider:
+
+* client IP
+* trusted proxy configuration
+* reverse proxy / deployment environment
+* authenticated account ID where appropriate
+* endpoint category
+* rate-limit headers
+* correct HTTP status
+* Redis-backed/shared limiter if multiple backend instances are deployed
+
+Do not trust arbitrary client-provided IP headers.
+
+Use the application's trusted proxy configuration so the correct originating IP is resolved safely.
+
+Expected rejection:
+
+```text
+HTTP 429 Too Many Requests
+```
+
+with a safe response body.
+
+Do not expose internal infrastructure information in rate-limit responses.
 
 ---
 
-# Intermediate Step Behavior
+## 5. CSRF protection for forms and state-changing requests
 
-When a user completes an onboarding step:
+Inspect the application's authentication model before implementing CSRF protection.
 
-1. Validate the submitted fields server-side.
-2. Retrieve the existing onboarding state from session/Redis.
-3. Merge only the fields belonging to that onboarding step.
-4. Save the updated onboarding data back to session/Redis.
-5. Record the next/current onboarding step.
-6. Return the updated onboarding progress to the frontend.
-7. Do NOT permanently save the onboarding form data to onboarding-related database tables yet.
+Determine whether authentication uses:
+
+* cookies
+* session cookies
+* JWT in HttpOnly cookies
+* Authorization headers
+* mixed authentication
+
+CSRF protection must be applied where browser credentials are automatically included with requests.
+
+Inspect state-changing methods:
+
+```text
+POST
+PUT
+PATCH
+DELETE
+```
+
+especially those related to:
+
+* profile updates
+* account settings
+* authentication
+* password changes
+* email changes
+* wallet operations
+* payments
+* cashout
+* subscriptions
+* marketplace operations
+* job creation
+* proposals
+* disputes
+* messaging actions
+* file operations
+* KYC
+* administrative actions
+
+````
+
+Use an established CSRF protection strategy compatible with the application's existing session/authentication design.
+
+Possible valid strategies include:
+
+- server-generated CSRF token
+- synchronizer token pattern
+- signed double-submit cookie
+- framework-supported CSRF middleware
+
+Do not create a custom cryptographic CSRF protocol unless existing architecture requires it.
+
+Ensure:
+
+```text
+valid token
+→ request accepted
+
+missing token
+→ rejected
+
+invalid token
+→ rejected
+
+token from another session
+→ rejected
+````
+
+Do not apply CSRF checks to endpoints where doing so would break legitimate provider webhooks or server-to-server APIs.
+
+Webhook endpoints must instead retain appropriate signature verification.
+
+---
+
+# API Response Exposure Audit
+
+Inspect API responses in security-sensitive and commonly accessed endpoints.
+
+Look for excessive data exposure such as:
+
+* password hashes
+* authentication tokens
+* refresh tokens
+* internal account IDs where unnecessary
+* email addresses
+* phone numbers
+* KYC documents
+* verification metadata
+* payment-provider IDs
+* payment secrets
+* session identifiers
+* internal moderation fields
+* role/permission internals
+* private profile attributes
+* private file URLs
+* storage object keys
+* stack traces
+* raw database objects
+* SQL/database errors
+* environment data
+* third-party provider responses
+* internal infrastructure information
+
+Prefer explicit response serialization / DTOs / allowlists over:
+
+```javascript
+res.json(databaseRow)
+```
+
+when database objects contain fields not intended for clients.
+
+Responses should return only what the frontend actually requires.
+
+Do not remove fields blindly.
+
+Trace frontend usage before changing an API response contract.
+
+---
+
+# Additional Security Discovery
+
+After investigating the known findings, perform a focused inspection of critical application areas.
+
+This is not permission to rewrite the entire application.
+
+Use progressive security discovery.
+
+Prioritize attack surfaces that could result in:
+
+* account takeover
+* unauthorized access
+* privilege escalation
+* financial loss
+* private data exposure
+* arbitrary file access
+* server compromise
+* business-logic bypass
+* payment manipulation
+
+---
+
+# Priority Security Areas
+
+## 1. Authentication
+
+Inspect:
+
+* login
+* registration
+* logout
+* session restoration
+* password reset
+* account verification
+* JWT/session validation
+
+Check for:
+
+* account enumeration
+* weak rate limiting
+* authentication bypass
+* insecure token handling
+* insecure cookies
+* overly long token lifetime
+* missing revocation
+* predictable reset tokens
+* login brute force
+* inconsistent logout
+* stale sessions
+
+---
+
+## 2. Authorization
+
+Check whether endpoints validate:
+
+```text
+Who is authenticated?
+        +
+Are they allowed to access THIS specific resource?
+```
+
+Look for:
+
+* IDOR
+* horizontal privilege escalation
+* vertical privilege escalation
+* trusting frontend role values
+* missing ownership checks
+* missing membership checks
+* administrator-only actions accessible by normal users
+
+Do not treat authentication alone as authorization.
+
+---
+
+## 3. Payments / Credits / Wallet / Cashout
+
+Treat these as high-risk.
+
+Inspect:
+
+* credit balances
+* top-ups
+* transfers
+* escrow
+* refunds
+* asset purchases
+* fees
+* cashout
+* Xendit/provider callbacks
+* transaction creation
+
+Look for:
+
+* client-controlled amount
+* client-controlled balance
+* duplicate transaction processing
+* missing idempotency
+* replay attacks
+* unauthorized transfer
+* negative values
+* integer overflow/precision issues
+* webhook spoofing
+* missing signature validation
+* race conditions
+* double spending
+* status manipulation
+
+Never trust payment success based solely on frontend requests.
+
+---
+
+## 4. File Uploads
+
+Inspect:
+
+* file type validation
+* file extension validation
+* MIME validation
+* file size
+* filename handling
+* storage keys
+* download authorization
+* signed URLs
+* private files
+* path traversal
+* executable uploads
+
+---
+
+## 5. KYC / Verification
+
+Inspect:
+
+* session creation
+* webhook handling
+* verification status updates
+* document access
+* administrative access
+
+Look for:
+
+* spoofed verification status
+* unauthorized document viewing
+* webhook forgery
+* client-controlled verified status
+* sensitive identity data returned to normal users
+
+---
+
+## 6. Messaging / Socket.IO / Real-Time Features
+
+Inspect:
+
+* socket authentication
+* room joining
+* message authorization
+* group membership
+* notifications
+* WebRTC signaling
+
+Look for:
+
+* joining arbitrary rooms
+* receiving another user's notifications
+* sending messages as another user
+* trusting client account IDs
+* unauthorized signaling
+* missing membership verification
+
+---
+
+## 7. Marketplace / Jobs / Proposals / Disputes
+
+Inspect ownership and role checks for:
+
+* job creation
+* job updates
+* proposals
+* accepting proposals
+* hiring
+* asset creation
+* purchases
+* refunds
+* disputes
+* ratings
+
+Look for business-logic bypasses.
+
+---
+
+## 8. Administrative / Moderator APIs
+
+Ensure admin and moderator actions enforce authorization server-side.
+
+Never rely solely on hidden frontend buttons.
+
+---
+
+# Required Pre-Implementation Report
+
+Before editing code, produce a report with this format:
+
+```text
+# Initial Security Assessment
+
+## Finding 1
+
+Name:
+Severity:
+Affected endpoint/page:
+Affected execution path:
+
+Current behavior:
+
+Root cause:
+
+Security impact:
+
+Proposed fix:
+
+Expected files to modify:
+
+Verification:
+
+---
+
+## Finding 2
+...
+```
+
+Include all known findings first:
+
+```text
+/api/recent-avatar exposure
+frontend environment leakage
+duplicate landing page request
+missing rate limiting
+missing/incomplete CSRF protection
+```
+
+Then add newly discovered vulnerabilities.
+
+Severity should use:
+
+```text
+CRITICAL
+HIGH
+MEDIUM
+LOW
+INFORMATIONAL
+```
+
+Do not inflate severity.
+
+---
+
+# Change Scope Report
+
+Before implementation, list the files expected to change.
 
 Example:
 
 ```text
-Step 1
-POST onboarding data
-→ validate
-→ Redis/session
-→ current_step = 2
+EXPECTED FILE CHANGES
 
-Step 2
-POST onboarding data
-→ validate
-→ merge with Step 1 state
-→ Redis/session
-→ current_step = 3
+backend/app.js
+Reason:
+Register rate limiting middleware.
+
+backend/middleware/rateLimiter.js
+Reason:
+Centralized endpoint-specific rate limits.
+
+backend/routes/UserRoutes.js
+Reason:
+Protect /api/recent-avatar.
+
+frontend/src/pages/...
+Reason:
+Remove duplicate request root cause.
 ```
 
-Continue using this pattern until the final step.
+Do not modify files unrelated to an identified finding.
+
+If additional files become necessary during implementation, explain why before modifying them in the final report.
 
 ---
 
-# Refresh / Resume Behavior
+# Implementation Rules
 
-Refreshing the onboarding page must NOT reset onboarding progress.
+Use the smallest secure change possible.
 
-For example:
+Do not:
 
-```text
-User completes Step 1
-→ session current_step = 2
+* rewrite unrelated modules
+* change unrelated UI
+* rename unrelated files
+* reformat entire files unnecessarily
+* perform speculative refactoring
+* replace libraries without need
+* modify unrelated database schemas
+* disable existing security controls
+* hardcode secrets
+* move secrets into frontend code
+* hide errors instead of fixing root causes
+* suppress duplicate requests without understanding why they occur
 
-User is currently on Step 2
-→ refreshes browser
+Reuse:
 
-Application requests onboarding state
-→ server returns current_step = 2
-→ frontend restores Step 2
-```
-
-The frontend must not rely exclusively on React/component state for determining onboarding progress.
-
-The server-side session/Redis state is authoritative for **in-progress onboarding progress**.
-
-Provide or reuse an endpoint conceptually similar to:
-
-```text
-GET /api/onboarding/state
-```
-
-that returns the authenticated user's current onboarding progress.
-
-Reuse an existing endpoint if the project already has equivalent functionality rather than creating unnecessary duplicate routes.
-
-The response should conceptually contain:
-
-```json
-{
-  "completed": false,
-  "current_step": 2,
-  "data": {}
-}
-```
-
-Only return previously entered onboarding fields to the frontend when they are actually required to restore the forms.
-
-Never return sensitive server-only session information.
+* existing middleware patterns
+* authentication context
+* Redis infrastructure
+* validation utilities
+* logger
+* repository pattern
+* service pattern
+* existing error-handling conventions
 
 ---
 
-# Onboarding Access Enforcement
+# Rate Limiting Requirements
 
-Authenticated users must not be able to bypass required onboarding simply by manually navigating to another frontend route.
+Implement reusable rate-limit policies.
 
-On authentication/session restoration, determine the user's onboarding status using:
-
-```text
-users.completed_onboarding
-```
-
-Expected behavior:
+Conceptually:
 
 ```text
-completed_onboarding === 'completed'
-→ allow normal authenticated application routes
+General API
+→ moderate limit
 
-completed_onboarding !== 'completed'
-→ require onboarding
+Login
+→ strict limit
+
+Registration
+→ strict limit
+
+Password reset
+→ very strict limit
+
+OTP/email verification
+→ very strict limit
+
+Payments/cashout
+→ strict transactional limit
+
+Expensive search/API
+→ appropriate resource-based limit
 ```
 
-When onboarding is required:
+Exact limits should be based on existing system behavior.
 
-```text
-/setup_account/...
-```
+Do not select values so strict that normal application usage breaks.
 
-must be the allowed onboarding area.
+If Redis already exists and the deployment can run multiple backend instances, prefer a shared Redis-backed rate-limit store when supported by the current architecture.
 
-Attempts to navigate to protected application pages should redirect the user back to the appropriate onboarding step.
-
-Do not create redirect loops.
-
-Public routes such as login, registration, authentication callbacks, and other legitimately public routes must continue functioning.
+If implementing an in-memory limiter, document the limitation for multi-instance deployments.
 
 ---
 
-# Backend Enforcement
+# CSRF Requirements
 
-Do not rely solely on frontend route guards for security or business-rule enforcement.
-
-Inspect authenticated backend endpoints that should only be available after onboarding.
-
-Where appropriate, reuse or implement centralized middleware equivalent to:
+For state-changing authenticated browser requests:
 
 ```text
-requireCompletedOnboarding
+Browser
+→ authenticated request
+→ CSRF validation
+→ route/controller
 ```
 
-Conceptual behavior:
+Ensure CSRF is integrated with existing frontend API calls.
 
-```text
-if user.completed_onboarding !== 'completed':
-    reject access with an appropriate onboarding-required response
-```
+Do not expose CSRF secrets.
 
-Do not blindly attach this middleware to every authenticated endpoint.
+If a CSRF token endpoint is needed, return only the token needed by the current authenticated browser session.
 
-Onboarding APIs themselves, logout/session APIs, authentication-related endpoints, and other endpoints required to complete onboarding must remain accessible.
+Provider webhooks must not be protected using browser CSRF validation.
 
-Prefer centralized middleware/route-group enforcement over duplicating the same check across controllers.
+They should instead use the provider's signature/authentication mechanism.
 
 ---
 
-# Final Step
+# Environment Variable Requirements
 
-The final onboarding submission is the only point where the accumulated onboarding data should be permanently persisted.
+Generate an environment security inventory.
 
-Required flow:
+For each frontend-referenced variable:
 
 ```text
-Retrieve onboarding state
-        ↓
-Verify all required steps/data
-        ↓
-Validate complete payload
-        ↓
-Begin database transaction
-        ↓
-Persist onboarding-related records
-        ↓
-Set users.completed_onboarding = 'completed'
-        ↓
-Commit transaction
-        ↓
-Clear onboarding Redis/session state
+Variable:
+Used by:
+Public or secret:
+Reason:
+Action:
 ```
 
-The database writes and `completed_onboarding` update must occur within an appropriate transaction when multiple related writes are involved.
+Anything bundled into frontend code must be assumed public.
 
-The user must not be marked as completed before all required onboarding persistence succeeds.
+Ensure `.env` files containing secrets are ignored from Git where appropriate.
+
+Search version-controlled files for accidentally committed secrets related to this task.
+
+Do not print actual secret values in the report.
+
+Use:
+
+```text
+REDACTED
+```
+
+when reporting sensitive configuration.
+
+If a credential appears genuinely exposed in repository history, report that rotation may be required.
+
+Do not rotate credentials automatically unless explicitly authorized.
 
 ---
 
-# Failure Handling
+# Duplicate Request Requirements
 
-If final persistence fails:
+For each duplicate request found:
 
 ```text
-database error
-      ↓
-rollback transaction
-      ↓
-DO NOT set completed_onboarding = 'completed'
-      ↓
-DO NOT delete onboarding Redis/session state
-      ↓
-return appropriate error
+Endpoint:
+Trigger:
+Number of unintended requests:
+Root cause:
+Fix:
 ```
 
-This allows the user to retry without losing all previously entered onboarding information.
+Confirm the change does not:
 
-If Redis/session temporarily fails during an intermediate step:
-
-* return an appropriate server error
-* do not pretend the step was successfully saved
-* do not advance the frontend to the next step unless progress was actually stored
-
-Do not silently fall back to partially writing onboarding data to the database.
+* break loading
+* cause missing data
+* introduce stale state
+* create race conditions
+* remove useful retry behavior
 
 ---
 
-# Session Lifecycle
+# Error Handling
 
-The onboarding temporary state should:
+API responses must not expose:
 
-* belong only to the authenticated user
-* survive normal page refreshes
-* follow the existing session/Redis expiration strategy where appropriate
-* not be readable by another user
-* be deleted after successful onboarding completion
-* be invalidated appropriately if the project's authentication/session lifecycle requires it
+* stack traces
+* SQL errors
+* Redis errors
+* filesystem paths
+* provider credentials
+* internal exception details
+* environment values
 
-Do not delete onboarding progress merely because the browser refreshes.
+Production errors should use safe responses.
 
-If the user logs out and later logs back in while the onboarding state still legitimately exists, resume behavior should follow the existing Redis/session architecture and security model.
+Internal details may be logged using the project's existing logger, provided secrets are redacted.
 
 ---
 
-# Existing User Compatibility
+# Logging Security
 
-Existing users with:
+Inspect affected security-sensitive logging.
 
-```text
-completed_onboarding = 'completed'
-```
+Do not log:
 
-must not be forced through onboarding again.
-
-Users whose value is:
-
-```text
-NULL
-```
-
-or any value other than:
-
-```text
-completed
-```
-
-must be treated as not having completed onboarding unless the existing schema/application explicitly defines another equivalent completed state.
-
-Do not modify existing completed users' onboarding records unnecessarily.
+* passwords
+* auth tokens
+* refresh tokens
+* session IDs
+* OTP codes
+* payment credentials
+* webhook secrets
+* private KYC information
+* full sensitive request payloads
 
 ---
 
 # Acceptance Criteria
 
-## 1. No intermediate database persistence
+## `/api/recent-avatar`
 
-Completing Step 1, Step 2, or any non-final onboarding step must not permanently save the onboarding form data to its final database tables.
+Unauthenticated callers cannot obtain private account information.
 
-Temporary data must exist only in the approved server-side session/Redis state.
+Response contains only explicitly allowed fields.
+
+No unnecessary identifiers or sensitive account information are exposed.
 
 ---
 
-## 2. Progress survives refresh
+## Rate Limiting
 
-Given:
+Sensitive endpoints reject excessive requests using:
 
 ```text
-current_step = 2
+HTTP 429
 ```
 
-When the user refreshes the page:
+Normal expected usage still works.
+
+Client-controlled forwarded IP headers cannot trivially bypass the limiter.
+
+---
+
+## CSRF
+
+Protected state-changing browser requests:
 
 ```text
-expected → Step 2
-incorrect → Step 1
+valid CSRF
+→ success
+
+missing CSRF
+→ rejected
+
+invalid CSRF
+→ rejected
 ```
 
-The same requirement applies to every onboarding step.
+Relevant frontend forms continue functioning.
+
+Provider webhooks continue functioning.
 
 ---
 
-## 3. Previous information is recoverable
+## Frontend Environment
 
-When navigating backward to a previous onboarding step, previously entered information should be restored from onboarding state where appropriate.
+No server-only secret is bundled into frontend JavaScript.
 
-The user should not have to re-enter information solely because they moved between onboarding steps.
+Frontend configuration contains only explicitly public values.
 
 ---
 
-## 4. Incomplete users cannot bypass onboarding
+## API Responses
 
-Given:
+Critical API responses contain only fields required by the client.
+
+No sensitive internal or credential data is returned.
+
+---
+
+## Duplicate Requests
+
+The known landing-page duplicate API request is resolved at its root cause.
+
+Normal loading behavior remains correct.
+
+---
+
+## Authorization
+
+Critical endpoints inspected during this task enforce both:
 
 ```text
-users.completed_onboarding != 'completed'
-```
-
-Attempting to access a protected application route must require/redirect the user to onboarding.
-
----
-
-## 5. Completed users bypass onboarding
-
-Given:
-
-```text
-users.completed_onboarding = 'completed'
-```
-
-The user must enter the normal application and must not be unnecessarily redirected to onboarding.
-
----
-
-## 6. Final step persists atomically
-
-Successful final onboarding must:
-
-```text
-persist all required onboarding data
+authentication
 +
-set completed_onboarding = 'completed'
-+
-commit
+resource authorization
 ```
 
-Only after successful persistence should temporary onboarding state be removed.
+where required.
 
 ---
 
-## 7. Failed final submission preserves progress
+## Build and Tests
 
-If final persistence fails:
+Run existing supported commands discovered from the repository, such as:
 
 ```text
-completed_onboarding != 'completed'
-onboarding Redis/session state still exists
-database transaction rolled back
+npm test
+npm run test
+npm run lint
+npm run build
 ```
 
-The user must be able to retry.
+Use only commands actually defined in the relevant package configuration.
+
+Do not report a test as passing if it was not executed.
 
 ---
 
-## 8. Security
+# Security Verification
 
-Verify that:
+After implementation, test the relevant paths as both:
 
-* one user cannot access another user's onboarding state
-* client-supplied user IDs cannot override authenticated identity
-* onboarding cannot be marked completed from the frontend alone
-* users cannot skip required onboarding steps by manipulating route URLs
-* protected backend functionality cannot be trivially bypassed through direct API requests
+```text
+unauthenticated guest
+authenticated normal user
+resource owner
+different authenticated user
+privileged user/admin where applicable
+```
+
+Test expected failures as well as expected successes.
+
+Examples:
+
+```text
+Guest
+→ /api/recent-avatar
+→ private data must not leak
+```
+
+```text
+Repeated login attempts
+→ limiter eventually returns 429
+```
+
+```text
+State-changing request without CSRF
+→ rejected
+```
+
+```text
+State-changing request with valid CSRF
+→ succeeds
+```
+
+```text
+User A resource ID supplied by User B
+→ authorization denied
+```
 
 ---
 
-# Required Investigation
+# Newly Discovered Vulnerabilities
 
-Before modifying code:
+During investigation, additional vulnerabilities may be found.
 
-1. Read the project-level agent instructions.
-2. Inspect:
-
-```text
-E:\EnsembleV2\Ensemble\frontend\src\pages\setup_account
-```
-
-3. Enumerate the actual onboarding pages and determine their order.
-4. Trace every onboarding API call to its backend implementation.
-5. Identify where intermediate onboarding data is currently written to PostgreSQL.
-6. Identify the existing authentication/session implementation.
-7. Identify the existing Redis client and session utilities.
-8. Identify where `users.completed_onboarding` is currently read and updated.
-9. Identify frontend authenticated route guards.
-10. Identify backend routes that require completed onboarding.
-11. Determine the smallest safe refactor.
-
-Do not read unrelated documentation or scan unrelated features unless required by these execution paths.
-
----
-
-# Implementation Constraints
-
-* Do not rewrite the entire onboarding system.
-* Do not modify unrelated features.
-* Do not change unrelated database tables.
-* Do not create duplicate Redis infrastructure.
-* Do not introduce unnecessary dependencies.
-* Preserve existing UI and styling unless a UI change is necessary for correct onboarding behavior.
-* Preserve existing authentication behavior.
-* Preserve existing API response contracts where reasonably possible.
-* Prefer existing controllers/services/repositories/middleware patterns.
-* Keep database access inside the project's existing repository/data-access layer.
-* Keep business logic in the appropriate service layer.
-* Keep controllers thin.
-* Do not trust onboarding state supplied entirely by the frontend.
-* Make the smallest production-safe change.
-
----
-
-# Verification
-
-Run the project's existing relevant build/test/lint commands discovered from `package.json` and existing project configuration.
-
-At minimum manually verify:
-
-```text
-NEW/INCOMPLETE USER
-login
-→ onboarding Step 1
-→ submit
-→ Step 2
-→ refresh
-→ remains Step 2
-→ continue
-→ refresh
-→ remains correct step
-→ final submit
-→ database records created/updated
-→ completed_onboarding = 'completed'
-→ onboarding session removed
-→ application accessible
-```
-
-Verify bypass prevention:
-
-```text
-incomplete user
-→ manually navigate to protected route
-→ redirected/rejected to onboarding
-```
-
-Verify completed user:
-
-```text
-completed user
-→ login
-→ normal application
-→ no onboarding redirect
-```
-
-Verify final failure:
-
-```text
-simulate/trigger persistence failure
-→ transaction rollback
-→ completed_onboarding remains incomplete
-→ onboarding session remains available
-→ retry remains possible
-```
-
-Also verify:
-
-```text
-npm build/test/lint commands as supported by project
-```
-
-Do not claim a command passed unless it was actually executed successfully.
-
----
-
-# Notes and Decisions
-
-## Source of Truth
-
-Persistent onboarding completion:
-
-```text
-PostgreSQL
-users.completed_onboarding
-```
-
-Completed value:
-
-```text
-'completed'
-```
-
-In-progress onboarding state:
-
-```text
-Redis / server-side session
-```
-
-Frontend state is only a presentation layer and must not be the authoritative source of onboarding progress.
-
----
-
-## Persistence Strategy
+Record each one.
 
 Use:
 
 ```text
-Intermediate steps
-        ↓
-Redis / Session
-
-Final step
-        ↓
-Database transaction
-        ↓
-completed_onboarding = 'completed'
-        ↓
-clear temporary state
+Finding:
+Severity:
+Affected area:
+Evidence:
+Root cause:
+Attack/failure scenario:
+Recommended action:
+In current scope: YES / NO
 ```
 
-Do NOT use:
+If:
 
 ```text
-Step 1 → DB
-Step 2 → DB
-Step 3 → DB
-Step 4 → DB
+In current scope = YES
 ```
 
-unless a particular database operation is independently required by the existing system and cannot safely be deferred. Any such exception must be documented in the final report with justification.
+fix it when doing so is directly related and low-risk.
+
+If:
+
+```text
+In current scope = NO
+```
+
+do not expand into a large unrelated refactor.
+
+Document it for a future security task.
+
+Critical vulnerabilities that could immediately compromise accounts, payments, secrets, or private user data should be clearly highlighted even if they require a separate follow-up task.
 
 ---
 
-## Context Policy
+# Final Report
 
-Follow the repository's project-level agent instructions.
+After implementation produce:
 
-Use progressive context discovery.
+## Executive Summary
 
-Start from:
+Summarize overall security improvements.
 
-```text
-frontend/src/pages/setup_account
-```
+## Findings
 
-and trace only the relevant frontend → API → backend → database/session execution paths.
-
-Do not reread all project markdown documentation.
-
-Load only documentation directly relevant to:
-
-* onboarding
-* authentication
-* sessions
-* Redis
-* users
-* routing
-
-Expand scope only when a direct dependency requires it.
-
----
-
-# Final Report Required
-
-After implementation, report:
-
-## Root Cause
-
-Explain why onboarding previously persisted data after every step and why progress could not reliably resume after refresh.
-
-## Previous Flow
-
-Document the discovered original flow.
-
-## New Flow
-
-Document the implemented:
+For every known and newly discovered issue:
 
 ```text
-Frontend
-→ API
-→ Redis/session
-→ final submission
-→ database transaction
+Finding
+Severity
+Root cause
+Resolution
+Status
 ```
 
-flow.
+Status:
+
+```text
+FIXED
+MITIGATED
+OPEN
+NOT APPLICABLE
+```
 
 ## Files Changed
 
-List every modified/created file and why it was necessary.
+For every changed file:
 
-## Redis / Session Changes
+```text
+File:
+Why it changed:
+Finding addressed:
+```
+
+Confirm that unrelated files were not intentionally modified.
+
+## Rate Limiting
 
 Document:
 
-* state structure
-* key/session naming
-* expiration behavior
-* current-step handling
-* cleanup behavior
+* middleware
+* storage mechanism
+* endpoint categories
+* rate policies
+* proxy/IP behavior
+* multi-instance limitations if any
 
-Do not expose secrets or actual session credentials.
+## CSRF
 
-## Database Changes
+Document:
 
-Document all persistence changes and confirm whether a migration was required.
+* protection strategy
+* protected routes
+* frontend integration
+* excluded webhook/server routes
 
-## Route Protection
+## API Exposure
 
-Document how incomplete users are prevented from bypassing onboarding on both frontend and relevant backend paths.
+List APIs whose response payloads were reduced or protected.
+
+Do not include sensitive values.
+
+## Environment Security
+
+Document:
+
+* unsafe frontend environment usage found
+* changes performed
+* credentials requiring manual rotation, if any
+
+Never print credential values.
+
+## Duplicate Request Fixes
+
+Document root causes and corrections.
+
+## Additional Findings
+
+List vulnerabilities discovered during the security inspection but not addressed because they were outside scope.
 
 ## Tests Performed
 
-List the commands and manual scenarios actually executed.
+List exact commands and manual security scenarios actually executed.
 
 ## Remaining Risks
 
-Document unresolved issues or edge cases instead of hiding them.
+Document unresolved risks.
 
-## Status
+## Task Status
 
 Set exactly one:
 
@@ -822,110 +1132,35 @@ PARTIAL
 BLOCKED
 ```
 
-Include the reason when status is `PARTIAL` or `BLOCKED`.
+If `PARTIAL` or `BLOCKED`, explain why.
 
 ---
 
-# Implementation Report
+# Notes and Decisions
 
-## Root Cause
+Security is part of implementation correctness.
 
-Each onboarding page independently called existing profile/user/survey endpoints that immediately wrote to PostgreSQL. Personal details updated `users`, avatar selection updated `accounts` and file tables, survey submission inserted responses/purposes, and a separate frontend request changed `completed_onboarding`. Survey sub-step progress lived only in React state, so refresh reset it. Existing route checks interpreted intermediate database values inconsistently and did not centrally protect application APIs.
+Do not consider a feature complete if it functions but allows unauthorized access, exposes unnecessary data, trusts client-controlled identity, or weakens existing security controls.
 
-## Previous Flow
+Use progressive context discovery.
 
-1. Email verification created the base account/user and authenticated session.
-2. Personal details wrote directly to `users`.
-3. Avatar metadata/preset selection wrote directly to `files`, `account_profile_files`, and `accounts`.
-4. The frontend wrote `completed_onboarding = 'profile'`.
-5. Survey responses and platform purposes were committed in a separate transaction.
-6. The frontend separately wrote `completed_onboarding = 'completed'`.
-7. Survey sub-step state was not recoverable after refresh.
+Start from the known vulnerable execution paths and expand only through direct dependencies.
 
-## New Flow
+Read only documentation relevant to:
 
-1. Authenticated onboarding pages load `GET /api/onboarding/state`.
-2. Personal details, avatar metadata/preset ID, survey answers, and `current_step` are validated and stored under the authenticated user's Redis key.
-3. Refresh and Back navigation restore both data and the authoritative current step.
-4. Final survey submission is validated against the server-side survey catalog.
-5. One PostgreSQL transaction writes personal details, avatar records/selection, survey responses, platform purposes, and finally `users.completed_onboarding = 'completed'`.
-6. Any database failure rolls back the transaction and leaves Redis progress intact.
-7. Redis onboarding state is deleted only after the transaction commits.
+* security
+* authentication
+* APIs
+* sessions
+* Redis
+* frontend requests
+* payments
+* files
+* KYC
+* real-time communication
 
-## Files Changed
+Do not reread all project documentation unnecessarily.
 
-- `backend/routes/Api.js`: mounts onboarding routes and centralized onboarding enforcement.
-- `backend/routes/Onboarding.js`: authenticated state/step/finalization endpoints.
-- `backend/controllers/OnboardingControllers.js`: thin HTTP adapters and safe errors.
-- `backend/services/OnboardingServices.js`: validation, Redis state, step sequencing, survey validation, and completion orchestration.
-- `backend/repositories/OnboardingRepositories.js`: completion reads and atomic final PostgreSQL transaction.
-- `backend/middleware/RequireCompletedOnboarding.js`: rejects protected API access for incomplete authenticated users while allowing required onboarding/auth dependencies.
-- `frontend/src/App.tsx`: places authenticated onboarding pages behind the existing route middleware; email verification remains public.
-- `frontend/src/lib/RouteMiddleware.ts`: resolves onboarding state and redirects incomplete/completed users appropriately.
-- `frontend/src/pages/setup_account/01_PersonalDetails.tsx`: restores/saves Redis onboarding data instead of PostgreSQL profile updates.
-- `frontend/src/pages/setup_account/02_UploadImage.tsx`: restores/saves avatar choice/metadata without intermediate database writes.
-- `frontend/src/pages/setup_account/04_Survey.tsx`: persists section progress, restores answers/sub-step, and uses atomic finalization.
+The application code is the final source of truth when documentation and implementation disagree.
 
-## Redis / Session Changes
-
-- Key: `onboarding:{userId}`; the user ID always comes from `req.session`.
-- TTL: 30 days, matching the existing authenticated session lifetime.
-- Shape: `{ current_step, data: { personal_details, avatar, survey }, updated_at }`.
-- Steps: `personal_details`, `avatar`, `survey_1`, `survey_2`.
-- Validated backward step changes preserve entered data.
-- Successful final completion deletes the key; rejected/failed completion preserves it.
-- No credentials, tokens, or passwords are stored in onboarding state.
-
-## Database Changes
-
-- No schema migration was required.
-- Intermediate onboarding endpoints perform no PostgreSQL writes.
-- The final transaction updates `users`, persists/chooses the avatar, inserts survey responses and platform purposes, and sets `completed_onboarding = 'completed'` last within the same transaction.
-
-## Route Protection
-
-- Frontend: authenticated users resolve server onboarding state before protected content renders. Incomplete users are redirected to the server-provided onboarding path; completed users entering setup routes are redirected to `/home`.
-- Backend: centralized middleware checks the database completion value for authenticated `User` sessions and returns `403 ONBOARDING_REQUIRED` for protected APIs. Authentication/session endpoints and the small set of APIs required for onboarding remain available.
-- Final completion and all state access derive identity from the authenticated session; client user IDs are ignored.
-
-## Tests Performed
-
-- `npm.cmd run build` in `frontend`: passed (`tsc --noEmit` and Vite production build).
-- `node --check` on every new/changed backend onboarding JavaScript file: passed.
-- Focused in-memory Redis script: passed step advancement, refresh-style state reads, cross-user key isolation, backward navigation without data loss, and cleanup.
-- Focused final-failure script with the real survey catalog: passed; invalid final submission was rejected and Redis progress remained.
-- Focused PostgreSQL rollback script using a nonexistent user in the final repository transaction: passed; the transaction failed and rolled back without creating a user.
-- Full `npm run lint`: failed on the repository baseline with 517 problems (479 errors, 38 warnings), including many unrelated files. No claim is made that full lint passes.
-- Targeted onboarding-file lint also reports existing style/type issues in the touched legacy files; the TypeScript production build passes.
-
-## Remaining Risks
-
-- Custom avatar uploads now use a server-issued, authenticated-user-owned key under `profile/onboarding/{userId}/...`. Redis records the exact issued metadata and the avatar step rejects foreign or fabricated keys. A daily bounded cleanup removes objects older than the onboarding TTL only when their paths are not referenced by the `files` table.
-- A full browser-driven successful onboarding against a disposable user was not executed because it would create permanent account/profile/survey data. The Redis, failure preservation, transaction rollback, syntax, and production build paths were verified independently.
-- Centralized enforcement performs a completion lookup for authenticated user API requests; if traffic warrants it, a carefully invalidated completion cache may be added later without changing the source of truth.
-
-## Follow-up Implementation
-
-- Added `POST /api/onboarding/avatar-upload-url`; it derives ownership from the authenticated session, saves the exact issued object metadata in Redis, and never accepts a client-provided owner.
-- Custom avatar selection must match that Redis-issued name, path, MIME type, and size before onboarding can advance.
-- Pending upload metadata is kept server-side and excluded from `GET /api/onboarding/state` responses.
-- Added a daily S3 cleanup job for expired, unreferenced onboarding avatar objects, capped at 500 scanned keys per run.
-- Replaced onboarding's legacy `/api/places` lookup with authenticated `GET /api/onboarding/addresses`, backed by Geoapify through the backend. The Geoapify key remains server-only.
-- The personal-details address field now debounces requests, cancels stale requests, and maps Geoapify selections into address, country, and postal code.
-
-## Follow-up Verification
-
-- Backend `node --check` passed for the onboarding service/controller/route/repository, file service, and background job.
-- `git diff --check` passed.
-- Frontend `npm.cmd run build` passed after the Geoapify and secure-upload changes.
-- Targeted ESLint for the two changed onboarding forms completed with 0 errors and 2 existing React hook dependency warnings.
-- A live Geoapify/S3 integration request was not executed because it requires the running authenticated application and configured provider credentials; provider failures are returned without exposing keys.
-
-## Redirect-loop Fix
-
-- Fixed a stale onboarding-route cache in `RouteMiddleware`. The middleware now refreshes authoritative onboarding state on every route transition and records which route that result belongs to.
-- Redirect enforcement is suspended until the state response matches the current route, preventing an old `/setup/personal-details` result from fighting a newer avatar, survey, or completed-state redirect.
-
-## Status
-
-COMPLETED
+Protect confidentiality, integrity, availability, and correct business behavior while preserving existing product functionality.

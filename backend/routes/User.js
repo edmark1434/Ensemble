@@ -39,7 +39,7 @@ router.post('/login', loginCredentials);
 
 router.post('/refresh-token',checkSession, refreshToken);
 
-router.get('/logout', [requireAuth], LogoutUsers);
+router.post('/logout', [checkSession, requireAuth], LogoutUsers);
 
 router.get('/check-user-role', [checkSession, requireAuth], CheckUserRole);
 router.get('/session', [checkSession, requireAuth], getUserSession);

@@ -1,10 +1,14 @@
 // Services/FileServices.js
 const {
     getAllProfileFilesRepositories,
-    createFileRepository
+    createUploadIntentRepository,
+    getUploadIntentForOwnerRepository,
+    claimUploadIntentRepository,
+    releaseUploadIntentRepository,
+    consumeUploadIntentRepository
 } = require('../repositories/FileRepositories');
 const crypto = require("crypto");
-const { PutObjectCommand } = require("@aws-sdk/client-s3");
+const { PutObjectCommand, HeadObjectCommand, CopyObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const s3 = require('../lib/AmazonS3');
 const dotenv = require('dotenv');
@@ -13,15 +17,57 @@ dotenv.config();
 // Read from environment variables with defaults
 const ALLOWED_FOLDERS = process.env.UPLOAD_ALLOWED_FOLDERS 
     ? process.env.UPLOAD_ALLOWED_FOLDERS.split(',').map(f => f.trim())
-    : ['profile', 'documents', 'assets', 'forum'];
+    : ['profile', 'documents', 'assets', 'forum', 'jobs', 'chat-attachments', 'forum-discussions', 'forum-group', 'forum-covers'];
 
-const ALLOWED_CONTENT_TYPES = process.env.UPLOAD_ALLOWED_TYPES 
+const ALLOWED_CONTENT_TYPES = (process.env.UPLOAD_ALLOWED_TYPES
     ? process.env.UPLOAD_ALLOWED_TYPES.split(',').map(t => t.trim())
-    : ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/avif', 'application/pdf'];
+    : ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'application/pdf', 'video/mp4'])
+    .filter(type => type !== 'image/svg+xml');
 
-const MAX_FILE_SIZE = process.env.UPLOAD_MAX_FILE_SIZE 
-    ? parseInt(process.env.UPLOAD_MAX_FILE_SIZE) 
-    : 5 * 1024 * 1024; // 5MB default
+const CONTENT_TYPE_EXTENSIONS = {
+    'image/jpeg': ['jpg', 'jpeg'],
+    'image/jpg': ['jpg', 'jpeg'],
+    'image/png': ['png'],
+    'image/gif': ['gif'],
+    'image/webp': ['webp'],
+    'image/avif': ['avif'],
+    'application/pdf': ['pdf'],
+    'video/mp4': ['mp4'],
+};
+
+const ABSOLUTE_MAX_FILE_SIZE = process.env.UPLOAD_ABSOLUTE_MAX_FILE_SIZE
+    ? parseInt(process.env.UPLOAD_ABSOLUTE_MAX_FILE_SIZE)
+    : 100 * 1024 * 1024;
+
+const MB = 1024 * 1024;
+const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/avif'];
+const UPLOAD_POLICIES = {
+    profile: { types: IMAGE_TYPES, imageLimit: 5 * MB },
+    forum: { types: IMAGE_TYPES, imageLimit: 8 * MB },
+    'forum-discussions': { types: [...IMAGE_TYPES, 'application/pdf'], imageLimit: 8 * MB, pdfLimit: 15 * MB },
+    'forum-group': { types: IMAGE_TYPES, imageLimit: 8 * MB },
+    'forum-covers': { types: IMAGE_TYPES, imageLimit: 8 * MB },
+    'chat-attachments': { types: [...IMAGE_TYPES, 'application/pdf'], imageLimit: 10 * MB, pdfLimit: 20 * MB },
+    documents: { types: [...IMAGE_TYPES, 'application/pdf'], imageLimit: 10 * MB, pdfLimit: 25 * MB },
+    jobs: { types: [...IMAGE_TYPES, 'application/pdf'], imageLimit: 10 * MB, pdfLimit: 25 * MB },
+    assets: { types: [...IMAGE_TYPES, 'application/pdf', 'video/mp4'], imageLimit: 25 * MB, pdfLimit: 25 * MB, videoLimit: 100 * MB },
+};
+
+function getUploadPolicy(folder, contentType) {
+    const policy = UPLOAD_POLICIES[folder];
+    if (!policy || !policy.types.includes(contentType) || !ALLOWED_CONTENT_TYPES.includes(contentType)) {
+        throw new Error(`Content type "${contentType}" is not allowed for folder "${folder}"`);
+    }
+    const categoryLimit = contentType === 'application/pdf'
+        ? policy.pdfLimit
+        : contentType.startsWith('video/')
+            ? policy.videoLimit
+            : policy.imageLimit;
+    return {
+        allowedTypes: policy.types.filter(type => ALLOWED_CONTENT_TYPES.includes(type)),
+        maxFileSize: Math.min(categoryLimit || ABSOLUTE_MAX_FILE_SIZE, ABSOLUTE_MAX_FILE_SIZE),
+    };
+}
 
 const URL_EXPIRY = process.env.UPLOAD_URL_EXPIRY 
     ? parseInt(process.env.UPLOAD_URL_EXPIRY) 
@@ -40,17 +86,15 @@ async function getAllProfileFilesServices() {
     }
 }
 
-async function generateUploadUrl(folder, filename, contentType, cacheControl = "public, max-age=86400") {
+async function generateStandaloneUploadUrl(folder, filename, contentType, cacheControl = "public, max-age=86400", signUrl = true) {
     try {
         // 1. Validate folder
         if (!ALLOWED_FOLDERS.includes(folder)) {
             throw new Error(`Folder "${folder}" is not allowed. Allowed: ${ALLOWED_FOLDERS.join(', ')}`);
         }
 
-        // 2. Validate content type
-        if (!ALLOWED_CONTENT_TYPES.includes(contentType)) {
-            throw new Error(`Content type "${contentType}" is not allowed. Allowed: ${ALLOWED_CONTENT_TYPES.join(', ')}`);
-        }
+        // 2. Validate the MIME type for this upload purpose and select its size limit.
+        const uploadPolicy = getUploadPolicy(folder, contentType);
 
         // 3. Validate filename
         if (!filename || filename.length === 0) {
@@ -85,6 +129,10 @@ async function generateUploadUrl(folder, filename, contentType, cacheControl = "
         if (extension && FORBIDDEN_EXTENSIONS.includes(extension)) {
             throw new Error(`File extension "${extension}" is not allowed`);
         }
+        const validExtensions = CONTENT_TYPE_EXTENSIONS[contentType];
+        if (!extension || !validExtensions?.includes(extension)) {
+            throw new Error(`File extension does not match content type "${contentType}"`);
+        }
 
         // 6. Sanitize filename
         const sanitizedFilename = filename
@@ -110,25 +158,25 @@ async function generateUploadUrl(folder, filename, contentType, cacheControl = "
             CacheControl: cacheControl
         });
 
-        const uploadUrl = await getSignedUrl(s3, command, { 
-            expiresIn: URL_EXPIRY 
-        });
+        const uploadUrl = signUrl
+            ? await getSignedUrl(s3, command, { expiresIn: URL_EXPIRY })
+            : null;
 
         console.log('📝 Generated upload URL:', {
             folder,
             key,
             contentType,
             expiresIn: `${URL_EXPIRY} seconds`,
-            fileSizeLimit: `${MAX_FILE_SIZE / 1024 / 1024}MB`,
-            allowedTypes: ALLOWED_CONTENT_TYPES.length
+            fileSizeLimit: `${uploadPolicy.maxFileSize / MB}MB`,
+            allowedTypes: uploadPolicy.allowedTypes.length
         });
 
         return {
             uploadUrl,
             key,
             expiresIn: URL_EXPIRY,
-            maxFileSize: MAX_FILE_SIZE,
-            allowedTypes: ALLOWED_CONTENT_TYPES,
+            maxFileSize: uploadPolicy.maxFileSize,
+            allowedTypes: uploadPolicy.allowedTypes,
             allowedFolders: ALLOWED_FOLDERS
         };
 
@@ -138,11 +186,48 @@ async function generateUploadUrl(folder, filename, contentType, cacheControl = "
     }
 }
 
+async function generateUploadUrl(accountId, folder, filename, contentType) {
+    const safeAccountId = String(accountId || '').trim();
+    if (!/^[0-9a-f-]{36}$/i.test(safeAccountId)) throw new Error('Invalid upload owner');
+    // Reuse the common validation/key preparation without signing an unused URL.
+    const prepared = await generateStandaloneUploadUrl(folder, filename, contentType, 'private, no-store', false);
+    const basename = prepared.key.slice(`${folder}/`.length);
+    const intentToken = crypto.randomUUID();
+    const stagingKey = `_uploads/${safeAccountId}/${intentToken}/${basename}`;
+    const finalKey = `${folder}/${safeAccountId}/${basename}`;
+    const command = new PutObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: stagingKey,
+        ContentType: contentType,
+        CacheControl: 'private, no-store'
+    });
+    const expiresAt = new Date(Date.now() + URL_EXPIRY * 1000);
+    const [intent, uploadUrl] = await Promise.all([
+        createUploadIntentRepository({
+            accountId: safeAccountId,
+            originalName: filename,
+            stagingKey,
+            finalKey,
+            expectedMimeType: contentType,
+            maxSizeBytes: prepared.maxFileSize,
+            expiresAt,
+        }),
+        getSignedUrl(s3, command, { expiresIn: URL_EXPIRY }),
+    ]);
+    return {
+        uploadUrl,
+        uploadIntentId: intent.upload_intent_id,
+        expiresIn: URL_EXPIRY,
+        maxFileSize: prepared.maxFileSize,
+        allowedTypes: prepared.allowedTypes,
+    };
+}
+
 async function generateOnboardingAvatarUploadUrl(userId, filename, contentType) {
     const safeUserId = String(userId || '').trim();
     if (!/^[0-9a-f-]{36}$/i.test(safeUserId)) throw new Error('Invalid onboarding upload owner');
 
-    const result = await generateUploadUrl('profile', filename, contentType, 'private, max-age=0, no-cache');
+    const result = await generateStandaloneUploadUrl('profile', filename, contentType, 'private, max-age=0, no-cache');
     const basename = result.key.slice('profile/'.length);
     const key = `profile/onboarding/${safeUserId}/${basename}`;
     const command = new PutObjectCommand({
@@ -170,8 +255,8 @@ async function uploadFileToS3(uploadUrl, file) {
         }
 
         // Validate file size
-        if (file.size > MAX_FILE_SIZE) {
-            throw new Error(`File size exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit`);
+        if (file.size > ABSOLUTE_MAX_FILE_SIZE) {
+            throw new Error(`File size exceeds ${ABSOLUTE_MAX_FILE_SIZE / MB}MB limit`);
         }
 
         // Validate file type
@@ -212,14 +297,60 @@ function getUploadConfig() {
     return {
         allowedFolders: ALLOWED_FOLDERS,
         allowedTypes: ALLOWED_CONTENT_TYPES,
-        maxFileSize: MAX_FILE_SIZE,
+        maxFileSize: ABSOLUTE_MAX_FILE_SIZE,
         urlExpiry: URL_EXPIRY,
         forbiddenExtensions: FORBIDDEN_EXTENSIONS
     };
 }
 
-async function registerFileService(name, path, mimeType, sizeBytes) {
-    return await createFileRepository(name, path, mimeType, sizeBytes);
+async function finalizeUploadService(accountId, uploadIntentId) {
+    if (!/^[0-9a-f-]{36}$/i.test(String(uploadIntentId || ''))) {
+        const error = new Error('Invalid upload intent'); error.statusCode = 400; throw error;
+    }
+    const existing = await getUploadIntentForOwnerRepository(uploadIntentId, accountId);
+    if (!existing) { const error = new Error('Upload intent not found'); error.statusCode = 404; throw error; }
+    if (existing.consumed_at || existing.status === 'consumed') { const error = new Error('Upload intent has already been used'); error.statusCode = 409; throw error; }
+    if (new Date(existing.expires_at).getTime() <= Date.now()) { const error = new Error('Upload intent has expired'); error.statusCode = 410; throw error; }
+    const intent = await claimUploadIntentRepository(uploadIntentId, accountId);
+    if (!intent) { const error = new Error('Upload intent is already being finalized'); error.statusCode = 409; throw error; }
+
+    let copied = false;
+    try {
+        const head = await s3.send(new HeadObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: intent.staging_key }));
+        const size = Number(head.ContentLength);
+        const actualType = String(head.ContentType || '').split(';')[0].trim().toLowerCase();
+        if (!Number.isSafeInteger(size) || size <= 0 || size > intent.max_size_bytes) {
+            const error = new Error('Uploaded file size is invalid'); error.statusCode = 422; throw error;
+        }
+        if (actualType !== String(intent.expected_mime_type).toLowerCase()) {
+            const error = new Error('Uploaded file type does not match the upload intent'); error.statusCode = 422; throw error;
+        }
+        const copySource = encodeURIComponent(`${process.env.AWS_BUCKET_NAME}/${intent.staging_key}`).replace(/%2F/g, '/');
+        await s3.send(new CopyObjectCommand({
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Key: intent.final_key,
+            CopySource: copySource,
+            ContentType: actualType,
+            CacheControl: 'public, max-age=86400',
+            MetadataDirective: 'REPLACE',
+        }));
+        copied = true;
+        const result = await consumeUploadIntentRepository(uploadIntentId, accountId, {
+            name: intent.original_name,
+            mimeType: actualType,
+            sizeBytes: size,
+        });
+        // Cleanup is not part of the user-visible critical path. The verified final
+        // object and database record already exist, so deletion can finish in the background.
+        void s3.send(new DeleteObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: intent.staging_key }))
+            .catch(() => undefined);
+        return result;
+    } catch (error) {
+        if (copied) await s3.send(new DeleteObjectCommand({ Bucket: process.env.AWS_BUCKET_NAME, Key: intent.final_key })).catch(() => undefined);
+        await releaseUploadIntentRepository(uploadIntentId, accountId).catch(() => undefined);
+        if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) error.statusCode = 422;
+        throw error;
+    }
 }
 
 module.exports = {
@@ -227,6 +358,6 @@ module.exports = {
     generateUploadUrl,
     uploadFileToS3,
     getUploadConfig,
-    registerFileService,
+    finalizeUploadService,
     generateOnboardingAvatarUploadUrl
 };

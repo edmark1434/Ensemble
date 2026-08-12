@@ -1,4 +1,4 @@
-import api from "@/lib/axios";
+import { uploadFileWithIntent } from "@/lib/uploadFile";
 
 export type ForumComment = {
   user_id: string | number;
@@ -49,26 +49,7 @@ export const buildForumCommentTree = <T extends ForumComment>(comments: T[]): T[
 };
 
 export const uploadForumCommentImage = async (file: File): Promise<string> => {
-  const response = await api.post("/api/files/upload-url", {
-    folder: "forum-discussions",
-    filename: file.name,
-    contentType: file.type,
-  });
-
-  const { uploadUrl, key } = response.data;
-  if (!uploadUrl || !key) {
-    throw new Error("Failed to get upload URL");
-  }
-
-  const uploadResponse = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": file.type },
-    body: file,
-  });
-  if (!uploadResponse.ok) {
-    throw new Error(`Upload failed with status ${uploadResponse.status}`);
-  }
-
+  const { key } = await uploadFileWithIntent(file, "forum-discussions");
   return key;
 };
 

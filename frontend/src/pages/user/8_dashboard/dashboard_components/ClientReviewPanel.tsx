@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useInboxUploadMedia, InboxUploadMediaButton, InboxUploadMediaPreview } from '@/components/ui/inbox/inbox_functions/inbox_upload_image';
 import api from '@/lib/axios';
+import { uploadFileWithIntent } from '@/lib/uploadFile';
 import { AlertCircle, CheckCircle } from 'lucide-react';
 
 interface Props {
@@ -26,18 +27,7 @@ export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, ca
         try {
             // Upload all images sequentially and get their URLs
             const uploadPromises = mediaList.map(async (media) => {
-                const response = await api.post("/api/files/upload-url", {
-                    folder: "documents",
-                    filename: media.file.name,
-                    contentType: media.file.type || "application/octet-stream",
-                });
-                const { uploadUrl, key } = response.data || {};
-                
-                await fetch(uploadUrl, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': media.file.type },
-                    body: media.file
-                });
+                const { key } = await uploadFileWithIntent(media.file, "documents");
                 
                 return `https://s3.amazonaws.com/your-bucket-name/${key}`;
             });

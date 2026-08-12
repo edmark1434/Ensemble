@@ -3,7 +3,13 @@ const { pool } = require('../lib/Database');
 // User repository functions for interacting with the users table in the database
 async function getAllUsers() {
     try {
-        const result = await pool.query('SELECT * FROM users');
+        const result = await pool.query(`
+            SELECT u.user_id, u.account_id, u.first_name, u.last_name,
+                   a.display_name, a.handle, a.type, a.status
+            FROM users u
+            INNER JOIN accounts a ON a.account_id = u.account_id
+            WHERE u.deleted_at IS NULL AND a.deleted_at IS NULL
+        `);
         return result.rows;
     } catch (err) {
         console.error('Error fetching users:', err);

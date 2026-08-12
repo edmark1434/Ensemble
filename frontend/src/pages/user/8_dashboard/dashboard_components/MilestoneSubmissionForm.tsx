@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useInboxUploadMedia, InboxUploadMediaButton, InboxUploadMediaPreview } from '@/components/ui/inbox/inbox_functions/inbox_upload_image';
 import api from '@/lib/axios';
+import { uploadFileWithIntent } from '@/lib/uploadFile';
 import { Clock } from 'lucide-react';
 
 interface Props {
@@ -24,18 +25,7 @@ export const MilestoneSubmissionForm: React.FC<Props> = ({ contractId, milestone
         try {
             // Upload all images sequentially and get their URLs
             const uploadPromises = mediaList.map(async (media) => {
-                const response = await api.post("/api/files/upload-url", {
-                    folder: "documents",
-                    filename: media.file.name,
-                    contentType: media.file.type || "application/octet-stream",
-                });
-                const { uploadUrl, key } = response.data || {};
-                
-                await fetch(uploadUrl, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': media.file.type },
-                    body: media.file
-                });
+                const { key } = await uploadFileWithIntent(media.file, "documents");
                 
                 // Assuming your S3 bucket maps directly to a public URL or you store the key
                 // Based on `uploadChatAttachment` in the codebase, it returns `attachment_key`.
