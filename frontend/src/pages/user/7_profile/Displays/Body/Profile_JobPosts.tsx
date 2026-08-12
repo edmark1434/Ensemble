@@ -144,13 +144,14 @@ export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ userDetails, 
             >
               <button
                 onClick={(e) => handleToggleSave(e, job.id.toString())}
-                className={`absolute top-4 right-4 z-10 p-1.5 rounded-full bg-gray-100/50 dark:bg-white/5 transition-colors flex items-center gap-1 ${
-                  job.isSaved ? "text-yellow-500 hover:text-yellow-600" : "text-gray-400 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10"
+                className={`absolute top-4 right-4 z-10 p-2 rounded-lg backdrop-blur-sm transition-colors flex items-center justify-center ${
+                  job.isSaved 
+                    ? "bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30" 
+                    : "bg-black/30 text-white/80 hover:bg-black/50 hover:text-white"
                 }`}
                 title="Save Job"
               >
                 <Bookmark className={`h-4 w-4 ${job.isSaved ? "fill-current" : ""}`} />
-                <span className="text-[10px] font-bold">{job.savesCount}</span>
               </button>
               
               <div className="flex-1">
@@ -170,7 +171,7 @@ export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ userDetails, 
                     className={`rounded border px-2 py-0.5 text-[10px] font-medium ${
                       job.status === "Open"
                         ? "border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
-                        : "border-gray-300 bg-gray-100 text-gray-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-400"
+                        : "border-red-300 bg-red-100 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
                     }`}
                   >
                     {job.status}
@@ -224,9 +225,14 @@ export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ userDetails, 
               </div>
 
               {/* Time Ago Footer */}
-              <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-500">
-                <Clock className="h-3 w-3" />
-                <span>Posted {job.timeAgo}</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-500">
+                  <Clock className="h-3 w-3" />
+                  <span>Posted {job.timeAgo}</span>
+                </div>
+                <div className="text-[11px] font-bold text-gray-700 dark:text-zinc-300 bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md">
+                  {job.savesCount} Saves
+                </div>
               </div>
             </div>
           ))}

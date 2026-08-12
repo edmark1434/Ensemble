@@ -115,16 +115,16 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-xl border border-white/10 bg-[#0d0f1a] shadow-2xl backdrop-blur-xl overflow-hidden z-50">
+    <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-2xl backdrop-blur-xl overflow-hidden z-50">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-white/10 p-4">
-        <h3 className="text-sm font-semibold text-white">
+      <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 p-4">
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
           Notifications
         </h3>
 
         <button
           onClick={onClose}
-          className="text-zinc-400 hover:text-white"
+          className="text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
         >
           <X size={18} />
         </button>
@@ -133,7 +133,7 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
       {/* Notification List */}
       <div className="max-h-[420px] overflow-y-auto p-2">
         {notificationsData.length === 0 ? (
-          <div className="py-10 text-center text-zinc-500 text-sm">
+          <div className="py-10 text-center text-gray-500 dark:text-zinc-500 text-sm">
             No notifications
           </div>
         ) : (
@@ -143,32 +143,32 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
               onClick={() => handleNotificationClick(notification)}
               className={`w-full rounded-lg p-3 mb-2 text-left transition ${
                 notification.is_read
-                  ? "hover:bg-white/5"
-                  : "bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20"
+                  ? "hover:bg-gray-50 dark:hover:bg-white/5"
+                  : "bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 hover:bg-blue-100 dark:hover:bg-blue-500/20"
               }`}
             >
               <div className="flex items-start justify-between">
                 <span
                   className={`text-xs font-semibold ${
                     notification.is_read
-                      ? "text-zinc-400"
-                      : "text-blue-400"
+                      ? "text-gray-500 dark:text-zinc-400"
+                      : "text-blue-600 dark:text-blue-400"
                   }`}
                 >
                   {notification.reference_prefix}
                 </span>
 
-                <span className="text-[10px] text-zinc-500">
+                <span className="text-[10px] text-gray-500 dark:text-zinc-500">
                   {formatTimeAgo(notification.created_at)}
                 </span>
               </div>
 
-              <p className="mt-1 text-sm text-zinc-300">
+              <p className="mt-1 text-sm text-gray-700 dark:text-zinc-300">
                 {notification.message}
               </p>
 
               <div className="mt-2 flex items-center justify-between">
-                <span className="text-[11px] text-zinc-500">
+                <span className="text-[11px] text-gray-500 dark:text-zinc-500">
                   {notification.reference_table}
                 </span>
 
@@ -183,10 +183,10 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
 
       {/* Footer */}
       {notificationsData.length > 0 && (
-        <div className="border-t border-white/10 p-3">
+        <div className="border-t border-gray-200 dark:border-white/10 p-3">
           <button
             onClick={handleMarkAllRead}
-            className="w-full text-center text-sm font-medium text-blue-400 hover:text-blue-300"
+            className="w-full text-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
           >
             Mark all as read
           </button>

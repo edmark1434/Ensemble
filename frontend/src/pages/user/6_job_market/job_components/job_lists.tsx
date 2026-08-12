@@ -16,6 +16,7 @@ export interface Job {
   priceRange: string;
   minBudget: number;
   postedBy: string;
+  client_account_id?: string;
   clientAvatar?: string;
   postedAt: string;
   updatedAt?: string;

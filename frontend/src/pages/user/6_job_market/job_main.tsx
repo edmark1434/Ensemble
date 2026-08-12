@@ -113,6 +113,7 @@ const JobMain: React.FC = () => {
           minBudget: j.rate_credits_min || 0,
           maxBudget: j.rate_credits_max || 0,
           postedBy: j.client_name || j.client_handle || "Unknown",
+          client_account_id: j.client_account_id,
           clientAvatar: j.client_avatar_path
             ? `${import.meta.env.VITE_CLOUDFRONT_URL}${j.client_avatar_path.startsWith('/') ? '' : '/'}${j.client_avatar_path}`
             : undefined,

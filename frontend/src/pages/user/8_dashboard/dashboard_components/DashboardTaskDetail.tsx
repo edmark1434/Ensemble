@@ -43,7 +43,7 @@ export const DashboardTaskDetail = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-[#080a12] flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] flex items-center justify-center">
                 <LoaderCircle className="h-8 w-8 text-emerald-500 animate-spin" />
             </div>
         );
@@ -51,7 +51,7 @@ export const DashboardTaskDetail = () => {
 
     if (!task) {
         return (
-            <div className="min-h-screen bg-[#080a12] flex items-center justify-center text-white">
+            <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] flex items-center justify-center text-gray-900 dark:text-white">
                 Task not found.
             </div>
         );
@@ -77,13 +77,13 @@ export const DashboardTaskDetail = () => {
     }
 
     const statusBadgeColor = 
-        computedStatus === 'Completed' ? 'bg-purple-500/10 border-purple-500/20 text-purple-400' :
-        computedStatus === 'Done' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' :
-        computedStatus === 'Ongoing' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
-        'bg-zinc-500/10 border-zinc-500/20 text-zinc-400';
+        computedStatus === 'Completed' ? 'bg-purple-500/10 border-purple-500/20 text-purple-600 dark:text-purple-400' :
+        computedStatus === 'Done' ? 'bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400' :
+        computedStatus === 'Ongoing' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400' :
+        'bg-zinc-500/10 border-zinc-500/20 text-gray-600 dark:text-zinc-400';
 
     return (
-        <div className="min-h-screen bg-[#080a12]">
+        <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
             <UserHeader pageTitle={isFreelancer ? "My Task" : "To Review"} credits={user?.wallet?.balance_credits || 0} />
             
             <div className="mx-auto max-w-7xl p-6 md:p-8 h-[calc(100vh-100px)] flex flex-col">
@@ -93,7 +93,7 @@ export const DashboardTaskDetail = () => {
                         <div>
                             <button 
                                 onClick={() => navigate(location.pathname.includes('/review/') ? '/dashboard/review' : '/dashboard/tasks')}
-                                className="flex items-center gap-2 text-zinc-400 hover:text-white transition"
+                                className="flex items-center gap-2 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition"
                             >
                                 <ArrowLeft className="h-4 w-4" /> Back to Dashboard
                             </button>
@@ -105,17 +105,17 @@ export const DashboardTaskDetail = () => {
                                     <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md border ${statusBadgeColor} shrink-0`}>
                                         {computedStatus}
                                     </span>
-                                    <span className="text-[10px] uppercase font-bold px-2 py-1 rounded-md border bg-zinc-500/10 text-zinc-400 border-zinc-500/20 shrink-0">
+                                    <span className="text-[10px] uppercase font-bold px-2 py-1 rounded-md border bg-zinc-500/10 text-gray-600 dark:text-zinc-400 border-zinc-500/20 shrink-0">
                                         Job
                                     </span>
                                 </div>
                                 <div className="flex items-start gap-3">
-                                    <h1 className="text-xl font-bold text-white tracking-tight break-words line-clamp-3">{task.job_title}</h1>
+                                    <h1 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight break-words line-clamp-3">{task.job_title}</h1>
                                     <a 
                                         href={`/jobs/postings/${task.job_id}`} 
                                         target="_blank" 
                                         rel="noreferrer" 
-                                        className="flex items-center justify-center p-1.5 rounded-md bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors shrink-0 mt-0.5"
+                                        className="flex items-center justify-center p-1.5 rounded-md bg-white dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition-colors shrink-0 mt-0.5"
                                         title="View Original Job Post"
                                     >
                                         <ExternalLink className="h-4 w-4" />
@@ -134,27 +134,33 @@ export const DashboardTaskDetail = () => {
                                                 ? `${import.meta.env.VITE_CLOUDFRONT_URL}${task.freelancer_avatar.startsWith('/') ? '' : '/'}${task.freelancer_avatar}`
                                                 : "https://i.pravatar.cc/150?u=b042581f4e29026704d")} 
                                         alt="User Avatar" 
-                                        className="w-8 h-8 rounded-full object-cover border border-zinc-700"
+                                        className="w-8 h-8 rounded-full object-cover border border-gray-300 dark:border-zinc-700"
                                     />
                                     <div className="flex flex-col">
-                                        <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">
+                                        <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-zinc-500 tracking-wider">
                                             {isFreelancer ? 'Client' : 'Freelancer'}
                                         </span>
-                                        <span className="text-zinc-300 font-medium text-sm leading-tight">
+                                        <span className="text-gray-700 dark:text-zinc-300 font-medium text-sm leading-tight">
                                             {isFreelancer ? task.client_name : task.freelancer_name}
                                         </span>
                                     </div>
                                 </div>
+                                <button 
+                                    onClick={() => navigate(`/profile/${isFreelancer ? task.client_account_id : task.freelancer_account_id}`)}
+                                    className="text-[10px] font-semibold px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-zinc-800 text-gray-700 dark:text-zinc-300 hover:bg-gray-300 dark:hover:bg-zinc-700 border border-gray-300 dark:border-zinc-700 transition-colors uppercase tracking-wider"
+                                >
+                                    View Profile
+                                </button>
                             </div>
                         </div>
 
                         {/* Milestones Stepper */}
-                        <div className="bg-[#0d0f1a]/70 border border-white/10 rounded-2xl p-5 flex-1 overflow-y-auto inbox-scroll-thin min-h-0">
+                        <div className="bg-white dark:bg-[#0d0f1a]/70 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10 rounded-2xl p-5 flex-1 overflow-y-auto inbox-scroll-thin min-h-0">
                             <div className="flex items-center justify-between mb-5">
-                                <h2 className="text-base font-bold text-white uppercase tracking-wide">Milestones</h2>
+                                <h2 className="text-base font-bold text-gray-900 dark:text-white uppercase tracking-wide">Milestones</h2>
                                 <button 
                                     onClick={() => navigate(`/contracts/${task.contract_id || id}`)}
-                                    className="text-[10px] font-semibold px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors uppercase tracking-wider"
+                                    className="text-[10px] font-semibold px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-colors uppercase tracking-wider"
                                 >
                                     View Contract
                                 </button>
@@ -175,17 +181,17 @@ export const DashboardTaskDetail = () => {
                                     const isActionable = milestone.status === 'active' || milestone.status === 'submitted_for_review';
                                     
                                     const statusColors = isCompleted 
-                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' 
                                         : isActionable 
-                                            ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' 
-                                            : 'bg-white/5 text-zinc-500 border-white/5';
+                                            ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' 
+                                            : 'bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-zinc-500 border-gray-200 dark:border-white/5';
                                             
-                                    const circleColors = isCompleted ? 'bg-emerald-500 text-white' : isActionable ? 'bg-blue-500 text-white' : 'bg-zinc-800 text-zinc-500';
+                                    const circleColors = isCompleted ? 'bg-emerald-500 text-white' : isActionable ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-zinc-800 text-gray-500 dark:text-zinc-500';
 
                                     return (
                                         <div 
                                             key={milestone.id} 
-                                            className={`relative flex gap-3 p-3 rounded-xl transition ${isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-white/5'} ${isActive ? 'bg-white/5 border border-white/10' : 'border border-transparent'}`}
+                                            className={`relative flex gap-3 p-3 rounded-xl transition ${isLocked ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5'} ${isActive ? 'bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10' : 'border border-transparent'}`}
                                             onClick={() => !isLocked && setActiveMilestoneId(milestone.id)}
                                         >
                                             <div className="flex flex-col items-center mt-1">
@@ -193,29 +199,29 @@ export const DashboardTaskDetail = () => {
                                                     {index + 1}
                                                 </div>
                                                 {index !== task.milestones.length - 1 && (
-                                                    <div className="w-px h-full bg-white/10 my-1" />
+                                                    <div className="w-px h-full bg-gray-200 dark:bg-white/10 my-1" />
                                                 )}
                                             </div>
                                             <div className="flex-1 pb-1">
-                                                <p className={`font-semibold text-xs mb-1 ${isActive ? 'text-white' : 'text-zinc-300'}`}>{milestone.name}</p>
-                                                <p className="text-zinc-500 text-[10px] mb-2 leading-relaxed line-clamp-2" title={milestone.description}>
+                                                <p className={`font-semibold text-xs mb-1 ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-zinc-300'}`}>{milestone.name}</p>
+                                                <p className="text-gray-500 dark:text-zinc-500 text-[10px] mb-2 leading-relaxed line-clamp-2" title={milestone.description}>
                                                     {milestone.description || "No description provided."}
                                                 </p>
                                                 
                                                 <div className="flex flex-col gap-1.5 mt-2">
                                                     <div className="flex items-center justify-between">
-                                                        <div className="flex items-center gap-1 text-[10px] font-bold text-yellow-500">
+                                                        <div className="flex items-center gap-1 text-[10px] font-bold text-yellow-600 dark:text-yellow-500">
                                                             <img src="/icons/lottie/credit.png" alt="credits" className="w-3 h-3 object-contain" onError={(e) => { e.currentTarget.style.display = 'none' }} />
                                                             {milestone.credits} Credits
                                                         </div>
-                                                        <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border ${isLocked ? 'bg-zinc-900 text-zinc-600 border-zinc-800' : statusColors}`}>
+                                                        <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border ${isLocked ? 'bg-gray-100 dark:bg-zinc-900 text-gray-500 dark:text-zinc-600 border-gray-200 dark:border-zinc-800' : statusColors}`}>
                                                             {isLocked ? 'LOCKED' : milestone.status.replace(/_/g, ' ')}
                                                         </span>
                                                     </div>
-                                                    <div className="flex items-center justify-between text-[9px] text-zinc-400 font-medium">
-                                                        <span>Additional work rate: <span className="text-yellow-500">{task.revision_price_credits} Credits</span></span>
+                                                    <div className="flex items-center justify-between text-[9px] text-gray-500 dark:text-zinc-400 font-medium">
+                                                        <span>Additional work rate: <span className="text-yellow-600 dark:text-yellow-500">{task.revision_price_credits} Credits</span></span>
                                                         <span>
-                                                            Revisions: <span className={milestone.submissions?.filter((s: any) => s.status === 'revision_request').length >= milestone.revisions_max ? "text-red-400" : "text-white"}>
+                                                            Revisions: <span className={milestone.submissions?.filter((s: any) => s.status === 'revision_request').length >= milestone.revisions_max ? "text-red-600 dark:text-red-400" : "text-gray-700 dark:text-white"}>
                                                                 {milestone.submissions?.filter((s: any) => s.status === 'revision_request').length || 0} / {milestone.revisions_max}
                                                             </span>
                                                         </span>
@@ -241,7 +247,7 @@ export const DashboardTaskDetail = () => {
                                 onOpenReviewModal={() => setIsReviewModalOpen(true)}
                             />
                         ) : (
-                            <div className="flex-1 flex items-center justify-center text-zinc-500">
+                            <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-zinc-500">
                                 Select a milestone to view activity.
                             </div>
                         )}

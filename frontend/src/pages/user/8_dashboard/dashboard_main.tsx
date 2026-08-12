@@ -149,7 +149,7 @@ const DashboardMain = () => {
                             className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
                                 activeTab === 'overview' 
                                     ? 'text-blue-400 font-bold' 
-                                    : 'text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white'
+                                    : 'text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg'
                             }`}
                             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                         >
@@ -168,7 +168,7 @@ const DashboardMain = () => {
                             className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
                                 activeTab === 'freelancer' 
                                     ? 'text-blue-400 font-bold' 
-                                    : 'text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white'
+                                    : 'text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg'
                             }`}
                             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                         >
@@ -188,7 +188,7 @@ const DashboardMain = () => {
                             className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
                                 activeTab === 'client' 
                                     ? 'text-blue-400 font-bold' 
-                                    : 'text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white'
+                                    : 'text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg'
                             }`}
                             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                         >
@@ -208,7 +208,7 @@ const DashboardMain = () => {
                             className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
                                 activeTab === 'archived' 
                                     ? 'text-blue-400 font-bold' 
-                                    : 'text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white'
+                                    : 'text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg'
                             }`}
                             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                         >
@@ -292,7 +292,7 @@ const DashboardMain = () => {
                                                 <div 
                                                     key={task.contract_id} 
                                                     onClick={() => navigate(`/dashboard/tasks/${task.contract_id}`)}
-                                                    className="flex items-center gap-4 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3 rounded-xl border border-gray-200 dark:border-white/10 cursor-pointer hover:bg-gray-100 dark:bg-white/10 transition-colors"
+                                                    className="flex items-center gap-4 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3 rounded-xl border border-gray-200 dark:border-white/10 cursor-pointer hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
                                                 >
                                                     <img 
                                                         src={task.client_avatar 
@@ -309,11 +309,11 @@ const DashboardMain = () => {
                                                             </a>
                                                         </div>
                                                         <div className="flex items-center gap-3 w-full">
-                                                            <div className="w-full h-1.5 bg-gray-100 dark:bg-white/10 rounded-full flex overflow-hidden">
+                                                            <div className="w-full h-1.5 bg-gray-200 dark:bg-white/10 rounded-full flex overflow-hidden">
                                                                 {task.milestones?.map((m: any, idx: number) => (
                                                                     <div 
                                                                         key={m.id} 
-                                                                        className={`h-full flex-1 ${idx !== 0 ? 'border-l border-[#0d0f1a]' : ''} ${m.status === 'completed' || m.status === 'approved' ? 'bg-emerald-500' : 'bg-transparent'}`}
+                                                                        className={`h-full flex-1 ${idx !== 0 ? 'border-l border-white dark:border-[#0d0f1a]' : ''} ${m.status === 'completed' || m.status === 'approved' ? 'bg-emerald-500' : 'bg-transparent'}`}
                                                                     />
                                                                 ))}
                                                             </div>
@@ -358,7 +358,7 @@ const DashboardMain = () => {
                                                 <div 
                                                     key={task.contract_id} 
                                                     onClick={() => navigate(`/dashboard/review/${task.contract_id}`)}
-                                                    className="flex items-center gap-4 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3 rounded-xl border border-gray-200 dark:border-white/10 cursor-pointer hover:bg-gray-100 dark:bg-white/10 transition-colors"
+                                                    className="flex items-center gap-4 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3 rounded-xl border border-gray-200 dark:border-white/10 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/10 transition-colors"
                                                 >
                                                     <img 
                                                         src={task.freelancer_avatar 
@@ -375,11 +375,11 @@ const DashboardMain = () => {
                                                             </a>
                                                         </div>
                                                         <div className="flex items-center gap-3 w-full">
-                                                            <div className="w-full h-1.5 bg-gray-100 dark:bg-white/10 rounded-full flex overflow-hidden">
+                                                            <div className="w-full h-1.5 bg-gray-200 dark:bg-white/10 rounded-full flex overflow-hidden">
                                                                 {task.milestones?.map((m: any, idx: number) => (
                                                                     <div 
                                                                         key={m.id} 
-                                                                        className={`h-full flex-1 ${idx !== 0 ? 'border-l border-[#0d0f1a]' : ''} ${m.status === 'completed' || m.status === 'approved' ? 'bg-emerald-500' : 'bg-transparent'}`}
+                                                                        className={`h-full flex-1 ${idx !== 0 ? 'border-l border-white dark:border-[#0d0f1a]' : ''} ${m.status === 'completed' || m.status === 'approved' ? 'bg-emerald-500' : 'bg-transparent'}`}
                                                                     />
                                                                 ))}
                                                             </div>
@@ -392,7 +392,7 @@ const DashboardMain = () => {
                                                         <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${statusBadgeColor}`}>
                                                             {computedStatus}
                                                         </span>
-                                                        <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded border bg-zinc-500/10 text-gray-500 dark:text-zinc-400 border-zinc-500/20">
+                                                        <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded border bg-zinc-500/10 text-gray-600 dark:text-zinc-400 border-zinc-500/20">
                                                             Job
                                                         </span>
                                                     </div>

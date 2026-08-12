@@ -21,7 +21,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
     if (selectedJob.isOwnPost) {
       navigate("/profile");
     } else {
-      navigate(`/profile/${encodeURIComponent(selectedJob.postedBy)}`);
+      navigate(`/profile/${selectedJob.client_account_id}`);
     }
   };
 
