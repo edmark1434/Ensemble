@@ -187,9 +187,19 @@ useEffect(() => {
         return prev;
       }
 
+<<<<<<< HEAD
       const updated = [notification, ...prev];
       notificationCache = { accountId: userInfo.account_id, items: updated, fetchedAt: Date.now() };
       return updated;
+=======
+      // Play notification sound
+      try {
+        const audio = new Audio("/sounds/notification.mp3");
+        audio.play().catch(e => console.log("Audio play blocked:", e));
+      } catch (err) {}
+
+      return [notification, ...prev];
+>>>>>>> af654cae744dd0612d7eae31f2a703413e98629d
     });
   };
 

@@ -1,3 +1,6 @@
+const { pool } = require('../lib/Database');
+const { getIo } = require('../lib/WebSocket');
+const { createNotificationServices } = require('../services/NotificationServices');
 const { createNewAccount, fetchAllAccounts, getAccountByHandleService,
     searchUserAccountsByHandleService,
     getAccountWalletService, getProfileServices, getAccountLinkByAccountIdService,
@@ -249,6 +252,26 @@ async function followUserController(req, res) {
     if (!followerId) return res.status(401).json({ success: false, message: 'Unauthorized' });
     try {
         await followUserService(followerId, followedId);
+        
+        try {
+            const accQ = await pool.query('SELECT handle FROM accounts WHERE account_id = $1', [followerId]);
+            if (accQ.rows[0]) {
+                const handle = accQ.rows[0].handle;
+                const notif = await createNotificationServices({
+                    message: `@${handle} followed you.`,
+                    reference_table: 'accounts',
+                    reference_prefix: 'follow',
+                    reference_path: `/profile/${followerId}`,
+                    reference_id: followerId,
+                    account_id: followedId
+                });
+                const io = getIo();
+                if (io) io.to(String(followedId)).emit('notification', notif);
+            }
+        } catch (notifErr) {
+            console.error('Error sending follow notification:', notifErr);
+        }
+
         return res.status(200).json({ success: true, message: 'Successfully followed user' });
     } catch (err) {
         console.error('Error in followUserController:', err);

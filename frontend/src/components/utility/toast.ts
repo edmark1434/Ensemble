@@ -2,6 +2,7 @@
 import React from 'react';
 import toast, { type ToastOptions } from 'react-hot-toast';
 import { CheckCircle, XCircle, Loader2, Info } from 'lucide-react';
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 
 /**
  * Base Tailwind classes for the toast
@@ -22,16 +23,28 @@ const getClassName = (type: 'success' | 'error' | 'loading' | 'custom'): string 
   return `${baseClassName} ${themes[type]}`;
 };
 
+const ToastLottieIcon = ({ src }: { src: string }) => {
+  return React.createElement(
+    'div',
+    { className: "h-7 w-7 shrink-0 flex items-center justify-center -ml-1" },
+    React.createElement(
+      'div',
+      { className: "scale-[1.3] w-full h-full flex items-center justify-center" },
+      React.createElement(DotLottieReact, { src, autoplay: true, loop: false })
+    )
+  );
+};
+
 export const toastConfig = {
   success: {
     duration: 4000,
-    icon: React.createElement(CheckCircle, { className: "h-5 w-5 text-emerald-500 dark:text-emerald-400" }),
+    icon: React.createElement(ToastLottieIcon, { src: "/icons/lottie/success.lottie" }),
     className: getClassName('success'),
     style: { padding: '12px 16px', background: 'transparent' },
   },
   error: {
     duration: 5000,
-    icon: React.createElement(XCircle, { className: "h-5 w-5 text-red-500 dark:text-red-400" }),
+    icon: React.createElement(ToastLottieIcon, { src: "/icons/lottie/error.lottie" }),
     className: getClassName('error'),
     style: { padding: '12px 16px', background: 'transparent' },
   },

@@ -65,7 +65,7 @@ const CustomDropdown: React.FC<{
 
   return (
     <div className="space-y-1.5 relative">
-      <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block mb-1">
+      <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1">
         {label} <span className="text-red-500">*</span>
       </label>
       <div className="relative">
@@ -76,10 +76,10 @@ const CustomDropdown: React.FC<{
             error ? "border-red-500/50" : isOpen ? "border-blue-500/50" : "border-gray-200 dark:border-white/10 hover:border-white/20"
           }`}
         >
-          <span className={value ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-zinc-500"}>
+          <span className={value ? "text-gray-900 dark:text-white" : "text-gray-600 dark:text-zinc-400"}>
             {value || placeholder}
           </span>
-          <ChevronDown className={`h-3.5 w-3.5 text-gray-500 dark:text-zinc-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+          <ChevronDown className={`h-3.5 w-3.5 text-gray-600 dark:text-zinc-300 transition-transform ${isOpen ? "rotate-180" : ""}`} />
         </button>
 
         <AnimatePresence>
@@ -109,7 +109,7 @@ const CustomDropdown: React.FC<{
                       className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition ${
                         isSelected
                           ? "bg-blue-500/15 text-blue-400"
-                          : "text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:text-white"
+                          : "text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
                       }`}
                     >
                       <span>{opt}</span>
@@ -230,72 +230,79 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
     <div className="space-y-5 text-left">
       <div>
         <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-0.5">Job Core Specifications</h2>
-        <p className="text-xs text-gray-500 dark:text-zinc-400">Provide fundamental background criteria for your project.</p>
+        <p className="text-xs text-gray-600 dark:text-zinc-300">Provide fundamental background criteria for your project.</p>
       </div>
 
-      <div className="space-y-1.5">
-        <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">Job Thumbnail Image</label>
-        <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-          className={`relative h-28 w-full rounded-xl border border-dashed flex items-center justify-center p-3 cursor-pointer transition-all duration-200 ${
-            isDragging ? "border-blue-500 bg-blue-500/10" : previewUrl ? "border-white/20 bg-white dark:bg-white/5 shadow-sm dark:shadow-none" : "border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:border-white/20"
-          }`}
-        >
-          <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
-          {previewUrl ? (
-            <div className="absolute inset-0 w-full h-full rounded-xl overflow-hidden group">
-              <img src={previewUrl} alt="Preview" className="w-full h-full object-cover opacity-80" />
-            </div>
-          ) : (
-            <div className="text-center space-y-1 pointer-events-none">
-              <ImageIcon className="h-4 w-4 mx-auto text-gray-500 dark:text-zinc-400" />
-              <div className="text-xs text-gray-500 dark:text-zinc-400"><span className="font-bold text-blue-400">Click to browse file</span> or drop asset here</div>
-            </div>
-          )}
+      <div className="grid grid-cols-1 md:grid-cols-[140px_1fr] gap-5 items-start">
+        {/* Left: Square Image */}
+        <div className="flex flex-col">
+          <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1.5">Job Thumbnail</label>
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={`relative w-[140px] aspect-square rounded-xl border border-dashed flex flex-col items-center justify-center p-3 cursor-pointer transition-all duration-200 ${
+              isDragging ? "border-blue-500 bg-blue-500/10" : previewUrl ? "border-white/20 bg-white dark:bg-white/5 shadow-sm dark:shadow-none" : "border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:border-white/20"
+            }`}
+          >
+            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
+            {previewUrl ? (
+              <div className="absolute inset-0 w-full h-full rounded-xl overflow-hidden group">
+                <img src={previewUrl} alt="Preview" className="w-full h-full object-cover opacity-80" />
+              </div>
+            ) : (
+              <div className="text-center space-y-1 pointer-events-none">
+                <ImageIcon className="h-5 w-5 mx-auto text-gray-500 dark:text-zinc-400" />
+                <div className="text-[10px] text-gray-600 dark:text-zinc-300 leading-tight">
+                  <span className="font-bold text-blue-500 dark:text-blue-400 block mb-0.5">Browse</span>
+                  or drop
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right: Stacked Dropdowns */}
+        <div className="flex flex-col gap-4 pt-[2px]">
+          <CustomDropdown
+            label="Job Category"
+            value={category}
+            options={categories}
+            placeholder="Select Category"
+            error={errors.category}
+            onSelect={(val) => {
+              setCategory(val);
+              clearError("category");
+            }}
+          />
+
+          <CustomDropdown
+            label="Job Difficulty"
+            value={difficulty}
+            options={difficulties}
+            placeholder="Select Level"
+            error={errors.difficulty}
+            onSelect={(val) => {
+              setDifficulty(val);
+              clearError("difficulty");
+            }}
+          />
         </div>
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-1.5 mt-5">
         <div className="flex justify-between items-center">
-          <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">Job Post Title <span className="text-red-500">*</span></label>
+          <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1">Job Post Title <span className="text-red-500">*</span></label>
           <span className="text-[10px] font-mono text-gray-500 dark:text-zinc-500">{title.length}/300</span>
         </div>
         <input type="text" maxLength={300} placeholder="e.g., Wedding Video Edit - Romantic Style" value={title} onChange={e => { setTitle(e.target.value); if(e.target.value.trim()) clearError("title"); }} className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3.5 py-2.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${errors.title ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"}`} />
         {errors.title && <p className="text-[11px] text-red-400">{errors.title}</p>}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <CustomDropdown
-          label="Job Category"
-          value={category}
-          options={categories}
-          placeholder="Select Category"
-          error={errors.category}
-          onSelect={(val) => {
-            setCategory(val);
-            clearError("category");
-          }}
-        />
-
-        <CustomDropdown
-          label="Job Difficulty"
-          value={difficulty}
-          options={difficulties}
-          placeholder="Select Level"
-          error={errors.difficulty}
-          onSelect={(val) => {
-            setDifficulty(val);
-            clearError("difficulty");
-          }}
-        />
-      </div>
-
       <div className="space-y-1.5">
         <div className="flex justify-between items-end mb-1">
-          <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block mb-1">
+          <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1">
             Job Post Description <span className="text-red-500">*</span>
           </label>
           <div className="flex items-center gap-1">

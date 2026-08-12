@@ -74,7 +74,7 @@ export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, ca
 
     if (!canReview) {
         return (
-            <div className="text-center py-4 text-zinc-500 font-bold bg-white/5 rounded-xl border border-white/10">
+            <div className="text-center py-4 text-gray-500 dark:text-zinc-500 font-bold bg-gray-100 dark:bg-white/5 rounded-xl border border-gray-200 dark:border-white/10">
                 Waiting for the freelancer to submit work for review.
             </div>
         );
@@ -114,26 +114,26 @@ export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, ca
                         <AlertCircle className="h-4 w-4" />
                         Revision Limit Exceeded
                     </h3>
-                    <button onClick={() => setAction(null)} className="text-xs text-zinc-400 hover:text-white">Cancel</button>
+                    <button onClick={() => setAction(null)} className="text-xs text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white">Cancel</button>
                 </div>
                 
-                <p className="text-sm text-zinc-300 leading-relaxed">
+                <p className="text-sm text-gray-700 dark:text-zinc-300 leading-relaxed">
                     You have used all <b>{maxRevisions}</b> included revisions for this milestone. 
                     You can purchase an additional revision to request more changes.
                 </p>
 
-                <div className="bg-[#080a12]/50 rounded-lg border border-white/5 p-4 space-y-3">
-                    <div className="flex justify-between text-xs text-zinc-400">
+                <div className="bg-white dark:bg-[#080a12]/50 rounded-lg border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none p-4 space-y-3">
+                    <div className="flex justify-between text-xs text-gray-500 dark:text-zinc-400">
                         <span>Base Milestone Price:</span>
-                        <span className="text-white font-bold">{activeMilestone?.credits} Credits</span>
+                        <span className="text-gray-900 dark:text-white font-bold">{activeMilestone?.credits} Credits</span>
                     </div>
-                    <div className="flex justify-between text-xs text-zinc-400">
+                    <div className="flex justify-between text-xs text-gray-500 dark:text-zinc-400">
                         <span>Additional Revision Rate:</span>
-                        <span className="text-yellow-500 font-bold">+{rate} Credits</span>
+                        <span className="text-yellow-600 dark:text-yellow-500 font-bold">+{rate} Credits</span>
                     </div>
-                    <div className="border-t border-white/10 pt-3 flex justify-between text-sm">
-                        <span className="font-bold text-white">Amount to Pay:</span>
-                        <span className="font-bold text-yellow-500">{total} Credits</span>
+                    <div className="border-t border-gray-200 dark:border-white/10 pt-3 flex justify-between text-sm">
+                        <span className="font-bold text-gray-900 dark:text-white">Amount to Pay:</span>
+                        <span className="font-bold text-yellow-600 dark:text-yellow-500">{total} Credits</span>
                     </div>
                 </div>
 
@@ -159,7 +159,7 @@ export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, ca
                 <button 
                     type="button" 
                     onClick={() => setAction(null)}
-                    className="text-[10px] text-zinc-400 hover:text-white"
+                    className="text-[10px] text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
                 >
                     Cancel
                 </button>
@@ -170,7 +170,7 @@ export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, ca
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder={action === 'approve' ? "Optional remark for the freelancer..." : "Describe what needs to be changed..."}
                 rows={3}
-                className="w-full rounded-xl border border-white/10 bg-[#080a12]/50 p-3.5 text-xs font-sans text-white placeholder-zinc-500 transition focus:border-emerald-500/50 focus:outline-none resize-none leading-relaxed"
+                className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-[#080a12]/50 p-3.5 text-xs font-sans text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 transition focus:border-emerald-500/50 focus:outline-none resize-none leading-relaxed shadow-sm dark:shadow-none"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 required={action === 'revise'}
             />

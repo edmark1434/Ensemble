@@ -302,7 +302,7 @@ export const TransactionHistoryMain = () => {
                       if (tab === "Credits") setActiveChildTab("All Credits");
                       if (tab === "Assets") setActiveChildTab("All Assets");
                     }}
-                    className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isActive ? "border-blue-500/40 bg-blue-500/10 text-blue-300" : "border-transparent text-gray-500 dark:text-zinc-500 hover:bg-gray-50 dark:bg-white/[0.03] hover:text-gray-700 dark:text-zinc-200"}`}
+                    className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isActive ? "border-blue-500/40 bg-blue-500/10 text-blue-300" : "border-transparent text-gray-700 dark:text-zinc-300 hover:bg-gray-50 dark:bg-white/[0.03] hover:text-gray-900 dark:text-zinc-100"}`}
                   >
                     <TabIcon className="h-3.5 w-3.5" aria-hidden="true" />
                     {tab}
@@ -335,7 +335,7 @@ export const TransactionHistoryMain = () => {
                       role="tab"
                       aria-selected={isActive}
                       onClick={() => setActiveChildTab(tab)}
-                      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isActive ? "border-blue-500/40 bg-blue-500/10 text-blue-300" : "border-gray-100 dark:border-white/5 text-gray-500 dark:text-zinc-500 hover:bg-gray-50 dark:bg-white/[0.03] hover:text-gray-700 dark:text-zinc-200"}`}
+                      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${isActive ? "border-blue-500/40 bg-blue-500/10 text-blue-300" : "border-gray-100 dark:border-white/5 text-gray-700 dark:text-zinc-300 hover:bg-gray-50 dark:bg-white/[0.03] hover:text-gray-900 dark:text-zinc-100"}`}
                     >
                       <List className="h-3.5 w-3.5" aria-hidden="true" />
                       {tab.startsWith("All ") ? tab : displayType(tab)}

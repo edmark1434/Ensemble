@@ -22,7 +22,7 @@ const JobTabs: React.FC = () => {
             key={tab.path}
             onClick={() => navigate(tab.path)}
             className={`relative flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors duration-200 ${
-              isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+              isActive ? "text-blue-600 dark:text-blue-400" : "text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-white/5 rounded-t-lg"
             }`}
           >
             <span className="relative z-10 flex items-center gap-2">

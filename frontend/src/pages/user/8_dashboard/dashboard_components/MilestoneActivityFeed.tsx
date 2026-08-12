@@ -60,16 +60,16 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
     }
 
     return (
-        <div className="flex flex-col h-full bg-[#0d0f1a]/70 rounded-2xl border border-white/10 overflow-hidden shadow-xl">
+        <div className="flex flex-col h-full bg-white dark:bg-[#0d0f1a]/70 rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden shadow-xl">
             
             {/* Header */}
-            <div className="px-6 py-4 border-b border-white/10 bg-white/5 flex items-center justify-between">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 flex items-center justify-between">
                 <div>
-                    <h2 className="text-lg font-bold text-white flex items-center gap-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
                         {activeMilestone.name}
                         {isCompleted && <CheckCircle className="h-4 w-4 text-emerald-400" />}
                     </h2>
-                    <p className="text-xs text-zinc-400 mt-1">
+                    <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
                         {feed.length} updates • Deadline: {new Date(activeMilestone.deadline).toLocaleDateString()}
                     </p>
                 </div>
@@ -107,12 +107,12 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                                         />
                                     </div>
                                     <div className={`flex flex-col ${isFreelancerMsg ? 'items-end' : 'items-start'}`}>
-                                        <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mb-1 px-1 flex gap-2">
+                                        <div className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1 px-1 flex gap-2">
                                             <span>{isFreelancerMsg ? task.freelancer_name : task.client_name}</span>
                                             <span>•</span>
                                             <span>
                                                 {formatRelativeTime(item.submitted_at)} 
-                                                <span className="text-[9px] font-normal text-zinc-600/70 ml-1">
+                                                <span className="text-[9px] font-normal text-gray-400 dark:text-zinc-600/70 ml-1">
                                                     {new Date(item.submitted_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                                 </span>
                                             </span>
@@ -120,22 +120,22 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                                         <div className={`rounded-2xl p-4 ${
                                             item.status === 'submitted_for_review' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 rounded-tr-none' :
                                             item.status === 'approval' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 rounded-tl-none' :
-                                            item.status === 'revision_request' ? 'bg-red-500/20 border border-red-500/30 text-white rounded-tl-none' :
-                                            'bg-white/10 text-white rounded-tr-none'
+                                            item.status === 'revision_request' ? 'bg-red-500/20 border border-red-500/30 text-red-600 dark:text-white rounded-tl-none' :
+                                            'bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white rounded-tr-none'
                                         }`}>
                                     
                                     {item.status === 'submitted_for_review' && (
-                                        <div className="mb-2 font-bold text-xs uppercase tracking-wider text-blue-200 border-b border-blue-400/30 pb-2 flex items-center gap-2">
+                                        <div className="mb-2 font-bold text-xs uppercase tracking-wider text-blue-100 dark:text-blue-200 border-b border-blue-400/30 pb-2 flex items-center gap-2">
                                             <AlertCircle className="h-3 w-3" /> Submitted for Review
                                         </div>
                                     )}
                                     {item.status === 'approval' && (
-                                        <div className="mb-2 font-bold text-xs uppercase tracking-wider text-emerald-200 border-b border-emerald-400/30 pb-2 flex items-center gap-2">
+                                        <div className="mb-2 font-bold text-xs uppercase tracking-wider text-emerald-100 dark:text-emerald-200 border-b border-emerald-400/30 pb-2 flex items-center gap-2">
                                             <CheckCircle className="h-3 w-3" /> Milestone Approved
                                         </div>
                                     )}
                                     {item.status === 'revision_request' && (
-                                        <div className="mb-2 font-bold text-xs uppercase tracking-wider text-red-300 border-b border-red-500/30 pb-2 flex items-center gap-2">
+                                        <div className="mb-2 font-bold text-xs uppercase tracking-wider text-red-600 dark:text-red-300 border-b border-red-500/30 pb-2 flex items-center gap-2">
                                             <AlertCircle className="h-3 w-3" /> Revision Requested
                                         </div>
                                     )}
@@ -176,7 +176,7 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
             </div>
 
             {/* Interaction Panel */}
-            <div className="p-4 border-t border-white/10 bg-white/5">
+            <div className="p-4 border-t border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5">
                 {isCompleted ? (
                     <div className="text-center py-4 text-emerald-400 font-bold bg-emerald-500/10 rounded-xl border border-emerald-500/20">
                         <div className="flex items-center justify-center gap-2 mb-2">

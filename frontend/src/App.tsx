@@ -60,6 +60,7 @@ const EmailVerification = lazyPage(() => import('./pages/EmailVerification'));
 const NotFound = lazyPage(() => import('@/pages/user/0_misc/NotFound.tsx'));
 const ResetPasswordPage = lazyPage(() => import('@/pages/auth/ResetPasswordPage.tsx'));
 const ForgotPasswordPage = lazyPage(() => import('@/pages/auth/ForgotPasswordPage.tsx'));
+const NotificationsPage = lazyPage(() => import('@/pages/user/notifications/notifications_page.tsx'));
 const AdminLayout = lazyPage(() => import('./pages/admin/AdminLayout'));
 const AdminDashboard = lazyPage(() => import('./pages/admin/AdminDashboard'));
 const UserTeamPage = lazyPage(() => import('./pages/admin/userTeam/UserTeamPage'));
@@ -250,6 +251,7 @@ function App() {
           <Route path='/dashboard/tasks/:id' element={<DashboardTaskDetail />} />
           <Route path='/dashboard/review/:id' element={<DashboardTaskDetail />} />
           <Route path='/transactions' element={<TransactionHistoryMain />} />
+          <Route path='/notifications' element={<NotificationsPage />} />
         </Route>
       </Route>
 
