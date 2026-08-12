@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import ShapeGrid from "@/components/ui/ShapeGrid";
+import useGlobalState from "@/lib/global_state";
 
 // Reused Creation Step Components & Header
 import ProposalEditHeader from "../proposals_components/proposals_edit_components/proposal_edit_header";
@@ -22,6 +23,7 @@ import type { Job } from "../../job_components/job_lists";
 import type { ProposalItemData } from "../proposals_components/proposals_list";
 
 export const ProposalsEditPage: React.FC = () => {
+  const theme = useGlobalState((state) => state.theme);
   const navigate = useNavigate();
   const { proposalId } = useParams<{ proposalId: string }>();
 
@@ -148,8 +150,8 @@ export const ProposalsEditPage: React.FC = () => {
           squareSize={48}
           direction="diagonal"
           speed={0.4}
-          borderColor="rgba(255, 255, 255, 0.05)"
-          hoverFillColor="rgba(59, 130, 246, 0.15)"
+          borderColor={theme === 'dark' ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.06)"}
+          hoverFillColor={theme === 'dark' ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
           hoverTrailAmount={3}
         />
       </div>

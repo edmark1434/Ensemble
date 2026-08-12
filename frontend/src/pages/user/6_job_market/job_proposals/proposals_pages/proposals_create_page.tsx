@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
+import useGlobalState from "@/lib/global_state";
 
 // Sub-components & Wizard Steps
 import ProposalCreateHeader from "../proposals_components/proposals_creation_components/proposal_create_header";
@@ -17,6 +18,7 @@ import { sampleJobs } from "../../job_datasets";
 import type { Job } from "../../job_components/job_lists";
 
 const ProposalsCreatePage: React.FC = () => {
+  const theme = useGlobalState((state) => state.theme);
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
 
@@ -183,8 +185,8 @@ const ProposalsCreatePage: React.FC = () => {
           squareSize={48}
           direction="diagonal"
           speed={0.4}
-          borderColor="rgba(255, 255, 255, 0.05)"
-          hoverFillColor="rgba(59, 130, 246, 0.15)"
+          borderColor={theme === 'dark' ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.06)"}
+          hoverFillColor={theme === 'dark' ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
           hoverTrailAmount={3}
         />
       </div>

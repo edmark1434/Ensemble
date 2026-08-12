@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
+import useGlobalState from "@/lib/global_state";
 import { JobRichText } from "../../job_components/JobRichText";
 
 import { sampleIncomingProposals, sampleSentProposals } from "../proposals_datasets";
@@ -34,6 +35,7 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 export const ProposalsViewDetailsAsApplicant: React.FC = () => {
   const { proposalId, contractId } = useParams<{ proposalId: string, contractId?: string }>();
   const navigate = useNavigate();
+  const theme = useGlobalState((state) => state.theme);
   const { pathname } = useLocation();
   const { fetchProposalById, withdrawProposal, acceptJobOffer, rejectContract, loading } = useJobs();
 
@@ -328,8 +330,8 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
           squareSize={48}
           direction="diagonal"
           speed={0.4}
-          borderColor="rgba(255, 255, 255, 0.05)"
-          hoverFillColor="rgba(59, 130, 246, 0.15)"
+          borderColor={theme === 'dark' ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.06)"}
+          hoverFillColor={theme === 'dark' ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
           hoverTrailAmount={3}
         />
       </div>
