@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { lazy, Suspense, type ComponentType, useEffect } from 'react'
 import {ToastProvider} from "@/components/utility/toast_provider.tsx";
+import {ToastTestingWidget} from "@/components/utility/ToastTestingWidget.tsx";
 import useGlobalState from '@/lib/global_state';
 import RouteMiddleware from './lib/RouteMiddleware'
 import StaffMiddleware from './lib/StaffMiddleware'
@@ -131,6 +132,7 @@ function App() {
   return (
     <>
       <ToastProvider />
+      <ToastTestingWidget />
       <Suspense
         fallback={
           <div className="flex min-h-screen items-center justify-center bg-[#080a12] text-sm text-zinc-400">

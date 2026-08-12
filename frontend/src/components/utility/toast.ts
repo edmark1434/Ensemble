@@ -1,57 +1,53 @@
 // src/config/toast.ts
 import React from 'react';
-import toast, {type ToastOptions } from 'react-hot-toast';
+import toast, { type ToastOptions } from 'react-hot-toast';
 import { CheckCircle, XCircle, Loader2, Info } from 'lucide-react';
 
 /**
- * Base styles for the glassmorphism effect
+ * Base Tailwind classes for the toast
+ * Using ! to override react-hot-toast inline defaults
  */
-const baseStyle: React.CSSProperties = {
-  background: 'linear-gradient(135deg, #0d0f1a 0%, #0a0c14 100%)',
-  color: '#ffffff',
-  border: '1px solid rgba(74, 111, 165, 0.3)',
-  borderRadius: '12px',
-  fontFamily: "'Plus Jakarta Sans', sans-serif",
-  fontSize: '14px',
-  textAlign: 'left',
-  fontWeight: '500',
-  padding: '14px 20px',
-  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3)',
-  backdropFilter: 'blur(12px)',
-  minWidth: '320px',
-};
+const baseClassName = "!flex !items-center !gap-3 !px-4 !py-3 !rounded-xl !shadow-xl border !text-sm !font-medium !transition-all !duration-300 !min-w-[320px]";
 
 /**
- * Dynamic style generator to merge base styles with type-specific gradients
+ * Dynamic class generator for different toast types
  */
-const getStyle = (accentColor: string, accentRgba: string): React.CSSProperties => ({
-  ...baseStyle,
-  borderLeft: `4px solid ${accentColor}`,
-  background: `linear-gradient(135deg, ${accentRgba} 0%, #0d0f1a 100%)`,
-});
+const getClassName = (type: 'success' | 'error' | 'loading' | 'custom'): string => {
+  const themes = {
+    success: '!bg-white dark:!bg-[#0f172a] !text-gray-900 dark:!text-white border-emerald-200 dark:border-emerald-500/30 border-l-4 !border-l-emerald-500',
+    error: '!bg-white dark:!bg-[#0f172a] !text-gray-900 dark:!text-white border-red-200 dark:border-red-500/30 border-l-4 !border-l-red-500',
+    loading: '!bg-white dark:!bg-[#0f172a] !text-gray-900 dark:!text-white border-blue-200 dark:border-blue-500/30 border-l-4 !border-l-blue-500',
+    custom: '!bg-white dark:!bg-[#0f172a] !text-gray-900 dark:!text-white border-gray-200 dark:border-white/10'
+  };
+  return `${baseClassName} ${themes[type]}`;
+};
 
 export const toastConfig = {
   success: {
     duration: 4000,
-    icon: React.createElement(CheckCircle, { className: "h-5 w-5 text-emerald-400" }),
-    style: getStyle('#10b981', 'rgba(16, 185, 129, 0.15)'),
+    icon: React.createElement(CheckCircle, { className: "h-5 w-5 text-emerald-500 dark:text-emerald-400" }),
+    className: getClassName('success'),
+    style: { padding: '12px 16px', background: 'transparent' },
   },
   error: {
     duration: 5000,
-    icon: React.createElement(XCircle, { className: "h-5 w-5 text-red-400" }),
-    style: getStyle('#ef4444', 'rgba(239, 68, 68, 0.15)'),
+    icon: React.createElement(XCircle, { className: "h-5 w-5 text-red-500 dark:text-red-400" }),
+    className: getClassName('error'),
+    style: { padding: '12px 16px', background: 'transparent' },
   },
   loading: {
-    duration: Infinity, // Loading usually stays until manual dismissal/promise resolution
-    icon: React.createElement(Loader2, { className: "h-5 w-5 text-blue-400 animate-spin" }),
-    style: getStyle('#3b82f6', 'rgba(59, 130, 246, 0.15)'),
+    duration: Infinity,
+    icon: React.createElement(Loader2, { className: "h-5 w-5 text-blue-500 dark:text-blue-400 animate-spin" }),
+    className: getClassName('loading'),
+    style: { padding: '12px 16px', background: 'transparent' },
   },
   custom: {
     duration: 3000,
-    icon: React.createElement(Info, { className: "h-5 w-5 text-indigo-400" }),
-    style: baseStyle,
+    icon: React.createElement(Info, { className: "h-5 w-5 text-indigo-500 dark:text-indigo-400" }),
+    className: getClassName('custom'),
+    style: { padding: '12px 16px', background: 'transparent' },
   },
-    style: undefined
+  style: undefined
 };
 
 // --- Helper Functions ---
