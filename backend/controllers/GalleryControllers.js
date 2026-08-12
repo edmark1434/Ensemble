@@ -25,6 +25,9 @@ async function createGalleryItem(req, res) {
         res.status(201).json(item);
     } catch (err) {
         console.error('createGalleryItem error:', err);
+        if (err.message === 'Gallery upload limit reached (max 5 items)') {
+            return res.status(400).json({ error: err.message });
+        }
         res.status(500).json({ error: err.message || 'Failed to create gallery item' });
     }
 }
@@ -49,8 +52,26 @@ async function deleteGalleryItem(req, res) {
     }
 }
 
+async function updateGalleryItem(req, res) {
+    try {
+        const accountId = req.user.account_id;
+        const { galleryId } = req.params;
+        const { title, description } = req.body;
+        
+        const item = await GalleryServices.updateGalleryItem(galleryId, accountId, title, description);
+        res.status(200).json(item);
+    } catch (err) {
+        console.error('updateGalleryItem error:', err);
+        if (err.message === 'Gallery item not found' || err.message === 'Unauthorized to update this gallery item') {
+            return res.status(403).json({ error: err.message });
+        }
+        res.status(500).json({ error: err.message || 'Failed to update gallery item' });
+    }
+}
+
 module.exports = {
     getUserGalleries,
     createGalleryItem,
-    deleteGalleryItem
+    deleteGalleryItem,
+    updateGalleryItem
 };

@@ -1,13 +1,16 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Pencil, Trash2 } from "lucide-react";
 import type { GalleryItem } from "./Profile_Gallery";
 
 interface GalleryLightboxProps {
   items: GalleryItem[];
   selectedItem: GalleryItem | null;
   setSelectedItem: (item: GalleryItem | null) => void;
+  isOwner?: boolean;
+  onEdit?: (item: GalleryItem) => void;
+  onDelete?: (item: GalleryItem) => void;
 }
 
 const constructAssetUrl = (path: string | undefined): string | undefined => {
@@ -19,7 +22,14 @@ const constructAssetUrl = (path: string | undefined): string | undefined => {
   return `${cloudfrontUrl}/${cleanPath}`;
 };
 
-export const GalleryLightbox: React.FC<GalleryLightboxProps> = ({ items, selectedItem, setSelectedItem }) => {
+export const GalleryLightbox: React.FC<GalleryLightboxProps> = ({ 
+  items, 
+  selectedItem, 
+  setSelectedItem,
+  isOwner,
+  onEdit,
+  onDelete
+}) => {
   return createPortal(
     <AnimatePresence>
       {selectedItem && (() => {
@@ -87,6 +97,24 @@ export const GalleryLightbox: React.FC<GalleryLightboxProps> = ({ items, selecte
                   <div className="w-full bg-white/40 dark:bg-[#111111]/60 border-t border-white/30 dark:border-white/10 flex flex-col p-6 lg:p-8">
                     <div className="flex items-start justify-between mb-4 pr-8 lg:pr-0">
                       <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{selectedItem.title}</h2>
+                      {isOwner && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onEdit?.(selectedItem); }}
+                            className="p-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg transition-colors flex items-center justify-center"
+                            title="Edit"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onDelete?.(selectedItem); }}
+                            className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 rounded-lg transition-colors flex items-center justify-center"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                     
                     <div className="prose prose-sm dark:prose-invert max-w-none text-gray-700 dark:text-zinc-300">

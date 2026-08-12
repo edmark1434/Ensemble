@@ -36,7 +36,8 @@ const {
 const {
     getUserGalleries,
     createGalleryItem,
-    deleteGalleryItem
+    deleteGalleryItem,
+    updateGalleryItem
 } = require('../controllers/GalleryControllers');
 
 router.get('/recent-avatars', getRecentUserAvatarsController);
@@ -56,6 +57,7 @@ router.delete('/profile/attachments/:attachmentId', [checkSession, requireAuth],
 router.get('/:accountId/galleries', [checkSession, requireAuth], getUserGalleries);
 router.post('/galleries', [checkSession, requireAuth], createGalleryItem);
 router.delete('/galleries/:galleryId', [checkSession, requireAuth], deleteGalleryItem);
+router.put('/galleries/:galleryId', [checkSession, requireAuth], updateGalleryItem);
 router.get('/profile/:accountId', [checkSession, requireAuth], getProfileByAccountIdController);
 router.get('/links/:accountId', [checkSession, requireAuth], getAccountLinkByAccountIdController);
 router.get('/profile/avatars/:accountId', [checkSession, requireAuth], getProfileAvatarsByAccountIdController);

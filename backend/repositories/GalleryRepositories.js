@@ -70,9 +70,26 @@ async function getGalleryItem(galleryId) {
     }
 }
 
+async function updateGalleryItem(galleryId, accountId, title, description) {
+    try {
+        const query = `
+            UPDATE user_galleries
+            SET title = $1, description = $2, updated_at = NOW()
+            WHERE gallery_id = $3 AND account_id = $4
+            RETURNING *
+        `;
+        const result = await pool.query(query, [title, description, galleryId, accountId]);
+        return result.rows[0];
+    } catch (err) {
+        console.error('Error updating gallery item:', err);
+        throw err;
+    }
+}
+
 module.exports = {
     getUserGalleries,
     createGalleryItem,
     deleteGalleryItem,
-    getGalleryItem
+    getGalleryItem,
+    updateGalleryItem
 };
