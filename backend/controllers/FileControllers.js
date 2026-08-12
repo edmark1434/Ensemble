@@ -54,8 +54,16 @@ async function generateUploadUrlController(req, res) {
     } catch (err) {
         console.error('Error in generateUploadUrlController:', err);
         
-        // Handle specific errors
-        if (err.message.includes('not allowed')) {
+        // Handle specific validation errors
+        const validationErrors = [
+            'not allowed',
+            'Filename is required',
+            'Filename is too long',
+            'Filename contains invalid characters',
+            'File extension'
+        ];
+
+        if (validationErrors.some(msg => err.message.includes(msg))) {
             return res.status(400).json({
                 success: false,
                 message: err.message
