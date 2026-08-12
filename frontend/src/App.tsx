@@ -63,6 +63,7 @@ const TosMain = lazyPage(() => import('@/pages/user/terms_of_service/tos_main.ts
 const Contracts = lazyPage(() => import('@/pages/user/contracts/contracts.tsx'));
 const UserProfilesList = lazyPage(() => import('@/components/nav/user_profiles_list.tsx'));
 const VerificationStatus = lazy(() => import('@/pages/user/7_profile/VerificationStatus/VerificationStatus.tsx').then((module) => ({ default: module.VerificationStatus })));
+const NotificationsPage = lazyPage(() => import('@/pages/user/notifications/notifications_page.tsx'));
 const AdminLayout = lazyPage(() => import('./pages/admin/AdminLayout'));
 const AdminDashboard = lazyPage(() => import('./pages/admin/AdminDashboard'));
 const UserTeamPage = lazyPage(() => import('./pages/admin/userTeam/UserTeamPage'));
@@ -255,6 +256,7 @@ function App() {
           <Route path='/dashboard/tasks/:id' element={<DashboardTaskDetail />} />
           <Route path='/dashboard/review/:id' element={<DashboardTaskDetail />} />
           <Route path='/transactions' element={<TransactionHistoryMain />} />
+          <Route path='/notifications' element={<NotificationsPage />} />
         </Route>
       </Route>
 

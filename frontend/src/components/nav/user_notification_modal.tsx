@@ -182,16 +182,25 @@ const UserNotificationModal: React.FC<UserNotificationModalProps> = ({
       </div>
 
       {/* Footer */}
-      {notificationsData.length > 0 && (
-        <div className="border-t border-gray-200 dark:border-white/10 p-3">
+      <div className="border-t border-gray-200 dark:border-white/10 p-3 flex gap-2">
+        <button
+          onClick={() => {
+            onClose();
+            navigate("/notifications");
+          }}
+          className="flex-1 py-1.5 rounded-lg text-center text-sm font-medium text-gray-700 dark:text-zinc-300 hover:bg-gray-50 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white transition"
+        >
+          Open Full View
+        </button>
+        {notificationsData.length > 0 && (
           <button
             onClick={handleMarkAllRead}
-            className="w-full text-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+            className="flex-1 py-1.5 rounded-lg text-center text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:text-blue-700 dark:hover:text-blue-300 transition"
           >
             Mark all as read
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

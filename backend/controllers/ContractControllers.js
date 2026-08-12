@@ -1,4 +1,7 @@
 const ContractRepositories = require('../repositories/ContractRepositories');
+const { pool } = require('../lib/Database');
+const { getIo } = require('../lib/WebSocket');
+const { createNotificationServices } = require('../services/NotificationServices');
 
 async function sendJobOfferController(req, res) {
     try {
@@ -11,6 +14,52 @@ async function sendJobOfferController(req, res) {
         }
 
         const result = await ContractRepositories.sendJobOffer(clientId, proposalId, rateCredits, startsAt);
+
+        try {
+            const propQ = await pool.query(`
+                SELECT p.freelancer_account_id, j.title, p.job_id 
+                FROM proposals p 
+                JOIN jobs j ON p.job_id = j.job_id 
+                WHERE p.proposal_id = $1
+            `, [proposalId]);
+            const accQ = await pool.query('SELECT handle FROM accounts WHERE account_id = $1', [clientId]);
+            
+            if (propQ.rows[0] && accQ.rows[0]) {
+                const freelancerAccQ = await pool.query('SELECT handle FROM accounts WHERE account_id = $1', [propQ.rows[0].freelancer_account_id]);
+                if (freelancerAccQ.rows[0]) {
+                    const { freelancer_account_id, title, job_id } = propQ.rows[0];
+                    const clientHandle = accQ.rows[0].handle;
+                    const freelancerHandle = freelancerAccQ.rows[0].handle;
+                    const contractId = result.contract_id || result.id || proposalId;
+
+                    const notif1 = await createNotificationServices({
+                        message: `@${clientHandle} Sent you a Contract Offer for ${title}`,
+                        reference_table: 'contracts',
+                        reference_prefix: 'offer_received',
+                        reference_path: `/jobs/proposals/sent/${proposalId}`,
+                        reference_id: contractId,
+                        account_id: freelancer_account_id
+                    });
+
+                    const notif2 = await createNotificationServices({
+                        message: `You sent a Contract Offer to @${freelancerHandle} for ${title}`,
+                        reference_table: 'contracts',
+                        reference_prefix: 'offer_sent',
+                        reference_path: `/jobs/proposals/incoming/${proposalId}`,
+                        reference_id: contractId,
+                        account_id: clientId
+                    });
+
+                    const io = getIo();
+                    if (io) {
+                        io.to(String(freelancer_account_id)).emit('notification', notif1);
+                        io.to(String(clientId)).emit('notification', notif2);
+                    }
+                }
+            }
+        } catch (notifErr) {
+            console.error('Error sending contract offer notification:', notifErr);
+        }
 
         return res.status(200).json({
             success: true,

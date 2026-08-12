@@ -126,6 +126,12 @@ useEffect(() => {
         return prev;
       }
 
+      // Play notification sound
+      try {
+        const audio = new Audio("/sounds/notification.mp3");
+        audio.play().catch(e => console.log("Audio play blocked:", e));
+      } catch (err) {}
+
       return [notification, ...prev];
     });
   };
