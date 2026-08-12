@@ -13,7 +13,7 @@ dotenv.config();
 // Read from environment variables with defaults
 const ALLOWED_FOLDERS = process.env.UPLOAD_ALLOWED_FOLDERS 
     ? process.env.UPLOAD_ALLOWED_FOLDERS.split(',').map(f => f.trim())
-    : ['profile', 'documents', 'assets', 'forum'];
+    : ['profile', 'documents', 'assets', 'forum', 'gallery', 'jobs'];
 
 const ALLOWED_CONTENT_TYPES = process.env.UPLOAD_ALLOWED_TYPES 
     ? process.env.UPLOAD_ALLOWED_TYPES.split(',').map(t => t.trim())
@@ -70,7 +70,6 @@ async function generateUploadUrl(folder, filename, contentType, cacheControl = "
             /^\s+|\s+$/, // Leading/trailing whitespace
             /[\x00-\x1f]/, // Control characters
             /\/\*/, // SQL comment
-            /--/, // SQL comment
             /\%/, // URL encoding
         ];
 
