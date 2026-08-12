@@ -10,6 +10,8 @@ const CREDIT_TRANSACTION_TYPES = Object.freeze([
   'Asset Purchase',
   'Asset Refund',
   'Fee',
+  'Cashout',
+  'Cashout Refund',
 ]);
 
 const CREDIT_TRANSACTION_TYPE = Object.freeze({
@@ -20,6 +22,8 @@ const CREDIT_TRANSACTION_TYPE = Object.freeze({
   ASSET_PURCHASE: 'Asset Purchase',
   ASSET_REFUND: 'Asset Refund',
   FEE: 'Fee',
+  CASHOUT: 'Cashout',
+  CASHOUT_REFUND: 'Cashout Refund',
 });
 
 /** Map legacy / free-form labels onto the canonical catalog. */
@@ -37,6 +41,8 @@ const LEGACY_TYPE_MAP = Object.freeze({
   refund: CREDIT_TRANSACTION_TYPE.ESCROW_REFUND,
   purchase: CREDIT_TRANSACTION_TYPE.ASSET_PURCHASE,
   fee: CREDIT_TRANSACTION_TYPE.FEE,
+  cashout: CREDIT_TRANSACTION_TYPE.CASHOUT,
+  'cashout refund': CREDIT_TRANSACTION_TYPE.CASHOUT_REFUND,
 });
 
 function normalizeCreditTransactionType(value, fallback = CREDIT_TRANSACTION_TYPE.FUND_TRANSFER) {

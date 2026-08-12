@@ -81,7 +81,7 @@ async function initSocket(httpServer) {
 
   io = new Server(httpServer, {
     cors: {
-      origin: "http://localhost:5173",
+      origin: createCorsOriginValidator(getAllowedOrigins()),
       credentials: true,
       allowedHeaders: [
         "Content-Type",
@@ -543,6 +543,28 @@ async function initSocket(httpServer) {
       }
     });
 
+    socket.on('getPresenceSnapshot', async (_payload, callback) => {
+      if (typeof _payload === 'function') callback = _payload;
+      try {
+        const inboxes = await getAllInboxesByAccountIdServices(accountId);
+        const memberIds = Array.from(new Set(inboxes.flatMap((inbox) =>
+          (inbox.members || [])
+            .filter((member) => !['left', 'removed'].includes(member.status))
+            .map((member) => String(member.account_id))
+        )));
+        const snapshot = {
+          members: memberIds.map((memberAccountId) => ({
+            account_id: memberAccountId,
+            is_online: isAccountOnline(memberAccountId),
+          })),
+        };
+        socket.emit('presenceSnapshot', snapshot);
+        acknowledge(callback, snapshot);
+      } catch (error) {
+        rejectEvent(socket, 'presenceSnapshot', callback, error);
+      }
+    });
+
     // Existing notification events keep their original names and behavior.
     socket.on('markMessageAsRead', async (notificationId, callback) => {
       try {
@@ -603,6 +625,17 @@ async function initSocket(httpServer) {
         if (!socket.connected) return;
         const roomIds = inboxes.map((inbox) => String(inbox._id));
         socket.join(roomIds);
+        const memberIds = Array.from(new Set(inboxes.flatMap((inbox) =>
+          (inbox.members || [])
+            .filter((member) => !['left', 'removed'].includes(member.status))
+            .map((member) => String(member.account_id))
+        )));
+        socket.emit('presenceSnapshot', {
+          members: memberIds.map((memberAccountId) => ({
+            account_id: memberAccountId,
+            is_online: isAccountOnline(memberAccountId),
+          })),
+        });
         if (becameOnline) {
           roomIds.forEach((conversationId) => {
             socket.to(conversationId).emit('presenceChanged', {

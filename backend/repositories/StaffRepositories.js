@@ -3,6 +3,7 @@ const bcrypt = require('bcrypt');
 const { pool } = require('../lib/Database');
 const { getAccountByHandle } = require('./AccountRepositories');
 const { getUserByEmail } = require('./UserRepositories');
+const { insertWithPublicIdRetry } = require('../lib/PublicId');
 
 const MODERATOR_ROLES = [
     'Support Moderator',
@@ -107,14 +108,14 @@ async function createStaffAccount({
     try {
         await client.query('BEGIN');
 
-        const accountResult = await client.query(
+        const account = await insertWithPublicIdRetry((publicId) => client.query(
             `INSERT INTO accounts (
-                display_name, handle, type, merit_score, status, created_at
-             ) VALUES ($1, $2, 'Staff', 100, 'Active', NOW())
+                public_id, display_name, handle, type, merit_score, status, created_at
+             ) VALUES ($1, $2, $3, 'Staff', 100, 'Active', NOW())
+             ON CONFLICT (public_id) DO NOTHING
              RETURNING account_id, handle, status, display_name, created_at`,
-            [displayName.slice(0, 50), handle.slice(0, 50)]
-        );
-        const account = accountResult.rows[0];
+            [publicId, displayName.slice(0, 50), handle.slice(0, 50)]
+        ));
 
         const staff = await createStaff({
             firebaseStaffUuid: firebaseStaffUuid.slice(0, 50),

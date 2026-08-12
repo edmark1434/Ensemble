@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, CreditCard, HelpCircle, FileText, ArrowLeft, AlertCircle, Ticket, Monitor } from "lucide-react";
+import { User, CreditCard, HelpCircle, FileText, ArrowLeft, AlertCircle,  Ticket, Monitor, Wallet } from "lucide-react";
 
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
@@ -18,7 +18,8 @@ import { UserSettingsHelp } from "./user_settings_help";
 import { UserSettingsLegalPolicies } from "./user_settings_legalpolicies";
 import { UserSettingsDisplay } from "./user_settings_display";
 import PageSubmitATicket from '@/pages/landing/pages/page_SubmitATicket';
-type TabType = "account" | "subscription" | "help" | "legal" | "ticket" | "display";
+import { UserSettingsWallet } from "./user_settings_wallet";
+type TabType = "account" | "wallet" | "subscription" | "help" | "legal" | "ticket" | "display";
 
 interface Preset {
   file_id: number;
@@ -66,10 +67,12 @@ export default function UserSettings() {
     plan_name: string;
     status: string;
     renews_at?: string;
+    cancel_at_period_end?: boolean;
   }>({
     plan_name: "Free Member",
     status: "Active",
   });
+  const [isCancellingSubscription, setIsCancellingSubscription] = useState(false);
 
   const constructAvatarUrl = (path: string | undefined): string => {
     if (!path) return "https://i.pravatar.cc/150?u=user";
@@ -133,6 +136,7 @@ export default function UserSettings() {
             plan_name: subRes.data.planDetails.plan_name || "Free Member",
             status: subRes.data.planDetails.status || "Active",
             renews_at: subRes.data.planDetails.renews_at,
+            cancel_at_period_end: Boolean(subRes.data.planDetails.cancel_at_period_end),
           });
         }
       }
@@ -257,17 +261,21 @@ export default function UserSettings() {
   const handleCancelSubscription = async () => {
     if (confirm("Are you sure you want to cancel your current subscription?")) {
       try {
-        await api.post("/api/subscription/cancel");
-        setSubscription((prev) => ({ ...prev, status: "Cancelled" }));
-        toast.success("Subscription cancelled successfully.");
-      } catch (err) {
-        toast.error("Failed to cancel subscription.");
+        setIsCancellingSubscription(true);
+        const { data } = await api.post("/api/payment/cancel-subscription");
+        setSubscription((prev) => ({ ...prev, cancel_at_period_end: true }));
+        toast.success(data.message || "Subscription cancellation scheduled successfully.");
+      } catch (err: any) {
+        toast.error(err.response?.data?.error || err.response?.data?.message || "Failed to cancel subscription.");
+      } finally {
+        setIsCancellingSubscription(false);
       }
     }
   };
   const navItems = [
     { id: "display", label: "Display Settings", icon: Monitor },
     { id: "account", label: "Account Details", icon: User },
+    { id: "wallet", label: "Wallet", icon: Wallet },
     { id: "subscription", label: "Subscription Details", icon: CreditCard },
     { id: "ticket", label: "Submit a Ticket", icon: Ticket },
     { id: "help", label: "Help & Support", icon: HelpCircle },
@@ -371,8 +379,11 @@ export default function UserSettings() {
                   <UserSettingsSubscriptionDetails
                     subscription={subscription}
                     onCancelSubscription={handleCancelSubscription}
+                    isCancelling={isCancellingSubscription}
                   />
                 )}
+
+                {activeTab === "wallet" && <UserSettingsWallet />}
 
                 {activeTab === "help" && <UserSettingsHelp />}
 

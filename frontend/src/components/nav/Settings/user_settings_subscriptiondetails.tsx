@@ -1,19 +1,22 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { XCircle, Check, Crown, Zap } from "lucide-react";
+import { XCircle, Check, Crown, Loader2, Zap } from "lucide-react";
 
 interface SubscriptionDetailsProps {
   subscription: {
     plan_name: string;
     status: string;
     renews_at?: string;
+    cancel_at_period_end?: boolean;
   };
   onCancelSubscription: () => void;
+  isCancelling?: boolean;
 }
 
 export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps> = ({
   subscription,
   onCancelSubscription,
+  isCancelling = false,
 }) => {
   const navigate = useNavigate();
 
@@ -107,13 +110,14 @@ export const UserSettingsSubscriptionDetails: React.FC<SubscriptionDetailsProps>
           </button>
 
           {/* Cancel button is hidden if user is on Free Plan */}
-          {!isFreePlan && subscription.status === "Active" && (
+          {!isFreePlan && !subscription.cancel_at_period_end && subscription.status.toLowerCase() === "active" && (
             <button
               type="button"
               onClick={onCancelSubscription}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all"
+              disabled={isCancelling}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <XCircle className="h-4 w-4" /> Cancel Subscription
+              {isCancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />} {isCancelling ? "Cancelling..." : "Cancel Subscription"}
             </button>
           )}
         </div>

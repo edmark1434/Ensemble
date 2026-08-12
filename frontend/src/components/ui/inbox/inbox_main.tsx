@@ -652,7 +652,7 @@ const InboxMain = () => {
     const isUnsent = message.is_unsent;
     const attachments = message.attachments || [];
     const hasText = Boolean(message.message_content && message.message_content.trim());
-    const isCallCard = /^\[video-call:(?:missed|ended)\]/.test(
+    const isCallCard = /^(?:\[video-call:(?:missed|ended)\]|\[meeting:(?:requested|ended):[^\]]+\]|\[zoom-call:(?:started|ended):[^\]]+\])/.test(
       message.message_content || ""
     );
     const callCardText = formatCallCardText(message.message_content);
