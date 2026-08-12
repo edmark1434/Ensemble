@@ -309,9 +309,9 @@ export const Contracts: React.FC = () => {
 
   const getStatusBadge = (status: ContractStatus) => {
     let color = 'bg-zinc-500/10 text-gray-500 dark:text-zinc-400 border-zinc-500/20';
-    if (status === 'Active') color = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-    else if (status === 'Waiting') color = 'bg-blue-500/10 text-blue-400 border-blue-500/20';
-    else if (status === 'Closed' || status === 'Done') color = 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+    if (status === 'Active') color = 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
+    else if (status === 'Waiting') color = 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20';
+    else if (status === 'Closed' || status === 'Done') color = 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20';
 
     return (
       <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${color}`}>
@@ -448,7 +448,7 @@ export const Contracts: React.FC = () => {
                           setSelectedContract(contract);
                           navigate(`/contracts/${contract.id}`);
                         }}
-                        className={`group relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900/40 shadow-sm dark:shadow-none p-5 transition-all duration-300 hover:border-blue-500/50 hover:bg-zinc-900/80 hover:shadow-xl hover:shadow-blue-500/5 ${
+                        className={`group relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900/40 shadow-sm dark:shadow-none p-5 transition-all duration-300 hover:border-blue-500/50 hover:bg-gray-50 dark:hover:bg-zinc-900/80 hover:shadow-xl hover:shadow-blue-500/5 ${
                           isArchived ? "opacity-40 grayscale-[50%] hover:opacity-100 hover:grayscale-0" : ""
                         }`}
                       >
@@ -482,12 +482,12 @@ export const Contracts: React.FC = () => {
                         </div>
 
                         {/* Contract Document Preview (Compressed) */}
-                        <div className="mb-4 relative rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-[#080a12]/80 opacity-70 group-hover:opacity-100 transition-opacity overflow-hidden pointer-events-none mx-2 shadow-[0_2px_10px_rgba(0,0,0,0.5)]" style={{ transform: 'rotate(-1deg)' }}>
+                        <div className="mb-4 relative rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-[#080a12]/80 opacity-70 group-hover:opacity-100 transition-opacity overflow-hidden pointer-events-none mx-2 shadow-md dark:shadow-[0_2px_10px_rgba(0,0,0,0.5)]" style={{ transform: 'rotate(-1deg)' }}>
                           <div className="p-3 text-[7px] text-gray-500 dark:text-zinc-500 font-sans leading-[10px] h-[90px] overflow-hidden whitespace-pre-wrap">
                             <h4 className="font-bold text-[8px] border-b border-gray-200 dark:border-white/10 pb-1 mb-1 uppercase tracking-widest text-gray-500 dark:text-zinc-400">Contract Agreement</h4>
                             {contract.jobDescription || "No contract description provided."}
                           </div>
-                          <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#080a12] to-transparent" />
+                          <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-gray-50 dark:from-[#080a12] to-transparent" />
                         </div>
 
                         {/* Milestone Progress Bar Segmented */}
@@ -652,10 +652,10 @@ export const Contracts: React.FC = () => {
 
               {/* I. PARTIES */}
               <div className="space-y-1.5">
-                <h3 className="text-[9px] font-bold uppercase tracking-widest text-gray-500 dark:text-zinc-500">
+                <h3 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 dark:text-zinc-100">
                   I. Parties Involved
                 </h3>
-                <div className="overflow-hidden border-y border-gray-200 dark:border-zinc-800 bg-transparent text-[10px] font-mono">
+                <div className="overflow-hidden border-y border-gray-200 dark:border-zinc-800 bg-transparent text-xs font-mono">
                   <div className="flex items-center justify-between border-b border-gray-200 dark:border-zinc-800/50 px-3 py-2">
                     <span className="text-gray-500 dark:text-zinc-500 uppercase tracking-wider">Client</span>
                     <span className="font-semibold text-gray-700 dark:text-zinc-200">{selectedContract.clientName}</span>
@@ -669,10 +669,10 @@ export const Contracts: React.FC = () => {
 
               {/* II. SCOPE OF WORK */}
               <div className="space-y-1.5">
-                <h3 className="text-[9px] font-bold uppercase tracking-widest text-gray-500 dark:text-zinc-500">
+                <h3 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 dark:text-zinc-100">
                   II. Scope of Work
                 </h3>
-                <div className="overflow-hidden border-y border-gray-200 dark:border-zinc-800 bg-transparent text-[10px] font-mono">
+                <div className="overflow-hidden border-y border-gray-200 dark:border-zinc-800 bg-transparent text-xs font-mono">
                   <div className="px-3 py-3 border-b border-gray-200 dark:border-zinc-800/50 space-y-2">
                     <span className="text-gray-500 dark:text-zinc-500 uppercase tracking-wider block">Job Post Title</span>
                     <p className="text-gray-700 dark:text-zinc-200 font-semibold leading-relaxed whitespace-pre-line text-xs font-sans">
@@ -694,11 +694,11 @@ export const Contracts: React.FC = () => {
 
               {/* III. LOCKED MILESTONES WITH CLAIMED INDICATORS */}
               <div className="space-y-1.5">
-                <h3 className="text-[9px] font-bold uppercase tracking-widest text-gray-500 dark:text-zinc-500">
+                <h3 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 dark:text-zinc-100">
                   III. Milestones Schedule
                 </h3>
                 <div className="overflow-x-auto border-y border-gray-200 dark:border-zinc-800 bg-transparent">
-                  <table className="w-full text-left text-[10px] font-mono">
+                  <table className="w-full text-left text-xs font-mono">
                     <thead>
                       <tr className="border-b border-gray-200 dark:border-zinc-800/50 text-gray-500 dark:text-zinc-500">
                         <th className="px-3 py-2 text-center w-8 uppercase font-normal">#</th>
@@ -742,14 +742,14 @@ export const Contracts: React.FC = () => {
               {/* IV. TERMS OF SERVICE & ESCROW */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-[9px] font-bold uppercase tracking-widest text-gray-500 dark:text-zinc-500">
+                  <h3 className="text-sm font-extrabold uppercase tracking-widest text-gray-900 dark:text-zinc-100">
                     IV. Agreed Terms of Service (TOS)
                   </h3>
-                  <span className="text-[9px] font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider">
+                  <span className="text-xs font-mono text-gray-500 dark:text-zinc-500 uppercase tracking-wider">
                     Preset: {selectedContract.freelancerTosTitle}
                   </span>
                 </div>
-                <div className="border-y border-gray-200 dark:border-zinc-800 bg-transparent p-4 text-[9px] font-mono text-gray-500 dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">
+                <div className="border-y border-gray-200 dark:border-zinc-800 bg-transparent p-4 text-xs font-mono text-gray-700 dark:text-zinc-400 whitespace-pre-wrap leading-relaxed">
                   {selectedContract.freelancerTosContent}
                 </div>
               </div>
@@ -765,7 +765,7 @@ export const Contracts: React.FC = () => {
                   user?.account_id === selectedContract.freelancerAccountId ? (
                     <button
                       onClick={() => navigate(`/dashboard/tasks/${selectedContract.id}`)}
-                      className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                      className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors"
                       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                     >
                       View Tasks
@@ -773,7 +773,7 @@ export const Contracts: React.FC = () => {
                   ) : (
                     <button
                       onClick={() => navigate(`/dashboard/review/${selectedContract.id}`)}
-                      className="rounded-xl bg-blue-500/10 border border-blue-500/20 px-4 py-2 text-xs font-semibold text-blue-400 hover:bg-blue-500/20 transition-colors"
+                      className="rounded-xl bg-blue-500/10 border border-blue-500/20 px-4 py-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors"
                       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                     >
                       Review Updates
