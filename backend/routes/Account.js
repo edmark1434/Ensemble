@@ -33,6 +33,11 @@ const {
     createProfileAttachmentController,
     deleteProfileAttachmentController
 } = require('../controllers/ProfileControllers');
+const {
+    getUserGalleries,
+    createGalleryItem,
+    deleteGalleryItem
+} = require('../controllers/GalleryControllers');
 
 router.get('/recent-avatars', getRecentUserAvatarsController);
 router.put('/profile/tagline-description', [checkSession, requireAuth], updateTaglineAndDescriptionController);
@@ -48,6 +53,9 @@ router.get('/:accountId/follow-status', [checkSession], checkIsFollowingControll
 router.get('/profile/:accountId/attachments', [checkSession, requireAuth], getProfileAttachmentsController);
 router.post('/profile/attachments', [checkSession, requireAuth], createProfileAttachmentController);
 router.delete('/profile/attachments/:attachmentId', [checkSession, requireAuth], deleteProfileAttachmentController);
+router.get('/:accountId/galleries', [checkSession, requireAuth], getUserGalleries);
+router.post('/galleries', [checkSession, requireAuth], createGalleryItem);
+router.delete('/galleries/:galleryId', [checkSession, requireAuth], deleteGalleryItem);
 router.get('/profile/:accountId', [checkSession, requireAuth], getProfileByAccountIdController);
 router.get('/links/:accountId', [checkSession, requireAuth], getAccountLinkByAccountIdController);
 router.get('/profile/avatars/:accountId', [checkSession, requireAuth], getProfileAvatarsByAccountIdController);
