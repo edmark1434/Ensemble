@@ -8,7 +8,8 @@ interface UserDetail {
   username: string;
   name: string;
   birthdate?: string;
-  role: "Freelancer" | "Client" | "Freelancer & Client" | "Casual";
+  role?: any;
+  roles?: string[];
   email_address: string;
   address: string;
   bio: string;
@@ -57,6 +58,7 @@ export default function ProfileEditModal({
     birthDay: "",
     birthYear: "",
     role: "Freelancer",
+    roles: [],
     email_address: "",
     address: "",
     bio: "",
@@ -75,6 +77,7 @@ export default function ProfileEditModal({
     name: "",
     birthdate: "",
     role: "Freelancer",
+    roles: [],
     email_address: "",
     address: "",
     bio: "",
@@ -134,6 +137,7 @@ export default function ProfileEditModal({
         birthDay: bDay,
         birthYear: bYear,
         role: data.role || "Freelancer",
+        roles: Array.isArray(data.role) ? data.role.map((r: any) => r.role_name) : (data.roles || []),
         email_address: data.email_address || "",
         joinedDate: data.joinedDate || "",
         address: data.location || data.address || "",
@@ -231,6 +235,21 @@ export default function ProfileEditModal({
     }
   };
 
+  const handleRoleToggle = (roleName: string) => {
+    setFormData(prev => {
+      const currentRoles = prev.roles || [];
+      if (currentRoles.includes(roleName)) {
+        return { ...prev, roles: currentRoles.filter(r => r !== roleName) };
+      } else {
+        return { ...prev, roles: [...currentRoles, roleName] };
+      }
+    });
+  };
+
+  const handleCountrySelect = (country: string) => {
+    setFormData(prev => ({ ...prev, country }));
+  };
+
   const handlePlaceSelect = (place: Place) => {
     const formattedAddress = `${place.properties.name || ''}, ${place.properties.city ?? ''}, ${place.properties.state ?? ''}`.trim().replace(/,\s*$/, '');
     
@@ -306,7 +325,8 @@ export default function ProfileEditModal({
         country: originalFormData.country || "",
         zip_code: originalFormData.zipCode || "",
         description: originalFormData.bio || "",
-        tagline: originalFormData.tagline || ""
+        tagline: originalFormData.tagline || "",
+        roles: originalFormData.roles || []
       };
       
       const updates = {
@@ -316,7 +336,8 @@ export default function ProfileEditModal({
         country: formData.country || "",
         zip_code: formData.zipCode || "",
         description: formData.bio || "",
-        tagline: formData.tagline || ""
+        tagline: formData.tagline || "",
+        roles: formData.roles || []
       };
       
       console.log("📊 Original:", JSON.stringify(original, null, 2));
@@ -475,6 +496,30 @@ export default function ProfileEditModal({
                   <option key={y} value={y}>{y}</option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          {/* Row 3.5: Account Tags */}
+          <div>
+            <label className="block text-[11px] font-medium text-gray-600 dark:text-zinc-400 mb-1">Account Tags</label>
+            <div className="flex flex-wrap gap-2">
+              {["Client", "Freelancer", "Casual"].map((roleName) => {
+                const isSelected = (formData.roles || []).includes(roleName);
+                return (
+                  <button
+                    key={roleName}
+                    type="button"
+                    onClick={() => handleRoleToggle(roleName)}
+                    className={`px-3 py-1.5 rounded-full text-[12px] font-medium transition-colors border ${
+                      isSelected
+                        ? "bg-blue-50 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30"
+                        : "bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10"
+                    }`}
+                  >
+                    {roleName}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

@@ -346,6 +346,43 @@ async function getEmailAddressByAccountId(accountId) {
     }
 }
 
+async function updateUserRolesByAccountIdRepositories(accountId, roles) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        // Find user_id for the accountId
+        const userRes = await client.query('SELECT user_id FROM users WHERE account_id = $1', [accountId]);
+        if (userRes.rows.length === 0) {
+            throw new Error('User not found for this account');
+        }
+        const userId = userRes.rows[0].user_id;
+
+        // Delete existing roles
+        await client.query('DELETE FROM user_platform_purpose WHERE user_id = $1', [userId]);
+
+        // Insert new roles if any
+        if (roles && roles.length > 0) {
+            const insertQuery = `
+                INSERT INTO user_platform_purpose (user_id, plpu_id)
+                SELECT $1, plpu_id 
+                FROM platform_purpose 
+                WHERE purpose_name = ANY($2::text[])
+            `;
+            await client.query(insertQuery, [userId, roles]);
+        }
+        
+        await client.query('COMMIT');
+        return { success: true };
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(`Error updating roles for accountId ${accountId}:`, err);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
 module.exports = {
     updateProfileAccountRepositories,
     insertProfileSocialMediaRepositories,
@@ -358,5 +395,6 @@ module.exports = {
     deleteProfileSocialMediaRepositories,
     getProfileAvatarsByAccountId,
     getProfileCurrentAvatarByAccountId,
-    getEmailAddressByAccountId
+    getEmailAddressByAccountId,
+    updateUserRolesByAccountIdRepositories
 };

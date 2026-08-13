@@ -5,12 +5,11 @@ import type { JobMainContext } from "../job_main";
 
 const JobMyPostPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<"All" | "Open" | "Closed">("All");
-  const { jobsList, loading, viewType, toggleSaveJob, handleReportJob } =
+  const { filteredJobs, loading, viewType, toggleSaveJob, handleReportJob } =
     useOutletContext<JobMainContext>();
   const { id } = useParams();
 
-  const myJobs = jobsList.filter((job) => {
-    if (!job.isOwnPost) return false;
+  const myJobs = filteredJobs.filter((job) => {
     if (statusFilter !== "All" && job.status !== statusFilter) return false;
     return true;
   });
