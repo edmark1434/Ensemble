@@ -10,6 +10,7 @@ const {
 const { createNotification } = require('../repositories/NotificationRepositories');
 const { getActiveTeamOwnerAccountIds } = require('../repositories/TeamsRepositories');
 const { getIo } = require('../lib/WebSocket');
+const redisClient = require('../lib/Redis');
 const {
   appyForResubmissionServices,
   approvedVerificationServices,
@@ -17,6 +18,7 @@ const {
 } = require('./AccountVerificationServices');
 
 const DECISION_KYC_STATUSES = new Set(['in review', 'approved']);
+const DIDIT_DECISION_CACHE_TTL_SECONDS = 60;
 
 function first(items) {
   return Array.isArray(items) ? items[0] || null : null;
@@ -132,6 +134,16 @@ async function getAdminVerificationDetails(accountId) {
     return { ...base, activity: 'details_unavailable' };
   }
 
+  const decisionCacheKey = `admin-verification-decision:v1:${record.didit_session_id}`;
+  try {
+    const cached = await redisClient.get(decisionCacheKey);
+    if (cached) {
+      return { ...base, activity: 'details', decision: JSON.parse(cached) };
+    }
+  } catch {
+    // Redis is an accelerator only; the provider request remains authoritative.
+  }
+
   try {
     const response = await axios.get(
       `https://verification.didit.me/v3/session/${encodeURIComponent(record.didit_session_id)}/decision/`,
@@ -143,10 +155,12 @@ async function getAdminVerificationDetails(accountId) {
         timeout: 15000,
       }
     );
+    const decision = sanitizeDecision(response.data || {});
+    void redisClient.set(decisionCacheKey, JSON.stringify(decision), { EX: DIDIT_DECISION_CACHE_TTL_SECONDS }).catch(() => undefined);
     return {
       ...base,
       activity: 'details',
-      decision: sanitizeDecision(response.data || {}),
+      decision,
     };
   } catch (error) {
     console.error('Failed to fetch Didit verification decision:', error.response?.status || error.message);
@@ -165,6 +179,7 @@ async function applyAdminDiditVerificationAction(accountId, action, options = {}
   const normalizedAction = String(action || '').toLowerCase();
   const verifiedByAccountId = options.verifiedByAccountId;
   const comment = String(options.comment || '').trim();
+  const reverificationRequirements = options.reverificationRequirements || {};
   let validityDays = Number(options.validityDays);
   if (!Number.isFinite(validityDays) || validityDays <= 0) validityDays = 365;
   validityDays = Math.min(Math.max(Math.floor(validityDays), 1), 3650);
@@ -282,7 +297,24 @@ async function applyAdminDiditVerificationAction(accountId, action, options = {}
 
   if (normalizedAction === 'reverify') {
     if (!comment) throw actionError('A reason is required to request reverification');
-    await appyForResubmissionServices(record.didit_session_id, accountId, comment);
+    await appyForResubmissionServices(record.didit_session_id, accountId, comment, reverificationRequirements);
+    await redisClient.del(`admin-verification-decision:v1:${record.didit_session_id}`).catch(() => undefined);
+    const selectedLabels = [
+      reverificationRequirements.idDocument && 'ID document',
+      reverificationRequirements.liveness && 'liveness',
+      reverificationRequirements.faceMatch && 'face match',
+      reverificationRequirements.ipAnalysis && 'IP analysis',
+    ].filter(Boolean).join(', ');
+    const notification = await createNotification({
+      message: `Your identity verification requires resubmission: ${selectedLabels}. Admin message: ${comment}`,
+      is_read: false,
+      reference_table: 'account_verification',
+      reference_prefix: 'IDENTITY_REVERIFICATION',
+      reference_path: '/account-verification-status',
+      reference_id: record.verification_id,
+      account_id: accountId,
+    });
+    getIo().to(String(accountId)).emit('notification', notification);
     return { action: 'reverify', mode: 'didit_requested' };
   }
 

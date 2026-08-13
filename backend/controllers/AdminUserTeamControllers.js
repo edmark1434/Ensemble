@@ -105,6 +105,7 @@ async function runAdminDiditVerificationAction(req, res, action) {
       validityDays: req.body?.validityDays ?? req.body?.validity_days,
       verifiedByAccountId: req.session?.account_id,
       comment: req.body?.comment,
+      reverificationRequirements: req.body?.reverificationRequirements,
     });
     const message = data.mode === 'team_local_update'
       ? `Team verification updated to ${data.verificationStatus}`

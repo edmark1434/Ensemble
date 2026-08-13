@@ -31,63 +31,6 @@ interface Notification {
   deleted_at: string | null;
 }
 
-const NOTIFICATION_CACHE_MS = 30_000;
-let notificationCache: { accountId: string; items: Notification[]; fetchedAt: number } | null = null;
-let notificationRequest: { accountId: string; promise: Promise<Notification[]> } | null = null;
-type HeaderSnapshot = { credits: number; avatarPath: string; plan: "Free" | "Premium" | "Business" };
-let headerCache: { accountId: string; value: HeaderSnapshot; fetchedAt: number } | null = null;
-let headerRequest: { accountId: string; promise: Promise<HeaderSnapshot> } | null = null;
-
-const uniqueNotifications = (items: Notification[]) =>
-  Array.from(new Map(items.map((notification) => [notification.notification_id, notification])).values());
-
-const fetchNotificationsShared = async (accountId: string): Promise<Notification[]> => {
-  if (
-    notificationCache?.accountId === accountId &&
-    Date.now() - notificationCache.fetchedAt < NOTIFICATION_CACHE_MS
-  ) {
-    return notificationCache.items;
-  }
-  if (!notificationRequest || notificationRequest.accountId !== accountId) {
-    const promise = api.get("/api/notifications/")
-      .then(({ data }) => {
-        const items = uniqueNotifications(data.notifications ?? []);
-        notificationCache = { accountId, items, fetchedAt: Date.now() };
-        return items;
-      })
-      .finally(() => {
-        if (notificationRequest?.promise === promise) notificationRequest = null;
-      });
-    notificationRequest = { accountId, promise };
-  }
-  return notificationRequest.promise;
-};
-
-const fetchHeaderShared = (accountId: string): Promise<HeaderSnapshot> => {
-  if (headerCache?.accountId === accountId && Date.now() - headerCache.fetchedAt < 30_000) {
-    return Promise.resolve(headerCache.value);
-  }
-  if (!headerRequest || headerRequest.accountId !== accountId) {
-    const promise = Promise.all([
-      api.get("/api/accounts/wallet", { params: { type: "account_wallets" } }),
-      api.get("/api/accounts/profile/current-avatar"),
-      api.get("/api/subscription/plan-details"),
-    ]).then(([walletResponse, avatarResponse, planResponse]) => {
-      const value: HeaderSnapshot = {
-        credits: walletResponse.data?.wallet?.balance_credits || 0,
-        avatarPath: avatarResponse.data?.data?.path || "",
-        plan: planResponse.data?.planDetails?.plan_name || "Free",
-      };
-      headerCache = { accountId, value, fetchedAt: Date.now() };
-      return value;
-    }).finally(() => {
-      if (headerRequest?.promise === promise) headerRequest = null;
-    });
-    headerRequest = { accountId, promise };
-  }
-  return headerRequest.promise;
-};
-
 interface CreatorSearchApiAccount {
   account_id: string;
   display_name: string | null;
@@ -157,23 +100,19 @@ useEffect(() => {
     notificationId: string;
     is_read: boolean;
   }) => {
-    setNotifications((prev) => {
-      const updated = prev.map((notification) =>
+    setNotifications((prev) =>
+      prev.map((notification) =>
         notification.notification_id === notificationId
           ? { ...notification, is_read }
           : notification
-      );
-      notificationCache = { accountId: userInfo.account_id, items: updated, fetchedAt: Date.now() };
-      return updated;
-    });
+      )
+    );
   };
 
   const handleAllNotificationsRead = (
     updatedNotifications: Notification[]
   ) => {
-    const updated = uniqueNotifications(updatedNotifications);
-    notificationCache = { accountId: userInfo.account_id, items: updated, fetchedAt: Date.now() };
-    setNotifications(updated);
+    setNotifications(updatedNotifications);
   };
 
   const handleNewNotification = (notification: Notification) => {
@@ -187,11 +126,6 @@ useEffect(() => {
         return prev;
       }
 
-<<<<<<< HEAD
-      const updated = [notification, ...prev];
-      notificationCache = { accountId: userInfo.account_id, items: updated, fetchedAt: Date.now() };
-      return updated;
-=======
       // Play notification sound
       try {
         const audio = new Audio("/sounds/notification.mp3");
@@ -199,7 +133,6 @@ useEffect(() => {
       } catch (err) {}
 
       return [notification, ...prev];
->>>>>>> af654cae744dd0612d7eae31f2a703413e98629d
     });
   };
 
@@ -215,34 +148,56 @@ useEffect(() => {
 }, [userInfo?.account_id]);
   
 useEffect(() => {
-  if (!userInfo?.account_id) return;
-  let cancelled = false;
   const fetchNotifications = async () => {
     try {
-      const fetchedNotifications = await fetchNotificationsShared(userInfo.account_id);
-      if (!cancelled) setNotifications(fetchedNotifications);
+      const { data } = await api.get("/api/notifications/");
+
+      const fetchedNotifications: Notification[] =
+        data.notifications ?? [];
+
+      // Remove duplicates just in case
+      const uniqueNotifications = Array.from(
+        new Map(
+          fetchedNotifications.map((n) => [
+            n.notification_id,
+            n,
+          ])
+        ).values()
+      );
+
+      setNotifications(uniqueNotifications);
     } catch (err) {
       console.error("Failed to fetch notifications", err);
     }
   };
 
-  void fetchNotifications();
-  return () => { cancelled = true; };
-}, [userInfo?.account_id]);
+  fetchNotifications();
+}, []);
+
+useEffect(() => {
+  console.log(
+    "Notifications:",
+    notifications.map((n) => n.notification_id)
+  );
+}, [notifications]);
 
   useEffect(() => {
-    if (!userInfo?.account_id) return;
-    let cancelled = false;
     const checkRole = async () => {
       try {
-        const snapshot = await fetchHeaderShared(userInfo.account_id);
-        if (cancelled) return;
+        const [, getWalletResponse, getAvatarResponse, getSubscriptionPlanResponse] = await Promise.all([
+          api.get("/api/users/check-user-role"),
+          api.get("/api/accounts/wallet", {
+            params: { type: 'account_wallets' },
+          }),
+          api.get(`/api/accounts/profile/current-avatar`),
+          api.get(`/api/subscription/plan-details`),
+        ]);
 
         // ✅ Fix: Properly construct avatar URL
-        setUserSubscriptionPlan(snapshot.plan);
+        setUserSubscriptionPlan(getSubscriptionPlanResponse.data?.planDetails.plan_name);
         let avatarUrl = '';
-        if (snapshot.avatarPath) {
-          const path = snapshot.avatarPath;
+        if (getAvatarResponse.data?.data?.path) {
+          const path = getAvatarResponse.data.data.path;
           
           // Check if it's already a full URL
           if (path.startsWith('http')) {
@@ -257,7 +212,7 @@ useEffect(() => {
         }
 
         setUserAvatarState(avatarUrl);
-        setCredits(snapshot.credits);
+        setCredits(getWalletResponse.data.wallet.balance_credits || 0);
         setShowHeader(true);
       } catch (err) {
         console.error("Error checking user role:", err);
@@ -266,9 +221,8 @@ useEffect(() => {
         setIsCheckingAccess(false);
       }
     };
-    void checkRole();
-    return () => { cancelled = true; };
-  }, [userInfo?.account_id]);
+    checkRole();
+  }, []);
 
   useEffect(() => {
     const query = headerSearchInput.replace(/^@/, "").trim();
@@ -357,7 +311,7 @@ useEffect(() => {
 
   const executeFinalLogout = async () => {
     try {
-      await api.post("/api/users/logout");
+      await api.get("/api/users/logout");
       await signOut(auth);
       useGlobalState.getState().clearUser();
     } catch (error) {
