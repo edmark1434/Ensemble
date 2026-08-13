@@ -4,11 +4,11 @@ import JobList from "../job_components/job_lists";
 import type { JobMainContext } from "../job_main";
 
 const JobSavesPage: React.FC = () => {
-  const { jobsList, loading, viewType, toggleSaveJob, handleReportJob } =
+  const { filteredJobs, loading, viewType, toggleSaveJob, handleReportJob } =
     useOutletContext<JobMainContext>();
   const { id } = useParams();
 
-  const savedJobs = jobsList.filter((j) => j.isSaved && j.status !== "Closed");
+  const savedJobs = filteredJobs;
 
   return (
     <JobList

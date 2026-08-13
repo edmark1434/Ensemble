@@ -9,7 +9,8 @@ const {
     deleteProfileSocialMediaRepositories,
     insertProfileSocialMediaRepositories,
     getProfileAvatarsByAccountId,
-    getProfileCurrentAvatarByAccountId
+    getProfileCurrentAvatarByAccountId,
+    updateUserRolesByAccountIdRepositories
 } = require('../repositories/ProfileRepositories');
 const { getAccountLinkByAccountIdService } = require('../services/AccountServices');
 const {getUserByIdFromAccountId} = require('../repositories/UserRepositories');
@@ -103,6 +104,20 @@ async function updateProfileDetailsServices(accountId, originalUpdates, updates)
         if (updates.birth_date !== undefined && updates.birth_date !== originalUpdates.birth_date) {
             userUpdates.birth_date = updates.birth_date;
             hasChanges = true;
+        }
+
+        let rolesResult = null;
+        if (updates.roles !== undefined) {
+            // Check if roles have changed
+            const originalRoles = originalUpdates.roles || [];
+            const newRoles = updates.roles;
+            const originalRoleNames = originalRoles.map(r => r.role_name || r).sort().join(',');
+            const newRoleNames = newRoles.sort().join(',');
+            
+            if (originalRoleNames !== newRoleNames) {
+                rolesResult = await updateUserRolesByAccountIdRepositories(accountId, newRoles);
+                hasChanges = true;
+            }
         }
 
         // If no changes, return early

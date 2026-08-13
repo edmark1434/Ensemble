@@ -480,8 +480,13 @@ export default function Profile() {
 
   const saveProfileDetails = async (updatedData: any) => {
     try {
+      const formattedRoles = updatedData.roles 
+        ? updatedData.roles.map((r: string) => ({ role_id: 0, role_name: r }))
+        : updatedData.role;
+
       setUserDetails({
         ...updatedData,
+        role: formattedRoles,
         joinedDate: updatedData.joinedDate || "",
         location: updatedData.address
       });
