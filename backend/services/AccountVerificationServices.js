@@ -21,7 +21,9 @@ const {
     updateAccountVerificationSessionById,
     getAccountVerificationStatusByAccountId,
     updateAccountVerifications,
-    createBusinessVerificationSubmissionRepository
+    createBusinessVerificationSubmissionRepository,
+    getAccountVerificationSessionBySessionId,
+    getPendingDiditVerificationSessions
 } = require("../repositories/AccountVerificationRepositories");
 
 const {
@@ -38,6 +40,158 @@ const {
 } = require('../repositories/AccountRepositories')
 
 const redisClient = require('../lib/Redis');
+const { createNotification } = require('../repositories/NotificationRepositories');
+const { updateUserDetailsByAccountId } = require('../repositories/UserRepositories');
+const { getIo } = require('../lib/WebSocket');
+
+function getDecisionPayload(payload) {
+    return payload?.decision?.decision
+        || payload?.data?.decision
+        || payload?.decision
+        || payload?.data
+        || {};
+}
+
+async function processDiditVerificationStatusUpdate(webhookPayload) {
+    const sessionId = webhookPayload?.session_id;
+    const status = webhookPayload?.status;
+    if (!sessionId || !status) {
+        const error = new Error('Invalid verification status payload');
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const session = await getAccountVerificationSessionBySessionId(sessionId);
+    if (!session?.account_id) return { found: false };
+    if (status === 'Kyc Expired') return { found: true, ignored: true };
+
+    // Webhooks and reconciliation may deliver the same provider status more than once.
+    // Reapplying it would duplicate notifications and side effects.
+    if (session.kyc_status === status) return { found: true, unchanged: true };
+
+    const accountId = session.account_id;
+    const io = getIo();
+    const decision = getDecisionPayload(webhookPayload);
+    const referencePath = decision?.session_url || `${process.env.FRONTEND_URL}/account-verification-status`;
+    const notify = async (message, referenceId) => {
+        const notification = await createNotification({
+            message,
+            is_read: false,
+            reference_table: 'verifications',
+            reference_prefix: 'VERIFICATION',
+            reference_path: referencePath,
+            reference_id: referenceId,
+            account_id: accountId
+        });
+        io.to(notification.account_id).emit('notification', notification);
+    };
+
+    const payload = { kyc_status: status };
+    switch (status) {
+        case 'Approved':
+        case 'In Review': {
+            payload.verification_status = status;
+            if (status === 'Approved') {
+                const existingExpiry = session.expires_at ? new Date(session.expires_at) : null;
+                if (existingExpiry && existingExpiry.getTime() > Date.now()) {
+                    payload.expires_at = existingExpiry;
+                } else {
+                    const expiresAt = new Date();
+                    expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+                    payload.expires_at = expiresAt;
+                }
+                const result = await updateAccountVerifications(accountId, {
+                    is_verified: true,
+                    verified_at: new Date(),
+                    verification_session_id: session.verification_session_id || null
+                });
+                await notify('Your account verification has been approved.', result?.verification_id || accountId);
+            }
+
+            const verification = decision?.id_verifications?.[0];
+            if (verification) {
+                let firstName = verification.first_name || '';
+                const middleName = verification.extra_fields?.middle_name || '';
+                if (middleName && firstName.toLowerCase().endsWith(` ${middleName.toLowerCase()}`)) {
+                    firstName = firstName.slice(0, firstName.length - middleName.length).trim();
+                }
+                const verificationDetails = {
+                    first_name: firstName,
+                    middle_name: middleName,
+                    last_name: verification.last_name,
+                    birth_date: verification.date_of_birth,
+                };
+                if (verification.extra_fields?.suffix) verificationDetails.suffix = verification.extra_fields.suffix;
+                await updateUserDetailsByAccountId(accountId, verificationDetails);
+            }
+            break;
+        }
+        case 'Declined':
+            await updateAccountVerifications(accountId, { is_verified: false, verified_at: null });
+            await notify('Your account verification has been declined. Please complete the verification again.', accountId);
+            await appyForResubmissionServices(sessionId, accountId, 'Please redo the required verification steps', {
+                idDocument: true,
+                liveness: true,
+                faceMatch: true,
+                ipAnalysis: true,
+            });
+            payload.kyc_status = 'Resubmitted';
+            payload.verification_status = 'Pending';
+            payload.expires_at = null;
+            break;
+        case 'Expired':
+        case 'Abandoned':
+            payload.verification_status = 'Rejected';
+            payload.expires_at = null;
+            await notify('Your account verification session has expired or was abandoned.', accountId);
+            break;
+        case 'Not Started':
+        case 'In Progress':
+        case 'Awaiting User':
+        case 'Resubmitted':
+            if (status === 'Resubmitted') {
+                await updateAccountVerifications(accountId, { is_verified: false, verified_at: null });
+                payload.expires_at = null;
+            }
+            payload.verification_status = 'Pending';
+            await notify('You are required to complete the verification process.', accountId);
+            break;
+        default:
+            return { found: true, ignored: true };
+    }
+
+    const updatedSession = await updateAccountVerificationSessionStatus(sessionId, payload);
+    return { found: true, updated: true, session: updatedSession };
+}
+
+async function reconcileDiditVerificationSessionsServices() {
+    if (!process.env.DIDIT_API_KEY) {
+        console.warn('Skipping Didit verification reconciliation: DIDIT_API_KEY is not configured.');
+        return { checked: 0, updated: 0, skipped: true };
+    }
+
+    const sessions = await getPendingDiditVerificationSessions();
+    let updated = 0;
+    for (const session of sessions) {
+        try {
+            const response = await axios.get(
+                `https://verification.didit.me/v3/session/${encodeURIComponent(session.didit_session_id)}/decision/`,
+                { headers: { 'x-api-key': process.env.DIDIT_API_KEY, Accept: 'application/json' } }
+            );
+            const providerPayload = response.data?.data || response.data || {};
+            const result = await processDiditVerificationStatusUpdate({
+                ...providerPayload,
+                session_id: providerPayload.session_id || session.didit_session_id,
+                status: providerPayload.status,
+                decision: providerPayload.decision || providerPayload,
+            });
+            if (result.updated) updated += 1;
+        } catch (error) {
+            console.error(`Didit verification reconciliation failed for session ${session.verification_session_id}:`, error.response?.status || error.message);
+        }
+    }
+    return { checked: sessions.length, updated, skipped: false };
+}
 
 async function createAccountVerificationSession(userId) {
     try {
@@ -232,8 +386,19 @@ async function createAccountVerificationSession(userId) {
 }
 
 
-async function appyForResubmissionServices(sessionId,accountId,comment = "Please redo the required verification steps") {
+async function appyForResubmissionServices(sessionId,accountId,comment = "Please redo the required verification steps", requirements = {}) {
     const emailResponse = await getEmailAddressByAccountId(accountId);
+    const selected = {
+        idDocument: requirements?.idDocument === true,
+        liveness: requirements?.liveness === true,
+        faceMatch: requirements?.faceMatch === true,
+        ipAnalysis: requirements?.ipAnalysis === true,
+    };
+    if (!Object.values(selected).some(Boolean)) {
+        const error = new Error('Select at least one verification item to resubmit');
+        error.statusCode = 400;
+        throw error;
+    }
     try{
         let nodesToResubmit = [];
         try {
@@ -252,11 +417,18 @@ async function appyForResubmissionServices(sessionId,accountId,comment = "Please
                 || responseBody.data
                 || responseBody;
             nodesToResubmit = [
-                ...(decision.id_verifications || []).map(({ node_id }) => ({ node_id, feature: "OCR" })),
-                ...(decision.nfc_verifications || []).map(({ node_id }) => ({ node_id, feature: "NFC" })),
-                ...(decision.liveness_checks || []).map(({ node_id }) => ({ node_id, feature: "LIVENESS" })),
-                ...(decision.face_matches || []).map(({ node_id }) => ({ node_id, feature: "FACE_MATCH" })),
-                ...(decision.ip_analyses || []).map(({ node_id }) => ({ node_id, feature: "IP_ANALYSIS" })),
+                ...(selected.idDocument
+                    ? (decision.id_verifications || []).map(({ node_id }) => ({ node_id, feature: "OCR" }))
+                    : []),
+                ...(selected.liveness
+                    ? (decision.liveness_checks || []).map(({ node_id }) => ({ node_id, feature: "LIVENESS" }))
+                    : []),
+                ...(selected.faceMatch
+                    ? (decision.face_matches || []).map(({ node_id }) => ({ node_id, feature: "FACE_MATCH" }))
+                    : []),
+                ...(selected.ipAnalysis
+                    ? (decision.ip_analyses || []).map(({ node_id }) => ({ node_id, feature: "IP_ANALYSIS" }))
+                    : []),
             ].filter(({ node_id }) => Boolean(node_id));
         } catch (decisionError) {
             console.warn(
@@ -271,7 +443,12 @@ async function appyForResubmissionServices(sessionId,accountId,comment = "Please
             email_address: emailResponse.email_address,
             comment
         };
-        if (nodesToResubmit.length) updatePayload.nodes_to_resubmit = nodesToResubmit;
+        if (!nodesToResubmit.length) {
+            const error = new Error('The selected verification items are unavailable for this Didit session');
+            error.statusCode = 422;
+            throw error;
+        }
+        updatePayload.nodes_to_resubmit = nodesToResubmit;
 
         const response = await axios.patch(
             `https://verification.didit.me/v3/session/${encodeURIComponent(sessionId)}/update-status/`,
@@ -552,5 +729,7 @@ module.exports = {
     DeclinedVerificationServices,
     getAccountVerificationStatusServices,
     sendVerificationServices,
-    createBusinessAccountVerificationServices
+    createBusinessAccountVerificationServices,
+    processDiditVerificationStatusUpdate,
+    reconcileDiditVerificationSessionsServices
 };

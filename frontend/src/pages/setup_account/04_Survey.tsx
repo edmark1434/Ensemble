@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { HelpCircle, ArrowRight, ArrowLeft, Check } from "lucide-react";
 import ShapeGrid from "../../components/ui/ShapeGrid";
 import api from "@/lib/axios";
+import { deleteAvatarDraft, getAvatarDraft } from "@/lib/onboardingAvatarDraft";
 
 const T = {
   bg:        "#080a12",
@@ -55,25 +56,21 @@ export default function Survey() {
   
   // Dynamic state to store answers for all questions
   const [answers, setAnswers] = useState<{ [questionId: string]: string | string[] }>({});
-
-    useEffect(() => {
-      const checkOnboardingStatus = async () => {
-        const response = await api.get("/api/users/session");
-                if (response.data.steps) {
-                  if (response.data.steps && response.data.steps !== 'profile' && response.data.steps === 'completed') {
-                    navigate("/*");
-                  }
-        }
-      }
-      checkOnboardingStatus();
-    }, []);
+  const [customAvatar, setCustomAvatar] = useState<CustomAvatarDraft | null>(null);
 
   // Fetch survey data on component mount
   useEffect(() => {
     const fetchSurvey = async () => {
       try {
-        const response = await api.get('/api/surveys/User%20Onboarding%20Survey');
+        const [response, stateResponse] = await Promise.all([
+          api.get('/api/surveys/User%20Onboarding%20Survey'),
+          api.get('/api/onboarding/state'),
+        ]);
+        if (stateResponse.data.completed) return navigate('/home', { replace: true });
+        if (stateResponse.data.path !== '/setup/survey') return navigate(stateResponse.data.path, { replace: true });
         setSurveyData(response.data);
+        const savedAvatar = stateResponse.data.data?.avatar;
+        setCustomAvatar(savedAvatar?.type === 'custom' ? savedAvatar : null);
         
         // Initialize answers state with empty values
         const initialAnswers: { [key: string]: string | string[] } = {};
@@ -84,7 +81,19 @@ export default function Survey() {
             initialAnswers[q.question_id] = '';
           }
         });
+        const savedResponses = stateResponse.data.data?.survey?.responses || [];
+        savedResponses.forEach((saved: { question_id: string; option_id: string }) => {
+          const question = response.data.questions.find((item: Question) => item.question_id === saved.question_id);
+          const option = question?.options.find((item: QuestionOption) => item.option_id === saved.option_id);
+          if (!question || !option) return;
+          if (question.question_type === 'multi-select') {
+            initialAnswers[question.question_id] = [...(initialAnswers[question.question_id] as string[]), option.option_value];
+          } else {
+            initialAnswers[question.question_id] = option.option_value;
+          }
+        });
         setAnswers(initialAnswers);
+        if (stateResponse.data.current_step === 'survey_2') setSubStep(2);
       } catch (error) {
         console.error('Error fetching survey:', error);
       } finally {
@@ -165,7 +174,19 @@ export default function Survey() {
     return newErrors;
   };
 
-  const handleNextAction = (e: React.FormEvent) => {
+  const buildSubmissionData = () => ({
+    survey_id: surveyData?.survey_id,
+    responses: Object.entries(answers).flatMap(([questionId, value]) => {
+      const question = surveyData?.questions.find(q => q.question_id === questionId);
+      const values = Array.isArray(value) ? value : value ? [value] : [];
+      return values.map((selectedValue) => {
+        const option = question?.options.find(o => o.option_value === selectedValue);
+        return { question_id: questionId, option_id: option?.option_id || null, response_text: question?.question_type === 'text' ? selectedValue : null };
+      }).filter((response) => response.option_id);
+    }),
+  });
+
+  const handleNextAction = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const validationErrors = validateStep();
@@ -182,7 +203,15 @@ export default function Survey() {
     const lastQuestionIndex = currentQuestions[currentQuestions.length - 1]?.display_order || 0;
     
     if (subStep === 1 && lastQuestionIndex < totalQuestions) {
-      setSubStep(2);
+      setLoading(true);
+      try {
+        await api.post('/api/onboarding/survey-progress', buildSubmissionData());
+        setSubStep(2);
+      } catch (err: any) {
+        setErrors({ submit: err.response?.data?.message || 'Failed to save survey progress.' });
+      } finally {
+        setLoading(false);
+      }
     } else {
       executeFinalSubmissionPipeline();
     }
@@ -191,92 +220,33 @@ export default function Survey() {
   const executeFinalSubmissionPipeline = async () => {
     setLoading(true);
     try {
-      // Format the responses with question text and option text
-      const formattedResponses = Object.entries(answers).map(([questionId, value]) => {
-        const question = surveyData?.questions.find(q => q.question_id === questionId);
-        
-        // Handle multi-select answers
-        if (Array.isArray(value) && value.length > 0) {
-          const optionDetails = value
-            .map(val => {
-              const option = question?.options.find(o => o.option_value === val);
-              return {
-                option_id: option?.option_id || null,
-                option_text: option?.option_text || null
-              };
-            })
-            .filter(item => item.option_id !== null);
-
-          // Return as array of objects for multi-select
-          return optionDetails.map(option => ({
-            question_id: questionId,
-            question_text: question?.question_text || null,
-            option_id: option.option_id,
-            option_text: option.option_text
-          }));
-        } else if (value && typeof value === 'string' && value !== '') {
-          // Single select
-          const option = question?.options.find(o => o.option_value === value);
-          
-          return {
-            question_id: questionId,
-            question_text: question?.question_text || null,
-            option_id: option?.option_id || null,
-            option_text: option?.option_text || null
-          };
-        } else {
-          // No answer selected
-          return {
-            question_id: questionId,
-            question_text: question?.question_text || null,
-            option_id: null,
-            option_text: null
-          };
-        }
-      });
-
-      // Flatten the array (in case multi-select returns an array of arrays)
-      const flattenedResponses = formattedResponses.flat();
-
-      // Create the final submission data
-      const submissionData = {
-        survey_id: surveyData?.survey_id,
-        survey_name: surveyData?.survey_name,
-        responses: flattenedResponses
-      };
-
-      // Console log in the requested format
-      console.log('Survey Submission Data:');
-      console.log('survey_id:', submissionData.survey_id);
-      console.log('survey_name:', submissionData.survey_name);
-      console.log('responses:');
-      flattenedResponses.forEach((response) => {
-        console.log({
-          question_id: response.question_id,
-          question_text: response.question_text,
-          option_id: response.option_id,
-          option_text: response.option_text
+      if (customAvatar && !customAvatar.path) {
+        const file = await getAvatarDraft(customAvatar.draft_id);
+        if (!file) throw new Error('Your custom avatar draft is unavailable. Go back and select it again.');
+        const upload = await api.post('/api/onboarding/avatar-upload-url', {
+          filename: customAvatar.name,
+          contentType: customAvatar.mime_type,
+          sizeBytes: customAvatar.size_bytes,
         });
-      });
-
-      console.log('Full Submission Data:', JSON.stringify(submissionData, null, 2));
-
-      // Send the data to the backend API
-      await api.post('/api/surveys/', submissionData); 
-      const result = await api.get("/api/users/session");
-          if (result.data.steps && result.data.steps === 'profile') {
-            await api.put("/api/accounts/update-profile-onboarding", {
-              completed_onboarding: 'completed'
-            });
-          }
-      // Navigate to preview on success
+        const uploaded = await fetch(upload.data.uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': customAvatar.mime_type },
+          body: file,
+        });
+        if (!uploaded.ok) throw new Error('Unable to upload your avatar. Please try again.');
+        await api.post('/api/onboarding/avatar/finalize', { ...customAvatar, path: upload.data.key });
+      }
+      await api.post('/api/onboarding/complete', buildSubmissionData());
+      if (customAvatar?.draft_id) await deleteAvatarDraft(customAvatar.draft_id);
       navigate("/home");
       
     } catch (err: any) {
       console.error('Error submitting survey:', err);
       
       // Show error message to user
-      if (err.response?.data?.message) {
+      if (err instanceof Error && !err.response?.data?.message) {
+        setErrors({ submit: err.message });
+      } else if (err.response?.data?.message) {
         setErrors({ submit: err.response.data.message });
       } else {
         setErrors({ submit: 'Failed to submit survey. Please try again.' });
@@ -286,12 +256,22 @@ export default function Survey() {
     }
   };
 
-  const handleBackAction = () => {
+  const handleBackAction = async () => {
     if (subStep === 2) {
-      setErrors({});
-      setSubStep(1);
+      try {
+        await api.post('/api/onboarding/current-step', { current_step: 'survey_1' });
+        setErrors({});
+        setSubStep(1);
+      } catch {
+        setErrors({ submit: 'Unable to return to the previous survey section.' });
+      }
     } else {
-      navigate("/setup/upload-image");
+      try {
+        await api.post('/api/onboarding/current-step', { current_step: 'avatar' });
+        navigate("/setup/upload-image");
+      } catch {
+        setErrors({ submit: 'Unable to return to the avatar step.' });
+      }
     }
   };
 
@@ -670,4 +650,13 @@ export default function Survey() {
       </div>
     </>
   );
+}
+
+interface CustomAvatarDraft {
+  type: 'custom';
+  draft_id: string;
+  name: string;
+  path?: string;
+  mime_type: string;
+  size_bytes: number;
 }

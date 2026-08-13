@@ -16,6 +16,7 @@ export const useGoogleAuth = () => {
       const payload = {
         email: user.email,
         firebase_user_uuid: user.uid,
+        firebaseIdToken: await user.getIdToken(),
         firstName: user.displayName?.split(' ')[0] || 'User',
         lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
         signUpWithOAuth: true,

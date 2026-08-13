@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Download, X } from 'lucide-react';
 import api from '@/lib/axios';
 import {
@@ -219,7 +219,7 @@ export function PardonAccountModal({
   entityName: string;
   accountId: string;
   onClose: () => void;
-  onChanged?: () => void;
+  onChanged?: () => void | Promise<void>;
 }) {
   const [note, setNote] = useState('Administrative pardon');
   const [saving, setSaving] = useState(false);
@@ -928,6 +928,14 @@ export function VerificationModal({
   const [useCustom, setUseCustom] = useState(false);
   const [actionReason, setActionReason] = useState('');
   const [actionReasonError, setActionReasonError] = useState('');
+  const actionReasonRef = useRef<HTMLTextAreaElement>(null);
+  const [reverificationRequirements, setReverificationRequirements] = useState({
+    idDocument: false,
+    liveness: false,
+    faceMatch: false,
+    ipAnalysis: false,
+  });
+  const [showReverificationModal, setShowReverificationModal] = useState(false);
   const [diditDetails, setDiditDetails] = useState<AdminVerificationDetails | null>(null);
   const [diditLoading, setDiditLoading] = useState(loadDiditDetails);
   const [diditError, setDiditError] = useState('');
@@ -990,10 +998,22 @@ export function VerificationModal({
     && ['approve', 'decline', 'reverify'].includes(action)
     && !(action === 'approve' && isAlreadyApproved);
 
+  const focusActionReason = () => {
+    window.requestAnimationFrame(() => {
+      actionReasonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      actionReasonRef.current?.focus();
+    });
+  };
+
   const apply = async (action: string) => {
     if (requiresActionReason(action) && !actionReason.trim()) {
       setActionReasonError('A reason is required before submitting this action.');
-      return;
+      focusActionReason();
+      return false;
+    }
+    if (action === 'reverify' && !Object.values(reverificationRequirements).some(Boolean)) {
+      setActionReasonError('Select at least one item that the user must resubmit.');
+      return false;
     }
     setActionReasonError('');
     setSaving(true);
@@ -1002,17 +1022,23 @@ export function VerificationModal({
         validityDays: action === 'approve' ? resolvedDays : undefined,
         diditWorkflow: loadDiditDetails,
         comment: actionReason.trim() || undefined,
+        reverificationRequirements: action === 'reverify' ? reverificationRequirements : undefined,
       });
-      onChanged?.();
+      // Refresh the parent record first so prop-based modal content (status, expiry,
+      // verification logs) is current, then reload the Didit detail panel.
+      await onChanged?.();
       if (loadDiditDetails) setDiditRefreshToken((value) => value + 1);
+      return true;
     } catch (err) {
       handleAccountActionError(err);
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
   return (
+    <>
     <ModalShell
       title={`${entityName} verification`}
       subtitle={
@@ -1041,7 +1067,18 @@ export function VerificationModal({
               key={item.action}
               type="button"
               disabled={saving}
-              onClick={() => void apply(item.action)}
+              onClick={() => {
+                if (item.action === 'reverify' && loadDiditDetails && !diditDetails?.isTeam) {
+                  if (requiresActionReason(item.action) && !actionReason.trim()) {
+                    setActionReasonError('A reason is required before submitting this action.');
+                    focusActionReason();
+                    return;
+                  }
+                  setShowReverificationModal(true);
+                  return;
+                }
+                void apply(item.action);
+              }}
               className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-white hover:bg-white/[0.05] disabled:opacity-50"
             >
               {item.label}
@@ -1055,6 +1092,7 @@ export function VerificationModal({
           Reason for verification action{' '}
           <span className="text-red-400">* (required for Didit status actions)</span>
           <textarea
+            ref={actionReasonRef}
             value={actionReason}
             onChange={(event) => {
               setActionReason(event.target.value);
@@ -1076,6 +1114,67 @@ export function VerificationModal({
             </span>
           )}
         </label>
+        {showReverificationModal && loadDiditDetails && !diditDetails?.isTeam && (
+          <fieldset className="fixed inset-0 z-[60] m-0 flex items-center justify-center border-0 bg-black/70 p-4">
+            <div className="w-full max-w-md rounded-2xl border border-white/[0.1] bg-[#12131a] p-5 shadow-2xl">
+            <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Required for reverification
+            </legend>
+            <p className="mb-3 text-xs text-zinc-500">
+              Select only the evidence the user must submit again. This selection is applied when you choose “Require reverification now”.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: 'idDocument', label: 'ID document (front and back)' },
+                { key: 'liveness', label: 'Liveness' },
+                { key: 'faceMatch', label: 'Face match' },
+                { key: 'ipAnalysis', label: 'IP analysis' },
+              ].map(({ key, label }) => {
+                const checked = reverificationRequirements[key as keyof typeof reverificationRequirements];
+                return (
+                  <label
+                    key={key}
+                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
+                      checked
+                        ? 'border-amber-400/50 bg-amber-400/10 text-amber-100'
+                        : 'border-white/[0.1] text-zinc-300 hover:border-white/20 hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        setReverificationRequirements((current) => ({ ...current, [key]: !current[key as keyof typeof current] }));
+                        setActionReasonError('');
+                      }}
+                      className="h-4 w-4 accent-amber-400"
+                    />
+                    {label}
+                  </label>
+                );
+              })}
+            </div>
+            <div className="mt-5 flex justify-end gap-3 border-t border-white/[0.08] pt-4">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setShowReverificationModal(false)}
+                className="rounded-xl border border-white/[0.1] px-4 py-2 text-sm text-zinc-300 hover:bg-white/[0.05] disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving || !Object.values(reverificationRequirements).some(Boolean)}
+                onClick={() => void apply('reverify').then((submitted) => { if (submitted !== false) setShowReverificationModal(false); })}
+                className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-medium text-black hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? 'Requesting...' : 'Request reverification'}
+              </button>
+            </div>
+            </div>
+          </fieldset>
+        )}
         <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {loadDiditDetails && (
             <div>
@@ -1207,6 +1306,7 @@ export function VerificationModal({
         ))}
       </ul>
     </ModalShell>
+    </>
   );
 }
 

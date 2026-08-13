@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import axios from "axios";
 import { FileCheck2, FileUp, Loader2, RefreshCw, Trash2, X } from "lucide-react";
 import api from "@/lib/axios";
+import { uploadFileWithIntent } from "@/lib/uploadFile";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import {
   AUTHORIZATION_DOCUMENTS,
@@ -261,20 +261,13 @@ function BusinessVerificationModalContent({
     try {
       const uploadedDocuments = await Promise.all(
         documents.map(async (document) => {
-          const uploadResponse = await api.post("/api/files/upload-url", {
-            folder: "documents",
-            filename: document.file.name,
-            contentType: document.file.type,
-          });
-          await axios.put(uploadResponse.data.uploadUrl, document.file, {
-            headers: { "Content-Type": document.file.type },
-          });
+          const uploaded = await uploadFileWithIntent(document.file, "documents");
           return {
             document_type: document.documentType,
             is_required: document.required,
             file: {
               name: document.file.name,
-              path: uploadResponse.data.key,
+              path: uploaded.key,
               mime_type: document.file.type,
               size_bytes: document.file.size,
             },

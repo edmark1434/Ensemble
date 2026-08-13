@@ -15,7 +15,7 @@ export async function setAccountStatus(accountId: string, action: string, option
 export async function setAccountVerification(
   accountId: string,
   action: string,
-  options?: ActionOptions & { validityDays?: number; diditWorkflow?: boolean; comment?: string }
+  options?: ActionOptions & { validityDays?: number; diditWorkflow?: boolean; comment?: string; reverificationRequirements?: { idDocument: boolean; liveness: boolean; faceMatch: boolean; ipAnalysis: boolean } }
 ) {
   const diditPath: Record<string, string> = {
     approve: 'approve',
@@ -30,6 +30,7 @@ export async function setAccountVerification(
     action,
     validityDays: options?.validityDays,
     comment: options?.comment,
+    reverificationRequirements: options?.reverificationRequirements,
   });
   if (!res.data?.success) throw new Error(res.data?.message || 'Verification update failed');
   if (!options?.silent) {

@@ -3,8 +3,16 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+html,
+body,
+#root {
+  min-height: 100%;
+  background: #080a12;
+}
+
 body {
   font-family: 'Plus Jakarta Sans', sans-serif;
+  margin: 0;
 }
 
 /* Toast animation */

@@ -6,6 +6,46 @@ import {DevModeWidget} from "@/components/utility/DevModeWidget.tsx";
 import useGlobalState from '@/lib/global_state';
 import RouteMiddleware from './lib/RouteMiddleware'
 import StaffMiddleware from './lib/StaffMiddleware'
+import CreditShop from '@/pages/user/13_creditsshop/CreditsShop.tsx'
+import Checkout from '@/pages/payment/checkout.tsx'
+import Profile from '@/pages/user/7_profile/Profile.tsx'
+import UserSettings from '@/components/nav/Settings/user_settings.tsx'
+import Layout from './components/ui/Layout.tsx'
+import Home from '@/pages/user/1_home/Home.tsx'
+import Projects from '@/pages/user/2_projects/Projects.tsx'
+import Projects_Selection from '@/pages/user/2_projects/Projects_Selection.tsx'
+import Teams from '@/pages/user/3_teams/Teams.tsx'
+import SelectedTeam from '@/pages/user/3_teams/SelectedTeam.tsx'
+import Forums from './pages/user/4_forums/Forums.tsx'
+import SelectedGroup from '@/pages/user/4_forums/SelectedGroup.tsx'
+import ExpandDiscussion from '@/pages/user/4_forums/ExpandDiscussion.tsx'
+import InboxMain from '@/components/ui/inbox/inbox_main.tsx'
+import SectionPlaceholder from '@/pages/user/0_misc/SectionPlaceholder.tsx'
+import DashboardMain from './pages/user/8_dashboard/dashboard_main'
+import { DashboardTaskDetail } from './pages/user/8_dashboard/dashboard_components/DashboardTaskDetail'
+import JobMain from '@/pages/user/6_job_market/job_main.tsx'
+import JobPostingPage from '@/pages/user/6_job_market/job_pages/job_posting_page.tsx'
+import JobSavesPage from '@/pages/user/6_job_market/job_pages/job_saves_page.tsx'
+import JobMyPostPage from '@/pages/user/6_job_market/job_pages/job_mypost_page.tsx'
+import JobCreatePostPage from '@/pages/user/6_job_market/job_pages/job_createpost_page.tsx'
+import JobEditPostPage from '@/pages/user/6_job_market/job_pages/job_editpost_page.tsx'
+import ProposalsMain from '@/pages/user/6_job_market/job_proposals/proposals_main.tsx'
+import ProposalsSelectJobPage from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_select_job_page.tsx'
+import ProposalsIncomingPage from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_incoming_page.tsx'
+import ProposalsSentPage from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_sent_page.tsx'
+import ProposalsCreatePage from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_create_page.tsx'
+import ProposalsEditPage from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_edit_page.tsx'
+import ProposalsViewDetailsAsApplicant from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_applicant'
+import ProposalsViewDetailsAsAuthor from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author'
+import GigMarketplace from '@/pages/user/7_gigs/Gig_Posting/main.tsx'
+import { CreateGigWizard } from '@/pages/user/7_gigs/Gig_Posting/CreateGigWizard.tsx'
+import Verification from '@/pages/user/9_verification/Verification.tsx'
+import BusinessVerification from '@/pages/user/9_verification/BusinessVerification.tsx'
+import TransactionHistoryMain from '@/pages/user/11_transactionhistory/main.tsx'
+import TosMain from '@/pages/user/terms_of_service/tos_main.tsx'
+import Contracts from '@/pages/user/contracts/contracts.tsx'
+import UserProfilesList from '@/components/nav/user_profiles_list.tsx'
+import { VerificationStatus } from '@/pages/user/7_profile/VerificationStatus/VerificationStatus.tsx'
 
 import './App.css'
 
@@ -20,49 +60,6 @@ const EmailVerification = lazyPage(() => import('./pages/EmailVerification'));
 const NotFound = lazyPage(() => import('@/pages/user/0_misc/NotFound.tsx'));
 const ResetPasswordPage = lazyPage(() => import('@/pages/auth/ResetPasswordPage.tsx'));
 const ForgotPasswordPage = lazyPage(() => import('@/pages/auth/ForgotPasswordPage.tsx'));
-const CreditShop = lazyPage(() => import('@/pages/user/13_creditsshop/CreditsShop.tsx'));
-const Checkout = lazyPage(() => import('@/pages/payment/checkout.tsx'));
-const Profile = lazyPage(() => import('@/pages/user/7_profile/Profile.tsx'));
-const UserSettings = lazyPage(() => import('@/components/nav/Settings/user_settings.tsx'));
-const Layout = lazyPage(() => import('./components/ui/Layout.tsx'));
-const Home = lazyPage(() => import('@/pages/user/1_home/Home.tsx'));
-const Projects = lazyPage(() => import('@/pages/user/2_projects/Projects.tsx'));
-const Projects_Selection = lazyPage(() => import('@/pages/user/2_projects/Projects_Selection.tsx'));
-const Teams = lazyPage(() => import('@/pages/user/3_teams/Teams.tsx'));
-const SelectedTeam = lazyPage(() => import('@/pages/user/3_teams/SelectedTeam.tsx'));
-const Forums = lazyPage(() => import('./pages/user/4_forums/Forums.tsx'));
-const SelectedGroup = lazyPage(() => import('@/pages/user/4_forums/SelectedGroup.tsx'));
-const ExpandDiscussion = lazyPage(() => import('@/pages/user/4_forums/ExpandDiscussion.tsx'));
-const InboxMain = lazyPage(() => import('@/components/ui/inbox/inbox_main.tsx'));
-const SectionPlaceholder = lazyPage(() => import('@/pages/user/0_misc/SectionPlaceholder.tsx'));
-
-// Dashboard Imports
-const DashboardMain = lazyPage(() => import('./pages/user/8_dashboard/dashboard_main'));
-const DashboardTaskDetail = lazy(() => import('./pages/user/8_dashboard/dashboard_components/DashboardTaskDetail').then((module) => ({ default: module.DashboardTaskDetail })));
-
-const JobMain = lazyPage(() => import('@/pages/user/6_job_market/job_main.tsx'));
-const JobPostingPage = lazyPage(() => import('@/pages/user/6_job_market/job_pages/job_posting_page.tsx'));
-const JobSavesPage = lazyPage(() => import('@/pages/user/6_job_market/job_pages/job_saves_page.tsx'));
-const JobMyPostPage = lazyPage(() => import('@/pages/user/6_job_market/job_pages/job_mypost_page.tsx'));
-const JobCreatePostPage = lazyPage(() => import('@/pages/user/6_job_market/job_pages/job_createpost_page.tsx'));
-const JobEditPostPage = lazyPage(() => import('@/pages/user/6_job_market/job_pages/job_editpost_page.tsx'));
-const ProposalsMain = lazyPage(() => import('@/pages/user/6_job_market/job_proposals/proposals_main.tsx'));
-const ProposalsSelectJobPage = lazyPage(() => import('@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_select_job_page.tsx'));
-const ProposalsIncomingPage = lazyPage(() => import('@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_incoming_page.tsx'));
-const ProposalsSentPage = lazyPage(() => import('@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_sent_page.tsx'));
-const ProposalsCreatePage = lazyPage(() => import('@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_create_page.tsx'));
-const ProposalsEditPage = lazyPage(() => import('@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_edit_page.tsx'));
-const ProposalsViewDetailsAsApplicant = lazyPage(() => import('@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_applicant'));
-const ProposalsViewDetailsAsAuthor = lazyPage(() => import('@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author'));
-const GigMarketplace = lazyPage(() => import('@/pages/user/7_gigs/Gig_Posting/main.tsx'));
-const CreateGigWizard = lazy(() => import('@/pages/user/7_gigs/Gig_Posting/CreateGigWizard.tsx').then((module) => ({ default: module.CreateGigWizard })));
-const Verification = lazyPage(() => import('@/pages/user/9_verification/Verification.tsx'));
-const BusinessVerification = lazyPage(() => import('@/pages/user/9_verification/BusinessVerification.tsx'));
-const TransactionHistoryMain = lazyPage(() => import('@/pages/user/11_transactionhistory/main.tsx'));
-const TosMain = lazyPage(() => import('@/pages/user/terms_of_service/tos_main.tsx'));
-const Contracts = lazyPage(() => import('@/pages/user/contracts/contracts.tsx'));
-const UserProfilesList = lazyPage(() => import('@/components/nav/user_profiles_list.tsx'));
-const VerificationStatus = lazy(() => import('@/pages/user/7_profile/VerificationStatus/VerificationStatus.tsx').then((module) => ({ default: module.VerificationStatus })));
 const NotificationsPage = lazyPage(() => import('@/pages/user/notifications/notifications_page.tsx'));
 const AdminLayout = lazyPage(() => import('./pages/admin/AdminLayout'));
 const AdminDashboard = lazyPage(() => import('./pages/admin/AdminDashboard'));
@@ -147,14 +144,12 @@ function App() {
       <Route path="/admin" element={<AdminLoginPage />} />
       <Route path="/staff" element={<StaffLoginPage />} />
 
-        <Route path="/setup">
-          <Route path="verify-email" element={<VerifyEmail />} />
-          <Route path="personal-details" element={<PersonalDetails />} />
-          <Route path="upload-image" element={<UploadImage />} />
-          <Route path="survey" element={<Survey />} />
-        </Route>
+        <Route path="/setup/verify-email" element={<VerifyEmail />} />
 
       <Route element={<RouteMiddleware />}>
+        <Route path="/setup/personal-details" element={<PersonalDetails />} />
+        <Route path="/setup/upload-image" element={<UploadImage />} />
+        <Route path="/setup/survey" element={<Survey />} />
         {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path='*' element={<NotFound/>} />

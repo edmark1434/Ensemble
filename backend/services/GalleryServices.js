@@ -15,6 +15,9 @@ async function createGalleryItem(accountId, fileId, title, description) {
     if (currentGalleries.length >= 5) {
         throw new Error('Gallery upload limit reached (max 5 items)');
     }
+    if (!await GalleryRepositories.isOwnedGalleryFile(accountId, fileId)) {
+        throw new Error('Invalid or unauthorized gallery file');
+    }
     return await GalleryRepositories.createGalleryItem(accountId, fileId, title, description);
 }
 

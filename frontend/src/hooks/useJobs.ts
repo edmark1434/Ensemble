@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
-import axios from 'axios';
 import api from '../lib/axios';
+import { uploadFileWithIntent } from '../lib/uploadFile';
 
 export const useJobs = () => {
     const [loading, setLoading] = useState(false);
@@ -153,29 +153,8 @@ export const useJobs = () => {
     const uploadAttachment = async (file: File, folder: string = 'jobs') => {
         setLoading(true);
         try {
-            // 1. Get pre-signed URL
-            const urlRes = await api.post('/api/files/upload-url', {
-                folder,
-                filename: file.name,
-                contentType: file.type
-            });
-            
-            const { uploadUrl, key } = urlRes.data;
-
-            // 2. Upload file directly to S3 using the pre-signed URL
-            await axios.put(uploadUrl, file, {
-                headers: { 'Content-Type': file.type }
-            });
-
-            // 3. Register file in database to get UUID
-            const regRes = await api.post('/api/files/register', {
-                name: file.name,
-                path: key,
-                mimeType: file.type,
-                sizeBytes: file.size
-            });
-
-            return regRes.data.fileId; // return the UUID
+            const uploaded = await uploadFileWithIntent(file, folder);
+            return uploaded.fileId;
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to upload attachment');
             throw err;
