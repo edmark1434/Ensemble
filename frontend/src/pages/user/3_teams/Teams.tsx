@@ -16,6 +16,7 @@ interface Team {
   member_count: number;
   current_user_role?: string;
   current_user_status?: string;
+  is_business_verified?: boolean;
 }
 
 interface CreateTeamValues {
@@ -239,11 +240,18 @@ export default function Teams() {
                       </p>
                     </div>
 
-                    {team.current_user_role && (
-                      <span className="h-fit rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
-                        {team.current_user_role}
-                      </span>
-                    )}
+                    <div className="flex flex-wrap justify-end gap-1.5">
+                      {team.current_user_role && (
+                        <span className="h-fit rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
+                          {team.current_user_role}
+                        </span>
+                      )}
+                      {team.is_business_verified && (
+                        <span className="h-fit rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">
+                          Business verified
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <p className="mt-2 line-clamp-2 text-xs text-gray-500 dark:text-zinc-400">
