@@ -201,12 +201,11 @@ async function applyAdminDiditVerificationAction(accountId, action, options = {}
       validityDays,
       verifiedByAccountId
     );
-    const actionMessages = {
-      approve: 'Your Team business verification has been approved.',
-      decline: 'Your Team business verification was declined. You may resubmit the required documents.',
-      reverify: 'Your Team business verification requires resubmission.',
-    };
-    const notificationMessage = `${actionMessages[normalizedAction]} Admin message: ${comment}`;
+    const teamName = record.team_name || 'Unnamed team';
+    const notificationMessage = `Team verification for "${teamName}" has been ${result.verificationStatus}. Admin message: ${comment}`;
+    const verificationPath = record.team_id
+      ? `/teams/${encodeURIComponent(record.team_id)}/business-verification`
+      : '/teams';
     const ownerAccountIds = await getActiveTeamOwnerAccountIds(accountId);
     const io = getIo();
     await Promise.all(ownerAccountIds.map(async (ownerAccountId) => {
@@ -215,7 +214,7 @@ async function applyAdminDiditVerificationAction(accountId, action, options = {}
         is_read: false,
         reference_table: 'verifications',
         reference_prefix: 'BUSINESS_VERIFICATION',
-        reference_path: '/teams',
+        reference_path: verificationPath,
         reference_id: result.verification.verification_id,
         account_id: ownerAccountId,
       });

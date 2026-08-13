@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ArrowLeft,
+  ArrowRightLeft,
   Bell,
   Briefcase,
   Check,
@@ -68,6 +69,7 @@ type Review = {
   comment?: string;
 };
 type Wallet = Record<string, number>;
+type TeamTransaction = { credit_transaction_id: string; type: string; amount_credits: number; status: string; created_at: string; recipient_name: string; recipient_handle: string };
 type Tab =
   | "about"
   | "jobs"
@@ -76,6 +78,7 @@ type Tab =
   | "reviews"
   | "members"
   | "wallet";
+  | "transactions";
 
 const cloudfront = String(import.meta.env.VITE_CLOUDFRONT_URL || "").replace(
   /\/$/,
@@ -96,6 +99,11 @@ export default function SelectedTeam() {
   const [requests, setRequests] = useState<Member[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [transactions, setTransactions] = useState<TeamTransaction[]>([]);
+  const [transactionPage, setTransactionPage] = useState(1);
+  const [transactionTotalPages, setTransactionTotalPages] = useState(1);
+  const [transactionSearch, setTransactionSearch] = useState('');
+  const [transactionDate, setTransactionDate] = useState('');
   const [activeTab, setActiveTab] = useState<Tab>("about");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -108,6 +116,9 @@ export default function SelectedTeam() {
     useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<Member | null>(null);
+  const [showDistribution, setShowDistribution] = useState(false);
+  const [distributionRecipientId, setDistributionRecipientId] = useState('');
+  const [distributionAmount, setDistributionAmount] = useState('');
 
   const loadTeam = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -267,6 +278,47 @@ export default function SelectedTeam() {
       rating,
       comment: comment.trim(),
     });
+  };
+
+  const distributeFunds = async () => {
+    const amount = Number(distributionAmount);
+    if (!distributionRecipientId) {
+      showErrorToast('Select a Team member');
+      return;
+    }
+    if (!Number.isSafeInteger(amount) || amount <= 0) {
+      showErrorToast('Enter a whole number of credits to distribute');
+      return;
+    }
+    if (amount > Number(wallet?.available_balance || 0)) {
+      showErrorToast('Distribution amount exceeds the available Team balance');
+      return;
+    }
+    setSaving(true);
+    try {
+      const response = await api.post(`/api/teams/${id}/wallet/distributions`, {
+        recipients: [{ account_id: distributionRecipientId, amount_credits: amount }],
+      });
+      const result = response.data?.data;
+      setWallet((current) => current ? {
+        ...current,
+        available_balance: result.available_balance,
+        total_balance: Number(current.total_balance || 0),
+      } : current);
+      setDistributionRecipientId('');
+      setDistributionAmount('');
+      setShowDistribution(false);
+      showSuccessToast('Team funds distributed');
+    } catch (error: unknown) {
+      showErrorToast(axiosMessage(error, 'Unable to distribute Team funds'));
+    } finally {
+      setSaving(false);
+    }
+    if (tab === 'transactions') void loadTransactions(1);
+  };
+
+  const loadTransactions = async (page = transactionPage) => {
+    try { const response = await api.get(`/api/teams/${id}/transactions`, { params: { page, pageSize: 10, search: transactionSearch, dateFrom: transactionDate, dateTo: transactionDate } }); setTransactions(response.data.data?.items || []); setTransactionPage(response.data.data?.pagination?.page || page); setTransactionTotalPages(response.data.data?.pagination?.total_pages || 1); } catch (error: unknown) { showErrorToast(axiosMessage(error, 'Unable to load Team transactions')); }
   };
 
   if (loading)
@@ -536,6 +588,15 @@ export default function SelectedTeam() {
           onTransfer={(account) =>
             void mutate("/transfer-ownership", "patch", { accountId: account })
           }
+          onDistributeFunds={() => setShowDistribution(true)}
+          transactionSearch={transactionSearch}
+          transactionDate={transactionDate}
+          transactionPage={transactionPage}
+          transactionTotalPages={transactionTotalPages}
+          transactions={transactions}
+          onTransactionSearch={setTransactionSearch}
+          onTransactionDate={setTransactionDate}
+          onLoadTransactions={loadTransactions}
           onReview={() => void addReview()}
         />
       </main>
@@ -598,6 +659,39 @@ export default function SelectedTeam() {
           navigate("/account-verification-status");
         }}
       />
+      {showDistribution && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#12131a] p-5 shadow-2xl">
+            <h2 className="text-lg font-semibold text-white">Distribute Team funds</h2>
+            <p className="mt-2 text-sm text-zinc-400">
+              Send credits from the Team account wallet to an active member’s account wallet. Available: {Number(wallet?.available_balance || 0).toLocaleString()} credits.
+            </p>
+            <label className="mt-4 block text-sm text-zinc-300">
+              Team member
+              <select value={distributionRecipientId} onChange={(event) => setDistributionRecipientId(event.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-[#12131a] px-3 py-2 text-white outline-none focus:border-blue-400">
+                <option value="">Select a member</option>
+                {members.filter((member) => member.status === 'Active').map((member) => <option key={member.account_id} value={member.account_id}>{member.display_name} (@{member.handle})</option>)}
+              </select>
+            </label>
+            <label className="mt-4 block text-sm text-zinc-300">
+              Credits to distribute
+              <input
+                type="number"
+                min="1"
+                step="1"
+                inputMode="numeric"
+                value={distributionAmount}
+                onChange={(event) => setDistributionAmount(event.target.value)}
+                className="mt-2 w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-white outline-none focus:border-blue-400"
+              />
+            </label>
+            <div className="mt-5 flex justify-end gap-3">
+              <button type="button" disabled={saving} onClick={() => setShowDistribution(false)} className="rounded-lg border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:bg-white/[0.05]">Cancel</button>
+              <button type="button" disabled={saving || !distributionRecipientId || !distributionAmount} onClick={() => void distributeFunds()} className="inline-flex items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-400 disabled:opacity-50"><ArrowRightLeft className="h-4 w-4" />{saving ? 'Distributing...' : 'Distribute funds'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </Page>
   );
 }
@@ -619,7 +713,7 @@ function TeamTabs({
     { id: "reviews", label: "Reviews", icon: Star },
     { id: "members", label: "Members", icon: Users },
   ];
-  if (showWallet) tabs.push({ id: "wallet", label: "Wallet", icon: Briefcase });
+  if (showWallet) { tabs.push({ id: "wallet", label: "Wallet", icon: Briefcase }); tabs.push({ id: "transactions", label: "Transactions", icon: ArrowRightLeft }); }
   return (
     <div className="mb-6 flex flex-wrap gap-1 border-b border-gray-200 dark:border-white/10">
       {tabs.map(({ id, label, icon: Icon }) => (
@@ -650,6 +744,8 @@ function TeamTabContent({
   onRemove,
   onRole,
   onTransfer,
+  onDistributeFunds,
+  transactions, transactionSearch, transactionDate, transactionPage, transactionTotalPages, onTransactionSearch, onTransactionDate, onLoadTransactions,
   onReview,
 }: {
   active: Tab;
@@ -665,6 +761,8 @@ function TeamTabContent({
   onRemove: (member: Member) => void;
   onRole: (account: string, role: string) => void;
   onTransfer: (account: string) => void;
+  onDistributeFunds: () => void;
+  transactions: TeamTransaction[]; transactionSearch: string; transactionDate: string; transactionPage: number; transactionTotalPages: number; onTransactionSearch: (value: string) => void; onTransactionDate: (value: string) => void; onLoadTransactions: (page?: number) => void;
   onReview: () => void;
 }) {
   if (active === "about")
@@ -713,19 +811,29 @@ function TeamTabContent({
     );
   if (active === "wallet")
     return wallet ? (
-      <div className="grid gap-3 sm:grid-cols-4">
-        {Object.entries(wallet).map(([key, value]) => (
-          <div key={key} className="rounded-xl border border-gray-200 dark:border-white/10 p-4">
-            <p className="text-xs capitalize text-gray-500 dark:text-zinc-500">
-              {key.replaceAll("_", " ")}
-            </p>
-            <b>{value} credits</b>
+      <div>
+        {isOwner && (
+          <div className="mb-4 flex justify-end">
+            <button type="button" onClick={onDistributeFunds} disabled={saving || Number(wallet.available_balance || 0) <= 0} className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50">
+              <ArrowRightLeft className="h-4 w-4" /> Distribute funds
+            </button>
           </div>
-        ))}
+        )}
+        <div className="grid gap-3 sm:grid-cols-4">
+          {Object.entries(wallet).map(([key, value]) => (
+            <div key={key} className="rounded-xl border border-gray-200 dark:border-white/10 p-4">
+              <p className="text-xs capitalize text-gray-500 dark:text-zinc-500">
+                {key.replaceAll("_", " ")}
+              </p>
+              <b>{value} credits</b>
+            </div>
+          ))}
+        </div>
       </div>
     ) : (
       <p className="text-gray-500 dark:text-zinc-400">Loading wallet…</p>
     );
+  if (active === 'transactions') return <div className="rounded-xl border border-white/10 p-4"><div className="mb-4 flex flex-wrap gap-2"><input value={transactionSearch} onChange={(e)=>onTransactionSearch(e.target.value)} placeholder="Search member name" className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white"/><input type="date" value={transactionDate} onChange={(e)=>onTransactionDate(e.target.value)} className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white"/><button onClick={()=>onLoadTransactions(1)} className="rounded-lg bg-blue-500 px-3 py-2 text-sm text-white">Filter</button></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-zinc-500"><tr><th className="pb-2">Date</th><th className="pb-2">Recipient</th><th className="pb-2">Amount</th><th className="pb-2">Status</th></tr></thead><tbody>{transactions.map((item)=><tr key={item.credit_transaction_id} className="border-t border-white/[0.06]"><td className="py-3">{new Date(item.created_at).toLocaleDateString()}</td><td>{item.recipient_name || item.recipient_handle}</td><td>{item.amount_credits.toLocaleString()} credits</td><td>{item.status}</td></tr>)}{!transactions.length&&<tr><td colSpan={4} className="py-6 text-center text-zinc-500">No Team transactions found.</td></tr>}</tbody></table></div><div className="mt-4 flex justify-end gap-2"><button disabled={transactionPage<=1} onClick={()=>onLoadTransactions(transactionPage-1)} className="rounded border border-white/10 px-3 py-1 disabled:opacity-40">Previous</button><span className="px-2 text-sm text-zinc-400">{transactionPage} / {transactionTotalPages}</span><button disabled={transactionPage>=transactionTotalPages} onClick={()=>onLoadTransactions(transactionPage+1)} className="rounded border border-white/10 px-3 py-1 disabled:opacity-40">Next</button></div></div>;
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {members.map((member) => (

@@ -998,6 +998,11 @@ export function VerificationModal({
     && ['approve', 'decline', 'reverify'].includes(action)
     && !(action === 'approve' && isAlreadyApproved);
 
+  // Only personal-account verification is backed by Didit/KYC nodes. Team
+  // verification is a separate business-document workflow and must never ask
+  // the administrator to select personal identity evidence.
+  const isUserDiditVerification = Boolean(loadDiditDetails && diditDetails && !diditDetails.isTeam);
+
   const focusActionReason = () => {
     window.requestAnimationFrame(() => {
       actionReasonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1011,7 +1016,7 @@ export function VerificationModal({
       focusActionReason();
       return false;
     }
-    if (action === 'reverify' && !Object.values(reverificationRequirements).some(Boolean)) {
+    if (action === 'reverify' && isUserDiditVerification && !Object.values(reverificationRequirements).some(Boolean)) {
       setActionReasonError('Select at least one item that the user must resubmit.');
       return false;
     }
@@ -1022,7 +1027,10 @@ export function VerificationModal({
         validityDays: action === 'approve' ? resolvedDays : undefined,
         diditWorkflow: loadDiditDetails,
         comment: actionReason.trim() || undefined,
-        reverificationRequirements: action === 'reverify' ? reverificationRequirements : undefined,
+        reverificationRequirements:
+          action === 'reverify' && isUserDiditVerification
+            ? reverificationRequirements
+            : undefined,
       });
       // Refresh the parent record first so prop-based modal content (status, expiry,
       // verification logs) is current, then reload the Didit detail panel.
@@ -1068,7 +1076,7 @@ export function VerificationModal({
               type="button"
               disabled={saving}
               onClick={() => {
-                if (item.action === 'reverify' && loadDiditDetails && !diditDetails?.isTeam) {
+                if (item.action === 'reverify' && isUserDiditVerification) {
                   if (requiresActionReason(item.action) && !actionReason.trim()) {
                     setActionReasonError('A reason is required before submitting this action.');
                     focusActionReason();
@@ -1114,7 +1122,7 @@ export function VerificationModal({
             </span>
           )}
         </label>
-        {showReverificationModal && loadDiditDetails && !diditDetails?.isTeam && (
+        {showReverificationModal && isUserDiditVerification && (
           <fieldset className="fixed inset-0 z-[60] m-0 flex items-center justify-center border-0 bg-black/70 p-4">
             <div className="w-full max-w-md rounded-2xl border border-white/[0.1] bg-[#12131a] p-5 shadow-2xl">
             <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
