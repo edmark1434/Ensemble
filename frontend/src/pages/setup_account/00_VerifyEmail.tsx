@@ -91,10 +91,7 @@ export default function VerifyEmail() {
         { email, code: fullCode },
         { withCredentials: true }
       );
-      const signUpResponse = await axios.post(`${import.meta.env.VITE_BASE_URL}/api/users/signup`, 
-        response.data.credentials, { withCredentials: true }
-      );
-        if (setUser) setUser(signUpResponse.data.credentials);
+        if (setUser) setUser(response.data.credentials);
         if (setIsAuthenticated) setIsAuthenticated(true);
         navigate("/setup/personal-details");
     } catch (err:any) {

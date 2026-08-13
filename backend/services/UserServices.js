@@ -33,6 +33,7 @@ const {
 const redisClient = require('../lib/Redis');
 //library for generating JSON Web Tokens for authentication
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 //constants for password hashing 
 const SALT_ROUNDS = 10;
@@ -79,7 +80,31 @@ function normalizeSignupInput(payload = {}) {
         type: payload.type || 'User',
         signUpWithOAuth: payload.signUpWithOAuth || false,
         firebaseUserUuid: payload.firebase_user_uuid || null,
+        firebaseIdToken: payload.firebaseIdToken || null,
     };
+}
+
+async function verifyFirebaseIdentityToken(idToken) {
+    const apiKey = process.env.FIREBASE_WEB_API_KEY;
+    if (!apiKey) throw new ServiceError('OAuth authentication is not configured', 503);
+    if (typeof idToken !== 'string' || idToken.length < 100 || idToken.length > 10000) {
+        throw new ServiceError('Invalid OAuth identity token', 401);
+    }
+    try {
+        const response = await axios.post(
+            `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(apiKey)}`,
+            { idToken },
+            { timeout: 10000, headers: { 'Content-Type': 'application/json' } }
+        );
+        const identity = response.data?.users?.[0];
+        if (!identity?.localId || !identity?.email || identity.emailVerified !== true) {
+            throw new ServiceError('OAuth email is not verified', 401);
+        }
+        return identity;
+    } catch (error) {
+        if (error instanceof ServiceError) throw error;
+        throw new ServiceError('Invalid or expired OAuth identity token', 401);
+    }
 }
 //function to get all users from the database by calling the corresponding repository function
 async function fetchAllUsers() {
@@ -103,7 +128,7 @@ async function getUsersByListOfIdsServices(userIds) {
 }
 
 //function to register a new user, handling both standard email/password registration and OAuth-based registration, including validation of input, checking for existing users, creating accounts and users in the database, hashing passwords, and returning the created user and account information
-async function registerUser(signupPayload = {}) {
+async function registerUser(signupPayload = {}, options = {}) {
 
     //normalize and validate the signup input
     const {
@@ -114,18 +139,28 @@ async function registerUser(signupPayload = {}) {
         password,
         type,
         signUpWithOAuth,
-        firebaseUserUuid
+        firebaseUserUuid,
+        firebaseIdToken
     } = normalizeSignupInput(signupPayload);
+    if (signUpWithOAuth) {
+        const identity = await verifyFirebaseIdentityToken(firebaseIdToken);
+        if (identity.email.toLowerCase() !== emailAddress || identity.localId !== firebaseUserUuid) {
+            throw new ServiceError('OAuth identity does not match the requested account', 401);
+        }
+    }
     //check if its using oauth signup, if not validate the required fields for standard registration and check for username uniqueness. If using oauth, only validate email format and check for existing user with that email, if exists update firebase uuid if not already set.
     if(!signUpWithOAuth){
+        if (!options.emailVerified) {
+            throw new ServiceError('Email verification is required before signup can be completed', 403);
+        }
         //if not signing up with OAuth, validate all required fields and check for username uniqueness. If signing up with OAuth, only validate email format and check for existing user with that email, if exists update firebase uuid if not already set.
         if(!firstName || !lastName){
             throw new ServiceError('First name and last name are required', 400);
         }
-        if (!emailAddress || !password) {
+        if (!emailAddress || (!password && !options.passwordHash)) {
             throw new ServiceError('Email and password are required', 400);
         }
-        if (!STRONG_PASSWORD_PATTERN.test(password)) {
+        if (!options.passwordHash && !STRONG_PASSWORD_PATTERN.test(password)) {
             throw new ServiceError('Password must be at least 8 characters and include one uppercase letter, one lowercase letter, and one special character.', 400);
         }
 
@@ -186,7 +221,7 @@ async function registerUser(signupPayload = {}) {
         status: 'active',
     });
     //hash the password if provided, otherwise set to null for OAuth users
-    const passwordHash = password ? await bcrypt.hash(password, SALT_ROUNDS) : null;
+    const passwordHash = options.passwordHash || (password ? await bcrypt.hash(password, SALT_ROUNDS) : null);
 
     //create the user in the database with the associated account ID and return the created user information along with the account ID
     const user = await createUser({
@@ -196,7 +231,7 @@ async function registerUser(signupPayload = {}) {
         emailAddress,
         passwordHash,
         firebaseUserUuid,
-        isEmailVerified: true,
+        isEmailVerified: Boolean(signUpWithOAuth || options.emailVerified),
     });
     
     // Automatically grant the Alpha Tester badge to all new accounts
@@ -235,16 +270,19 @@ async function LoginUserOrEmail(loginIdentifier, password, context = {}) {
         const credentialsInSession = await redisClient.get(`sessionCredentials:${loginIdentifier.toLowerCase()}`);
         if (credentialsInSession) {
             credentialsSession = JSON.parse(credentialsInSession);
-            console.log('Found credentials in session for email:', loginIdentifier);
-            console.log("credentialsSession:", credentialsSession);
-            if (loginIdentifier.toLowerCase() === credentialsSession.email.toLowerCase() && password === credentialsSession.password) {
-                credentialsSession.existSession = true;
+            if (credentialsSession.passwordHash && loginIdentifier.toLowerCase() === credentialsSession.email.toLowerCase() && await bcrypt.compare(password, credentialsSession.passwordHash)) {
                 const verifyCodeSession = await redisClient.get(`verificationCode:${credentialsSession.email}`);
                 if (!verifyCodeSession) {
                     const verificationCode = await sendVerificationEmail(credentialsSession.email, credentialsSession.firstName, credentialsSession.lastName);
                     await redisClient.set(`verificationCode:${credentialsSession.email}`, verificationCode, { EX: 10 * 60 });
                 }
-                return credentialsSession;
+                return {
+                    email: credentialsSession.email,
+                    firstName: credentialsSession.firstName,
+                    lastName: credentialsSession.lastName,
+                    username: credentialsSession.username,
+                    existSession: true,
+                };
             }
         }
     }
@@ -406,46 +444,60 @@ async function signUpSaveSession(credentials) {
 
     try {
         let errorList = {}
-        if(!isValidEmail(credentials.email)) {
+        const email = credentials.email?.trim().toLowerCase();
+        const firstName = credentials.firstName?.trim();
+        const lastName = credentials.lastName?.trim();
+        const username = credentials.username?.trim();
+        if(!isValidEmail(email)) {
             errorList.email = "Invalid email format";
         }
-        if(await getEmailandPasswordHashByEmail(credentials.email)) {
+        if(await getEmailandPasswordHashByEmail(email)) {
             errorList.email = "Email already in use";
         }
-        if(await getEmailandPasswordHashByUsername(credentials.username)) {
+        if(await getEmailandPasswordHashByUsername(username)) {
             errorList.username = "Username already in use";
         }
-        if (!credentials.email) {
+        if (!email) {
             errorList.email = "Email and password are required";
         }
         if(!credentials.password) {
             errorList.password = "Email and password are required";
         }
-        if (!credentials.firstName) {
+        if (!firstName) {
             errorList.firstName = "First name is required";
         }
-        if (!credentials.lastName) {
+        if (!lastName) {
             errorList.lastName = "Last name is required";
         }
 
-        if (!credentials.username) {
+        if (!username) {
             errorList.username = "Username is required";
         }
 
-        if (!/^[a-zA-Z0-9_]{3,20}$/.test(credentials.username)) {
+        if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
             errorList.username = "Username must be 3-20 characters and contain only letters, numbers, or underscores";
+        }
+        if (credentials.password && !STRONG_PASSWORD_PATTERN.test(credentials.password)) {
+            errorList.password = 'Password must be at least 8 characters and include one uppercase letter, one lowercase letter, and one special character.';
         }
         
         if(Object.keys(errorList).length > 0){
             throw new ServiceError('Validation errors', 400, errorList);
         } else {
-            await redisClient.set(`sessionCredentials:${credentials.email}`, JSON.stringify(credentials), { EX: 60 * 60 * 24 * 30 });
-            const checkCodeSession = await redisClient.get(`verificationCode:${credentials.email}`);
+            const pending = {
+                email,
+                firstName,
+                lastName,
+                username,
+                passwordHash: await bcrypt.hash(credentials.password, SALT_ROUNDS),
+            };
+            await redisClient.set(`sessionCredentials:${email}`, JSON.stringify(pending), { EX: 60 * 60 * 24 });
+            const checkCodeSession = await redisClient.get(`verificationCode:${email}`);
             if(!checkCodeSession){
-                const verificationCode = await sendVerificationEmail(credentials.email, credentials.firstName, credentials.lastName);
-                await redisClient.set(`verificationCode:${credentials.email}`, verificationCode, { EX: 10 * 60 });
+                const verificationCode = await sendVerificationEmail(email, firstName, lastName);
+                await redisClient.set(`verificationCode:${email}`, verificationCode, { EX: 10 * 60 });
             }
-            return;
+            return { email, firstName, lastName, username };
         }
     }catch(err){
         console.error(`Error signing up and saving session:`, err);
@@ -454,7 +506,11 @@ async function signUpSaveSession(credentials) {
 }
 
 async function checkVerificationCode(email, code) { 
-    const storedCode = await redisClient.get(`verificationCode:${email}`);
+    const normalizedEmail = email?.trim().toLowerCase();
+    if (!isValidEmail(normalizedEmail) || !/^\d{6}$/.test(String(code || ''))) {
+        throw new ServiceError('Invalid verification request', 400);
+    }
+    const storedCode = await redisClient.get(`verificationCode:${normalizedEmail}`);
     if (!storedCode) {
         throw new ServiceError('Verification code expired', 400);
     }
@@ -462,26 +518,36 @@ async function checkVerificationCode(email, code) {
         throw new ServiceError('Invalid verification code', 400);
     }
     if (storedCode === code) {
-        await redisClient.del(`verificationCode:${email}`);
-        const credentialsInSession = await redisClient.get(`sessionCredentials:${email}`);
+        const credentialsInSession = await redisClient.get(`sessionCredentials:${normalizedEmail}`);
         if (!credentialsInSession) {
             throw new ServiceError('Session expired or not found', 400);
         }
-        const credentials = JSON.parse(credentialsInSession);
-        return credentials;
+        const pending = JSON.parse(credentialsInSession);
+        const result = await registerUser({
+            firstName: pending.firstName,
+            lastName: pending.lastName,
+            username: pending.username,
+            email: pending.email,
+            type: 'User',
+        }, { emailVerified: true, passwordHash: pending.passwordHash });
+        await redisClient.del(`verificationCode:${normalizedEmail}`);
+        await redisClient.del(`sessionCredentials:${normalizedEmail}`);
+        return result;
     }
 }
 
 
 
 
-async function sendVerificationEmailServices(email, firstName, lastName) {
+async function sendVerificationEmailServices(email) {
     try {
-        if(!await redisClient.get(`verificationCode:${email}`)){
-            const sixDigitCode = await sendVerificationEmail(email, firstName, lastName);
-            await redisClient.set(`verificationCode:${email}`, sixDigitCode, { EX: 10 * 60 });
-            return sixDigitCode;
-        }
+        const normalizedEmail = email?.trim().toLowerCase();
+        const pendingRaw = await redisClient.get(`sessionCredentials:${normalizedEmail}`);
+        if (!pendingRaw) throw new ServiceError('Pending signup not found or expired', 400);
+        const pending = JSON.parse(pendingRaw);
+        const sixDigitCode = await sendVerificationEmail(normalizedEmail, pending.firstName, pending.lastName);
+        await redisClient.set(`verificationCode:${normalizedEmail}`, sixDigitCode, { EX: 10 * 60 });
+        return true;
     }
     catch (err) {
         console.error(`Error sending verification email:`, err);
@@ -505,7 +571,7 @@ async function updatePersonalDetails(userId, details) {
 
 
 async function sendVerificationEmail(email, firstName, lastName) { 
-    const sixDigitCode = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+    const sixDigitCode = crypto.randomInt(0, 1000000).toString().padStart(6, '0');
     const payload = emailPayload(email, firstName, lastName, sixDigitCode);
     const response = await axios.post('https://api.brevo.com/v3/smtp/email', payload, {
         headers: {

@@ -28,6 +28,8 @@ const { CREDIT_TRANSACTION_TYPE } = require("./CreditTransactionEnums");
 
 const {getIo} = require('../lib/WebSocket');
 const { reconcileCashoutsServices } = require('../services/CashoutServices');
+const { cleanupExpiredOnboardingAvatars } = require('../services/OnboardingServices');
+const { reconcileDiditVerificationSessionsServices } = require('../services/AccountVerificationServices');
 
 const config = {
     auth: {
@@ -309,8 +311,19 @@ async function updateForResubmission(sessionId){
 let isPaymentJobRunning = false;
 let isSubscriptionJobRunning = false;
 let isCashoutJobRunning = false;
+let isVerificationJobRunning = false;
 
 function startPaymentReconciliationJob() {
+
+    // Delete only expired onboarding uploads that were never committed to the files table.
+    cron.schedule("17 3 * * *", async () => {
+        try {
+            const result = await cleanupExpiredOnboardingAvatars();
+            if (result.deleted) console.log(`Removed ${result.deleted} expired onboarding avatar upload(s).`);
+        } catch (err) {
+            console.error('Onboarding avatar cleanup failed:', err.message);
+        }
+    });
 
     // Payment reconciliation every 30 seconds
     cron.schedule("*/30 * * * * *", async () => {
@@ -367,6 +380,27 @@ function startPaymentReconciliationJob() {
             console.error("Cashout reconciliation failed:", err);
         } finally {
             isCashoutJobRunning = false;
+        }
+    });
+
+    // Fallback for Didit status.updated webhooks missed while this server was unavailable.
+    // The service reuses the webhook status-processing path and is idempotent for unchanged statuses.
+    cron.schedule("*/5 * * * *", async () => {
+        if (isVerificationJobRunning) {
+            console.log("Skipping Didit verification reconciliation. Previous job still running.");
+            return;
+        }
+
+        isVerificationJobRunning = true;
+        try {
+            const result = await reconcileDiditVerificationSessionsServices();
+            if (result.checked) {
+                console.log(`Reconciled ${result.checked} Didit verification session(s); updated ${result.updated}.`);
+            }
+        } catch (err) {
+            console.error("Didit verification reconciliation failed:", err.message);
+        } finally {
+            isVerificationJobRunning = false;
         }
     });
 

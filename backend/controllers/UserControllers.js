@@ -377,7 +377,7 @@ async function signUpSaveSessionController(req, res) {
         return res.status(200).json({
             success: true,
             message: 'Session saved successfully',
-            credentials: req.body
+            credentials: result
         });
     } catch (err) {
         console.error('Error saving session after signup:', err);
@@ -399,11 +399,16 @@ async function checkVerificationCodeController(req, res) {
     try {
         const { email, code } = req.body;
         const result = await checkVerificationCode(email, code);
+        await Promise.all([
+            setupRefreshTokenCookie(res, result.credentials),
+            createSessionIdCookie(res, result.credentials)
+        ]);
+        setAccessTokenCookie(res, await AccessTokens(result.credentials));
 
         return res.status(200).json({
             success: true,
-            message: 'Verification code is valid',
-            credentials: result
+            message: 'Email verified and account created',
+            credentials: result.credentials
         });
     }catch (err) {
         console.error('Error checking verification code:', err);
@@ -423,7 +428,7 @@ async function checkVerificationCodeController(req, res) {
 
 async function sendVerificationEmailController(req, res) { 
     try {
-        await sendVerificationEmailServices(req.body.email, req.body.firstName, req.body.lastName);
+        await sendVerificationEmailServices(req.body.email);
         return res.status(200).json({
             success: true,
             message: 'Verification email sent successfully',

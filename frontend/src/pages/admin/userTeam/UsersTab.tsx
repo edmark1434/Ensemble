@@ -531,7 +531,7 @@ export default function UsersTab({
           verification={selected.verification}
           loadDiditDetails
           onClose={closeModal}
-          onChanged={() => void refreshAfterChange()}
+          onChanged={refreshAfterChange}
         />
       )}
       {selected && modal === 'history' && (

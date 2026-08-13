@@ -7,24 +7,27 @@ const { initSocket } = require('./lib/WebSocket');
 const { connectMongoDB } = require('./lib/MongoDb');
 const { connectPostgresDB } = require('./lib/Database');
 const { startPaymentReconciliationJob } = require('./lib/BackgroundJob');
+const { apiRateLimiter } = require('./middleware/RateLimiter');
+const { csrfProtection } = require('./middleware/CsrfProtection');
+const { createCorsOriginValidator, getAllowedOrigins } = require('./lib/CorsOrigins');
 
 const app = express();
-app.set('trust proxy', 1);
+app.set('trust proxy', process.env.TRUST_PROXY || 'loopback');
 
 // Websocket server setup
 const httpServer = createServer(app);
 
-const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
-
 // Middleware configuration
 app.use(cors({
-  origin: [
-    allowedOrigin
-  ],
+  origin: createCorsOriginValidator(getAllowedOrigins()),
   credentials: true,
 }));
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({
+  verify: (req, _res, buffer) => {
+    if (req.originalUrl === '/api/verification/webhook/status/updated') req.rawBody = Buffer.from(buffer);
+  },
+}));
 
 // Create a wrapper function to handle asynchronous startup sequence sequential ordering
 async function startServer() {
@@ -40,7 +43,7 @@ async function startServer() {
     startPaymentReconciliationJob(); // Start the background job after DB connections
     // 2. Load API routes ONLY after database setups are fully initialized
 const apiRoutes = require('./routes/Api');
-    app.use('/api', apiRoutes);
+    app.use('/api', apiRateLimiter, csrfProtection, apiRoutes);
 
     // 3. Finally, open up the HTTP ports
     httpServer.listen(4000, () => {

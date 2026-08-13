@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { Image, ArrowRight, ArrowLeft, Upload, Check, AlertTriangle } from "lucide-react";
 import ShapeGrid from "../../components/ui/ShapeGrid";
 import api from "../../lib/axios";
+import type { AxiosError } from "axios";
 import toast from "react-hot-toast";
+import { deleteAvatarDraft, getAvatarDraft, saveAvatarDraft } from "../../lib/onboardingAvatarDraft";
 
 const T = {
   bg:        "#080a12",
@@ -19,7 +21,7 @@ const T = {
 };
 
 interface Preset {
-  file_id: number;
+  file_id: string;
   path: string;
   name: string;
 }
@@ -31,20 +33,20 @@ export default function UploadImage() {
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [isCustomFile, setIsCustomFile] = useState(false);
   const [presets, setPresets] = useState<Preset[]>([]);
-  const [selectedPresetId, setSelectedPresetId] = useState<number | null>(null);
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string>("");
   const [isUploading, setIsUploading] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null); // ✅ ADDED: Store file in state
-  useEffect(() => {
-    const checkOnboardingStatus = async () => {
-      const response = await api.get("/api/users/session");
-        if (response.data.steps) {
-          navigate("/*");
-        }
+  const [savedCustomAvatar, setSavedCustomAvatar] = useState<{ type: "custom"; draft_id: string; name: string; mime_type: string; size_bytes: number } | null>(null);
+  const handleBack = async () => {
+    try {
+      await api.post('/api/onboarding/current-step', { current_step: 'personal_details' });
+      navigate('/setup/personal-details');
+    } catch {
+      toast.error('Unable to return to personal details.');
     }
-    checkOnboardingStatus();
-  }, []);
+  };
   const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
   const ALLOWED_MIME_TYPES = [
     'image/jpeg',
@@ -149,11 +151,34 @@ export default function UploadImage() {
   useEffect(() => {
     const fetchPresets = async () => {
       try {
-        const response = await api.get("/api/files/profile-presets");
+        const [response, stateResponse] = await Promise.all([
+          api.get("/api/files/profile-presets"),
+          api.get("/api/onboarding/state"),
+        ]);
+        if (stateResponse.data.completed) return navigate("/home", { replace: true });
+        if (stateResponse.data.path !== '/setup/upload-image') return navigate(stateResponse.data.path, { replace: true });
         const presetFiles = response.data.files || [];
         setPresets(presetFiles);
-        
-        if (presetFiles.length > 0) {
+        const savedAvatar = stateResponse.data.data?.avatar;
+        if (savedAvatar?.type === "preset") {
+          const selected = presetFiles.find((item: Preset) => item.file_id === savedAvatar.fileId);
+          if (selected) {
+            setPreviewUrl(constructAvatarUrl(selected.path));
+            setSelectedPresetId(selected.file_id);
+            setIsCustomFile(false);
+          }
+        } else if (savedAvatar?.type === "custom") {
+          setSavedCustomAvatar(savedAvatar);
+          const draftFile = await getAvatarDraft(savedAvatar.draft_id);
+          if (draftFile) {
+            setSelectedFile(draftFile);
+            setPreviewUrl(URL.createObjectURL(draftFile));
+          } else {
+            setFileError('Select your custom avatar again on this browser before continuing.');
+          }
+          setSelectedPresetId(null);
+          setIsCustomFile(true);
+        } else if (presetFiles.length > 0) {
           const firstPreset = presetFiles[0];
           const fullUrl = constructAvatarUrl(firstPreset.path);
           setPreviewUrl(fullUrl);
@@ -201,6 +226,7 @@ export default function UploadImage() {
           
           // ✅ Store file in state
           setSelectedFile(file);
+          setSavedCustomAvatar(null);
           const url = URL.createObjectURL(file);
           setPreviewUrl(url);
           setIsCustomFile(true);
@@ -219,11 +245,13 @@ export default function UploadImage() {
     reader.readAsDataURL(file);
   };
 
-  const handlePresetSelect = (presetId: number, presetUrl: string) => {
+  const handlePresetSelect = (presetId: string, presetUrl: string) => {
+    if (savedCustomAvatar?.draft_id) void deleteAvatarDraft(savedCustomAvatar.draft_id);
     setPreviewUrl(presetUrl);
     setIsCustomFile(false);
     setSelectedPresetId(presetId);
     setSelectedFile(null);
+    setSavedCustomAvatar(null);
     setFileError("");
     setIsSaved(false);
     if (fileInputRef.current) {
@@ -239,17 +267,18 @@ export default function UploadImage() {
 
   const uploadFile = async (file: File): Promise<string> => {
     try {
-      const response = await api.post("/api/files/upload-url", {
-        folder: "profile",
+      const response = await api.post("/api/onboarding/avatar-upload-url", {
         filename: file.name,
         contentType: file.type,
+        sizeBytes: file.size,
       });
 
       if (!response.data.success) {
         throw new Error(response.data.message || 'Failed to get upload URL');
       }
 
-      let { uploadUrl, key, expiresIn, maxFileSize } = response.data;
+      const { uploadUrl, expiresIn, maxFileSize } = response.data;
+      let { key } = response.data;
       
       console.log('📤 Upload URL received:', {
         key,
@@ -274,10 +303,10 @@ export default function UploadImage() {
       if (uploadResponse.status === 403) {
         console.log("⚠️ Upload URL expired, requesting new one...");
         
-        const newResponse = await api.post("/api/files/upload-url", {
-          folder: "profile",
+        const newResponse = await api.post("/api/onboarding/avatar-upload-url", {
           filename: file.name,
           contentType: file.type,
+          sizeBytes: file.size,
         });
 
         if (!newResponse.data.success) {
@@ -290,7 +319,6 @@ export default function UploadImage() {
           method: "PUT",
           headers: {
             "Content-Type": file.type,
-            "x-amz-server-side-encryption": "AES256",
           },
           body: file,
         });
@@ -314,23 +342,24 @@ export default function UploadImage() {
       console.log('✅ File uploaded successfully:', key);
       return key;
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const apiError = error as AxiosError<{ message?: string }> & { name?: string };
       console.error('❌ Upload error:', error);
       
-      if (error.name === 'AbortError') {
+      if (apiError.name === 'AbortError') {
         throw new Error('Upload timed out. Please try again.');
       }
-      if (error.response?.status === 401) {
+      if (apiError.response?.status === 401) {
         throw new Error('Please log in to upload files.');
       }
-      if (error.response?.status === 429) {
+      if (apiError.response?.status === 429) {
         throw new Error('Too many upload attempts. Please try again later.');
       }
-      if (error.response?.status === 400) {
-        throw new Error(error.response?.data?.message || 'Invalid file or folder.');
+      if (apiError.response?.status === 400) {
+        throw new Error(apiError.response?.data?.message || 'Invalid file or folder.');
       }
       
-      throw new Error(error.message || 'Failed to upload image. Please try again.');
+      throw new Error(apiError.message || 'Failed to upload image. Please try again.');
     }
   };
 
@@ -356,31 +385,30 @@ export default function UploadImage() {
         }
 
         // Re-validate file before upload
-        if (!validateImageFile(file)) {
+        if (file && !validateImageFile(file)) {
           setIsUploading(false);
           setLoading(false);
           return;
         }
 
-        const toastId = toast.loading('Uploading avatar...');
+        const toastId = toast.loading('Saving avatar selection...');
 
         try {
-          const key = await uploadFile(file);
+          const draftId = savedCustomAvatar?.draft_id || crypto.randomUUID();
+          await saveAvatarDraft(draftId, file);
 
-          const cloudfrontUrl = import.meta.env.VITE_CLOUDFRONT_URL;
-          const fullUrl = `${cloudfrontUrl}/${key}`;
-
-          await api.post("/api/accounts/update-profile", {
+          await api.post("/api/onboarding/avatar", {
+            type: "custom",
+            draft_id: draftId,
             name: file.name,
-            path: key,
             mime_type: file.type,
             size_bytes: file.size,
           });
 
           console.log("✅ Custom avatar uploaded.");
-          toast.success("Avatar uploaded successfully!", { id: toastId });
+          toast.success("Avatar saved for onboarding!", { id: toastId! });
         } catch (error) {
-          toast.error(error instanceof Error ? error.message : "Failed to upload avatar.", { id: toastId });
+          toast.error(error instanceof Error ? error.message : "Failed to upload avatar.", { id: toastId! });
           throw error;
         }
       } else {
@@ -392,24 +420,11 @@ export default function UploadImage() {
           throw new Error("No preset selected");
         }
 
-        await api.put("/api/accounts/update-profile-id", {
+        await api.post("/api/onboarding/avatar", {
+          type: "preset",
           fileId: selectedPreset.file_id
         });
         console.log("✅ Preset avatar selected.");
-      }
-
-      // Update onboarding status
-      try {
-        const response = await api.get("/api/users/session");
-        if (!response.data.steps) {
-          if (!response.data.steps) {
-            await api.put("/api/accounts/update-profile-onboarding", {
-              completed_onboarding: 'profile'
-            });
-          }
-        }
-      } catch (error) {
-        console.error("Error updating onboarding:", error);
       }
 
       setIsSaved(true);
@@ -722,7 +737,7 @@ export default function UploadImage() {
             <div style={{ display: "flex", gap: 12 }}>
               <button
                 type="button"
-                onClick={() => navigate("/setup/personal-details")}
+                onClick={() => void handleBack()}
                 disabled={isUploading}
                 style={{
                   flex: 1,

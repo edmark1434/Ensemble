@@ -8,6 +8,26 @@ const T = {
   fontDisplay: "'Plus Jakarta Sans', sans-serif",
 } as const;
 
+let avatarRequest: Promise<string[]> | null = null;
+let avatarCache: string[] | null = null;
+
+function loadRecentAvatars() {
+  if (avatarCache) return Promise.resolve(avatarCache);
+  if (!avatarRequest) {
+    avatarRequest = api.get("/api/accounts/recent-avatars").then((response) => {
+      const rows = response.data?.success && Array.isArray(response.data.data) ? response.data.data : [];
+      avatarCache = rows
+        .map((item: { avatar_path?: string | null }) => item.avatar_path)
+        .filter((path: unknown): path is string => typeof path === "string" && path.length > 0)
+        .map((path) => `${import.meta.env.VITE_CLOUDFRONT_URL}${path.startsWith('/') ? '' : '/'}${path}`);
+      return avatarCache;
+    }).finally(() => {
+      avatarRequest = null;
+    });
+  }
+  return avatarRequest;
+}
+
 interface CounterProps {
   targetValue: string;
   duration?: number;
@@ -60,20 +80,17 @@ const AvatarGroup = () => {
   const [avatars, setAvatars] = useState<string[]>([]);
   
   useEffect(() => {
+    let active = true;
     const fetchAvatars = async () => {
       try {
-        const response = await api.get("/api/accounts/recent-avatars");
-        if (response.data?.success && Array.isArray(response.data.data)) {
-          const fetchedUrls = response.data.data.map((u: any) => 
-            u.avatar_path ? `${import.meta.env.VITE_CLOUDFRONT_URL}${u.avatar_path.startsWith('/') ? '' : '/'}${u.avatar_path}` : "https://d2dl0agwn9kque.cloudfront.net/jobs/Chiikawa_2025_1786113209772_9bef7d8f.webp"
-          );
-          setAvatars(fetchedUrls);
-        }
+        const fetchedUrls = await loadRecentAvatars();
+        if (active) setAvatars(fetchedUrls);
       } catch (err) {
         console.error("Failed to fetch recent avatars", err);
       }
     };
     fetchAvatars();
+    return () => { active = false; };
   }, []);
 
   const displayAvatars = avatars.length > 0 ? avatars : Array(5).fill("https://d2dl0agwn9kque.cloudfront.net/jobs/Chiikawa_2025_1786113209772_9bef7d8f.webp");

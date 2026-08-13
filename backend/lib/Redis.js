@@ -26,6 +26,7 @@ function createMemoryClient() {
       return memoryData.get(key) ?? null;
     },
     async set(key, value, options = {}) {
+      if (options.NX && memoryData.has(key) && !isExpired(key)) return null;
       memoryData.set(key, value);
       if (options.EX != null) {
         memoryExpiry.set(key, now() + options.EX * 1000);
@@ -34,6 +35,7 @@ function createMemoryClient() {
       } else {
         memoryExpiry.delete(key);
       }
+      return 'OK';
     },
     async del(key) {
       memoryData.delete(key);

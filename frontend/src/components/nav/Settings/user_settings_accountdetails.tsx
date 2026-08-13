@@ -24,6 +24,7 @@ interface AccountDetailsProps {
 
 const RESEND_COOLDOWN_SECONDS = 60;
 const RESEND_STORAGE_KEY = "accountDetails.emailVerification.sentAt";
+type AddressSuggestion = { id: string; label: string; street_line_1: string; city: string; province_state: string; postal_code: string };
 
 export const UserSettingsAccountDetails: React.FC<AccountDetailsProps> = ({
   fullName,
@@ -59,6 +60,8 @@ export const UserSettingsAccountDetails: React.FC<AccountDetailsProps> = ({
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
   const [userNameError, setUsernameError] = React.useState("");
   const [isUsernameUnique, setIsUsernameUnique] = React.useState(username === initialValues.username);
+  const [addressSuggestions, setAddressSuggestions] = React.useState<AddressSuggestion[]>([]);
+  const [isAddressFocused, setIsAddressFocused] = React.useState(false);
   
   // Whether the email has been changed from its original value.
   const isEmailChanged = email !== initialValues.email;
@@ -156,6 +159,30 @@ export const UserSettingsAccountDetails: React.FC<AccountDetailsProps> = ({
     setUsernameError("");
     return () => clearTimeout(timer);
   }, [username, initialValues.username]);
+
+  React.useEffect(() => {
+    const query = address.trim();
+    if (!isAddressFocused || query.length < 3 || query === initialValues.address) {
+      setAddressSuggestions([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await api.get("/api/cashouts/address-suggestions", {
+          params: { q: query },
+          signal: controller.signal,
+        });
+        setAddressSuggestions(response.data?.addresses || []);
+      } catch (error: any) {
+        if (error?.code !== "ERR_CANCELED") setAddressSuggestions([]);
+      }
+    }, 300);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [address, initialValues.address, isAddressFocused]);
 
   // Send verification code
   const handleSendVerificationCode = async () => {
@@ -302,8 +329,31 @@ export const UserSettingsAccountDetails: React.FC<AccountDetailsProps> = ({
               type="text"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
+              onFocus={() => setIsAddressFocused(true)}
+              onBlur={() => window.setTimeout(() => setIsAddressFocused(false), 150)}
+              autoComplete="off"
               className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 pl-10 pr-4 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 transition-colors"
             />
+            {isAddressFocused && addressSuggestions.length > 0 && (
+              <div className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl dark:border-white/10 dark:bg-[#13151f]">
+                {addressSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion.id}
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      setAddress(suggestion.label);
+                      setAddressSuggestions([]);
+                      setIsAddressFocused(false);
+                    }}
+                    className="block w-full border-b border-gray-100 px-3 py-2.5 text-left text-xs text-gray-700 last:border-0 hover:bg-gray-50 dark:border-white/5 dark:text-zinc-200 dark:hover:bg-white/5"
+                  >
+                    <span className="block text-sm">{suggestion.street_line_1 || suggestion.label}</span>
+                    <span className="mt-0.5 block text-gray-500 dark:text-zinc-500">{suggestion.city}, {suggestion.province_state} {suggestion.postal_code}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

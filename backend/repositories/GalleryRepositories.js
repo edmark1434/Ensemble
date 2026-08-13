@@ -41,6 +41,19 @@ async function createGalleryItem(accountId, fileId, title, description) {
     }
 }
 
+async function isOwnedGalleryFile(accountId, fileId) {
+    return Boolean((await pool.query(
+        `SELECT 1 FROM files f
+         JOIN upload_intents ui ON ui.file_id=f.file_id
+         WHERE f.file_id=$1 AND ui.account_id=$2 AND ui.status='consumed'
+           AND ui.consumed_at IS NOT NULL AND f.deleted_at IS NULL
+           AND f.path LIKE 'gallery/%'
+           AND (f.mime_type LIKE 'image/%' OR f.mime_type='video/mp4')
+         LIMIT 1`,
+        [fileId, accountId]
+    )).rowCount);
+}
+
 async function deleteGalleryItem(galleryId, accountId) {
     try {
         const query = `
@@ -89,6 +102,7 @@ async function updateGalleryItem(galleryId, accountId, title, description) {
 module.exports = {
     getUserGalleries,
     createGalleryItem,
+    isOwnedGalleryFile,
     deleteGalleryItem,
     getGalleryItem,
     updateGalleryItem
