@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { MapPin, Mail, Calendar, ChevronDown, Edit2, MessageCircle, Share2, Cake, HelpCircle, ShieldCheck, X } from "lucide-react";
+import { MapPin, Mail, Calendar, ChevronDown, Edit2, MessageCircle, Share2, Cake, HelpCircle, ShieldCheck, X, Tag } from "lucide-react";
 import { ProfileTags } from "../Utilities/ProfileTags.tsx";
 
 interface TopSectionProps {
@@ -25,7 +25,7 @@ interface TopSectionProps {
   avatarUrl?: string;
   isOwner?: boolean;
   verificationLevel?: boolean;
-  subscriptionType?: "Free" | "Premium" | "Business";
+  verificationLevel?: number | boolean;
   onEditAvatar?: () => void;
   onEditProfile?: () => void;
   onChatClick?: () => void;
@@ -162,6 +162,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             role={role}
             verificationLevel={verificationLevel}
             subscriptionType={subscriptionType}
+            onEditRole={isOwner ? onEditProfile : undefined}
           />
 
           {/* Row 2: Full Name Header Block */}
@@ -181,7 +182,8 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
                   return firstMid;
                 })()}
               </span>
-              <span className="text-sm font-bold text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 px-2.5 py-0.5 rounded-lg ml-1">
+              <span className={`flex items-center gap-1 text-sm font-bold px-2.5 py-0.5 rounded-lg ml-1 ${subscriptionType === 'Business' ? 'animate-rainbow' : subscriptionType === 'Premium' ? 'animate-gold-solid' : 'silver-solid'}`}>
+                <Tag className="w-3.5 h-3.5" />
                 {tagline || "Add Tagline"}
               </span>
             </h1>

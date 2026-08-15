@@ -27,6 +27,7 @@ interface ProfileEditModalProps {
   onClose: () => void;
   data: UserDetail;
   onSave: (updatedData: UserDetail) => void;
+  highlightField?: string;
 }
 
 type Place = {
@@ -42,7 +43,8 @@ export default function ProfileEditModal({
   isOpen, 
   onClose, 
   data, 
-  onSave
+  onSave,
+  highlightField
 }: ProfileEditModalProps) {
   const [formData, setFormData] = useState<UserDetail & { firstName?: string; middleName?: string; lastName?: string; birthMonth?: string; birthDay?: string; birthYear?: string }>({
     username: "",
@@ -383,12 +385,18 @@ export default function ProfileEditModal({
             </div>
             <div>
               <label className="block text-[11px] font-medium text-gray-600 dark:text-zinc-400 mb-1">Email</label>
-              <input 
-                type="email" 
-                value={formData.email_address || ""} 
-                readOnly
-                className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 px-3 py-2 text-[13px] text-gray-500 dark:text-zinc-400 outline-none cursor-not-allowed" 
-              />
+              <div className="relative">
+                <input 
+                  type="email" 
+                  value={formData.email_address || ""} 
+                  readOnly
+                  className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 px-3 py-2 pr-20 text-[13px] text-gray-500 dark:text-zinc-400 outline-none cursor-not-allowed" 
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-emerald-500 dark:text-emerald-400">
+                  <Check className="h-4 w-4" />
+                  <span className="text-[10px] font-medium">Verified</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -638,7 +646,12 @@ export default function ProfileEditModal({
               value={formData.tagline || ""}
               onChange={handleInputChange}
               disabled={isLoading}
-              className="w-full rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-[13px] focus:border-blue-500/50 outline-none transition disabled:opacity-50"
+              ref={(el) => { if (el && highlightField === "tagline") { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); } }}
+              className={`w-full rounded-lg border bg-white dark:bg-white/5 px-3 py-2 text-[13px] outline-none transition disabled:opacity-50 ${
+                highlightField === "tagline" 
+                  ? "border-blue-500 ring-2 ring-blue-500/20 dark:ring-blue-400/20" 
+                  : "border-gray-300 dark:border-white/10 focus:border-blue-500/50"
+              }`}
               placeholder="e.g., Full-Stack Developer | UI/UX Designer"
             />
           </div>
@@ -653,7 +666,12 @@ export default function ProfileEditModal({
               disabled={isLoading}
               rows={4}
               maxLength={120}
-              className="w-full rounded-lg border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 px-3 py-2 text-[13px] focus:border-blue-500/50 outline-none resize-none leading-relaxed disabled:opacity-50"
+              ref={(el) => { if (el && highlightField === "bio") { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); } }}
+              className={`w-full rounded-lg border bg-white dark:bg-white/5 px-3 py-2 text-[13px] outline-none resize-none leading-relaxed disabled:opacity-50 transition ${
+                highlightField === "bio" 
+                  ? "border-blue-500 ring-2 ring-blue-500/20 dark:ring-blue-400/20" 
+                  : "border-gray-300 dark:border-white/10 focus:border-blue-500/50"
+              }`}
               placeholder="Tell the community about yourself (max 120 characters)..."
             />
             <div className="text-right text-[10px] text-gray-500 dark:text-zinc-500 mt-1">
