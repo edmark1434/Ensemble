@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
-import axios from "axios";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Compass, Plus, Search, UserPlus, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/axios";
+import { uploadFileToIntent } from "@/lib/uploadFile";
 import UserHeader from "@/components/nav/user_header";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import EditTeamModal from "./team_modals/EditTeamModal";
@@ -16,6 +16,7 @@ interface Team {
   member_count: number;
   current_user_role?: string;
   current_user_status?: string;
+  is_business_verified?: boolean;
 }
 
 interface CreateTeamValues {
@@ -42,20 +43,23 @@ export default function Teams() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [isBrowseMode, setIsBrowseMode] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [createProgress, setCreateProgress] = useState("");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
+  const hasLoadedTeams = useRef(false);
 
-  const loadTeams = useCallback(async () => {
-    setIsLoading(true);
+  const loadTeams = useCallback(async (showLoading = false) => {
+    if (showLoading) setIsLoading(true);
 
     try {
       const response = await api.get("/api/teams", {
         params: {
           mine: !isBrowseMode,
-          search: searchTerm,
+          search: debouncedSearchTerm,
         },
       });
 
@@ -63,12 +67,19 @@ export default function Teams() {
     } catch (error: unknown) {
       showErrorToast(getApiError(error, "Unable to load Teams"));
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsLoading(false);
     }
-  }, [isBrowseMode, searchTerm]);
+  }, [debouncedSearchTerm, isBrowseMode]);
 
   useEffect(() => {
-    void loadTeams();
+    const timer = window.setTimeout(() => setDebouncedSearchTerm(searchTerm), 300);
+    return () => window.clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const showLoading = !hasLoadedTeams.current;
+    hasLoadedTeams.current = true;
+    void loadTeams(showLoading);
   }, [loadTeams]);
 
   const createTeam = async ({ photo, ...teamValues }: CreateTeamValues) => {
@@ -83,39 +94,31 @@ export default function Teams() {
     }
 
     setIsSaving(true);
+    setCreateProgress("Uploading photo...");
 
     try {
-      const uploadResponse = await api.post("/api/files/upload-url", {
-        folder: "profile",
-        filename: photo.name,
-        contentType: photo.type,
-      });
-
-      await axios.put(uploadResponse.data.uploadUrl, photo, {
-        headers: {
-          "Content-Type": photo.type,
-        },
-      });
-
-      const fileResponse = await api.post("/api/files/register", {
-        name: photo.name,
-        path: uploadResponse.data.key,
-        mimeType: photo.type,
-        sizeBytes: photo.size,
-      });
+      const uploaded = await uploadFileToIntent(photo, "profile");
+      setCreateProgress("Creating Team...");
 
       const teamResponse = await api.post("/api/teams", {
         ...teamValues,
-        avatarFileId: fileResponse.data.fileId,
+        avatarUploadIntentId: uploaded.uploadIntentId,
       });
 
       showSuccessToast("Team created");
       setIsCreateModalOpen(false);
-      navigate(`/teams/${teamResponse.data.data.team_id}`);
+      const createdTeam = teamResponse.data.data as Team;
+      setTeams((current) =>
+        isBrowseMode || debouncedSearchTerm
+          ? current
+          : [{ ...createdTeam, member_count: 1, current_user_role: "Owner", current_user_status: "Active" }, ...current],
+      );
+      void loadTeams(false);
     } catch (error: unknown) {
       showErrorToast(getApiError(error, "Unable to create Team"));
     } finally {
       setIsSaving(false);
+      setCreateProgress("");
     }
   };
 
@@ -132,8 +135,8 @@ export default function Teams() {
       showSuccessToast("Team joined or request submitted");
       setIsJoinModalOpen(false);
       setJoinCode("");
-      setIsBrowseMode(false);
-      await loadTeams();
+      if (isBrowseMode) setIsBrowseMode(false);
+      else void loadTeams(false);
     } catch (error: unknown) {
       showErrorToast(getApiError(error, "Unable to join Team"));
     } finally {
@@ -156,7 +159,7 @@ export default function Teams() {
         <div className="mb-6 flex flex-wrap gap-3">
           <button
             onClick={() => setIsJoinModalOpen(true)}
-            className="flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black"
+            className="flex cursor-pointer items-center gap-2 rounded-full border border-white bg-white px-5 py-2.5 text-sm font-medium text-black shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-zinc-200 hover:shadow-md active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080a12]"
           >
             <UserPlus className="h-4 w-4" />
             Join with Code
@@ -164,7 +167,7 @@ export default function Teams() {
 
           <button
             onClick={() => setIsBrowseMode((current) => !current)}
-            className="flex items-center gap-2 rounded-full border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-5 py-2.5 text-sm text-gray-900 dark:text-white"
+            className="flex cursor-pointer items-center gap-2 rounded-full border border-gray-200 bg-white px-5 py-2.5 text-sm text-gray-900 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 hover:shadow-md active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 dark:border-white/15 dark:bg-white/5 dark:text-white dark:shadow-none dark:hover:border-blue-400/70 dark:hover:bg-blue-500/15 dark:hover:text-blue-200"
           >
             {isBrowseMode ? (
               <X className="h-4 w-4" />
@@ -176,7 +179,7 @@ export default function Teams() {
 
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 rounded-full border border-gray-200 dark:border-white/15 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-5 py-2.5 text-sm text-gray-900 dark:text-white"
+            className="flex cursor-pointer items-center gap-2 rounded-full border border-blue-500 bg-blue-500 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-400 hover:bg-blue-400 hover:shadow-md hover:shadow-blue-500/20 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080a12]"
           >
             <Plus className="h-4 w-4" />
             Create a Team
@@ -237,11 +240,18 @@ export default function Teams() {
                       </p>
                     </div>
 
-                    {team.current_user_role && (
-                      <span className="h-fit rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
-                        {team.current_user_role}
-                      </span>
-                    )}
+                    <div className="flex flex-wrap justify-end gap-1.5">
+                      {team.current_user_role && (
+                        <span className="h-fit rounded-full bg-blue-500/20 px-2 py-0.5 text-xs text-blue-400">
+                          {team.current_user_role}
+                        </span>
+                      )}
+                      {team.is_business_verified && (
+                        <span className="h-fit rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">
+                          Business verified
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <p className="mt-2 line-clamp-2 text-xs text-gray-500 dark:text-zinc-400">
@@ -258,6 +268,7 @@ export default function Teams() {
         isOpen={isCreateModalOpen}
         mode="create"
         saving={isSaving}
+        savingLabel={createProgress}
         onClose={() => setIsCreateModalOpen(false)}
         onCreate={createTeam}
       />

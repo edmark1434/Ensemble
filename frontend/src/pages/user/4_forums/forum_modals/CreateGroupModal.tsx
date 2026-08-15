@@ -5,6 +5,7 @@ import { showSuccessToast, showErrorToast } from "@/components/utility/toast.ts"
 import axios from "@/lib/axios.ts";
 import { gradientOptions } from "@/pages/user/4_forums/forum_modals/EditGroupModal.tsx";
 import api from "@/lib/axios"; // Import your API client
+import { uploadFileWithIntent } from "@/lib/uploadFile";
 
 interface CreateGroupModalProps {
   isOpen: boolean;
@@ -73,6 +74,7 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
 
   const uploadFile = async (file: File): Promise<string> => {
     try {
+      return (await uploadFileWithIntent(file, "forum-group")).key;
       const response = await api.post("/api/files/upload-url", {
         folder: "forum-group", // Changed from "profile" to "forum-covers" for organization
         filename: file.name,

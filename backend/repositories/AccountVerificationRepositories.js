@@ -257,6 +257,20 @@ async function getAccountVerificationSessionBySessionId(sessionId) {
     }
 }
 
+async function getPendingDiditVerificationSessions(limit = 50) {
+    const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
+    const result = await pool.query(
+        `SELECT *
+         FROM account_verification_sessions
+         WHERE verification_status IN ('Pending', 'In Review')
+           AND didit_session_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+         ORDER BY updated_at ASC NULLS FIRST, created_at ASC
+         LIMIT $1`,
+        [safeLimit]
+    );
+    return result.rows;
+}
+
 async function createVerificationAttachments(payload){
     try{
         const query = `
@@ -450,6 +464,7 @@ module.exports = {
     getAccountVerificationByAccountId,
     getAccountVerificationSessionsByAccountId,
     getAccountVerificationSessionBySessionId,
+    getPendingDiditVerificationSessions,
     getAccountVerificationStatusByAccountId,
     createVerificationAttachments,
     createBusinessVerificationSubmissionRepository

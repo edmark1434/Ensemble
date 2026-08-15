@@ -434,6 +434,8 @@ async function getUserVerificationRecord(accountId) {
       v.verified_at,
       v.updated_at AS verification_updated_at,
       a.type AS account_type,
+      t.team_id,
+      a.display_name AS team_name,
       avs.didit_session_id,
       avs.kyc_status,
       avs.verification_status AS internal_status,
@@ -471,6 +473,7 @@ async function getUserVerificationRecord(accountId) {
       ), '[]'::json) AS attachments
     FROM verifications v
     JOIN accounts a ON a.account_id = v.account_id
+    LEFT JOIN teams t ON t.account_id = a.account_id
     LEFT JOIN account_verification_sessions avs
       ON avs.verification_session_id = v.verification_session_id
     LEFT JOIN business_verification_details bvd

@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { showSuccessToast, showErrorToast } from "@/components/utility/toast";
 import api from "@/lib/axios";
+import { uploadFileWithIntent } from "@/lib/uploadFile";
 
 interface Group {
   id: string;
@@ -395,6 +396,7 @@ const NewDiscussionModal: React.FC<NewDiscussionModalProps> = ({
   // Upload file to AWS S3
   const uploadFileToS3 = async (file: File): Promise<string> => {
     try {
+      return (await uploadFileWithIntent(file, "forum-discussions")).key;
       const response = await api.post("/api/files/upload-url", {
         folder: "forum-discussions",
         filename: file.name,

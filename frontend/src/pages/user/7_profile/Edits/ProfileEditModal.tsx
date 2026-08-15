@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
 import { X, Check, Search, MapPin, AlertCircle } from "lucide-react";
 import api from "@/lib/axios.ts";
-import axios from "axios";
 import { toast } from "react-hot-toast";
 
 interface UserDetail {
   username: string;
   name: string;
   birthdate?: string;
-  role: "Freelancer" | "Client" | "Freelancer & Client" | "Casual";
+  role?: any;
+  roles?: string[];
   email_address: string;
   address: string;
   bio: string;
@@ -30,14 +30,12 @@ interface ProfileEditModalProps {
 }
 
 type Place = {
-  properties: {
-    osm_id: number;
-    name?: string;
-    city?: string;
-    state?: string;
-    country?: string;
-    postcode?: string;
-  };
+  id: string;
+  label: string;
+  street_line_1: string;
+  city: string;
+  province_state: string;
+  postal_code: string;
 };
 
 export default function ProfileEditModal({ 
@@ -57,6 +55,7 @@ export default function ProfileEditModal({
     birthDay: "",
     birthYear: "",
     role: "Freelancer",
+    roles: [],
     email_address: "",
     address: "",
     bio: "",
@@ -75,6 +74,7 @@ export default function ProfileEditModal({
     name: "",
     birthdate: "",
     role: "Freelancer",
+    roles: [],
     email_address: "",
     address: "",
     bio: "",
@@ -89,7 +89,6 @@ export default function ProfileEditModal({
   });
   
   const [places, setPlaces] = useState<Place[]>([]);
-  const [countries, setCountries] = useState<string[]>([]);
   const [isAddressSelected, setIsAddressSelected] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [addressStatus, setAddressStatus] = useState<"idle" | "typing" | "selected" | "manual">("idle");
@@ -134,6 +133,7 @@ export default function ProfileEditModal({
         birthDay: bDay,
         birthYear: bYear,
         role: data.role || "Freelancer",
+        roles: Array.isArray(data.role) ? data.role.map((r: any) => r.role_name) : (data.roles || []),
         email_address: data.email_address || "",
         joinedDate: data.joinedDate || "",
         address: data.location || data.address || "",
@@ -164,19 +164,6 @@ export default function ProfileEditModal({
     }
   }, [isOpen, data]);
 
-  // Fetch countries
-  useEffect(() => {
-    const fetchCountries = async () => {
-      try {
-        const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/api/countries`);
-        setCountries(response.data.countries || []);
-      } catch (error) {
-        console.error("Error fetching countries:", error);
-      }
-    };
-    fetchCountries();
-  }, []);
-
   // Fetch places for address autocomplete
   useEffect(() => {
     if (!isOpen || !isInitialized) return;
@@ -197,11 +184,12 @@ export default function ProfileEditModal({
     
     const timeout = setTimeout(async () => {
       try {
-        const response = await axios.get(`${import.meta.env.VITE_BASE_URL}/api/places`, {
+        const response = await api.get("/api/cashouts/address-suggestions", {
           params: { q: formData.address }
         });
-        setPlaces(response.data.places || []);
-        if (response.data.places?.length === 0) {
+        const suggestions = response.data.addresses || [];
+        setPlaces(suggestions);
+        if (suggestions.length === 0) {
           setAddressStatus("manual");
         }
       } catch (err) {
@@ -231,26 +219,30 @@ export default function ProfileEditModal({
     }
   };
 
+  const handleRoleToggle = (roleName: string) => {
+    setFormData(prev => {
+      const currentRoles = prev.roles || [];
+      if (currentRoles.includes(roleName)) {
+        return { ...prev, roles: currentRoles.filter(r => r !== roleName) };
+      } else {
+        return { ...prev, roles: [...currentRoles, roleName] };
+      }
+    });
+  };
+
+  const handleCountrySelect = (country: string) => {
+    setFormData(prev => ({ ...prev, country }));
+  };
+
   const handlePlaceSelect = (place: Place) => {
-    const formattedAddress = `${place.properties.name || ''}, ${place.properties.city ?? ''}, ${place.properties.state ?? ''}`.trim().replace(/,\s*$/, '');
-    
     const updatedData = {
       ...formData,
-      address: formattedAddress,
-      country: place.properties.country || formData.country || "Philippines",
-      zipCode: place.properties.postcode || formData.zipCode || ""
+      address: place.label,
+      country: "Philippines",
+      zipCode: place.postal_code
     };
     
     setFormData(updatedData);
-    
-    // CRITICAL FIX: Also update originalFormData to reflect the selected address
-    // This ensures the original data matches the selected address data
-    setOriginalFormData(prev => ({
-      ...prev,
-      address: formattedAddress,
-      country: place.properties.country || prev.country || "Philippines",
-      zipCode: place.properties.postcode || prev.zipCode || ""
-    }));
     
     setIsAddressSelected(true);
     setAddressStatus("selected");
@@ -306,7 +298,8 @@ export default function ProfileEditModal({
         country: originalFormData.country || "",
         zip_code: originalFormData.zipCode || "",
         description: originalFormData.bio || "",
-        tagline: originalFormData.tagline || ""
+        tagline: originalFormData.tagline || "",
+        roles: originalFormData.roles || []
       };
       
       const updates = {
@@ -316,7 +309,8 @@ export default function ProfileEditModal({
         country: formData.country || "",
         zip_code: formData.zipCode || "",
         description: formData.bio || "",
-        tagline: formData.tagline || ""
+        tagline: formData.tagline || "",
+        roles: formData.roles || []
       };
       
       console.log("📊 Original:", JSON.stringify(original, null, 2));
@@ -478,6 +472,30 @@ export default function ProfileEditModal({
             </div>
           </div>
 
+          {/* Row 3.5: Account Tags */}
+          <div>
+            <label className="block text-[11px] font-medium text-gray-600 dark:text-zinc-400 mb-1">Account Tags</label>
+            <div className="flex flex-wrap gap-2">
+              {["Client", "Freelancer", "Casual"].map((roleName) => {
+                const isSelected = (formData.roles || []).includes(roleName);
+                return (
+                  <button
+                    key={roleName}
+                    type="button"
+                    onClick={() => handleRoleToggle(roleName)}
+                    className={`px-3 py-1.5 rounded-full text-[12px] font-medium transition-colors border ${
+                      isSelected
+                        ? "bg-blue-50 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30"
+                        : "bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10"
+                    }`}
+                  >
+                    {roleName}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Address with Autocomplete - Pre-filled with existing address */}
           <div className="relative">
             <label className="block text-[11px] font-medium text-gray-600 dark:text-zinc-400 mb-1">Street Address</label>
@@ -563,7 +581,7 @@ export default function ProfileEditModal({
                 </div>
                 {places.map((place) => (
                   <div
-                    key={place.properties.osm_id}
+                    key={place.id}
                     onMouseDown={(e) => {
                       e.preventDefault();
                       handlePlaceSelect(place);
@@ -572,30 +590,23 @@ export default function ProfileEditModal({
                   >
                     <div className="flex items-center justify-between">
                       <div className="text-[13px] text-gray-900 dark:text-white group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">
-                        {place.properties.name || "Unnamed location"}
-                        {place.properties.city && (
+                        {place.street_line_1 || place.label}
+                        {place.city && (
                           <span className="text-xs text-zinc-400 ml-1">
-                            ({place.properties.city})
+                            ({place.city})
                           </span>
                         )}
                       </div>
                       <div className="text-[10px] text-zinc-500">
-                        {place.properties.country && (
-                          <span className="bg-white/5 px-2 py-0.5 rounded">
-                            {place.properties.country}
-                          </span>
-                        )}
-                        {place.properties.postcode && (
+                        {place.postal_code && (
                           <span className="ml-1 bg-white/5 px-2 py-0.5 rounded">
-                            {place.properties.postcode}
+                            {place.postal_code}
                           </span>
                         )}
                       </div>
                     </div>
                     <div className="text-xs text-zinc-500 mt-0.5">
-                      {place.properties.state || ""}
-                      {place.properties.state && place.properties.country && " • "}
-                      {place.properties.country || ""}
+                      {place.province_state} • Philippines
                     </div>
                   </div>
                 ))}

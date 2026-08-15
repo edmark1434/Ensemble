@@ -34,20 +34,25 @@ async function getProfileAttachmentsRepository(accountId, includePrivate = false
   return result.rows;
 }
 
+async function getOwnedFinalizedFileRepository(accountId, fileId) {
+  return (await pool.query(
+    `SELECT f.file_id, f.name, f.path, f.mime_type, f.size_bytes
+     FROM files f
+     JOIN upload_intents ui ON ui.file_id = f.file_id
+     WHERE f.file_id = $1 AND ui.account_id = $2
+       AND ui.status = 'consumed' AND ui.consumed_at IS NOT NULL
+       AND f.deleted_at IS NULL
+     LIMIT 1`,
+    [fileId, accountId]
+  )).rows[0] || null;
+}
+
 async function createProfileAttachmentRepository(accountId, attachment) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     let fileId = null;
-    if (attachment.attachment_kind === 'file') {
-      const fileResult = await client.query(
-        `INSERT INTO files (name, path, mime_type, size_bytes)
-         VALUES ($1, $2, $3, $4)
-         RETURNING file_id`,
-        [attachment.file.name, attachment.file.path, attachment.file.mime_type, attachment.file.size_bytes]
-      );
-      fileId = fileResult.rows[0].file_id;
-    }
+    if (attachment.attachment_kind === 'file') fileId = attachment.file.file_id;
 
     const result = await client.query(
       `INSERT INTO account_attachments (
@@ -91,6 +96,7 @@ async function deleteProfileAttachmentRepository(attachmentId, accountId) {
 
 module.exports = {
   getProfileAttachmentsRepository,
+  getOwnedFinalizedFileRepository,
   createProfileAttachmentRepository,
   deleteProfileAttachmentRepository,
 };

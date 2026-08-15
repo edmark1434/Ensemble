@@ -1,7 +1,7 @@
 // src/components/ui/inbox/inbox_functions/inbox_upload_image.tsx
 import React, { useRef, useState, useCallback } from "react";
 import { X, Paperclip, Film, FileText } from "lucide-react";
-import api from "@/lib/axios";
+import { uploadFileWithIntent } from "@/lib/uploadFile";
 
 export type MediaType = "image" | "gif" | "video" | "file";
 
@@ -30,23 +30,7 @@ export const chatAttachmentUrl = (attachmentKey: string): string => {
 export const uploadChatAttachment = async (
   media: UploadedMedia
 ): Promise<ChatAttachmentPayload> => {
-  const response = await api.post("/api/files/upload-url", {
-    folder: "chat-attachments",
-    filename: media.file.name,
-    contentType: media.file.type || "application/octet-stream",
-  });
-  const { uploadUrl, key } = response.data || {};
-  if (!uploadUrl || !key) throw new Error("Unable to prepare attachment upload");
-  const uploadResponse = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: {
-      "Content-Type": media.file.type || "application/octet-stream",
-    },
-    body: media.file,
-  });
-  if (!uploadResponse.ok) {
-    throw new Error(`Attachment upload failed (${uploadResponse.status})`);
-  }
+  const { key } = await uploadFileWithIntent(media.file, "chat-attachments");
   return {
     attachment_id: media.id,
     attachment_type: media.type,

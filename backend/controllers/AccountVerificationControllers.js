@@ -1,25 +1,10 @@
 const {
     createAccountVerificationSession,
-    appyForResubmissionServices,
     getAccountVerificationStatusServices,
     sendVerificationServices,
-    createBusinessAccountVerificationServices
+    createBusinessAccountVerificationServices,
+    processDiditVerificationStatusUpdate
 } = require('../services/AccountVerificationServices');
-const {
-    updateAccountVerificationSessionStatus,
-    updateAccountVerifications,
-    getAccountVerificationSessionBySessionId
-} = require('../repositories/AccountVerificationRepositories');
-
-const {
-    updateUserDetailsByAccountId
-} = require('../repositories/UserRepositories');
-
-const {
-    createNotification
-} = require('../repositories/NotificationRepositories');
-
-const {getIo} = require('../lib/WebSocket');
 
 const redisClient = require('../lib/Redis');
 const {
@@ -97,156 +82,10 @@ async function createBusinessVerificationController(req,res){
 
 async function handleVerificationWebhookStatusUpdated(req, res) {
     try {
-        console.log("Received verification webhook:", req.body);
-        const io = getIo();
-        io.emit("verificationWebhook", req.body);
-        const {
-            session_id: sessionId,
-            status,
-        } = req.body;
-
-        // Ignore Kyc Expired completely
-        if (status === "Kyc Expired") {
-            return res.status(200).json({
-                message: "Kyc Expired ignored.",
-            });
+        const result = await processDiditVerificationStatusUpdate(req.body);
+        if (!result.found) {
+            return res.status(404).json({ success: false, message: 'Verification session not found' });
         }
-
-        const payload = {
-            kyc_status: status,
-        };
-
-        switch (status) {
-            case "Approved":
-            case "In Review": {
-                payload.verification_status = status;
-                if(status === "Approved"){
-                    const session = await getAccountVerificationSessionBySessionId(sessionId);
-                    const existingExpiry = session?.expires_at ? new Date(session.expires_at) : null;
-                    // Admin approval stores a custom future expiry before asking Didit to approve.
-                    // A normal user-completed session has no expiry yet and receives the one-year default.
-                    if (existingExpiry && existingExpiry.getTime() > Date.now()) {
-                        payload.expires_at = existingExpiry;
-                    } else {
-                        const expiresAt = new Date();
-                        expiresAt.setFullYear(expiresAt.getFullYear() + 1);
-                        payload.expires_at = expiresAt;
-                    }
-                    console.log("Updating account verification status to verified for account:", session.verification_session_id);
-                    const result = await updateAccountVerifications(req.body.metadata?.account_id, { is_verified: true, verified_at: new Date(),verification_session_id: session?.verification_session_id || null });
-                
-                    const notification = await createNotification({
-                        message: `Your account verification has been approved.`,
-                        is_read: false,
-                        reference_table: "verifications",
-                        reference_prefix: "VERIFICATION",
-                        reference_path: `${req.body?.decision?.session_url || `${process.env.FRONTEND_URL}/account-verification-status`}`,
-                        reference_id: result.verification_id,
-                        account_id: req.body.metadata?.account_id
-                    });
-                    io.to(notification.account_id).emit("notification", notification);
-                }
-                
-                const verification =
-                    req.body.decision?.id_verifications?.[0];
-
-                if (verification) {
-                    let firstName = verification.first_name || "";
-                    const middleName =
-                        verification.extra_fields?.middle_name || "";
-
-                    // Remove middle name if appended to first name
-                    if (
-                        middleName &&
-                        firstName
-                            .toLowerCase()
-                            .endsWith(` ${middleName.toLowerCase()}`)
-                    ) {
-                        firstName = firstName
-                            .slice(0, firstName.length - middleName.length)
-                            .trim();
-                    }
-
-                    const verificationDetails = {
-                        first_name: firstName,
-                        middle_name: middleName,
-                        last_name: verification.last_name,
-                        birth_date: verification.date_of_birth,
-                    };
-
-                    if (verification.extra_fields?.suffix) {
-                        verificationDetails.suffix = verification.extra_fields.suffix;
-                    }
-                    console.log("Updating user details with verification details:", verificationDetails);
-                    await updateUserDetailsByAccountId(req.body.metadata?.account_id, verificationDetails);
-
-                    // TODO:
-                    // await saveVerificationDetails(sessionId, verificationDetails);
-                }
-
-                break;
-            }
-
-            case "Declined":
-                await updateAccountVerifications(req.body.metadata?.account_id, { is_verified: false, verified_at: null });
-                const notificationDeclined = await createNotification({
-                    message: `Your account verification has been declined. Please complete the verification again.`,
-                    is_read: false,
-                    reference_table: "verifications",
-                    reference_prefix: "VERIFICATION",
-                    reference_path: `${req.body?.decision?.session_url || `${process.env.FRONTEND_URL}/account-verification-status`}`,
-                    reference_id: req.body.metadata?.account_id,
-                    account_id: req.body.metadata?.account_id
-                });
-                io.to(notificationDeclined.account_id).emit("notification", notificationDeclined);
-                await applyForResubmission(sessionId, req.body.metadata?.account_id);
-                payload.kyc_status = "Resubmitted";
-                payload.verification_status = "Pending";
-                payload.expires_at = null;
-                break;
-            case "Expired":
-            case "Abandoned":
-                payload.verification_status = "Rejected";
-                payload.expires_at = null;
-                const notificationRejected = await createNotification({
-                    message: `Your account verification session has expired or was abandoned.`,
-                    is_read: false,
-                    reference_table: "verifications",
-                    reference_prefix: "VERIFICATION",
-                    reference_path: `${req.body?.decision?.session_url || `${process.env.FRONTEND_URL}/account-verification-status`}`,
-                    reference_id: req.body.metadata?.account_id,
-                    account_id: req.body.metadata?.account_id
-                });
-                io.to(notificationRejected.account_id).emit("notification", notificationRejected);
-                break;
-
-            case "Not Started":
-            case "In Progress":
-            case "Awaiting User":
-            case "Resubmitted":
-                if(status === "Resubmitted"){
-                    await updateAccountVerifications(req.body.metadata?.account_id, { is_verified: false, verified_at: null });
-                    payload.expires_at = null;
-                }
-                payload.verification_status = "Pending";
-                const notificationPending = await createNotification({
-                    message: `Your are required to complete the verification process.`,
-                    is_read: false,
-                    reference_table: "verifications",
-                    reference_prefix: "VERIFICATION",
-                    reference_path: `${req.body?.decision?.session_url || `${process.env.FRONTEND_URL}/account-verification-status`}`,
-                    reference_id: req.body.metadata?.account_id,
-                    account_id: req.body.metadata?.account_id
-                });
-                io.to(notificationPending.account_id).emit("notification", notificationPending);
-                break;
-
-            default:
-                console.warn(`Unknown Didit status: ${status}`);
-                break;
-        }
-
-        await updateAccountVerificationSessionStatus(sessionId, payload);
 
         return res.status(200).json({
             message: "Webhook received successfully",
@@ -254,19 +93,9 @@ async function handleVerificationWebhookStatusUpdated(req, res) {
     } catch (err) {
         console.error("Error handling verification webhook:", err);
 
-        return res.status(500).json({
+        return res.status(err.statusCode || 500).json({
             error: "Failed to handle verification webhook",
         });
-    }
-}
-
-async function applyForResubmission(sessionId, accountId) {
-    try{
-        const response = await appyForResubmissionServices(sessionId, accountId);
-        return response;
-    }catch(err){
-        console.error("Error applying for resubmission:", err);
-        throw err;
     }
 }
 

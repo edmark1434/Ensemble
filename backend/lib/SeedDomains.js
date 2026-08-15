@@ -286,10 +286,12 @@ async function seedBillingAndMoney(ctx) {
     const user = users[i];
     await pool.query(
       `INSERT INTO cashouts (
-         xendit_disbursement_id, xendit_channel_code, account_no, account_name,
+         reference_id, idempotency_key, xendit_disbursement_id, xendit_channel_code, account_no, account_name,
          amount_credits, fee_php_cents, net_amount_php_cents, status, user_id
-       ) VALUES ($1,'PH_BDO',$2,$3,$4,2500,$5,$6,$7)`,
+       ) VALUES ($1,$2,$3,'PH_BDO',$4,$5,$6,2500,$7,$8,$9)`,
       [
+        `ref_seed_${faker.string.alphanumeric(10)}`,
+        `idem_seed_${faker.string.alphanumeric(10)}`,
         `disb_seed_${faker.string.alphanumeric(10)}`,
         `00${faker.string.numeric(10)}`,
         cap(user.display_name, 50),

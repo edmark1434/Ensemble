@@ -487,7 +487,7 @@ export default function TeamsTab({
           verification={selected.verification}
           loadDiditDetails
           onClose={closeModal}
-          onChanged={() => void refreshAfterChange()}
+          onChanged={refreshAfterChange}
         />
       )}
       {selected && modal === 'history' && (

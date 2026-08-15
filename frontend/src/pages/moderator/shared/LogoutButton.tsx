@@ -15,7 +15,7 @@ export default function LogoutButton({ loginPath = STAFF_LOGIN_PATH }: { loginPa
   const handleLogout = async () => {
     setConfirmOpen(false);
     try {
-      await api.get("/api/users/logout");
+      await api.post("/api/users/logout");
     } catch {
       // Still clear the local session if the request fails.
     }

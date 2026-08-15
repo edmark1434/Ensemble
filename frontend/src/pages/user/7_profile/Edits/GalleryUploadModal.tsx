@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Upload, FileVideo, Image as ImageIcon, AlertCircle } from "lucide-react";
 import api from "@/lib/axios";
+import { uploadFileWithIntent } from "@/lib/uploadFile";
 import toast from "react-hot-toast";
 
 interface GalleryUploadModalProps {
@@ -111,35 +112,7 @@ export const GalleryUploadModal: React.FC<GalleryUploadModalProps> = ({
 
     setIsUploading(true);
     try {
-      // 1. Get Presigned URL
-      const urlRes = await api.post("/api/files/upload-url", {
-        folder: "gallery",
-        filename: file.name,
-        contentType: file.type,
-      });
-
-      if (!urlRes.data.success) throw new Error("Failed to get upload URL");
-      const { uploadUrl, key } = urlRes.data;
-
-      // 2. Upload to S3
-      const uploadRes = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
-
-      if (!uploadRes.ok) throw new Error("Failed to upload file to S3");
-
-      // 3. Register File in DB
-      const registerRes = await api.post("/api/files/register", {
-        name: file.name,
-        path: key,
-        mimeType: file.type,
-        sizeBytes: file.size
-      });
-
-      const fileId = registerRes.data.fileId;
-      if (!fileId) throw new Error("Failed to register file ID.");
+      const { fileId } = await uploadFileWithIntent(file, "gallery");
 
       // 4. Create Gallery Item
       await api.post("/api/accounts/galleries", {

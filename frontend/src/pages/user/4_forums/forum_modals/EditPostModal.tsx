@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { showErrorToast } from "@/components/utility/toast";
 import api from "@/lib/axios";
+import { uploadFileWithIntent } from "@/lib/uploadFile";
 
 interface ImageAttachment {
   id: string;
@@ -336,6 +337,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({
   // Upload file to AWS S3
   const uploadFileToS3 = async (file: File): Promise<string> => {
     try {
+      return (await uploadFileWithIntent(file, "forum-discussions")).key;
       const response = await api.post("/api/files/upload-url", {
         folder: "forum-discussions",
         filename: file.name,

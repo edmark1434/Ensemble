@@ -3,6 +3,7 @@ import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import UserHeader from "@/components/nav/user_header";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
+import { uploadFileWithIntent } from "@/lib/uploadFile";
 import toast from "react-hot-toast";
 
 // Modularized Profile Sub-Components
@@ -197,8 +198,9 @@ export default function Profile() {
     }
   };
 
-  const uploadFile = async (file: File): Promise<string> => {
+  const uploadFile = async (file: File, folder: "profile" | "documents" = "profile"): Promise<string> => {
     try {
+      return (await uploadFileWithIntent(file, folder)).key;
       const response = await api.post("/api/files/upload-url", {
         folder: "profile",
         filename: file.name,
@@ -296,25 +298,20 @@ export default function Profile() {
       toast.error("Please select a PDF file.");
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("The PDF must not exceed 5 MB.");
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error("The PDF must not exceed 25 MB.");
       return;
     }
 
     const toastId = toast.loading("Uploading CV / resume...");
     try {
-      const key = await uploadFile(file);
+      const uploaded = await uploadFileWithIntent(file, "documents");
       const response = await api.post("/api/accounts/profile/attachments", {
         attachment_kind: "file",
         attachment_type: "cv_resume",
         name: file.name.replace(/\.pdf$/i, ""),
         description: "CV / Resume",
-        file: {
-          name: file.name,
-          path: key,
-          mime_type: file.type,
-          size_bytes: file.size,
-        },
+        file_id: uploaded.fileId,
       });
       setPortfolioItems((current) => [
         mapAttachmentToPortfolioItem(response.data.attachment),
@@ -483,8 +480,13 @@ export default function Profile() {
 
   const saveProfileDetails = async (updatedData: any) => {
     try {
+      const formattedRoles = updatedData.roles 
+        ? updatedData.roles.map((r: string) => ({ role_id: 0, role_name: r }))
+        : updatedData.role;
+
       setUserDetails({
         ...updatedData,
+        role: formattedRoles,
         joinedDate: updatedData.joinedDate || "",
         location: updatedData.address
       });

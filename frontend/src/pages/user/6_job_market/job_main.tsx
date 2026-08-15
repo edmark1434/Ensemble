@@ -212,9 +212,20 @@ const JobMain: React.FC = () => {
     setRatingSort(false);
   };
 
+  const tabFilteredJobs = useMemo(() => {
+    const isSavedTab = location.pathname.includes("/saved-posts");
+    const isMyPostsTab = location.pathname.includes("/my-job-post");
+
+    return jobsList.filter((job) => {
+      if (isSavedTab) return job.isSaved && job.status !== "Closed";
+      if (isMyPostsTab) return job.isOwnPost;
+      return job.status !== "Closed"; // Default postings tab
+    });
+  }, [jobsList, location.pathname]);
+
   const dynamicCategories = useMemo(() => {
     const counts: Record<string, number> = {};
-    jobsList.forEach((job) => {
+    tabFilteredJobs.forEach((job) => {
       if (job.category) {
         counts[job.category] = (counts[job.category] || 0) + 1;
       }
@@ -224,15 +235,13 @@ const JobMain: React.FC = () => {
       count: counts[name],
     }));
     return [
-      { label: "All", count: jobsList.length },
+      { label: "All", count: tabFilteredJobs.length },
       ...catArray.sort((a, b) => b.count - a.count),
     ];
-  }, [jobsList]);
+  }, [tabFilteredJobs]);
 
   const filteredJobs = useMemo(() => {
-    const result = jobsList.filter((job) => {
-      const isNotClosed = job.status !== "Closed";
-
+    const result = tabFilteredJobs.filter((job) => {
       const matchesSearch =
         job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         job.postedBy.toLowerCase().includes(searchQuery.toLowerCase());
@@ -244,7 +253,6 @@ const JobMain: React.FC = () => {
       const matchesPos = posValue === "" || job.positionsNeeded === parseInt(posValue);
 
       return (
-        isNotClosed &&
         matchesSearch &&
         matchesCategory &&
         matchesMinPrice &&
@@ -265,7 +273,7 @@ const JobMain: React.FC = () => {
 
     return result;
   }, [
-    jobsList,
+    tabFilteredJobs,
     searchQuery,
     activeCategoryFilter,
     minPrice,

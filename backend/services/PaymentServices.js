@@ -43,9 +43,24 @@ const {
 } = require("../repositories/NotificationRepositories");
 
 const redisClient = require('../lib/Redis');
-async function xenditWebhookHandler(req, res) {
-    console.log("📬 Xendit Webhook Received:", req.body);
+const TOPUP_PACKS = new Map([
+    [80, { amount: 99, name: 'Pocket (80 Credits)' }],
+    [250, { amount: 299, name: 'Bundle (250 Credits)' }],
+    [750, { amount: 849, name: 'Box (750 Credits)' }],
+    [1600, { amount: 1599, name: 'Vault (1,600 Credits)' }],
+]);
+const CUSTOM_CREDIT_RATE = 1.25;
 
+function validateTopupRequest(body = {}) {
+    const credits = Number(body.credits);
+    if (!Number.isSafeInteger(credits) || credits < 10 || credits > 1000000 || body.currency !== 'PHP') throw new Error('INVALID_TOPUP');
+    const pack = body.itemType === 'topup' ? TOPUP_PACKS.get(credits) : null;
+    if (body.itemType === 'topup' && !pack) throw new Error('INVALID_TOPUP');
+    if (!['topup', 'custom'].includes(body.itemType)) throw new Error('INVALID_TOPUP');
+    const amount = pack?.amount ?? Math.round(credits * CUSTOM_CREDIT_RATE * 100) / 100;
+    return { amount, credits, currency: 'PHP', itemName: pack?.name ?? `Custom Top-up (${credits.toLocaleString()} Credits)` };
+}
+async function xenditWebhookHandler(req, res) {
     const { event, data } = req.body;
 
     try {
@@ -344,11 +359,10 @@ async function xenditWebhookHandler(req, res) {
 
 
 async function processTopUpPayment(req, res) {
-    console.log("💳 Processing Top-Up Payment:", req.body);
+    let validated;
+    try { validated = validateTopupRequest(req.body); }
+    catch { return res.status(422).json({ success: false, message: 'Invalid top-up selection.' }); }
     let accountName = {};
-    if(!req.body.currency && !req.body.amount && !req.body.itemName && !req.body.credits){
-        return res.status(400).json({ error: "Missing required fields: currency, amount, itemName, credits" });
-    }
 if (!req.session) {
     const response = await pool.query(
         `SELECT user_id, first_name, last_name, email
@@ -383,8 +397,8 @@ const customerPayload = await getCustomerPayload(req);
         session_type: "PAY",
         mode: "PAYMENT_LINK",
 
-        amount: req.body.amount,
-        currency: req.body.currency,
+        amount: validated.amount,
+        currency: validated.currency,
         country: "PH",
 
         capture_method: "AUTOMATIC",
@@ -400,8 +414,8 @@ const customerPayload = await getCustomerPayload(req);
         //     }
         // },
         metadata: {
-            item_name: `${req.body.itemName}`,
-            credits: `${req.body.credits}`,
+            item_name: validated.itemName,
+            credits: String(validated.credits),
             user_id: `${accountName.user_id || req.session.userId }`
         },
 
@@ -414,10 +428,10 @@ const customerPayload = await getCustomerPayload(req);
     };
     const topUpPayload = {
         user_id: accountName.user_id || req.session.userId,
-        amount: req.body.amount,
-        currency: req.body.currency,
-        credits: req.body.credits,
-        description: req.body.itemName
+        amount: validated.amount,
+        currency: validated.currency,
+        credits: validated.credits,
+        description: validated.itemName
         };
     const existingTopUp = await getPaymentCheckOutByPayload(topUpPayload,'checkout');
         console.log("💳 Payment Session Created:", existingTopUp);
@@ -463,7 +477,6 @@ const customerPayload = await getCustomerPayload(req);
             }
         );
 
-        console.log("response.data:", response.data);
         const redirectUrl = response.data.payment_link_url ? response.data.payment_link_url : response.data.actions.find(a => a.type === "REDIRECT_CUSTOMER" && a.descriptor === "WEB_URL")?.value;
         if(response.data.status === "REQUIRED_ACTION" || response.data.status === "ACTIVE") {
             await createTopUpPaymentSession({
@@ -500,7 +513,7 @@ const customerPayload = await getCustomerPayload(req);
         console.error(err.response?.data || err);
 
         return res.status(500).json({
-            error: err.response?.data || err.message
+            error: 'Unable to create payment session.'
         });
 
     }
@@ -551,7 +564,7 @@ async function createPaymentToken(req, res) {
     }catch(err){
         console.error(err.response?.data || err);
         res.status(500).json({
-            error: err.response?.data || err.message
+            error: 'Unable to create payment token.'
         });
     }
 }
@@ -578,7 +591,6 @@ async function savePaymentMethod(data) {
                         }
                     }
                 );
-                                console.log("✅ Xendit Payment Token Response:", response.data);
 
                 const checkExistingPaymentMethod = await paymentMethodExists(
                     { user_id: payment.user_id, payment_token_id: data.payment_token_id }
@@ -728,7 +740,6 @@ async function getAllPaymentMethodsByUserIdService(req, res) {
 }
 
 async function paymentSessionCompleteWebhookHandler(req, res) {
-    console.log("📬 Payment Session Complete Webhook Received:", req.body);
     const { event, data } = req.body;
     const hasToken = data.payment_token_id ? true : false;
     const userId = data.metadata?.user_id|| null; 
@@ -747,7 +758,6 @@ async function paymentSessionCompleteWebhookHandler(req, res) {
                         }
                     }
                 );
-                                console.log("✅ Xendit Payment Token Response:", response.data);
                 
                 const checkExistingPaymentMethod = await paymentMethodExists(
                     { user_id: userId, payment_token_id: data.payment_token_id }
@@ -812,37 +822,40 @@ async function paymentSessionCompleteWebhookHandler(req, res) {
             await redisClient.set(`customerId:${userId}`, response.data.customer_id, 'EX', 60 * 60 * 24 * 30); // Cache for 30 days
             await updateUserCustomerId(userId, response.data.customer_id); // Ensure DB is updated
         }
-        console.log("Payment Session Complete Webhook Processed Successfully",response.data);
     }
 }
 
 async function paymentSessionExpiredWebhookHandler(req, res) {
-    console.log("📬 Payment Session Expired Webhook Received:", req.body);
 }
 
 async function TopUpPaymentByPaymentMethod(req, res) {
     let { userId } = req.session;
-    console.log("💳 Processing Top-Up Payment by Payment Method:", req.body);
-    const {amount, currency, itemName, credits,itemType, paymentMethodId} = req.body;
+    let validated;
+    try { validated = validateTopupRequest(req.body); }
+    catch { return res.status(422).json({ success: false, message: 'Invalid top-up selection.' }); }
+    const { paymentMethodId } = req.body;
+    if (typeof paymentMethodId !== 'string' || !paymentMethodId || !await paymentMethodExists({ user_id: userId, payment_token_id: paymentMethodId, status: 'ACTIVE' })) {
+        return res.status(403).json({ success: false, message: 'Payment method is not available for this account.' });
+    }
     const reference_id = `TOPUP-${uuidv4()}`;
     const topUpPayload = {
         user_id: userId,
-        amount: req.body.amount,
-        currency: req.body.currency,
-        credits: req.body.credits,
-        description: req.body.itemName
+        amount: validated.amount,
+        currency: validated.currency,
+        credits: validated.credits,
+        description: validated.itemName
     };
     const payload = {
         reference_id: reference_id,
         type: "PAY",
-        currency: currency,
-        request_amount: amount,
+        currency: validated.currency,
+        request_amount: validated.amount,
         metadata: {
-            item_name: `${itemName}`,
-            credits: `${credits}`,
+            item_name: validated.itemName,
+            credits: String(validated.credits),
         },
         capture_method: "AUTOMATIC",
-        description: `Top-up ${credits} credits for ${itemName}`,
+        description: `Top-up ${validated.credits} credits for ${validated.itemName}`,
         channel_properties: {
             success_return_url: `https://app.com/credits?success`,
             cancel_return_url: `https://app.com/credits?cancel`,
@@ -891,7 +904,6 @@ async function TopUpPaymentByPaymentMethod(req, res) {
                 }
             }
         );
-        console.log("✅ Xendit Payment Request Response:", response.data);
         const redirectUrl = response.data.actions ? response.data.actions.find(a => a.type === "REDIRECT_CUSTOMER" && a.descriptor === "WEB_URL")?.value : null;
         if(redirectUrl || (response.data.status === "REQUIRES_ACTION" || response.data.status === "ACTIVE"|| response.data.status === "SUCCEEDED")) {
             await createTopUpPaymentSession({
@@ -931,7 +943,7 @@ async function TopUpPaymentByPaymentMethod(req, res) {
             await updatePaymentMethodStatus(paymentMethodId, 'INACTIVE');
         }
         return res.status(500).json({
-            error: err.response?.data || err.message
+            error: 'Unable to process top-up payment.'
         });
     }
 }
@@ -939,7 +951,6 @@ async function TopUpPaymentByPaymentMethod(req, res) {
 
 
 async function subscriptionWebhookHandler(req,res){
-    console.log("💳 Processing Subscription Payment:", req.body);
     const { event, data } = req.body;
     let subscriptionId;
     if(event !== 'recurring.plan.inactived' && event !== 'recurring.plan.activated' ){
@@ -1082,7 +1093,6 @@ async function subscriptionWebhookHandler(req,res){
 }
 
 async function processSubscriptionPayment(req, res) {
-    console.log("💳 Processing Subscription Payment:", req.body);
     let anchorDate = new Date();
     if (anchorDate.getDate() > 28) {
         anchorDate.setDate(28);
@@ -1095,6 +1105,9 @@ async function processSubscriptionPayment(req, res) {
     }
     if(!req.body.planId){
         return res.status(400).json({ error: "Missing required field: planId" });
+    }
+    if (typeof req.body.paymentMethodId !== 'string' || !await paymentMethodExists({ user_id: userId, payment_token_id: req.body.paymentMethodId, status: 'ACTIVE' })) {
+        return res.status(403).json({ error: 'Payment method is not available for this account.' });
     }
     const [subscriptionDetails, planDetails] = await Promise.all([
         getSubcriptionByUserIdRepositories(userId),
@@ -1288,7 +1301,7 @@ async function cancelSubscription(req,res){
         console.error(err.response?.data || err);
         return res.status(500).json({
             message: "Failed to cancel subscription",
-            error: err.response?.data || err.message
+            error: 'Unable to cancel subscription.'
         });
     }
 }
@@ -1325,8 +1338,6 @@ async function endSubscription(subscriptionId) {
 }
 
 async function updateSubscriptionPayment(req, res) {
-    console.log("💳 Processing Subscription Payment:", req.body);
-    const {amount} = req.body;
     const { userId } = req.session;
     if (!userId) {
         return res.status(400).json({ error: "Missing required field: userId" });
@@ -1354,6 +1365,16 @@ async function updateSubscriptionPayment(req, res) {
     const updateType = planDetails.amount_php_cents > subscriptionPlanDetails.amount_php_cents ? "UPGRADE" : "DOWNGRADE";
     if (updateType === "UPGRADE") {
 
+        const periodStart = new Date(subscriptionDetails[0].current_period_start).getTime();
+        const periodEnd = new Date(subscriptionDetails[0].current_period_end).getTime();
+        const now = Date.now();
+        const total = periodEnd - periodStart;
+        const remainingRatio = Number.isFinite(total) && total > 0
+            ? Math.max(0, Math.min(1, (periodEnd - now) / total))
+            : 1;
+        const priceDifference = Number(planDetails.amount_php_cents) - Number(subscriptionPlanDetails.amount_php_cents);
+        const serverAmount = Math.max(1, Math.round(priceDifference * remainingRatio * 100) / 100);
+
         const referenceId = `SUBSCRIPTION-${uuidv4()}`;
 
         const paymentPayload = {
@@ -1363,7 +1384,7 @@ async function updateSubscriptionPayment(req, res) {
             currency: "PHP",
 
             // Charge the full new plan amount
-            request_amount: amount,
+            request_amount: serverAmount,
 
             payment_token_id: req.body.paymentMethodId,
             description: `Subscription upgrade from ${subscriptionDetails[0].plan_id} to ${planDetails.plan_id}`,
