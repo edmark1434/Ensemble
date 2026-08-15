@@ -77,7 +77,7 @@ type Tab =
   | "assets"
   | "reviews"
   | "members"
-  | "wallet";
+  | "wallet"
   | "transactions";
 
 const cloudfront = String(import.meta.env.VITE_CLOUDFRONT_URL || "").replace(
