@@ -59,7 +59,6 @@ export const useStateManagerEvents = (stateManager: StateManager) => {
   }, [stateManager, setState]);
 
   useEffect(() => {
-    console.log("useStateManagerEvents", stateManager);
     // Check if we already have subscriptions for this stateManager
     if (!subscriptionRegistry.has(stateManager)) {
       subscriptionRegistry.set(stateManager, new Set());

@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-import { Kysely, PostgresDialect, Generated } from "kysely";
+import {Kysely, PostgresDialect, Generated} from "kysely";
 
 interface FilesTable {
   file_id: Generated<number>;
@@ -44,12 +44,58 @@ interface UsersTable {
   account_id: number;
 }
 
+interface SessionsTable {
+  session_id: Generated<number>;
+  project_id: number;
+  user_id: number;
+  socket_id: string | null;
+  connected_at: Generated<Date>;
+  disconnected_at: Date | null;
+}
+
+interface SessionActivitiesTable {
+  session_activity_id: Generated<number>;
+  session_id: number;
+  type: "edit" | "join" | "leave";
+  created_at: Generated<Date>;
+}
+
+interface YjsUpdatesTable {
+  yjs_update_id: Generated<number>;
+  session_activity_id: number;
+  update: Buffer;
+  created_at: Generated<Date>;
+}
+
+interface ProjectYjsUpdatesTable {
+  yjs_update_id: number;
+  project_id: number;
+}
+
+interface YjsSnapshotsTable {
+  yjs_snapshot_id: Generated<number>;
+  document: Buffer;
+  created_at: Generated<Date>;
+}
+
+interface ProjectYjsSnapshotsTable {
+  yjs_snapshot_id: number;
+  project_id: number;
+}
+
 interface Database {
   files: FilesTable;
   media_assets: MediaAssetsTable;
   projects: ProjectsTable;
   accounts: AccountsTable;
   users: UsersTable;
+
+  sessions: SessionsTable;
+  session_activities: SessionActivitiesTable;
+  yjs_updates: YjsUpdatesTable;
+  yjs_snapshots: YjsSnapshotsTable;
+  project_yjs_updates: ProjectYjsUpdatesTable;
+  project_yjs_snapshots: ProjectYjsSnapshotsTable;
 }
 
 const globalForDb = globalThis as unknown as { pool?: Pool };

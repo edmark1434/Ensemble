@@ -15,11 +15,15 @@ import {getFitZoomLevel, getNextZoomLevel, getPreviousZoomLevel} from "@/feature
 import {useTimelineOffsetX} from "@/features/editor/hooks/use-timeline-offset";
 import {TIMELINE_OFFSET_CANVAS_LEFT} from "@/features/editor/constants/constants";
 import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
+import type * as Y from "yjs";
 
-export function useKeyboardShortcuts(stateManager: StateManager) {
+export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y.UndoManager) {
   const timelineOffsetX = useTimelineOffsetX();
   const timelineOffsetXRef = useRef(timelineOffsetX);
   timelineOffsetXRef.current = timelineOffsetX;
+
+  const undoManagerRef = useRef(undoManager);
+  undoManagerRef.current = undoManager;
 
   const applyScale = (newScale: ITimelineScaleState) => {
     const { fps, scale, timeline, playerRef } = useStore.getState();
@@ -72,7 +76,8 @@ export function useKeyboardShortcuts(stateManager: StateManager) {
       // undo / redo
       if (mod && e.code === "KeyZ") {
         e.preventDefault();
-        e.shiftKey ? dispatch(HISTORY_REDO) : dispatch(HISTORY_UNDO);
+        if (!undoManagerRef.current) return;
+        e.shiftKey ? undoManagerRef.current.redo() : undoManagerRef.current.undo();
       }
 
       // delete

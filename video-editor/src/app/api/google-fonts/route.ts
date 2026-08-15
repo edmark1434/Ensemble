@@ -41,10 +41,7 @@ export async function GET(request: NextRequest) {
     url.searchParams.set("key", apiKey);
     url.searchParams.set("sort", sort);
 
-    const response = await fetch(url.toString(), {
-      // Cache at the CDN/edge level — font list barely changes
-      next: { revalidate: 86400 } // 24 hours
-    });
+    const response = await fetch(url.toString());
 
     if (!response.ok) {
       throw new Error(`Google Fonts API error: ${response.status}`);
