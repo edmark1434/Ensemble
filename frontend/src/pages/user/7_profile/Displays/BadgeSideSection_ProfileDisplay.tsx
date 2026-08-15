@@ -140,7 +140,7 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
                 {displayBadges.map((b) => (
                   <div
                     key={b.id}
-                    className="group relative flex items-center justify-center aspect-square p-1 rounded-xl transition-all duration-200 cursor-help border bg-gray-50 dark:bg-[#0d111d] border-transparent dark:border-white/[0.03]"
+                    className="group relative flex items-center justify-center w-[54px] h-[54px] mx-auto rounded-full transition-all duration-200 cursor-help border bg-gray-50 dark:bg-[#0d111d] border-transparent dark:border-white/[0.03]"
                     onMouseEnter={(e) => {
                       e.currentTarget.style.borderColor = b.borderColor;
                       e.currentTarget.style.backgroundColor = b.glowColor + "05";
