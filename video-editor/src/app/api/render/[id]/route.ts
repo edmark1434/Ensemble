@@ -19,10 +19,16 @@ export async function GET(
       );
     }
 
-    const response = await fetch(`${RENDER_SERVER_URL}/renders/${id}`, {
-      cache: "no-store",
-      headers: userId ? { "x-user-id": userId } : undefined,
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${RENDER_SERVER_URL}/renders/${id}`, {
+        cache: "no-store",
+        headers: userId ? { "x-user-id": userId } : undefined,
+      });
+    } catch {
+      // Render server isn't reachable — nothing to report, not a bug
+      return NextResponse.json({ error: "Render server unavailable" }, { status: 503 });
+    }
 
     const statusData = await response.json();
 
@@ -58,10 +64,15 @@ export async function DELETE(
       );
     }
 
-    const response = await fetch(`${RENDER_SERVER_URL}/renders/${id}`, {
-      method: "DELETE",
-      headers: userId ? { "x-user-id": userId } : undefined,
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${RENDER_SERVER_URL}/renders/${id}`, {
+        method: "DELETE",
+        headers: userId ? { "x-user-id": userId } : undefined,
+      });
+    } catch {
+      return NextResponse.json({ error: "Render server unavailable" }, { status: 503 });
+    }
 
     const data = await response.json();
 
