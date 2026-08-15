@@ -1,4 +1,5 @@
 import React from "react";
+import { Edit2 } from "lucide-react";
 
 interface ProfileTagsProps {
   role?: {
@@ -7,12 +8,14 @@ interface ProfileTagsProps {
   }[];
   verificationLevel?: boolean;
   subscriptionType?: "Free" | "Premium" | "Business";
+  onEditRole?: () => void;
 }
 
 export const ProfileTags: React.FC<ProfileTagsProps> = ({
   role,
   verificationLevel = false,
   subscriptionType = "Free",
+  onEditRole,
 }) => {
 
   const getSubscriptionIcon = (type: string) => {
@@ -44,27 +47,36 @@ export const ProfileTags: React.FC<ProfileTagsProps> = ({
         title={`${subscriptionType} Member`}
       />
       {/* Role Tag Matrix */}
-{role && Array.isArray(role) && role.length > 0 ? (
-  role.map((roleItem, index) => (
-    <span 
-      key={index} 
-      className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase border ${
-        roleItem.role_name === "Freelancer"
-          ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
-          : roleItem.role_name === "Client"
-          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-          : roleItem.role_name === "Casual"
-          ? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20"
-          : "bg-blue-500/10 text-blue-400 border-blue-500/20"
-      }`}
-    >
-      {roleItem.role_name}
-    </span>
-  ))
-) : (
-  <span className="text-zinc-500 text-xs">No roles assigned</span>
-)}
+      {role && Array.isArray(role) && role.length > 0 ? (
+        role.map((roleItem, index) => (
+          <span 
+            key={index} 
+            className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase border ${
+              roleItem.role_name === "Freelancer"
+                ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                : roleItem.role_name === "Client"
+                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                : roleItem.role_name === "Casual"
+                ? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20"
+                : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+            }`}
+          >
+            {roleItem.role_name}
+          </span>
+        ))
+      ) : (
+        <span className="text-zinc-500 text-xs">No roles assigned</span>
+      )}
 
+      {onEditRole && (
+        <button
+          onClick={onEditRole}
+          className="ml-1 p-1 rounded hover:bg-gray-200 dark:hover:bg-zinc-800 text-gray-400 hover:text-blue-500 transition-colors"
+          title="Edit Account Tags"
+        >
+          <Edit2 className="w-3 h-3" />
+        </button>
+      )}
     </div>
   );
 };
