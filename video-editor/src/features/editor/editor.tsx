@@ -45,6 +45,7 @@ import {useTimelineOffsetX} from "@/features/editor/hooks/use-timeline-offset";
 import {Kbd, KbdGroup} from "@/components/ui/kbd";
 import {seedDefaultFont} from "@/features/editor/utils/seed-default-font";
 import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
+import {useCollabDoc} from "@/features/editor/hooks/use-collab-doc";
 
 // ts not getting used
 const stateManager = new StateManager({
@@ -387,7 +388,7 @@ const Panels = ({
               ref={menuPanelRef}
               collapsible
               collapsedSize={0}
-              defaultSize={0}
+              defaultSize={showMenuItem ? 30 : 0}
               minSize={30}
               maxSize={40}
               className={showMenuItem ? "" : "hidden"}
@@ -460,6 +461,8 @@ const Controls = ({ panelRef }: { panelRef: React.RefObject<HTMLDivElement | nul
 };
 
 const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
+  const { userId, projectId } = useStore();
+
   const { scene } = useSceneStore();
   const timelinePanelRef = useRef<ImperativePanelHandle>(null);
   const sceneRef = useRef<SceneRef>(null);
@@ -474,6 +477,8 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
     setTypeControlItem,
   } = useLayoutStore();
   const isLargeScreen = useIsLargeScreen();
+
+  const collab = useCollabDoc(projectId, userId, stateManager);
 
   useTimelineEvents();
 
@@ -521,7 +526,7 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
       if (trackItem) {
         setTrackItem(trackItem);
         setLayoutTrackItem(trackItem);
-      } else console.log(transitionsMap[id]);
+      }
     } else {
       setTrackItem(null);
       setLayoutTrackItem(null);
@@ -534,7 +539,7 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
     setTypeControlItem("");
   }, [isLargeScreen]);
 
-  useKeyboardShortcuts(stateManager);
+  useKeyboardShortcuts(stateManager, collab?.undoManager);
 
   useEffect(() => {
     useStore.getState().setStateManager(stateManager);
@@ -546,7 +551,15 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
     return () => window.removeEventListener("scroll", lockWindowScroll);
   }, []);
 
-  if (!loaded) {
+  if (collab?.error) {
+    return (
+      <div className="fixed top-0 left-0 z-50 flex h-screen w-screen items-center justify-center bg-card">
+        <p className="text-sm text-red-500">Failed to load project: {collab.error.message}</p>
+      </div>
+    );
+  }
+
+  if (!loaded || !collab?.ready) {
     return (
       <div className="fixed top-0 left-0 z-50 flex h-screen w-screen items-center justify-center gap-4 bg-card">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -560,13 +573,14 @@ const Editor = ({ tempId, id }: { tempId?: string; id?: string }) => {
       <Navbar
         user={null}
         stateManager={stateManager}
+        undoManager={collab?.undoManager}
       />
 
       <div className="flex flex-1 h-[calc(100vh-56px)]">
         {isLargeScreen ? (
           <ResizablePanelGroup direction="horizontal" className="h-full w-full">
             <ResizablePanel
-              defaultSize={40}
+              defaultSize={100}
               minSize={40}
               className="min-w-0 min-h-0"
             >

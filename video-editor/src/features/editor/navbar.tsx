@@ -29,7 +29,6 @@ import {
 import {
   CloudCheck
 } from "lucide-react";
-
 import { LogoIcons } from "@/components/shared/logos";
 import Link from "next/link";
 import { ShortcutsModal } from "./shortcuts-modal";
@@ -38,13 +37,16 @@ import {Tooltip, TooltipContent, TooltipTrigger} from "@/components/ui/tooltip";
 import {Input} from "@/components/ui/input";
 import useStore from "./store/use-store";
 import {Kbd, KbdGroup} from "@/components/ui/kbd";
+import type * as Y from "yjs";
 
 export default function Navbar({
   user,
-  stateManager
+  stateManager,
+  undoManager
 }: {
   user: unknown | null;
   stateManager: StateManager;
+  undoManager?: Y.UndoManager;
 }) {
   const isLargeScreen = useIsLargeScreen();
   const isMediumScreen = useIsMediumScreen();
@@ -57,11 +59,11 @@ export default function Navbar({
   }, [projectName]);
 
   const handleUndo = () => {
-    dispatch(HISTORY_UNDO);
+    undoManager?.undo();
   };
 
   const handleRedo = () => {
-    dispatch(HISTORY_REDO);
+    undoManager?.redo();
   };
 
   const commitTitle = () => {
@@ -87,12 +89,28 @@ export default function Navbar({
   const [canRedo, setCanRedo] = useState(false);
 
   useEffect(() => {
-    const sub = stateManager.subscribe(() => {
-      setCanUndo(stateManager.undos.length > 0);
-      setCanRedo(stateManager.redos.length > 0);
-    });
-    return () => sub.unsubscribe();
-  }, [stateManager]);
+    if (!undoManager) {
+      setCanUndo(false);
+      setCanRedo(false);
+      return;
+    }
+
+    const updateFlags = () => {
+      setCanUndo(undoManager.undoStack.length > 0);
+      setCanRedo(undoManager.redoStack.length > 0);
+    };
+
+    updateFlags();
+    undoManager.on("stack-item-added", updateFlags);
+    undoManager.on("stack-item-popped", updateFlags);
+    undoManager.on("stack-cleared", updateFlags);
+
+    return () => {
+      undoManager.off("stack-item-added", updateFlags);
+      undoManager.off("stack-item-popped", updateFlags);
+      undoManager.off("stack-cleared", updateFlags);
+    };
+  }, [undoManager]);
 
   return (
     <div

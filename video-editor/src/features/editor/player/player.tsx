@@ -26,6 +26,7 @@ const Player = () => {
   return (
     <div className="h-full w-full" style={CHECKERBOARD_STYLE}>
       <RemotionPlayer
+        acknowledgeRemotionLicense
         ref={playerRef}
         component={Composition}
         durationInFrames={safeDurationInFrames}

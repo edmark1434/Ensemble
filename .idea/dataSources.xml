@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="ensemble-dev@localhost" uuid="f2d797ed-8b44-49dd-ad9b-ad177ca5d61e">
+    <data-source source="LOCAL" name="ensemble-dev-2@localhost" uuid="893f405a-a0ff-4d87-9ff4-2a74c21978ad">
+      <driver-ref>postgresql</driver-ref>
+      <synchronize>true</synchronize>
+      <jdbc-driver>org.postgresql.Driver</jdbc-driver>
+      <jdbc-url>jdbc:postgresql://localhost:5432/ensemble-dev-2</jdbc-url>
+      <working-dir>$ProjectFileDir$</working-dir>
+    </data-source>
+    <data-source source="LOCAL" name="ensemble-dev@localhost" uuid="3c75b671-e6d3-41cc-89df-f92c174b8751">
       <driver-ref>postgresql</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.postgresql.Driver</jdbc-driver>

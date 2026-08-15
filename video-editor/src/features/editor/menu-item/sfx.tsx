@@ -86,7 +86,6 @@ export function SFX() {
 
   const handleAddAudio = (payload: Partial<IAudio>) => {
     payload.id = generateId();
-    console.log(payload);
     dispatch(ADD_AUDIO, {
       payload,
       options: {}

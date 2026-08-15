@@ -49,7 +49,6 @@ export const Captions = () => {
       const orderedCaptionByDisplayFrom = captions.sort(
         (a, b) => a.display.from - b.display.from
       );
-      console.log({ orderedCaptionByDisplayFrom });
       groupedCaptions[key] = orderedCaptionByDisplayFrom as ITrackItem[];
     }
     setCaptionTrackItemsMap(groupedCaptions);
@@ -103,8 +102,6 @@ export const Captions = () => {
         fontInfo,
         options
       );
-
-      console.log({ captions });
 
       dispatch(ADD_ITEMS, {
         payload: {

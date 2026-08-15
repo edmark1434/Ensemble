@@ -146,7 +146,6 @@ const useUploadStore = create<IUploadStore>()(
         for (const upload of currentActiveUploads.filter(
           (upload) => upload.status === "uploading"
         )) {
-          console.log("upload", upload);
           processUpload(
             upload.id,
             { file: upload.file, url: upload.url },

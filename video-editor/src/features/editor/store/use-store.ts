@@ -15,6 +15,8 @@ import { create } from "zustand";
 import {TIMELINE_ZOOM_LEVELS} from "@/features/editor/constants/scale";
 import {nanoid} from "nanoid";
 import StateManager from "@designcombo/state";
+import * as Y from "yjs";
+import { CollabSchema, markerToY } from "../collab/ydoc-schema";
 
 interface ITimelineStore {
   duration: number;
@@ -71,6 +73,10 @@ interface ITimelineStore {
 
   stateManager: StateManager | null;
   setStateManager: (stateManager: StateManager | null) => void;
+
+  collabSchema: CollabSchema | null;
+  collabOrigin: string | null;
+  setCollabSchema: (schema: CollabSchema | null, origin: string | null) => void;
 }
 
 export interface IMarker {
@@ -79,6 +85,7 @@ export interface IMarker {
   label?: string;
   color?: string;
   type: "marker" | "comment";
+  userId: string;
 }
 
 export interface IBackground {
@@ -168,19 +175,30 @@ const useStore = create<ITimelineStore>((set, get) => ({
   setShortcutsModalOpen: (open) => set({ isShortcutsModalOpen: open }),
 
   markers: [],
-  addMarker: (timeMs, type = "marker") => set((state) => ({
-    markers: [
-      ...state.markers,
-      {
-        id: nanoid(),
-        timeMs,
-        type,
-      }
-    ]
-  })),
-  removeMarker: (id) => set((state) => ({
-    markers: state.markers.filter((m) => m.id !== id)
-  })),
+  addMarker: (timeMs, type = "marker") => {
+    const { collabSchema, collabOrigin, userId } = get();
+    const id = nanoid();
+    const marker: IMarker = { id, timeMs, type, userId };
+
+    if (collabSchema && collabOrigin) {
+      collabSchema.doc.transact(() => {
+        collabSchema.markers.set(id, markerToY(marker));
+      }, collabOrigin);
+    }
+
+    set((state) => ({ markers: [...state.markers, marker] }));
+  },
+  removeMarker: (id) => {
+    const { collabSchema, collabOrigin } = get();
+
+    if (collabSchema && collabOrigin) {
+      collabSchema.doc.transact(() => {
+        collabSchema.markers.delete(id);
+      }, collabOrigin);
+    }
+
+    set((state) => ({ markers: state.markers.filter((m) => m.id !== id) }));
+  },
 
   playheadSnapped: false,
 
@@ -195,6 +213,10 @@ const useStore = create<ITimelineStore>((set, get) => ({
 
   stateManager: null,
   setStateManager: (stateManager) => set({ stateManager }),
+
+  collabSchema: null,
+  collabOrigin: null,
+  setCollabSchema: (collabSchema, collabOrigin) => set({ collabSchema, collabOrigin }),
 }));
 
 export default useStore;
