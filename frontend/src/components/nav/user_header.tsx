@@ -324,8 +324,34 @@ useEffect(() => {
     }
   };
 
+
+
   if (isCheckingAccess) {
-    return null;
+    return (
+      <header
+        className={`sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12]/95 backdrop-blur-md transition-all duration-300 ${
+            (!isCollapsed ? "md:p-0" : "md:pl-20")
+        }`}
+      >
+        <div className="flex items-center justify-between px-6 py-4 md:px-8 gap-4">
+          <div className="flex items-center gap-8 flex-1 min-w-0">
+            <div className="h-7 w-32 bg-gray-200 dark:bg-white/10 rounded animate-pulse shrink-0 hidden sm:block"></div>
+            <div className="w-full max-w-xs h-9 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse"></div>
+          </div>
+          <div className="flex items-center gap-4 shrink-0">
+            <div className="h-8 w-24 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse"></div>
+            <div className="h-9 w-9 bg-gray-200 dark:bg-white/10 rounded-lg animate-pulse"></div>
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-white/10 animate-pulse"></div>
+              <div className="hidden md:block space-y-2">
+                <div className="h-3 w-20 bg-gray-200 dark:bg-white/10 rounded animate-pulse"></div>
+                <div className="h-2 w-16 bg-gray-200 dark:bg-white/10 rounded animate-pulse"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+    );
   }
 
   return showHeader ? (
