@@ -1,9 +1,10 @@
-// app/api/collab/projects/[id]/snapshot/route.ts
+// app/api/collab/projects/[id]/snapshots/latest/route.ts
 
 import { NextRequest, NextResponse } from "next/server";
 import * as Y from "yjs";
 import { db } from "@/lib/db";
 import { resolveProjectId } from "@/utils/resolve-ids";
+import { loadLatestProjectState } from "@/lib/collab/persistence-store";
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const ab = new ArrayBuffer(bytes.byteLength);
@@ -46,18 +47,23 @@ export async function GET(
   }
 
   try {
-    const row = await db
-      .selectFrom("project_yjs_snapshots")
-      .innerJoin("yjs_snapshots", "yjs_snapshots.yjs_snapshot_id", "project_yjs_snapshots.yjs_snapshot_id")
-      .where("project_yjs_snapshots.project_id", "=", projectId)
-      .orderBy("yjs_snapshots.created_at", "desc")
-      .select(["yjs_snapshots.document"])
-      .executeTakeFirst();
+    const { snapshot, updates } = await loadLatestProjectState(projectId);
 
-    // no snapshot yet — brand new project. Create and persist a blank one
-    // now rather than returning 204, so every project always has exactly
-    // one canonical snapshot row from first access onward.
-    const documentBytes = row?.document ?? (await createBlankSnapshot(projectId));
+    let documentBytes: Buffer;
+    if (!snapshot && updates.length === 0) {
+      // brand new project — same "always create a canonical blank snapshot"
+      // behavior as before
+      documentBytes = await createBlankSnapshot(projectId);
+    } else if (updates.length === 0) {
+      // snapshot alone is already current, nothing trailing to merge
+      documentBytes = snapshot!;
+    } else {
+      const doc = new Y.Doc();
+      if (snapshot) Y.applyUpdate(doc, snapshot);
+      for (const update of updates) Y.applyUpdate(doc, update);
+      documentBytes = Buffer.from(Y.encodeStateAsUpdate(doc));
+      doc.destroy();
+    }
 
     return new NextResponse(toArrayBuffer(documentBytes), {
       headers: { "Content-Type": "application/octet-stream" },

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import * as Y from "yjs";
 import type StateManager from "@designcombo/state";
+import useStore from "../store/use-store";
 import {
   CollabSchema,
   createCollabSchema,
@@ -10,8 +11,8 @@ import {
 import { setupMirrorIn } from "../collab/mirror-in";
 import { createSyncGuard, SyncGuard } from "../collab/sync-guard";
 import { createSession, endSession, loadSnapshot, attachPersistence } from "../collab/persistence";
-import useStore from "../store/use-store";
 import { setupMirrorOutFromStateManager, setupMirrorOutFromStore } from "../collab/mirror-out";
+import { attachWsProvider } from "../collab/ws-provider";
 
 export interface CollabDoc {
   doc: Y.Doc;
@@ -42,6 +43,7 @@ export function useCollabDoc(
     let teardownMirrorOutStateManager: (() => void) | null = null;
     let teardownMirrorOutStore: (() => void) | null = null;
     let teardownPersistence: (() => void) | null = null;
+    let teardownWsProvider: (() => void) | null = null;
     let activeSessionId: number | null = null;
 
     const doc = new Y.Doc();
@@ -73,6 +75,7 @@ export function useCollabDoc(
         teardownMirrorOutStateManager = setupMirrorOutFromStateManager(schema, stateManager, localOrigin, syncGuard);
         teardownMirrorOutStore = setupMirrorOutFromStore(schema, localOrigin, syncGuard);
         teardownPersistence = attachPersistence(schema, projectId, sessionId, localOrigin);
+        teardownWsProvider = attachWsProvider(schema, projectId, userId);
 
         const isBlank = schema.trackItemIds.length === 0 && schema.tracks.length === 0;
 
@@ -151,6 +154,7 @@ export function useCollabDoc(
       teardownMirrorOutStateManager?.();
       teardownMirrorOutStore?.();
       teardownPersistence?.();
+      teardownWsProvider?.();
       if (activeSessionId !== null) endSession(activeSessionId);
       useStore.getState().setCollabSchema(null, null);
       undoManager.destroy();

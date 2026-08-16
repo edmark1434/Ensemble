@@ -17,7 +17,10 @@ export async function createSession(projectId: string, userId: string): Promise<
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ projectId, userId }),
   });
-  if (!res.ok) throw new Error("Failed to create collab session");
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Failed to create collab session (${res.status}): ${body}`);
+  }
   const data = await res.json();
   return data.sessionId as number;
 }
@@ -31,7 +34,7 @@ export function endSession(sessionId: number): void {
 // failure instead of a generic message, so genuine errors (project not
 // found, DB failure) are visible instead of hidden.
 export async function loadSnapshot(projectId: string): Promise<Uint8Array> {
-  const res = await fetch(`/api/collab/projects/${projectId}/snapshot`);
+  const res = await fetch(`/api/collab/projects/${projectId}/snapshots/latest`);
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`Failed to load project snapshot (${res.status}): ${body}`);
@@ -48,12 +51,17 @@ export function attachPersistence(
   let pending: Uint8Array[] = [];
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const flush = () => {
-    flushTimer = null;
-    if (pending.length === 0) return;
-
+  const mergePending = (): Uint8Array | null => {
+    if (pending.length === 0) return null;
     const merged = pending.length === 1 ? pending[0] : Y.mergeUpdates(pending);
     pending = [];
+    return merged;
+  };
+
+  const flush = () => {
+    flushTimer = null;
+    const merged = mergePending();
+    if (!merged) return;
 
     fetch(`/api/collab/projects/${projectId}/updates?sessionId=${sessionId}`, {
       method: "POST",
@@ -64,6 +72,19 @@ export function attachPersistence(
     });
   };
 
+  // Unlike fetch, sendBeacon is guaranteed by the browser to be sent even
+  // as the page is being torn down — this is the case a plain fetch in
+  // the unmount cleanup can miss on an actual tab close.
+  const flushOnUnload = () => {
+    const merged = mergePending();
+    if (!merged) return;
+    const blob = new Blob([toArrayBuffer(merged)], { type: "application/octet-stream" });
+    const sent = navigator.sendBeacon(`/api/collab/projects/${projectId}/updates?sessionId=${sessionId}`, blob);
+    if (!sent) {
+      console.warn("sendBeacon dropped collab update on unload, payload too large", merged.byteLength);
+    }
+  };
+
   const handleUpdate = (update: Uint8Array, origin: unknown) => {
     if (origin !== localOrigin) return;
     pending.push(update);
@@ -71,9 +92,11 @@ export function attachPersistence(
   };
 
   schema.doc.on("update", handleUpdate);
+  window.addEventListener("pagehide", flushOnUnload);
 
   return () => {
     schema.doc.off("update", handleUpdate);
+    window.removeEventListener("pagehide", flushOnUnload);
     if (flushTimer) clearTimeout(flushTimer);
     flush();
   };
