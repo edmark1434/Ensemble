@@ -1,6 +1,5 @@
 const { pool } = require('./Database');
 const { faker } = require('@faker-js/faker');
-const { generatePublicId } = require('./PublicId');
 
 function cap(value, max) {
   if (value == null) return value;
@@ -311,13 +310,12 @@ async function seedProjectsAndEditor(ctx) {
   if (users.length < 2) return [];
 
   const projectRes = await pool.query(
-    `INSERT INTO projects (public_id, name, status)
+    `INSERT INTO projects (name, status)
      VALUES
-       ($1, 'Brand Reel Q3', 'active'),
-       ($2, 'Product Launch Cut', 'active'),
-       ($3, 'Archive Demo', 'archived')
-     RETURNING project_id, public_id, name`,
-    [generatePublicId(), generatePublicId(), generatePublicId()]
+       ('Brand Reel Q3', 'active'),
+       ('Product Launch Cut', 'active'),
+       ('Archive Demo', 'archived')
+     RETURNING project_id, name`
   );
   const projects = projectRes.rows;
 
@@ -752,12 +750,11 @@ async function seedMarketplaceCatalog(ctx, projects) {
     const fileC = files[(i + 2) % files.length];
     const res = await pool.query(
       `INSERT INTO media_assets (
-         public_id, name, type, width, height, duration_seconds, is_marketed,
+         name, type, width, height, duration_seconds, is_marketed,
          owner_user_id, original_file_id, proxy_file_id, thumbnail_file_id
-       ) VALUES ($1,$2,'video',1920,1080,$3,true,$4,$5,$6,$7)
-       RETURNING media_asset_id, public_id`,
+       ) VALUES ($1,'video',1920,1080,$2,true,$3,$4,$5,$6)
+       RETURNING media_asset_id`,
       [
-        generatePublicId(),
         cap(`Demo Clip ${i + 1}`, 50),
         15 + i * 5,
         owner.user_id,

@@ -53,7 +53,7 @@ async function updateProfileDetailsServices(accountId, originalUpdates, updates)
     if (!accountId) {
         throw new Error('Account ID is required');
     }
-    if (!checkAccountId(accountId)) {
+    if (!await checkAccountId(accountId)) {
         throw new Error('Invalid account ID');
     }
     try {
@@ -275,7 +275,7 @@ async function getProfileByAccountIdService(accountId) {
     if (!accountId) {
         throw new Error('Account ID is required');
     }
-    if(!checkAccountId(accountId)){
+    if (!await checkAccountId(accountId)) {
         throw new Error('Invalid account ID');
     }
     try {
@@ -298,7 +298,7 @@ async function profileSocialMediaUpdateService(accountId,original, listOfSocialM
     if (!accountId) {
         throw new Error('Account ID is required');
     }
-    if(!checkAccountId(accountId)){
+    if (!await checkAccountId(accountId)) {
         throw new Error('Invalid account ID');
     }
     try {
@@ -335,7 +335,7 @@ async function getProfileAvatarsByAccountIdService(accountId) {
     if (!accountId) {
         throw new Error('Account ID is required');
     }
-    if(!checkAccountId(accountId)){
+    if (!await checkAccountId(accountId)) {
         throw new Error('Invalid account ID');
     }
     try {
@@ -352,7 +352,7 @@ async function getProfileCurrentAvatarByAccountIdService(accountId) {
         throw new Error('Account ID is required');
     }
     console.log('Fetching current profile avatar for accountId:', accountId);
-    if(!checkAccountId(accountId)){
+    if (!await checkAccountId(accountId)) {
         throw new Error('Invalid account ID');
     }
     try {

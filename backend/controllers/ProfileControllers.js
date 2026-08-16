@@ -98,15 +98,18 @@ async function getProfileByAccountIdController(req, res) {
     try {
         const { accountId } = req.params;
         const profile = await getProfileByAccountIdService(accountId);
+        if (!profile) {
+            return res.status(404).json({ success: false, message: 'Profile not found.' });
+        }
         return res.status(200).json({
             success: true,
             data: profile
         });
     } catch (err) {
         console.error('Error in getProfileByAccountIdController:', err);
-        return res.status(500).json({
+        return res.status(err.message === 'Invalid account ID' ? 400 : 500).json({
             success: false,
-            message: 'An error occurred while fetching the profile. Please try again.'
+            message: err.message === 'Invalid account ID' ? 'Invalid account ID.' : 'An error occurred while fetching the profile. Please try again.'
         });
     }
 }

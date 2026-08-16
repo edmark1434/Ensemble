@@ -9,6 +9,7 @@ import StaffMiddleware from './lib/StaffMiddleware'
 import CreditShop from '@/pages/user/13_creditsshop/CreditsShop.tsx'
 import Checkout from '@/pages/payment/checkout.tsx'
 import Profile from '@/pages/user/7_profile/Profile.tsx'
+import ProfileRoute from '@/pages/user/7_profile/ProfileRoute.tsx'
 import UserSettings from '@/components/nav/Settings/user_settings.tsx'
 import Layout from './components/ui/Layout.tsx'
 import Home from '@/pages/user/1_home/Home.tsx'
@@ -184,7 +185,8 @@ function App() {
             <Route path='/credits' element={<CreditShop />} />
             <Route path='/credits-subscriptions' element={<CreditShop />} />
             <Route path='/credits/checkout' element={<Checkout />} />
-            <Route path='/profile/:id?' element={<Profile />} />
+            <Route path='/profile' element={<Profile />} />
+            <Route path='/profile/:id' element={<ProfileRoute />} />
             <Route path='/account-verification-status' element={<VerificationStatus />} />
             <Route path='/search/user/:query' element={<UserProfilesList />} />
 

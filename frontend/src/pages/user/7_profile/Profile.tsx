@@ -28,6 +28,7 @@ import ProfileEditModal from "@/pages/user/7_profile/Edits/ProfileEditModal.tsx"
 import { BadgeEditModal } from "./Edits/BadgeEditModal.tsx";
 import SkillsEditModal from "@/pages/user/7_profile/Edits/SkillsEditModal.tsx";
 import { FollowersModal } from "./Displays/FollowersModal.tsx";
+import NotFound from "@/pages/user/0_misc/NotFound.tsx";
 
 // Chat Interface Context Types
 import type { ChatTarget } from "@/components/ui/Layout";
@@ -111,7 +112,17 @@ interface Preset {
   name: string;
 }
 
-export default function Profile() {
+interface ProfileProps {
+  validatedProfileId?: string;
+}
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const isUuid = (value: string | undefined): value is string =>
+  Boolean(value && UUID_PATTERN.test(value));
+
+export default function Profile({ validatedProfileId }: ProfileProps) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>("introduction");
@@ -119,6 +130,7 @@ export default function Profile() {
   const { user } = useGlobalState();
   const { id: profileAccountId } = useParams<{ id?: string }>();
   const id = profileAccountId || user?.account_id;
+  const hasInvalidProfileId = Boolean(profileAccountId && !isUuid(profileAccountId));
 
   // Outlet context handler for global chat control
   const { openChatWithUser } = useOutletContext<{
@@ -141,6 +153,8 @@ export default function Profile() {
   const [isFollowing, setIsFollowing] = useState(false);
   const [isFollowedBy, setIsFollowedBy] = useState(false);
   const [followersModalType, setFollowersModalType] = useState<"followers" | "following" | null>(null);
+  const [profileNotFound, setProfileNotFound] = useState(hasInvalidProfileId);
+  const [confirmedProfileId, setConfirmedProfileId] = useState<string | null>(null);
 
   const isOwner = id == user?.account_id;
 
@@ -594,23 +608,40 @@ export default function Profile() {
   };
 
   useEffect(() => {
-    if (id) {
+    if (confirmedProfileId === id && isUuid(id)) {
       fetchAvatarPresets();
     }
-  }, [id]);
+  }, [id, confirmedProfileId]);
 
   useEffect(() => {
     const fetchProfile = async () => {
+      if (!id) {
+        return;
+      }
+
+      if (!isUuid(id)) {
+        setProfileNotFound(true);
+        setConfirmedProfileId(null);
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
+        setProfileNotFound(false);
+        setConfirmedProfileId(null);
         const startTime = Date.now();
 
-        const [isUser] = await Promise.all([api.get(`/api/accounts/check-user/${id}`)]);
-        if (isUser.data.isUser === false) {
-          toast.error("Profile not found.");
-          navigate("/*");
-          return;
+        if (validatedProfileId !== id) {
+          const isUser = await api.get(`/api/accounts/check-user/${id}`);
+          if (isUser.data.isUser === false) {
+            setProfileNotFound(true);
+            setLoading(false);
+            return;
+          }
         }
+
+        setConfirmedProfileId(id);
 
         const [profileResponse, tagsResponse, accountLinkResponse, attachmentsResponse, galleriesResponse] = await Promise.all([
           api.get(`/api/accounts/profile/${id}?t=${new Date().getTime()}`),
@@ -773,15 +804,19 @@ export default function Profile() {
 
       } catch (err) {
         console.error('Error loading profile:', err);
-        toast.error("Failed to load profile data");
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 400 || status === 404) {
+          setProfileNotFound(true);
+          setConfirmedProfileId(null);
+        } else {
+          toast.error("Failed to load profile data");
+        }
         setLoading(false);
       }
     };
 
-    if (id) {
-      fetchProfile();
-    }
-  }, [id, navigate]);
+    void fetchProfile();
+  }, [id, validatedProfileId]);
 
   const [highlightField, setHighlightField] = useState<"bio" | "tagline" | undefined>();
 
@@ -880,6 +915,10 @@ export default function Profile() {
       }
     }
   }, [user?.subscription_type, isOwner]);
+
+  if (hasInvalidProfileId || profileNotFound) {
+    return <NotFound />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] font-['Plus Jakarta Sans',sans-serif] text-gray-900 dark:text-zinc-300 antialiased selection:bg-blue-500/30">
@@ -987,7 +1026,9 @@ export default function Profile() {
           onChatClick={handleOpenChat}
           onVerificationClick={() => navigate("/account-verification-status")}
         />
-        {/* Layout Matrix Grid Panels Split */}
+        {/* These data-dependent sections are intentionally not mounted until the
+            profile lookup succeeds. Their child components fetch galleries. */}
+        {!loading && confirmedProfileId === id && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr]">
 
           {/* Left Sidebar Column */}
@@ -1037,6 +1078,7 @@ export default function Profile() {
           </div>
 
         </div>
+        )}
       </div>
 
       {/* System Parameter Modals */}

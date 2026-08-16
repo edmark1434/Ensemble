@@ -1,9 +1,7 @@
 // src/pages/user/1_home/Home.tsx
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import UserHeader from "@/components/nav/user_header";
 import useGlobalState from "@/lib/global_state";
-import api from "@/lib/axios";
 
 // Subcomponents
 import { HomeBanner, WelcomeCardSkeleton } from "./home_components/home_banner";
@@ -14,7 +12,6 @@ import {
 } from "./home_components/home_featured";
 
 const Home: React.FC = () => {
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -27,25 +24,6 @@ const Home: React.FC = () => {
     const timer = setTimeout(() => setLoading(false), 800);
     return () => clearTimeout(timer);
   }, []);
-
-  useEffect(() => {
-    const fetchUserSession = async () => {
-      try {
-        const response = await api.get("/api/users/session");
-        console.log("User session response:", response.data);
-        if (response.status === 200) {
-          if (!response.data.steps) {
-            navigate("/setup/personal-details");
-          } else if (response.data.steps === "profile") {
-            navigate("/setup/survey");
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching user session:", err);
-      }
-    };
-    fetchUserSession();
-  }, [navigate]);
 
   if (loading) {
     return (

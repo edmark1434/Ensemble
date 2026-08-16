@@ -44,7 +44,12 @@ const useGlobalState = create<GlobalState>((set) => ({
   setUser:            (user) => set({ user, isAuthenticated: true }),
   setIsAuthenticated: (isAuthenticated) => set({ isAuthenticated }),
   setIsLoading:       (isLoading) => set({ isLoading }),
-  clearUser:          () => set({ user: null, isAuthenticated: false }),
+  clearUser:          () => set({
+    user: null,
+    isAuthenticated: false,
+    accessToken: null,
+    signUpData: null,
+  }),
   setAccessToken: (accessToken) => set({ accessToken }),
   setSignUpData: (data) => set({ signUpData: data }),
   setTheme: (theme) => {

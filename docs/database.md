@@ -20,9 +20,8 @@
 ## IDs
 
 - Internal primary/foreign keys remain implementation details.
-- Public IDs currently apply to accounts, projects, and media assets only.
-- Account `public_id` has database-side insertion protection; application code should still create IDs where established.
-- Do not add public IDs to users, teams, or staff unless requirements explicitly change.
+- Accounts, projects, and media assets use their existing UUID primary keys; they do not have a separate `public_id` column.
+- Do not introduce additional public identifier columns unless a future requirement explicitly defines their contract and lifecycle.
 
 ## Transactions and money
 
