@@ -141,6 +141,20 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
             </div>
           </section>
 
+          {/* SKILLS */}
+          {gig.skills && gig.skills.length > 0 && (
+            <section>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Skills Applied</h3>
+              <div className="flex flex-wrap gap-2">
+                {gig.skills.map((skill, idx) => (
+                  <span key={idx} className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-xs font-medium text-gray-700 dark:text-zinc-300">
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* TIERS TABS (DRAWER ONLY) */}
           {!isPage && (
           <section>
@@ -203,19 +217,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
             </section>
           )}
 
-          {/* SKILLS */}
-          {gig.skills && gig.skills.length > 0 && (
-            <section>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Skills & Tools</h3>
-              <div className="flex flex-wrap gap-2">
-                {gig.skills.map((skill, idx) => (
-                  <span key={idx} className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-xs font-medium text-gray-700 dark:text-zinc-300">
-                    {skill}
-                  </span>
-                ))}
-              </div>
-            </section>
-          )}
+
 
           {/* MILESTONES */}
           {gig.milestones && gig.milestones.length > 0 && (

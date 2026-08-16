@@ -1,7 +1,7 @@
 // src/pages/user/1_home/home_components/home_featured_gigs.tsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { Star, ArrowRight } from "lucide-react";
+import { Star, ArrowRight, Wrench } from "lucide-react";
 import { sampleGigs } from "../../7_gigs/gig_datasets";
 
 export const HomeFeaturedGigs: React.FC = () => {
@@ -81,9 +81,29 @@ export const HomeFeaturedGigs: React.FC = () => {
                 </h3>
                 
                 {/* Description */}
-                <p className="text-xs text-gray-500 dark:text-zinc-400 line-clamp-2 mb-4 leading-relaxed">
+                <p className="text-xs text-gray-500 dark:text-zinc-400 line-clamp-2 mb-3 leading-relaxed">
                   {gig.description}
                 </p>
+
+                {/* Skills */}
+                {Array.isArray(gig.skills) && gig.skills.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                    <Wrench className="h-3 w-3 text-gray-400 dark:text-zinc-400 shrink-0 mr-0.5" />
+                    {gig.skills.slice(0, 3).map((skill) => (
+                      <span
+                        key={skill}
+                        className="rounded-md border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800/80 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 dark:text-zinc-300"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                    {gig.skills.length > 3 && (
+                      <span className="rounded-md border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400">
+                        +{gig.skills.length - 3}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="mt-auto pt-3 border-t border-gray-200 dark:border-white/5 flex items-center justify-between">

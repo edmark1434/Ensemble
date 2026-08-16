@@ -166,6 +166,25 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 </div>
               </div>
 
+              {/* Skills Applied */}
+              {selectedGig.skills && selectedGig.skills.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400">
+                    Skills Applied
+                  </h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedGig.skills.map((skill, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2 py-1 rounded-md bg-gray-100 dark:bg-zinc-800/80 border border-gray-200 dark:border-white/10 text-[11px] font-semibold text-gray-700 dark:text-zinc-300"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Milestones */}
               {selectedGig.milestones && selectedGig.milestones.length > 0 && (
                 <div className="space-y-2">

@@ -114,9 +114,28 @@ export const GigList: React.FC<GigListProps> = ({
                   <h3 className="text-gray-900 dark:text-white text-base font-bold mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1">
                     {gig.title}
                   </h3>
-                  <p className="text-[12px] text-gray-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">
+                  <p className="text-[12px] text-gray-500 dark:text-zinc-400 line-clamp-2 leading-relaxed mb-3">
                     {gig.description}
                   </p>
+                  
+                  {Array.isArray(gig.skills) && gig.skills.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                      <Wrench className="h-3 w-3 text-gray-400 dark:text-zinc-400 shrink-0 mr-0.5" />
+                      {gig.skills.slice(0, 3).map((skill) => (
+                        <span
+                          key={skill}
+                          className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-zinc-800/80 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 text-[10px] font-semibold"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                      {gig.skills.length > 3 && (
+                        <span className="px-2 py-0.5 rounded-md bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 text-[10px] font-medium">
+                          +{gig.skills.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-2 pt-4 border-t border-gray-200 dark:border-white/5 flex flex-wrap items-center justify-between text-[10px] text-gray-500 dark:text-zinc-400 gap-3">
