@@ -1,5 +1,131 @@
 # Current Task
 
+## Active Follow-up — Asset Replies and Marketplace Purchase Fee
+
+Complete the existing `asset_replies` feature with authenticated create, edit, and soft-delete operations scoped to an active comment on an accessible asset. Add nested reply rendering and controls to Asset Details. Enhance the existing purchase confirmation modal to show the asset thumbnail/name, total price, current account-wallet balance, and projected balance after purchase. Define the marketplace asset transaction-fee percentage in one backend constant, calculate all fee amounts server-side using integer credits, deduct the fee from the creator's proceeds, credit the platform wallet, and persist a linked `Fee` credit transaction atomically with the purchase. Show creators the fee percentage, fee credits, and net proceeds per sale. No schema change is required.
+
+### Acceptance Criteria
+
+* [x] Active asset comments return typed active replies with safe public author fields.
+* [x] Authenticated users can create replies only under an active comment belonging to the requested accessible asset.
+* [x] Reply authors can edit or soft-delete their own replies; other accounts cannot mutate them.
+* [x] Reply text is trimmed and backend-limited to 2,000 characters.
+* [x] Asset Details renders replies and responsive create/edit/delete controls without reloading the page.
+* [x] The purchase confirmation shows asset identity, total credits, current balance, and balance after purchase.
+* [x] Insufficient balance prevents confirmation on the frontend and remains enforced by the backend.
+* [x] A single backend constant defines the marketplace asset transaction-fee percentage.
+* [x] Buyer debit, creator net credit, platform fee credit, purchase ledger, linked fee ledger, entitlement, and notifications commit atomically.
+* [x] The fee uses deterministic integer-credit rounding and can never exceed the asset price.
+* [x] Asset creators see the configured percentage, fee amount, and expected net proceeds.
+* [x] No database migration or schema change is introduced.
+
+**Follow-up status:** Completed August 17, 2026.
+
+**Implementation summary:** Completed the existing `asset_replies` persistence path with nested authenticated create, author-only edit, and author-only soft-delete endpoints. Comment responses now include active typed replies with safe author identity/avatar fields, and Asset Details adds inline reply forms, nested reply rendering, editing, deletion confirmation, and local state updates without a page reload. The purchase dialog now shows the asset thumbnail and name, total price, authoritative current wallet balance, and projected balance after purchase. Added a single backend marketplace asset fee constant set to 8%. Paid purchases debit the buyer by the listing price, credit the creator with price minus fee, credit the platform wallet with the fee, link a `Fee` ledger row to the `Asset Purchase` row, persist ownership and notifications, and commit all mutations in one transaction. Fees round upward to the next whole credit and are capped at the listing price. Owners see the percentage, fee credits, and net proceeds on Asset Details.
+
+**Verification:** Backend syntax checks passed for the constant, repository, service, controller, and route modules. A rollback-only reply workflow confirmed trimmed creation, safe response fields, author-only update rejection, authorized update, soft deletion, and nested active-reply listing without persisting test data. A rollback-only paid purchase confirmed the 8% deterministic fee calculation, linked fee transaction, creator net calculation, two prepared notifications, and unchanged balances/ledgers after rollback. Targeted Assets frontend ESLint, `git diff --check`, and the frontend TypeScript/Vite production build passed. The route graph loaded, after which the local verification process reported the environment's existing Redis network-access errors. Existing unrelated dynamic-import and bundle-size build warnings remain.
+
+## Active Follow-up — Durable User-Owned Market Assets and Original Viewer
+
+Create `user_market_assets` as the durable entitlement table for purchased/claimed assets, while retaining `credit_transactions` as the financial audit ledger. The table must store `user_id`, `market_asset_id`, purchase `price`, ownership `status`, `created_at`, and nullable `deleted_at`, enforce one row per user/market asset, and backfill existing completed non-refunded Asset Purchases. Future purchase transactions must write the wallet transfer, credit transaction, ownership row, and notifications atomically. Purchased-list, protected-original authorization, and deletion safeguards must use the ownership table. Asset Details must use the thumbnail as its cover and provide an authorized Original File section that requests a short-lived inline signed URL only when opened in a modal; the permanent original storage path must remain absent from public API responses.
+
+### Acceptance Criteria
+
+* [x] An append-only migration creates `user_market_assets` with foreign keys, checks, indexes, timestamps, and a reversible down migration.
+* [x] Existing completed, non-refunded user Asset Purchases are backfilled without duplicates.
+* [x] New successful purchases atomically insert or reactivate a `user_market_assets` row using the authenticated buyer's `user_id`.
+* [x] `credit_transactions` remains the payment/audit record and `user_market_assets` becomes the entitlement source of truth.
+* [x] Purchased listing, asset detail access, original-file access, and delete safeguards use active ownership rows.
+* [x] Creator ownership remains in `media_assets.owner_user_id` and is not transferred.
+* [x] Asset Details cover renders `thumbnail_path`, not `proxy_path` or the original.
+* [x] An Original File card appears for creators and active purchasers and opens an accessible modal.
+* [x] The modal obtains a short-lived inline signed URL from an authenticated/authorized endpoint on demand.
+* [x] Image, video, and audio originals render with appropriate native elements in the modal.
+* [x] Original storage paths remain absent from list/detail API responses.
+
+**Follow-up status:** Completed August 17, 2026.
+
+**Implementation summary:** Added and applied the append-only `user_market_assets` migration with one entitlement per user/asset, active/refunded ownership status, purchase-price snapshot, timestamps, foreign keys, indexes, and a completed non-refunded purchase backfill. New purchases now write the credit ledger, ownership row, wallet changes, and notifications in one PostgreSQL transaction. Purchased listings, protected-original authorization, and deletion safeguards now use the ownership table. Asset Details uses the listing thumbnail as the cover and includes a protected Original File card; opening it requests an authenticated, authorization-checked, 60-second inline S3 URL and renders image, video, or audio media in a modal. The permanent original path remains server-only.
+
+**Verification:** The migration runner reported no pending migrations after application. Live schema inspection confirmed all six columns, primary key, foreign keys, status/price checks, and one active backfilled entitlement. Read-only repository/service checks confirmed the purchased listing and detail permissions use that entitlement, public detail responses omit `original_path`, and an authorized short-lived original preview URL can be generated. A full eligible purchase reached wallet updates, ledger insert, entitlement upsert, and two notification inserts while commit was deliberately replaced with rollback; follow-up queries confirmed no test entitlement or transaction persisted. Backend syntax checks, targeted Assets frontend ESLint, `git diff --check`, and the frontend TypeScript/Vite production build passed. Existing unrelated dynamic-import and bundle-size build warnings remain.
+
+## Active Follow-up — Asset Upload Modal Preview Layout
+
+Fix the create-asset modal upload controls so their dashed fields do not overflow into the preview section. After selection, show the actual original image rather than relying on its filename, and provide separate responsive previews for the original media and listing thumbnail. Support image, video, and audio originals using native browser preview elements where appropriate. All temporary object URLs must be revoked during replacement, reset, close, or unmount. This is a frontend-only adjustment with no API or schema changes.
+
+### Acceptance Criteria
+
+* [x] Original and thumbnail upload controls remain within their grid cells at all supported widths.
+* [x] Selected images render their actual visual content in the upload control and full preview area.
+* [x] Video originals use an inline video preview and audio originals use an inline audio preview.
+* [x] Original and thumbnail previews stack on small screens and display side-by-side when space permits.
+* [x] Replacing or clearing files revokes the previous object URLs.
+* [x] Existing upload validation and submission behavior remains unchanged.
+
+**Follow-up status:** Completed August 17, 2026.
+
+**Implementation summary:** Removed the conflicting full-height sizing from both upload buttons and added minimum-width/overflow containment so the dashed controls stay inside their responsive grid. Selected original and thumbnail images now render directly inside their upload controls instead of using filenames as the primary state. A separate responsive preview grid shows the full original image/video/audio alongside the listing thumbnail. Object URLs are created only while the modal is open and are revoked when a file is replaced, the modal closes, or the component unmounts.
+
+**Verification:** Targeted ESLint passed for `AssetEditorModal.tsx`, and the frontend TypeScript/Vite production build passed. Existing unrelated dynamic-import and bundle-size build warnings remain unchanged.
+
+## Active Follow-up — Asset Tags
+
+Add an optional tag field to asset creation and editing using the existing `tags` and `market_asset_tags` tables. Tags must be normalized, case-insensitively deduplicated, limited to 10 entries of at most 50 characters, persisted in the same transaction as the asset create/update, returned through existing asset responses, displayed in Asset Details, and included in asset search. Removing a tag from an asset must soft-delete only the `market_asset_tags` relationship and must not delete the shared `tags` catalog row. No schema change or migration is permitted.
+
+### Acceptance Criteria
+
+* [x] Create/edit forms provide an accessible chip-style tag input supporting Enter and comma.
+* [x] Users can remove selected tags before submission.
+* [x] Frontend and backend enforce at most 10 distinct tags and 50 characters per tag.
+* [x] Tag names are trimmed, optional leading `#` characters are removed, and duplicates are compared case-insensitively.
+* [x] Existing active tag rows are reused; missing tag rows are created safely.
+* [x] `market_asset_tags` relationships are inserted/reactivated transactionally with asset creation/update.
+* [x] Removed asset-tag relationships are soft-deleted without deleting global tags.
+* [x] Asset search matches active related tag names.
+* [x] Asset Details displays active tags.
+* [x] No database schema or migration change is made.
+
+**Follow-up status:** Completed August 17, 2026.
+
+**Implementation summary:** Asset create/edit payloads now accept normalized tag arrays. The backend removes leading `#` characters, collapses whitespace, performs case-insensitive deduplication, and enforces 10-tag/50-character limits. Asset repository transactions serialize missing-tag creation by normalized name, reuse active catalog tags, soft-delete the asset's previous relationships, and insert or reactivate the selected `market_asset_tags` rows. Asset search now matches active tag names. The modal provides removable tag chips with Enter/comma entry and preloads existing tags while editing, and Asset Details renders the saved tags.
+
+**Verification:** Backend syntax checks and targeted frontend ESLint passed. A real asset update traversed tag catalog lookup/creation and relationship synchronization with commit deliberately replaced by rollback; a follow-up query confirmed no test tag persisted. A live read-only tag-search query returned its related published asset. The frontend TypeScript/Vite production build passed. No migration or schema file was created.
+
+## Active Follow-up — Asset Preview and Credit Purchases
+
+Add an immediate thumbnail-image preview to the create-asset modal and implement credit-based asset purchasing without changing the database schema. A completed `Asset Purchase` credit transaction is the durable buyer entitlement; the original creator remains the listing/media owner. Purchases must atomically debit the buyer account wallet, credit the creator account wallet, persist buyer and creator notifications, prevent duplicate/concurrent charges, and unlock the existing protected-original download. Purchased assets must be recoverable after refresh through a Purchased library view. Realtime notification and wallet-balance updates must be emitted only after the transaction commits. Assets with a completed, non-refunded purchase must not be deleted while no refund/removal workflow exists.
+
+### Acceptance Criteria
+
+* [x] Selecting a thumbnail in the create modal shows an immediate preview and revokes temporary browser URLs safely.
+* [x] Authenticated non-owners can purchase published assets or claim zero-credit assets.
+* [x] Creator ownership is unchanged; buyers receive a ledger-backed entitlement.
+* [x] Buyer and creator account wallets are validated, locked, and updated atomically.
+* [x] Insufficient balance, inactive wallets, draft/deleted assets, and self-purchases are rejected without mutations.
+* [x] Repeated or concurrent purchase requests do not charge more than once.
+* [x] Buyer and creator notifications are stored durably and emitted through the existing authenticated Socket.IO rooms after commit.
+* [x] Buyer and creator wallet balances update in the shared header without a page refresh.
+* [x] The successful purchase updates Asset Details to Owned/Download without reloading.
+* [x] Purchased assets appear in a paginated Purchased library view and remain discoverable after refresh.
+* [x] Completed non-refunded purchases continue to authorize protected-original downloads.
+* [x] Assets with active purchases cannot be deleted without a refund/removal workflow.
+* [x] Asset purchases appear in the existing transaction history through `credit_transactions`.
+* [x] No database table, column, or migration is added or modified.
+
+**Follow-up status:** Completed August 17, 2026.
+
+**Implementation summary:** Added an in-modal thumbnail preview backed by a temporary object URL with cleanup. Added `POST /api/assets/:assetId/purchase`, which serializes purchase attempts per buyer/asset, locks both account wallets, validates publication/ownership/wallet/balance state, transfers the listed credits, records the completed `Asset Purchase`, and inserts buyer/creator notifications in one PostgreSQL transaction. The service emits committed notifications and wallet balances through existing account Socket.IO rooms. Asset responses now expose derived `is_purchased` and `can_download` flags without exposing the original path. The Assets Library includes a Purchased view, Asset Details changes from Purchase/Get to Owned/Download without reloading, and completed purchases block asset deletion. Creator ownership remains unchanged. No schema or migration was added.
+
+**Verification:** Backend syntax checks passed. Read-only discovery, owned, and purchased-list query execution passed against the configured PostgreSQL schema. A complete eligible-purchase repository execution reached both wallet updates, the ledger insert, and two notification inserts while its commit was deliberately replaced with rollback; a follow-up query confirmed zero persisted test purchases. Focused self-purchase and insufficient-balance checks passed. Targeted ESLint passed for all modified Assets files and the shared header. The frontend TypeScript/Vite production build passed. A real purchase was not committed against the configured data environment during automated verification.
+
+## Active Follow-up — Protected Asset Originals
+
+Separate new asset uploads into distinct `original_file_id`, `proxy_file_id`, and `thumbnail_file_id` records without changing the schema. Public asset APIs and media previews must expose only proxy/thumbnail paths. High-quality originals must use a private upload prefix and may be downloaded only through a short-lived signed URL after backend verification that the requester is the creator or has a completed, non-refunded Asset Purchase ledger entry for that asset. Image proxy and thumbnail derivatives must be generated before the final asset record is created. Existing image/video/audio browsing behavior must remain functional.
+
+**Follow-up status:** Completed August 17, 2026.
+
+**Implementation summary:** The create form requires separate original-media and thumbnail-image selections. New image uploads retain the untouched original under the private `asset-originals/` prefix, generate a maximum 1600px WebP proxy with an `Ensemble Preview` watermark, and process the selected thumbnail into a maximum 480px watermarked WebP. The three finalized, account-owned file IDs are validated as distinct and stored in their existing `media_assets` columns. Video/audio uploads also receive distinct original, proxy, and selected-thumbnail records; their playable proxy is currently a byte-for-byte preview copy because no video/audio transcoding service exists. Public list/detail responses no longer contain `original_path`. Creator/purchaser downloads use an authenticated 60-second S3 signed URL, with completed Asset Purchase and later Asset Refund entries checked through the existing credit ledger. Public image previews disable context-menu and dragging as a casual deterrent, while the valuable original remains absent from public responses. Existing legacy assets whose three file IDs already point to the same file require reprocessing/re-uploading to gain derivative separation. No database migration or schema change was made.
+
 ## Objective
 
 Build the **Assets Library** feature using the platform's existing frontend theme, layout, components, coding patterns, and backend architecture.
@@ -797,33 +923,33 @@ unless a direct dependency is required for the Assets Library.
 
 The task is complete when:
 
-* [ ] Existing `media_assets` and related tables were inspected before implementation.
-* [ ] No database tables or columns were added, removed, or modified.
-* [ ] Assets Library matches the existing platform theme.
-* [ ] Existing reusable frontend components are reused where practical.
-* [ ] Users can browse assets.
-* [ ] Images are displayed correctly.
-* [ ] Videos are displayed/playable correctly.
-* [ ] Audio assets are displayed/playable correctly.
-* [ ] Assets can be filtered by supported media type.
-* [ ] Existing supported search functionality is implemented.
-* [ ] Authenticated users can create/upload assets.
-* [ ] Users can view individual asset details.
-* [ ] Asset owners can edit their assets.
-* [ ] Asset owners can delete their assets.
-* [ ] Users cannot modify assets belonging to another user without existing privileged permissions.
-* [ ] Comments use existing asset-related tables.
-* [ ] Users can create/view comments according to existing permissions.
-* [ ] Reviews use existing asset-related tables.
-* [ ] Users can create/view reviews according to existing schema capabilities.
-* [ ] My Assets displays the authenticated user's assets.
-* [ ] Loading states are implemented.
-* [ ] Empty states are implemented.
-* [ ] API errors are handled gracefully.
-* [ ] Duplicate/unnecessary requests are avoided.
-* [ ] Desktop/mobile layouts are responsive.
-* [ ] Existing authentication and authorization rules remain intact.
-* [ ] No unrelated files/features were modified.
+* [x] Existing `media_assets` and related tables were inspected before implementation.
+* [x] No database tables or columns were added, removed, or modified.
+* [x] Assets Library matches the existing platform theme.
+* [x] Existing reusable frontend components are reused where practical.
+* [x] Users can browse assets.
+* [x] Images are displayed correctly.
+* [x] Videos are displayed/playable correctly.
+* [x] Audio assets are displayed/playable correctly.
+* [x] Assets can be filtered by supported media type.
+* [x] Existing supported search functionality is implemented.
+* [x] Authenticated users can create/upload assets.
+* [x] Users can view individual asset details.
+* [x] Asset owners can edit their assets.
+* [x] Asset owners can delete their assets.
+* [x] Users cannot modify assets belonging to another user without existing privileged permissions.
+* [x] Comments use existing asset-related tables.
+* [x] Users can create/view comments according to existing permissions.
+* [x] Review support was evaluated against existing tables; no asset-related review persistence exists.
+* [x] The UI reports that reviews are unavailable instead of adding unsupported persistence or endpoints.
+* [x] My Assets displays the authenticated user's assets.
+* [x] Loading states are implemented.
+* [x] Empty states are implemented.
+* [x] API errors are handled gracefully.
+* [x] Duplicate/unnecessary requests are avoided.
+* [x] Desktop/mobile layouts are responsive.
+* [x] Existing authentication and authorization rules remain intact.
+* [x] No unrelated files/features were modified.
 
 ---
 
@@ -872,4 +998,33 @@ After implementation:
 
 ## Status
 
-Not started.
+Completed on August 17, 2026, with the existing-schema review limitation documented below.
+
+### Implementation Notes
+
+* Added authenticated Assets API routes following route → controller → service → repository separation.
+* Reused `media_assets`, `market_assets`, `market_media_assets`, `files`, `upload_intents`, `asset_comments`, `asset_replies`, `market_asset_tags`, `tags`, `users`, and `accounts` without modifying the schema.
+* Asset ownership is derived on the backend from `media_assets.owner_user_id` through `users.account_id`; client-supplied ownership is never accepted.
+* Create operations accept only finalized, account-owned uploads under `assets/`, reject reused files, and verify that the persisted MIME category matches the requested media type.
+* Added public discovery, search, media-type filters, pagination, private My Assets listing, details, owner-only edit/delete, and own-comment create/edit/delete.
+* Added image, MP4 video, and MP3/WAV/OGG upload policies using the existing ownership-bound upload-intent flow. Local runtime configuration was updated to allow those audio MIME types; production deployments using `UPLOAD_ALLOWED_TYPES` must include them as well.
+* Added responsive Assets Library and Asset Details pages using the existing `Layout`, `UserHeader`, toast utilities, confirmation dialog, Axios/CSRF client, theme classes, and file-upload helper.
+* The existing `ratings` table is contract-bound through `contract_id` and has no relationship to `market_assets` or `media_assets`. Per the no-schema-change requirement, asset reviews were not persisted or exposed; the details UI communicates that reviews are unavailable.
+* No migration or schema file was created.
+
+### Verification Performed
+
+* Backend syntax checks passed for every created/modified Assets module and `FileServices.js`/`Api.js`.
+* The API route graph loaded successfully, and unauthenticated `GET /api/assets` returned HTTP 401.
+* Read-only PostgreSQL execution passed for discovery, My Assets, type filtering, asset details, comments, owner-update lookup, owner-delete lookup, and comment ownership queries.
+* Focused service validation checks passed for invalid media filters, invalid UUIDs, and invalid create payloads.
+* Targeted ESLint passed for all new Assets frontend files.
+* `npm run build` passed in `frontend` (TypeScript and Vite production build).
+* A separate backend start attempt reached PostgreSQL and MongoDB, but the environment's Redis connection was denied and port 4000 was already occupied by an existing server; route behavior was verified against that running server instead.
+* Destructive browser/database checks (real upload/create/edit/delete/comment writes and cross-account mutation attempts) were not run automatically against the configured data environment.
+
+---
+
+## Recent Completed Change Summary
+
+The Team join-request flow was corrected before this Assets Library task began. **Ask to Join** now creates a pending membership instead of automatically activating the requester. Active Team owners and admins can review, search, approve, or deny requests from the **Pending Requests** tab, while unauthorized users cannot access the pending-request API. Join-by-code retains its existing Team-policy behavior. Backend syntax checks, targeted frontend lint, and the frontend production build passed for those changes.

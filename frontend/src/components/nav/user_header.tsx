@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, Settings, LogOut, User, Search, Crown } from "lucide-react";
+import { Bell, ChevronDown, Settings, LogOut, User, Search } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useGlobalState from "@/lib/global_state";
@@ -142,20 +142,29 @@ useEffect(() => {
       try {
         const audio = new Audio("/sounds/notification.mp3");
         audio.play().catch(e => console.log("Audio play blocked:", e));
-      } catch (err) {}
+      } catch {
+        // Notification audio is optional and may be blocked by the browser.
+      }
 
       return [notification, ...prev];
     });
   };
 
+  const handleWalletBalanceUpdated = ({ balance_credits }: { balance_credits: number }) => {
+    const nextBalance = Number(balance_credits);
+    if (Number.isFinite(nextBalance)) setCredits(nextBalance);
+  };
+
   socket.on("notificationRead", handleNotificationRead);
   socket.on("allNotificationsRead", handleAllNotificationsRead);
   socket.on("notification", handleNewNotification);
+  socket.on("walletBalanceUpdated", handleWalletBalanceUpdated);
 
   return () => {
     socket.off("notificationRead", handleNotificationRead);
     socket.off("allNotificationsRead", handleAllNotificationsRead);
     socket.off("notification", handleNewNotification);
+    socket.off("walletBalanceUpdated", handleWalletBalanceUpdated);
   };
 }, [userInfo?.account_id]);
   
