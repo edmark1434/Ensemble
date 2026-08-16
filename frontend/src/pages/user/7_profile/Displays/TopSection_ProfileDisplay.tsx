@@ -239,8 +239,8 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             <span className="text-gray-800 dark:text-zinc-500 font-medium tracking-wide bg-gray-100 dark:bg-white/5 px-1.5 py-0.5 rounded text-[11px]">@{username}</span>
             <span className="text-zinc-600 hidden sm:inline select-none">|</span>
 
-            <div className="flex items-center gap-1 text-gray-700 dark:text-zinc-400 font-medium tracking-wide bg-blue-50 dark:bg-blue-500/5 border border-blue-200 dark:border-blue-500/10 px-2 py-0.5 rounded text-[11px]">
-              <MapPin className="h-3 w-3 text-blue-500 dark:text-blue-400 flex-shrink-0" />
+            <div className="flex items-center gap-1 text-gray-700 dark:text-zinc-400 font-medium tracking-wide bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 px-2 py-0.5 rounded text-[11px]">
+              <MapPin className="h-3 w-3 text-gray-500 dark:text-zinc-400 flex-shrink-0" />
               <span>Cebu City | Cebu | Philippines</span>
             </div>
           </div>

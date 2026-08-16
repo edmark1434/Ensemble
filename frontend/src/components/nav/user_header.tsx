@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, Settings, LogOut, User, Search } from "lucide-react";
+import { Bell, ChevronDown, Settings, LogOut, User, Search, Crown } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useGlobalState from "@/lib/global_state";
@@ -488,7 +488,10 @@ useEffect(() => {
                 />
                 <div className="text-left hidden md:block">
                   <p className="text-sm font-medium text-gray-900 dark:text-white">{userInfo?.display_name || userInfo?.displayName || userInfo?.username || "User"}</p>
-                  <p className="text-xs text-gray-500 dark:text-zinc-500">{userSubscriptionPlan} Member</p>
+                  <p className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500">
+                    <Crown className="h-3 w-3 text-yellow-500" />
+                    {userSubscriptionPlan} Member
+                  </p>
                 </div>
                 <ChevronDown className={`h-4 w-4 text-gray-400 dark:text-zinc-400 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`} />
               </button>
