@@ -8,7 +8,7 @@ const {
     consumeUploadIntentRepository
 } = require('../repositories/FileRepositories');
 const crypto = require("crypto");
-const { PutObjectCommand, HeadObjectCommand, CopyObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const { PutObjectCommand, HeadObjectCommand, CopyObjectCommand, DeleteObjectCommand, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const s3 = require('../lib/AmazonS3');
 const dotenv = require('dotenv');
@@ -17,11 +17,11 @@ dotenv.config();
 // Read from environment variables with defaults
 const ALLOWED_FOLDERS = process.env.UPLOAD_ALLOWED_FOLDERS 
     ? process.env.UPLOAD_ALLOWED_FOLDERS.split(',').map(f => f.trim())
-    : ['profile', 'documents', 'assets', 'forum', 'gallery', 'jobs', 'jobs', 'chat-attachments', 'forum-discussions', 'forum-group', 'forum-covers'];
+    : ['profile', 'documents', 'assets', 'asset-originals', 'forum', 'gallery', 'jobs', 'jobs', 'chat-attachments', 'forum-discussions', 'forum-group', 'forum-covers'];
 
 const ALLOWED_CONTENT_TYPES = (process.env.UPLOAD_ALLOWED_TYPES
     ? process.env.UPLOAD_ALLOWED_TYPES.split(',').map(t => t.trim())
-    : ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'application/pdf', 'video/mp4'])
+    : ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/avif', 'application/pdf', 'video/mp4', 'audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/ogg'])
     .filter(type => type !== 'image/svg+xml');
 
 const CONTENT_TYPE_EXTENSIONS = {
@@ -33,6 +33,10 @@ const CONTENT_TYPE_EXTENSIONS = {
     'image/avif': ['avif'],
     'application/pdf': ['pdf'],
     'video/mp4': ['mp4'],
+    'audio/mpeg': ['mp3'],
+    'audio/wav': ['wav'],
+    'audio/x-wav': ['wav'],
+    'audio/ogg': ['ogg', 'oga'],
 };
 
 const ABSOLUTE_MAX_FILE_SIZE = process.env.UPLOAD_ABSOLUTE_MAX_FILE_SIZE
@@ -41,6 +45,7 @@ const ABSOLUTE_MAX_FILE_SIZE = process.env.UPLOAD_ABSOLUTE_MAX_FILE_SIZE
 
 const MB = 1024 * 1024;
 const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/avif'];
+const AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/ogg'];
 const UPLOAD_POLICIES = {
     profile: { types: IMAGE_TYPES, imageLimit: 5 * MB },
     gallery: { types: [...IMAGE_TYPES, 'video/mp4'], imageLimit: 20 * MB, videoLimit: 25 * MB },
@@ -51,7 +56,8 @@ const UPLOAD_POLICIES = {
     'chat-attachments': { types: [...IMAGE_TYPES, 'application/pdf'], imageLimit: 10 * MB, pdfLimit: 20 * MB },
     documents: { types: [...IMAGE_TYPES, 'application/pdf'], imageLimit: 10 * MB, pdfLimit: 25 * MB },
     jobs: { types: [...IMAGE_TYPES, 'application/pdf'], imageLimit: 10 * MB, pdfLimit: 25 * MB },
-    assets: { types: [...IMAGE_TYPES, 'application/pdf', 'video/mp4'], imageLimit: 25 * MB, pdfLimit: 25 * MB, videoLimit: 100 * MB },
+    assets: { types: [...IMAGE_TYPES, 'video/mp4', ...AUDIO_TYPES], imageLimit: 25 * MB, videoLimit: 100 * MB, audioLimit: 50 * MB },
+    'asset-originals': { types: [...IMAGE_TYPES, 'video/mp4', ...AUDIO_TYPES], imageLimit: 25 * MB, videoLimit: 100 * MB, audioLimit: 50 * MB },
 };
 
 function getUploadPolicy(folder, contentType) {
@@ -63,7 +69,9 @@ function getUploadPolicy(folder, contentType) {
         ? policy.pdfLimit
         : contentType.startsWith('video/')
             ? policy.videoLimit
-            : policy.imageLimit;
+            : contentType.startsWith('audio/')
+                ? policy.audioLimit
+                : policy.imageLimit;
     return {
         allowedTypes: policy.types.filter(type => ALLOWED_CONTENT_TYPES.includes(type)),
         maxFileSize: Math.min(categoryLimit || ABSOLUTE_MAX_FILE_SIZE, ABSOLUTE_MAX_FILE_SIZE),
@@ -326,12 +334,13 @@ async function finalizeUploadService(accountId, uploadIntentId) {
             const error = new Error('Uploaded file type does not match the upload intent'); error.statusCode = 422; throw error;
         }
         const copySource = encodeURIComponent(`${process.env.AWS_BUCKET_NAME}/${intent.staging_key}`).replace(/%2F/g, '/');
+        const isProtectedAssetOriginal = intent.final_key.startsWith('asset-originals/');
         await s3.send(new CopyObjectCommand({
             Bucket: process.env.AWS_BUCKET_NAME,
             Key: intent.final_key,
             CopySource: copySource,
             ContentType: actualType,
-            CacheControl: 'public, max-age=86400',
+            CacheControl: isProtectedAssetOriginal ? 'private, no-store' : 'public, max-age=86400',
             MetadataDirective: 'REPLACE',
         }));
         copied = true;
@@ -353,11 +362,45 @@ async function finalizeUploadService(accountId, uploadIntentId) {
     }
 }
 
+async function generateProtectedAssetUrl(path, filename, contentType, disposition) {
+    const key = String(path || '').trim();
+    if (!key.startsWith('asset-originals/') && !key.startsWith('assets/')) {
+        const error = new Error('Invalid protected asset path');
+        error.statusCode = 400;
+        throw error;
+    }
+    if (key.includes('..') || key.includes('\\')) {
+        const error = new Error('Invalid protected asset path');
+        error.statusCode = 400;
+        throw error;
+    }
+    const safeFilename = String(filename || 'asset-download')
+        .replace(/[^a-zA-Z0-9._ -]/g, '_')
+        .slice(0, 150) || 'asset-download';
+    const command = new GetObjectCommand({
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: key,
+        ResponseContentType: contentType || 'application/octet-stream',
+        ResponseContentDisposition: `${disposition}; filename="${safeFilename}"`,
+    });
+    return getSignedUrl(s3, command, { expiresIn: 60 });
+}
+
+async function generateProtectedAssetDownloadUrl(path, filename, contentType) {
+    return generateProtectedAssetUrl(path, filename, contentType, 'attachment');
+}
+
+async function generateProtectedAssetPreviewUrl(path, filename, contentType) {
+    return generateProtectedAssetUrl(path, filename, contentType, 'inline');
+}
+
 module.exports = {
     getAllProfileFilesServices,
     generateUploadUrl,
     uploadFileToS3,
     getUploadConfig,
     finalizeUploadService,
-    generateOnboardingAvatarUploadUrl
+    generateOnboardingAvatarUploadUrl,
+    generateProtectedAssetDownloadUrl,
+    generateProtectedAssetPreviewUrl
 };

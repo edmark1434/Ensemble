@@ -22,6 +22,8 @@ import SelectedGroup from '@/pages/user/4_forums/SelectedGroup.tsx'
 import ExpandDiscussion from '@/pages/user/4_forums/ExpandDiscussion.tsx'
 import InboxMain from '@/components/ui/inbox/inbox_main.tsx'
 import SectionPlaceholder from '@/pages/user/0_misc/SectionPlaceholder.tsx'
+import AssetsLibrary from '@/pages/user/5_assets/AssetsLibrary.tsx'
+import AssetDetails from '@/pages/user/5_assets/AssetDetails.tsx'
 import DashboardMain from './pages/user/8_dashboard/dashboard_main'
 import { DashboardTaskDetail } from './pages/user/8_dashboard/dashboard_components/DashboardTaskDetail'
 import JobMain from '@/pages/user/6_job_market/job_main.tsx'
@@ -208,7 +210,10 @@ function App() {
             <Route path=':id' element={<SelectedTeam />} />
           </Route>
 
-          <Route path='/assets' element={<SectionPlaceholder title='ASSET LIBRARY' />} />
+          <Route path='/assets'>
+            <Route index element={<AssetsLibrary />} />
+            <Route path=':assetId' element={<AssetDetails />} />
+          </Route>
 
           {/* Reworked Job Market Sub-Routes */}
           <Route path='/jobs' element={<JobMain />}>
