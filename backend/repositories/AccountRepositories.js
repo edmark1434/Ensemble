@@ -1,5 +1,4 @@
 const { pool } = require('../lib/Database');
-const { insertWithPublicIdRetry } = require('../lib/PublicId');
 
 async function getAllAccounts() {
     try {
@@ -32,9 +31,8 @@ async function createAccount({
     deletedAt = null,
 } = {}) {
     try {
-        return await insertWithPublicIdRetry((publicId) => pool.query(
+        const result = await pool.query(
             `INSERT INTO accounts (
-                public_id,
                 display_name,
                 handle,
                 avatar_file_id,
@@ -44,11 +42,9 @@ async function createAccount({
                 status,
                 deleted_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            ON CONFLICT (public_id) DO NOTHING
-            RETURNING account_id, public_id, type, handle, status, display_name`,
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING account_id, type, handle, status, display_name`,
             [
-                publicId,
                 displayName,
                 handle,
                 avatarFileId,
@@ -58,7 +54,8 @@ async function createAccount({
                 status,
                 deletedAt,
             ]
-        ));
+        );
+        return result.rows[0];
     } catch (err) {
         console.error('Error creating account:', err);
         throw err;
@@ -68,7 +65,7 @@ async function createAccount({
 async function getAccountByHandle(handle) {
     try{
         const result = await pool.query(
-            'SELECT account_id, public_id, handle, display_name FROM accounts WHERE LOWER(handle) = LOWER($1)',
+            'SELECT account_id, handle, display_name FROM accounts WHERE LOWER(handle) = LOWER($1)',
             [handle]
         );
         return result.rows[0];
@@ -87,7 +84,6 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 10) 
     const result = await pool.query(
         `SELECT
             a.account_id,
-            a.public_id,
             a.display_name,
             u.first_name || ' ' || u.last_name AS full_name,
             a.handle,
@@ -162,7 +158,18 @@ async function getAccountWalletRepositories(accountId,type = 'account wallets') 
     }
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidAccountId(accountId) {
+    return typeof accountId === 'string' && UUID_PATTERN.test(accountId);
+}
+
 async function checkAccountId(accountId) { 
+    // PostgreSQL raises 22P02 when a non-UUID is compared to account_id.
+    // Treat malformed external input as a non-existent account instead.
+    if (!isValidAccountId(accountId)) {
+        return false;
+    }
     try {
         const queryText = `
             SELECT EXISTS(
@@ -184,7 +191,6 @@ async function getProfileRepositories(accountId) {
         const queryText = `
             SELECT 
                 A.DISPLAY_NAME AS NAME, 
-                A.PUBLIC_ID,
                 U.EMAIL_ADDRESS, 
                 A.TAGLINE, 
                 A.DESCRIPTION AS BIO, 
@@ -236,6 +242,9 @@ async function getAccountLinkByAccountIdRepositories(accountId) {
 }
 
 async function checkUserAccountIdRepositories(accountId) { 
+    if (!isValidAccountId(accountId)) {
+        return false;
+    }
     try{
         const isRoleResult = await pool.query('SELECT EXISTS(SELECT 1 FROM accounts WHERE account_id = $1 AND type = $2)', [accountId, 'User']);
         return isRoleResult.rows[0].exists;

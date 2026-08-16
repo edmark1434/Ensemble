@@ -4,6 +4,8 @@ import { HelpCircle, ArrowRight, ArrowLeft, Check } from "lucide-react";
 import ShapeGrid from "../../components/ui/ShapeGrid";
 import api from "@/lib/axios";
 import { deleteAvatarDraft, getAvatarDraft } from "@/lib/onboardingAvatarDraft";
+import useGlobalState from "@/lib/global_state";
+import { notifyOnboardingCompleted } from "@/lib/onboardingEvents";
 
 const T = {
   bg:        "#080a12",
@@ -40,6 +42,12 @@ interface SurveyData {
   survey_name: string;
   description: string;
   questions: Question[];
+}
+
+function getApiErrorMessage(error: unknown) {
+  const message = (error as { response?: { data?: { message?: unknown } } })
+    .response?.data?.message;
+  return typeof message === 'string' ? message : null;
 }
 
 export default function Survey() {
@@ -102,7 +110,7 @@ export default function Survey() {
     };
     
     fetchSurvey();
-  }, []);
+  }, [navigate]);
 
   // Handle single select change (dropdown)
   const handleSingleSelectChange = (questionId: string, value: string) => {
@@ -207,8 +215,8 @@ export default function Survey() {
       try {
         await api.post('/api/onboarding/survey-progress', buildSubmissionData());
         setSubStep(2);
-      } catch (err: any) {
-        setErrors({ submit: err.response?.data?.message || 'Failed to save survey progress.' });
+      } catch (error: unknown) {
+        setErrors({ submit: getApiErrorMessage(error) || 'Failed to save survey progress.' });
       } finally {
         setLoading(false);
       }
@@ -236,18 +244,24 @@ export default function Survey() {
         if (!uploaded.ok) throw new Error('Unable to upload your avatar. Please try again.');
         await api.post('/api/onboarding/avatar/finalize', { ...customAvatar, path: upload.data.key });
       }
-      await api.post('/api/onboarding/complete', buildSubmissionData());
-      if (customAvatar?.draft_id) await deleteAvatarDraft(customAvatar.draft_id);
-      navigate("/home");
+      const completionResponse = await api.post('/api/onboarding/complete', buildSubmissionData());
+      notifyOnboardingCompleted(useGlobalState.getState().user?.account_id);
+      if (customAvatar?.draft_id) {
+        void deleteAvatarDraft(customAvatar.draft_id).catch((error) => {
+          console.warn('Unable to remove the completed avatar draft:', error);
+        });
+      }
+      navigate(completionResponse.data.path || "/home", { replace: true });
       
-    } catch (err: any) {
-      console.error('Error submitting survey:', err);
+    } catch (error: unknown) {
+      console.error('Error submitting survey:', error);
+      const apiMessage = getApiErrorMessage(error);
       
       // Show error message to user
-      if (err instanceof Error && !err.response?.data?.message) {
-        setErrors({ submit: err.message });
-      } else if (err.response?.data?.message) {
-        setErrors({ submit: err.response.data.message });
+      if (apiMessage) {
+        setErrors({ submit: apiMessage });
+      } else if (error instanceof Error) {
+        setErrors({ submit: error.message });
       } else {
         setErrors({ submit: 'Failed to submit survey. Please try again.' });
       }
@@ -304,7 +318,7 @@ export default function Survey() {
           </div>
         );
       
-      case 'multi-select':
+      case 'multi-select': {
         const selectedValues = (value as string[]) || [];
         return (
           <div className="survey-section" key={question.question_id}>
@@ -347,6 +361,7 @@ export default function Survey() {
             {error && <span className="error-text">{error}</span>}
           </div>
         );
+      }
       
       case 'text':
         return (

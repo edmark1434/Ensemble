@@ -9,6 +9,7 @@ import { auth } from "@/pages/firebase";
 import UserNotificationModal from "./user_notification_modal";
 import UserLogoutModal from "./user_logout_modal";
 import socket from "@/lib/socket";
+import useChatState from "@/components/ui/chat_bubble/chat_state";
 import { CreditIcon } from "@/components/ui/credit-icon";
 
 interface UserHeaderProps {
@@ -185,13 +186,6 @@ useEffect(() => {
   fetchNotifications();
 }, []);
 
-useEffect(() => {
-  console.log(
-    "Notifications:",
-    notifications.map((n) => n.notification_id)
-  );
-}, [notifications]);
-
   useEffect(() => {
     const checkRole = async () => {
       try {
@@ -321,18 +315,25 @@ useEffect(() => {
   };
 
   const executeFinalLogout = async () => {
-    try {
-      await api.get("/api/users/logout");
-      await signOut(auth);
-      useGlobalState.getState().clearUser();
-    } catch (error) {
-      console.error("Error logging out:", error);
-    } finally {
-      setIsLogoutModalOpen(false);
-      setIsProfileOpen(false);
-      setShowHeader(false);
-      navigate("/", { replace: true });
+    setIsLogoutModalOpen(false);
+    setIsProfileOpen(false);
+
+    const [serverLogout, firebaseLogout] = await Promise.allSettled([
+      api.post("/api/users/logout"),
+      signOut(auth),
+    ]);
+
+    if (serverLogout.status === "rejected") {
+      console.error("Unable to close the server session during logout.");
     }
+    if (firebaseLogout.status === "rejected") {
+      console.error("Unable to close the Firebase session during logout.");
+    }
+
+    useChatState.getState().reset();
+    useGlobalState.getState().clearUser();
+    setShowHeader(false);
+    navigate("/", { replace: true });
   };
 
 

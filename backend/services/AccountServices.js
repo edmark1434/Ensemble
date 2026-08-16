@@ -72,7 +72,7 @@ async function searchUserAccountsByHandleService(handle, accountId) {
 }
 
 async function getAccountWalletService(accountId, type) { 
-    if (!checkAccountIdService(accountId)) {
+    if (!await checkAccountIdService(accountId)) {
         throw new Error('Invalid account ID');
     }
     if(!type && !['account wallets', 'escrow wallets', 'platform wallets'].includes(type)){
@@ -93,7 +93,7 @@ async function checkAccountIdService(accountId) {
         throw new Error('Account ID is required');
     }
     try {
-        return isExist = await checkAccountId(accountId);
+        return await checkAccountId(accountId);
     } catch (err) {
         console.error('Error checking account ID:', err);
         throw err;
@@ -101,7 +101,7 @@ async function checkAccountIdService(accountId) {
 }
 
 async function getProfileServices(accountId) {
-    if (!checkAccountIdService(accountId)) {
+    if (!await checkAccountIdService(accountId)) {
         throw new Error('Invalid account ID');
     }
     try {
@@ -122,7 +122,7 @@ async function getProfileServices(accountId) {
 }
 
 async function getAccountLinkByAccountIdService(accountId) { 
-    if (!checkAccountIdService(accountId)) {
+    if (!await checkAccountIdService(accountId)) {
         throw new Error('Invalid account ID');
     }
     try {
@@ -135,7 +135,7 @@ async function getAccountLinkByAccountIdService(accountId) {
 }
 
 async function checkUserAccountIdService(accountId) {
-    if (!checkAccountIdService(accountId)) {
+    if (!await checkAccountIdService(accountId)) {
         throw new Error('Invalid account ID');
     }
     try {
@@ -162,7 +162,7 @@ async function getDisplayNameByAccountIdService(listOfAccountIds) {
 }
 
 async function updateAndInsertAccountProfileServices(accountId, profileData) { 
-    if (!checkAccountIdService(accountId)) {
+    if (!await checkAccountIdService(accountId)) {
         throw new Error('Invalid account ID');
     }
     console.log('Profile data received for update:', profileData);
@@ -176,7 +176,7 @@ async function updateAndInsertAccountProfileServices(accountId, profileData) {
 }
 
 async function updateAccountProfileServices(accountId, fileId) {
-    if (!checkAccountIdService(accountId)) {
+    if (!await checkAccountIdService(accountId)) {
         throw new Error('Invalid account ID');
     }
     console.log('File ID received for update:', fileId);
@@ -189,14 +189,14 @@ async function updateAccountProfileServices(accountId, fileId) {
 }
 
 async function settingAccountInfoUpdate(accountId, payload) {
-    if (!checkAccountIdService(accountId)) {
+    if (!await checkAccountIdService(accountId)) {
         throw new Error('Invalid account ID');
     }
     try {
         if (payload.isEmailVerified !== undefined && !payload.isEmailVerified) {
             throw new Error('Email must be verified to update account information');
         }
-        if(payload.isUernameUnique !== undefined && !payload.isUsernameUnique) {
+        if(payload.isUsernameUnique !== undefined && !payload.isUsernameUnique) {
             throw new Error('Username must be unique to update account information');
         }
         if (payload.password) {
@@ -207,16 +207,21 @@ async function settingAccountInfoUpdate(accountId, payload) {
         if (!payload.email && !payload.address && !payload.password && !payload.username) { 
             return; // No fields to update, exit early
         }
-        await Promise.all([
-            updateUserDetailsByAccountId(accountId, {
-                email_address: payload.email,
-                address: payload.address,
-                password_hash: payload.password,
-            }),
-            updateProfileAccountRepositories(accountId, {
+        const userUpdates = {
+            email_address: payload.email,
+            address: payload.address,
+            password_hash: payload.password,
+        };
+        const updates = [];
+        if (Object.values(userUpdates).some((value) => value !== undefined)) {
+            updates.push(updateUserDetailsByAccountId(accountId, userUpdates));
+        }
+        if (payload.username !== undefined) {
+            updates.push(updateProfileAccountRepositories(accountId, {
                 handle: payload.username,
-            })
-        ]);
+            }));
+        }
+        await Promise.all(updates);
         
     }catch (err) {
         console.error('Error updating account info:', err);
@@ -286,7 +291,7 @@ async function checkIsFollowingService(followerId, followedId) {
 }
 
 async function curateBadgesService(accountId, registryIds) {
-    if (!checkAccountIdService(accountId)) {
+    if (!await checkAccountIdService(accountId)) {
         throw new Error('Invalid account ID');
     }
     if (!Array.isArray(registryIds) || registryIds.length > 5) {

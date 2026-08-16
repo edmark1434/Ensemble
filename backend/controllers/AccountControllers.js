@@ -148,13 +148,16 @@ async function checkUserAccountIdController(req, res) {
     }
     try {
         const isUser = await checkUserAccountIdService(accountId);
+        if (!isUser) {
+            return res.status(404).json({ success: false, message: 'User profile not found.' });
+        }
         return res.status(200).json({ success: true, message: 'User check completed successfully', isUser });
     }
     catch (err) {
         console.error(`Error checking user status for accountId ${accountId}:`, err);
-        return res.status(500).json({
+        return res.status(err.message === 'Invalid account ID' ? 400 : 500).json({
             success: false,
-            message: err.message,
+            message: err.message === 'Invalid account ID' ? 'Invalid account ID.' : 'Unable to check user profile.',
         });
     }
 }
