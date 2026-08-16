@@ -46,7 +46,7 @@ let jobsItemsInitial: NavItem[] = [
 
 let gigsItemsInitial: NavItem[] = [
     { label: "Services", icon: Megaphone, to: "/gigs" },
-    { label: "Requests", icon: Inbox, to: "/requests" },
+    { label: "Orders", icon: Inbox, to: "/orders" },
 ];
 
 let activityRecordsInitial: NavItem[] = [
