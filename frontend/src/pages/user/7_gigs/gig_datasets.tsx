@@ -270,7 +270,7 @@ export const sampleGigs: Gig[] = [
         title: "Full Brand Kit",
         description: "3 logo concepts, vector source files, color palette, and typography guidelines.",
         daysOfDelivery: 5,
-        revisions: Unlimited = 99,
+        revisions: 99,
         price: 35000
       }
     ],
