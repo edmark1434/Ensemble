@@ -1,5 +1,5 @@
 import React from "react";
-import { Edit2 } from "lucide-react";
+import { Edit2, Laptop, Briefcase, User } from "lucide-react";
 
 interface ProfileTagsProps {
   role?: {
@@ -51,16 +51,11 @@ export const ProfileTags: React.FC<ProfileTagsProps> = ({
         role.map((roleItem, index) => (
           <span 
             key={index} 
-            className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase border ${
-              roleItem.role_name === "Freelancer"
-                ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
-                : roleItem.role_name === "Client"
-                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                : roleItem.role_name === "Casual"
-                ? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20"
-                : "bg-blue-500/10 text-blue-400 border-blue-500/20"
-            }`}
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase border bg-gray-100 text-gray-600 border-gray-200 dark:bg-zinc-500/10 dark:text-zinc-400 dark:border-zinc-500/20"
           >
+            {roleItem.role_name === "Freelancer" && <Laptop className="w-2.5 h-2.5" />}
+            {roleItem.role_name === "Client" && <Briefcase className="w-2.5 h-2.5" />}
+            {roleItem.role_name === "Casual" && <User className="w-2.5 h-2.5" />}
             {roleItem.role_name}
           </span>
         ))

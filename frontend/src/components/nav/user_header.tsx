@@ -45,6 +45,17 @@ interface CreatorSearchResult {
   avatar: string;
 }
 
+const getSubscriptionIcon = (type: string) => {
+  switch (type.toLowerCase()) {
+    case "premium":
+      return "/icons/subscription/premium.png";
+    case "business":
+      return "/icons/subscription/studio.png";
+    default:
+      return "/icons/subscription/freemium.png";
+  }
+};
+
 const UserHeader: React.FC<UserHeaderProps> = ({
   pageTitle,
   userAvatar = "https://i.pravatar.cc/150?u=john",
@@ -333,7 +344,7 @@ useEffect(() => {
             (!isCollapsed ? "md:p-0" : "md:pl-20")
         }`}
       >
-        <div className="flex items-center justify-between px-6 py-4 md:px-8 gap-4">
+        <div className="flex items-center justify-between px-6 py-5 md:px-8 gap-4">
           <div className="flex items-center gap-8 flex-1 min-w-0">
             <div className="h-7 w-32 bg-gray-200 dark:bg-white/10 rounded animate-pulse shrink-0 hidden sm:block"></div>
             <div className="w-full max-w-xs h-9 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse"></div>
@@ -489,7 +500,7 @@ useEffect(() => {
                 <div className="text-left hidden md:block">
                   <p className="text-sm font-medium text-gray-900 dark:text-white">{userInfo?.display_name || userInfo?.displayName || userInfo?.username || "User"}</p>
                   <p className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500">
-                    <Crown className="h-3 w-3 text-yellow-500" />
+                    <img src={getSubscriptionIcon(userSubscriptionPlan || "Free")} alt={`${userSubscriptionPlan || "Free"} Tier`} className="h-4 w-4 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" />
                     {userSubscriptionPlan} Member
                   </p>
                 </div>
