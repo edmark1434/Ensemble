@@ -9,6 +9,7 @@ import StaffMiddleware from './lib/StaffMiddleware'
 import CreditShop from '@/pages/user/13_creditsshop/CreditsShop.tsx'
 import Checkout from '@/pages/payment/checkout.tsx'
 import Profile from '@/pages/user/7_profile/Profile.tsx'
+import ProfileRoute from '@/pages/user/7_profile/ProfileRoute.tsx'
 import UserSettings from '@/components/nav/Settings/user_settings.tsx'
 import Layout from './components/ui/Layout.tsx'
 import Home from '@/pages/user/1_home/Home.tsx'
@@ -37,8 +38,10 @@ import ProposalsCreatePage from '@/pages/user/6_job_market/job_proposals/proposa
 import ProposalsEditPage from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_edit_page.tsx'
 import ProposalsViewDetailsAsApplicant from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_applicant'
 import ProposalsViewDetailsAsAuthor from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author'
-import GigMarketplace from '@/pages/user/7_gigs/Gig_Posting/main.tsx'
-import { CreateGigWizard } from '@/pages/user/7_gigs/Gig_Posting/CreateGigWizard.tsx'
+import GigMain from '@/pages/user/7_gigs/gig_main.tsx'
+import GigServicesPage from '@/pages/user/7_gigs/gig_pages/gig_services_page.tsx'
+import GigCreatePage from '@/pages/user/7_gigs/gig_pages/gig_create_page.tsx'
+import GigFullPage from '@/pages/user/7_gigs/gig_pages/gig_full_page.tsx'
 import Verification from '@/pages/user/9_verification/Verification.tsx'
 import BusinessVerification from '@/pages/user/9_verification/BusinessVerification.tsx'
 import TransactionHistoryMain from '@/pages/user/11_transactionhistory/main.tsx'
@@ -182,7 +185,8 @@ function App() {
             <Route path='/credits' element={<CreditShop />} />
             <Route path='/credits-subscriptions' element={<CreditShop />} />
             <Route path='/credits/checkout' element={<Checkout />} />
-            <Route path='/profile/:id?' element={<Profile />} />
+            <Route path='/profile' element={<Profile />} />
+            <Route path='/profile/:id' element={<ProfileRoute />} />
             <Route path='/account-verification-status' element={<VerificationStatus />} />
             <Route path='/search/user/:query' element={<UserProfilesList />} />
 
@@ -233,14 +237,18 @@ function App() {
           <Route path='/jobs/proposals/sent/:proposalId' element={<ProposalsViewDetailsAsApplicant />} />
           <Route path='/jobs/proposals/sent/:proposalId/offer/:contractId' element={<ProposalsViewDetailsAsApplicant />} />
 
-          <Route path='/gigs'>
-            <Route index element={<GigMarketplace />} />
-            <Route path='create' element={<CreateGigWizard />} />
-            <Route path=':id' element={<GigMarketplace />} />
+          <Route path='/gigs' element={<GigMain />}>
+            <Route index element={<Navigate to="/gigs/services" replace />} />
+            <Route path='services' element={<GigServicesPage />} />
+            <Route path='services/:id' element={<GigServicesPage />} />
+            <Route path='saved-services' element={<GigServicesPage />} />
+            <Route path='my-services' element={<GigServicesPage />} />
           </Route>
+          <Route path='/gigs/create' element={<GigCreatePage />} />
+          <Route path='/gigs/services/:id/page' element={<GigFullPage />} />
           <Route path='/verification' element={<Verification />} />
-          <Route path='/requests' element={<SectionPlaceholder title='INCOMING REQUESTS' />} />
-          <Route path='/my-requests' element={<SectionPlaceholder title='MY REQUESTS' />} />
+          <Route path='/orders' element={<SectionPlaceholder title='INCOMING ORDERS' />} />
+          <Route path='/my-orders' element={<SectionPlaceholder title='MY ORDERS' />} />
           <Route path='/terms-of-services' element={<TosMain />} />
           <Route path='/contracts' element={<Contracts />} />
           <Route path='/contracts/:id' element={<Contracts />} />

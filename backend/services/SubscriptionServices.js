@@ -1,6 +1,7 @@
 const {getAllPlanRepositories,
     getSubcriptionByUserIdRepositories,
-    getSubscriptionPlanDetailsByUserIdRepositories
+    getSubscriptionPlanDetailsByUserIdRepositories,
+    forceUpdateSubscriptionByUserIdRepositories
 } = require('../repositories/SubscriptionRepositories');
 
 async function getAllPlanServices() {
@@ -22,6 +23,15 @@ async function getSubcriptionByUserIdServices(userId) {
     }
 }
 
+async function forceUpdateSubscriptionByUserIdServices(userId, tierName) {
+    try{
+        return await forceUpdateSubscriptionByUserIdRepositories(userId, tierName);
+    }catch(err){
+        console.error('Error in service layer while force updating subscription:', err);
+        throw err;
+    }
+}
+
 async function getSubscriptionPlanDetailsByUserIdServices(userId) {
     try{
         const planDetails = await getSubscriptionPlanDetailsByUserIdRepositories(userId);
@@ -35,5 +45,6 @@ async function getSubscriptionPlanDetailsByUserIdServices(userId) {
 module.exports = {
     getAllPlanServices,
     getSubcriptionByUserIdServices,
-    getSubscriptionPlanDetailsByUserIdServices
+    getSubscriptionPlanDetailsByUserIdServices,
+    forceUpdateSubscriptionByUserIdServices
 }

@@ -19,7 +19,7 @@ export const BadgeEditModal: React.FC<BadgeEditModalProps> = ({
   onSave,
 }) => {
   const [selectedBadges, setSelectedBadges] = useState<BadgeMetadata[]>([]);
-  const [inventoryMode, setInventoryMode] = useState<"RowList" | "BoxList">("RowList");
+  const [inventoryMode, setInventoryMode] = useState<"RowList" | "BoxList">("BoxList");
 
   useEffect(() => {
     if (isOpen) {
@@ -148,18 +148,18 @@ export const BadgeEditModal: React.FC<BadgeEditModalProps> = ({
                     <div
                       key={b.id}
                       onClick={() => handleToggleBadge(b, isUnlocked)}
-                      className={`group relative flex items-center border transition-all duration-200 ${
+                      className={`group relative hover:z-50 flex items-center border transition-all duration-200 ${
                         inventoryMode === "RowList"
                           ? "gap-4 p-3 rounded-xl bg-zinc-50 dark:bg-white/[0.01]"
                           : "justify-center rounded-xl bg-zinc-50 dark:bg-white/[0.01] aspect-square p-2"
-                      } ${!isUnlocked ? "opacity-50 grayscale cursor-not-allowed border-zinc-200 dark:border-white/5" : (isSelected ? "bg-zinc-100 dark:bg-white/[0.02] cursor-pointer" : "border-zinc-200 dark:border-white/5 hover:border-zinc-300 dark:hover:border-white/10 hover:bg-zinc-100 dark:hover:bg-white/[0.02] cursor-pointer")}`}
+                      } ${!isUnlocked ? "grayscale cursor-not-allowed border-zinc-200 dark:border-white/5" : (isSelected ? "bg-zinc-100 dark:bg-white/[0.02] cursor-pointer" : "border-zinc-200 dark:border-white/5 hover:border-zinc-300 dark:hover:border-white/10 hover:bg-zinc-100 dark:hover:bg-white/[0.02] cursor-pointer")}`}
                       style={{ borderColor: isSelected ? b.borderColor : undefined }}
                     >
                       {/* Badge Icon Core */}
                       <div
                         className={`bg-white dark:bg-[#121624] border border-zinc-200 dark:border-white/10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
                           inventoryMode === "RowList" ? "w-11 h-11 p-2" : "w-14 h-14 p-2.5"
-                        } ${isUnlocked ? "group-hover:scale-105" : ""}`}
+                        } ${isUnlocked ? "group-hover:scale-105" : "opacity-50"}`}
                         style={{ boxShadow: isSelected ? `0 0 12px ${b.glowColor}20` : undefined }}
                       >
                         <img src={b.icon} alt={b.name} className="w-full h-full object-contain filter drop-shadow-sm dark:drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]" />
@@ -168,7 +168,7 @@ export const BadgeEditModal: React.FC<BadgeEditModalProps> = ({
                       {/* Row List View Configurations */}
                       {inventoryMode === "RowList" ? (
                         <>
-                          <div className="space-y-0.5 flex-1 min-w-0">
+                          <div className={`space-y-0.5 flex-1 min-w-0 ${!isUnlocked ? 'opacity-50' : ''}`}>
                             <h4 className="font-bold text-xs text-zinc-900 dark:text-zinc-100 tracking-wide truncate">
                               {b.name} {!isUnlocked && <span className="ml-2 text-[10px] uppercase font-black text-red-500 bg-red-50 dark:bg-red-500/10 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-500/20">Locked</span>}
                             </h4>

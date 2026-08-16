@@ -22,6 +22,17 @@ export const badgesRegistry: BadgeMetadata[] = [
     condition: "Participate in workspace optimization and platform testing during open beta operations.",
     dateObtained: "Early Adopter Access"
   },
+  // --- PROFILE MILESTONES ---
+  {
+    id: "setup-profile",
+    name: "Profile Complete",
+    description: "Granted to users who have successfully fully completed their profile setup.",
+    icon: "/icons/badges/setup-profile.png",
+    borderColor: "#10b981", // Green
+    glowColor: "#10b981",
+    condition: "Achieve 100% completion in the Profile Setup checklist.",
+    dateObtained: "Profile Initialization"
+  },
 
   // --- FREELANCE RANK PROGRESSION TRACKS ---
   {

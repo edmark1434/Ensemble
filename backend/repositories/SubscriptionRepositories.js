@@ -61,6 +61,22 @@ async function getSubcriptionByUserIdRepositories(userId) {
     }
 }
 
+async function forceUpdateSubscriptionByUserIdRepositories(userId, tierName) {
+    try {
+        const query = `
+            UPDATE subscriptions
+            SET plan_id = (SELECT plan_id FROM plans WHERE name = $1 LIMIT 1)
+            WHERE user_id = $2
+            RETURNING *;
+        `;
+        const result = await pool.query(query, [tierName, userId]);
+        return result.rows[0];
+    } catch (err) {
+        console.error("Error force updating subscription:", err);
+        throw err;
+    }
+}
+
 
 async function getSubscriptionPlanDetailsByUserIdRepositories(userId) {
     try{
@@ -319,5 +335,6 @@ module.exports = {
     getCancelledSubscriptionRepositories,
     getSubscriptionByXenditPlanIdRepositories,
     updateSubscriptionInvoiceAmountRepositories,
-    getSubscriptionBySubscriptionIdRepositories
+    getSubscriptionBySubscriptionIdRepositories,
+    forceUpdateSubscriptionByUserIdRepositories
 };

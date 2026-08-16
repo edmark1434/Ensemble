@@ -133,6 +133,7 @@ interface ChatState {
   remoteCallStreams: Record<string, MediaStream>;
   remoteMediaStates: Record<string, { video: boolean; audio: boolean }>;
   initialize: (accountId: string) => void;
+  reset: () => void;
   fetchConversations: () => Promise<void>;
   loadConversation: (conversationId: string) => Promise<void>;
   selectConversation: (conversationId: string) => Promise<void>;
@@ -1374,6 +1375,38 @@ const useChatState = create<ChatState>((set, get) => ({
     void get()
       .fetchConversations()
       .catch((error) => console.error("Unable to load chats:", error));
+  },
+
+  reset: () => {
+    releaseCallMedia();
+    authenticatedAccountId = null;
+    conversationsRequest = null;
+    messageRequests.clear();
+    loadedConversationIds.clear();
+    pendingGoogleMeetingWindow?.close();
+    pendingGoogleMeetingWindow = null;
+    socket.disconnect();
+    set({
+      conversations: [],
+      messagesByConversation: {},
+      activeConversationId: null,
+      floatingWindows: [],
+      activeFloatingId: null,
+      isFloatingOpen: false,
+      unreadCounts: {},
+      typingByConversation: {},
+      onlineAccounts: {},
+      loadingConversations: false,
+      loadingMessages: {},
+      activeCall: null,
+      meetingCreationPrompt: null,
+      googleMeetingsByConversation: {},
+      groupCallsByConversation: {},
+      localCallStream: null,
+      remoteCallStream: null,
+      remoteCallStreams: {},
+      remoteMediaStates: {},
+    });
   },
 
   fetchConversations: async () => {

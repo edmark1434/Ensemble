@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, Settings, LogOut, User, Search } from "lucide-react";
+import { Bell, ChevronDown, Settings, LogOut, User, Search, Crown } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useGlobalState from "@/lib/global_state";
@@ -9,6 +9,7 @@ import { auth } from "@/pages/firebase";
 import UserNotificationModal from "./user_notification_modal";
 import UserLogoutModal from "./user_logout_modal";
 import socket from "@/lib/socket";
+import useChatState from "@/components/ui/chat_bubble/chat_state";
 import { CreditIcon } from "@/components/ui/credit-icon";
 
 interface UserHeaderProps {
@@ -44,6 +45,17 @@ interface CreatorSearchResult {
   username: string;
   avatar: string;
 }
+
+const getSubscriptionIcon = (type: string) => {
+  switch (type.toLowerCase()) {
+    case "premium":
+      return "/icons/subscription/premium.png";
+    case "business":
+      return "/icons/subscription/studio.png";
+    default:
+      return "/icons/subscription/freemium.png";
+  }
+};
 
 const UserHeader: React.FC<UserHeaderProps> = ({
   pageTitle,
@@ -174,13 +186,6 @@ useEffect(() => {
   fetchNotifications();
 }, []);
 
-useEffect(() => {
-  console.log(
-    "Notifications:",
-    notifications.map((n) => n.notification_id)
-  );
-}, [notifications]);
-
   useEffect(() => {
     const checkRole = async () => {
       try {
@@ -310,22 +315,55 @@ useEffect(() => {
   };
 
   const executeFinalLogout = async () => {
-    try {
-      await api.get("/api/users/logout");
-      await signOut(auth);
-      useGlobalState.getState().clearUser();
-    } catch (error) {
-      console.error("Error logging out:", error);
-    } finally {
-      setIsLogoutModalOpen(false);
-      setIsProfileOpen(false);
-      setShowHeader(false);
-      navigate("/", { replace: true });
+    setIsLogoutModalOpen(false);
+    setIsProfileOpen(false);
+
+    const [serverLogout, firebaseLogout] = await Promise.allSettled([
+      api.post("/api/users/logout"),
+      signOut(auth),
+    ]);
+
+    if (serverLogout.status === "rejected") {
+      console.error("Unable to close the server session during logout.");
     }
+    if (firebaseLogout.status === "rejected") {
+      console.error("Unable to close the Firebase session during logout.");
+    }
+
+    useChatState.getState().reset();
+    useGlobalState.getState().clearUser();
+    setShowHeader(false);
+    navigate("/", { replace: true });
   };
 
+
+
   if (isCheckingAccess) {
-    return null;
+    return (
+      <header
+        className={`sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12]/95 backdrop-blur-md transition-all duration-300 ${
+            (!isCollapsed ? "md:p-0" : "md:pl-20")
+        }`}
+      >
+        <div className="flex items-center justify-between px-6 py-5 md:px-8 gap-4">
+          <div className="flex items-center gap-8 flex-1 min-w-0">
+            <div className="h-7 w-32 bg-gray-200 dark:bg-white/10 rounded animate-pulse shrink-0 hidden sm:block"></div>
+            <div className="w-full max-w-xs h-9 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse"></div>
+          </div>
+          <div className="flex items-center gap-4 shrink-0">
+            <div className="h-8 w-24 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse"></div>
+            <div className="h-9 w-9 bg-gray-200 dark:bg-white/10 rounded-lg animate-pulse"></div>
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-white/10 animate-pulse"></div>
+              <div className="hidden md:block space-y-2">
+                <div className="h-3 w-20 bg-gray-200 dark:bg-white/10 rounded animate-pulse"></div>
+                <div className="h-2 w-16 bg-gray-200 dark:bg-white/10 rounded animate-pulse"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+    );
   }
 
   return showHeader ? (
@@ -462,7 +500,10 @@ useEffect(() => {
                 />
                 <div className="text-left hidden md:block">
                   <p className="text-sm font-medium text-gray-900 dark:text-white">{userInfo?.display_name || userInfo?.displayName || userInfo?.username || "User"}</p>
-                  <p className="text-xs text-gray-500 dark:text-zinc-500">{userSubscriptionPlan} Member</p>
+                  <p className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500">
+                    <img src={getSubscriptionIcon(userSubscriptionPlan || "Free")} alt={`${userSubscriptionPlan || "Free"} Tier`} className="h-4 w-4 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" />
+                    {userSubscriptionPlan} Member
+                  </p>
                 </div>
                 <ChevronDown className={`h-4 w-4 text-gray-400 dark:text-zinc-400 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`} />
               </button>

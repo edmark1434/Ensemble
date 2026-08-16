@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { ChevronDown } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
@@ -26,6 +28,7 @@ import ProfileEditModal from "@/pages/user/7_profile/Edits/ProfileEditModal.tsx"
 import { BadgeEditModal } from "./Edits/BadgeEditModal.tsx";
 import SkillsEditModal from "@/pages/user/7_profile/Edits/SkillsEditModal.tsx";
 import { FollowersModal } from "./Displays/FollowersModal.tsx";
+import NotFound from "@/pages/user/0_misc/NotFound.tsx";
 
 // Chat Interface Context Types
 import type { ChatTarget } from "@/components/ui/Layout";
@@ -109,7 +112,17 @@ interface Preset {
   name: string;
 }
 
-export default function Profile() {
+interface ProfileProps {
+  validatedProfileId?: string;
+}
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const isUuid = (value: string | undefined): value is string =>
+  Boolean(value && UUID_PATTERN.test(value));
+
+export default function Profile({ validatedProfileId }: ProfileProps) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>("introduction");
@@ -117,6 +130,7 @@ export default function Profile() {
   const { user } = useGlobalState();
   const { id: profileAccountId } = useParams<{ id?: string }>();
   const id = profileAccountId || user?.account_id;
+  const hasInvalidProfileId = Boolean(profileAccountId && !isUuid(profileAccountId));
 
   // Outlet context handler for global chat control
   const { openChatWithUser } = useOutletContext<{
@@ -139,6 +153,8 @@ export default function Profile() {
   const [isFollowing, setIsFollowing] = useState(false);
   const [isFollowedBy, setIsFollowedBy] = useState(false);
   const [followersModalType, setFollowersModalType] = useState<"followers" | "following" | null>(null);
+  const [profileNotFound, setProfileNotFound] = useState(hasInvalidProfileId);
+  const [confirmedProfileId, setConfirmedProfileId] = useState<string | null>(null);
 
   const isOwner = id == user?.account_id;
 
@@ -592,23 +608,40 @@ export default function Profile() {
   };
 
   useEffect(() => {
-    if (id) {
+    if (confirmedProfileId === id && isUuid(id)) {
       fetchAvatarPresets();
     }
-  }, [id]);
+  }, [id, confirmedProfileId]);
 
   useEffect(() => {
     const fetchProfile = async () => {
+      if (!id) {
+        return;
+      }
+
+      if (!isUuid(id)) {
+        setProfileNotFound(true);
+        setConfirmedProfileId(null);
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
+        setProfileNotFound(false);
+        setConfirmedProfileId(null);
         const startTime = Date.now();
 
-        const [isUser] = await Promise.all([api.get(`/api/accounts/check-user/${id}`)]);
-        if (isUser.data.isUser === false) {
-          toast.error("Profile not found.");
-          navigate("/*");
-          return;
+        if (validatedProfileId !== id) {
+          const isUser = await api.get(`/api/accounts/check-user/${id}`);
+          if (isUser.data.isUser === false) {
+            setProfileNotFound(true);
+            setLoading(false);
+            return;
+          }
         }
+
+        setConfirmedProfileId(id);
 
         const [profileResponse, tagsResponse, accountLinkResponse, attachmentsResponse, galleriesResponse] = await Promise.all([
           api.get(`/api/accounts/profile/${id}?t=${new Date().getTime()}`),
@@ -771,26 +804,121 @@ export default function Profile() {
 
       } catch (err) {
         console.error('Error loading profile:', err);
-        toast.error("Failed to load profile data");
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 400 || status === 404) {
+          setProfileNotFound(true);
+          setConfirmedProfileId(null);
+        } else {
+          toast.error("Failed to load profile data");
+        }
         setLoading(false);
       }
     };
 
-    if (id) {
-      fetchProfile();
-    }
-  }, [id, navigate]);
+    void fetchProfile();
+  }, [id, validatedProfileId]);
+
+  const [highlightField, setHighlightField] = useState<"bio" | "tagline" | undefined>();
+
+  const openModalWithHighlight = (field: "bio" | "tagline") => {
+    setHighlightField(field);
+    setIsProfileModalOpen(true);
+  };
 
   const completionSteps = [
-    { check: !!userDetails?.avatar_preset_url && !userDetails.avatar_preset_url.includes('default'), label: 'Upload an Avatar' },
-    { check: !!userDetails?.bio || !!userDetails?.introduction, label: 'Add an Introduction' },
-    { check: !!userDetails?.skills && userDetails.skills.length > 0, label: 'Add Skills' },
-    { check: portfolioItems.length > 0, label: 'Add a Portfolio item' },
-    { check: galleryCount > 0, label: 'Add a Gallery item' }
+    { check: !!userDetails?.avatar_preset_url && !userDetails.avatar_preset_url.includes('default'), label: 'Upload an Avatar', action: () => setIsAvatarModalOpen(true) },
+    { check: !!userDetails?.tagline, label: 'Add a Tagline', action: () => openModalWithHighlight("tagline") },
+    { check: !!userDetails?.bio, label: 'Add a Bio', action: () => openModalWithHighlight("bio") },
+    { check: !!userDetails?.introduction, label: 'Add an Introduction', action: () => { setActiveTab('introduction'); window.scrollTo({ top: 300, behavior: 'smooth' }); } },
+    { check: !!userDetails?.skills && userDetails.skills.length > 0, label: 'Add Skills', action: () => setIsSkillsModalOpen(true) },
+    { check: portfolioItems.length > 0, label: 'Add a Portfolio item', action: () => { setActiveTab('portfolio'); window.scrollTo({ top: 300, behavior: 'smooth' }); } }
   ];
 
-  const completionScore = completionSteps.filter(step => step.check).length * 20;
+  const [isProfileSetupExpanded, setIsProfileSetupExpanded] = useState(true);
+  
+  const [hasCompletedProfileSetup, setHasCompletedProfileSetup] = useState(() => {
+    return localStorage.getItem(`profileSetupCompleted_${user?.account_id}`) === 'true';
+  });
+  const [showCongrats, setShowCongrats] = useState(false);
+
+  const getProgressColor = (score: number) => {
+    if (score < 33) return "bg-red-500";
+    if (score < 66) return "bg-orange-500";
+    if (score < 100) return "bg-blue-500";
+    return "bg-green-500";
+  };
+
+  const completionScore = Math.round((completionSteps.filter(step => step.check).length / completionSteps.length) * 100);
   const nextStep = completionSteps.find(step => !step.check);
+
+  useEffect(() => {
+    const handleProfileReset = async () => {
+      setHasCompletedProfileSetup(false);
+      localStorage.removeItem(`profileSetupCompleted_${user?.account_id}`);
+      // Reset tagline to trigger incomplete state
+      try {
+        await api.put(`/api/accounts/update-profile-details`, { original: { tagline: userDetails?.tagline || "" }, updates: { tagline: "" } });
+        setUserDetails(prev => {
+          if (!prev) return prev;
+          // ALSO remove the badge so we can earn it again!
+          const newBadges = (prev.badges || []).filter(b => b.id !== "setup-profile");
+          return { ...prev, tagline: "", badges: newBadges };
+        });
+      } catch (e) {
+        console.error("Failed to reset tagline", e);
+      }
+    };
+    
+    const handleShowCongrats = () => setShowCongrats(true);
+    
+    window.addEventListener('profileSetupReset', handleProfileReset);
+    window.addEventListener('profileSetupShowCongrats', handleShowCongrats);
+    return () => {
+      window.removeEventListener('profileSetupReset', handleProfileReset);
+      window.removeEventListener('profileSetupShowCongrats', handleShowCongrats);
+    };
+  }, [user?.account_id, userDetails?.tagline]);
+
+  useEffect(() => {
+    if (completionScore === 100 && isOwner) {
+      // 1. Show congrats modal if they just completed it
+      if (!hasCompletedProfileSetup) {
+        setShowCongrats(true);
+        setHasCompletedProfileSetup(true);
+        localStorage.setItem(`profileSetupCompleted_${user?.account_id}`, 'true');
+        window.dispatchEvent(new Event('profileSetupStatusUpdate'));
+      }
+      
+      // 2. Retroactively grant the badge if they are at 100% but missing it
+      if (userDetails && !userDetails.badges?.some(b => b.id === "setup-profile")) {
+        setUserDetails(prev => {
+          if (!prev) return prev;
+          if (prev.badges?.some(b => b.id === "setup-profile")) return prev;
+          
+          const nextOrder = Math.max(-1, ...(prev.badges || []).filter(b => b.display_order !== null).map(b => b.display_order!)) + 1;
+          const newBadges = [...(prev.badges || []), { id: "setup-profile", display_order: nextOrder }];
+          return { ...prev, badges: newBadges };
+        });
+        api.post('/api/accounts/grant-badge', { badgeId: 'setup-profile' }).catch(() => {});
+      }
+    }
+  }, [completionScore, hasCompletedProfileSetup, isOwner, user?.account_id, userDetails]);
+
+  // Synchronize global user subscription changes (from testing widget) to the local profile view
+  useEffect(() => {
+    if (isOwner && user?.subscription_type && userDetails) {
+      if (userDetails.subscriptionType !== user.subscription_type) {
+        setUserDetails(prev => {
+          if (!prev) return prev;
+          return { ...prev, subscriptionType: user.subscription_type as any };
+        });
+      }
+    }
+  }, [user?.subscription_type, isOwner]);
+
+  if (hasInvalidProfileId || profileNotFound) {
+    return <NotFound />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] font-['Plus Jakarta Sans',sans-serif] text-gray-900 dark:text-zinc-300 antialiased selection:bg-blue-500/30">
@@ -799,36 +927,69 @@ export default function Profile() {
       <div className="mx-auto max-w-7xl p-4 md:p-8 space-y-5">
         
         {/* Profile Completion Widget (Owner Only) */}
-        {!loading && isOwner && completionScore < 100 && (
-          <div className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl p-5 shadow-sm flex flex-col md:flex-row items-center gap-6">
-            <div className="flex-1 w-full">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-bold text-gray-900 dark:text-white">Profile Setup ({completionScore}%)</h3>
-                <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                  {nextStep ? `Next: ${nextStep.label}` : 'All done!'}
-                </span>
-              </div>
-              <div className="h-2.5 w-full bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
+        {!loading && isOwner && !hasCompletedProfileSetup && (
+          <div className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl p-5 shadow-sm flex flex-col gap-4 transition-all duration-300">
+            <div className="flex flex-col md:flex-row items-center gap-6 w-full">
+              <div className="flex-1 w-full">
                 <div 
-                  className="h-full bg-blue-600 transition-all duration-1000 ease-out rounded-full" 
-                  style={{ width: `${completionScore}%` }}
-                />
+                  className="flex items-center justify-between mb-2 cursor-pointer group"
+                  onClick={() => setIsProfileSetupExpanded(!isProfileSetupExpanded)}
+                >
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-gray-900 dark:text-white group-hover:text-blue-500 transition-colors">Profile Setup ({completionScore}%)</h3>
+                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isProfileSetupExpanded ? "rotate-180" : ""}`} />
+                  </div>
+                  <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                    {nextStep ? `Next: ${nextStep.label}` : 'All done!'}
+                  </span>
+                </div>
+                <div className="h-2.5 w-full bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-1000 ease-out rounded-full ${getProgressColor(completionScore)}`}
+                    style={{ width: `${completionScore}%` }}
+                  />
+                </div>
               </div>
+              {nextStep && (
+                <button 
+                  onClick={nextStep.action}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-full transition-colors whitespace-nowrap shadow-sm w-full md:w-auto"
+                >
+                  Complete Now
+                </button>
+              )}
             </div>
-            {nextStep && (
-              <button 
-                onClick={() => {
-                  if (nextStep.label.includes('Avatar')) setIsAvatarModalOpen(true);
-                  if (nextStep.label.includes('Introduction')) { setActiveTab('introduction'); window.scrollTo({ top: 300, behavior: 'smooth' }); }
-                  if (nextStep.label.includes('Skills')) setIsSkillsModalOpen(true);
-                  if (nextStep.label.includes('Portfolio')) { setActiveTab('portfolio'); window.scrollTo({ top: 300, behavior: 'smooth' }); }
-                  if (nextStep.label.includes('Gallery')) { setActiveTab('gallery'); window.scrollTo({ top: 300, behavior: 'smooth' }); }
-                }}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-full transition-colors whitespace-nowrap shadow-sm"
-              >
-                Complete Now
-              </button>
-            )}
+            
+            {/* Collapsible Checklist */}
+            <div 
+              className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 border-gray-100 dark:border-white/10 transition-all duration-300 overflow-hidden ${
+                isProfileSetupExpanded ? "border-t pt-4 mt-2 opacity-100 max-h-[500px]" : "max-h-0 opacity-0 border-transparent m-0 p-0"
+              }`}
+            >
+              {completionSteps.map((step, idx) => (
+                <button 
+                  key={idx} 
+                  onClick={!step.check ? step.action : undefined}
+                  className={`flex items-center gap-2 text-sm font-medium text-left transition-colors ${
+                    step.check 
+                      ? 'text-green-600 dark:text-green-400 cursor-default' 
+                      : 'text-gray-400 dark:text-zinc-500 hover:text-blue-500 dark:hover:text-blue-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-white/5 p-1 -ml-1 rounded'
+                  }`}
+                  title={!step.check ? 'Click to complete this step' : 'Completed'}
+                >
+                  {step.check ? (
+                    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  )}
+                  <span className="truncate">{step.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -865,7 +1026,9 @@ export default function Profile() {
           onChatClick={handleOpenChat}
           onVerificationClick={() => navigate("/account-verification-status")}
         />
-        {/* Layout Matrix Grid Panels Split */}
+        {/* These data-dependent sections are intentionally not mounted until the
+            profile lookup succeeds. Their child components fetch galleries. */}
+        {!loading && confirmedProfileId === id && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr]">
 
           {/* Left Sidebar Column */}
@@ -906,8 +1069,7 @@ export default function Profile() {
               onUploadPDF={handleUploadResume}
               onAddExternalLink={handleAddWebsite}
               onDeletePortfolioItem={handleDeletePortfolioItem}
-              onUpdateIntroduction={async (intro) => {
-                await api.put(`/api/accounts/profile`, { introduction: intro });
+              onUpdateIntroduction={(intro) => {
                 setUserDetails(prev => prev ? { ...prev, introduction: intro } : null);
               }}
               userDetails={userDetails}
@@ -916,6 +1078,7 @@ export default function Profile() {
           </div>
 
         </div>
+        )}
       </div>
 
       {/* System Parameter Modals */}
@@ -931,10 +1094,11 @@ export default function Profile() {
       {userDetails && (
         <ProfileEditModal
           isOpen={isProfileModalOpen}
-          onClose={() => setIsProfileModalOpen(false)}
+          onClose={() => { setIsProfileModalOpen(false); setHighlightField(undefined); }}
           data={userDetails}
           onSave={saveProfileDetails}
           availableSkillsList={availableSkills}
+          highlightField={highlightField}
         />
       )}
 
@@ -946,6 +1110,61 @@ export default function Profile() {
           type={followersModalType}
         />
       )}
+
+      {/* Congratulations Modal */}
+      <AnimatePresence>
+        {showCongrats && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="relative bg-white dark:bg-zinc-900 rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center border border-gray-100 dark:border-white/10"
+            >
+              <div className="w-24 h-24 mx-auto bg-green-50 dark:bg-green-500/10 rounded-full flex items-center justify-center mb-6 shadow-inner">
+                <span className="text-5xl drop-shadow-md">🎉</span>
+              </div>
+              <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-3 tracking-tight">Congratulations!</h2>
+              <p className="text-sm text-gray-600 dark:text-zinc-400 mb-8 leading-relaxed">
+                You've successfully completed your Profile Setup. Your profile is now 100% ready to stand out in the community!
+              </p>
+              <button
+                onClick={() => {
+                  setShowCongrats(false);
+                  
+                  // Grant the setup-profile badge locally if not already owned
+                  if (!userDetails?.badges?.some(b => b.id === "setup-profile")) {
+                    toast.success("You earned the Profile Complete Badge! 🏅");
+                    // Attempt API call if backend supports it (Optional)
+                    api.post('/api/accounts/grant-badge', { badgeId: 'setup-profile' }).catch(() => {});
+                    
+                    setUserDetails(prev => {
+                      if (!prev) return prev;
+                      
+                      // Auto-display it by giving it the next available display_order
+                      const nextOrder = Math.max(-1, ...(prev.badges || []).filter(b => b.display_order !== null).map(b => b.display_order!)) + 1;
+                      
+                      const newBadges = [...(prev.badges || []), { id: "setup-profile", display_order: nextOrder }];
+                      return { ...prev, badges: newBadges };
+                    });
+                  }
+                }}
+                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40"
+              >
+                Awesome! Let's Go
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <BadgeEditModal
         isOpen={isBadgeModalOpen}

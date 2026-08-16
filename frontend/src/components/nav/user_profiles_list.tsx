@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Search, User, MapPin, ArrowRight, Sparkles } from "lucide-react";
+import { Search, User, MapPin, ArrowRight, Sparkles, Tag } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import useGlobalState from "@/lib/global_state";
 
@@ -95,7 +95,23 @@ export const UserProfilesList: React.FC = () => {
       }
     };
     fetchProfiles();
-  }, [decodedQuery]);
+  }, [decodedQuery, userInfo?.account_id]);
+
+  // Synchronize global testing membership updates (Alt+O) immediately on the matching profile
+  useEffect(() => {
+    if (userInfo?.subscription_type && profiles.length > 0) {
+      setProfiles(prev => {
+        const hasChange = prev.some(p => p.id === userInfo.account_id && p.subscriptionType !== userInfo.subscription_type);
+        if (!hasChange) return prev;
+        
+        return prev.map(p => 
+          p.id === userInfo.account_id 
+            ? { ...p, subscriptionType: userInfo.subscription_type as any } 
+            : p
+        );
+      });
+    }
+  }, [userInfo?.subscription_type]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -231,9 +247,10 @@ export const UserProfilesList: React.FC = () => {
                       </div>
                     </div>
 
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400 font-medium">
-                      {profile.tagline}
-                    </p>
+                    <div className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-lg w-fit ${profile.subscriptionType === 'Business' ? 'animate-rainbow' : profile.subscriptionType === 'Premium' ? 'animate-gold-solid' : 'silver-solid'}`}>
+                      <Tag className="w-3 h-3" />
+                      {profile.tagline || "Add Tagline"}
+                    </div>
 
                     <p className="text-xs text-zinc-500 dark:text-zinc-400 pt-1 max-w-xl leading-relaxed">
                       {profile.bio.length > 40 ? (

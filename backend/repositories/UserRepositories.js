@@ -229,12 +229,25 @@ async function updateUserDetails(userId, updates) {
             throw new Error("No fields to update.");
         }
 
+        const allowedColumns = new Set([
+            'email_address',
+            'address',
+            'password_hash',
+            'first_name',
+            'middle_name',
+            'last_name',
+            'birth_date',
+            'suffix',
+        ]);
         const setClauses = [];
         const values = [];
         let index = 1;
 
         for (const [column, value] of Object.entries(updates)) {
             if (value === undefined) continue;
+            if (!allowedColumns.has(column)) {
+                throw new Error(`Unsupported user field: ${column}`);
+            }
 
             setClauses.push(`${column} = $${index}`);
             values.push(value);
@@ -281,7 +294,10 @@ async function updateUserDetailsByAccountId(accountId, updates) {
             index++;
         }
 
-        // Always update updated_at
+        if (setClauses.length === 0) {
+            return null;
+        }
+
         values.push(accountId);
 
         const query = `

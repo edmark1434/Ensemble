@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { MapPin, Mail, Calendar, ChevronDown, Edit2, MessageCircle, Share2, Cake, HelpCircle, ShieldCheck, X } from "lucide-react";
+import { MapPin, Mail, Calendar, ChevronDown, Edit2, MessageCircle, Share2, Cake, HelpCircle, ShieldCheck, X, Tag } from "lucide-react";
 import { ProfileTags } from "../Utilities/ProfileTags.tsx";
 
 interface TopSectionProps {
@@ -25,7 +25,7 @@ interface TopSectionProps {
   avatarUrl?: string;
   isOwner?: boolean;
   verificationLevel?: boolean;
-  subscriptionType?: "Free" | "Premium" | "Business";
+  verificationLevel?: number | boolean;
   onEditAvatar?: () => void;
   onEditProfile?: () => void;
   onChatClick?: () => void;
@@ -162,6 +162,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             role={role}
             verificationLevel={verificationLevel}
             subscriptionType={subscriptionType}
+            onEditRole={isOwner ? onEditProfile : undefined}
           />
 
           {/* Row 2: Full Name Header Block */}
@@ -181,7 +182,8 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
                   return firstMid;
                 })()}
               </span>
-              <span className="text-sm font-bold text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 px-2.5 py-0.5 rounded-lg ml-1">
+              <span className={`flex items-center gap-1 text-sm font-bold px-2.5 py-0.5 rounded-lg ml-1 ${subscriptionType === 'Business' ? 'animate-rainbow' : subscriptionType === 'Premium' ? 'animate-gold-solid' : 'silver-solid'}`}>
+                <Tag className="w-3.5 h-3.5" />
                 {tagline || "Add Tagline"}
               </span>
             </h1>
@@ -237,8 +239,8 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             <span className="text-gray-800 dark:text-zinc-500 font-medium tracking-wide bg-gray-100 dark:bg-white/5 px-1.5 py-0.5 rounded text-[11px]">@{username}</span>
             <span className="text-zinc-600 hidden sm:inline select-none">|</span>
 
-            <div className="flex items-center gap-1 text-gray-700 dark:text-zinc-400 font-medium tracking-wide bg-blue-50 dark:bg-blue-500/5 border border-blue-200 dark:border-blue-500/10 px-2 py-0.5 rounded text-[11px]">
-              <MapPin className="h-3 w-3 text-blue-500 dark:text-blue-400 flex-shrink-0" />
+            <div className="flex items-center gap-1 text-gray-700 dark:text-zinc-400 font-medium tracking-wide bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 px-2 py-0.5 rounded text-[11px]">
+              <MapPin className="h-3 w-3 text-gray-500 dark:text-zinc-400 flex-shrink-0" />
               <span>Cebu City | Cebu | Philippines</span>
             </div>
           </div>
