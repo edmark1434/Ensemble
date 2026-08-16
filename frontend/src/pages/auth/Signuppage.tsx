@@ -603,6 +603,12 @@ export default function SignupPage({
         .animate-pulse-gentle {
           animation: pulse-gentle 10s ease-in-out infinite;
         }
+        
+        /* Custom Scrollbar */
+        .slide-in-left::-webkit-scrollbar { width: 6px; }
+        .slide-in-left::-webkit-scrollbar-track { background: transparent; }
+        .slide-in-left::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+        .slide-in-left::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
       `}</style>
 
       <div className={`page-container ${pageLoaded ? 'opacity-100' : 'opacity-0'}`} style={{
