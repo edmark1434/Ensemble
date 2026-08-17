@@ -38,9 +38,13 @@ export async function GET(request: NextRequest) {
 
     let query = db
       .selectFrom("media_assets")
-      .innerJoin("files", "files.file_id", "media_assets.original_file_id")
+      .innerJoin("media_asset_bundle_files", (join) => join
+        .onRef("media_asset_bundle_files.media_asset_id", "=", "media_assets.media_asset_id")
+        .on("media_asset_bundle_files.position", "=", 0)
+        .on("media_asset_bundle_files.deleted_at", "is", null))
+      .innerJoin("files", "files.file_id", "media_asset_bundle_files.file_id")
       .select([
-        "media_assets.public_id",
+        "media_assets.media_asset_id",
         "media_assets.name",
         "media_assets.type",
         "media_assets.width",
@@ -65,7 +69,7 @@ export async function GET(request: NextRequest) {
     const rows = await query.orderBy("media_assets.created_at", "desc").execute();
 
     const uploads = rows.map((row) => ({
-      id: row.public_id,
+      id: row.media_asset_id,
       fileName: row.name,
       type: row.type,
       url: buildPublicUrl(row.path),

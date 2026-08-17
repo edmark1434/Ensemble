@@ -154,34 +154,45 @@ export async function POST(request: NextRequest) {
           resolvedDuration = probedDuration != null ? Math.round(probedDuration) : null;
         }
 
-        const file = await db
-          .insertInto("files")
-          .values({
-            name: fileName,
-            path: filePath,
-            mime_type: contentType,
-            size_bytes: buffer.byteLength
-          })
-          .returning("file_id")
-          .executeTakeFirstOrThrow();
+        const mediaAsset = await db.transaction().execute(async (transaction) => {
+          const file = await transaction
+            .insertInto("files")
+            .values({
+              name: fileName,
+              path: filePath,
+              mime_type: contentType,
+              size_bytes: buffer.byteLength
+            })
+            .returning("file_id")
+            .executeTakeFirstOrThrow();
 
-        const mediaAsset = await db
-          .insertInto("media_assets")
-          .values({
-            public_id: nanoid(),
-            owner_user_id: ownerUserId,
-            project_id: resolvedProjectId,
-            name: fileName,
-            original_file_id: file.file_id,
-            proxy_file_id: file.file_id,
-            thumbnail_file_id: file.file_id,
-            type: contentType.split("/")[0],
-            width: resolvedWidth,
-            height: resolvedHeight,
-            duration_seconds: resolvedDuration
-          })
-          .returning(["media_asset_id", "public_id"])
-          .executeTakeFirstOrThrow();
+          const createdMediaAsset = await transaction
+            .insertInto("media_assets")
+            .values({
+              owner_user_id: ownerUserId,
+              project_id: resolvedProjectId,
+              name: fileName,
+              proxy_file_id: file.file_id,
+              thumbnail_file_id: file.file_id,
+              type: contentType.split("/")[0],
+              width: resolvedWidth,
+              height: resolvedHeight,
+              duration_seconds: resolvedDuration
+            })
+            .returning("media_asset_id")
+            .executeTakeFirstOrThrow();
+
+          await transaction
+            .insertInto("media_asset_bundle_files")
+            .values({
+              media_asset_id: createdMediaAsset.media_asset_id,
+              file_id: file.file_id,
+              preview_file_id: file.file_id,
+              position: 0
+            })
+            .execute();
+          return createdMediaAsset;
+        });
 
         return {
           fileName,
@@ -190,7 +201,7 @@ export async function POST(request: NextRequest) {
           originalUrl: sourceUrl,
           folder: "uploads",
           url: buildPublicUrl(filePath),
-          mediaAssetId: mediaAsset.public_id,
+          mediaAssetId: mediaAsset.media_asset_id,
           width: resolvedWidth,
           height: resolvedHeight,
           durationSeconds: resolvedDuration

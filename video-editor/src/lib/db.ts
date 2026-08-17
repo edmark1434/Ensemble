@@ -13,11 +13,9 @@ interface FilesTable {
 
 interface MediaAssetsTable {
   media_asset_id: Generated<number>;
-  public_id: string;
   owner_user_id: number;
   project_id: number;
   name: string;
-  original_file_id: number;
   proxy_file_id: number | null;
   thumbnail_file_id: number | null;
   type: string;
@@ -25,6 +23,16 @@ interface MediaAssetsTable {
   height: number | null;
   duration_seconds: number | null;
   is_marketed: Generated<boolean>;
+  created_at: Generated<Date>;
+  deleted_at: Date | null;
+}
+
+interface MediaAssetBundleFilesTable {
+  media_asset_bundle_file_id: Generated<number>;
+  media_asset_id: number;
+  file_id: number;
+  preview_file_id: number;
+  position: number;
   created_at: Generated<Date>;
   deleted_at: Date | null;
 }
@@ -86,6 +94,7 @@ interface ProjectYjsSnapshotsTable {
 interface Database {
   files: FilesTable;
   media_assets: MediaAssetsTable;
+  media_asset_bundle_files: MediaAssetBundleFilesTable;
   projects: ProjectsTable;
   accounts: AccountsTable;
   users: UsersTable;
