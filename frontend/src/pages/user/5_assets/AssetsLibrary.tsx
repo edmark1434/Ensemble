@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AudioLines, CheckCircle2, ChevronLeft, ChevronRight, Image, Loader2, Pencil, Plus, Search, Trash2, Video } from "lucide-react";
+import { AudioLines, Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Heart, Image, Loader2, Pencil, Plus, Search, Star, Trash2, Video } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/axios";
 import UserHeader from "@/components/nav/user_header";
@@ -10,7 +10,7 @@ import AssetMedia from "./AssetMedia";
 import type { AssetPagination, AssetRecord, AssetType } from "./assetTypes";
 
 type FilterType = "all" | AssetType;
-type AssetView = "discover" | "mine" | "purchased";
+type AssetView = "discover" | "mine" | "purchased" | "saved";
 
 const FILTERS: { value: FilterType; label: string; icon: typeof Image }[] = [
   { value: "all", label: "All", icon: Image },
@@ -59,6 +59,7 @@ export default function AssetsLibrary() {
   const [editingAsset, setEditingAsset] = useState<AssetRecord | null>(null);
   const [deletingAsset, setDeletingAsset] = useState<AssetRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [engagementPending, setEngagementPending] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -132,6 +133,36 @@ export default function AssetsLibrary() {
     }
   };
 
+  const updateEngagement = async (asset: AssetRecord, kind: "like" | "save") => {
+    const key = `${kind}:${asset.market_asset_id}`;
+    if (engagementPending.has(key)) return;
+    const enabled = kind === "like" ? asset.is_liked : asset.is_saved;
+    setEngagementPending((current) => new Set(current).add(key));
+    try {
+      const response = enabled
+        ? await api.delete<{ is_liked?: boolean; like_count?: number; is_saved?: boolean; save_count?: number }>(`/api/assets/${asset.market_asset_id}/${kind}`)
+        : await api.put<{ is_liked?: boolean; like_count?: number; is_saved?: boolean; save_count?: number }>(`/api/assets/${asset.market_asset_id}/${kind}`);
+      if (kind === "save" && view === "saved" && !response.data.is_saved) {
+        setAssets((current) => current.filter((item) => item.market_asset_id !== asset.market_asset_id));
+        setPagination((current) => ({ ...current, total: Math.max(0, current.total - 1) }));
+      } else {
+        setAssets((current) => current.map((item) => item.market_asset_id === asset.market_asset_id
+          ? kind === "like"
+            ? { ...item, is_liked: Boolean(response.data.is_liked), like_count: Number(response.data.like_count || 0) }
+            : { ...item, is_saved: Boolean(response.data.is_saved), save_count: Number(response.data.save_count || 0) }
+          : item));
+      }
+    } catch (error) {
+      showErrorToast(requestError(error));
+    } finally {
+      setEngagementPending((current) => {
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-[#080a12] dark:text-white">
       <UserHeader pageTitle="Asset Library" />
@@ -149,9 +180,9 @@ export default function AssetsLibrary() {
         <section className="mt-7 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#0d0f1a] dark:shadow-none">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex rounded-xl bg-gray-100 p-1 dark:bg-white/5" role="tablist" aria-label="Asset views">
-              {(["discover", "mine", "purchased"] as const).map((tab) => (
+              {(["discover", "mine", "purchased", "saved"] as const).map((tab) => (
                 <button key={tab} type="button" role="tab" aria-selected={view === tab} onClick={() => { setPage(1); setView(tab); }} className={`flex-1 rounded-lg px-5 py-2 text-sm font-semibold capitalize transition lg:flex-none ${view === tab ? "bg-white text-blue-600 shadow-sm dark:bg-blue-600 dark:text-white" : "text-gray-600 hover:text-gray-900 dark:text-zinc-400 dark:hover:text-white"}`}>
-                  {tab === "mine" ? "My Assets" : tab === "purchased" ? "Purchased" : "Discover"}
+                  {tab === "mine" ? "My Assets" : tab === "purchased" ? "Purchased" : tab === "saved" ? "Saved" : "Discover"}
                 </button>
               ))}
             </div>
@@ -171,7 +202,7 @@ export default function AssetsLibrary() {
         </section>
 
         <div className="mt-6 flex items-center justify-between">
-          <p className="text-sm font-semibold">{view === "mine" ? "Your uploaded assets" : view === "purchased" ? "Your purchased assets" : "Community assets"}</p>
+          <p className="text-sm font-semibold">{view === "mine" ? "Your uploaded assets" : view === "purchased" ? "Your purchased assets" : view === "saved" ? "Your saved assets" : "Community assets"}</p>
           {!loading && <p className="text-xs text-gray-500 dark:text-zinc-500">{pagination.total.toLocaleString()} {pagination.total === 1 ? "asset" : "assets"}</p>}
         </div>
 
@@ -185,8 +216,8 @@ export default function AssetsLibrary() {
         ) : assets.length === 0 ? (
           <div className="mt-4 rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-16 text-center dark:border-white/10 dark:bg-[#0d0f1a]">
             <AudioLines className="mx-auto h-10 w-10 text-gray-400 dark:text-zinc-600" />
-            <h2 className="mt-4 font-semibold">{view === "mine" ? "You haven't uploaded any assets yet." : view === "purchased" ? "You haven't purchased any assets yet." : "No assets found."}</h2>
-            <p className="mt-1 text-sm text-gray-500 dark:text-zinc-500">{search ? "Try a different search or filter." : view === "purchased" ? "Assets you purchase will appear here." : "Uploaded media will appear here."}</p>
+            <h2 className="mt-4 font-semibold">{view === "mine" ? "You haven't uploaded any assets yet." : view === "purchased" ? "You haven't purchased any assets yet." : view === "saved" ? "You haven't saved any assets yet." : "No assets found."}</h2>
+            <p className="mt-1 text-sm text-gray-500 dark:text-zinc-500">{search ? "Try a different search or filter." : view === "purchased" ? "Assets you purchase will appear here." : view === "saved" ? "Save assets to find them here later." : "Uploaded media will appear here."}</p>
             {view === "mine" && <button type="button" onClick={openCreate} className="mt-5 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">Upload your first asset</button>}
           </div>
         ) : (
@@ -200,7 +231,12 @@ export default function AssetsLibrary() {
                     <span className="shrink-0 text-sm font-bold text-amber-600 dark:text-amber-300">{asset.price_credits.toLocaleString()} cr</span>
                   </div>
                   <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-3 text-[11px] text-gray-500 dark:border-white/5 dark:text-zinc-500">
-                    <span>{formatDate(asset.created_at)}</span><span>{asset.comment_count} comments</span>
+                    <span>{formatDate(asset.created_at)}</span>
+                    <span className="inline-flex items-center gap-3"><span className="inline-flex items-center gap-1"><Heart className="h-3.5 w-3.5" /> {asset.like_count}</span><span className="inline-flex items-center gap-1"><Star className="h-3.5 w-3.5" /> {asset.average_rating || "—"}</span></span>
+                  </div>
+                  <div className="mt-3 flex gap-2" onClick={(event) => event.stopPropagation()}>
+                    <button type="button" onClick={() => void updateEngagement(asset, "like")} disabled={engagementPending.has(`like:${asset.market_asset_id}`)} className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-semibold transition disabled:opacity-50 ${asset.is_liked ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-300" : "border-gray-200 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"}`}><Heart className={`h-3.5 w-3.5 ${asset.is_liked ? "fill-current" : ""}`} /> {asset.is_liked ? "Liked" : "Like"}</button>
+                    <button type="button" onClick={() => void updateEngagement(asset, "save")} disabled={engagementPending.has(`save:${asset.market_asset_id}`)} className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-semibold transition disabled:opacity-50 ${asset.is_saved ? "border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-300" : "border-gray-200 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"}`}><Bookmark className={`h-3.5 w-3.5 ${asset.is_saved ? "fill-current" : ""}`} /> {asset.is_saved ? "Saved" : "Save"}</button>
                   </div>
                   {asset.is_owner && (
                     <div className="mt-3 flex gap-2" onClick={(event) => event.stopPropagation()}>

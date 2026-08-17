@@ -4,17 +4,73 @@ const {
   calculateAssetTransactionFee,
 } = require('../lib/AssetMarketplaceConstants');
 
+const ORIGINAL_FILE_SIZE_LIMITS = {
+  image: 25 * 1024 * 1024,
+  video: 100 * 1024 * 1024,
+  audio: 50 * 1024 * 1024,
+};
+
+function mediaTypeFromMime(mimeType) {
+  if (mimeType?.startsWith('image/')) return 'image';
+  if (mimeType?.startsWith('video/')) return 'video';
+  if (mimeType?.startsWith('audio/')) return 'audio';
+  return null;
+}
+
 const ASSET_SELECT = `
   SELECT ma.market_asset_id, ma.name, ma.description, ma.price_credits, ma.status,
          ma.created_at, ma.updated_at,
          media.media_asset_id, media.type, media.width, media.height,
          media.duration_seconds, media.proxy_path,
          media.thumbnail_path, media.mime_type, media.size_bytes,
+         media.bundle_files, media.bundle_file_count,
          owner.display_name AS creator_name, owner.handle AS creator_handle,
          owner.account_id AS owner_account_id,
          (owner.account_id = $1) AS is_owner,
          purchase_access.is_purchased,
          ((owner.account_id = $1) OR purchase_access.is_purchased) AS can_download,
+         (purchase_access.is_purchased AND owner.account_id <> $1) AS can_review,
+         EXISTS (
+           SELECT 1 FROM asset_likes likes
+           WHERE likes.market_asset_id = ma.market_asset_id
+             AND likes.account_id = $1 AND likes.deleted_at IS NULL
+         ) AS is_liked,
+         EXISTS (
+           SELECT 1 FROM asset_saves saves
+           WHERE saves.market_asset_id = ma.market_asset_id
+             AND saves.account_id = $1 AND saves.deleted_at IS NULL
+         ) AS is_saved,
+         (SELECT COUNT(*)::int FROM asset_likes likes
+          WHERE likes.market_asset_id = ma.market_asset_id
+            AND likes.deleted_at IS NULL) AS like_count,
+         (SELECT COUNT(*)::int FROM asset_saves saves
+          WHERE saves.market_asset_id = ma.market_asset_id
+            AND saves.deleted_at IS NULL) AS save_count,
+         (SELECT COUNT(*)::int FROM asset_reviews reviews
+          WHERE reviews.market_asset_id = ma.market_asset_id
+            AND reviews.deleted_at IS NULL
+            AND EXISTS (
+              SELECT 1
+              FROM user_market_assets review_ownership
+              JOIN users reviewing_user ON reviewing_user.user_id = review_ownership.user_id
+              WHERE review_ownership.market_asset_id = reviews.market_asset_id
+                AND reviewing_user.account_id = reviews.account_id
+                AND review_ownership.status = 'active'
+                AND review_ownership.deleted_at IS NULL
+            )) AS review_count,
+         COALESCE((SELECT ROUND(AVG(reviews.rating)::numeric, 1)
+          FROM asset_reviews reviews
+          WHERE reviews.market_asset_id = ma.market_asset_id
+            AND reviews.deleted_at IS NULL
+            AND EXISTS (
+              SELECT 1
+              FROM user_market_assets review_ownership
+              JOIN users reviewing_user ON reviewing_user.user_id = review_ownership.user_id
+              WHERE review_ownership.market_asset_id = reviews.market_asset_id
+                AND reviewing_user.account_id = reviews.account_id
+                AND review_ownership.status = 'active'
+                AND review_ownership.deleted_at IS NULL
+            )), 0) AS average_rating,
          COALESCE((
            SELECT array_agg(t.name ORDER BY t.name)
            FROM market_asset_tags mat
@@ -27,20 +83,51 @@ const ASSET_SELECT = `
   FROM market_assets ma
   JOIN LATERAL (
     SELECT m.media_asset_id, m.type, m.width, m.height, m.duration_seconds,
-           proxy.path AS proxy_path,
-           thumbnail.path AS thumbnail_path, original.mime_type, original.size_bytes,
+           primary_preview.path AS proxy_path,
+           thumbnail.path AS thumbnail_path, primary_original.mime_type,
+           primary_original.size_bytes,
+           COALESCE((
+             SELECT json_agg(json_build_object(
+               'media_asset_bundle_file_id', bundle.media_asset_bundle_file_id,
+               'name', bundle_file.name,
+               'mime_type', bundle_file.mime_type,
+               'size_bytes', bundle_file.size_bytes,
+               'preview_path', bundle_preview.path,
+               'preview_mime_type', bundle_preview.mime_type,
+               'position', bundle.position
+             ) ORDER BY bundle.position, bundle.media_asset_bundle_file_id)
+             FROM media_asset_bundle_files bundle
+             JOIN files bundle_file ON bundle_file.file_id = bundle.file_id
+             JOIN files bundle_preview ON bundle_preview.file_id = bundle.preview_file_id
+             WHERE bundle.media_asset_id = m.media_asset_id
+               AND bundle.deleted_at IS NULL
+               AND bundle_file.deleted_at IS NULL
+               AND bundle_preview.deleted_at IS NULL
+           ), '[]'::json) AS bundle_files,
+           (SELECT COUNT(*)::int
+            FROM media_asset_bundle_files bundle_count
+            JOIN files counted_file ON counted_file.file_id = bundle_count.file_id
+            JOIN files counted_preview ON counted_preview.file_id = bundle_count.preview_file_id
+            WHERE bundle_count.media_asset_id = m.media_asset_id
+              AND bundle_count.deleted_at IS NULL
+              AND counted_file.deleted_at IS NULL
+              AND counted_preview.deleted_at IS NULL) AS bundle_file_count,
            m.owner_user_id
     FROM market_media_assets mma
     JOIN media_assets m ON m.media_asset_id = mma.media_asset_id
-    JOIN files original ON original.file_id = m.original_file_id
-    JOIN files proxy ON proxy.file_id = m.proxy_file_id
+    JOIN media_asset_bundle_files primary_bundle
+      ON primary_bundle.media_asset_id = m.media_asset_id
+     AND primary_bundle.deleted_at IS NULL
+    JOIN files primary_original ON primary_original.file_id = primary_bundle.file_id
+    JOIN files primary_preview ON primary_preview.file_id = primary_bundle.preview_file_id
     JOIN files thumbnail ON thumbnail.file_id = m.thumbnail_file_id
     WHERE mma.market_asset_id = ma.market_asset_id
       AND m.deleted_at IS NULL
-      AND original.deleted_at IS NULL
-      AND proxy.deleted_at IS NULL
+      AND primary_original.deleted_at IS NULL
+      AND primary_preview.deleted_at IS NULL
       AND thumbnail.deleted_at IS NULL
-    ORDER BY m.created_at, m.media_asset_id
+    ORDER BY m.created_at, m.media_asset_id, primary_bundle.position,
+             primary_bundle.media_asset_bundle_file_id
     LIMIT 1
   ) media ON TRUE
   JOIN users owner_user ON owner_user.user_id = media.owner_user_id
@@ -105,6 +192,13 @@ async function listAssetsRepository({ accountId, search, type, view, limit, offs
     ? 'owner.account_id = $1'
     : view === 'purchased'
       ? 'purchase_access.is_purchased'
+      : view === 'saved'
+        ? `ma.status = 'published' AND EXISTS (
+            SELECT 1 FROM asset_saves saved_asset
+            WHERE saved_asset.market_asset_id = ma.market_asset_id
+              AND saved_asset.account_id = $1
+              AND saved_asset.deleted_at IS NULL
+          )`
       : `ma.status = 'published'`;
   const { rows } = await pool.query(
     `${ASSET_SELECT_WITH_TOTAL}
@@ -148,7 +242,7 @@ async function createAssetRepository(accountId, data) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const fileIds = [data.originalFileId, data.proxyFileId, data.thumbnailFileId];
+    const fileIds = [...data.originalFileIds, ...data.previewFileIds, data.thumbnailFileId];
     const ownedFiles = await client.query(
       `SELECT f.file_id, f.name, f.path, f.mime_type, f.size_bytes, u.user_id
        FROM files f
@@ -161,31 +255,47 @@ async function createAssetRepository(accountId, data) {
       [fileIds, accountId]
     );
     const filesById = new Map(ownedFiles.rows.map((file) => [String(file.file_id), file]));
-    const original = filesById.get(data.originalFileId);
-    const proxy = filesById.get(data.proxyFileId);
+    const originals = data.originalFileIds.map((fileId) => filesById.get(fileId));
+    const previews = data.previewFileIds.map((fileId) => filesById.get(fileId));
+    const proxy = previews[0];
     const thumbnail = filesById.get(data.thumbnailFileId);
-    if (!original || !proxy || !thumbnail) {
+    if (originals.some((file) => !file) || previews.some((file) => !file) || !thumbnail) {
       const error = new Error('ASSET_FILE_NOT_OWNED');
       error.code = 'ASSET_FILE_NOT_OWNED';
       throw error;
     }
-    const originalType = original.mime_type?.startsWith('image/')
-      ? 'image'
-      : original.mime_type?.startsWith('video/')
-        ? 'video'
-        : original.mime_type?.startsWith('audio/')
-          ? 'audio'
-          : null;
-    const proxyType = proxy.mime_type?.startsWith('image/')
-      ? 'image'
-      : proxy.mime_type?.startsWith('video/')
-        ? 'video'
-        : proxy.mime_type?.startsWith('audio/')
-          ? 'audio'
-          : null;
-    if (originalType !== data.type || proxyType !== data.type || !thumbnail.mime_type?.startsWith('image/')) {
+    const primaryOriginal = originals[0];
+    const originalTypes = originals.map((file) => mediaTypeFromMime(file.mime_type));
+    if (originalTypes.some((type) => !type)
+      || previews.some((file) => !file.mime_type?.startsWith('image/'))
+      || originalTypes[0] !== data.type
+      || !thumbnail.mime_type?.startsWith('image/')) {
       const error = new Error('ASSET_FILE_TYPE_MISMATCH');
       error.code = 'ASSET_FILE_TYPE_MISMATCH';
+      throw error;
+    }
+    let aggregateOriginalBytes = 0;
+    for (let index = 0; index < originals.length; index += 1) {
+      const sizeBytes = Number(originals[index].size_bytes);
+      const limit = ORIGINAL_FILE_SIZE_LIMITS[originalTypes[index]];
+      if (!Number.isSafeInteger(sizeBytes) || sizeBytes <= 0 || sizeBytes > limit) {
+        const error = new Error('ASSET_ORIGINAL_FILE_TOO_LARGE');
+        error.code = 'ASSET_ORIGINAL_FILE_TOO_LARGE';
+        throw error;
+      }
+      aggregateOriginalBytes += sizeBytes;
+    }
+    if (previews.some((file) => !Number.isSafeInteger(Number(file.size_bytes))
+      || Number(file.size_bytes) <= 0
+      || Number(file.size_bytes) > 5 * 1024 * 1024)) {
+      const error = new Error('ASSET_PREVIEW_INVALID');
+      error.code = 'ASSET_PREVIEW_INVALID';
+      throw error;
+    }
+    if (!Number.isSafeInteger(aggregateOriginalBytes)
+      || aggregateOriginalBytes > data.maxBundleBytes) {
+      const error = new Error('ASSET_BUNDLE_TOO_LARGE');
+      error.code = 'ASSET_BUNDLE_TOO_LARGE';
       throw error;
     }
     if (!Number.isSafeInteger(Number(thumbnail.size_bytes))
@@ -195,19 +305,29 @@ async function createAssetRepository(accountId, data) {
       error.code = 'ASSET_THUMBNAIL_INVALID';
       throw error;
     }
-    if (!original.path.startsWith('asset-originals/')
-      || !proxy.path.startsWith('assets/')
+    if (originals.some((file) => !file.path.startsWith('asset-originals/'))
+      || previews.some((file) => !file.path.startsWith('assets/'))
       || !thumbnail.path.startsWith('assets/')) {
       const error = new Error('ASSET_FILE_PLACEMENT_INVALID');
       error.code = 'ASSET_FILE_PLACEMENT_INVALID';
       throw error;
     }
     const alreadyUsed = await client.query(
-      `SELECT 1 FROM media_assets
-       WHERE deleted_at IS NULL
-         AND (original_file_id = ANY($1::uuid[])
-           OR proxy_file_id = ANY($1::uuid[])
-           OR thumbnail_file_id = ANY($1::uuid[]))
+      `SELECT 1
+       FROM (
+         SELECT m.media_asset_id
+         FROM media_assets m
+         WHERE m.deleted_at IS NULL
+           AND m.thumbnail_file_id = ANY($1::uuid[])
+         UNION ALL
+         SELECT bundle.media_asset_id
+         FROM media_asset_bundle_files bundle
+         JOIN media_assets m ON m.media_asset_id = bundle.media_asset_id
+         WHERE m.deleted_at IS NULL
+           AND bundle.deleted_at IS NULL
+           AND (bundle.file_id = ANY($1::uuid[])
+             OR bundle.preview_file_id = ANY($1::uuid[]))
+       ) used_files
        LIMIT 1`,
       [fileIds]
     );
@@ -220,11 +340,20 @@ async function createAssetRepository(accountId, data) {
     const media = await client.query(
       `INSERT INTO media_assets
          (name, type, width, height, duration_seconds, is_marketed, owner_user_id,
-          original_file_id, proxy_file_id, thumbnail_file_id)
-       VALUES ($1, $2, $3, $4, $5, TRUE, $6, $7, $8, $9)
+          proxy_file_id, thumbnail_file_id)
+       VALUES ($1, $2, $3, $4, $5, TRUE, $6, $7, $8)
        RETURNING media_asset_id`,
       [data.name, data.type, data.width, data.height, data.durationSeconds,
-        original.user_id, data.originalFileId, data.proxyFileId, data.thumbnailFileId]
+        primaryOriginal.user_id, data.previewFileIds[0], data.thumbnailFileId]
+    );
+    await client.query(
+      `INSERT INTO media_asset_bundle_files
+         (media_asset_id, file_id, preview_file_id, position)
+       SELECT $1, original.file_id, preview.file_id, original.ordinality - 1
+       FROM unnest($2::uuid[]) WITH ORDINALITY AS original(file_id, ordinality)
+       JOIN unnest($3::uuid[]) WITH ORDINALITY AS preview(file_id, ordinality)
+         ON preview.ordinality = original.ordinality`,
+      [media.rows[0].media_asset_id, data.originalFileIds, data.previewFileIds]
     );
     const market = await client.query(
       `INSERT INTO market_assets
@@ -249,9 +378,10 @@ async function createAssetRepository(accountId, data) {
   }
 }
 
-async function getAssetDownloadRepository(assetId, accountId) {
+async function getAssetDownloadRepository(assetId, accountId, bundleFileId = null) {
   const { rows } = await pool.query(
-    `SELECT original.path, original.name, original.mime_type,
+    `SELECT bundle.media_asset_bundle_file_id, bundle.position,
+            original.path, original.name, original.mime_type, original.size_bytes,
             (owner.account_id = $2) AS is_owner,
             EXISTS (
               SELECT 1
@@ -265,15 +395,18 @@ async function getAssetDownloadRepository(assetId, accountId) {
      FROM market_assets ma
      JOIN market_media_assets mma ON mma.market_asset_id = ma.market_asset_id
      JOIN media_assets media ON media.media_asset_id = mma.media_asset_id
-     JOIN files original ON original.file_id = media.original_file_id
+     JOIN media_asset_bundle_files bundle ON bundle.media_asset_id = media.media_asset_id
+     JOIN files original ON original.file_id = bundle.file_id
      JOIN users owner_user ON owner_user.user_id = media.owner_user_id
      JOIN accounts owner ON owner.account_id = owner_user.account_id
      WHERE ma.market_asset_id = $1
        AND ma.deleted_at IS NULL AND media.deleted_at IS NULL
-       AND original.deleted_at IS NULL
-     ORDER BY media.created_at, media.media_asset_id
+       AND bundle.deleted_at IS NULL AND original.deleted_at IS NULL
+       AND ($3::uuid IS NULL OR bundle.media_asset_bundle_file_id = $3)
+     ORDER BY media.created_at, media.media_asset_id, bundle.position,
+              bundle.media_asset_bundle_file_id
      LIMIT 1`,
-    [assetId, accountId]
+    [assetId, accountId, bundleFileId]
   );
   return rows[0] || null;
 }
@@ -740,6 +873,179 @@ async function deleteReplyRepository(assetId, commentId, replyId, accountId) {
   return result.rowCount === 1;
 }
 
+async function setAssetLikeRepository(assetId, accountId, liked) {
+  if (liked) {
+    await pool.query(
+      `INSERT INTO asset_likes (market_asset_id, account_id, created_at, deleted_at)
+       VALUES ($1, $2, CURRENT_TIMESTAMP, NULL)
+       ON CONFLICT (market_asset_id, account_id)
+       DO UPDATE SET deleted_at = NULL,
+                     created_at = CASE WHEN asset_likes.deleted_at IS NULL
+                       THEN asset_likes.created_at ELSE CURRENT_TIMESTAMP END`,
+      [assetId, accountId]
+    );
+  } else {
+    await pool.query(
+      `UPDATE asset_likes SET deleted_at = CURRENT_TIMESTAMP
+       WHERE market_asset_id = $1 AND account_id = $2 AND deleted_at IS NULL`,
+      [assetId, accountId]
+    );
+  }
+  const { rows: [result] } = await pool.query(
+    `SELECT EXISTS (
+       SELECT 1 FROM asset_likes
+       WHERE market_asset_id = $1 AND account_id = $2 AND deleted_at IS NULL
+     ) AS is_liked,
+     (SELECT COUNT(*)::int FROM asset_likes
+      WHERE market_asset_id = $1 AND deleted_at IS NULL) AS like_count`,
+    [assetId, accountId]
+  );
+  return result;
+}
+
+async function setAssetSaveRepository(assetId, accountId, saved) {
+  if (saved) {
+    await pool.query(
+      `INSERT INTO asset_saves (market_asset_id, account_id, created_at, deleted_at)
+       VALUES ($1, $2, CURRENT_TIMESTAMP, NULL)
+       ON CONFLICT (market_asset_id, account_id)
+       DO UPDATE SET deleted_at = NULL,
+                     created_at = CASE WHEN asset_saves.deleted_at IS NULL
+                       THEN asset_saves.created_at ELSE CURRENT_TIMESTAMP END`,
+      [assetId, accountId]
+    );
+  } else {
+    await pool.query(
+      `UPDATE asset_saves SET deleted_at = CURRENT_TIMESTAMP
+       WHERE market_asset_id = $1 AND account_id = $2 AND deleted_at IS NULL`,
+      [assetId, accountId]
+    );
+  }
+  const { rows: [result] } = await pool.query(
+    `SELECT EXISTS (
+       SELECT 1 FROM asset_saves
+       WHERE market_asset_id = $1 AND account_id = $2 AND deleted_at IS NULL
+     ) AS is_saved,
+     (SELECT COUNT(*)::int FROM asset_saves
+      WHERE market_asset_id = $1 AND deleted_at IS NULL) AS save_count`,
+    [assetId, accountId]
+  );
+  return result;
+}
+
+async function listAssetReviewsRepository(assetId, accountId) {
+  const { rows } = await pool.query(
+    `SELECT review.asset_review_id, review.rating, review.review,
+            review.created_at, review.updated_at,
+            author.display_name AS author_name,
+            author.handle AS author_handle,
+            avatar.path AS author_avatar_path,
+            (review.account_id = $2) AS is_owner
+     FROM asset_reviews review
+     JOIN accounts author ON author.account_id = review.account_id
+     LEFT JOIN files avatar ON avatar.file_id = author.avatar_file_id
+     WHERE review.market_asset_id = $1
+       AND review.deleted_at IS NULL
+       AND author.deleted_at IS NULL
+       AND EXISTS (
+         SELECT 1
+         FROM user_market_assets ownership
+         JOIN users buyer ON buyer.user_id = ownership.user_id
+         WHERE ownership.market_asset_id = review.market_asset_id
+           AND buyer.account_id = review.account_id
+           AND ownership.status = 'active'
+           AND ownership.deleted_at IS NULL
+       )
+     ORDER BY review.created_at DESC, review.asset_review_id DESC`,
+    [assetId, accountId]
+  );
+  return rows;
+}
+
+async function createAssetReviewRepository(assetId, accountId, rating, reviewText) {
+  const { rows } = await pool.query(
+    `WITH inserted AS (
+       INSERT INTO asset_reviews
+         (market_asset_id, account_id, rating, review, created_at, updated_at, deleted_at)
+       SELECT $1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL
+       WHERE EXISTS (
+         SELECT 1
+         FROM user_market_assets ownership
+         JOIN users buyer ON buyer.user_id = ownership.user_id
+         WHERE ownership.market_asset_id = $1
+           AND buyer.account_id = $2
+           AND ownership.status = 'active'
+           AND ownership.deleted_at IS NULL
+       )
+       ON CONFLICT (market_asset_id, account_id)
+       DO UPDATE SET rating = EXCLUDED.rating,
+                     review = EXCLUDED.review,
+                     created_at = CURRENT_TIMESTAMP,
+                     updated_at = CURRENT_TIMESTAMP,
+                     deleted_at = NULL
+       WHERE asset_reviews.deleted_at IS NOT NULL
+       RETURNING asset_review_id, rating, review, created_at, updated_at, account_id
+     )
+     SELECT inserted.asset_review_id, inserted.rating, inserted.review,
+            inserted.created_at, inserted.updated_at,
+            author.display_name AS author_name,
+            author.handle AS author_handle,
+            avatar.path AS author_avatar_path,
+            TRUE AS is_owner
+     FROM inserted
+     JOIN accounts author ON author.account_id = inserted.account_id
+     LEFT JOIN files avatar ON avatar.file_id = author.avatar_file_id`,
+    [assetId, accountId, rating, reviewText]
+  );
+  return rows[0] || null;
+}
+
+async function updateAssetReviewRepository(assetId, reviewId, accountId, rating, reviewText) {
+  const { rows } = await pool.query(
+    `WITH updated AS (
+       UPDATE asset_reviews review
+       SET rating = $4, review = $5, updated_at = CURRENT_TIMESTAMP
+       WHERE review.asset_review_id = $2
+         AND review.market_asset_id = $1
+         AND review.account_id = $3
+         AND review.deleted_at IS NULL
+         AND EXISTS (
+           SELECT 1
+           FROM user_market_assets ownership
+           JOIN users buyer ON buyer.user_id = ownership.user_id
+           WHERE ownership.market_asset_id = review.market_asset_id
+             AND buyer.account_id = review.account_id
+             AND ownership.status = 'active'
+             AND ownership.deleted_at IS NULL
+         )
+       RETURNING review.asset_review_id, review.rating, review.review,
+                 review.created_at, review.updated_at, review.account_id
+     )
+     SELECT updated.asset_review_id, updated.rating, updated.review,
+            updated.created_at, updated.updated_at,
+            author.display_name AS author_name,
+            author.handle AS author_handle,
+            avatar.path AS author_avatar_path,
+            TRUE AS is_owner
+     FROM updated
+     JOIN accounts author ON author.account_id = updated.account_id
+     LEFT JOIN files avatar ON avatar.file_id = author.avatar_file_id`,
+    [assetId, reviewId, accountId, rating, reviewText]
+  );
+  return rows[0] || null;
+}
+
+async function deleteAssetReviewRepository(assetId, reviewId, accountId) {
+  const result = await pool.query(
+    `UPDATE asset_reviews
+     SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+     WHERE asset_review_id = $2 AND market_asset_id = $1
+       AND account_id = $3 AND deleted_at IS NULL`,
+    [assetId, reviewId, accountId]
+  );
+  return result.rowCount === 1;
+}
+
 module.exports = {
   listAssetsRepository,
   getAssetRepository,
@@ -755,4 +1061,10 @@ module.exports = {
   createReplyRepository,
   updateReplyRepository,
   deleteReplyRepository,
+  setAssetLikeRepository,
+  setAssetSaveRepository,
+  listAssetReviewsRepository,
+  createAssetReviewRepository,
+  updateAssetReviewRepository,
+  deleteAssetReviewRepository,
 };

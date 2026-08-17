@@ -13,6 +13,12 @@ const {
   createReplyRepository,
   updateReplyRepository,
   deleteReplyRepository,
+  setAssetLikeRepository,
+  setAssetSaveRepository,
+  listAssetReviewsRepository,
+  createAssetReviewRepository,
+  updateAssetReviewRepository,
+  deleteAssetReviewRepository,
 } = require('../repositories/AssetRepositories');
 const {
   generateProtectedAssetDownloadUrl,
@@ -27,7 +33,9 @@ const {
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ASSET_TYPES = new Set(['image', 'video', 'audio']);
 const ASSET_STATUSES = new Set(['draft', 'published']);
-const ASSET_VIEWS = new Set(['discover', 'mine', 'purchased']);
+const ASSET_VIEWS = new Set(['discover', 'mine', 'purchased', 'saved']);
+const MAX_BUNDLE_FILES = 20;
+const MAX_BUNDLE_BYTES = 500 * 1024 * 1024;
 
 class AssetError extends Error {
   constructor(message, statusCode = 400, code = 'ASSET_ERROR') {
@@ -114,19 +122,31 @@ function validateAssetPayload(payload, { creating = false } = {}) {
   };
   if (!creating) return result;
 
-  requireUuid(payload?.originalFileId, 'Original file ID');
-  requireUuid(payload?.proxyFileId, 'Proxy file ID');
+  if (!Array.isArray(payload?.originalFileIds)
+    || payload.originalFileIds.length < 1
+    || payload.originalFileIds.length > MAX_BUNDLE_FILES) {
+    throw new AssetError(`Choose between 1 and ${MAX_BUNDLE_FILES} original files.`, 400, 'VALIDATION_ERROR');
+  }
+  const originalFileIds = payload.originalFileIds.map((fileId, index) =>
+    requireUuid(fileId, `Original file ID ${index + 1}`));
+  if (!Array.isArray(payload?.previewFileIds)
+    || payload.previewFileIds.length !== originalFileIds.length) {
+    throw new AssetError('Each original file must have one derivative preview.', 400, 'VALIDATION_ERROR');
+  }
+  const previewFileIds = payload.previewFileIds.map((fileId, index) =>
+    requireUuid(fileId, `Preview file ID ${index + 1}`));
   requireUuid(payload?.thumbnailFileId, 'Thumbnail file ID');
-  if (new Set([payload.originalFileId, payload.proxyFileId, payload.thumbnailFileId]).size !== 3) {
-    throw new AssetError('Original, proxy, and thumbnail files must be separate uploads.', 400, 'VALIDATION_ERROR');
+  if (new Set([...originalFileIds, ...previewFileIds, payload.thumbnailFileId]).size
+    !== originalFileIds.length + previewFileIds.length + 1) {
+    throw new AssetError('Every original, preview, and thumbnail must be a separate upload.', 400, 'VALIDATION_ERROR');
   }
   if (!ASSET_TYPES.has(payload?.type)) {
     throw new AssetError('Asset type must be image, video, or audio.', 400, 'VALIDATION_ERROR');
   }
   return {
     ...result,
-    originalFileId: payload.originalFileId,
-    proxyFileId: payload.proxyFileId,
+    originalFileIds,
+    previewFileIds,
     thumbnailFileId: payload.thumbnailFileId,
     type: payload.type,
     width: payload.type === 'audio' ? null : optionalPositiveInteger(payload.width, 'Width', 100000),
@@ -134,6 +154,18 @@ function validateAssetPayload(payload, { creating = false } = {}) {
     durationSeconds: payload.type === 'image'
       ? null
       : optionalPositiveInteger(payload.durationSeconds, 'Duration', 86400),
+    maxBundleBytes: MAX_BUNDLE_BYTES,
+  };
+}
+
+function validateReviewPayload(payload) {
+  const rating = Number(payload?.rating);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+    throw new AssetError('Rating must be a whole number from 1 to 5.', 400, 'VALIDATION_ERROR');
+  }
+  return {
+    rating,
+    review: cleanText(payload?.review, 'Review', 2000),
   };
 }
 
@@ -144,6 +176,10 @@ function publicAsset(asset) {
   const transactionFeeCredits = calculateAssetTransactionFee(priceCredits);
   return {
     ...safeAsset,
+    like_count: Number(safeAsset.like_count || 0),
+    save_count: Number(safeAsset.save_count || 0),
+    review_count: Number(safeAsset.review_count || 0),
+    average_rating: Number(safeAsset.average_rating || 0),
     transaction_fee_percent: MARKETPLACE_ASSET_TRANSACTION_FEE_PERCENT,
     transaction_fee_credits: transactionFeeCredits,
     owner_net_credits: priceCredits - transactionFeeCredits,
@@ -209,14 +245,24 @@ async function createAssetServices(accountId, payload) {
     if (error.code === 'ASSET_THUMBNAIL_INVALID') {
       throw new AssetError('The thumbnail must be a valid image no larger than 5MB.', 400, error.code);
     }
+    if (error.code === 'ASSET_PREVIEW_INVALID') {
+      throw new AssetError('Every asset preview must be a valid image no larger than 5MB.', 400, error.code);
+    }
+    if (error.code === 'ASSET_ORIGINAL_FILE_TOO_LARGE') {
+      throw new AssetError('One or more original files exceeds its permitted size.', 400, error.code);
+    }
+    if (error.code === 'ASSET_BUNDLE_TOO_LARGE') {
+      throw new AssetError('The combined original files must not exceed 500MB.', 400, error.code);
+    }
     throw error;
   }
 }
 
-async function getAssetDownloadServices(assetId, accountId) {
+async function getAssetDownloadServices(assetId, accountId, bundleFileId = null) {
   requireUuid(assetId);
-  const download = await getAssetDownloadRepository(assetId, accountId);
-  if (!download) throw new AssetError('Asset not found.', 404, 'ASSET_NOT_FOUND');
+  if (bundleFileId) requireUuid(bundleFileId, 'Bundle file ID');
+  const download = await getAssetDownloadRepository(assetId, accountId, bundleFileId);
+  if (!download) throw new AssetError('Asset file not found.', 404, 'ASSET_FILE_NOT_FOUND');
   if (!download.is_owner && !download.is_purchased) {
     throw new AssetError('Purchase this asset before downloading the original file.', 403, 'ASSET_PURCHASE_REQUIRED');
   }
@@ -226,10 +272,11 @@ async function getAssetDownloadServices(assetId, accountId) {
   };
 }
 
-async function getAssetOriginalPreviewServices(assetId, accountId) {
+async function getAssetOriginalPreviewServices(assetId, accountId, bundleFileId = null) {
   requireUuid(assetId);
-  const preview = await getAssetDownloadRepository(assetId, accountId);
-  if (!preview) throw new AssetError('Asset not found.', 404, 'ASSET_NOT_FOUND');
+  if (bundleFileId) requireUuid(bundleFileId, 'Bundle file ID');
+  const preview = await getAssetDownloadRepository(assetId, accountId, bundleFileId);
+  if (!preview) throw new AssetError('Asset file not found.', 404, 'ASSET_FILE_NOT_FOUND');
   if (!preview.is_owner && !preview.is_purchased) {
     throw new AssetError('Purchase this asset before viewing the original file.', 403, 'ASSET_PURCHASE_REQUIRED');
   }
@@ -390,6 +437,62 @@ async function deleteReplyServices(assetId, commentId, replyId, accountId) {
   }
 }
 
+async function setAssetLikeServices(assetId, accountId, liked) {
+  requireUuid(assetId);
+  await getAssetServices(assetId, accountId);
+  return setAssetLikeRepository(assetId, accountId, Boolean(liked));
+}
+
+async function setAssetSaveServices(assetId, accountId, saved) {
+  requireUuid(assetId);
+  await getAssetServices(assetId, accountId);
+  return setAssetSaveRepository(assetId, accountId, Boolean(saved));
+}
+
+async function listAssetReviewsServices(assetId, accountId) {
+  requireUuid(assetId);
+  await getAssetServices(assetId, accountId);
+  return listAssetReviewsRepository(assetId, accountId);
+}
+
+async function createAssetReviewServices(assetId, accountId, payload) {
+  requireUuid(assetId);
+  const asset = await getAssetServices(assetId, accountId);
+  if (!asset.can_review) {
+    throw new AssetError('Only users who purchased this asset can review it.', 403, 'ASSET_PURCHASE_REQUIRED');
+  }
+  const { rating, review } = validateReviewPayload(payload);
+  const created = await createAssetReviewRepository(assetId, accountId, rating, review);
+  if (!created) {
+    throw new AssetError('You already reviewed this asset.', 409, 'ASSET_REVIEW_EXISTS');
+  }
+  return created;
+}
+
+async function updateAssetReviewServices(assetId, reviewId, accountId, payload) {
+  requireUuid(assetId);
+  requireUuid(reviewId, 'Review ID');
+  const asset = await getAssetServices(assetId, accountId);
+  if (!asset.can_review) {
+    throw new AssetError('Only an active purchaser can update this review.', 403, 'ASSET_PURCHASE_REQUIRED');
+  }
+  const { rating, review } = validateReviewPayload(payload);
+  const updated = await updateAssetReviewRepository(assetId, reviewId, accountId, rating, review);
+  if (!updated) {
+    throw new AssetError('Review not found or you cannot edit it.', 404, 'ASSET_REVIEW_NOT_FOUND');
+  }
+  return updated;
+}
+
+async function deleteAssetReviewServices(assetId, reviewId, accountId) {
+  requireUuid(assetId);
+  requireUuid(reviewId, 'Review ID');
+  await getAssetServices(assetId, accountId);
+  if (!await deleteAssetReviewRepository(assetId, reviewId, accountId)) {
+    throw new AssetError('Review not found or you cannot delete it.', 404, 'ASSET_REVIEW_NOT_FOUND');
+  }
+}
+
 module.exports = {
   AssetError,
   listAssetsServices,
@@ -407,4 +510,10 @@ module.exports = {
   createReplyServices,
   updateReplyServices,
   deleteReplyServices,
+  setAssetLikeServices,
+  setAssetSaveServices,
+  listAssetReviewsServices,
+  createAssetReviewServices,
+  updateAssetReviewServices,
+  deleteAssetReviewServices,
 };
