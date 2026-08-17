@@ -89,7 +89,7 @@ export const InboxReplyQuote: React.FC<InboxReplyQuoteProps> = ({
         <p className="text-[10px] font-semibold text-blue-300">
           {isParentSender ? "You" : "Replied to a message"}
         </p>
-        <p className="truncate text-zinc-300 text-[11px]">{previewContent}</p>
+        <p className="truncate text-gray-600 dark:text-zinc-300 text-[11px]">{previewContent}</p>
       </div>
     </button>
   );

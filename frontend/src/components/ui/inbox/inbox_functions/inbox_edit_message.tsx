@@ -35,7 +35,7 @@ export const InboxEditedBadge: React.FC<InboxEditedBadgeProps> = ({ isEdited }) 
 
   return (
     <span
-      className="text-[10px] text-zinc-500 italic select-none"
+      className="text-[10px] text-gray-500 dark:text-zinc-500 italic select-none"
       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
     >
       Edited

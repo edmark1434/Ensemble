@@ -51,11 +51,11 @@ export const InboxList: React.FC<InboxListProps> = ({
         <AlertCircle className="mb-2 h-8 w-8 text-red-400" />
         {!isCollapsed && (
           <>
-            <p className="text-xs text-zinc-400">{error}</p>
+            <p className="text-xs text-gray-500 dark:text-zinc-400">{error}</p>
             <button
               type="button"
               onClick={onRetry}
-              className="mt-3 rounded-lg bg-white/10 px-3 py-1.5 text-xs text-white hover:bg-white/15"
+              className="mt-3 rounded-lg bg-gray-100 dark:bg-white/10 px-3 py-1.5 text-xs text-gray-900 dark:text-white hover:bg-white/15"
             >
               Try again
             </button>
@@ -70,7 +70,7 @@ export const InboxList: React.FC<InboxListProps> = ({
       <div className="flex flex-col items-center justify-center h-full text-center p-4">
         <MessageCircle className="h-8 w-8 text-zinc-600 mb-2" />
         {!isCollapsed && (
-          <p className="text-xs text-zinc-400" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+          <p className="text-xs text-gray-500 dark:text-zinc-400" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
             {searchQuery ? "No conversations found" : "No messages yet"}
           </p>
         )}
@@ -79,7 +79,7 @@ export const InboxList: React.FC<InboxListProps> = ({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-dark-surface inbox-scroll-thin">
+    <div className="flex-1 overflow-y-auto bg-white dark:bg-dark-surface inbox-scroll-thin">
       {conversations.map((inbox) => {
         const isActive = selectedConversation?._id === inbox._id;
         const name = getConversationName(inbox);
@@ -110,7 +110,7 @@ export const InboxList: React.FC<InboxListProps> = ({
             key={inbox._id}
             onClick={() => onSelectConversation(inbox)}
             title={isCollapsed ? name : undefined}
-            className={`w-full flex items-center gap-3 hover:bg-white/5 transition-all duration-200 ${
+            className={`w-full flex items-center gap-3 hover:bg-gray-50 dark:bg-white/5 transition-all duration-200 ${
               isCollapsed ? "p-3 justify-center" : "p-4"
             } ${
               isActive
@@ -133,13 +133,13 @@ export const InboxList: React.FC<InboxListProps> = ({
               />
               {inbox.conversation_type === "direct" && (
                 <span
-                  className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-[#0d0f1a] ${
+                  className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-dark-surface ${
                     isOnline ? "bg-green-500" : "bg-zinc-600"
                   }`}
                 />
               )}
               {isCollapsed && unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-blue-500 ring-2 ring-[#0d0f1a]" />
+                <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-blue-500 ring-2 ring-white dark:ring-dark-surface" />
               )}
             </div>
 
@@ -147,13 +147,13 @@ export const InboxList: React.FC<InboxListProps> = ({
               <>
                 <div className="flex-1 text-left min-w-0">
                   <p
-                    className="font-medium text-white truncate text-sm"
+                    className="font-medium text-gray-900 dark:text-white truncate text-sm"
                     style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                   >
                     {name}
                   </p>
                   <p
-                    className="text-xs text-zinc-500 truncate"
+                    className="text-xs text-gray-500 dark:text-zinc-500 truncate"
                     style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                   >
                     {lastMessage}
@@ -162,13 +162,13 @@ export const InboxList: React.FC<InboxListProps> = ({
 
                 <div className="text-right flex-shrink-0">
                   <p
-                    className="text-[10px] text-zinc-500"
+                    className="text-[10px] text-gray-500 dark:text-zinc-500"
                     style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                   >
                     {time}
                   </p>
                   {unreadCount > 0 && (
-                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-blue-500 text-[10px] font-medium text-white px-1 mt-1">
+                    <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-blue-500 text-[10px] font-medium text-gray-900 dark:text-white px-1 mt-1">
                       {unreadCount > 99 ? "99+" : unreadCount}
                     </span>
                   )}

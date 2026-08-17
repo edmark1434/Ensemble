@@ -160,7 +160,7 @@ export const InboxUploadMediaButton: React.FC<InboxUploadMediaButtonProps> = ({
         className={`rounded-xl p-2.5 transition flex-shrink-0 ${
           disabled
             ? "text-zinc-600 cursor-not-allowed"
-            : "text-zinc-400 hover:bg-white/10 hover:text-white"
+            : "text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
         }`}
       >
         <Paperclip className="h-5 w-5" />
@@ -185,29 +185,29 @@ export const InboxUploadMediaPreview: React.FC<InboxUploadMediaPreviewProps> = (
       {mediaList.map((media) => (
         <div key={media.id} className="relative inline-block flex-shrink-0">
           {media.type === "file" ? (
-            <div className="h-20 w-40 rounded-xl border border-white/10 bg-white/5 p-3 text-zinc-300">
+            <div className="h-20 w-40 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 p-3 text-gray-600 dark:text-zinc-300">
               <FileText className="mb-1 h-5 w-5 text-blue-400" />
               <p className="truncate text-xs">{media.file.name}</p>
             </div>
           ) : media.type === "video" ? (
-            <div className="relative h-20 w-20 rounded-xl overflow-hidden border border-white/10 bg-black flex items-center justify-center">
+            <div className="relative h-20 w-20 rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 bg-black flex items-center justify-center">
               <video src={media.previewUrl} className="h-full w-full object-cover" muted />
               <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                <Film className="h-5 w-5 text-white/80" />
+                <Film className="h-5 w-5 text-gray-900 dark:text-white/80" />
               </div>
             </div>
           ) : (
             <img
               src={media.previewUrl}
               alt="Media preview"
-              className="h-20 w-20 rounded-xl object-cover border border-white/10"
+              className="h-20 w-20 rounded-xl object-cover border border-gray-200 dark:border-white/10"
             />
           )}
 
           <button
             type="button"
             onClick={() => onRemove(media.id)}
-            className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-[#12141f] border border-white/10 flex items-center justify-center text-zinc-300 hover:text-white hover:bg-red-500/80 transition shadow-md"
+            className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-[#12141f] border border-gray-200 dark:border-white/10 flex items-center justify-center text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-red-500/80 transition shadow-md"
           >
             <X className="h-3 w-3" />
           </button>

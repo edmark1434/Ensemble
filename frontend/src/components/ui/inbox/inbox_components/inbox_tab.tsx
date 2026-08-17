@@ -25,7 +25,7 @@ export const InboxTab: React.FC<InboxTabProps> = ({
   return (
     <>
       <div
-        className={`flex items-center border-b border-white/10 flex-shrink-0 bg-dark-surface ${
+        className={`flex items-center border-b border-gray-200 dark:border-white/10 flex-shrink-0 bg-white dark:bg-dark-surface ${
           isCollapsed ? "flex-col py-2 gap-2" : "pr-2"
         }`}
       >
@@ -37,12 +37,12 @@ export const InboxTab: React.FC<InboxTabProps> = ({
               ? `p-3 rounded-xl ${
                   !isMarketplace
                     ? "bg-blue-500/20 text-blue-400"
-                    : "text-zinc-400 hover:text-white hover:bg-white/5"
+                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5"
                 }`
               : `flex-1 py-3 text-sm font-medium ${
                   !isMarketplace
-                    ? "text-white border-b-2 border-blue-500"
-                    : "text-zinc-400 hover:text-white hover:bg-white/5"
+                    ? "text-gray-900 dark:text-white border-b-2 border-blue-500"
+                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5"
                 }`
           }`}
           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
@@ -59,12 +59,12 @@ export const InboxTab: React.FC<InboxTabProps> = ({
               ? `p-3 rounded-xl ${
                   isMarketplace
                     ? "bg-blue-500/20 text-blue-400"
-                    : "text-zinc-400 hover:text-white hover:bg-white/5"
+                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5"
                 }`
               : `flex-1 py-3 text-sm font-medium ${
                   isMarketplace
-                    ? "text-white border-b-2 border-blue-500"
-                    : "text-zinc-400 hover:text-white hover:bg-white/5"
+                    ? "text-gray-900 dark:text-white border-b-2 border-blue-500"
+                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-50 dark:bg-white/5"
                 }`
           }`}
           style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
@@ -77,7 +77,7 @@ export const InboxTab: React.FC<InboxTabProps> = ({
         <button
           onClick={() => setIsModalOpen(true)}
           title="Create Group Chat"
-          className={`rounded-xl text-zinc-400 hover:text-white hover:bg-white/10 transition flex-shrink-0 ${
+          className={`rounded-xl text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-100 dark:bg-white/10 transition flex-shrink-0 ${
             isCollapsed ? "p-3" : "p-2 ml-1"
           }`}
         >

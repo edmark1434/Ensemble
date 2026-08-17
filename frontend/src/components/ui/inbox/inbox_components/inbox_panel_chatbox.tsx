@@ -68,21 +68,21 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
   }, [messageInput, textareaRef]);
 
   return (
-    <div className="border-t border-white/10 bg-dark-surface flex-shrink-0">
+    <div className="border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface flex-shrink-0">
       {typingCount > 0 && (
-        <div className="px-4 pt-2 text-xs text-zinc-500">
+        <div className="px-4 pt-2 text-xs text-gray-500 dark:text-zinc-500">
           {typingCount === 1 ? "Someone is typing..." : `${typingCount} people are typing...`}
         </div>
       )}
       {(replyToMessage || editingMessage) && (
-        <div className="px-4 py-2 bg-dark-surface border-b border-white/10 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm text-zinc-400">
+        <div className="px-4 py-2 bg-white dark:bg-dark-surface border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-zinc-400">
             {replyToMessage ? (
               <>
                 <Reply className="h-4 w-4 text-blue-400" />
                 <span>
                   Replying to:{" "}
-                  <span className="text-white">
+                  <span className="text-gray-900 dark:text-white">
                     {replyToMessage.message_content.substring(0, 50)}...
                   </span>
                 </span>
@@ -96,7 +96,7 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
           </div>
           <button
             onClick={cancelReply}
-            className="p-1 rounded-full hover:bg-white/10 text-zinc-400 hover:text-white transition"
+            className="p-1 rounded-full hover:bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition"
           >
             <X className="h-4 w-4" />
           </button>
@@ -118,7 +118,7 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
                 : "Type a message..."
             }
             rows={1}
-            className="w-full rounded-2xl border border-white/15 bg-white/5 py-2.5 pl-4 pr-11 text-sm text-white outline-none resize-none placeholder:text-zinc-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition inbox-scroll-thin max-h-[18rem] overflow-y-auto"
+            className="w-full rounded-2xl border border-gray-300 dark:border-white/15 bg-gray-50 dark:bg-white/5 py-2.5 pl-4 pr-11 text-sm text-gray-900 dark:text-white outline-none resize-none placeholder:text-gray-500 dark:text-zinc-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition inbox-scroll-thin max-h-[18rem] overflow-y-auto"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
             value={messageInput}
             onChange={(e) => setMessageInput(e.target.value)}
@@ -132,7 +132,7 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
           <button
             type="button"
             onClick={() => setShowEmojiPicker((open) => !open)}
-            className="absolute bottom-2.5 right-3 text-zinc-500 transition hover:text-white"
+            className="absolute bottom-2.5 right-3 text-gray-500 dark:text-zinc-500 transition hover:text-gray-900 dark:text-white"
             aria-label="Choose emoji"
           >
             <Smile className="h-5 w-5" />
@@ -155,7 +155,7 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
 
         <button
           onClick={handleSendMessage}
-          className="rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 p-2.5 text-white transition hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+          className="rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 p-2.5 text-gray-900 dark:text-white transition hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
           disabled={!canSend || isSending}
         >
           <Send className="h-5 w-5" />

@@ -93,7 +93,7 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
     : "";
 
   return (
-    <div className="sticky top-0 z-10 bg-dark-surface/95 backdrop-blur-sm border-b border-white/10 p-4 flex items-center justify-between flex-shrink-0">
+    <div className="sticky top-0 z-10 bg-white dark:bg-dark-surface/95 backdrop-blur-sm border-b border-gray-200 dark:border-white/10 p-4 flex items-center justify-between flex-shrink-0">
       <div className="flex min-w-0 items-center gap-3">
         <div className="relative flex-shrink-0">
           <img
@@ -109,18 +109,18 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
             }}
           />
           {!isGroup && !isTicket && (
-            <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-[#0d0f1a] ${isOnline ? "bg-green-500" : "bg-zinc-600"}`} />
+            <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-dark-surface ${isOnline ? "bg-green-500" : "bg-zinc-600"}`} />
           )}
         </div>
         <div className="min-w-0">
           <h2
-            className="font-semibold text-white text-sm"
+            className="font-semibold text-gray-900 dark:text-white text-sm"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
             {name}
           </h2>
           <p
-            className="text-xs text-zinc-500"
+            className="text-xs text-gray-500 dark:text-zinc-500"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
             {statusLabel}
@@ -134,7 +134,7 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
                 type="button"
                 disabled={Boolean(activeCall)}
                 onClick={() => void joinGroupCall(String(selectedConversation._id))}
-                className="rounded-md bg-green-500 px-2 py-1 text-[10px] font-semibold text-white hover:bg-green-400 disabled:opacity-50"
+                className="rounded-md bg-green-500 px-2 py-1 text-[10px] font-semibold text-gray-900 dark:text-white hover:bg-green-400 disabled:opacity-50"
               >
                 {activeCall?.conversationId === String(selectedConversation._id)
                   ? "In Call"
@@ -148,7 +148,7 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
                 <Briefcase className="h-3 w-3" />
                 {listingType || "engagement"}
               </span>
-              <span className="max-w-56 truncate text-xs text-zinc-300">
+              <span className="max-w-56 truncate text-xs text-gray-600 dark:text-zinc-300">
                 {selectedConversation.listing_title || name}
               </span>
               {listingPath && (
@@ -163,7 +163,7 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
             </div>
           )}
           {isEngagement && selectedConversation.listing_preview && (
-            <p className="mt-1 max-w-xl truncate text-[10px] text-zinc-500">
+            <p className="mt-1 max-w-xl truncate text-[10px] text-gray-500 dark:text-zinc-500">
               {selectedConversation.listing_preview}
             </p>
           )}
@@ -171,7 +171,7 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-1">
-        <button className="rounded-lg p-2 text-zinc-400 hover:bg-white/10 hover:text-white transition">
+        <button className="rounded-lg p-2 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white transition">
           <Share2 className="h-5 w-5" />
         </button>
         {!hasRestrictedMessageTools && (
@@ -187,7 +187,7 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
               )
             }
             title={canCall ? "Request a meeting" : "No other member is available to meet"}
-            className="rounded-lg p-2 text-zinc-400 hover:bg-white/10 hover:text-white transition disabled:opacity-40"
+            className="rounded-lg p-2 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white transition disabled:opacity-40"
           >
             <Video className="h-5 w-5" />
           </button>
@@ -195,7 +195,7 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
         <button
           onClick={onToggleDetails}
           title="Chat Details"
-          className="rounded-lg p-2 text-zinc-400 hover:bg-white/10 hover:text-white transition"
+          className="rounded-lg p-2 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white transition"
         >
           <MoreVertical className="h-5 w-5" />
         </button>

@@ -45,7 +45,7 @@ export const InboxTimeOfMessage: React.FC<InboxTimeOfMessageProps> = ({
 
   return (
     <div
-      className={`flex items-center gap-1.5 text-[10px] text-zinc-400 select-none ${
+      className={`flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-zinc-400 select-none ${
         isSender ? "justify-end text-right" : "justify-start text-left"
       }`}
       style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
@@ -77,7 +77,7 @@ export const InboxTimeOfMessage: React.FC<InboxTimeOfMessageProps> = ({
             )
           ) : (
             <Check
-              className="h-3.5 w-3.5 text-zinc-500"
+              className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-500"
               title="Sent"
             />
           )}

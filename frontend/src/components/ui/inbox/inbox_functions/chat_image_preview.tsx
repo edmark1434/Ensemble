@@ -20,12 +20,12 @@ export const ChatImagePreview = ({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="relative flex max-h-[90vh] max-w-5xl items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[#12141f] shadow-2xl"
+        className="relative flex max-h-[90vh] max-w-5xl items-center justify-center overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-[#12141f] shadow-2xl"
       >
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-3 top-3 z-10 rounded-full bg-black/60 p-2 text-white hover:bg-red-500/80"
+          className="absolute right-3 top-3 z-10 rounded-full bg-black/60 p-2 text-gray-900 dark:text-white hover:bg-red-500/80"
           aria-label="Close preview"
         >
           <X className="h-5 w-5" />
