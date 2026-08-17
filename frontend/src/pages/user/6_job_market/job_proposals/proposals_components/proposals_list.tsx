@@ -192,8 +192,8 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
             >
               <div className="space-y-3.5">
                 {/* 1. User Header & Clickable Target Job Post Link */}
-                <div className="flex items-start justify-between gap-3 border-b border-gray-100 dark:border-white/5 pb-3">
-                  <div className="flex items-center gap-3 min-w-0">
+                <div className={`flex ${viewType === "grid" ? "flex-col-reverse gap-3" : "items-start justify-between gap-3"} border-b border-gray-100 dark:border-white/5 pb-3`}>
+                  <div className="flex items-center gap-3 min-w-0 w-full">
                     <div className="h-9 w-9 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-sm font-bold shrink-0 overflow-hidden">
                       {item.partyAvatar ? (
                         <img src={item.partyAvatar} alt={item.partyName} className="w-full h-full object-cover" />
@@ -234,35 +234,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                   </div>
 
                   {/* Badges & Actions */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    {/* Chat Button for Shortlisted Candidates */}
-                    {item.status === "Shortlisted" && (
-                      <button
-                        title="Open Discussion Chat"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/inbox?user=${encodeURIComponent(item.partyName)}`);
-                        }}
-                        className="p-1.5 rounded-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 transition-colors border border-blue-500/30"
-                      >
-                        <MessageSquare className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-
-                    {/* Edit Button for Own Proposals */}
-                    {item.type === "sent" && item.status !== "Accepted" && (
-                      <button
-                        title="Edit Proposal"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/jobs/proposals/edit/${item.id}`);
-                        }}
-                        className="p-1.5 rounded-full bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition-colors border border-gray-200 dark:border-white/10"
-                      >
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-
+                  <div className={`flex items-center gap-2 shrink-0 ${viewType === "grid" ? "w-full justify-between" : ""}`}>
                     <span
                       className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${renderStatusBadge(
                         item.status
@@ -270,11 +242,41 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                     >
                       {item.status}
                     </span>
+
+                    <div className="flex items-center gap-2">
+                      {/* Chat Button for Shortlisted Candidates */}
+                      {item.status === "Shortlisted" && (
+                        <button
+                          title="Open Discussion Chat"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/inbox?user=${encodeURIComponent(item.partyName)}`);
+                          }}
+                          className="p-1.5 rounded-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 transition-colors border border-blue-500/30"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+
+                      {/* Edit Button for Own Proposals */}
+                      {item.type === "sent" && item.status === "Pending" && (
+                        <button
+                          title="Edit Proposal"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/jobs/proposals/edit/${item.id}`);
+                          }}
+                          className="p-1.5 rounded-full bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white transition-colors border border-gray-200 dark:border-white/10"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 {/* 2. Prominent Emphasized Bid Banner */}
-                <div className="p-3 rounded-xl border border-yellow-500/20 bg-yellow-500/5 flex items-center justify-between">
+                <div className={`p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/5 flex items-center ${viewType === "grid" ? "justify-between" : "justify-start gap-4"}`}>
                   <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
                     PROPOSED BID
                   </span>
@@ -284,37 +286,62 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                       {item.bidAmount.toLocaleString()}
                     </span>
                   </div>
+                  {viewType === "list" && (
+                    <div className="flex items-center gap-1.5 ml-auto">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-800/80 text-gray-600 dark:text-zinc-300 text-[10px] font-semibold">
+                        <Layers className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
+                        {item.milestones.length} Milestones
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-800/80 text-gray-600 dark:text-zinc-300 text-[10px] font-semibold">
+                        <Percent className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
+                        +{item.additionalWorkRate}% Work Rate
+                      </span>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-800/80 text-gray-600 dark:text-zinc-300 text-[10px] font-semibold">
+                        <RefreshCcw className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
+                        {revisionsSummary} Revs / Step
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* 3. Cover Letter Pitch Snippet */}
-                <div className="px-1 text-gray-600 dark:text-zinc-300 italic">
-                  <JobRichText content={item.coverLetter} truncate={2} />
-                </div>
+                {viewType === "list" && (
+                  <div className="px-1 text-gray-600 dark:text-zinc-300 italic">
+                    <JobRichText content={item.coverLetter} truncate={2} />
+                  </div>
+                )}
 
-                {/* 4. Sleek Gray Pill Tags */}
-                <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800/80 text-gray-600 dark:text-zinc-300 text-[10px] font-semibold">
-                    <Layers className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
-                    {item.milestones.length} Milestones
-                  </span>
+                {/* 4. Sleek Gray Pill Tags (Grid View only, since List View has them in the bid banner) */}
+                {viewType === "grid" && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800/80 text-gray-600 dark:text-zinc-300 text-[10px] font-semibold" title={`${item.milestones.length} Milestones`}>
+                      <Layers className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
+                      {item.milestones.length}
+                    </span>
 
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800/80 text-gray-600 dark:text-zinc-300 text-[10px] font-semibold">
-                    <Percent className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
-                    +{item.additionalWorkRate}% Work Rate
-                  </span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800/80 text-gray-600 dark:text-zinc-300 text-[10px] font-semibold" title={`+${item.additionalWorkRate}% Work Rate`}>
+                      <Percent className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
+                      +{item.additionalWorkRate}%
+                    </span>
 
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800/80 text-gray-600 dark:text-zinc-300 text-[10px] font-semibold">
-                    <RefreshCcw className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
-                    {revisionsSummary} Revs / Step
-                  </span>
-                </div>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800/80 text-gray-600 dark:text-zinc-300 text-[10px] font-semibold" title={`${revisionsSummary} Revs / Step`}>
+                      <RefreshCcw className="h-3 w-3 text-gray-500 dark:text-zinc-400" />
+                      {revisionsSummary}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* 5. Date Proposed & View Details Link */}
               <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between gap-2 text-[11px] text-gray-500 dark:text-zinc-400">
                 <span className="flex items-center gap-1 text-gray-500 dark:text-zinc-400">
                   <Clock className="h-3 w-3 text-gray-500 dark:text-zinc-500 shrink-0" />
-                  {totalDays}d ({totalHours}h) • <Calendar className="h-3 w-3 text-gray-500 dark:text-zinc-500 inline ml-0.5" /> {item.submittedAgo || item.submittedAt}
+                  {totalDays}d ({totalHours}h) 
+                  {viewType === "list" && (
+                    <>
+                      • <Calendar className="h-3 w-3 text-gray-500 dark:text-zinc-500 inline ml-0.5" /> {item.submittedAgo || item.submittedAt}
+                    </>
+                  )}
                 </span>
 
                 <span className="flex items-center gap-1 text-xs font-bold text-blue-400 group-hover:translate-x-1 transition-transform shrink-0">

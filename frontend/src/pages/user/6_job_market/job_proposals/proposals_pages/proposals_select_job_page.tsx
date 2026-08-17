@@ -1,7 +1,8 @@
 import React from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ClipboardList, ChevronRight, Calendar, Clock, Briefcase, Users } from "lucide-react";
+import { ClipboardList, ChevronRight, Calendar, Clock, Briefcase, Users, Plus } from "lucide-react";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import type { ProposalsMainContext } from "../proposals_main";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
@@ -123,9 +124,25 @@ export const ProposalsSelectJobPage: React.FC = () => {
           ))}
         </div>
       ) : filteredJobs.length === 0 ? (
-        <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/60 shadow-sm dark:shadow-none p-12 text-center">
-          <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">No job postings found matching your search.</p>
-        </div>
+        myJobPosts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 space-y-4 text-center">
+            <div className="w-24 h-24 flex items-center justify-center mb-2 opacity-80 pointer-events-none">
+              <DotLottieReact src="/icons/lottie/no-result.lottie" autoplay loop />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">No Job Postings Found</h3>
+            <p className="text-xs text-gray-500 dark:text-zinc-400 max-w-sm">You haven't posted any jobs yet. Post a job to start receiving proposals from talented freelancers!</p>
+            <button
+              onClick={() => navigate('/jobs/create')}
+              className="mt-4 px-6 py-2.5 rounded-xl bg-blue-500 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+            >
+              <Plus className="h-4 w-4" /> Post a Job
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/60 shadow-sm dark:shadow-none p-12 text-center">
+            <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">No job postings found matching your search.</p>
+          </div>
+        )
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {filteredJobs.map((job) => (

@@ -20,6 +20,7 @@ export const ProposalsIncomingPage: React.FC = () => {
     revisionRateSort,
     dateSort,
     viewType,
+    setChildProposalsCounts,
   } = useOutletContext<ProposalsMainContext>();
 
   const [proposals, setProposals] = useState<any[]>([]);
@@ -63,6 +64,15 @@ export const ProposalsIncomingPage: React.FC = () => {
               : "/placeholder.svg"
           });
         }
+
+        // Calculate and report status counts to parent
+        const counts = { All: mapped.length, Pending: 0, Shortlisted: 0, Accepted: 0, Rejected: 0 };
+        mapped.forEach((p: any) => {
+          if (p.status in counts) {
+            counts[p.status as keyof typeof counts]++;
+          }
+        });
+        setChildProposalsCounts(counts);
       } catch (err) {
         console.error("Failed to load incoming proposals", err);
       } finally {

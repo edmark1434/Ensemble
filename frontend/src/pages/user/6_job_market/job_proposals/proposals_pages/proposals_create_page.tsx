@@ -116,8 +116,10 @@ const ProposalsCreatePage: React.FC = () => {
 
     if (!bidAmount || rawBid <= 0) {
       stepErrors.bidAmount = "A valid bid amount is required.";
-    } else if (job && (rawBid < job.minBudget || rawBid > job.maxBudget)) {
-      stepErrors.bidAmount = `Your bid must be between ${job.minBudget.toLocaleString()} and ${job.maxBudget.toLocaleString()}.`;
+    } else if (job && rawBid < job.minBudget) {
+      stepErrors.bidAmount = `Please increase your bid to the minimum budget of ${job.minBudget.toLocaleString()}.`;
+    } else if (job && rawBid > job.maxBudget) {
+      stepErrors.bidAmount = `Please do not exceed the maximum budget of ${job.maxBudget.toLocaleString()}.`;
     }
     if (!coverLetter.trim() || coverLetter.length < 50) {
       stepErrors.coverLetter = "Cover pitch must be at least 50 characters long.";

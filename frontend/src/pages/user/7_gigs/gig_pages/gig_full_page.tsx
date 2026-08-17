@@ -22,7 +22,7 @@ const GigFullPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
+    <div className="h-screen overflow-y-auto bg-gray-50 dark:bg-[#080a12]">
       {/* Sticky Headers Container */}
       <div className="sticky top-0 z-20 bg-white dark:bg-[#0a0a0a] flex flex-col">
         <div className="z-10 border-b border-gray-200 dark:border-white/10">

@@ -420,10 +420,11 @@ const customerPayload = await getCustomerPayload(req);
         },
 
         success_return_url:
-            `${process.env.FRONTEND_URL}/credits?success`,
-
+            `https://app.com/credits?success`,
+            // `${process.env.FRONTEND_URL}/credits?success`
         cancel_return_url:
-            `${process.env.FRONTEND_URL}/credits?cancel`,
+            `https://app.com/credits?success`,
+            // `${process.env.FRONTEND_URL}/credits?cancel`,
 
     };
     const topUpPayload = {

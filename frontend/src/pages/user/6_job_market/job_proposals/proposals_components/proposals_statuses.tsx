@@ -43,21 +43,27 @@ export const ProposalsStatuses: React.FC<ProposalsStatusesProps> = ({
       <div className="flex flex-col gap-1.5">
         {statuses.map((st) => {
           const isActive = activeStatus === st.label;
+          const isDisabled = st.count === 0 && !isActive;
 
           return (
             <button
               key={st.label}
-              onClick={() => onStatusChange(st.label)}
+              disabled={isDisabled}
+              onClick={() => !isDisabled && onStatusChange(st.label)}
               className={`relative flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors duration-200 ${
+                isDisabled ? "opacity-50 cursor-not-allowed" : ""
+              } ${
                 isActive
                   ? "text-gray-900 dark:text-white"
-                  : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 shadow-sm dark:shadow-none"
+                  : isDisabled
+                    ? "text-gray-400 dark:text-zinc-500"
+                    : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 shadow-sm dark:shadow-none"
               }`}
             >
               {isActive && (
                 <motion.div
                   layoutId="activeStatusGlow"
-                  className="absolute inset-0 rounded-xl bg-blue-500/15 border border-blue-500/30"
+                  className="absolute inset-0 rounded-xl bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 shadow-sm"
                   transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 />
               )}
@@ -70,7 +76,7 @@ export const ProposalsStatuses: React.FC<ProposalsStatusesProps> = ({
               <span
                 className={`relative z-10 text-[10px] font-mono px-2 py-0.5 rounded-md ${
                   isActive
-                    ? "bg-blue-500/30 text-blue-300 border border-blue-500/40"
+                    ? "bg-gray-200 dark:bg-white/20 text-gray-900 dark:text-white border border-gray-300 dark:border-white/30"
                     : "bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-500 dark:text-zinc-500 border border-gray-100 dark:border-white/5"
                 }`}
               >
