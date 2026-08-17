@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { ArrowLeft, Calendar, CheckCircle2, Clock3, Coins, CornerDownRight, Download, Edit3, Eye, Loader2, MessageSquare, Pencil, Ruler, Send, ShoppingCart, Trash2 } from "lucide-react";
+import { ArrowLeft, Bookmark, Calendar, CheckCircle2, Clock3, Coins, CornerDownRight, Download, Edit3, Eye, FileAudio, FileImage, FileVideo, Heart, Loader2, MessageSquare, PackageOpen, Pencil, Ruler, Send, ShoppingCart, Star, Trash2 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "@/lib/axios";
 import UserHeader from "@/components/nav/user_header";
@@ -9,7 +9,7 @@ import AssetEditorModal from "./AssetEditorModal";
 import AssetMedia from "./AssetMedia";
 import AssetOriginalModal from "./AssetOriginalModal";
 import AssetPurchaseModal from "./AssetPurchaseModal";
-import { mediaUrl, readableDuration, readableSize, type AssetComment, type AssetPurchaseResponse, type AssetRecord, type AssetReply } from "./assetTypes";
+import { mediaUrl, readableDuration, readableSize, type AssetBundleFile, type AssetComment, type AssetPurchaseResponse, type AssetRecord, type AssetReply, type AssetReview } from "./assetTypes";
 
 function errorMessage(error: unknown, fallback: string) {
   if (typeof error === "object" && error && "response" in error) {
@@ -41,6 +41,7 @@ export default function AssetDetails() {
   const navigate = useNavigate();
   const [asset, setAsset] = useState<AssetRecord | null>(null);
   const [comments, setComments] = useState<AssetComment[]>([]);
+  const [reviews, setReviews] = useState<AssetReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -57,24 +58,32 @@ export default function AssetDetails() {
   const [editingReply, setEditingReply] = useState("");
   const [savingReply, setSavingReply] = useState(false);
   const [replyToDelete, setReplyToDelete] = useState<{ commentId: string; reply: AssetReply } | null>(null);
+  const [reviewToDelete, setReviewToDelete] = useState<AssetReview | null>(null);
   const [assetToDelete, setAssetToDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [purchaseOpen, setPurchaseOpen] = useState(false);
-  const [originalOpen, setOriginalOpen] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  const [selectedOriginalFile, setSelectedOriginalFile] = useState<AssetBundleFile | null>(null);
+  const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
+  const [engagementPending, setEngagementPending] = useState<"like" | "save" | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState("");
+  const [reviewSaving, setReviewSaving] = useState(false);
+  const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setLoadError("");
     setNotFound(false);
     try {
-      const [assetResponse, commentsResponse] = await Promise.all([
+      const [assetResponse, commentsResponse, reviewsResponse] = await Promise.all([
         api.get<{ asset: AssetRecord }>(`/api/assets/${assetId}`, { signal }),
         api.get<{ comments: AssetComment[] }>(`/api/assets/${assetId}/comments`, { signal }),
+        api.get<{ reviews: AssetReview[] }>(`/api/assets/${assetId}/reviews`, { signal }),
       ]);
       setAsset(assetResponse.data.asset);
       setComments(commentsResponse.data.comments || []);
+      setReviews(reviewsResponse.data.reviews || []);
     } catch (error) {
       if (signal?.aborted) return;
       const parsed = errorMessage(error, "Unable to load this asset.");
@@ -90,6 +99,71 @@ export default function AssetDetails() {
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
+
+  const applyReviews = (nextReviews: AssetReview[]) => {
+    setReviews(nextReviews);
+    const average = nextReviews.length
+      ? Number((nextReviews.reduce((total, review) => total + Number(review.rating), 0) / nextReviews.length).toFixed(1))
+      : 0;
+    setAsset((current) => current ? {
+      ...current,
+      review_count: nextReviews.length,
+      average_rating: average,
+    } : current);
+  };
+
+  const updateEngagement = async (kind: "like" | "save") => {
+    if (!asset || engagementPending) return;
+    const enabled = kind === "like" ? asset.is_liked : asset.is_saved;
+    setEngagementPending(kind);
+    try {
+      const response = enabled
+        ? await api.delete<{ is_liked?: boolean; like_count?: number; is_saved?: boolean; save_count?: number }>(`/api/assets/${asset.market_asset_id}/${kind}`)
+        : await api.put<{ is_liked?: boolean; like_count?: number; is_saved?: boolean; save_count?: number }>(`/api/assets/${asset.market_asset_id}/${kind}`);
+      setAsset((current) => {
+        if (!current) return current;
+        return kind === "like"
+          ? { ...current, is_liked: Boolean(response.data.is_liked), like_count: Number(response.data.like_count || 0) }
+          : { ...current, is_saved: Boolean(response.data.is_saved), save_count: Number(response.data.save_count || 0) };
+      });
+    } catch (error) {
+      showErrorToast(errorMessage(error, `Unable to ${kind} this asset.`).message);
+    } finally {
+      setEngagementPending(null);
+    }
+  };
+
+  const submitReview = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!asset || reviewSaving || !reviewText.trim()) return;
+    setReviewSaving(true);
+    try {
+      if (editingReviewId) {
+        const response = await api.patch<{ review: AssetReview }>(
+          `/api/assets/${asset.market_asset_id}/reviews/${editingReviewId}`,
+          { rating: reviewRating, review: reviewText.trim() }
+        );
+        applyReviews(reviews.map((review) => review.asset_review_id === editingReviewId
+          ? response.data.review
+          : review));
+        showSuccessToast("Review updated.");
+      } else {
+        const response = await api.post<{ review: AssetReview }>(
+          `/api/assets/${asset.market_asset_id}/reviews`,
+          { rating: reviewRating, review: reviewText.trim() }
+        );
+        applyReviews([response.data.review, ...reviews]);
+        showSuccessToast("Review submitted.");
+      }
+      setEditingReviewId(null);
+      setReviewRating(5);
+      setReviewText("");
+    } catch (error) {
+      showErrorToast(errorMessage(error, "Unable to save your review.").message);
+    } finally {
+      setReviewSaving(false);
+    }
+  };
 
   const postComment = async (event: FormEvent) => {
     event.preventDefault();
@@ -178,7 +252,14 @@ export default function AssetDetails() {
     if (deleting) return;
     setDeleting(true);
     try {
-      if (replyToDelete) {
+      if (reviewToDelete) {
+        await api.delete(`/api/assets/${assetId}/reviews/${reviewToDelete.asset_review_id}`);
+        applyReviews(reviews.filter((review) => review.asset_review_id !== reviewToDelete.asset_review_id));
+        setReviewToDelete(null);
+        setEditingReviewId(null);
+        setReviewText("");
+        showSuccessToast("Review deleted.");
+      } else if (replyToDelete) {
         await api.delete(`/api/assets/${assetId}/comments/${replyToDelete.commentId}/replies/${replyToDelete.reply.asset_reply_id}`);
         setComments((current) => current.map((item) => item.asset_comment_id === replyToDelete.commentId
           ? { ...item, replies: item.replies.filter((reply) => reply.asset_reply_id !== replyToDelete.reply.asset_reply_id) }
@@ -203,17 +284,17 @@ export default function AssetDetails() {
     }
   };
 
-  const downloadOriginal = async () => {
-    if (!asset || downloading) return;
-    setDownloading(true);
+  const downloadOriginal = async (bundleFile: AssetBundleFile) => {
+    if (!asset || downloadingFileId) return;
+    setDownloadingFileId(bundleFile.media_asset_bundle_file_id);
     try {
-      const response = await api.get<{ downloadUrl: string }>(`/api/assets/${asset.market_asset_id}/download`);
+      const response = await api.get<{ downloadUrl: string }>(`/api/assets/${asset.market_asset_id}/files/${bundleFile.media_asset_bundle_file_id}/download`);
       if (!response.data.downloadUrl) throw new Error("The download URL was not returned.");
       window.location.assign(response.data.downloadUrl);
     } catch (error) {
       showErrorToast(errorMessage(error, "Unable to download the original asset.").message);
     } finally {
-      setDownloading(false);
+      setDownloadingFileId(null);
     }
   };
 
@@ -227,13 +308,16 @@ export default function AssetDetails() {
         : "Asset purchased successfully.");
   };
 
-  const deleteDialogOpen = assetToDelete || Boolean(commentToDelete) || Boolean(replyToDelete);
-  const deleteDialogTitle = assetToDelete ? "Delete asset?" : replyToDelete ? "Delete reply?" : "Delete comment?";
+  const deleteDialogOpen = assetToDelete || Boolean(commentToDelete) || Boolean(replyToDelete) || Boolean(reviewToDelete);
+  const deleteDialogTitle = assetToDelete ? "Delete asset?" : reviewToDelete ? "Delete review?" : replyToDelete ? "Delete reply?" : "Delete comment?";
   const deleteDialogMessage = assetToDelete
     ? "This asset will be removed from the library."
+    : reviewToDelete
+      ? "Your review will be removed from this asset."
     : replyToDelete
       ? "This reply will be removed permanently."
       : "This comment will be removed permanently.";
+  const myReview = reviews.find((review) => review.is_owner) || null;
 
   if (loading) {
     return <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]"><UserHeader pageTitle="Asset Details" /><DetailSkeleton /></div>;
@@ -272,10 +356,12 @@ export default function AssetDetails() {
                 <p className="mt-2 text-sm text-gray-500 dark:text-zinc-400">Shared by <span className="font-semibold text-gray-800 dark:text-zinc-200">{asset.creator_name}</span>{asset.creator_handle ? ` · @${asset.creator_handle}` : ""}</p>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <button type="button" onClick={() => void updateEngagement("like")} disabled={Boolean(engagementPending)} className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${asset.is_liked ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-300" : "border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"}`} aria-pressed={asset.is_liked}><Heart className={`h-4 w-4 ${asset.is_liked ? "fill-current" : ""}`} /> {asset.like_count}</button>
+                <button type="button" onClick={() => void updateEngagement("save")} disabled={Boolean(engagementPending)} className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${asset.is_saved ? "border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-300" : "border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:hover:bg-white/5"}`} aria-pressed={asset.is_saved}><Bookmark className={`h-4 w-4 ${asset.is_saved ? "fill-current" : ""}`} /> {asset.is_saved ? "Saved" : "Save"}</button>
                 <span className="mr-2 inline-flex items-center gap-2 text-lg font-bold text-amber-600 dark:text-amber-300"><Coins className="h-5 w-5" /> {asset.price_credits.toLocaleString()} credits</span>
                 {asset.can_download ? (
-                  <button type="button" onClick={() => void downloadOriginal()} disabled={downloading} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">
-                    {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} Download original
+                  <button type="button" onClick={() => document.getElementById("asset-bundle-files")?.scrollIntoView({ behavior: "smooth", block: "center" })} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
+                    <PackageOpen className="h-4 w-4" /> View {asset.bundle_file_count} {asset.bundle_file_count === 1 ? "file" : "files"}
                   </button>
                 ) : (
                   <button type="button" onClick={() => setPurchaseOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">
@@ -313,23 +399,33 @@ export default function AssetDetails() {
               </div>
             )}
 
-            {asset.can_download && (
-              <button type="button" onClick={() => setOriginalOpen(true)} className="mt-6 flex w-full flex-col items-stretch gap-4 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 p-3 text-left transition hover:border-blue-400 hover:bg-blue-50/50 sm:flex-row sm:items-center dark:border-white/10 dark:bg-white/[0.025] dark:hover:border-blue-500/50 dark:hover:bg-blue-500/5">
-                <img src={mediaUrl(asset.thumbnail_path || asset.proxy_path)} alt="" draggable={false} className="h-32 w-full shrink-0 rounded-lg bg-black/10 object-cover sm:h-20 sm:w-28" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-bold text-gray-900 dark:text-white">Original file</span>
-                  <span className="mt-1 block text-xs text-gray-500 dark:text-zinc-400">Full-quality {asset.type} · {readableSize(asset.size_bytes)}</span>
-                  <span className="mt-1 block text-xs text-gray-400 dark:text-zinc-600">Available only to the creator and purchasers</span>
-                </span>
-                <span className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white"><Eye className="h-4 w-4" /> View original</span>
-              </button>
-            )}
+            <section id="asset-bundle-files" className="mt-6 scroll-mt-24 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/[0.025]">
+              <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+                <div><h2 className="text-sm font-bold text-gray-900 dark:text-white">Package contents</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{asset.bundle_file_count} protected original {asset.bundle_file_count === 1 ? "file" : "files"}</p></div>
+                {!asset.can_download && <span className="text-xs font-semibold text-gray-500 dark:text-zinc-400">Blurred previews · purchase for original files</span>}
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {asset.bundle_files.map((bundleFile) => (
+                  <BundleFilePreview
+                    key={`${bundleFile.media_asset_bundle_file_id}:${asset.can_download}`}
+                    bundleFile={bundleFile}
+                    canAccessOriginal={Boolean(asset.can_download)}
+                    downloading={downloadingFileId === bundleFile.media_asset_bundle_file_id}
+                    downloadDisabled={Boolean(downloadingFileId)}
+                    onOpen={() => asset.can_download
+                      ? setSelectedOriginalFile(bundleFile)
+                      : setPurchaseOpen(true)}
+                    onDownload={() => void downloadOriginal(bundleFile)}
+                  />
+                ))}
+              </div>
+            </section>
 
             <dl className="mt-6 grid gap-3 border-t border-gray-200 pt-5 text-sm sm:grid-cols-2 lg:grid-cols-4 dark:border-white/10">
               <Metadata icon={Calendar} label="Published" value={formatDate(asset.created_at)} />
               <Metadata icon={Ruler} label="Dimensions" value={asset.width && asset.height ? `${asset.width} × ${asset.height}` : "—"} />
               <Metadata icon={Clock3} label="Duration" value={readableDuration(asset.duration_seconds)} />
-              <Metadata icon={MessageSquare} label="File size" value={readableSize(asset.size_bytes)} />
+              <Metadata icon={MessageSquare} label="Package size" value={readableSize(asset.bundle_files.reduce((total, file) => total + Number(file.size_bytes || 0), 0))} />
             </dl>
           </div>
         </section>
@@ -425,21 +521,119 @@ export default function AssetDetails() {
           </section>
 
           <aside className="h-fit rounded-2xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-[#0d0f1a]">
-            <h2 className="font-bold">Reviews</h2>
-            <p className="mt-3 text-sm leading-6 text-gray-500 dark:text-zinc-400">Ratings are not available for library assets yet.</p>
-            <p className="mt-2 text-xs leading-5 text-gray-400 dark:text-zinc-600">You can still share feedback with the creator in comments.</p>
+            <div className="flex items-start justify-between gap-3">
+              <div><h2 className="font-bold">Buyer reviews</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-500">Verified purchasers only</p></div>
+              <div className="text-right"><p className="inline-flex items-center gap-1 text-sm font-bold text-amber-500"><Star className="h-4 w-4 fill-current" /> {asset.average_rating || "—"}</p><p className="mt-1 text-[10px] text-gray-500 dark:text-zinc-500">{asset.review_count} {asset.review_count === 1 ? "review" : "reviews"}</p></div>
+            </div>
+
+            {asset.can_review && (!myReview || editingReviewId) ? (
+              <form onSubmit={submitReview} className="mt-5 rounded-xl border border-gray-200 p-3 dark:border-white/10">
+                <p className="text-xs font-bold">{editingReviewId ? "Edit your review" : "Review this purchase"}</p>
+                <div className="mt-3 flex gap-1" aria-label="Review rating">
+                  {[1, 2, 3, 4, 5].map((rating) => (
+                    <button key={rating} type="button" onClick={() => setReviewRating(rating)} className="rounded-md p-1 transition hover:bg-amber-500/10" aria-label={`${rating} star${rating === 1 ? "" : "s"}`} aria-pressed={reviewRating === rating}><Star className={`h-5 w-5 ${rating <= reviewRating ? "fill-amber-400 text-amber-400" : "text-gray-300 dark:text-zinc-600"}`} /></button>
+                  ))}
+                </div>
+                <textarea value={reviewText} onChange={(event) => setReviewText(event.target.value)} maxLength={2000} rows={4} placeholder="Share your experience with this asset…" className="mt-3 w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 dark:border-white/10 dark:bg-[#080a12]" />
+                <div className="mt-3 flex gap-2">
+                  <button type="submit" disabled={reviewSaving || !reviewText.trim()} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-blue-500 disabled:opacity-50">{reviewSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {editingReviewId ? "Save review" : "Submit review"}</button>
+                  {editingReviewId && <button type="button" onClick={() => { setEditingReviewId(null); setReviewRating(5); setReviewText(""); }} disabled={reviewSaving} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold dark:border-white/10">Cancel</button>}
+                </div>
+              </form>
+            ) : !asset.can_review && !asset.is_owner ? (
+              <p className="mt-4 rounded-lg bg-gray-50 p-3 text-xs leading-5 text-gray-500 dark:bg-white/[0.025] dark:text-zinc-400">Purchase this asset to leave a verified review.</p>
+            ) : asset.is_owner ? (
+              <p className="mt-4 rounded-lg bg-gray-50 p-3 text-xs leading-5 text-gray-500 dark:bg-white/[0.025] dark:text-zinc-400">Creators cannot review their own assets.</p>
+            ) : null}
+
+            <div className="mt-5 space-y-4">
+              {reviews.length === 0 ? (
+                <p className="py-5 text-center text-xs text-gray-500 dark:text-zinc-500">No buyer reviews yet.</p>
+              ) : reviews.map((review) => (
+                <article key={review.asset_review_id} className="border-t border-gray-100 pt-4 first:border-0 first:pt-0 dark:border-white/5">
+                  <div className="flex items-start gap-2.5">
+                    {review.author_avatar_path ? <img src={mediaUrl(review.author_avatar_path)} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" /> : <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-[10px] font-bold text-blue-600 dark:text-blue-300">{review.author_name.slice(0, 2).toUpperCase()}</span>}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2"><div><p className="truncate text-xs font-semibold">{review.author_name}</p><div className="mt-1 flex">{[1, 2, 3, 4, 5].map((rating) => <Star key={rating} className={`h-3 w-3 ${rating <= review.rating ? "fill-amber-400 text-amber-400" : "text-gray-300 dark:text-zinc-700"}`} />)}</div></div>{review.is_owner && <div className="flex"><button type="button" onClick={() => { setEditingReviewId(review.asset_review_id); setReviewRating(review.rating); setReviewText(review.review); }} className="rounded-md p-1.5 text-gray-500 transition hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-white/5" aria-label="Edit review"><Pencil className="h-3 w-3" /></button><button type="button" onClick={() => setReviewToDelete(review)} className="rounded-md p-1.5 text-gray-500 transition hover:bg-red-500/10 hover:text-red-500" aria-label="Delete review"><Trash2 className="h-3 w-3" /></button></div>}</div>
+                      <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-5 text-gray-600 dark:text-zinc-300">{review.review}</p>
+                      <p className="mt-2 text-[10px] text-gray-400 dark:text-zinc-600">{formatDate(review.created_at)}</p>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
           </aside>
         </div>
       </main>
 
       <AssetEditorModal open={editorOpen} asset={asset} onClose={() => setEditorOpen(false)} onSaved={(updated) => { setAsset(updated); setEditorOpen(false); showSuccessToast("Asset updated."); }} />
       {!asset.is_owner && <AssetPurchaseModal open={purchaseOpen} asset={asset} onClose={() => setPurchaseOpen(false)} onPurchased={handlePurchased} />}
-      <AssetOriginalModal open={originalOpen} asset={asset} onClose={() => setOriginalOpen(false)} />
-      <ConfirmationModal isOpen={deleteDialogOpen} title={deleteDialogTitle} message={deleteDialogMessage} confirmText={deleting ? "Deleting..." : "Delete"} cancelText="Cancel" onConfirm={() => void deleteSelected()} onCancel={() => { if (!deleting) { setAssetToDelete(false); setCommentToDelete(null); setReplyToDelete(null); } }} />
+      {selectedOriginalFile && <AssetOriginalModal open asset={asset} bundleFile={selectedOriginalFile} onClose={() => setSelectedOriginalFile(null)} />}
+      <ConfirmationModal isOpen={deleteDialogOpen} title={deleteDialogTitle} message={deleteDialogMessage} confirmText={deleting ? "Deleting..." : "Delete"} cancelText="Cancel" onConfirm={() => void deleteSelected()} onCancel={() => { if (!deleting) { setAssetToDelete(false); setCommentToDelete(null); setReplyToDelete(null); setReviewToDelete(null); } }} />
     </div>
   );
 }
 
 function Metadata({ icon: Icon, label, value }: { icon: typeof Calendar; label: string; value: string }) {
   return <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-3 dark:bg-white/[0.025]"><Icon className="h-4 w-4 shrink-0 text-gray-400 dark:text-zinc-500" /><div className="min-w-0"><dt className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-500">{label}</dt><dd className="mt-0.5 truncate font-medium text-gray-800 dark:text-zinc-200">{value}</dd></div></div>;
+}
+
+function BundleFileIcon({ mimeType }: { mimeType: string }) {
+  const Icon = mimeType.startsWith("image/") ? FileImage : mimeType.startsWith("video/") ? FileVideo : FileAudio;
+  return <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-300"><Icon className="h-7 w-7" /></span>;
+}
+
+function BundleFilePreview({
+  bundleFile,
+  canAccessOriginal,
+  downloading,
+  downloadDisabled,
+  onOpen,
+  onDownload,
+}: {
+  bundleFile: AssetBundleFile;
+  canAccessOriginal: boolean;
+  downloading: boolean;
+  downloadDisabled: boolean;
+  onOpen: () => void;
+  onDownload: () => void;
+}) {
+  const [failed, setFailed] = useState(false);
+  const previewUrl = mediaUrl(bundleFile.preview_path);
+  const format = bundleFile.mime_type.split("/")[1] || "file";
+  console.log(bundleFile);
+  return (
+    <article className="group min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/10 dark:bg-[#080a12]">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="relative block aspect-video w-full cursor-pointer overflow-hidden bg-gray-100 text-left dark:bg-black/30"
+        aria-label={canAccessOriginal ? `View original ${bundleFile.name}` : `View blurred preview of ${bundleFile.name}`}
+      >
+        {previewUrl && !failed ? (
+          <img
+            src={previewUrl}
+            alt={`Preview of ${bundleFile.name}`}
+            draggable={false}
+            onContextMenu={(event) => event.preventDefault()}
+            onError={() => setFailed(true)}
+            className={`h-full w-full object-cover transition duration-200 group-hover:scale-[1.02] ${canAccessOriginal ? "" : "scale-105 blur-md"}`}
+          />
+        ) : (
+          <span className="absolute inset-0 flex items-center justify-center"><BundleFileIcon mimeType={bundleFile.mime_type} /></span>
+        )}
+        {!canAccessOriginal && <span className="absolute inset-0 bg-black/10" aria-hidden="true" />}
+        <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/25 group-hover:opacity-100"><Eye className="h-7 w-7 text-white" /></span>
+      </button>
+      <div className="flex items-center justify-between gap-2 p-3">
+        <p className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-zinc-400">{format} · {readableSize(bundleFile.size_bytes)}</p>
+        {canAccessOriginal ? (
+          <div className="flex shrink-0 gap-1">
+            <button type="button" onClick={onOpen} className="rounded-lg p-2 text-gray-500 transition hover:bg-blue-500/10 hover:text-blue-600 dark:text-zinc-400 dark:hover:text-blue-300" aria-label={`View ${bundleFile.name}`}><Eye className="h-4 w-4" /></button>
+            <button type="button" onClick={onDownload} disabled={downloadDisabled} className="rounded-lg p-2 text-gray-500 transition hover:bg-blue-500/10 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:text-blue-300" aria-label={`Download ${bundleFile.name}`}>{downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}</button>
+          </div>
+        ) : <button type="button" onClick={onOpen} className="rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-blue-600 transition hover:bg-blue-500/10 dark:text-blue-300">View preview</button>}
+      </div>
+    </article>
+  );
 }

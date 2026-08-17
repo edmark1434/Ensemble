@@ -1,5 +1,55 @@
 # Current Task
 
+## Active Follow-up — Asset Previews, Likes, Saves, and Buyer Reviews
+
+Provide one safe public derivative preview for every file in an asset package. Package Contents must render these previews blurred for users who do not own the package and without a lock replacement; full-quality originals remain available only through the existing authorized signed-URL endpoints after purchase or to the creator. Add durable asset likes and saves, including authenticated idempotent API actions, counts/state in asset responses, and a Saved library view. Add `asset_reviews` so each active purchaser can submit at most one 1–5 star review, update or delete their own review, and non-purchasers/creators cannot review. Keep the controller → service → repository boundary and change only marketplace-asset schema and feature files.
+
+### Acceptance Criteria
+
+* [x] A reversible append-only migration adds a public derivative file relationship to each bundle item and safely backfills existing items from the package thumbnail.
+* [x] New one-file and multi-file assets upload and atomically persist one derivative preview for every protected original.
+* [x] Public asset responses expose derivative preview paths but never original paths or original signed URLs.
+* [x] Package Contents shows clear derivative previews to creators/purchasers and blurred derivative previews to other users without fetching protected originals.
+* [x] Original preview/download endpoints remain restricted to the creator or an active purchaser.
+* [x] Reversible `asset_likes`, `asset_saves`, and `asset_reviews` tables enforce one active relationship/review per account and asset.
+* [x] Authenticated like/save actions are idempotent and asset responses include current-account state and aggregate counts.
+* [x] Saved assets are available through the paginated Assets Library.
+* [x] Only an active purchaser can create or update one 1–5 star review; only its author can update/delete it.
+* [x] Asset Details shows review totals/average, buyer review controls, and active reviews without a page reload.
+* [x] Backend validation and authorization remain authoritative.
+* [x] Relevant migration, repository/service/controller/route checks, focused database verification, frontend lint, and production build pass.
+
+**Follow-up status:** Completed August 18, 2026.
+
+**Implementation summary:** Added and applied the reversible marketplace-engagement migration. Every protected bundle original now references a safe public image derivative; existing items use their listing thumbnail, while new images receive a resized watermarked WebP, videos receive a watermarked still frame, and audio files receive a non-playable visual card. Public asset list/detail responses expose only this derivative metadata. Package Contents renders the derivative clearly for creators and active purchasers and blurred for other users, while the existing signed original preview/download endpoints remain entitlement-protected. Added durable, soft-deletable `asset_likes`, `asset_saves`, and `asset_reviews` records with one row per account/asset, authenticated idempotent like/save endpoints, aggregate/current-user state, and a paginated Saved library view. Buyer Reviews supports one 1–5 star review per active purchaser with author-only edit/delete controls and immediate local UI updates; creators and non-purchasers are rejected by backend authorization.
+
+**Verification:** Both asset migrations are applied. Live schema checks confirmed all eight active bundle items have a non-null preview relationship and confirmed the primary, foreign-key, uniqueness, rating, text-length, and index protections on all three engagement tables. A read-only repository check loaded an existing package and confirmed its public payload had matching preview metadata and no protected `asset-originals/` path. Rollback-only database checks confirmed like/save set/unset idempotency and purchaser review create, duplicate rejection, update, and delete; a service check confirmed a non-purchaser receives HTTP 403. Backend syntax checks and Asset route loading passed. Targeted Assets ESLint, `git diff --check`, and the frontend TypeScript/Vite production build passed. The production build retains the repository's existing dynamic-import and large-chunk warnings; route loading also triggered the environment's existing Redis network-access warnings after the route itself loaded.
+
+## Active Follow-up — Multi-file Asset Bundles
+
+Allow one marketplace asset package to contain one or many protected original files. Add `media_asset_bundle_files` as the normalized child of `media_assets`, backfill every existing `original_file_id` as bundle position zero, then remove the legacy `media_assets.original_file_id` foreign key and column. Keep `thumbnail_file_id` as the package cover and `proxy_file_id` as the safe public preview. Asset creation must accept multiple finalized, account-owned originals, enforce per-file and aggregate limits, persist all bundle relationships atomically, and retain one-file creation. Asset Details must list every bundle file; creators and active purchasers may request a separate 60-second signed preview/download URL per file, while public list/detail responses must never contain original paths or signed URLs. Update only direct schema consumers, including the video editor's one-file media-asset flow.
+
+### Acceptance Criteria
+
+* [x] An append-only reversible migration creates `media_asset_bundle_files` with keys, ordering, constraints, indexes, and timestamps.
+* [x] Every existing non-deleted and deleted media asset original is backfilled before `media_assets.original_file_id` is removed.
+* [x] Migration down restores `original_file_id` from the first ordered bundle item before removing the bundle table.
+* [x] Asset creation accepts 1–20 original files and validates distinct IDs, finalized ownership, protected placement, MIME support, per-file size, and a 500MB aggregate limit on the backend.
+* [x] The first original remains the source for public proxy generation and top-level media metadata; the selected thumbnail remains the package cover.
+* [x] Media asset, market listing, bundle-file rows, tags, and file-use checks are committed atomically.
+* [x] Public asset list/detail responses include only safe bundle metadata and never original paths or signed URLs.
+* [x] Only the creator or an active purchaser can request a signed preview/download URL for a specific active bundle file.
+* [x] Asset Details lists all included originals and opens the selected authorized file in the protected viewer.
+* [x] New single-file and multi-file packages both work, while existing assets remain accessible as one-file bundles.
+* [x] Direct video-editor media-asset inserts/read queries use the bundle table and preserve their existing one-file behavior.
+* [x] No unrelated feature files are modified.
+
+**Follow-up status:** Completed August 18, 2026.
+
+**Implementation summary:** Added and applied the append-only `media_asset_bundle_files` migration, backfilled each former `media_assets.original_file_id` at position zero, and removed the legacy column. Marketplace asset creation now accepts one to twenty finalized protected originals, enforces distinct ownership, MIME, placement, per-file, and 500MB aggregate rules on the backend, and inserts the media record, ordered originals, listing, and tags in one transaction. The first selected original still produces the public proxy and top-level media metadata; the separate thumbnail remains the package cover. Public asset responses return only safe ordered file metadata. Creator and active-purchaser preview/download endpoints authorize the requested bundle-file ID before returning a 60-second signed URL. The create modal supports one or many originals, appends files selected in later picker sessions, preserves valid selections when a new selection fails validation, and allows individual removal. Asset Details renders visual image/video cards for authorized package originals instead of filename-led rows, uses a media visual when no frame is available, and displays locked blurred cover cards without fetching originals for non-purchasers. Clicking an authorized preview opens the selected file in the protected viewer. Seed and video-editor direct schema consumers now create/read position-zero bundle rows for their existing single-file flows, and the affected video-editor routes use the current media UUID after the old public-ID column removal.
+
+**Verification:** The migration applied successfully. Live schema inspection confirmed six child-table columns, one primary key, two foreign keys, two uniqueness constraints, and five indexes; all five existing media assets were backfilled and none retained or lacked the legacy original relationship. A rollback-only two-original creation reached ordered positions zero and one atomically, and a follow-up query confirmed no verification data persisted. Read-only authorization checks confirmed public results contain no original path or signed URL, creators can select an exact child file, unrelated child IDs return no result, and an unauthorized account receives `ASSET_PURCHASE_REQUIRED`. Empty, duplicate, and 21-file payloads returned backend validation errors. Backend syntax checks and route loading, targeted Assets ESLint, `git diff --check`, and the frontend TypeScript/Vite production build passed. The four changed video-editor TypeScript files parsed without diagnostics; a full video-editor type/build check could not run because that package's dependencies are not installed in this workspace and restricted npm access prevented `npx` from fetching TypeScript. Existing frontend dynamic-import and large-chunk warnings remain unrelated.
+
 ## Active Follow-up — Asset Replies and Marketplace Purchase Fee
 
 Complete the existing `asset_replies` feature with authenticated create, edit, and soft-delete operations scoped to an active comment on an accessible asset. Add nested reply rendering and controls to Asset Details. Enhance the existing purchase confirmation modal to show the asset thumbnail/name, total price, current account-wallet balance, and projected balance after purchase. Define the marketplace asset transaction-fee percentage in one backend constant, calculate all fee amounts server-side using integer credits, deduct the fee from the creator's proceeds, credit the platform wallet, and persist a linked `Fee` credit transaction atomically with the purchase. Show creators the fee percentage, fee credits, and net proceeds per sale. No schema change is required.

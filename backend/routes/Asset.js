@@ -17,6 +17,14 @@ const {
   createReplyController,
   updateReplyController,
   deleteReplyController,
+  likeAssetController,
+  unlikeAssetController,
+  saveAssetController,
+  unsaveAssetController,
+  listAssetReviewsController,
+  createAssetReviewController,
+  updateAssetReviewController,
+  deleteAssetReviewController,
 } = require('../controllers/AssetControllers');
 
 router.use(checkSession, requireAuth);
@@ -24,6 +32,16 @@ router.use(checkSession, requireAuth);
 router.get('/', listAssetsController);
 router.post('/', createAssetController);
 router.post('/:assetId/purchase', purchaseAssetController);
+router.put('/:assetId/like', likeAssetController);
+router.delete('/:assetId/like', unlikeAssetController);
+router.put('/:assetId/save', saveAssetController);
+router.delete('/:assetId/save', unsaveAssetController);
+router.get('/:assetId/reviews', listAssetReviewsController);
+router.post('/:assetId/reviews', createAssetReviewController);
+router.patch('/:assetId/reviews/:reviewId', updateAssetReviewController);
+router.delete('/:assetId/reviews/:reviewId', deleteAssetReviewController);
+router.get('/:assetId/files/:bundleFileId/original-preview', getAssetOriginalPreviewController);
+router.get('/:assetId/files/:bundleFileId/download', getAssetDownloadController);
 router.get('/:assetId/original-preview', getAssetOriginalPreviewController);
 router.get('/:assetId/download', getAssetDownloadController);
 router.get('/:assetId', getAssetController);
