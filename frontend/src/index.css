@@ -1,6 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
+@theme {
+  --color-dark-base: #111214;
+  --color-dark-surface: #1e1f22;
+  --color-dark-elevated: #2b2d31;
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 html,

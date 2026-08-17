@@ -340,7 +340,7 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
                       initial={{ opacity: 0, scale: 0.95, y: 20 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                      className="relative w-full max-w-md bg-white dark:bg-[#111111] rounded-2xl shadow-2xl overflow-hidden flex flex-col p-6 text-center"
+                      className="relative w-full max-w-md bg-white dark:bg-dark-base rounded-2xl shadow-2xl overflow-hidden flex flex-col p-6 text-center"
                     >
                       <div className="mx-auto w-12 h-12 bg-red-100 dark:bg-red-500/10 rounded-full flex items-center justify-center mb-4">
                         <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />

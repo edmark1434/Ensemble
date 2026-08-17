@@ -160,7 +160,7 @@ export const UserProfilesList: React.FC = () => {
   };
 
   return (
-    <div className="w-full min-h-screen bg-zinc-50 dark:bg-[#080a12] text-zinc-900 dark:text-white overflow-x-hidden">
+    <div className="w-full min-h-screen bg-zinc-50 dark:bg-dark-base text-zinc-900 dark:text-white overflow-x-hidden">
       <UserHeader pageTitle="User List" credits={1250} />
 
       <div className="mx-auto max-w-5xl p-6 md:p-8 w-full">
@@ -193,7 +193,7 @@ export const UserProfilesList: React.FC = () => {
             <div className="text-center text-zinc-500 py-12">Searching for creators...</div>
           ) : profiles.length === 0 ? (
             /* Elegant Empty State Block */
-            <div className="rounded-3xl border border-dashed border-zinc-200 dark:border-white/10 bg-white/50 dark:bg-[#0d0f1a]/40 p-12 text-center max-w-md mx-auto space-y-3 mt-12">
+            <div className="rounded-3xl border border-dashed border-zinc-200 dark:border-white/10 bg-white/50 dark:bg-dark-surface/40 p-12 text-center max-w-md mx-auto space-y-3 mt-12">
               <User className="h-8 w-8 mx-auto text-zinc-400 dark:text-zinc-600" />
               <div>
                 <h3 className="text-sm font-bold text-zinc-700 dark:text-zinc-300">No Creators Found</h3>
@@ -205,7 +205,7 @@ export const UserProfilesList: React.FC = () => {
               <div
                 key={profile.id}
                 onClick={() => navigate(`/profile/${profile.id}`)}
-                className="group rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/40 p-5 md:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 transition-all hover:border-zinc-300 dark:hover:border-white/20 hover:shadow-md dark:hover:bg-[#0d0f1a]/60 cursor-pointer animate-fade-in"
+                className="group rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-5 md:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 transition-all hover:border-zinc-300 dark:hover:border-white/20 hover:shadow-md dark:hover:bg-dark-surface/60 cursor-pointer animate-fade-in"
               >
                 {/* Left Side: Avatar + Meta Specs */}
                 <div className="flex items-start gap-4 min-w-0 w-full sm:w-auto flex-1">

@@ -335,7 +335,7 @@ export const UserSettingsAccountDetails: React.FC<AccountDetailsProps> = ({
               className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-white/5 pl-10 pr-4 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 transition-colors"
             />
             {isAddressFocused && addressSuggestions.length > 0 && (
-              <div className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl dark:border-white/10 dark:bg-[#13151f]">
+              <div className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl dark:border-white/10 dark:bg-dark-surface">
                 {addressSuggestions.map((suggestion) => (
                   <button
                     key={suggestion.id}

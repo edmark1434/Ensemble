@@ -149,7 +149,7 @@ export const GalleryUploadModal: React.FC<GalleryUploadModalProps> = ({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="relative w-full max-w-lg bg-white dark:bg-[#0b0e17] rounded-3xl shadow-2xl border border-gray-200 dark:border-white/10 overflow-hidden flex flex-col max-h-[90vh]"
+            className="relative w-full max-w-lg bg-white dark:bg-dark-base rounded-3xl shadow-2xl border border-gray-200 dark:border-white/10 overflow-hidden flex flex-col max-h-[90vh]"
           >
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-white/5">
@@ -234,7 +234,7 @@ export const GalleryUploadModal: React.FC<GalleryUploadModalProps> = ({
                     required
                     disabled={isUploading}
                     placeholder="e.g. Modern Dashboard UI Design"
-                    className="w-full px-4 py-3 bg-white dark:bg-[#0b0e17] border border-gray-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 dark:text-white transition-all text-sm"
+                    className="w-full px-4 py-3 bg-white dark:bg-dark-base border border-gray-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 dark:text-white transition-all text-sm"
                   />
                 </div>
 
@@ -248,7 +248,7 @@ export const GalleryUploadModal: React.FC<GalleryUploadModalProps> = ({
                     disabled={isUploading}
                     placeholder="Tell us a little bit about this piece..."
                     rows={3}
-                    className="w-full px-4 py-3 bg-white dark:bg-[#0b0e17] border border-gray-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 dark:text-white transition-all text-sm resize-none"
+                    className="w-full px-4 py-3 bg-white dark:bg-dark-base border border-gray-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 dark:text-white transition-all text-sm resize-none"
                   />
                 </div>
               </form>

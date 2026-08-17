@@ -114,7 +114,7 @@ export default function SkillsEditModal({
 
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 dark:bg-black/80 backdrop-blur-md p-4 font-['Plus Jakarta Sans',sans-serif] text-gray-800 dark:text-zinc-300 select-none animate-fadeIn">
-      <div className="relative w-full max-w-xl rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12] p-5 md:p-6 shadow-xl dark:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] space-y-4">
+      <div className="relative w-full max-w-xl rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base p-5 md:p-6 shadow-xl dark:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] space-y-4">
 
         {/* Header Component Controls */}
         <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
@@ -158,7 +158,7 @@ export default function SkillsEditModal({
                     // Delay closing to allow click on dropdown items
                     setTimeout(() => setIsDropdownOpen(false), 200);
                   }}
-                  className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#121420] px-3 py-1.5 text-xs outline-none text-gray-900 dark:text-white focus:border-blue-500/30 pr-8 shadow-sm"
+                  className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface px-3 py-1.5 text-xs outline-none text-gray-900 dark:text-white focus:border-blue-500/30 pr-8 shadow-sm"
                   placeholder={isLoading ? "Loading skills..." : "Search or select skill..."}
                   disabled={isLoading}
                 />
@@ -173,7 +173,7 @@ export default function SkillsEditModal({
 
               {/* Dropdown List */}
               {isDropdownOpen && filteredSkills.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-white dark:bg-[#121420] border border-gray-200 dark:border-white/10 rounded-lg max-h-40 overflow-y-auto shadow-xl">
+                <div className="absolute z-50 w-full mt-1 bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-lg max-h-40 overflow-y-auto shadow-xl">
                   {filteredSkills.map((skill) => (
                     <button
                       key={skill.tag_id}
@@ -189,7 +189,7 @@ export default function SkillsEditModal({
 
               {/* No Results Message */}
               {isDropdownOpen && searchTerm && filteredSkills.length === 0 && suggestedSkills.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-white dark:bg-[#121420] border border-gray-200 dark:border-white/10 rounded-lg p-3 text-center shadow-xl">
+                <div className="absolute z-50 w-full mt-1 bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-lg p-3 text-center shadow-xl">
                   <p className="text-xs text-gray-500 dark:text-zinc-400">No matching skills found</p>
                   <p className="text-[10px] text-gray-400 dark:text-zinc-500 mt-1">You can still add it manually</p>
                 </div>
@@ -201,7 +201,7 @@ export default function SkillsEditModal({
               <select
                 value={newSkill.proficiency}
                 onChange={(e) => setNewSkill(p => ({ ...p, proficiency: e.target.value as Proficiency }))}
-                className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#121420] px-2 py-1.5 text-xs outline-none text-gray-900 dark:text-white h-[32px] font-medium shadow-sm"
+                className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface px-2 py-1.5 text-xs outline-none text-gray-900 dark:text-white h-[32px] font-medium shadow-sm"
               >
                 <option value="beginner">Beginner</option>
                 <option value="intermediate">Intermediate</option>

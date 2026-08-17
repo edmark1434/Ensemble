@@ -16,7 +16,7 @@ interface SkillsSectionProps {
 }
 
 export const SkillsSideSectionSkeleton: React.FC = () => (
-  <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-[#0b0e17]/60 p-4 space-y-3 animate-pulse">
+  <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-dark-base/60 p-4 space-y-3 animate-pulse">
     <div className="flex justify-between items-center">
       <div className="h-4 w-36 bg-white/10 rounded" />
     </div>
@@ -46,7 +46,7 @@ export const SkillsSideSection_ProfileDisplay: React.FC<SkillsSectionProps> = ({
 
   return (
     // FIXED: Adjusted z-index to z-10 so top-level page elements / tooltips stack over it properly
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-[#0b0e17]/60 backdrop-blur-md p-4 text-gray-800 dark:text-zinc-300 shadow-xl font-['Plus Jakarta Sans',sans-serif] space-y-3 relative z-10">
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-dark-base/60 backdrop-blur-md p-4 text-gray-800 dark:text-zinc-300 shadow-xl font-['Plus Jakarta Sans',sans-serif] space-y-3 relative z-10">
 
       {/* Header Panel */}
       <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-2">
@@ -62,7 +62,7 @@ export const SkillsSideSection_ProfileDisplay: React.FC<SkillsSectionProps> = ({
             </button>
 
             {/* Note: Kept high z-index strictly local to this specific tooltip box */}
-            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 w-72 p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#070913] shadow-[0_15px_35px_rgba(0,0,0,0.1)] dark:shadow-[0_15px_35px_rgba(0,0,0,0.6)] opacity-0 scale-95 pointer-events-none transition-all duration-200 group-hover/help:opacity-100 group-hover/help:scale-100 z-[9999] text-left origin-left">
+            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 w-72 p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-[0_15px_35px_rgba(0,0,0,0.1)] dark:shadow-[0_15px_35px_rgba(0,0,0,0.6)] opacity-0 scale-95 pointer-events-none transition-all duration-200 group-hover/help:opacity-100 group-hover/help:scale-100 z-[9999] text-left origin-left">
               <div className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent border-r-white dark:border-r-[#070913]" />
               <div className="absolute right-full top-1/2 -translate-y-1/2 -mr-[1px] border-[5px] border-transparent border-r-gray-200 dark:border-r-white/10 -z-10" />
               <p className="text-[10px] text-gray-600 dark:text-zinc-300 leading-relaxed font-medium">
@@ -117,7 +117,7 @@ export const SkillsSideSection_ProfileDisplay: React.FC<SkillsSectionProps> = ({
                   return (
                     <div
                       key={`pill-${skill.tag_id}`}
-                      className="group relative flex items-center justify-center bg-white dark:bg-[#121420]/60 hover:bg-gray-100 dark:hover:bg-[#121420]/80 px-3 py-1 rounded-lg border transition-all duration-300 box-border overflow-hidden select-none"
+                      className="group relative flex items-center justify-center bg-white dark:bg-dark-surface/60 hover:bg-gray-100 dark:hover:bg-dark-surface/80 px-3 py-1 rounded-lg border transition-all duration-300 box-border overflow-hidden select-none"
                       style={{ borderColor: currentConfig.color }}
                     >
                       <span className="text-[11px] font-bold text-gray-700 dark:text-zinc-200 tracking-wide transition-colors group-hover:text-gray-900 dark:group-hover:text-white relative z-10 whitespace-nowrap">
@@ -143,7 +143,7 @@ export const SkillsSideSection_ProfileDisplay: React.FC<SkillsSectionProps> = ({
                     return (
                       <div
                         key={`card-${skill.tag_id}`}
-                        className="group relative flex flex-col justify-between bg-gray-50 dark:bg-[#121420]/60 hover:bg-gray-100 dark:hover:bg-[#121420]/80 p-2.5 rounded-xl border border-transparent dark:border-white/5 transition-all duration-300 w-full box-border overflow-hidden"
+                        className="group relative flex flex-col justify-between bg-gray-50 dark:bg-dark-surface/60 hover:bg-gray-100 dark:hover:bg-dark-surface/80 p-2.5 rounded-xl border border-transparent dark:border-white/5 transition-all duration-300 w-full box-border overflow-hidden"
                         onMouseEnter={(e) => {
                           e.currentTarget.style.borderColor = currentConfig.color;
                         }}

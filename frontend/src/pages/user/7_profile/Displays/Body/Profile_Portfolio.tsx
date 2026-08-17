@@ -126,7 +126,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
             <div
               key={item.id}
               onClick={() => setActiveViewItem(item)}
-              className="group relative flex flex-col aspect-square justify-between bg-white dark:bg-[#121420]/30 rounded-2xl border border-gray-200 dark:border-white/5 overflow-hidden transition-all duration-300 hover:border-gray-300 dark:hover:border-white/15 hover:bg-gray-50 dark:hover:bg-[#121420]/50 cursor-pointer shadow-lg"
+              className="group relative flex flex-col aspect-square justify-between bg-white dark:bg-dark-surface/30 rounded-2xl border border-gray-200 dark:border-white/5 overflow-hidden transition-all duration-300 hover:border-gray-300 dark:hover:border-white/15 hover:bg-gray-50 dark:hover:bg-dark-surface/50 cursor-pointer shadow-lg"
             >
               {isOwner && onDeleteItem && (
                 <button
@@ -188,7 +188,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                 </div>
               </div>
 
-              <div className="p-3.5 space-y-1 bg-white dark:bg-[#0b0e17]/20 relative z-10">
+              <div className="p-3.5 space-y-1 bg-white dark:bg-dark-base/20 relative z-10">
                 <div className="flex items-center justify-between gap-2">
                   <span className={`text-[8px] font-mono font-black uppercase tracking-widest ${cfg.color}`}>
                     {cfg.label}
@@ -260,15 +260,15 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                 </div>
                 <label className="block text-xs text-gray-600 dark:text-zinc-400">
                   Display name <span className="text-red-500 dark:text-red-400">*</span>
-                  <input required maxLength={255} value={linkName} onChange={(e) => setLinkName(e.target.value)} className="mt-1.5 w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-[#0b0e17] px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500" placeholder="My portfolio website" />
+                  <input required maxLength={255} value={linkName} onChange={(e) => setLinkName(e.target.value)} className="mt-1.5 w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-dark-base px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500" placeholder="My portfolio website" />
                 </label>
                 <label className="block text-xs text-gray-600 dark:text-zinc-400">
                   Website URL <span className="text-red-500 dark:text-red-400">*</span>
-                  <input required type="url" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} className="mt-1.5 w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-[#0b0e17] px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500" placeholder="https://example.com" />
+                  <input required type="url" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} className="mt-1.5 w-full rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-dark-base px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500" placeholder="https://example.com" />
                 </label>
                 <label className="block text-xs text-gray-600 dark:text-zinc-400">
                   Description
-                  <textarea maxLength={2000} rows={3} value={linkDescription} onChange={(e) => setLinkDescription(e.target.value)} className="mt-1.5 w-full resize-none rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-[#0b0e17] px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500" placeholder="Describe what visitors will find." />
+                  <textarea maxLength={2000} rows={3} value={linkDescription} onChange={(e) => setLinkDescription(e.target.value)} className="mt-1.5 w-full resize-none rounded-xl border border-gray-300 dark:border-white/10 bg-gray-50 dark:bg-dark-base px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500" placeholder="Describe what visitors will find." />
                 </label>
                 <button disabled={isSubmitting} type="submit" className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50">
                   {isSubmitting ? "Adding..." : "Add Website"}
@@ -291,7 +291,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ type: "spring", duration: 0.4 }}
-              className="relative w-full max-w-4xl bg-white/95 dark:bg-[#0b0e17]/95 border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden z-10 font-['Plus Jakarta Sans',sans-serif]"
+              className="relative w-full max-w-4xl bg-white/95 dark:bg-dark-base/95 border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden z-10 font-['Plus Jakarta Sans',sans-serif]"
             >
               <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-white/5 bg-gray-50 dark:bg-white/[0.01]">
                 <div className="min-w-0">
@@ -319,7 +319,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                 )}
 
                 {activeViewItem.type === "document" && activeViewItem.fileUrl && (
-                  <div className="w-full h-[500px] rounded-xl overflow-hidden border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-[#121420]/30">
+                  <div className="w-full h-[500px] rounded-xl overflow-hidden border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-dark-surface/30">
                     <iframe
                       src={`${activeViewItem.fileUrl}#toolbar=0`}
                       className="w-full h-full border-none"
@@ -358,7 +358,7 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                 )}
 
                 {activeViewItem.type === "tos" && (
-                  <div className="p-5 md:p-6 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-[#0d111d]/50 font-sans text-xs text-gray-800 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap max-h-[450px] overflow-y-auto">
+                  <div className="p-5 md:p-6 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-dark-surface/50 font-sans text-xs text-gray-800 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap max-h-[450px] overflow-y-auto">
                     {activeViewItem.description}
                   </div>
                 )}

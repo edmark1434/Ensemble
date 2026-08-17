@@ -68,7 +68,7 @@ export const BadgeEditModal: React.FC<BadgeEditModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-zinc-900/40 dark:bg-black/80 backdrop-blur-md p-4 font-['Plus Jakarta Sans',sans-serif] text-zinc-800 dark:text-zinc-300 select-none animate-fadeIn">
-      <div className="relative w-full max-w-5xl rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-[#080a12] p-5 md:p-6 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] space-y-5 overflow-hidden max-h-[90vh] flex flex-col transition-colors duration-300">
+      <div className="relative w-full max-w-5xl rounded-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-base p-5 md:p-6 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.1)] dark:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7)] space-y-5 overflow-hidden max-h-[90vh] flex flex-col transition-colors duration-300">
 
         {/* Header Segment */}
         <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/5 pb-3 flex-shrink-0">
@@ -157,7 +157,7 @@ export const BadgeEditModal: React.FC<BadgeEditModalProps> = ({
                     >
                       {/* Badge Icon Core */}
                       <div
-                        className={`bg-white dark:bg-[#121624] border border-zinc-200 dark:border-white/10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
+                        className={`bg-white dark:bg-dark-surface border border-zinc-200 dark:border-white/10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
                           inventoryMode === "RowList" ? "w-11 h-11 p-2" : "w-14 h-14 p-2.5"
                         } ${isUnlocked ? "group-hover:scale-105" : "opacity-50"}`}
                         style={{ boxShadow: isSelected ? `0 0 12px ${b.glowColor}20` : undefined }}
@@ -195,7 +195,7 @@ export const BadgeEditModal: React.FC<BadgeEditModalProps> = ({
                         /* Box Grid Overlay Priority tags */
                         isSelected && (
                           <div
-                            className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black font-mono border shadow-sm dark:shadow-md z-10 bg-white dark:bg-[#080a12]"
+                            className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black font-mono border shadow-sm dark:shadow-md z-10 bg-white dark:bg-dark-base"
                             style={{ borderColor: b.borderColor, color: b.borderColor }}
                           >
                             {currentSlotIndex + 1}
@@ -205,7 +205,7 @@ export const BadgeEditModal: React.FC<BadgeEditModalProps> = ({
 
                       {/* BoxList Tooltip Layer */}
                       {inventoryMode === "BoxList" && (
-                        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 p-2 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-[#070913] shadow-lg dark:shadow-[0_10px_25px_rgba(0,0,0,0.5)] opacity-0 scale-95 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 z-50 whitespace-nowrap origin-left">
+                        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 p-2 rounded-lg border border-zinc-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-lg dark:shadow-[0_10px_25px_rgba(0,0,0,0.5)] opacity-0 scale-95 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 z-50 whitespace-nowrap origin-left">
                           <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-white dark:border-r-[#070913]" />
                           <div className="absolute right-full top-1/2 -translate-y-1/2 -mr-[1px] border-4 border-transparent border-r-zinc-200 dark:border-r-white/10 -z-10" />
                           <h5 className="font-extrabold text-[11px] text-zinc-900 dark:text-white tracking-wide px-1">
@@ -235,11 +235,11 @@ export const BadgeEditModal: React.FC<BadgeEditModalProps> = ({
               {selectedBadges.map((b, index) => (
                 <div
                   key={b.id}
-                  className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-[#0b0e17]/90 border border-zinc-200 dark:border-white/5 h-[46px] group/item animate-slideRight shadow-sm dark:shadow-none"
+                  className="flex items-center justify-between p-2 rounded-xl bg-white dark:bg-dark-base/90 border border-zinc-200 dark:border-white/5 h-[46px] group/item animate-slideRight shadow-sm dark:shadow-none"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-500 w-4 text-center">{index + 1}</span>
-                    <div className="w-7 h-7 rounded-full bg-zinc-50 dark:bg-[#121624] p-1 border border-zinc-200 dark:border-white/10 flex-shrink-0">
+                    <div className="w-7 h-7 rounded-full bg-zinc-50 dark:bg-dark-surface p-1 border border-zinc-200 dark:border-white/10 flex-shrink-0">
                       <img src={b.icon} alt={b.name} className="w-full h-full object-contain" />
                     </div>
                     <span className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 truncate pr-1">{b.name}</span>

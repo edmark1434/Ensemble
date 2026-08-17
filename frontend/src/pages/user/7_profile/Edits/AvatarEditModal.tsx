@@ -290,7 +290,7 @@ export default function AvatarEditModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="relative w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-[#080a12]/95 backdrop-blur-md p-6 shadow-2xl font-['Plus Jakarta Sans',sans-serif] max-h-[90vh] overflow-y-auto">
+      <div className="relative w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-white/95 dark:bg-dark-base/95 backdrop-blur-md p-6 shadow-2xl font-['Plus Jakarta Sans',sans-serif] max-h-[90vh] overflow-y-auto">
         <button
           onClick={handleClose}
           disabled={isUploading}
@@ -316,7 +316,7 @@ export default function AvatarEditModal({
             </div>
           )}
 
-          <div className={`relative w-28 h-28 rounded-full border-2 border-dashed p-1 bg-white dark:bg-[#080a12] mb-6 transition-all duration-300 ${isCustomFile || selectedPresetId ? 'border-[#4a6fa5]' : 'border-gray-300 dark:border-[#2a2d3e]'}`}>
+          <div className={`relative w-28 h-28 rounded-full border-2 border-dashed p-1 bg-white dark:bg-dark-base mb-6 transition-all duration-300 ${isCustomFile || selectedPresetId ? 'border-[#4a6fa5]' : 'border-gray-300 dark:border-[#2a2d3e]'}`}>
             <div className="w-full h-full rounded-full overflow-hidden bg-gray-100 dark:bg-[#13151f] flex items-center justify-center">
               {previewUrl ? (
                 <img 

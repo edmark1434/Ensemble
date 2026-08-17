@@ -12,7 +12,7 @@ export const Profile_Services: React.FC<ProfileServicesProps> = ({ services = []
       {services.map((srv) => (
         <div
           key={srv.id}
-          className="group p-4 rounded-xl border border-gray-200 dark:border-white/5 bg-white dark:bg-[#121420]/20 flex justify-between items-center gap-4 transition-all duration-300 hover:border-gray-300 dark:hover:border-white/15 hover:bg-gray-50 dark:hover:bg-[#121420]/40"
+          className="group p-4 rounded-xl border border-gray-200 dark:border-white/5 bg-white dark:bg-dark-surface/20 flex justify-between items-center gap-4 transition-all duration-300 hover:border-gray-300 dark:hover:border-white/15 hover:bg-gray-50 dark:hover:bg-dark-surface/40"
         >
           <div className="space-y-1 min-w-0 flex-1">
             <h4 className="text-xs font-bold text-gray-900 dark:text-white tracking-wide transition-colors group-hover:text-blue-500 dark:group-hover:text-blue-400">

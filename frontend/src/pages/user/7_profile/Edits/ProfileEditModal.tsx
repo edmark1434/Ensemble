@@ -359,7 +359,7 @@ export default function ProfileEditModal({
 
   return (
     <div className="fixed inset-0 z-[200000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 font-['Plus Jakarta Sans',sans-serif]">
-      <div className="relative w-full max-w-2xl rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12] p-6 shadow-2xl text-gray-900 dark:text-white transition-all duration-300 max-h-[90vh] overflow-y-auto">
+      <div className="relative w-full max-w-2xl rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base p-6 shadow-2xl text-gray-900 dark:text-white transition-all duration-300 max-h-[90vh] overflow-y-auto">
 
         <button 
           onClick={onClose} 

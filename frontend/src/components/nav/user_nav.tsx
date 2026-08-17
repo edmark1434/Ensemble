@@ -106,7 +106,7 @@ const UserNav: React.FC<UserNavProps> = () => {
     return (
        <>
           <aside
-             className={`fixed inset-y-0 left-0 z-20 flex flex-col border-r border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12] transition-all duration-300 ${
+             className={`fixed inset-y-0 left-0 z-20 flex flex-col border-r border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base transition-all duration-300 ${
                 isCollapsed ? "w-20" : "w-64"
              }`}
           >
@@ -258,7 +258,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                             </div>
 
                             <div className="absolute left-full -ml-6 pl-6 hidden w-52 group-hover:block z-50">
-                               <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-1.5 shadow-xl dark:shadow-2xl animate-fade-in">
+                               <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-1.5 shadow-xl dark:shadow-2xl animate-fade-in">
                                   <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-500 border-b border-gray-100 dark:border-white/5 mb-1">Jobs</p>
                                   <ul className="space-y-0.5">
                                      {jobsState.map(({ label, icon: Icon, to }) => {
@@ -323,7 +323,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                             </div>
 
                             <div className="absolute left-full -ml-6 pl-6 hidden w-52 group-hover:block z-50">
-                               <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-1.5 shadow-xl dark:shadow-2xl animate-fade-in">
+                               <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-1.5 shadow-xl dark:shadow-2xl animate-fade-in">
                                   <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-500 border-b border-gray-100 dark:border-white/5 mb-1">Gigs</p>
                                   <ul className="space-y-0.5">
                                      {gigsState.map(({ label, icon: Icon, to }) => (

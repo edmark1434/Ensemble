@@ -350,7 +350,7 @@ useEffect(() => {
   if (isCheckingAccess) {
     return (
       <header
-        className={`sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12]/95 backdrop-blur-md transition-all duration-300 ${
+        className={`sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/95 backdrop-blur-md transition-all duration-300 ${
             (!isCollapsed ? "md:p-0" : "md:pl-20")
         }`}
       >
@@ -378,7 +378,7 @@ useEffect(() => {
   return showHeader ? (
     <>
       <header
-        className={`sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12]/95 backdrop-blur-md transition-all duration-300 ${
+        className={`sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/95 backdrop-blur-md transition-all duration-300 ${
             (!isCollapsed ? "md:p-0" : "md:pl-20")
         }`}
       >
@@ -413,7 +413,7 @@ useEffect(() => {
               </div>
 
               {isCreatorSearchOpen && headerSearchInput.replace(/^@/, "").trim().length >= 2 && (
-                <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#151824] shadow-xl dark:shadow-2xl">
+                <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-xl dark:shadow-2xl">
                   {isSearchingCreators ? (
                     <p className="px-4 py-3 text-center text-xs text-gray-500 dark:text-zinc-400">Searching creators...</p>
                   ) : creatorSearchResults.length > 0 ? (
@@ -518,7 +518,7 @@ useEffect(() => {
               </button>
 
               {isProfileOpen && (
-                <div className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-xl dark:shadow-2xl backdrop-blur-xl animate-fade-in">
+                <div className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-xl dark:shadow-2xl backdrop-blur-xl animate-fade-in">
                   <div className="border-b border-gray-200 dark:border-white/10 p-3">
                     <p className="text-sm font-medium text-gray-900 dark:text-white">{userInfo?.username || "User"}</p>
                     <p className="text-xs text-gray-500 dark:text-zinc-500">{userInfo?.email || "user@ensemble.com"}</p>

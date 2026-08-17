@@ -178,7 +178,7 @@ export const HomeFeaturedAssets: React.FC<HomeFeaturedAssetsProps> = ({
             onMouseEnter={() => setHoveredAsset(asset.id)}
             onMouseLeave={() => setHoveredAsset(null)}
           >
-            <div className="relative aspect-square w-full overflow-hidden bg-gray-200 dark:bg-gradient-to-br dark:from-[#1a1f2e] dark:to-[#0d0f1a]">
+            <div className="relative aspect-square w-full overflow-hidden bg-gray-200 dark:bg-gradient-to-br dark:from-[#1a1f2e] dark:to-dark-base">
               <img
                 src={asset.imagePlaceholder}
                 alt={asset.title}
