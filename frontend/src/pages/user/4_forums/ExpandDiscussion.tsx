@@ -527,7 +527,7 @@ const ExpandDiscussion = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
         <UserHeader pageTitle="Discussion" credits={1250} />
         <div className="mx-auto max-w-4xl p-8">
           <div className="h-80 animate-pulse rounded-xl bg-gray-100 dark:bg-white/10" />
@@ -538,7 +538,7 @@ const ExpandDiscussion = () => {
 
   if (!discussion) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
         <UserHeader pageTitle="Discussion" credits={1250} />
         <div className="mx-auto max-w-4xl p-8 text-center text-gray-500 dark:text-zinc-400">
           Discussion not found.
@@ -583,7 +583,7 @@ const ExpandDiscussion = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
       <UserHeader pageTitle="Discussion" credits={1250} />
       <main className="mx-auto max-w-4xl p-6 md:p-8">
         <button onClick={() => navigate(-1)} className="mb-5 flex items-center gap-2 text-sm text-gray-500 dark:text-zinc-400">
@@ -605,7 +605,7 @@ const ExpandDiscussion = () => {
                   <MoreVertical className="h-5 w-5" />
                 </button>
                 {menuOpen && (
-                  <div className="absolute right-0 z-10 w-32 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] py-1">
+                  <div className="absolute right-0 z-10 w-32 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface py-1">
                     <button onClick={() => setEditingPost(true)} className="flex w-full gap-2 px-3 py-2 text-sm text-gray-600 dark:text-zinc-300">
                       <Edit2 className="h-4 w-4" /> Edit
                     </button>

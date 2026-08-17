@@ -45,7 +45,7 @@ const ReportMemberModal: React.FC<ReportMemberModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in-modal">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d0f1a] p-6 shadow-2xl animate-scale-in">
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-dark-surface p-6 shadow-2xl animate-scale-in">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Flag className="h-5 w-5 text-red-400" />
@@ -73,11 +73,11 @@ const ReportMemberModal: React.FC<ReportMemberModalProps> = ({
           <select
             value={selectedReason}
             onChange={(e) => setSelectedReason(e.target.value)}
-            className="w-full rounded-lg border border-white/20 bg-[#1a1f2e] px-4 py-2 text-sm text-white focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+            className="w-full rounded-lg border border-white/20 bg-dark-surface px-4 py-2 text-sm text-white focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
           >
-            <option value="" className="bg-[#1a1f2e] text-zinc-400">Select a reason</option>
+            <option value="" className="bg-dark-surface text-zinc-400">Select a reason</option>
             {reportReasons.map((reason) => (
-              <option key={reason} value={reason} className="bg-[#1a1f2e] text-white">{reason}</option>
+              <option key={reason} value={reason} className="bg-dark-surface text-white">{reason}</option>
             ))}
           </select>
         </div>
@@ -92,7 +92,7 @@ const ReportMemberModal: React.FC<ReportMemberModalProps> = ({
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Please provide additional details about your report..."
             rows={4}
-            className="w-full rounded-lg border border-white/15 bg-[#1a1f2e] px-4 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 resize-none"
+            className="w-full rounded-lg border border-white/15 bg-dark-surface px-4 py-2 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50 resize-none"
           />
         </div>
 

@@ -33,7 +33,7 @@ function formatDate(value: string) {
 
 function AssetSkeleton() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-white/10 dark:bg-[#0d0f1a]">
+    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-white/10 dark:bg-dark-surface">
       <div className="h-48 animate-pulse bg-gray-200 dark:bg-white/5" />
       <div className="space-y-3 p-4">
         <div className="h-4 w-3/4 animate-pulse rounded bg-gray-200 dark:bg-white/10" />
@@ -133,7 +133,7 @@ export default function AssetsLibrary() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-[#080a12] dark:text-white">
+    <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-dark-base dark:text-white">
       <UserHeader pageTitle="Asset Library" />
       <main className="mx-auto w-full max-w-7xl p-5 md:p-8">
         <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
@@ -146,7 +146,7 @@ export default function AssetsLibrary() {
           </button>
         </div>
 
-        <section className="mt-7 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#0d0f1a] dark:shadow-none">
+        <section className="mt-7 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex rounded-xl bg-gray-100 p-1 dark:bg-white/5" role="tablist" aria-label="Asset views">
               {(["discover", "mine", "purchased"] as const).map((tab) => (
@@ -157,7 +157,7 @@ export default function AssetsLibrary() {
             </div>
             <label className="relative block w-full lg:max-w-md">
               <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} maxLength={100} placeholder="Search title, creator, or tag..." className="w-full rounded-xl border border-gray-300 bg-white py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-[#080a12] dark:text-white" />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} maxLength={100} placeholder="Search title, creator, or tag..." className="w-full rounded-xl border border-gray-300 bg-white py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-dark-base dark:text-white" />
             </label>
           </div>
 
@@ -183,7 +183,7 @@ export default function AssetsLibrary() {
             <button type="button" onClick={() => void loadAssets()} className="mt-4 rounded-lg border border-red-500/30 px-4 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-500/10 dark:text-red-300">Try again</button>
           </div>
         ) : assets.length === 0 ? (
-          <div className="mt-4 rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-16 text-center dark:border-white/10 dark:bg-[#0d0f1a]">
+          <div className="mt-4 rounded-2xl border border-dashed border-gray-300 bg-white px-5 py-16 text-center dark:border-white/10 dark:bg-dark-surface">
             <AudioLines className="mx-auto h-10 w-10 text-gray-400 dark:text-zinc-600" />
             <h2 className="mt-4 font-semibold">{view === "mine" ? "You haven't uploaded any assets yet." : view === "purchased" ? "You haven't purchased any assets yet." : "No assets found."}</h2>
             <p className="mt-1 text-sm text-gray-500 dark:text-zinc-500">{search ? "Try a different search or filter." : view === "purchased" ? "Assets you purchase will appear here." : "Uploaded media will appear here."}</p>
@@ -192,7 +192,7 @@ export default function AssetsLibrary() {
         ) : (
           <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {assets.map((asset) => (
-              <article key={asset.market_asset_id} onClick={() => navigate(`/assets/${asset.market_asset_id}`)} className="group cursor-pointer overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md dark:border-white/10 dark:bg-[#0d0f1a] dark:shadow-none dark:hover:border-blue-500/50">
+              <article key={asset.market_asset_id} onClick={() => navigate(`/assets/${asset.market_asset_id}`)} className="group cursor-pointer overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md dark:border-white/10 dark:bg-dark-surface dark:shadow-none dark:hover:border-blue-500/50">
                 <div className="relative overflow-hidden"><AssetMedia asset={asset} compact /><span className="absolute left-3 top-3 rounded-full bg-black/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">{asset.type}</span>{asset.is_purchased && !asset.is_owner && <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-bold uppercase text-white"><CheckCircle2 className="h-3 w-3" /> Owned</span>}</div>
                 <div className="p-4">
                   <div className="flex items-start justify-between gap-3">

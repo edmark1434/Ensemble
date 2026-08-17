@@ -473,17 +473,17 @@ const Projects: React.FC = () => {
   const renderProjectCard = (project: Project) => (
     <div
       key={project.id}
-      className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-gradient-to-br dark:from-white/5 dark:to-transparent transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/10 hover:scale-[1.02] shadow-sm hover:shadow-md dark:shadow-none"
+      className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-dark-surface/80 hover:scale-[1.02] shadow-sm hover:shadow-md dark:shadow-none"
       onMouseEnter={() => setHoveredProject(project.id)}
       onMouseLeave={() => setHoveredProject(null)}
     >
-      <div className="relative h-36 w-full overflow-hidden bg-gray-200 dark:bg-gradient-to-br dark:from-[#1a1f2e] dark:to-[#0d0f1a]">
+      <div className="relative h-36 w-full overflow-hidden bg-gray-200 dark:bg-gradient-to-br dark:from-dark-surface dark:to-dark-surface">
         <img
           src={project.thumbnail}
           alt={project.name}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 dark:from-[#080a12] via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 dark:from-dark-base via-transparent to-transparent" />
 
         <div className="absolute left-3 top-3">
           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${getTypeColor(project.type)}`}>
@@ -572,9 +572,9 @@ const Projects: React.FC = () => {
   const renderCompactProjectCard = (project: Project) => (
     <div
       key={project.id}
-      className="flex items-center gap-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-gradient-to-br dark:from-white/5 dark:to-transparent p-3 transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/10 shadow-sm hover:shadow-md dark:shadow-none"
+      className="flex items-center gap-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-3 transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-dark-surface/80 shadow-sm hover:shadow-md dark:shadow-none"
     >
-      <div className="relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-gray-200 dark:bg-gradient-to-br dark:from-[#1a1f2e] dark:to-[#0d0f1a]">
+      <div className="relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-gray-200 dark:bg-gradient-to-br dark:from-dark-surface dark:to-dark-surface">
         <img
           src={project.thumbnail}
           alt={project.name}
@@ -631,7 +631,7 @@ const Projects: React.FC = () => {
   const renderTeamFolderCard = (project: TeamProject) => (
     <div
       key={project.id}
-      className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-gradient-to-br dark:from-white/5 dark:to-transparent transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/10 hover:scale-[1.02] cursor-pointer shadow-sm hover:shadow-md dark:shadow-none"
+      className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-dark-surface/80 hover:scale-[1.02] cursor-pointer shadow-sm hover:shadow-md dark:shadow-none"
       onMouseEnter={() => setHoveredProject(project.id + 200)}
       onMouseLeave={() => setHoveredProject(null)}
       onClick={() => navigate(`/projects/team/${project.id}`)}
@@ -707,7 +707,7 @@ const Projects: React.FC = () => {
   const renderCompactTeamFolderCard = (project: TeamProject) => (
     <div
       key={project.id}
-      className="flex items-center gap-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-gradient-to-br dark:from-white/5 dark:to-transparent p-3 transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/10 cursor-pointer shadow-sm hover:shadow-md dark:shadow-none"
+      className="flex items-center gap-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-3 transition-all duration-300 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-dark-surface/80 cursor-pointer shadow-sm hover:shadow-md dark:shadow-none"
       onClick={() => navigate(`/projects/team/${project.id}`)}
     >
       <div className="relative h-16 w-24 flex-shrink-0 overflow-hidden rounded-lg bg-blue-50 dark:bg-gradient-to-br dark:from-blue-500/20 dark:to-purple-500/20 flex items-center justify-center border border-blue-100 dark:border-none">
@@ -773,7 +773,7 @@ const Projects: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
         <UserHeader pageTitle="Projects" credits={1250} />
         <div className="mx-auto max-w-7xl p-6 md:p-8">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -810,7 +810,7 @@ const Projects: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
       <UserHeader pageTitle="Projects" credits={1250} />
 
       <div className="mx-auto max-w-7xl p-6 md:p-8">

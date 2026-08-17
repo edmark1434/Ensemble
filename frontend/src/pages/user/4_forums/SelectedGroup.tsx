@@ -626,7 +626,7 @@ const CommentItem = ({
                   <MoreVertical className="h-3 w-3" />
                 </button>
                 {showCommentMenu && (
-                  <div className="absolute right-0 mt-1 w-28 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-xl z-20">
+                  <div className="absolute right-0 mt-1 w-28 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-xl z-20">
                     <button
                       onClick={() => {
                         setIsEditing(true);
@@ -1754,7 +1754,7 @@ const SelectedGroup = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
         <UserHeader pageTitle="Group" credits={1250} />
         <div className="mx-auto max-w-7xl p-6 md:p-8">
           <div className="h-48 w-full animate-pulse rounded-xl bg-gray-100 dark:bg-white/10" />
@@ -1771,7 +1771,7 @@ const SelectedGroup = () => {
 
   if (!group) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
         <UserHeader pageTitle="Group" credits={1250} />
         <div className="mx-auto max-w-7xl p-6 md:p-8 text-center">
           <p className="text-gray-500 dark:text-zinc-400">Group not found</p>
@@ -1787,7 +1787,7 @@ const SelectedGroup = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
       <UserHeader pageTitle={group.group_name} credits={1250} />
 
       <div className="mx-auto max-w-7xl p-6 md:p-8">
@@ -1809,7 +1809,7 @@ const SelectedGroup = () => {
             </button>
 
             {showMenu && (
-              <div className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-2xl backdrop-blur-xl overflow-hidden z-20">
+              <div className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-2xl backdrop-blur-xl overflow-hidden z-20">
                 <div className="p-2">
                   {canEditGroup && (
                     <button
@@ -2047,7 +2047,7 @@ const SelectedGroup = () => {
                                     <MoreVertical className="h-4 w-4" />
                                   </button>
                                   {postMenuOpen === post.id && (
-                                    <div className="absolute right-0 mt-1 w-36 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-xl overflow-hidden z-20">
+                                    <div className="absolute right-0 mt-1 w-36 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-xl overflow-hidden z-20">
                                       <button
                                         onClick={() => {
                                           setEditingPost(post);
@@ -2222,7 +2222,7 @@ const SelectedGroup = () => {
                         <MoreVertical className="h-4 w-4" />
                       </button>
                       {showMemberMenu === member.userId && (
-                        <div className="absolute right-0 mt-2 w-48 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-2xl backdrop-blur-xl overflow-hidden z-20">
+                        <div className="absolute right-0 mt-2 w-48 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-2xl backdrop-blur-xl overflow-hidden z-20">
                           <div className="p-2">
                             <button
                               onClick={() => {

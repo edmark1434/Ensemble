@@ -112,7 +112,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-fade-in">
-      <div className="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0d0f1a] shadow-2xl animate-scale-in">
+      <div className="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-dark-surface shadow-2xl animate-scale-in">
         <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-6 py-5">
           <h3
             className="text-xl font-semibold text-white"
@@ -258,7 +258,7 @@ const EditTeamModalContent: React.FC<EditTeamModalProps> = ({
           </div>
         </div>
 
-        <div className="flex shrink-0 gap-3 border-t border-white/10 bg-[#0d0f1a] px-6 py-4">
+        <div className="flex shrink-0 gap-3 border-t border-white/10 bg-dark-surface px-6 py-4">
           <button
             onClick={handleSave}
             disabled={

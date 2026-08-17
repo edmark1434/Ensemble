@@ -82,7 +82,7 @@ function OpenAssetPurchaseModal({ asset, onClose, onPurchased }: Omit<AssetPurch
         </div>
 
         <div className="p-5">
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-[#080a12]">
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-dark-base">
             <img src={mediaUrl(asset.thumbnail_path)} alt="" draggable={false} onContextMenu={(event) => event.preventDefault()} className="h-44 w-full object-contain" />
           </div>
           <h3 className="mt-4 truncate font-bold text-gray-900 dark:text-white">{asset.name}</h3>

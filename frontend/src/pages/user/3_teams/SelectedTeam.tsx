@@ -392,7 +392,7 @@ export default function SelectedTeam() {
 
   return (
     <Page title={team.display_name}>
-      <div className="relative h-48 overflow-hidden bg-[#1e2130]">
+      <div className="relative h-48 overflow-hidden bg-dark-surface">
         {team.avatar_path && (
           <img
             src={imageUrl(team.avatar_path)}
@@ -400,7 +400,7 @@ export default function SelectedTeam() {
             className="h-full w-full object-cover"
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#080a12] via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-dark-base via-transparent to-transparent" />
         <button
           onClick={() => navigate("/teams")}
           className="absolute left-4 top-4 rounded-full bg-black/50 p-2 text-gray-900 dark:text-white"
@@ -506,7 +506,7 @@ export default function SelectedTeam() {
               <MoreVertical className="h-5 w-5" />
             </button>
             {showMenu && (
-              <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-2 shadow-2xl">
+              <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-2 shadow-2xl">
                 {permissions.can_update_team && (
                   <button
                     onClick={() => setShowEdit(true)}
@@ -706,14 +706,14 @@ export default function SelectedTeam() {
       />
       {showDistribution && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#12131a] p-5 shadow-2xl">
+          <div className="w-full max-w-md rounded-xl border border-white/10 bg-dark-base p-5 shadow-2xl">
             <h2 className="text-lg font-semibold text-white">Distribute Team funds</h2>
             <p className="mt-2 text-sm text-zinc-400">
               Send credits from the Team account wallet to an active member’s account wallet. Available: {Number(wallet?.available_balance || 0).toLocaleString()} credits.
             </p>
             <label className="mt-4 block text-sm text-zinc-300">
               Team member
-              <select value={distributionRecipientId} onChange={(event) => setDistributionRecipientId(event.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-[#12131a] px-3 py-2 text-white outline-none focus:border-blue-400">
+              <select value={distributionRecipientId} onChange={(event) => setDistributionRecipientId(event.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-dark-base px-3 py-2 text-white outline-none focus:border-blue-400">
                 <option value="">Select a member</option>
                 {members.filter((member) => member.status === 'Active').map((member) => <option key={member.account_id} value={member.account_id}>{member.display_name} (@{member.handle})</option>)}
               </select>
@@ -1057,7 +1057,7 @@ function Page({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white">
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white">
       <UserHeader pageTitle={title} />
       {children}
     </div>

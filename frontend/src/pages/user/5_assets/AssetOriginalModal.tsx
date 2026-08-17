@@ -58,7 +58,7 @@ function OpenAssetOriginalModal({ asset, onClose }: Omit<AssetOriginalModalProps
   const mediaType = preview?.mimeType || asset.mime_type;
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/85 p-4" role="dialog" aria-modal="true" aria-labelledby="original-file-title">
-      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0d0f1a] shadow-2xl">
+      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-dark-surface shadow-2xl">
         <div className="flex shrink-0 items-start justify-between border-b border-white/10 px-5 py-4">
           <div className="min-w-0">
             <h2 id="original-file-title" className="truncate text-lg font-bold text-white">Original file · {asset.name}</h2>

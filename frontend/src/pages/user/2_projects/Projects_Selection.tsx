@@ -154,7 +154,7 @@ const ProjectsSelection: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#080a12] relative overflow-hidden">
+    <div className="min-h-screen bg-dark-base relative overflow-hidden">
 
       {/* Enhanced Color Blur Backgrounds */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">

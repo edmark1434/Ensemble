@@ -236,12 +236,12 @@ export default function AssetDetails() {
       : "This comment will be removed permanently.";
 
   if (loading) {
-    return <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]"><UserHeader pageTitle="Asset Details" /><DetailSkeleton /></div>;
+    return <div className="min-h-screen bg-gray-50 dark:bg-dark-base"><UserHeader pageTitle="Asset Details" /><DetailSkeleton /></div>;
   }
 
   if (notFound || loadError || !asset) {
     return (
-      <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-[#080a12] dark:text-white">
+      <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-dark-base dark:text-white">
         <UserHeader pageTitle="Asset Details" />
         <main className="mx-auto flex min-h-[65vh] max-w-3xl flex-col items-center justify-center p-6 text-center">
           <MessageSquare className="h-12 w-12 text-gray-400 dark:text-zinc-600" />
@@ -257,12 +257,12 @@ export default function AssetDetails() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-[#080a12] dark:text-white">
+    <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-dark-base dark:text-white">
       <UserHeader pageTitle="Asset Details" />
       <main className="mx-auto w-full max-w-6xl p-5 md:p-8">
         <button type="button" onClick={() => navigate("/assets")} className="mb-5 inline-flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 dark:text-zinc-400 dark:hover:bg-white/5 dark:hover:text-white"><ArrowLeft className="h-4 w-4" /> Back to Assets</button>
 
-        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-[#0d0f1a] dark:shadow-none">
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none">
           <AssetMedia asset={asset} thumbnailOnly />
           <div className="p-5 md:p-7">
             <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
@@ -335,10 +335,10 @@ export default function AssetDetails() {
         </section>
 
         <div className="mt-7 grid gap-7 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <section className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-[#0d0f1a]">
+          <section className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-dark-surface">
             <div className="flex items-center justify-between"><div><h2 className="text-lg font-bold">Comments</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-500">Join the conversation about this asset.</p></div><span className="text-xs text-gray-500 dark:text-zinc-500">{comments.length}</span></div>
             <form onSubmit={postComment} className="mt-5 flex flex-col gap-3 sm:flex-row">
-              <textarea value={comment} onChange={(event) => setComment(event.target.value)} maxLength={2000} rows={2} placeholder="Write a comment..." className="min-h-20 flex-1 resize-y rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-[#080a12] dark:text-white" />
+              <textarea value={comment} onChange={(event) => setComment(event.target.value)} maxLength={2000} rows={2} placeholder="Write a comment..." className="min-h-20 flex-1 resize-y rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-dark-base dark:text-white" />
               <button type="submit" disabled={posting || !comment.trim()} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">{posting && <Loader2 className="h-4 w-4 animate-spin" />} Post</button>
             </form>
 
@@ -365,7 +365,7 @@ export default function AssetDetails() {
 
                     {editingCommentId === item.asset_comment_id ? (
                       <div className="mt-3">
-                        <textarea value={editingComment} onChange={(event) => setEditingComment(event.target.value)} maxLength={2000} rows={3} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#080a12]" />
+                        <textarea value={editingComment} onChange={(event) => setEditingComment(event.target.value)} maxLength={2000} rows={3} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-white/10 dark:bg-dark-base" />
                         <div className="mt-2 flex gap-2"><button type="button" onClick={() => void saveComment(item)} disabled={savingComment || !editingComment.trim()} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">Save</button><button type="button" onClick={() => setEditingCommentId(null)} disabled={savingComment} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold dark:border-white/10">Cancel</button></div>
                       </div>
                     ) : (
@@ -397,7 +397,7 @@ export default function AssetDetails() {
                               </div>
                               {editingReplyId === reply.asset_reply_id ? (
                                 <div className="mt-2">
-                                  <textarea value={editingReply} onChange={(event) => setEditingReply(event.target.value)} maxLength={2000} rows={2} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs outline-none focus:border-blue-500 dark:border-white/10 dark:bg-[#080a12]" />
+                                  <textarea value={editingReply} onChange={(event) => setEditingReply(event.target.value)} maxLength={2000} rows={2} className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs outline-none focus:border-blue-500 dark:border-white/10 dark:bg-dark-base" />
                                   <div className="mt-2 flex gap-2"><button type="button" onClick={() => void saveReply(item.asset_comment_id)} disabled={savingReply || !editingReply.trim()} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">Save</button><button type="button" onClick={() => { setEditingReplyId(null); setEditingReply(""); }} disabled={savingReply} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold dark:border-white/10">Cancel</button></div>
                                 </div>
                               ) : (
@@ -411,7 +411,7 @@ export default function AssetDetails() {
 
                     {replyingToCommentId === item.asset_comment_id && (
                       <form onSubmit={(event) => void postReply(event, item.asset_comment_id)} className="mt-3 flex flex-col gap-2 sm:flex-row">
-                        <textarea autoFocus value={replyText} onChange={(event) => setReplyText(event.target.value)} maxLength={2000} rows={2} placeholder={`Reply to ${item.author_name}…`} className="min-h-16 flex-1 resize-y rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-[#080a12]" />
+                        <textarea autoFocus value={replyText} onChange={(event) => setReplyText(event.target.value)} maxLength={2000} rows={2} placeholder={`Reply to ${item.author_name}…`} className="min-h-16 flex-1 resize-y rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-white/10 dark:bg-dark-base" />
                         <div className="flex gap-2 sm:flex-col">
                           <button type="submit" disabled={postingReplyCommentId === item.asset_comment_id || !replyText.trim()} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white transition hover:bg-blue-500 disabled:opacity-50">{postingReplyCommentId === item.asset_comment_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Send</button>
                           <button type="button" onClick={() => { setReplyingToCommentId(null); setReplyText(""); }} disabled={postingReplyCommentId === item.asset_comment_id} className="h-9 rounded-lg border border-gray-200 px-3 text-xs font-semibold dark:border-white/10">Cancel</button>
@@ -424,7 +424,7 @@ export default function AssetDetails() {
             </div>
           </section>
 
-          <aside className="h-fit rounded-2xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-[#0d0f1a]">
+          <aside className="h-fit rounded-2xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-dark-surface">
             <h2 className="font-bold">Reviews</h2>
             <p className="mt-3 text-sm leading-6 text-gray-500 dark:text-zinc-400">Ratings are not available for library assets yet.</p>
             <p className="mt-2 text-xs leading-5 text-gray-400 dark:text-zinc-600">You can still share feedback with the creator in comments.</p>

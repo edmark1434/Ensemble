@@ -326,7 +326,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
               {(originalPreviewUrl || thumbnailPreviewUrl) && (
                 <div className="grid gap-4 sm:grid-cols-2">
                   {originalPreviewUrl && (
-                    <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-[#080a12]">
+                    <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-dark-base">
                       <div className="border-b border-gray-200 px-4 py-2.5 dark:border-white/10"><p className="text-xs font-semibold text-gray-700 dark:text-zinc-300">Original file preview</p></div>
                       <div className="flex min-h-48 items-center justify-center overflow-hidden p-3">
                         {type === "image" ? (
@@ -344,7 +344,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
                   )}
 
                   {thumbnailPreviewUrl && (
-                    <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-[#080a12]">
+                    <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-dark-base">
                       <div className="border-b border-gray-200 px-4 py-2.5 dark:border-white/10"><p className="text-xs font-semibold text-gray-700 dark:text-zinc-300">Listing thumbnail preview</p></div>
                       <div className="flex min-h-48 items-center justify-center overflow-hidden p-3">
                         <img src={thumbnailPreviewUrl} alt="Selected asset thumbnail preview" draggable={false} className="max-h-72 w-full rounded-lg object-contain" />

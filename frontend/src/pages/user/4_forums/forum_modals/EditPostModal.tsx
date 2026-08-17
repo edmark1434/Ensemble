@@ -142,7 +142,7 @@ const RichTextToolbar = ({ onFormat, onImageUpload, showPreview, onTogglePreview
           <LinkIcon className="h-4 w-4" />
         </button>
         {showLinkInput && (
-          <div className="absolute left-0 mt-2 z-20 min-w-72 rounded-lg border border-white/10 bg-[#0d0f1a] p-3 shadow-xl animate-fade-in">
+          <div className="absolute left-0 mt-2 z-20 min-w-72 rounded-lg border border-white/10 bg-dark-surface p-3 shadow-xl animate-fade-in">
             <p className="mb-2 text-xs font-medium text-zinc-400">Insert Link</p>
             <input
               type="text"
@@ -667,8 +667,8 @@ const EditPostModal: React.FC<EditPostModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/80 px-4 py-6 backdrop-blur-sm animate-fade-in-modal sm:items-center sm:py-8">
-      <div className="my-auto w-full max-w-4xl rounded-2xl border border-white/10 bg-[#0d0f1a] shadow-2xl animate-scale-in max-h-[calc(100vh-3rem)] overflow-y-auto">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[#0d0f1a]/95 backdrop-blur-sm p-4">
+      <div className="my-auto w-full max-w-4xl rounded-2xl border border-white/10 bg-dark-surface shadow-2xl animate-scale-in max-h-[calc(100vh-3rem)] overflow-y-auto">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-dark-surface/95 backdrop-blur-sm p-4">
           <div className="flex items-center gap-2">
             <div className="rounded-full bg-blue-500/20 p-1.5">
               <Edit3 className="h-4 w-4 text-blue-400" />
@@ -728,7 +728,7 @@ const EditPostModal: React.FC<EditPostModalProps> = ({
 
               {/* Dropdown menu */}
               {isDropdownOpen && availableTagsList.length > 0 && (
-                <div className="absolute left-0 right-0 top-full mt-1 z-10 max-h-48 overflow-y-auto rounded-lg border border-white/15 bg-[#0d0f1a] shadow-xl">
+                <div className="absolute left-0 right-0 top-full mt-1 z-10 max-h-48 overflow-y-auto rounded-lg border border-white/15 bg-dark-surface shadow-xl">
                   {availableTagsList.map((tag) => (
                     <button
                       key={tag.tag_id}
