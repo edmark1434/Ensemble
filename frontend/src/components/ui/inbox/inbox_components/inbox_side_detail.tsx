@@ -351,7 +351,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                       </button>
                     </div>
                   ) : (
-                    <p className="text-xs text-zinc-200 font-medium truncate bg-black/20 p-2 rounded-lg border border-gray-100 dark:border-white/5">
+                    <p className="text-xs text-gray-900 dark:text-zinc-200 font-medium truncate bg-black/20 p-2 rounded-lg border border-gray-100 dark:border-white/5">
                       {name}
                     </p>
                   )}
@@ -402,7 +402,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                         value={memberSearch}
                         onChange={(event) => setMemberSearch(event.target.value)}
                         placeholder="Search by @handle"
-                        className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-[#171a27] p-2 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500"
+                        className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-2 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500"
                       />
                       {isSearchingMembers && (
                         <p className="px-2 text-[10px] text-gray-500 dark:text-zinc-500">Searching...</p>
@@ -470,7 +470,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                             alt={memberName}
                             className="h-7 w-7 rounded-full object-cover"
                           />
-                          <span className="text-zinc-200 font-medium truncate">
+                          <span className="text-gray-900 dark:text-zinc-200 font-medium truncate">
                             {memberName}
                           </span>
                         </div>
@@ -507,7 +507,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                                         })
                                       )
                                     }
-                                    className="rounded bg-[#171a27] p-1 text-[9px]"
+                                    className="rounded bg-white dark:bg-dark-surface p-1 text-[9px]"
                                   >
                                     <option value="member">Member</option>
                                     {currentMember?.role === "owner" && (
@@ -568,7 +568,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
                       onClick={() => onJumpToMessage?.(msg._id)}
                       className="p-2 rounded-lg bg-black/20 border border-gray-100 dark:border-white/5 hover:bg-gray-50 dark:bg-white/5 transition cursor-pointer text-xs"
                     >
-                      <p className="text-zinc-200 line-clamp-2">
+                      <p className="text-gray-900 dark:text-zinc-200 line-clamp-2">
                         {msg.message_content || "[Attachment]"}
                       </p>
                       <span className="text-[10px] text-yellow-400/80 mt-1 block">

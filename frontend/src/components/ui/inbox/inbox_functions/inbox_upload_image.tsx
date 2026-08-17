@@ -159,7 +159,7 @@ export const InboxUploadMediaButton: React.FC<InboxUploadMediaButtonProps> = ({
         title="Attach images or files (Max 3)"
         className={`rounded-xl p-2.5 transition flex-shrink-0 ${
           disabled
-            ? "text-zinc-600 cursor-not-allowed"
+            ? "text-gray-500 dark:text-zinc-400 cursor-not-allowed"
             : "text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
         }`}
       >
@@ -207,7 +207,7 @@ export const InboxUploadMediaPreview: React.FC<InboxUploadMediaPreviewProps> = (
           <button
             type="button"
             onClick={() => onRemove(media.id)}
-            className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-[#12141f] border border-gray-200 dark:border-white/10 flex items-center justify-center text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-red-500/80 transition shadow-md"
+            className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-gray-50 dark:bg-dark-base border border-gray-200 dark:border-white/10 flex items-center justify-center text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white hover:bg-red-500/80 transition shadow-md"
           >
             <X className="h-3 w-3" />
           </button>

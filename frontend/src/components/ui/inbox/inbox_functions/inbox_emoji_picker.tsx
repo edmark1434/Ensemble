@@ -30,7 +30,7 @@ export const InboxEmojiPicker: React.FC<InboxEmojiPickerProps> = ({
   return (
     <div
       ref={pickerRef}
-      className={`absolute z-50 max-w-[280px] sm:max-w-[300px] rounded-2xl border border-gray-200 dark:border-white/10 bg-[#12141f]/95 backdrop-blur-md p-1.5 shadow-2xl ${
+      className={`absolute z-50 max-w-[280px] sm:max-w-[300px] rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-dark-base/95 backdrop-blur-md p-1.5 shadow-2xl ${
         isSender ? "bottom-full mb-2 right-0" : "top-full mt-2 left-0"
       }`}
     >
@@ -114,7 +114,7 @@ export const InboxReactionBadges: React.FC<InboxReactionBadgesProps> = ({
         isSender ? "-left-2" : "-right-2"
       }`}
     >
-      <div className="flex gap-0.5 rounded-full bg-[#12141f] border border-gray-200 dark:border-white/10 p-0.5 shadow-md">
+      <div className="flex gap-0.5 rounded-full bg-gray-50 dark:bg-dark-base border border-gray-200 dark:border-white/10 p-0.5 shadow-md">
         {grouped.map((group) => {
           const reactedByMe = group.accountIds.includes(currentUserId);
           return (

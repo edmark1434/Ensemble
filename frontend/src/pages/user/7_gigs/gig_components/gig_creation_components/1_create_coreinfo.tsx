@@ -88,7 +88,7 @@ const CustomDropdown: React.FC<{
                 animate={{ opacity: 1, y: 4, scale: 1 }}
                 exit={{ opacity: 0, y: -6, scale: 0.98 }}
                 transition={{ duration: 0.15, ease: "easeOut" }}
-                className="absolute left-0 right-0 z-30 max-h-48 overflow-y-auto rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-1.5 shadow-2xl space-y-0.5 custom-scrollbar"
+                className="absolute left-0 right-0 z-30 max-h-48 overflow-y-auto rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-1.5 shadow-2xl space-y-0.5 custom-scrollbar"
               >
                 {options.map((opt) => {
                   const isSelected = value === opt;
@@ -296,7 +296,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
           <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">
             Service Description <span className="text-red-500">*</span>
           </label>
-          <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-[#080a12] rounded-lg p-1 border border-gray-200 dark:border-white/5">
+          <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-dark-base rounded-lg p-1 border border-gray-200 dark:border-white/5">
             <button
               onClick={() => insertMarkdown('**', '**')}
               title="Bold"

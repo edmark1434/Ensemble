@@ -12,7 +12,7 @@ const GigFullPage: React.FC = () => {
 
   if (!gig) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] flex flex-col items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-base flex flex-col items-center justify-center">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Service not found</h2>
         <button onClick={() => navigate("/gigs/services")} className="mt-4 text-blue-600 hover:underline">
           Go back

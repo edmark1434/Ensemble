@@ -85,7 +85,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {tiers.map((tier, idx) => (
-              <div key={idx} className="p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12]">
+              <div key={idx} className="p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] font-bold text-gray-500 uppercase">{tier.tierName}</span>
                   <span className="text-xs font-black text-gray-900 dark:text-white">${tier.price}</span>

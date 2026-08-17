@@ -135,7 +135,7 @@ export const CreateForms: React.FC<CreateFormsProps> = ({
                   placeholder="Enter your question here..."
                   value={q.question}
                   onChange={(e) => updateQuestion(q.id, "question", e.target.value)}
-                  className={`w-full rounded-xl border bg-white dark:bg-[#080a12] shadow-sm dark:shadow-none px-3.5 py-3 text-sm text-gray-900 dark:text-white outline-none transition-all ${
+                  className={`w-full rounded-xl border bg-white dark:bg-dark-base shadow-sm dark:shadow-none px-3.5 py-3 text-sm text-gray-900 dark:text-white outline-none transition-all ${
                     errors[`question_${q.id}_question`] ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
                   }`}
                 />
@@ -153,7 +153,7 @@ export const CreateForms: React.FC<CreateFormsProps> = ({
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
                         isSelected 
                           ? "bg-blue-500 text-white shadow-md shadow-blue-500/20" 
-                          : "bg-white dark:bg-[#080a12] border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400 hover:border-gray-300 dark:hover:border-white/20"
+                          : "bg-white dark:bg-dark-base border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400 hover:border-gray-300 dark:hover:border-white/20"
                       }`}
                     >
                       <Icon className="h-3.5 w-3.5" />
@@ -198,7 +198,7 @@ export const CreateForms: React.FC<CreateFormsProps> = ({
                         placeholder={`Option ${optIndex + 1}`}
                         value={opt}
                         onChange={(e) => updateOption(q.id, optIndex, e.target.value)}
-                        className={`flex-1 rounded-lg border bg-white dark:bg-[#080a12] px-3 py-1.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
+                        className={`flex-1 rounded-lg border bg-white dark:bg-dark-base px-3 py-1.5 text-xs text-gray-900 dark:text-white outline-none transition-all ${
                            errors[`question_${q.id}_option_${optIndex}`] ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
                         }`}
                       />

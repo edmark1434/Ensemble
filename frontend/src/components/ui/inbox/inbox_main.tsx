@@ -982,7 +982,7 @@ const InboxMain = () => {
                   <div
                     className={`absolute bottom-full mb-2 ${
                       isSender ? "right-0" : "left-0"
-                    } z-50 w-36 rounded-xl border border-gray-200 dark:border-white/10 bg-[#12141f] p-1 shadow-xl text-xs text-zinc-200`}
+                    } z-50 w-36 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-dark-base p-1 shadow-xl text-xs text-gray-900 dark:text-zinc-200`}
                     style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                   >
                     {isSender && (

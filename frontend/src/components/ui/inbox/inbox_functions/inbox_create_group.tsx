@@ -126,7 +126,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-[#12141f] p-6 shadow-2xl text-gray-900 dark:text-white"
+        className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-dark-base p-6 shadow-2xl text-gray-900 dark:text-white"
         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
       >
         {/* Modal Header */}
@@ -181,7 +181,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
 
             {/* Suggested Accounts Dropdown */}
             {isDropdownOpen && filteredSuggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1.5 z-20 max-h-48 overflow-y-auto rounded-xl border border-gray-200 dark:border-white/10 bg-[#1a1d2d] p-1 shadow-2xl inbox-scroll-thin">
+              <div className="absolute top-full left-0 right-0 mt-1.5 z-20 max-h-48 overflow-y-auto rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-1 shadow-2xl inbox-scroll-thin">
                 {filteredSuggestions.map((account) => (
                   <button
                     key={account.account_id}
@@ -208,7 +208,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
               </div>
             )}
             {isDropdownOpen && isSearching && (
-              <div className="absolute left-0 right-0 top-full z-20 mt-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-[#1a1d2d] p-3 text-center text-xs text-gray-500 dark:text-zinc-400">
+              <div className="absolute left-0 right-0 top-full z-20 mt-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-3 text-center text-xs text-gray-500 dark:text-zinc-400">
                 Searching handles...
               </div>
             )}

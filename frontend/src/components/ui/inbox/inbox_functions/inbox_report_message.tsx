@@ -67,7 +67,7 @@ export const InboxReportModal: React.FC<InboxReportModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div
-        className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-[#12141f] p-5 shadow-2xl transition-all"
+        className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-dark-base p-5 shadow-2xl transition-all"
         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
       >
         {/* Header */}
@@ -100,7 +100,7 @@ export const InboxReportModal: React.FC<InboxReportModalProps> = ({
               <span className="text-[10px] uppercase font-semibold text-gray-500 dark:text-zinc-500 block mb-1">
                 Reporting this message:
               </span>
-              <p className="italic text-zinc-200 truncate">"{quotedText}"</p>
+              <p className="italic text-gray-900 dark:text-zinc-200 truncate">"{quotedText}"</p>
             </div>
 
             {/* Select Reason */}
@@ -131,7 +131,7 @@ export const InboxReportModal: React.FC<InboxReportModalProps> = ({
                 placeholder="Provide additional context..."
                 value={details}
                 onChange={(e) => setDetails(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 dark:border-white/15 bg-white dark:bg-dark-surface p-3 text-xs text-gray-900 dark:text-white outline-none resize-none placeholder:text-zinc-600 focus:border-blue-500 transition inbox-scroll-thin"
+                className="w-full rounded-xl border border-gray-300 dark:border-white/15 bg-white dark:bg-dark-surface p-3 text-xs text-gray-900 dark:text-white outline-none resize-none placeholder:text-gray-500 dark:text-zinc-400 focus:border-blue-500 transition inbox-scroll-thin"
               />
             </div>
 

@@ -68,7 +68,7 @@ export const InboxList: React.FC<InboxListProps> = ({
   if (conversations.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-4">
-        <MessageCircle className="h-8 w-8 text-zinc-600 mb-2" />
+        <MessageCircle className="h-8 w-8 text-gray-500 dark:text-zinc-400 mb-2" />
         {!isCollapsed && (
           <p className="text-xs text-gray-500 dark:text-zinc-400" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
             {searchQuery ? "No conversations found" : "No messages yet"}

@@ -61,7 +61,7 @@ export const CreateMilestones: React.FC<CreateMilestonesProps> = ({
                   placeholder="e.g. Rough Cut Delivery"
                   value={milestone.name}
                   onChange={(e) => updateMilestone(idx, "name", e.target.value)}
-                  className={`w-full rounded-xl border bg-white dark:bg-[#080a12] shadow-sm dark:shadow-none px-3.5 py-2.5 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500/50 transition-all ${
+                  className={`w-full rounded-xl border bg-white dark:bg-dark-base shadow-sm dark:shadow-none px-3.5 py-2.5 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500/50 transition-all ${
                      errors[`milestone_${idx}_name`] ? "border-red-500/50" : "border-gray-200 dark:border-white/10"
                   }`}
                 />
@@ -72,7 +72,7 @@ export const CreateMilestones: React.FC<CreateMilestonesProps> = ({
                   placeholder="Briefly describe the deliverables for this milestone..."
                   value={milestone.description}
                   onChange={(e) => updateMilestone(idx, "description", e.target.value)}
-                  className={`w-full h-20 rounded-xl border bg-white dark:bg-[#080a12] shadow-sm dark:shadow-none px-3.5 py-2.5 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500/50 transition-all resize-none ${
+                  className={`w-full h-20 rounded-xl border bg-white dark:bg-dark-base shadow-sm dark:shadow-none px-3.5 py-2.5 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500/50 transition-all resize-none ${
                      errors[`milestone_${idx}_desc`] ? "border-red-500/50" : "border-gray-200 dark:border-white/10"
                   }`}
                 />

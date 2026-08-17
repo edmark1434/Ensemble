@@ -112,7 +112,7 @@ const GigMain: React.FC = () => {
   };
 
   return (
-    <div className="w-full min-h-screen bg-gray-50 dark:bg-[#080a12] relative">
+    <div className="w-full min-h-screen bg-gray-50 dark:bg-dark-base relative">
       {/* Sticky User Header */}
       <div className="z-10 bg-white dark:bg-[#0a0a0a] border-b border-gray-200 dark:border-white/10 sticky top-0 md:static">
         <UserHeader pageTitle="Gig Market" credits={1250} />

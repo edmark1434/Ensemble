@@ -38,11 +38,11 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
   const allImages = [gig.thumbnail, ...(gig.gallery || [])].filter(Boolean);
 
   return (
-    <div className={`w-full flex-col relative ${isPage ? "" : "flex h-[calc(100vh-120px)] overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-sm sticky top-[100px]"}`}>
+    <div className={`w-full flex-col relative ${isPage ? "" : "flex h-[calc(100vh-120px)] overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm sticky top-[100px]"}`}>
       
       {/* HEADER */}
       {!isPage && (
-      <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 px-6 py-4 bg-white/80 dark:bg-[#0d0f1a]/80 backdrop-blur-md z-10">
+      <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 px-6 py-4 bg-white/80 dark:bg-dark-surface/80 backdrop-blur-md z-10">
         <div className="flex items-center gap-3">
           <button
             onClick={onClose}
@@ -159,7 +159,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
           {!isPage && (
           <section>
             <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Pricing Packages</h3>
-            <div className="rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-[#080a12]">
+            <div className="rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-dark-base">
               <div className="flex border-b border-gray-200 dark:border-white/10">
                 {gig.tiers.map((tier, idx) => (
                   <button
@@ -267,7 +267,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
         <div className="w-full lg:w-[400px] shrink-0 sticky top-32 space-y-6">
           <section>
             <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">Pricing Packages</h3>
-            <div className="rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-[#080a12] shadow-sm">
+            <div className="rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-dark-base shadow-sm">
               <div className="flex border-b border-gray-200 dark:border-white/10">
                 {gig.tiers.map((tier, idx) => (
                   <button
@@ -319,7 +319,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
 
       {/* ACTION BAR (MOBILE ONLY) */}
       {!isPage && (
-      <div className="lg:hidden absolute bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-[#0d0f1a]/80 backdrop-blur-md border-t border-gray-200 dark:border-white/10 flex justify-between items-center gap-4">
+      <div className="lg:hidden absolute bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-dark-surface/80 backdrop-blur-md border-t border-gray-200 dark:border-white/10 flex justify-between items-center gap-4">
         <div className="flex flex-col">
           <span className="text-xs text-gray-500">Selected: {activeTier.tierName}</span>
           <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier.price.toLocaleString()}</span>
@@ -346,7 +346,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-2xl bg-white dark:bg-[#0d0f1a] rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+              className="w-full max-w-2xl bg-white dark:bg-dark-surface rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
             >
               <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-start shrink-0">
                 <div>
@@ -374,7 +374,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
                   <section className="space-y-4">
                     <label className="block text-sm font-bold text-gray-900 dark:text-white mb-1">2. Requirements</label>
                     {gig.questionnaires.map((q, idx) => (
-                      <div key={idx} className="space-y-3 p-5 rounded-2xl border border-gray-100 dark:border-white/5 bg-white dark:bg-[#080a12] shadow-sm">
+                      <div key={idx} className="space-y-3 p-5 rounded-2xl border border-gray-100 dark:border-white/5 bg-white dark:bg-dark-base shadow-sm">
                         <p className="text-sm font-bold text-gray-800 dark:text-zinc-200"><span className="text-red-500 mr-1">{q.required ? "*" : ""}</span>{idx + 1}. {q.question}</p>
                         {q.type === "multiple-choice" ? (
                            <select className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-3.5 text-sm font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -435,7 +435,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
 
               </div>
 
-              <div className="p-6 border-t border-gray-100 dark:border-white/5 shrink-0 bg-white dark:bg-[#080a12]">
+              <div className="p-6 border-t border-gray-100 dark:border-white/5 shrink-0 bg-white dark:bg-dark-base">
                 <button
                   onClick={handleCheckout}
                   disabled={isProcessing}

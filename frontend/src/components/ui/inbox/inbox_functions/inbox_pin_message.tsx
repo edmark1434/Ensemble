@@ -84,7 +84,7 @@ export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
             </span>
             {ticketDetails?.type && (
               <span className="text-[11px] text-gray-500 dark:text-zinc-400">
-                Type: <span className="text-zinc-200">{ticketDetails.type}</span>
+                Type: <span className="text-gray-900 dark:text-zinc-200">{ticketDetails.type}</span>
               </span>
             )}
             {ticketDetails?.status && (

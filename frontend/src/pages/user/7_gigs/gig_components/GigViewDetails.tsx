@@ -53,19 +53,19 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
       </div>
 
       <div
-        className={`fixed right-0 top-0 bottom-0 w-full md:w-[500px] lg:w-[560px] bg-white dark:bg-[#0d0f1a] border-l border-gray-200 dark:border-white/10 z-[101] shadow-2xl flex flex-col transition-transform duration-300 ${
+        className={`fixed right-0 top-0 bottom-0 w-full md:w-[500px] lg:w-[560px] bg-white dark:bg-dark-surface border-l border-gray-200 dark:border-white/10 z-[101] shadow-2xl flex flex-col transition-transform duration-300 ${
           selectedGig ? "translate-x-0" : "translate-x-full"
         }`}
       >
         {selectedGig && activeTier && (
           <>
-            <div className="relative h-48 shrink-0 bg-zinc-950 border-b border-gray-100 dark:border-white/5">
+            <div className="relative h-48 shrink-0 bg-dark-base border-b border-gray-100 dark:border-white/5">
               <img
                 src={selectedGig.thumbnail}
                 alt=""
                 className="w-full h-full object-cover opacity-60"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-[#0d0f1a] via-transparent to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dark-surface via-transparent to-transparent" />
               
               {onToggleSave && (
                 <button
@@ -125,7 +125,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400">
                   Pricing Packages
                 </h4>
-                <div className="rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-[#080a12] shadow-sm">
+                <div className="rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-dark-base shadow-sm">
                   <div className="flex border-b border-gray-200 dark:border-white/10">
                     {selectedGig.tiers.map((tier, idx) => (
                       <button
@@ -247,7 +247,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
             </div>
 
             {/* Sticky Action Footer */}
-            <div className="p-4 border-t border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shrink-0 space-y-3">
+            <div className="p-4 border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shrink-0 space-y-3">
               <div className="flex items-center justify-between px-1">
                 <span className="text-[11px] text-gray-500">Total</span>
                 <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier.price.toLocaleString()}</span>
@@ -294,7 +294,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
-                className="w-full max-w-sm bg-white dark:bg-[#0d0f1a] rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden shadow-2xl"
+                className="w-full max-w-sm bg-white dark:bg-dark-surface rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden shadow-2xl"
               >
                 <div className="p-5 border-b border-gray-100 dark:border-white/5 flex justify-between items-center">
                   <h2 className="text-base font-bold text-gray-900 dark:text-white">Confirm Order</h2>

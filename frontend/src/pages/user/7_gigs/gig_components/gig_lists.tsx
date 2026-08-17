@@ -31,7 +31,7 @@ export const GigList: React.FC<GigListProps> = ({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.2, ease: "easeOut" }}
-        className="p-12 text-center rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/40 text-gray-500 dark:text-zinc-500"
+        className="p-12 text-center rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 text-gray-500 dark:text-zinc-500"
       >
         No gigs found matching your parameters.
       </motion.div>
@@ -65,11 +65,11 @@ export const GigList: React.FC<GigListProps> = ({
                 className={`group flex flex-col justify-between rounded-2xl border p-4 transition-colors duration-200 cursor-pointer ${
                   isActive
                     ? "border-blue-500 bg-blue-500/5 shadow-[0_0_30px_rgba(59,130,246,0.1)]"
-                    : "border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/40 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/[0.06] shadow-sm hover:shadow-md dark:shadow-none"
+                    : "border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/[0.06] shadow-sm hover:shadow-md dark:shadow-none"
                 }`}
               >
                 <div>
-                  <div className="h-40 w-full overflow-hidden rounded-xl bg-gray-200 dark:bg-zinc-900 border border-gray-100 dark:border-white/5 relative mb-3">
+                  <div className="h-40 w-full overflow-hidden rounded-xl bg-gray-200 dark:bg-dark-surface border border-gray-100 dark:border-white/5 relative mb-3">
                     <img
                       src={gig.thumbnail}
                       alt={gig.title}
@@ -178,11 +178,11 @@ export const GigList: React.FC<GigListProps> = ({
               className={`group flex flex-col md:flex-row gap-6 rounded-2xl border p-5 transition-colors duration-200 cursor-pointer ${
                 isActive
                   ? "border-blue-500 bg-blue-500/5 shadow-[0_0_30px_rgba(59,130,246,0.1)]"
-                  : "border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/40 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/[0.06] shadow-sm hover:shadow-md dark:shadow-none"
+                  : "border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/[0.06] shadow-sm hover:shadow-md dark:shadow-none"
               }`}
             >
               {/* Left: Image Thumbnail */}
-              <div className="hidden md:block relative h-auto min-h-[160px] w-full md:w-56 shrink-0 overflow-hidden rounded-xl bg-gray-200 dark:bg-zinc-900 border border-gray-100 dark:border-white/5">
+              <div className="hidden md:block relative h-auto min-h-[160px] w-full md:w-56 shrink-0 overflow-hidden rounded-xl bg-gray-200 dark:bg-dark-surface border border-gray-100 dark:border-white/5">
                 <img
                   src={gig.thumbnail}
                   alt={gig.title}

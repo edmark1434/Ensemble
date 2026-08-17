@@ -157,7 +157,7 @@ const GigCreatePage: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-gray-200 overflow-hidden font-inter transition-colors duration-300">
+    <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-gray-200 overflow-hidden font-inter transition-colors duration-300">
       {/* Background Patterns */}
       <div className="pointer-events-none fixed inset-0 z-0 opacity-[0.03] dark:opacity-20 mix-blend-overlay dark:mix-blend-screen transition-opacity duration-300">
         <ShapeGrid color={theme === "light" ? "#000000" : "#ffffff"} />
@@ -181,7 +181,7 @@ const GigCreatePage: React.FC = () => {
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <div className="rounded-3xl bg-white dark:bg-[#0d0f1a]/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
+                  <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
                     <CreateCoreInfo
                       title={title}
                       setTitle={setTitle}
@@ -209,7 +209,7 @@ const GigCreatePage: React.FC = () => {
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <div className="rounded-3xl bg-white dark:bg-[#0d0f1a]/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
+                  <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
                     <CreateDelivery
                       slots={slots}
                       setSlots={setSlots}
@@ -237,7 +237,7 @@ const GigCreatePage: React.FC = () => {
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <div className="rounded-3xl bg-white dark:bg-[#0d0f1a]/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
+                  <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
                     <CreateTiers
                       tiers={tiers}
                       setTiers={setTiers}
@@ -260,7 +260,7 @@ const GigCreatePage: React.FC = () => {
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <div className="rounded-3xl bg-white dark:bg-[#0d0f1a]/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
+                  <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
                     <CreateMilestones
                       milestones={milestones}
                       setMilestones={setMilestones}
@@ -281,7 +281,7 @@ const GigCreatePage: React.FC = () => {
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <div className="rounded-3xl bg-white dark:bg-[#0d0f1a]/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
+                  <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
                     <CreateForms
                       questionnaires={questionnaires}
                       setQuestionnaires={setQuestionnaires}
@@ -302,7 +302,7 @@ const GigCreatePage: React.FC = () => {
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <div className="rounded-3xl bg-white dark:bg-[#0d0f1a]/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
+                  <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
                     <CreateReview
                       title={title}
                       description={description}

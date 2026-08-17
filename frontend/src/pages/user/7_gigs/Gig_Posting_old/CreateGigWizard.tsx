@@ -326,7 +326,7 @@ export const CreateGigWizard: React.FC = () => {
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#080a12] text-white overflow-x-hidden">
+    <div className="w-full min-h-screen bg-dark-base text-white overflow-x-hidden">
       <UserHeader pageTitle="Create a Marketplace Gig" credits={1250} />
 
       <div className="mx-auto max-w-3xl p-6 md:p-8 w-full">
@@ -353,10 +353,10 @@ export const CreateGigWizard: React.FC = () => {
                     <div
                       className={`h-9 w-9 rounded-full flex items-center justify-center border text-xs font-bold transition-all duration-300 shadow-md ${
                         isCompleted
-                          ? "bg-green-500 border-green-500 text-[#080a12]"
+                          ? "bg-green-500 border-green-500 text-dark-base"
                           : isActive
                           ? "bg-blue-500/20 border-blue-500 text-blue-400 ring-4 ring-blue-500/10"
-                          : "bg-[#0d0f1a] border-white/10 text-zinc-500"
+                          : "bg-dark-surface border-white/10 text-zinc-500"
                       }`}
                     >
                       {isCompleted ? <Check className="h-4 w-4" /> : step.id}
@@ -384,7 +384,7 @@ export const CreateGigWizard: React.FC = () => {
         </div>
 
         {/* Form Box Wrapper Container */}
-        <div className="rounded-3xl border border-white/10 bg-[#0d0f1a]/60 p-6 md:p-8 backdrop-blur-md shadow-2xl space-y-6 mt-4">
+        <div className="rounded-3xl border border-white/10 bg-dark-surface/60 p-6 md:p-8 backdrop-blur-md shadow-2xl space-y-6 mt-4">
 
           {/* ======================================= */}
           {/* SLIDE 1: CORE GIG PARAMETERS            */}
@@ -443,7 +443,7 @@ export const CreateGigWizard: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">Category <span className="text-red-500">*</span></label>
-                  <select value={category} onChange={e => setCategory(e.target.value)} className="w-full rounded-xl border border-white/10 bg-[#0d0f1a] px-4 py-3 text-sm focus:outline-none text-white">
+                  <select value={category} onChange={e => setCategory(e.target.value)} className="w-full rounded-xl border border-white/10 bg-dark-surface px-4 py-3 text-sm focus:outline-none text-white">
                     <option value="" disabled>Select Category</option>
                     {categories.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -451,7 +451,7 @@ export const CreateGigWizard: React.FC = () => {
 
                 <div className="space-y-2 md:col-span-1">
                   <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">Available Slots</label>
-                  <div className="flex items-center justify-between border border-white/10 rounded-xl bg-[#080a12] p-1.5 h-[46px]">
+                  <div className="flex items-center justify-between border border-white/10 rounded-xl bg-dark-base p-1.5 h-[46px]">
                     <button type="button" onClick={() => setSlots(p => Math.max(1, p - 1))} className="h-7 w-7 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 text-white"><Minus className="h-3 w-3" /></button>
                     <span className="font-mono font-bold text-sm text-white">{slots}</span>
                     <button type="button" onClick={() => setSlots(p => p + 1)} className="h-7 w-7 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 text-white"><Plus className="h-3 w-3" /></button>
@@ -468,7 +468,7 @@ export const CreateGigWizard: React.FC = () => {
                     setSelectedTerms(e.target.value);
                     if (e.target.value) setErrors(prev => { const { selectedTerms: _, ...r } = prev; return r; });
                   }}
-                  className={`w-full rounded-xl border bg-[#0d0f1a] px-4 py-3 text-sm text-white focus:outline-none transition-all ${
+                  className={`w-full rounded-xl border bg-dark-surface px-4 py-3 text-sm text-white focus:outline-none transition-all ${
                     errors.selectedTerms ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-blue-500/50"
                   }`}
                 >
@@ -505,7 +505,7 @@ export const CreateGigWizard: React.FC = () => {
                   </label>
                 </div>
                 {postingAs === "team" && (
-                  <select value={selectedTeam} onChange={e => setSelectedTeam(e.target.value)} className="w-full rounded-xl border border-white/10 bg-[#0d0f1a] px-4 py-3 text-sm focus:outline-none text-white">
+                  <select value={selectedTeam} onChange={e => setSelectedTeam(e.target.value)} className="w-full rounded-xl border border-white/10 bg-dark-surface px-4 py-3 text-sm focus:outline-none text-white">
                     <option value="" disabled>Choose Studio Collective Entity...</option>
                     {sampleUserTeams.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
                   </select>
@@ -578,7 +578,7 @@ export const CreateGigWizard: React.FC = () => {
                 {errors.banners && <p className="text-xs text-red-400">{errors.banners}</p>}
                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 pt-2">
                   {supportingBanners.map((b, idx) => (
-                    <div key={idx} className="relative aspect-video rounded-xl bg-zinc-900 border border-white/10 overflow-hidden group">
+                    <div key={idx} className="relative aspect-video rounded-xl bg-dark-surface border border-white/10 overflow-hidden group">
                       <img src={b} alt="" className="h-full w-full object-cover" />
                       <button type="button" onClick={() => setSupportingBanners(supportingBanners.filter((_, i) => i !== idx))} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-red-400 transition-opacity"><X className="h-4 w-4" /></button>
                     </div>
@@ -610,8 +610,8 @@ export const CreateGigWizard: React.FC = () => {
                   <span className="text-[10px] font-mono text-zinc-500">{milestones.length}/7 Added</span>
                 </div>
                 <div className="space-y-3">
-                  <input type="text" placeholder="Milestone Phase Title (e.g., Rough Cut V1 Assembly)" value={milestoneName} onChange={e => setMilestoneName(e.target.value)} className="w-full rounded-xl border border-white/10 bg-[#0d0f1a] px-4 py-2.5 text-sm focus:outline-none text-white" />
-                  <textarea rows={2} placeholder="Detail verification parameters, client reviews, sound libraries syncing checks included..." value={milestoneDesc} onChange={e => setMilestoneDescription(e.target.value)} className="w-full rounded-xl border border-white/10 bg-[#0d0f1a] px-4 py-2.5 text-sm focus:outline-none resize-none custom-scrollbar text-white" />
+                  <input type="text" placeholder="Milestone Phase Title (e.g., Rough Cut V1 Assembly)" value={milestoneName} onChange={e => setMilestoneName(e.target.value)} className="w-full rounded-xl border border-white/10 bg-dark-surface px-4 py-2.5 text-sm focus:outline-none text-white" />
+                  <textarea rows={2} placeholder="Detail verification parameters, client reviews, sound libraries syncing checks included..." value={milestoneDesc} onChange={e => setMilestoneDescription(e.target.value)} className="w-full rounded-xl border border-white/10 bg-dark-surface px-4 py-2.5 text-sm focus:outline-none resize-none custom-scrollbar text-white" />
                   <button type="button" onClick={handleAddMilestone} disabled={milestones.length >= 7} className="w-full py-2.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-xl text-xs font-bold hover:bg-blue-500/20 disabled:opacity-30 disabled:pointer-events-none transition flex items-center justify-center gap-1.5"><Plus className="h-3.5 w-3.5" /> Append Phase Step</button>
                 </div>
               </div>
@@ -667,27 +667,27 @@ export const CreateGigWizard: React.FC = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase">Package Variant Header Name</label>
-                      <input type="text" placeholder="e.g., Quick Turnaround Highlight" value={tierName} onChange={e => setTierName(e.target.value)} className="w-full rounded-xl border border-white/10 bg-[#0d0f1a] px-4 py-2 text-sm focus:outline-none text-white" />
+                      <input type="text" placeholder="e.g., Quick Turnaround Highlight" value={tierName} onChange={e => setTierName(e.target.value)} className="w-full rounded-xl border border-white/10 bg-dark-surface px-4 py-2 text-sm focus:outline-none text-white" />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase">Credit Cost Allocation (Credits)</label>
-                      <input type="text" placeholder="Cost baseline value" value={formatCommaString(tierPrice)} onChange={e => setTierPrice(e.target.value.replace(/\D/g, ""))} className="w-full rounded-xl border border-white/10 bg-[#0d0f1a] px-4 py-2 text-sm focus:outline-none font-mono text-white" />
+                      <input type="text" placeholder="Cost baseline value" value={formatCommaString(tierPrice)} onChange={e => setTierPrice(e.target.value.replace(/\D/g, ""))} className="w-full rounded-xl border border-white/10 bg-dark-surface px-4 py-2 text-sm focus:outline-none font-mono text-white" />
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase">Package Scope Summary Details</label>
-                    <textarea rows={2} placeholder="Summarize project delivery dimensions matching this exact price bracket..." value={tierDesc} onChange={e => setTierDesc(e.target.value)} className="w-full rounded-xl border border-white/10 bg-[#0d0f1a] px-4 py-2 text-sm focus:outline-none resize-none custom-scrollbar text-white" />
+                    <textarea rows={2} placeholder="Summarize project delivery dimensions matching this exact price bracket..." value={tierDesc} onChange={e => setTierDesc(e.target.value)} className="w-full rounded-xl border border-white/10 bg-dark-surface px-4 py-2 text-sm focus:outline-none resize-none custom-scrollbar text-white" />
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase">Delivery Schedule (Days)</label>
-                      <input type="number" placeholder="Days limit" value={tierDelivery} onChange={e => setTierDelivery(e.target.value)} className="w-full rounded-xl border border-white/10 bg-[#0d0f1a] px-4 py-2 text-sm focus:outline-none text-white" />
+                      <input type="number" placeholder="Days limit" value={tierDelivery} onChange={e => setTierDelivery(e.target.value)} className="w-full rounded-xl border border-white/10 bg-dark-surface px-4 py-2 text-sm focus:outline-none text-white" />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] font-bold text-zinc-400 uppercase">Revisions Count Block</label>
-                      <div className="flex items-center justify-between border border-white/10 rounded-xl bg-[#080a12] px-3 h-[38px]">
+                      <div className="flex items-center justify-between border border-white/10 rounded-xl bg-dark-base px-3 h-[38px]">
                         <span className="text-xs text-zinc-400 font-mono">Max Cycles: <span className="text-white font-bold">{tierRevisions}</span></span>
                         <div className="flex gap-1">
                           <button type="button" onClick={() => setTierRevisions(p => Math.max(1, p - 1))} className="h-6 w-6 rounded bg-white/5 flex items-center justify-center hover:bg-white/10 text-white"><Minus className="h-3 w-3" /></button>
@@ -746,13 +746,13 @@ export const CreateGigWizard: React.FC = () => {
               <div className="p-4 rounded-2xl border border-white/5 bg-white/[0.01] space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-zinc-400 uppercase flex items-center gap-1"><HelpCircle className="h-3.5 w-3.5 text-zinc-500" /> Compose Requirement Question Prompt</label>
-                  <input type="text" placeholder="e.g., What is the preferred aspect ratio format for your delivery?" value={questionText} onChange={e => setQuestionText(e.target.value)} className="w-full rounded-xl border border-white/10 bg-[#0d0f1a] px-4 py-2.5 text-sm focus:outline-none text-white" />
+                  <input type="text" placeholder="e.g., What is the preferred aspect ratio format for your delivery?" value={questionText} onChange={e => setQuestionText(e.target.value)} className="w-full rounded-xl border border-white/10 bg-dark-surface px-4 py-2.5 text-sm focus:outline-none text-white" />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase">Input Answer Format Type</label>
-                    <select value={questionType} onChange={e => { setQuestionType(e.target.value as Question["type"]); setChoiceList([]); }} className="w-full rounded-xl border border-white/10 bg-[#0d0f1a] px-4 py-2 text-xs focus:outline-none text-zinc-300 h-[38px]">
+                    <select value={questionType} onChange={e => { setQuestionType(e.target.value as Question["type"]); setChoiceList([]); }} className="w-full rounded-xl border border-white/10 bg-dark-surface px-4 py-2 text-xs focus:outline-none text-zinc-300 h-[38px]">
                       <option value="Text Input">Standard Text Input Area</option>
                       <option value="Multiple Choice">Multiple Choice Select Matrix</option>
                       <option value="File Upload">Direct Media File Upload Slot</option>
@@ -778,7 +778,7 @@ export const CreateGigWizard: React.FC = () => {
                   <div className="p-4 rounded-xl border border-white/5 bg-black/20 space-y-3 animate-fade-in">
                     <label className="text-[10px] font-bold text-zinc-400 uppercase block">Configure Survey Selection Options</label>
                     <div className="flex gap-2">
-                      <input type="text" placeholder="Add choice variant value (e.g., 16:9 Landscape, 9:16 Vertical)" value={choiceInput} onChange={e => setChoiceInput(e.target.value)} onKeyDown={e => e.key === "Enter" && (e.preventDefault(), handleAddChoice(e))} className="flex-1 rounded-xl border border-white/10 bg-[#0d0f1a] px-4 py-2 text-xs focus:outline-none text-white" />
+                      <input type="text" placeholder="Add choice variant value (e.g., 16:9 Landscape, 9:16 Vertical)" value={choiceInput} onChange={e => setChoiceInput(e.target.value)} onKeyDown={e => e.key === "Enter" && (e.preventDefault(), handleAddChoice(e))} className="flex-1 rounded-xl border border-white/10 bg-dark-surface px-4 py-2 text-xs focus:outline-none text-white" />
                       <button type="button" onClick={handleAddChoice} className="px-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs font-bold text-blue-400 hover:bg-blue-500/20">Add Choice</button>
                     </div>
                     {errors.choices && <p className="text-xs text-red-400">{errors.choices}</p>}
@@ -919,7 +919,7 @@ export const CreateGigWizard: React.FC = () => {
                   ) : (
                     <div className="space-y-2 pt-1">
                       {milestones.map((m, idx) => (
-                        <div key={m.id} className="text-[11px] text-zinc-300 bg-[#080a12]/40 p-2 rounded-xl border border-white/[0.02]">
+                        <div key={m.id} className="text-[11px] text-zinc-300 bg-dark-base/40 p-2 rounded-xl border border-white/[0.02]">
                           <span className="text-blue-400 font-mono font-bold mr-1">Phase 0{idx + 1}:</span> <strong className="text-white">{m.name}</strong> — {m.description}
                         </div>
                       ))}
@@ -935,7 +935,7 @@ export const CreateGigWizard: React.FC = () => {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
                     {tiers.map(t => (
-                      <div key={t.id} className="p-3 rounded-xl bg-[#080a12] border border-white/5 flex flex-col justify-between space-y-2">
+                      <div key={t.id} className="p-3 rounded-xl bg-dark-base border border-white/5 flex flex-col justify-between space-y-2">
                         <div>
                           <span className="text-[9px] text-blue-400 font-black uppercase tracking-widest bg-blue-500/5 px-1.5 py-0.5 rounded border border-blue-500/10">{t.title}</span>
                           <div className="font-bold text-white truncate mt-1.5">{t.name}</div>
@@ -961,7 +961,7 @@ export const CreateGigWizard: React.FC = () => {
                   ) : (
                     <div className="space-y-3 pt-1">
                       {questions.map((q, idx) => (
-                        <div key={q.id} className="text-zinc-300 text-[11px] bg-[#080a12]/30 p-2 rounded-xl border border-white/[0.01]">
+                        <div key={q.id} className="text-zinc-300 text-[11px] bg-dark-base/30 p-2 rounded-xl border border-white/[0.01]">
                           <div className="font-bold"><span className="text-zinc-500 font-mono">Prompt 0{idx + 1}:</span> {q.text}</div>
                           {q.options && (
                             <div className="flex flex-wrap gap-1 mt-1.5">
@@ -978,7 +978,7 @@ export const CreateGigWizard: React.FC = () => {
               {/* Controls Footer Slide 6 Final Post */}
               <div className="pt-4 border-t border-white/5 flex justify-between gap-3">
                 <button type="button" onClick={() => setCurrentSlide(5)} className="px-5 rounded-xl border border-white/10 text-zinc-400 font-bold hover:text-white transition text-sm">Go Back</button>
-                <button type="button" onClick={handlePost} className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-xl bg-green-500 px-6 py-3 text-sm font-bold text-[#0d0f1a] hover:bg-green-400 transition shadow-lg shadow-green-500/10">
+                <button type="button" onClick={handlePost} className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-xl bg-green-500 px-6 py-3 text-sm font-bold text-dark-surface hover:bg-green-400 transition shadow-lg shadow-green-500/10">
                   <Check className="h-4 w-4" /> Confirm and Post Gig Live
                 </button>
               </div>

@@ -20,7 +20,7 @@ export const ChatImagePreview = ({
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="relative flex max-h-[90vh] max-w-5xl items-center justify-center overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-[#12141f] shadow-2xl"
+        className="relative flex max-h-[90vh] max-w-5xl items-center justify-center overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-dark-base shadow-2xl"
       >
         <button
           type="button"
