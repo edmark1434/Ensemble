@@ -22,10 +22,10 @@ const GigFullPage: React.FC = () => {
   }
 
   return (
-    <div className="h-screen overflow-y-auto bg-gray-50 dark:bg-[#080a12]">
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-base flex flex-col w-full relative">
       {/* Sticky Headers Container */}
-      <div className="sticky top-0 z-20 bg-white dark:bg-[#0a0a0a] flex flex-col">
-        <div className="z-10 border-b border-gray-200 dark:border-white/10">
+      <div className="sticky top-0 z-40 bg-white dark:bg-dark-base flex flex-col border-b border-gray-200 dark:border-white/10 shadow-sm">
+        <div className="z-50">
           <UserHeader pageTitle="Gig Market" credits={1250} />
         </div>
         <div className="border-b border-gray-200 dark:border-white/10 px-6 py-4 flex items-center">

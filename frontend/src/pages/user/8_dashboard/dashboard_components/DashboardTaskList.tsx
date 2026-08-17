@@ -68,7 +68,7 @@ export const DashboardTaskList: React.FC<DashboardTaskListProps> = ({ tasks, isF
                 <div key={task.contract_id} className={`bg-white dark:bg-white/5 shadow-sm dark:shadow-none transition border rounded-xl p-4 sm:p-6 ${isArchivedTab ? 'opacity-60 border-gray-100 dark:border-white/5 hover:opacity-100 hover:bg-gray-50 dark:hover:bg-white/10' : 'hover:bg-gray-50 dark:hover:bg-white/10 border-gray-200 dark:border-white/10'}`}>
                     <div className="flex flex-col sm:flex-row gap-5 w-full">
                         {task.job_banner && (
-                            <div className="w-full sm:w-48 h-32 sm:h-auto rounded-lg overflow-hidden shrink-0 border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-[#080a12]/50 flex items-center justify-center">
+                            <div className="w-full sm:w-48 h-32 sm:h-auto rounded-lg overflow-hidden shrink-0 border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-dark-base/50 flex items-center justify-center">
                                 <img 
                                     src={`${import.meta.env.VITE_CLOUDFRONT_URL}${task.job_banner.startsWith('/') ? '' : '/'}${task.job_banner}`}
                                     alt="Job Banner"

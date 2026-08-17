@@ -33,7 +33,7 @@ export interface ProposalsMainContext {
 
 const ProposalSidebarSkeleton = () => (
   <div className="space-y-6">
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/60 shadow-sm dark:shadow-none p-5 backdrop-blur-sm space-y-3">
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none p-5 backdrop-blur-sm space-y-3">
       <div className="h-3 w-28 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
       <div className="space-y-2">
         {[1, 2, 3, 4, 5].map((i) => (
@@ -41,7 +41,7 @@ const ProposalSidebarSkeleton = () => (
         ))}
       </div>
     </div>
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/60 shadow-sm dark:shadow-none p-5 backdrop-blur-sm space-y-4">
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none p-5 backdrop-blur-sm space-y-4">
       <div className="h-3 w-24 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
       <div className="space-y-3">
         <div className="h-8 flex-1 animate-pulse rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
@@ -141,7 +141,7 @@ export const ProposalsMain: React.FC = () => {
   };
 
   return (
-    <div className="w-full min-h-screen bg-gray-50 dark:bg-[#080a12] relative">
+    <div className="w-full min-h-screen bg-gray-50 dark:bg-dark-base relative">
       {/* Sticky User Header */}
       <div className="sticky top-0 z-50">
         <UserHeader pageTitle="Job Proposals" credits={1250} />

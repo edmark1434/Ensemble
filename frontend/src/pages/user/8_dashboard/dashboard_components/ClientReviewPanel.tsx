@@ -122,7 +122,7 @@ export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, ca
                     You can purchase an additional revision to request more changes.
                 </p>
 
-                <div className="bg-white dark:bg-[#080a12]/50 rounded-lg border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none p-4 space-y-3">
+                <div className="bg-white dark:bg-dark-base/50 rounded-lg border border-gray-200 dark:border-white/5 shadow-sm dark:shadow-none p-4 space-y-3">
                     <div className="flex justify-between text-xs text-gray-500 dark:text-zinc-400">
                         <span>Base Milestone Price:</span>
                         <span className="text-gray-900 dark:text-white font-bold">{activeMilestone?.credits} Credits</span>
@@ -170,7 +170,7 @@ export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, ca
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder={action === 'approve' ? "Optional remark for the freelancer..." : "Describe what needs to be changed..."}
                 rows={3}
-                className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-[#080a12]/50 p-3.5 text-xs font-sans text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 transition focus:border-emerald-500/50 focus:outline-none resize-none leading-relaxed shadow-sm dark:shadow-none"
+                className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-dark-base/50 p-3.5 text-xs font-sans text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 transition focus:border-emerald-500/50 focus:outline-none resize-none leading-relaxed shadow-sm dark:shadow-none"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 required={action === 'revise'}
             />

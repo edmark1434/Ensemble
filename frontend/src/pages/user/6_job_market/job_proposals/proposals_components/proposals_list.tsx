@@ -66,7 +66,7 @@ export const ProposalCardSkeleton: React.FC<{ viewType?: ViewType }> = ({
   viewType = "list",
 }) => {
   return (
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/40 p-5 animate-pulse space-y-4">
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 animate-pulse space-y-4">
       {/* Header Skeleton */}
       <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-white/5">
         <div className="flex items-center gap-3">
@@ -129,7 +129,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
 
   if (proposals.length === 0) {
     return (
-      <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/60 shadow-sm dark:shadow-none p-12 text-center">
+      <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none p-12 text-center">
         <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">No proposals found matching your criteria.</p>
       </div>
     );
@@ -188,7 +188,7 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                     : `/jobs/proposals/sent/${item.id}`
                 )
               }
-              className="group rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-5 backdrop-blur-sm shadow-xl hover:border-white/20 cursor-pointer transition-all duration-200 text-left space-y-4 flex flex-col justify-between"
+              className="group rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 backdrop-blur-sm shadow-xl hover:border-white/20 cursor-pointer transition-all duration-200 text-left space-y-4 flex flex-col justify-between"
             >
               <div className="space-y-3.5">
                 {/* 1. User Header & Clickable Target Job Post Link */}

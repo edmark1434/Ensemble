@@ -33,7 +33,7 @@ export const ProposalsFilters: React.FC<ProposalsFiltersProps> = ({
   onClear,
 }) => {
   return (
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/60 shadow-sm dark:shadow-none p-4 backdrop-blur-sm space-y-4 text-left">
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none p-4 backdrop-blur-sm space-y-4 text-left">
       <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-2">
         <h2 className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase tracking-[0.2em]">
           Filter & Sorting

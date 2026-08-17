@@ -68,14 +68,14 @@ export const InboxPanelChatbox: React.FC<InboxPanelChatboxProps> = ({
   }, [messageInput, textareaRef]);
 
   return (
-    <div className="border-t border-white/10 bg-[#0d0f1a] flex-shrink-0">
+    <div className="border-t border-white/10 bg-dark-surface flex-shrink-0">
       {typingCount > 0 && (
         <div className="px-4 pt-2 text-xs text-zinc-500">
           {typingCount === 1 ? "Someone is typing..." : `${typingCount} people are typing...`}
         </div>
       )}
       {(replyToMessage || editingMessage) && (
-        <div className="px-4 py-2 bg-[#0d0f1a] border-b border-white/10 flex items-center justify-between">
+        <div className="px-4 py-2 bg-dark-surface border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-zinc-400">
             {replyToMessage ? (
               <>

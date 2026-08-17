@@ -1,13 +1,16 @@
 import React, { useState } from "react";
-import { useOutletContext, useParams } from "react-router-dom";
+import { useOutletContext, useParams, useNavigate } from "react-router-dom";
 import JobList from "../job_components/job_lists";
 import type { JobMainContext } from "../job_main";
+import { Plus } from "lucide-react";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 
 const JobMyPostPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<"All" | "Open" | "Closed">("All");
   const { filteredJobs, loading, viewType, toggleSaveJob, handleReportJob } =
     useOutletContext<JobMainContext>();
   const { id } = useParams();
+  const navigate = useNavigate();
 
   const myJobs = filteredJobs.filter((job) => {
     if (statusFilter !== "All" && job.status !== statusFilter) return false;
@@ -33,15 +36,36 @@ const JobMyPostPage: React.FC = () => {
         ))}
       </div>
 
-      <JobList
-        jobs={myJobs}
-        loading={loading}
-        viewType={viewType}
-        activeJobId={id}
-        onToggleSave={toggleSaveJob}
-        onReportJob={handleReportJob}
-        baseRoute="/jobs/my-job-post"
-      />
+      {(!loading && myJobs.length === 0) ? (
+        <div className="flex flex-col items-center justify-center py-20 px-4 text-center mt-4">
+          <div className="mb-6 h-32 w-32 grayscale opacity-80">
+            <DotLottieReact src="/icons/lottie/no-result.lottie" autoplay loop />
+          </div>
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+            No Job Postings Found
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-zinc-400 mb-8 max-w-md">
+            You haven't posted any jobs yet. Post a job to start receiving proposals from talented freelancers!
+          </p>
+          <button
+            onClick={() => navigate("/jobs/create")}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" />
+            Post a Job
+          </button>
+        </div>
+      ) : (
+        <JobList
+          jobs={myJobs}
+          loading={loading}
+          viewType={viewType}
+          activeJobId={id}
+          onToggleSave={toggleSaveJob}
+          onReportJob={handleReportJob}
+          baseRoute="/jobs/my-job-post"
+        />
+      )}
     </div>
   );
 };

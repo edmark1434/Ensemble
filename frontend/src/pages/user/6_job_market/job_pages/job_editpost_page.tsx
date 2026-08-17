@@ -39,7 +39,7 @@ const CustomDropdown: React.FC<CustomSelectProps> = ({
         <button
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
-          className={`w-full flex items-center justify-between rounded-xl border bg-white dark:bg-[#0d0f1a] px-3.5 py-2.5 text-xs text-left transition-all ${
+          className={`w-full flex items-center justify-between rounded-xl border bg-white dark:bg-dark-surface px-3.5 py-2.5 text-xs text-left transition-all ${
             error
               ? "border-red-500/50 focus:border-red-500"
               : isOpen
@@ -69,7 +69,7 @@ const CustomDropdown: React.FC<CustomSelectProps> = ({
                 animate={{ opacity: 1, y: 4, scale: 1 }}
                 exit={{ opacity: 0, y: -6, scale: 0.98 }}
                 transition={{ duration: 0.15, ease: "easeOut" }}
-                className="absolute left-0 right-0 z-30 max-h-48 overflow-y-auto rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-1.5 shadow-2xl space-y-0.5 custom-scrollbar"
+                className="absolute left-0 right-0 z-30 max-h-48 overflow-y-auto rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-1.5 shadow-2xl space-y-0.5 custom-scrollbar"
               >
                 {options.map((opt) => {
                   const isSelected = value === opt;
@@ -342,7 +342,7 @@ export const JobEditPostPage: React.FC = () => {
   };
 
   return (
-    <div className="relative w-full min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-12">
+    <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-12">
       {/* Background Grid Animation */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
         <ShapeGrid
@@ -383,7 +383,7 @@ export const JobEditPostPage: React.FC = () => {
         </div>
 
         {/* Main Form Box */}
-        <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-5 text-left">
+        <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-5 text-left">
 
           {/* Read-Only Fixed Parameters Notice */}
           <div className="p-3.5 rounded-2xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] grid grid-cols-1 md:grid-cols-2 gap-3 text-xs mb-2">

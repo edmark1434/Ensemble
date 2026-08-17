@@ -193,7 +193,7 @@ export const ProposalsEditPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white flex items-center justify-center p-6">
         <div className="text-center text-sm text-gray-500 dark:text-zinc-400 font-medium animate-pulse">
           Loading proposal data...
         </div>
@@ -203,7 +203,7 @@ export const ProposalsEditPage: React.FC = () => {
 
   if (!proposal) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white flex items-center justify-center p-6">
         <div className="text-center space-y-3">
           <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">Proposal application not found.</p>
           <button
@@ -218,7 +218,7 @@ export const ProposalsEditPage: React.FC = () => {
   }
 
   return (
-    <div className="relative w-full min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-12">
+    <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-12">
       {/* Background Animated Grid */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
         <ShapeGrid
@@ -250,7 +250,7 @@ export const ProposalsEditPage: React.FC = () => {
         <ProposalEditHeader currentSlide={currentSlide} onReturn={handleReturnTrigger} />
 
         {/* Wizard Slide Container */}
-        <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6">
+        <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6">
           <AnimatePresence mode="wait">
             {currentSlide === 1 && (
               <motion.div

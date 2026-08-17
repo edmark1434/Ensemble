@@ -36,7 +36,7 @@ export const ProposalsStatuses: React.FC<ProposalsStatusesProps> = ({
   onStatusChange,
 }) => {
   return (
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-5 backdrop-blur-sm space-y-3 text-left">
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 backdrop-blur-sm space-y-3 text-left">
       <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
         Proposal Statuses
       </h3>

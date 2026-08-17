@@ -79,7 +79,7 @@ export const InboxList: React.FC<InboxListProps> = ({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#0d0f1a] inbox-scroll-thin">
+    <div className="flex-1 overflow-y-auto bg-dark-surface inbox-scroll-thin">
       {conversations.map((inbox) => {
         const isActive = selectedConversation?._id === inbox._id;
         const name = getConversationName(inbox);

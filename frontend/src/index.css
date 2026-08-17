@@ -2,7 +2,7 @@
 @import "tailwindcss";
 
 @theme {
-  --color-dark-base: #111214;
+  --color-dark-base: #121214;
   --color-dark-surface: #1e1f22;
   --color-dark-elevated: #2b2d31;
 }

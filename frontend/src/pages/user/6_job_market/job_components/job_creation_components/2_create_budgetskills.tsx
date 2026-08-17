@@ -148,7 +148,7 @@ export const CreateBudgetSkills: React.FC<CreateBudgetSkillsProps> = ({
           <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block">Positions Needed</label>
           <span className="text-[10px] text-gray-600 dark:text-zinc-400">Number of open assignment slots.</span>
         </div>
-        <div className="flex items-center gap-2 border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-[#080a12] p-1">
+        <div className="flex items-center gap-2 border border-gray-200 dark:border-white/10 rounded-xl bg-gray-50 dark:bg-dark-base p-1">
           <button type="button" onClick={() => setPositions(prev => Math.max(1, prev - 1))} className="h-7 w-7 flex items-center justify-center rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-900 dark:text-white focus:outline-none"><Minus className="h-3 w-3" /></button>
           <span className="w-6 text-center font-mono font-bold text-xs select-none">{positions}</span>
           <button type="button" onClick={() => setPositions(prev => prev + 1)} className="h-7 w-7 flex items-center justify-center rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none text-gray-900 dark:text-white focus:outline-none"><Plus className="h-3 w-3" /></button>

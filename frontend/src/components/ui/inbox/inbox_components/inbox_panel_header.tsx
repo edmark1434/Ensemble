@@ -93,7 +93,7 @@ export const InboxPanelHeader: React.FC<InboxPanelHeaderProps> = ({
     : "";
 
   return (
-    <div className="sticky top-0 z-10 bg-[#0d0f1a]/95 backdrop-blur-sm border-b border-white/10 p-4 flex items-center justify-between flex-shrink-0">
+    <div className="sticky top-0 z-10 bg-dark-surface/95 backdrop-blur-sm border-b border-white/10 p-4 flex items-center justify-between flex-shrink-0">
       <div className="flex min-w-0 items-center gap-3">
         <div className="relative flex-shrink-0">
           <img

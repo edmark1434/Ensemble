@@ -171,7 +171,7 @@ export const ProposalsIncomingPage: React.FC = () => {
   return (
     <div className="space-y-4 text-left">
       {/* Target Job Header Bar */}
-      <div className="flex items-center justify-between gap-4 p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 backdrop-blur-sm">
+      <div className="flex items-center justify-between gap-4 p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface backdrop-blur-sm">
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => navigate("/jobs/proposals")}

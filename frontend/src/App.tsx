@@ -140,7 +140,7 @@ function App() {
       <DevModeWidget />
       <Suspense
         fallback={
-          <div className="flex min-h-screen items-center justify-center bg-[#080a12] text-sm text-zinc-400">
+          <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-dark-base text-sm text-zinc-400">
             Loading...
           </div>
         }

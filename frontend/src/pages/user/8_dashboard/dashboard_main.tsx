@@ -111,14 +111,14 @@ const DashboardMain = () => {
     }, 0);
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
+        <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
             {/* Top Header */}
             <UserHeader pageTitle="Dashboard" credits={user?.wallet?.balance_credits || 0} />
 
             {/* Main Content */}
             <div className="mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in">
                 {/* Banner Title */}
-                <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 shadow-sm dark:shadow-none p-6 md:p-8 backdrop-blur-xl">
+                <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-dark-surface/60 shadow-sm dark:shadow-none p-6 md:p-8 backdrop-blur-xl">
                     <div className="relative z-10 flex flex-col sm:flex-row justify-between sm:items-center gap-4 w-full">
                         {/*<div className="bg-emerald-500/20 p-3 rounded-xl border border-emerald-500/30">*/}
                         {/*    <LayoutDashboard className="h-8 w-8 text-emerald-400" />*/}
@@ -232,7 +232,7 @@ const DashboardMain = () => {
                     <div>
                         {/* Stat Cards */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 mt-6">
-                            <div className="bg-white dark:bg-[#0d0f1a]/70 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10 rounded-2xl p-5 flex items-center justify-between shadow-xl">
+                            <div className="bg-white dark:bg-dark-surface/70 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10 rounded-2xl p-5 flex items-center justify-between shadow-xl">
                                 <div>
                                     <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-500">Ongoing Tasks</p>
                                     <h2 className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{ongoingCount}</h2>
@@ -241,7 +241,7 @@ const DashboardMain = () => {
                                     <Briefcase className="h-6 w-6 text-emerald-400" />
                                 </div>
                             </div>
-                            <div className="bg-white dark:bg-[#0d0f1a]/70 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10 rounded-2xl p-5 flex items-center justify-between shadow-xl">
+                            <div className="bg-white dark:bg-dark-surface/70 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10 rounded-2xl p-5 flex items-center justify-between shadow-xl">
                                 <div>
                                     <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-500">Upcoming Tasks</p>
                                     <h2 className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{waitingCount}</h2>
@@ -250,7 +250,7 @@ const DashboardMain = () => {
                                     <Clock className="h-6 w-6 text-blue-400" />
                                 </div>
                             </div>
-                            <div className="bg-white dark:bg-[#0d0f1a]/70 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10 rounded-2xl p-5 flex items-center justify-between shadow-xl">
+                            <div className="bg-white dark:bg-dark-surface/70 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10 rounded-2xl p-5 flex items-center justify-between shadow-xl">
                                 <div>
                                     <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-500">Completed Tasks</p>
                                     <h2 className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{archivedTasks.length}</h2>
@@ -259,7 +259,7 @@ const DashboardMain = () => {
                                     <CheckCircle className="h-6 w-6 text-purple-400" />
                                 </div>
                             </div>
-                            <div className="bg-white dark:bg-[#0d0f1a]/70 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10 rounded-2xl p-5 flex items-center justify-between shadow-xl">
+                            <div className="bg-white dark:bg-dark-surface/70 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10 rounded-2xl p-5 flex items-center justify-between shadow-xl">
                                 <div>
                                     <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-500">Remaining Milestones</p>
                                     <h2 className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{remainingMilestonesCount}</h2>
@@ -272,7 +272,7 @@ const DashboardMain = () => {
 
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             {/* My Tasks Column */}
-                            <div className="bg-white dark:bg-[#0d0f1a]/70 shadow-sm dark:shadow-none rounded-2xl border border-gray-200 dark:border-white/10 p-6">
+                            <div className="bg-white dark:bg-dark-surface/70 shadow-sm dark:shadow-none rounded-2xl border border-gray-200 dark:border-white/10 p-6">
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">My Tasks</h3>
                                 {myTasks.length === 0 ? (
                                     <p className="text-sm text-gray-500 dark:text-zinc-500 italic">No tasks currently.</p>
@@ -338,7 +338,7 @@ const DashboardMain = () => {
                             </div>
 
                             {/* To Review Column */}
-                            <div className="bg-white dark:bg-[#0d0f1a]/70 shadow-sm dark:shadow-none rounded-2xl border border-gray-200 dark:border-white/10 p-6">
+                            <div className="bg-white dark:bg-dark-surface/70 shadow-sm dark:shadow-none rounded-2xl border border-gray-200 dark:border-white/10 p-6">
                                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">To Review</h3>
                                 {toReview.length === 0 ? (
                                     <p className="text-sm text-gray-500 dark:text-zinc-500 italic">No tasks to review currently.</p>

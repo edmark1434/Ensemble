@@ -321,7 +321,7 @@ export const Contracts: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white font-['Plus_Jakarta_Sans']">
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white font-['Plus_Jakarta_Sans']">
       {/* Top Header */}
       <UserHeader pageTitle="My Contracts" credits={1250} />
 
@@ -330,7 +330,7 @@ export const Contracts: React.FC = () => {
       ) : (
         <div className="mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in">
           {/* Banner */}
-          <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 shadow-sm dark:shadow-none p-6 md:p-8 backdrop-blur-xl">
+          <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-dark-surface/60 shadow-sm dark:shadow-none p-6 md:p-8 backdrop-blur-xl">
             <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <h1
@@ -448,7 +448,7 @@ export const Contracts: React.FC = () => {
                           setSelectedContract(contract);
                           navigate(`/contracts/${contract.id}`);
                         }}
-                        className={`group relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900/40 shadow-sm dark:shadow-none p-5 transition-all duration-300 hover:border-blue-500/50 hover:bg-gray-50 dark:hover:bg-zinc-900/80 hover:shadow-xl hover:shadow-blue-500/5 ${
+                        className={`group relative cursor-pointer overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 shadow-sm dark:shadow-none p-5 transition-all duration-300 hover:border-blue-500/50 hover:bg-gray-50 dark:hover:bg-dark-surface/80 hover:shadow-xl hover:shadow-blue-500/5 ${
                           isArchived ? "opacity-40 grayscale-[50%] hover:opacity-100 hover:grayscale-0" : ""
                         }`}
                       >
@@ -482,12 +482,12 @@ export const Contracts: React.FC = () => {
                         </div>
 
                         {/* Contract Document Preview (Compressed) */}
-                        <div className="mb-4 relative rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-[#080a12]/80 opacity-70 group-hover:opacity-100 transition-opacity overflow-hidden pointer-events-none mx-2 shadow-md dark:shadow-[0_2px_10px_rgba(0,0,0,0.5)]" style={{ transform: 'rotate(-1deg)' }}>
+                        <div className="mb-4 relative rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-dark-base/80 opacity-70 group-hover:opacity-100 transition-opacity overflow-hidden pointer-events-none mx-2 shadow-md dark:shadow-[0_2px_10px_rgba(0,0,0,0.5)]" style={{ transform: 'rotate(-1deg)' }}>
                           <div className="p-3 text-[7px] text-gray-500 dark:text-zinc-500 font-sans leading-[10px] h-[90px] overflow-hidden whitespace-pre-wrap">
                             <h4 className="font-bold text-[8px] border-b border-gray-200 dark:border-white/10 pb-1 mb-1 uppercase tracking-widest text-gray-500 dark:text-zinc-400">Contract Agreement</h4>
                             {contract.jobDescription || "No contract description provided."}
                           </div>
-                          <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-gray-50 dark:from-[#080a12] to-transparent" />
+                          <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-gray-50 dark:from-dark-base to-transparent" />
                         </div>
 
                         {/* Milestone Progress Bar Segmented */}
@@ -576,7 +576,7 @@ export const Contracts: React.FC = () => {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-950/80 px-6 py-4">
+            <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-dark-surface/80 px-6 py-4">
               <div className="flex items-center gap-2.5">
                 <FileText className="h-5 w-5 text-blue-400" />
                 <span className="text-xs font-bold uppercase tracking-widest text-gray-600 dark:text-zinc-300">
@@ -715,7 +715,7 @@ export const Contracts: React.FC = () => {
                         const isInProgress = m.status === "In Progress";
 
                         return (
-                          <tr key={m.id} className="hover:bg-zinc-800/10 transition-colors">
+                          <tr key={m.id} className="hover:bg-white/5 transition-colors">
                             <td className="px-3 py-2 text-center text-gray-500 dark:text-zinc-500">{index + 1}</td>
                             <td className="px-3 py-2 font-medium text-gray-700 dark:text-zinc-200">{m.name}</td>
                             <td className="px-3 py-2 text-center">

@@ -69,7 +69,7 @@ export const InboxPanelPage = ({
       ["left", "removed"].includes(currentMember.status || "active"));
 
   return (
-    <div className="flex h-full max-h-full w-full overflow-hidden bg-[#080a12] relative">
+    <div className="flex h-full max-h-full w-full overflow-hidden bg-dark-base relative">
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
         <InboxPanelHeader
@@ -103,7 +103,7 @@ export const InboxPanelPage = ({
           />
 
           {cannotSendToGroup ? (
-            <div className="border-t border-white/10 bg-[#0d0f1a] p-4 text-center text-sm text-zinc-400">
+            <div className="border-t border-white/10 bg-dark-surface p-4 text-center text-sm text-zinc-400">
               You cannot send messages to this group chat anymore.
             </div>
           ) : (

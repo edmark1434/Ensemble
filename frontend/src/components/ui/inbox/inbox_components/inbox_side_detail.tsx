@@ -226,7 +226,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
 
   return (
     <div
-      className={`h-full bg-[#0d0f1a] border-l border-white/10 flex flex-col flex-shrink-0 overflow-y-auto inbox-scroll-thin text-white transition-all duration-300 ease-in-out ${
+      className={`h-full bg-dark-surface border-l border-white/10 flex flex-col flex-shrink-0 overflow-y-auto inbox-scroll-thin text-white transition-all duration-300 ease-in-out ${
         isOpen
           ? "w-72 md:w-80 opacity-100"
           : "w-0 opacity-0 overflow-hidden border-l-0"
@@ -235,7 +235,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
     >
       <div className="w-72 md:w-80 flex flex-col h-full">
         {/* Header Close Bar */}
-        <div className="flex items-center justify-between p-4 border-b border-white/10 sticky top-0 bg-[#0d0f1a]/95 backdrop-blur-sm z-10">
+        <div className="flex items-center justify-between p-4 border-b border-white/10 sticky top-0 bg-dark-surface/95 backdrop-blur-sm z-10">
           <h3 className="text-sm font-semibold text-zinc-300">Chat Details</h3>
           <button
             onClick={onClose}

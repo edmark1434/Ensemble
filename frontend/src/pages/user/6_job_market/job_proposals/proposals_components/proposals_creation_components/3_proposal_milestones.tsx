@@ -96,7 +96,7 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
       {/* Milestone Cards List */}
       <Reorder.Group axis="y" values={milestones} onReorder={setMilestones} className="space-y-4">
         {milestones.map((m, idx) => (
-          <Reorder.Item key={m.id} value={m} className="p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 space-y-3 relative group">
+          <Reorder.Item key={m.id} value={m} className="p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface space-y-3 relative group">
             <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-2">
               <div className="flex items-center gap-2">
                 <GripVertical className="h-4 w-4 text-gray-300 dark:text-zinc-600 cursor-grab active:cursor-grabbing" />

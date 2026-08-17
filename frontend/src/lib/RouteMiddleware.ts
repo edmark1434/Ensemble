@@ -44,15 +44,7 @@ function requestOnboardingPath(accountId: string) {
 
 function RouteLoadingShell({ message = 'Loading account...' }: { message?: string } = {}) {
     return createElement('div', {
-        style: {
-            minHeight: '100vh',
-            background: '#080a12',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#a1a1aa',
-            fontSize: '0.875rem',
-        },
+        className: 'min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-base text-zinc-400 text-sm',
         role: 'status',
         'aria-live': 'polite',
         'aria-label': 'Loading account',

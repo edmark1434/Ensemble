@@ -19,7 +19,7 @@ export const InboxSearch: React.FC<InboxSearchProps> = ({
 }) => {
   return (
     <div
-      className={`p-3 border-b border-white/10 flex-shrink-0 bg-[#0d0f1a] flex items-center justify-center ${
+      className={`p-3 border-b border-white/10 flex-shrink-0 bg-dark-surface flex items-center justify-center ${
         isCollapsed ? "px-2" : "gap-2"
       }`}
     >

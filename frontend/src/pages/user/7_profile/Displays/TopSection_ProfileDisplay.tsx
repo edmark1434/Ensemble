@@ -86,7 +86,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  if (loading) return <div className="h-48 w-full bg-gray-200 dark:bg-white/5 animate-pulse rounded-2xl" />;
+  if (loading) return <div className="h-48 w-full bg-gray-200 dark:bg-dark-elevated animate-pulse rounded-2xl" />;
 
 
 

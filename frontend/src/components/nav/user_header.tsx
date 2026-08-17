@@ -459,7 +459,7 @@ useEffect(() => {
               >
                 <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
                 <CreditIcon className="h-4 w-4 text-yellow-500" />
-                <span className="text-sm font-bold text-amber-600 dark:text-yellow-200">{userCredits.toLocaleString()}</span>
+                <span className="text-sm font-bold text-gray-900 dark:text-yellow-200">{userCredits.toLocaleString()}</span>
                 {isHovered && (
                   <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] text-white shadow-lg animate-fade-in">
                     Go to Credit Shop

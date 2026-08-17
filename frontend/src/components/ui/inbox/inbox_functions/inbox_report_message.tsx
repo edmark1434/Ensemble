@@ -111,7 +111,7 @@ export const InboxReportModal: React.FC<InboxReportModalProps> = ({
               <select
                 value={selectedReason}
                 onChange={(e) => setSelectedReason(e.target.value)}
-                className="w-full rounded-xl border border-white/15 bg-[#0d0f1a] px-3 py-2 text-xs text-white outline-none focus:border-blue-500 transition"
+                className="w-full rounded-xl border border-white/15 bg-dark-surface px-3 py-2 text-xs text-white outline-none focus:border-blue-500 transition"
               >
                 {REPORT_REASONS.map((reason) => (
                   <option key={reason} value={reason}>
@@ -131,7 +131,7 @@ export const InboxReportModal: React.FC<InboxReportModalProps> = ({
                 placeholder="Provide additional context..."
                 value={details}
                 onChange={(e) => setDetails(e.target.value)}
-                className="w-full rounded-xl border border-white/15 bg-[#0d0f1a] p-3 text-xs text-white outline-none resize-none placeholder:text-zinc-600 focus:border-blue-500 transition inbox-scroll-thin"
+                className="w-full rounded-xl border border-white/15 bg-dark-surface p-3 text-xs text-white outline-none resize-none placeholder:text-zinc-600 focus:border-blue-500 transition inbox-scroll-thin"
               />
             </div>
 

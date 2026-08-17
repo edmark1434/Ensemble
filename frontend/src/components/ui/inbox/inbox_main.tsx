@@ -1056,13 +1056,13 @@ const InboxMain = () => {
   };
 
   return (
-    <div className="w-full h-screen bg-[#080a12] flex flex-col overflow-hidden">
+    <div className="w-full h-screen bg-dark-base flex flex-col overflow-hidden">
       <UserHeader pageTitle="Inbox" credits={1250} />
 
       <div className="w-full flex-1 min-h-0 overflow-hidden flex border-t border-white/10 relative">
         {/* Animated Left Conversation Sidebar (Transitions smoothly between w-80/w-96 and compact w-20) */}
         <div
-          className={`flex-shrink-0 flex flex-col border-r border-white/10 bg-[#0d0f1a] transition-all duration-300 ease-in-out ${
+          className={`flex-shrink-0 flex flex-col border-r border-white/10 bg-dark-surface transition-all duration-300 ease-in-out ${
             isSidebarCollapsed ? "w-20" : "w-80 md:w-96"
           }`}
         >

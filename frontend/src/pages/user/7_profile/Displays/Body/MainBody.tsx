@@ -44,7 +44,7 @@ const tabOptions: { key: TabType; label: string; icon: React.ReactNode }[] = [
 export const DetailsListBodySkeleton: React.FC = () => (
   <div className="space-y-4 animate-pulse">
     <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-white/5 pb-3">
-      {[...Array(6)].map((_, i) => <div key={i} className="h-8 w-24 bg-gray-200 dark:bg-white/10 rounded-xl" />)}
+      {[...Array(6)].map((_, i) => <div key={i} className="h-8 w-24 bg-gray-200 dark:bg-dark-elevated rounded-xl" />)}
     </div>
     <div className="border border-gray-200 dark:border-white/10 bg-white/40 dark:bg-dark-base/40 rounded-2xl h-[500px] w-full" />
   </div>

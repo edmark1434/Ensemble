@@ -197,7 +197,7 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
             <button
               type="button"
               onClick={() => setIsRateOpen(!isRateOpen)}
-              className="w-full flex items-center justify-between rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] px-3.5 py-2.5 text-xs text-left transition hover:border-white/20"
+              className="w-full flex items-center justify-between rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface px-3.5 py-2.5 text-xs text-left transition hover:border-white/20"
             >
               <span className="text-gray-900 dark:text-white font-medium flex items-center gap-2">
                 <Percent className="h-3.5 w-3.5 text-blue-400" />
@@ -214,7 +214,7 @@ export const ProposalPitchStep: React.FC<ProposalPitchProps> = ({
                     initial={{ opacity: 0, y: -6 }}
                     animate={{ opacity: 1, y: 4 }}
                     exit={{ opacity: 0, y: -6 }}
-                    className="absolute left-0 right-0 z-30 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-1.5 shadow-2xl space-y-0.5"
+                    className="absolute left-0 right-0 z-30 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-1.5 shadow-2xl space-y-0.5"
                   >
                     {additionalWorkRates.map((rate) => {
                       const isSelected = additionalWorkRate === rate.value;

@@ -73,7 +73,7 @@ export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
   }
 
   return (
-    <div className="inbox-scroll-thin flex-shrink-0 max-h-36 overflow-y-auto bg-[#0d0f1a]">
+    <div className="inbox-scroll-thin flex-shrink-0 max-h-36 overflow-y-auto bg-dark-surface">
       {liveGoogleMeeting && <LiveGoogleMeetingBanner call={liveGoogleMeeting} />}
       <div className="px-4 py-2">
       {isTicket && (
