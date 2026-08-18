@@ -1,5 +1,7 @@
 // app/api/collab/projects/[id]/snapshots/latest/route.ts
 
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import * as Y from "yjs";
 import { db } from "@/lib/db";
