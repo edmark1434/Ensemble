@@ -8,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 import type { Gig, GigTier } from "../gig_datasets";
 import SuccessModal from "@/components/ui/SuccessModal";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import api from "@/lib/axios";
 
 interface GigRichTextProps {
   gig: Gig;
@@ -226,21 +227,21 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
               </div>
               <div className="p-5">
                 <div className="flex justify-between items-start mb-2">
-                  <h4 className="text-lg font-bold text-gray-900 dark:text-white">{activeTier.title}</h4>
-                  <span className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{activeTier.price.toLocaleString()}</span>
+                  <h4 className="text-lg font-bold text-gray-900 dark:text-white">{activeTier?.title}</h4>
+                  <span className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString()}</span>
                 </div>
-                <p className="text-sm text-gray-600 dark:text-zinc-400 mb-6">{activeTier.description}</p>
+                <p className="text-sm text-gray-600 dark:text-zinc-400 mb-6">{activeTier?.description}</p>
                 
                 <div className="flex items-center gap-4 text-xs font-medium text-gray-700 dark:text-zinc-300 mb-6">
-                  <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-gray-400" /> {activeTier.daysOfDelivery} Days Delivery</span>
-                  <span className="flex items-center gap-1.5"><PlayCircle className="h-4 w-4 text-gray-400" /> {activeTier.revisions} Revisions</span>
+                  <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-gray-400" /> {activeTier?.daysOfDelivery} Days Delivery</span>
+                  <span className="flex items-center gap-1.5"><PlayCircle className="h-4 w-4 text-gray-400" /> {activeTier?.revisions} Revisions</span>
                 </div>
                 
                 <button 
                   onClick={() => setIsCheckoutOpen(true)}
                   className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
                 >
-                  Continue ({activeTier.price.toLocaleString()} Credits)
+                  Continue ({activeTier?.price?.toLocaleString()} Credits)
                 </button>
               </div>
             </div>
@@ -334,21 +335,21 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
               </div>
               <div className="p-6">
                 <div className="flex justify-between items-start mb-2">
-                  <h4 className="text-lg font-bold text-gray-900 dark:text-white">{activeTier.title}</h4>
-                  <span className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{activeTier.price.toLocaleString()}</span>
+                  <h4 className="text-lg font-bold text-gray-900 dark:text-white">{activeTier?.title}</h4>
+                  <span className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString()}</span>
                 </div>
-                <p className="text-sm text-gray-600 dark:text-zinc-400 mb-6">{activeTier.description}</p>
+                <p className="text-sm text-gray-600 dark:text-zinc-400 mb-6">{activeTier?.description}</p>
                 
                 <div className="flex flex-col gap-3 text-xs font-medium text-gray-700 dark:text-zinc-300 mb-6">
-                  <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-gray-400" /> {activeTier.daysOfDelivery} Days Delivery</span>
-                  <span className="flex items-center gap-1.5"><PlayCircle className="h-4 w-4 text-gray-400" /> {activeTier.revisions} Revisions</span>
+                  <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-gray-400" /> {activeTier?.daysOfDelivery} Days Delivery</span>
+                  <span className="flex items-center gap-1.5"><PlayCircle className="h-4 w-4 text-gray-400" /> {activeTier?.revisions} Revisions</span>
                 </div>
                 
                 <button 
                   onClick={() => setIsCheckoutOpen(true)}
                   className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
                 >
-                  Continue ({activeTier.price.toLocaleString()} Credits)
+                  Continue ({activeTier?.price?.toLocaleString()} Credits)
                 </button>
               </div>
             </div>
@@ -370,8 +371,8 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
       {!isPage && (
       <div className="lg:hidden absolute bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-dark-surface/80 backdrop-blur-md border-t border-gray-200 dark:border-white/10 flex justify-between items-center gap-4">
         <div className="flex flex-col">
-          <span className="text-xs text-gray-500">Selected: {activeTier.tierName}</span>
-          <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier.price.toLocaleString()}</span>
+          <span className="text-xs text-gray-500">Selected: {activeTier?.tierName}</span>
+          <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString()}</span>
         </div>
         <button 
           onClick={() => setIsCheckoutOpen(true)}
@@ -384,7 +385,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
 
       {/* CHECKOUT MODAL */}
       <AnimatePresence>
-        {isCheckoutOpen && (
+        {isCheckoutOpen && activeTier && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -426,7 +427,10 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
                       <div key={idx} className="space-y-3 p-5 rounded-2xl border border-gray-100 dark:border-white/5 bg-white dark:bg-dark-base shadow-sm">
                         <p className="text-sm font-bold text-gray-800 dark:text-zinc-200"><span className="text-red-500 mr-1">{q.required ? "*" : ""}</span>{idx + 1}. {q.question}</p>
                         {q.type === "multiple-choice" ? (
-                           <select className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-3.5 text-sm font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                           <select 
+                             value={responses[q.id || ''] || ''}
+                             onChange={(e) => setResponses({ ...responses, [q.id || '']: e.target.value })}
+                             className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-3.5 text-sm font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                              <option value="">Select an option</option>
                              {q.options?.map((opt, oIdx) => <option key={oIdx} value={opt}>{opt}</option>)}
                            </select>
@@ -450,33 +454,33 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
                       <img src={gig.thumbnail} alt="" className="h-12 w-12 rounded-lg object-cover" />
                       <div>
                         <h3 className="font-bold text-sm text-gray-900 dark:text-white line-clamp-1">{gig.title}</h3>
-                        <p className="text-xs font-bold text-blue-600 dark:text-blue-400 mt-1">{activeTier.tierName} Package</p>
+                        <p className="text-xs font-bold text-blue-600 dark:text-blue-400 mt-1">{activeTier?.tierName} Package</p>
                       </div>
                     </div>
                     
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <span className="text-xs font-medium text-gray-600 dark:text-zinc-400">Delivery Time</span>
-                        <span className="text-xs font-bold text-gray-900 dark:text-white">{activeTier.daysOfDelivery} Days</span>
+                        <span className="text-xs font-bold text-gray-900 dark:text-white">{activeTier?.daysOfDelivery} Days</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-xs font-medium text-gray-600 dark:text-zinc-400">Revisions</span>
-                        <span className="text-xs font-bold text-gray-900 dark:text-white">{activeTier.revisions}</span>
+                        <span className="text-xs font-bold text-gray-900 dark:text-white">{activeTier?.revisions}</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-xs font-medium text-gray-600 dark:text-zinc-400">Base Price</span>
-                        <span className="text-xs font-bold text-gray-900 dark:text-white">{activeTier.price.toLocaleString()} Credits</span>
+                        <span className="text-xs font-bold text-gray-900 dark:text-white">{activeTier?.price?.toLocaleString()} Credits</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-xs font-medium text-gray-600 dark:text-zinc-400">Platform Fee (5%)</span>
-                        <span className="text-xs font-bold text-gray-900 dark:text-white">{(activeTier.price * 0.05).toLocaleString()} Credits</span>
+                        <span className="text-xs font-bold text-gray-900 dark:text-white">{((activeTier?.price || 0) * 0.05).toLocaleString()} Credits</span>
                       </div>
                       
                       <div className="h-px w-full bg-gray-200 dark:bg-white/10 my-3" />
                       
                       <div className="flex justify-between items-center">
                         <span className="text-base font-black text-gray-900 dark:text-white">Estimated Total</span>
-                        <span className="text-lg font-black text-blue-600 dark:text-blue-400 flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{(activeTier.price * 1.05).toLocaleString()} Credits</span>
+                        <span className="text-lg font-black text-blue-600 dark:text-blue-400 flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{((activeTier?.price || 0) * 1.05).toLocaleString()} Credits</span>
                       </div>
                     </div>
                   </div>
@@ -508,7 +512,10 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
       <SuccessModal
         isOpen={isSuccessOpen}
         message="Order Successfully Sent"
-        onConfirm={() => setIsSuccessOpen(false)}
+        onConfirm={() => {
+          setIsSuccessOpen(false);
+          navigate('/gigs/orders/sent');
+        }}
       />
     </div>
   );

@@ -548,11 +548,11 @@ async function seedGigsDomain(ctx) {
 
   const gigRes = await pool.query(
     `INSERT INTO gigs (
-       title, description, payment_type, no_of_concurrent_max, status, freelancer_account_id
+       title, description, category, payment_type, no_of_concurrent_max, status, freelancer_account_id
      ) VALUES
-       ($1, $2, 'fixed', 3, 'active', $3),
-       ($4, $5, 'fixed', 2, 'active', $6),
-       ($7, $8, 'fixed', 1, 'paused', $3)
+       ($1, $2, 'Video Editing', 'fixed', 3, 'active', $3),
+       ($4, $5, 'Animation', 'fixed', 2, 'active', $6),
+       ($7, $8, 'Audio Production', 'fixed', 1, 'paused', $3)
      RETURNING gig_id, title`,
     [
       cap('Cinematic color grade', 50),
@@ -578,31 +578,39 @@ async function seedGigsDomain(ctx) {
     [primaryGig.gig_id]
   );
 
-  const tierRes = await pool.query(
-    `INSERT INTO gig_tiers (
-       title, description, rate_credits, delivery_days, no_of_revisions_max, gig_id
-     ) VALUES
-       ('Basic', 'Single look, up to 3 min', 800, 3, 1, $1),
-       ('Standard', 'Two looks, up to 8 min', 1600, 5, 2, $1),
-       ('Premium', 'Full grade + deliverables', 3200, 7, 3, $1)
-     RETURNING gig_tier_id, title`,
-    [primaryGig.gig_id]
-  );
+  let primaryTierRes;
 
-  for (const tier of tierRes.rows) {
-    for (const feature of featureRes.rows) {
-      await pool.query(
-        `INSERT INTO gig_tier_features (gig_tier_id, gig_feature_id, is_included)
-         VALUES ($1,$2,$3)
-         ON CONFLICT DO NOTHING`,
-        [
-          tier.gig_tier_id,
-          feature.gig_feature_id,
-          tier.title !== 'Basic' || feature.name !== 'Export presets',
-        ]
-      );
+  for (const gig of gigs) {
+    const tierRes = await pool.query(
+      `INSERT INTO gig_tiers (
+         title, description, rate_credits, delivery_days, no_of_revisions_max, gig_id
+       ) VALUES
+         ('Basic', 'Standard delivery package', 800, 3, 1, $1),
+         ('Standard', 'Advanced delivery with source files', 1600, 5, 2, $1),
+         ('Premium', 'Premium delivery + extras', 3200, 7, 3, $1)
+       RETURNING gig_tier_id, title`,
+      [gig.gig_id]
+    );
+
+    if (gig.gig_id === primaryGig.gig_id) {
+      primaryTierRes = tierRes;
+      for (const tier of tierRes.rows) {
+        for (const feature of featureRes.rows) {
+          await pool.query(
+            `INSERT INTO gig_tier_features (gig_tier_id, gig_feature_id, is_included)
+             VALUES ($1,$2,$3)
+             ON CONFLICT DO NOTHING`,
+            [
+              tier.gig_tier_id,
+              feature.gig_feature_id,
+              tier.title !== 'Basic' || feature.name !== 'Export presets',
+            ]
+          );
+        }
+      }
     }
   }
+
 
   const reqRes = await pool.query(
     `INSERT INTO gig_requirements (type, question, is_required, gig_id)
@@ -637,11 +645,31 @@ async function seedGigsDomain(ctx) {
     [primaryGig.gig_id]
   );
 
-  if (files[2]) {
+  const gigFileRes = await pool.query(
+    `INSERT INTO files (name, path, mime_type, size_bytes) VALUES ($1, $2, 'image/png', 0) RETURNING file_id`,
+    ['gig_placeholder.png', 'https://d2dl0agwn9kque.cloudfront.net/gig_thumbnails/120ffbd6-72f6-4da9-98bd-ddf780450a66/placeholder_1787070142838_f09d8787.png']
+  );
+  const gigPlaceholderId = gigFileRes.rows[0].file_id;
+
+  if (gigPlaceholderId) {
+    // Primary Gig
     await pool.query(
-      `INSERT INTO gig_attachments (gig_id, file_id, index) VALUES ($1,$2,0)
-       ON CONFLICT DO NOTHING`,
-      [primaryGig.gig_id, files[2].file_id]
+      `INSERT INTO gig_attachments (gig_id, file_id, index) VALUES ($1,$2,0) ON CONFLICT DO NOTHING`,
+      [gigs[0].gig_id, gigPlaceholderId]
+    );
+    // Support image
+    await pool.query(
+      `INSERT INTO gig_attachments (gig_id, file_id, index) VALUES ($1,$2,1) ON CONFLICT DO NOTHING`,
+      [gigs[0].gig_id, gigPlaceholderId]
+    );
+    // Other Gigs
+    await pool.query(
+      `INSERT INTO gig_attachments (gig_id, file_id, index) VALUES ($1,$2,0) ON CONFLICT DO NOTHING`,
+      [gigs[1].gig_id, gigPlaceholderId]
+    );
+    await pool.query(
+      `INSERT INTO gig_attachments (gig_id, file_id, index) VALUES ($1,$2,0) ON CONFLICT DO NOTHING`,
+      [gigs[2].gig_id, gigPlaceholderId]
     );
   }
   if (tags[2]) {
@@ -661,9 +689,9 @@ async function seedGigsDomain(ctx) {
      RETURNING gig_request_id, status`,
     [
       buyers[0].account_id,
-      tierRes.rows[1].gig_tier_id,
+      primaryTierRes.rows[1].gig_tier_id,
       buyers[1].account_id,
-      tierRes.rows[0].gig_tier_id,
+      primaryTierRes.rows[0].gig_tier_id,
       buyers[2].account_id,
     ]
   );

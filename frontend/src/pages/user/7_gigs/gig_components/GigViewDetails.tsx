@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Clock, Users, Star, Send, MousePointerClick, User, FileText, PlayCircle, MapPin, Tag, Box, Layers, Bookmark } from "lucide-react";
+import { Clock, Users, Star, Send, MousePointerClick, User, FileText, PlayCircle, MapPin, Tag, Box, Layers, Bookmark, Edit2, ShoppingCart, Flag } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Gig } from "../gig_datasets";
 import { AnimatePresence, motion } from "framer-motion";
@@ -57,7 +57,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
           selectedGig ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        {selectedGig && activeTier && (
+        {selectedGig && (
           <>
             <div className="relative h-48 shrink-0 bg-dark-base border-b border-gray-100 dark:border-white/5">
               <img
@@ -121,40 +121,42 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
               </div>
 
               {/* Tiers Tabs */}
-              <div className="space-y-2">
-                <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400">
-                  Pricing Packages
-                </h4>
-                <div className="rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-dark-base shadow-sm">
-                  <div className="flex border-b border-gray-200 dark:border-white/10">
-                    {selectedGig.tiers.map((tier, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setActiveTierIdx(idx)}
-                        className={`flex-1 py-2.5 text-[11px] font-bold uppercase tracking-wider transition-colors ${
-                          activeTierIdx === idx 
-                            ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-b-2 border-blue-500" 
-                            : "text-gray-500 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/5"
-                        }`}
-                      >
-                        {tier.tierName}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="text-sm font-bold text-gray-900 dark:text-white">{activeTier.title}</h4>
-                      <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier.price.toLocaleString()}</span>
+              {selectedGig.tiers && selectedGig.tiers.length > 0 && activeTier && (
+                <div className="space-y-2">
+                  <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400">
+                    Pricing Packages
+                  </h4>
+                  <div className="rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-dark-base shadow-sm">
+                    <div className="flex border-b border-gray-200 dark:border-white/10">
+                      {selectedGig.tiers.map((tier, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setActiveTierIdx(idx)}
+                          className={`flex-1 py-2.5 text-[11px] font-bold uppercase tracking-wider transition-colors ${
+                            activeTierIdx === idx 
+                              ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-b-2 border-blue-500" 
+                              : "text-gray-500 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/5"
+                          }`}
+                        >
+                          {tier.tierName}
+                        </button>
+                      ))}
                     </div>
-                    <p className="text-xs text-gray-600 dark:text-zinc-400 mb-4">{activeTier.description}</p>
-                    
-                    <div className="flex items-center gap-4 text-[11px] font-medium text-gray-700 dark:text-zinc-300">
-                      <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-gray-400" /> {activeTier.daysOfDelivery} Days Delivery</span>
-                      <span className="flex items-center gap-1.5"><PlayCircle className="h-3.5 w-3.5 text-gray-400" /> {activeTier.revisions} Revisions</span>
+                    <div className="p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <h4 className="text-sm font-bold text-gray-900 dark:text-white">{activeTier.title}</h4>
+                        <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier.price?.toLocaleString()}</span>
+                      </div>
+                      <p className="text-xs text-gray-600 dark:text-zinc-400 mb-4">{activeTier.description}</p>
+                      
+                      <div className="flex items-center gap-4 text-[11px] font-medium text-gray-700 dark:text-zinc-300">
+                        <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-gray-400" /> {activeTier.daysOfDelivery} Days Delivery</span>
+                        <span className="flex items-center gap-1.5"><PlayCircle className="h-3.5 w-3.5 text-gray-400" /> {activeTier.revisions} Revisions</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Description */}
               <div className="space-y-2">
@@ -301,26 +303,55 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
 
             {/* Sticky Action Footer */}
             <div className="p-4 border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shrink-0 space-y-3">
-              <div className="flex items-center justify-between px-1">
-                <span className="text-[11px] text-gray-500">Total</span>
-                <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier.price.toLocaleString()}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    navigate(`/gigs/services/${selectedGig.id}/page`);
-                  }}
-                  className="px-4 flex items-center justify-center rounded-xl bg-gray-100 dark:bg-white/5 py-3 text-xs font-bold text-gray-700 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-white/10 transition active:scale-[0.98] shrink-0 border border-gray-200 dark:border-white/10"
-                >
-                  View Full
-                </button>
-                <button
-                  onClick={() => setIsCheckoutOpen(true)}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 active:scale-[0.98]"
-                >
-                  Order {activeTier.tierName} Package
-                </button>
-              </div>
+              {selectedGig.isOwnGig ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      navigate(`/gigs/services/${selectedGig.id}/page`);
+                    }}
+                    className="px-4 flex items-center justify-center rounded-xl bg-gray-100 dark:bg-white/5 py-3 text-xs font-bold text-gray-700 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-white/10 transition active:scale-[0.98] shrink-0 border border-gray-200 dark:border-white/10"
+                  >
+                    View Full
+                  </button>
+                  <button
+                    onClick={() => navigate(`/gigs/edit/${selectedGig.id}`)}
+                    className="p-3 aspect-square flex items-center justify-center rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition shrink-0"
+                    title="Edit Service"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => navigate('/gigs/orders')}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 py-3 text-xs font-bold text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-zinc-700 transition"
+                  >
+                    <ShoppingCart className="h-4 w-4 text-blue-400" /> Manage Orders
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-[11px] text-gray-500">Total</span>
+                    <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString() || "0"}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        navigate(`/gigs/services/${selectedGig.id}/page`);
+                      }}
+                      className="px-4 flex items-center justify-center rounded-xl bg-gray-100 dark:bg-white/5 py-3 text-xs font-bold text-gray-700 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-white/10 transition active:scale-[0.98] shrink-0 border border-gray-200 dark:border-white/10"
+                    >
+                      View Full
+                    </button>
+                    <button
+                      onClick={() => setIsCheckoutOpen(true)}
+                      disabled={!activeTier}
+                      className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Order {activeTier?.tierName || "Package"}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </>
         )}
@@ -357,22 +388,22 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                     <img src={selectedGig.thumbnail} alt="" className="h-12 w-12 rounded-lg object-cover" />
                     <div>
                       <h3 className="font-bold text-xs text-gray-900 dark:text-white line-clamp-2">{selectedGig.title}</h3>
-                      <p className="text-[10px] text-gray-500 mt-0.5">{activeTier.tierName} Package</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">{activeTier?.tierName} Package</p>
                     </div>
                   </div>
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-600 dark:text-zinc-400">Subtotal</span>
-                      <span className="font-bold text-gray-900 dark:text-white">{activeTier.price.toLocaleString()} Credits</span>
+                      <span className="font-bold text-gray-900 dark:text-white">{activeTier?.price?.toLocaleString()} Credits</span>
                     </div>
                     <div className="flex justify-between text-xs">
                       <span className="text-gray-600 dark:text-zinc-400">Platform Fee (5%)</span>
-                      <span className="font-bold text-gray-900 dark:text-white">{(activeTier.price * 0.05).toLocaleString()} Credits</span>
+                      <span className="font-bold text-gray-900 dark:text-white">{((activeTier?.price || 0) * 0.05).toLocaleString()} Credits</span>
                     </div>
                     <div className="h-px w-full bg-gray-200 dark:bg-white/10 my-2" />
                     <div className="flex justify-between text-sm">
                       <span className="font-bold text-gray-900 dark:text-white">Total</span>
-                      <span className="font-black text-blue-600 dark:text-blue-400">{(activeTier.price * 1.05).toLocaleString()} Credits</span>
+                      <span className="font-black text-blue-600 dark:text-blue-400">{((activeTier?.price || 0) * 1.05).toLocaleString()} Credits</span>
                     </div>
                   </div>
                   <div className="flex gap-2">

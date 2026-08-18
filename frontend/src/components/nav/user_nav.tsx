@@ -46,7 +46,7 @@ let jobsItemsInitial: NavItem[] = [
 
 let gigsItemsInitial: NavItem[] = [
     { label: "Services", icon: Megaphone, to: "/gigs" },
-    { label: "Orders", icon: Inbox, to: "/orders" },
+    { label: "Orders", icon: Inbox, to: "/gigs/orders" },
 ];
 
 let activityRecordsInitial: NavItem[] = [
@@ -99,6 +99,19 @@ const UserNav: React.FC<UserNavProps> = () => {
         }
         if (to === "/jobs/proposals") {
             return location.pathname.startsWith("/jobs/proposals");
+        }
+        return location.pathname === to;
+    };
+
+    const isGigItemActive = (to: string) => {
+        if (to === "/gigs") {
+            return (
+                location.pathname.startsWith("/gigs") &&
+                !location.pathname.startsWith("/gigs/orders")
+            );
+        }
+        if (to === "/gigs/orders") {
+            return location.pathname.startsWith("/gigs/orders");
         }
         return location.pathname === to;
     };
@@ -289,10 +302,11 @@ const UserNav: React.FC<UserNavProps> = () => {
 
                             <div className={`grid transition-all duration-300 ease-in-out ${isGigsOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
                                <ul className="ml-6 overflow-hidden space-y-1 border-l border-gray-200 dark:border-white/10 pl-2">
-                                  {gigsState.map(({ label, icon: Icon, to }) => (
+                                  {gigsState.map(({ label, icon: Icon, to }) => {
+                                     const isActive = isGigItemActive(to);
+                                     return (
                                      <li key={label}>
                                         <NavLink to={to}>
-                                           {({ isActive }) => (
                                               <div
                                                  className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors duration-200 ${
                                                     isActive ? "bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-white/10 dark:to-white/5 shadow-sm border border-gray-200 dark:border-white/10 text-gray-900 dark:text-gray-100 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
@@ -308,10 +322,10 @@ const UserNav: React.FC<UserNavProps> = () => {
                                                  <Icon className="relative z-10 h-3.5 w-3.5 shrink-0" />
                                                  <span className="relative z-10 text-xs">{label}</span>
                                               </div>
-                                           )}
                                         </NavLink>
                                      </li>
-                                  ))}
+                                     );
+                                  })}
                                </ul>
                             </div>
                          </div>
@@ -326,14 +340,17 @@ const UserNav: React.FC<UserNavProps> = () => {
                                <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-1.5 shadow-xl dark:shadow-2xl animate-fade-in">
                                   <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-500 border-b border-gray-100 dark:border-white/5 mb-1">Gigs</p>
                                   <ul className="space-y-0.5">
-                                     {gigsState.map(({ label, icon: Icon, to }) => (
-                                        <li key={label}>
-                                           <NavLink to={to} className={({ isActive }) => `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-white/10 dark:to-white/5 shadow-sm border border-gray-200 dark:border-white/10 text-gray-900 dark:text-gray-100 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"}`}>
-                                              <Icon className="h-3.5 w-3.5 shrink-0" />
-                                              <span>{label}</span>
-                                           </NavLink>
-                                        </li>
-                                     ))}
+                                     {gigsState.map(({ label, icon: Icon, to }) => {
+                                        const isActive = isGigItemActive(to);
+                                        return (
+                                         <li key={label}>
+                                            <NavLink to={to} className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-white/10 dark:to-white/5 shadow-sm border border-gray-200 dark:border-white/10 text-gray-900 dark:text-gray-100 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"}`}>
+                                               <Icon className="h-3.5 w-3.5 shrink-0" />
+                                               <span>{label}</span>
+                                            </NavLink>
+                                         </li>
+                                        );
+                                     })}
                                   </ul>
                                </div>
                             </div>

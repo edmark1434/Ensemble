@@ -146,6 +146,18 @@ export const GigList: React.FC<GigListProps> = ({
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
 
                     <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                      {gig.isOwnGig && (
+                        <button
+                          title="Edit Service"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/gigs/edit/${gig.id}`);
+                          }}
+                          className="p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm text-gray-500 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                       <button
                         onClick={(e) => onToggleSave(e, gig.id)}
                         className={`p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm transition-colors flex items-center gap-1 ${
@@ -243,6 +255,30 @@ export const GigList: React.FC<GigListProps> = ({
                   className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105 absolute inset-0"
                 />
                 <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                  {!gig.isOwnGig && (
+                    <button
+                      title="Report Post"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/support/report?type=gig&id=${gig.id}`);
+                      }}
+                      className="p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm text-gray-500 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                    >
+                      <Flag className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {gig.isOwnGig && (
+                    <button
+                      title="Edit Service"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/gigs/edit/${gig.id}`);
+                      }}
+                      className="p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm text-gray-500 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                   <button
                     onClick={(e) => onToggleSave(e, gig.id)}
                     className={`p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm transition-colors flex items-center gap-1 ${

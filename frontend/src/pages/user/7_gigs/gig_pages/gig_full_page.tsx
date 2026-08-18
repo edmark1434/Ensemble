@@ -5,7 +5,6 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import api from "@/lib/axios";
 import type { Gig } from "../gig_datasets";
-import { sampleGigs } from "../gig_datasets";
 
 const GigFullPage: React.FC = () => {
   const { id } = useParams();
@@ -16,32 +15,29 @@ const GigFullPage: React.FC = () => {
   useEffect(() => {
     const fetchGig = async () => {
       try {
-        const response = await api.get("/api/gigs");
+        const response = await api.get(`/api/gigs/${id}`);
         if (response.data.success && response.data.data) {
-          const mappedGigs = response.data.data.map((g: any) => {
-            const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || '';
-            const mapUrl = (path: string) => {
-              if (!path) return undefined;
-              if (!cloudFrontUrl && path.includes('public')) return undefined;
-              if (path.startsWith('http') || path.startsWith('/')) return path;
-              return `${cloudFrontUrl}${path.startsWith('/') ? '' : '/'}${path}`;
-            };
-            
-            return {
-              ...g,
-              thumbnail: mapUrl(g.thumbnail) || "https://d2dl0agwn9kque.cloudfront.net/gig_thumbnails/ede6f8d1-cc62-4afd-be9f-11f044d86122/placeholder_1787040672764_8a5d64b3.png",
-              clientAvatar: g.clientAvatar ? `${cloudFrontUrl}${g.clientAvatar.startsWith('/') ? '' : '/'}${g.clientAvatar}` : undefined,
-              gallery: (g.gallery || []).map((p: string) => mapUrl(p))
-            };
+          const g = response.data.data;
+          const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || '';
+          const mapUrl = (path: string) => {
+            if (!path) return undefined;
+            if (!cloudFrontUrl && path.includes('public')) return undefined;
+            if (path.startsWith('http') || path.startsWith('/')) return path;
+            return `${cloudFrontUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+          };
+          
+          setGig({
+            ...g,
+            thumbnail: mapUrl(g.thumbnail) || "https://d2dl0agwn9kque.cloudfront.net/gig_thumbnails/ede6f8d1-cc62-4afd-be9f-11f044d86122/placeholder_1787040672764_8a5d64b3.png",
+            clientAvatar: g.clientAvatar ? `${cloudFrontUrl}${g.clientAvatar.startsWith('/') ? '' : '/'}${g.clientAvatar}` : undefined,
+            gallery: (g.gallery || []).map((p: string) => mapUrl(p))
           });
-          const found = mappedGigs.find((g: Gig) => g.id === id) || sampleGigs.find((g) => g.id === id);
-          setGig(found || null);
         } else {
-          setGig(sampleGigs.find((g) => g.id === id) || null);
+          setGig(null);
         }
       } catch (error) {
         console.error("Failed to fetch gig details:", error);
-        setGig(sampleGigs.find((g) => g.id === id) || null);
+        setGig(null);
       } finally {
         setLoading(false);
       }

@@ -12,7 +12,6 @@ import GigListViewType from "./gig_components/gig_list_viewtype";
 import type { ViewType } from "./gig_components/gig_list_viewtype";
 
 // Datasets & Types
-import { sampleGigs } from "./gig_datasets";
 import type { Gig } from "./gig_datasets";
 import GigViewDetails from "./gig_components/GigViewDetails";
 
@@ -75,13 +74,11 @@ const GigMain: React.FC = () => {
           setGigsList(mappedGigs);
         } else {
           console.error("API returned unsuccessful data", response.data);
-          // Don't fallback to sampleGigs!
-          // setGigsList(sampleGigs);
+          setGigsList([]);
         }
       } catch (err) {
         console.error("Error fetching gigs:", err);
-        // Don't fallback to sampleGigs!
-        // setGigsList(sampleGigs);
+        setGigsList([]);
       } finally {
         setLoading(false);
       }

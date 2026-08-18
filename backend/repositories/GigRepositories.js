@@ -160,10 +160,10 @@ async function createGigRepository(gigData) {
     }
 }
 
-async function getAllGigsRepository(filters) {
+async function getAllGigsRepository(filters, accountId = null) {
     // For now, fetch base gig details with a basic summary.
     // To match the frontend, we need: id, postedBy, title, description, category, slots, thumbnail, postedAt, clientRating, etc.
-    const query = `
+    let query = `
         SELECT 
             g.gig_id as id,
             g.title,
@@ -171,6 +171,7 @@ async function getAllGigsRepository(filters) {
             g.category as category,
             g.no_of_concurrent_max as slots,
             g.created_at as "postedAt",
+            g.freelancer_account_id,
             a.display_name as "postedBy",
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
             (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as thumbnail,
@@ -185,12 +186,15 @@ async function getAllGigsRepository(filters) {
                 'revisions', gt.no_of_revisions_max
             )) FROM gig_tiers gt WHERE gt.gig_id = g.gig_id) as tiers,
             (SELECT json_agg(json_build_object('name', gm.name, 'description', gm.description)) FROM gig_milestones gm WHERE gm.gig_id = g.gig_id) as milestones
+            ${accountId ? `, (SELECT COUNT(*) FROM gig_saves gs WHERE gs.gig_id = g.gig_id AND gs.account_id = $1) > 0 as "isSaved"` : `, false as "isSaved"`},
+            (SELECT COUNT(*) FROM gig_saves gs WHERE gs.gig_id = g.gig_id) as "savesCount",
+            (SELECT COUNT(*) FROM gig_requests gr JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id WHERE gt.gig_id = g.gig_id) as "ordersCount"
         FROM gigs g
         JOIN accounts a ON g.freelancer_account_id = a.account_id
         WHERE g.status = 'active'
         ORDER BY g.created_at DESC
     `;
-    const res = await pool.query(query);
+    const res = accountId ? await pool.query(query, [accountId]) : await pool.query(query);
     
     // Map to frontend interface Gig
     return res.rows.map(row => {
@@ -216,13 +220,221 @@ async function getAllGigsRepository(filters) {
             timeAgo: 'Just now',
             clientRating: 5.0,
             ratingCount: 0,
-            isSaved: false,
-            isOwnGig: false
+            isSaved: row.isSaved,
+            isOwnGig: accountId ? row.freelancer_account_id === accountId : false,
+            savesCount: parseInt(row.savesCount || 0, 10),
+            ordersCount: parseInt(row.ordersCount || 0, 10),
+            freelancerAccountId: row.freelancer_account_id,
         };
     });
 }
 
+async function toggleGigSaveRepository(gigId, accountId) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const checkRes = await client.query('SELECT 1 FROM gig_saves WHERE gig_id = $1 AND account_id = $2', [gigId, accountId]);
+        
+        if (checkRes.rows.length > 0) {
+            await client.query('DELETE FROM gig_saves WHERE gig_id = $1 AND account_id = $2', [gigId, accountId]);
+            await client.query('COMMIT');
+            return { saved: false };
+        } else {
+            await client.query('INSERT INTO gig_saves (gig_id, account_id) VALUES ($1, $2)', [gigId, accountId]);
+            await client.query('COMMIT');
+            return { saved: true };
+        }
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error in toggleGigSaveRepository:', err);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
+async function getSavedGigsRepository(accountId) {
+    const query = `
+        SELECT 
+            g.gig_id as id, g.title, g.description, g.category as category, g.no_of_concurrent_max as slots,
+            g.created_at as "postedAt", a.display_name as "postedBy",
+            (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
+            (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as thumbnail,
+            (SELECT json_agg(f.path) FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id) as gallery,
+            (SELECT json_agg(t.name) FROM gig_tags gt JOIN tags t ON gt.tag_id = t.tag_id WHERE gt.gig_id = g.gig_id) as skills,
+            (SELECT json_agg(json_build_object(
+                'tierName', split_part(gt.title, ' - ', 1),
+                'title', split_part(gt.title, ' - ', 2),
+                'description', gt.description,
+                'price', gt.rate_credits,
+                'daysOfDelivery', gt.delivery_days,
+                'revisions', gt.no_of_revisions_max
+            )) FROM gig_tiers gt WHERE gt.gig_id = g.gig_id) as tiers,
+            (SELECT json_agg(json_build_object('name', gm.name, 'description', gm.description)) FROM gig_milestones gm WHERE gm.gig_id = g.gig_id) as milestones
+        FROM gigs g
+        JOIN accounts a ON g.freelancer_account_id = a.account_id
+        JOIN gig_saves gs ON gs.gig_id = g.gig_id
+        WHERE gs.account_id = $1 AND g.status = 'active'
+        ORDER BY gs.created_at DESC
+    `;
+    const res = await pool.query(query, [accountId]);
+    return res.rows.map(row => {
+        const cleanArray = (arr) => (arr && arr[0] !== null) ? arr : [];
+        return {
+            id: row.id, postedBy: row.postedBy || 'Unknown', clientAvatar: row.clientAvatar || 'https://i.pravatar.cc/150',
+            title: row.title, description: row.description, category: row.category, slots: row.slots,
+            skills: cleanArray(row.skills), thumbnail: row.thumbnail || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b',
+            gallery: cleanArray(row.gallery).length ? cleanArray(row.gallery) : [row.thumbnail],
+            milestones: cleanArray(row.milestones), tiers: cleanArray(row.tiers),
+            postedAt: row.postedAt, isSaved: true
+        };
+    });
+}
+
+async function submitGigOrderRepository(accountId, gigId, orderData) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        // Insert into gig_requests
+        const requestQuery = `
+            INSERT INTO gig_requests (client_account_id, gig_tier_id, project_brief, status)
+            VALUES ($1, $2, $3, $4) RETURNING gig_request_id
+        `;
+        const requestValues = [accountId, orderData.tierId, orderData.projectBrief, 'Pending'];
+        const requestRes = await client.query(requestQuery, requestValues);
+        const requestId = requestRes.rows[0].gig_request_id;
+        
+        // Insert responses if any
+        if (orderData.responses && orderData.responses.length > 0) {
+            const responseQuery = `
+                INSERT INTO gig_responses (gig_request_id, gig_requirement_id, response)
+                VALUES ($1, $2, $3)
+            `;
+            for (const resp of orderData.responses) {
+                await client.query(responseQuery, [requestId, resp.requirementId, resp.response]);
+            }
+        }
+        
+        await client.query('COMMIT');
+        return requestId;
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error in submitGigOrderRepository:', err);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
+async function getIncomingOrdersRepository(accountId) {
+    const query = `
+        SELECT 
+            r.gig_request_id as id, r.status, r.created_at, r.project_brief,
+            g.gig_id, g.title as gig_title,
+            a.display_name as client_name, a.handle as client_handle,
+            (SELECT f.path FROM files f WHERE f.file_id = a.avatar_file_id LIMIT 1) as client_avatar,
+            gt.title as tier_title, gt.rate_credits as price, gt.delivery_days
+        FROM gig_requests r
+        JOIN gig_tiers gt ON r.gig_tier_id = gt.gig_tier_id
+        JOIN gigs g ON gt.gig_id = g.gig_id
+        JOIN accounts a ON r.client_account_id = a.account_id
+        WHERE g.freelancer_account_id = $1
+        ORDER BY r.created_at DESC
+    `;
+    const res = await pool.query(query, [accountId]);
+    return res.rows;
+}
+
+async function getMyOrdersRepository(accountId) {
+    const query = `
+        SELECT 
+            r.gig_request_id as id, r.status, r.created_at, r.project_brief,
+            g.gig_id, g.title as gig_title,
+            a.display_name as freelancer_name, a.handle as freelancer_handle,
+            (SELECT f.path FROM files f WHERE f.file_id = a.avatar_file_id LIMIT 1) as freelancer_avatar,
+            gt.title as tier_title, gt.rate_credits as price, gt.delivery_days
+        FROM gig_requests r
+        JOIN gig_tiers gt ON r.gig_tier_id = gt.gig_tier_id
+        JOIN gigs g ON gt.gig_id = g.gig_id
+        JOIN accounts a ON g.freelancer_account_id = a.account_id
+        WHERE r.client_account_id = $1
+        ORDER BY r.created_at DESC
+    `;
+    const res = await pool.query(query, [accountId]);
+    return res.rows;
+}
+
+async function getGigByIdRepository(gigId, accountId = null) {
+    const query = `
+        SELECT 
+            g.gig_id as id, g.title, g.description, g.category as category, g.no_of_concurrent_max as slots,
+            g.created_at as "postedAt", a.display_name as "postedBy",
+            g.freelancer_account_id,
+            (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
+            (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as thumbnail,
+            (SELECT json_agg(f.path) FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index > 0) as gallery,
+            (SELECT json_agg(t.name) FROM gig_tags gt JOIN tags t ON gt.tag_id = t.tag_id WHERE gt.gig_id = g.gig_id) as skills,
+            (SELECT json_agg(json_build_object(
+                'tierId', gt.gig_tier_id,
+                'tierName', split_part(gt.title, ' - ', 1),
+                'title', split_part(gt.title, ' - ', 2),
+                'description', gt.description,
+                'price', gt.rate_credits,
+                'daysOfDelivery', gt.delivery_days,
+                'revisions', gt.no_of_revisions_max
+            )) FROM gig_tiers gt WHERE gt.gig_id = g.gig_id) as tiers,
+            (SELECT json_agg(json_build_object('name', gm.name, 'description', gm.description)) FROM gig_milestones gm WHERE gm.gig_id = g.gig_id) as milestones,
+            (SELECT json_agg(json_build_object(
+                'id', gr.gig_requirement_id,
+                'type', gr.type,
+                'question', gr.question,
+                'isRequired', gr.is_required,
+                'options', (SELECT json_agg(grc.name) FROM gig_requirement_choices grc WHERE grc.gig_requirement_id = gr.gig_requirement_id)
+            )) FROM gig_requirements gr WHERE gr.gig_id = g.gig_id) as questionnaires,
+            CASE WHEN $2::uuid IS NOT NULL THEN (SELECT EXISTS(SELECT 1 FROM gig_saves gs WHERE gs.gig_id = g.gig_id AND gs.account_id = $2)) ELSE FALSE END as "isSaved",
+            CASE WHEN $2::uuid IS NOT NULL THEN g.freelancer_account_id = $2 ELSE FALSE END as "isOwnGig",
+            (SELECT COUNT(*) FROM gig_saves gs WHERE gs.gig_id = g.gig_id) as "savesCount",
+            (SELECT COUNT(*) FROM gig_requests gr JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id WHERE gt.gig_id = g.gig_id) as "ordersCount"
+        FROM gigs g
+        JOIN accounts a ON g.freelancer_account_id = a.account_id
+        WHERE g.gig_id = $1
+    `;
+    const res = await pool.query(query, [gigId, accountId]);
+    if (res.rows.length === 0) return null;
+    
+    const row = res.rows[0];
+    const cleanArray = (arr) => (arr && arr[0] !== null) ? arr : [];
+    return {
+        id: row.id, 
+        postedBy: row.postedBy || 'Unknown', 
+        clientAvatar: row.clientAvatar || 'https://i.pravatar.cc/150',
+        title: row.title, 
+        description: row.description, 
+        category: row.category, 
+        slots: row.slots,
+        skills: cleanArray(row.skills), 
+        thumbnail: row.thumbnail || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b',
+        gallery: cleanArray(row.gallery).length ? cleanArray(row.gallery) : [row.thumbnail],
+        milestones: cleanArray(row.milestones), 
+        tiers: cleanArray(row.tiers),
+        questionnaires: cleanArray(row.questionnaires),
+        postedAt: row.postedAt, 
+        isSaved: row.isSaved,
+        isOwnGig: row.isOwnGig,
+        savesCount: parseInt(row.savesCount || 0, 10),
+        ordersCount: parseInt(row.ordersCount || 0, 10),
+        freelancerAccountId: row.freelancer_account_id
+    };
+}
+
 module.exports = {
     createGigRepository,
-    getAllGigsRepository
+    getAllGigsRepository,
+    toggleGigSaveRepository,
+    getSavedGigsRepository,
+    submitGigOrderRepository,
+    getIncomingOrdersRepository,
+    getMyOrdersRepository,
+    getGigByIdRepository
 };
