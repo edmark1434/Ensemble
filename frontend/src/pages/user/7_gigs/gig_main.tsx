@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { Filter } from "lucide-react";
 import { Outlet, useNavigate, useLocation, useParams } from "react-router-dom";
 import UserHeader from "@/components/nav/user_header";
+import api from "@/lib/axios";
 
 // Modular Component Imports
 import GigSearchBar from "./gig_components/gig_searchbar";
@@ -35,8 +36,35 @@ const GigMain: React.FC = () => {
   const [selectedGig, setSelectedGig] = useState<Gig | null>(null);
 
   useEffect(() => {
-    // For now, load dummy data
-    setGigsList(sampleGigs);
+    const fetchGigs = async () => {
+      try {
+        const response = await api.get("/api/gigs");
+        if (response.data.success && response.data.data) {
+          const mappedGigs = response.data.data.map((g: any) => {
+            const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || '';
+            const mapUrl = (path: string) => {
+              if (!path) return undefined;
+              if (path.startsWith('http') || path.startsWith('/')) return path;
+              return `${cloudFrontUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+            };
+            
+            return {
+              ...g,
+              thumbnail: mapUrl(g.thumbnail) || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b',
+              clientAvatar: mapUrl(g.clientAvatar) || 'https://i.pravatar.cc/150',
+              gallery: (g.gallery || []).map((p: string) => mapUrl(p))
+            };
+          });
+          setGigsList(mappedGigs);
+        } else {
+          setGigsList(sampleGigs);
+        }
+      } catch (err) {
+        console.error("Error fetching gigs:", err);
+        setGigsList(sampleGigs);
+      }
+    };
+    fetchGigs();
   }, []);
 
   useEffect(() => {

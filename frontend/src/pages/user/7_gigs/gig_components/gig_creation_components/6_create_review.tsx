@@ -18,7 +18,7 @@ interface CreateReviewProps {
   additionalWorkRate: number;
   questionnaires: Questionnaire[];
   onBack: () => void;
-  onSubmit: () => void;
+  onSubmit: () => Promise<void> | void;
 }
 
 export const CreateReview: React.FC<CreateReviewProps> = ({
@@ -42,10 +42,11 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
 
   const handlePublish = async () => {
     setIsSubmitting(true);
-    // Simulate API Call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setIsSubmitting(false);
-    onSubmit();
+    try {
+      await onSubmit();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

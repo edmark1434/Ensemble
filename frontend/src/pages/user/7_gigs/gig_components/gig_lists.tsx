@@ -1,8 +1,9 @@
 import React from "react";
-import { Star, Clock, Bookmark, Users, Flag, Edit2, Wrench } from "lucide-react";
+import { Star, Clock, Bookmark, Users, Flag, Edit2, Wrench, ShoppingCart, Heart, Send } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import { formatDistanceToNow } from "date-fns";
 import type { Gig } from "../gig_datasets";
 
 export type ViewType = "grid" | "list";
@@ -23,6 +24,15 @@ export const GigList: React.FC<GigListProps> = ({
   baseRoute,
 }) => {
   const navigate = useNavigate();
+
+  const formatTimeAgo = (dateStr: string | undefined) => {
+    if (!dateStr) return "Just now";
+    try {
+      return formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+    } catch {
+      return "Just now";
+    }
+  };
 
   if (gigs.length === 0) {
     return (
@@ -101,8 +111,13 @@ export const GigList: React.FC<GigListProps> = ({
                       {gig.status || "Open"}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
-                      {gig.category}
+                      {gig.category || "General"}
                     </span>
+                    {gig.tiers && gig.tiers.length > 0 && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
+                        {gig.tiers.length} Tiers
+                      </span>
+                    )}
                   </div>
 
                   {/* Price & Title */}
@@ -117,25 +132,6 @@ export const GigList: React.FC<GigListProps> = ({
                   <p className="text-[12px] text-gray-500 dark:text-zinc-400 line-clamp-2 leading-relaxed mb-3">
                     {gig.description}
                   </p>
-                  
-                  {Array.isArray(gig.skills) && gig.skills.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                      <Wrench className="h-3 w-3 text-gray-400 dark:text-zinc-400 shrink-0 mr-0.5" />
-                      {gig.skills.slice(0, 3).map((skill) => (
-                        <span
-                          key={skill}
-                          className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-zinc-800/80 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 text-[10px] font-semibold"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                      {gig.skills.length > 3 && (
-                        <span className="px-2 py-0.5 rounded-md bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 text-[10px] font-medium">
-                          +{gig.skills.length - 3}
-                        </span>
-                      )}
-                    </div>
-                  )}
                 </div>
 
                 <div className="mt-2 pt-4 border-t border-gray-200 dark:border-white/5 flex flex-wrap items-center justify-between text-[10px] text-gray-500 dark:text-zinc-400 gap-3">
@@ -156,8 +152,8 @@ export const GigList: React.FC<GigListProps> = ({
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-[10px] font-medium text-gray-500 dark:text-zinc-400">
-                    <span className="bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/5 flex items-center gap-1">
-                      <Users className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> {gig.slots} Slots
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> {formatTimeAgo(gig.postedAt)}
                     </span>
                   </div>
                 </div>
@@ -214,8 +210,13 @@ export const GigList: React.FC<GigListProps> = ({
                       {gig.status || "Open"}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
-                      {gig.category}
+                      {gig.category || "General"}
                     </span>
+                    {gig.tiers && gig.tiers.length > 0 && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
+                        {gig.tiers.length} Tiers
+                      </span>
+                    )}
                   </div>
 
                   <div>
@@ -234,7 +235,7 @@ export const GigList: React.FC<GigListProps> = ({
                   </p>
                   
                   {Array.isArray(gig.skills) && gig.skills.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
                       <Wrench className="h-3 w-3 text-gray-400 dark:text-zinc-400 shrink-0 mr-0.5" />
                       {gig.skills.slice(0, 4).map((skill) => (
                         <span
@@ -251,6 +252,11 @@ export const GigList: React.FC<GigListProps> = ({
                       )}
                     </div>
                   )}
+
+                  <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-zinc-400 font-medium">
+                    <Clock className="h-3 w-3" />
+                    <span>Posted {formatTimeAgo(gig.postedAt)}</span>
+                  </div>
                 </div>
 
                 <div className="mt-2 pt-4 border-t border-gray-200 dark:border-white/5 flex flex-wrap items-center justify-between text-[10px] text-gray-500 dark:text-zinc-400 gap-3">
@@ -271,15 +277,18 @@ export const GigList: React.FC<GigListProps> = ({
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-2 text-[10px] font-medium text-gray-500 dark:text-zinc-400">
-                    <span className="bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/5 flex items-center gap-1">
-                      <Clock className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> {gig.firstDraftDelivery} Delivery
-                    </span>
-                    <span className="bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/5 flex items-center gap-1">
-                      <Users className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> {gig.tiers?.length || 1} Tiers
-                    </span>
+                  <div className="flex flex-wrap items-center gap-2 text-[10px] font-medium text-gray-500 dark:text-zinc-400">
                     <span className="bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/5 flex items-center gap-1">
                       <Users className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> {gig.slots} Slots
+                    </span>
+                    <span className="bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/5 flex items-center gap-1">
+                      <ShoppingCart className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> 0 Orders
+                    </span>
+                    <span className="bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/5 flex items-center gap-1">
+                      <Heart className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> 0 Saves
+                    </span>
+                    <span className="bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/5 flex items-center gap-1">
+                      <Send className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> {gig.firstDraftDelivery || "Fast"} Delivery
                     </span>
                   </div>
                 </div>

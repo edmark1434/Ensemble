@@ -39,6 +39,7 @@ interface CreateCoreInfoProps {
   setCategory: (val: string) => void;
   previewUrl: string | null;
   setPreviewUrl: (val: string | null) => void;
+  setThumbnailFile?: (file: File | null) => void;
   isDragging: boolean;
   setIsDragging: (val: boolean) => void;
   errors: Record<string, string>;
@@ -130,6 +131,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
   setCategory,
   previewUrl,
   setPreviewUrl,
+  setThumbnailFile,
   isDragging,
   setIsDragging,
   errors,
@@ -181,6 +183,7 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
     }
     const localUrl = URL.createObjectURL(file);
     setPreviewUrl(localUrl);
+    if (setThumbnailFile) setThumbnailFile(file);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -341,20 +344,32 @@ export const CreateCoreInfo: React.FC<CreateCoreInfoProps> = ({
             )}
           </div>
         ) : (
-          <textarea
-            ref={descriptionRef}
-            placeholder="Describe what you are offering. Markdown is supported (e.g. **bold**, *italic*, - list)..."
-            value={description}
-            onChange={(e) => {
-              setDescription(e.target.value);
-              clearError("description");
-            }}
-            className={`w-full min-h-[160px] rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3.5 py-3 text-sm text-gray-900 dark:text-white transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 focus:outline-none resize-y custom-scrollbar ${
-              errors.description ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20 focus:border-blue-500/50"
-            }`}
-          />
+          <>
+            <textarea
+              ref={descriptionRef}
+              maxLength={2000}
+              placeholder="Describe what you are offering. Markdown is supported (e.g. **bold**, *italic*, - list)..."
+              value={description}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                clearError("description");
+              }}
+              className={`w-full min-h-[160px] rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3.5 py-3 text-sm text-gray-900 dark:text-white transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500 focus:outline-none resize-y custom-scrollbar ${
+                errors.description ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20 focus:border-blue-500/50"
+              }`}
+            />
+            <div className="flex justify-between items-center mt-1">
+              {errors.description ? (
+                <p className="text-[11px] text-red-400">{errors.description}</p>
+              ) : (
+                <span />
+              )}
+              <span className={`text-[10px] font-medium ${description.length >= 2000 ? "text-red-500" : "text-gray-500"}`}>
+                {description.length} / 2000
+              </span>
+            </div>
+          </>
         )}
-        {errors.description && <p className="text-[11px] text-red-400 mt-1">{errors.description}</p>}
       </div>
 
       <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-white/5">

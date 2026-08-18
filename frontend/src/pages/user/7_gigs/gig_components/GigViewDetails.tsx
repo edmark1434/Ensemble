@@ -185,6 +185,59 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 </div>
               )}
 
+              {/* Terms of Service */}
+              {selectedGig.termsOfService && (
+                <div className="space-y-2">
+                  <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400">
+                    Terms of Service
+                  </h4>
+                  <div className="bg-white/[0.01] border border-gray-100 dark:border-white/5 p-3.5 rounded-xl text-[13px] text-gray-600 dark:text-zinc-300 leading-relaxed whitespace-pre-line">
+                    {selectedGig.termsOfService}
+                  </div>
+                </div>
+              )}
+
+              {/* Questionnaire */}
+              {selectedGig.questionnaires && selectedGig.questionnaires.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400">
+                    Requirements / Questionnaire
+                  </h4>
+                  <div className="space-y-3 bg-white/[0.01] border border-gray-100 dark:border-white/5 p-3.5 rounded-xl">
+                    {selectedGig.questionnaires.map((q, idx) => (
+                      <div key={idx} className="pb-3 border-b border-gray-100 dark:border-white/5 last:border-0 last:pb-0">
+                        <div className="flex items-start gap-2">
+                          <span className="text-blue-500 font-bold text-[13px]">{idx + 1}.</span>
+                          <div>
+                            <h4 className="font-bold text-gray-900 dark:text-white text-[13px]">{q.question}</h4>
+                            <div className="flex gap-2 mt-1.5">
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/5 text-gray-500 font-medium">
+                                {q.type === 'file-upload' ? 'File Upload' : q.type === 'multiple-choice' ? 'Multiple Choice' : 'Text Answer'}
+                              </span>
+                              {q.required && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 font-medium">
+                                  Required
+                                </span>
+                              )}
+                            </div>
+                            {q.type === 'multiple-choice' && q.options && (
+                              <ul className="mt-2.5 space-y-1.5 ml-1">
+                                {q.options.map((opt, i) => (
+                                  <li key={i} className="text-[12px] text-gray-600 dark:text-zinc-400 flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-zinc-600 shrink-0" />
+                                    {opt}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Milestones */}
               {selectedGig.milestones && selectedGig.milestones.length > 0 && (
                 <div className="space-y-2">

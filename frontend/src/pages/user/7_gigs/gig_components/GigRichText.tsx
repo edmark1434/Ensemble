@@ -155,6 +155,55 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
             </section>
           )}
 
+          {/* TERMS OF SERVICE */}
+          {gig.termsOfService && (
+            <section>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Terms of Service</h3>
+              <div className="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed whitespace-pre-line bg-gray-50 dark:bg-white/5 p-4 rounded-xl border border-gray-200 dark:border-white/10">
+                {gig.termsOfService}
+              </div>
+            </section>
+          )}
+
+          {/* QUESTIONNAIRES */}
+          {gig.questionnaires && gig.questionnaires.length > 0 && (
+            <section>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Requirements / Questionnaire</h3>
+              <div className="space-y-4 bg-gray-50 dark:bg-white/5 p-4 rounded-xl border border-gray-200 dark:border-white/10">
+                {gig.questionnaires.map((q, idx) => (
+                  <div key={idx} className="pb-4 border-b border-gray-200 dark:border-white/10 last:border-0 last:pb-0">
+                    <div className="flex items-start gap-3">
+                      <span className="text-blue-500 font-bold text-sm mt-0.5">{idx + 1}.</span>
+                      <div>
+                        <h4 className="font-bold text-gray-900 dark:text-white text-sm">{q.question}</h4>
+                        <div className="flex gap-2 mt-2">
+                          <span className="text-xs px-2 py-1 rounded bg-white dark:bg-dark-base border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 font-medium">
+                            {q.type === 'file-upload' ? 'File Upload' : q.type === 'multiple-choice' ? 'Multiple Choice' : 'Text Answer'}
+                          </span>
+                          {q.required && (
+                            <span className="text-xs px-2 py-1 rounded bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 font-medium">
+                              Required
+                            </span>
+                          )}
+                        </div>
+                        {q.type === 'multiple-choice' && q.options && (
+                          <ul className="mt-3 space-y-2 ml-1">
+                            {q.options.map((opt, i) => (
+                              <li key={i} className="text-sm text-gray-600 dark:text-zinc-400 flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-zinc-500 shrink-0" />
+                                {opt}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* TIERS TABS (DRAWER ONLY) */}
           {!isPage && (
           <section>

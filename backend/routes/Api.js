@@ -25,6 +25,7 @@ const dashboardRoutes = require('./Dashboard');
 const cashoutRoutes = require('./Cashout');
 const onboardingRoutes = require('./Onboarding');
 const assetRoutes = require('./Asset');
+const gigRoutes = require('./Gig');
 const requireCompletedOnboarding = require('../middleware/RequireCompletedOnboarding');
 const checkSession = require('../middleware/CheckSession');
 const { issueCsrfToken } = require('../middleware/CsrfProtection');
@@ -59,6 +60,7 @@ router.use('/teams', teamRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/cashouts', cashoutRoutes);
 router.use('/assets', assetRoutes);
+router.use('/gigs', gigRoutes);
 
 router.get('/countries', getAllCountriesController);
 router.get('/places', getAllPlacesController);

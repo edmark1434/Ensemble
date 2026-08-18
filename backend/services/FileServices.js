@@ -58,6 +58,8 @@ const UPLOAD_POLICIES = {
     jobs: { types: [...IMAGE_TYPES, 'application/pdf'], imageLimit: 10 * MB, pdfLimit: 25 * MB },
     assets: { types: [...IMAGE_TYPES, 'video/mp4', ...AUDIO_TYPES], imageLimit: 25 * MB, videoLimit: 100 * MB, audioLimit: 50 * MB },
     'asset-originals': { types: [...IMAGE_TYPES, 'video/mp4', ...AUDIO_TYPES], imageLimit: 25 * MB, videoLimit: 100 * MB, audioLimit: 50 * MB },
+    gig_thumbnails: { types: IMAGE_TYPES, imageLimit: 5 * MB },
+    gig_galleries: { types: [...IMAGE_TYPES, 'video/mp4'], imageLimit: 20 * MB, videoLimit: 25 * MB },
 };
 
 function getUploadPolicy(folder, contentType) {
