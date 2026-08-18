@@ -740,6 +740,7 @@ async function seedMarketplaceCatalog(ctx, projects) {
   await pool.query(`DELETE FROM market_media_assets`);
   await pool.query(`DELETE FROM market_asset_tags`);
   await pool.query(`DELETE FROM market_assets`);
+  await pool.query(`DELETE FROM media_asset_bundle_files`);
   await pool.query(`DELETE FROM media_assets`);
 
   const mediaIds = [];
@@ -751,17 +752,22 @@ async function seedMarketplaceCatalog(ctx, projects) {
     const res = await pool.query(
       `INSERT INTO media_assets (
          name, type, width, height, duration_seconds, is_marketed,
-         owner_user_id, original_file_id, proxy_file_id, thumbnail_file_id
-       ) VALUES ($1,'video',1920,1080,$2,true,$3,$4,$5,$6)
+         owner_user_id, proxy_file_id, thumbnail_file_id
+       ) VALUES ($1,'video',1920,1080,$2,true,$3,$4,$5)
        RETURNING media_asset_id`,
       [
         cap(`Demo Clip ${i + 1}`, 50),
         15 + i * 5,
         owner.user_id,
-        fileA.file_id,
         fileB.file_id,
         fileC.file_id,
       ]
+    );
+    await pool.query(
+      `INSERT INTO media_asset_bundle_files
+         (media_asset_id, file_id, preview_file_id, position)
+       VALUES ($1, $2, $3, 0)`,
+      [res.rows[0].media_asset_id, fileA.file_id, fileB.file_id]
     );
     mediaIds.push(res.rows[0].media_asset_id);
   }

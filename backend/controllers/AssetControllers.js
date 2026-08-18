@@ -14,6 +14,12 @@ const {
   createReplyServices,
   updateReplyServices,
   deleteReplyServices,
+  setAssetLikeServices,
+  setAssetSaveServices,
+  listAssetReviewsServices,
+  createAssetReviewServices,
+  updateAssetReviewServices,
+  deleteAssetReviewServices,
 } = require('../services/AssetServices');
 
 function handleAssetError(res, error) {
@@ -63,7 +69,11 @@ async function getAssetDownloadController(req, res) {
     res.set('Cache-Control', 'no-store');
     return res.json({
       success: true,
-      ...(await getAssetDownloadServices(req.params.assetId, req.user.account_id)),
+      ...(await getAssetDownloadServices(
+        req.params.assetId,
+        req.user.account_id,
+        req.params.bundleFileId || null
+      )),
     });
   } catch (error) { return handleAssetError(res, error); }
 }
@@ -73,7 +83,11 @@ async function getAssetOriginalPreviewController(req, res) {
     res.set('Cache-Control', 'no-store');
     return res.json({
       success: true,
-      ...(await getAssetOriginalPreviewServices(req.params.assetId, req.user.account_id)),
+      ...(await getAssetOriginalPreviewServices(
+        req.params.assetId,
+        req.user.account_id,
+        req.params.bundleFileId || null
+      )),
     });
   } catch (error) { return handleAssetError(res, error); }
 }
@@ -151,6 +165,74 @@ async function deleteReplyController(req, res) {
   } catch (error) { return handleAssetError(res, error); }
 }
 
+async function likeAssetController(req, res) {
+  try {
+    return res.json({ success: true, ...(await setAssetLikeServices(
+      req.params.assetId, req.user.account_id, true
+    )) });
+  } catch (error) { return handleAssetError(res, error); }
+}
+
+async function unlikeAssetController(req, res) {
+  try {
+    return res.json({ success: true, ...(await setAssetLikeServices(
+      req.params.assetId, req.user.account_id, false
+    )) });
+  } catch (error) { return handleAssetError(res, error); }
+}
+
+async function saveAssetController(req, res) {
+  try {
+    return res.json({ success: true, ...(await setAssetSaveServices(
+      req.params.assetId, req.user.account_id, true
+    )) });
+  } catch (error) { return handleAssetError(res, error); }
+}
+
+async function unsaveAssetController(req, res) {
+  try {
+    return res.json({ success: true, ...(await setAssetSaveServices(
+      req.params.assetId, req.user.account_id, false
+    )) });
+  } catch (error) { return handleAssetError(res, error); }
+}
+
+async function listAssetReviewsController(req, res) {
+  try {
+    return res.json({
+      success: true,
+      reviews: await listAssetReviewsServices(req.params.assetId, req.user.account_id),
+    });
+  } catch (error) { return handleAssetError(res, error); }
+}
+
+async function createAssetReviewController(req, res) {
+  try {
+    const review = await createAssetReviewServices(
+      req.params.assetId, req.user.account_id, req.body
+    );
+    return res.status(201).json({ success: true, review });
+  } catch (error) { return handleAssetError(res, error); }
+}
+
+async function updateAssetReviewController(req, res) {
+  try {
+    const review = await updateAssetReviewServices(
+      req.params.assetId, req.params.reviewId, req.user.account_id, req.body
+    );
+    return res.json({ success: true, review });
+  } catch (error) { return handleAssetError(res, error); }
+}
+
+async function deleteAssetReviewController(req, res) {
+  try {
+    await deleteAssetReviewServices(
+      req.params.assetId, req.params.reviewId, req.user.account_id
+    );
+    return res.json({ success: true });
+  } catch (error) { return handleAssetError(res, error); }
+}
+
 module.exports = {
   listAssetsController,
   getAssetController,
@@ -167,4 +249,12 @@ module.exports = {
   createReplyController,
   updateReplyController,
   deleteReplyController,
+  likeAssetController,
+  unlikeAssetController,
+  saveAssetController,
+  unsaveAssetController,
+  listAssetReviewsController,
+  createAssetReviewController,
+  updateAssetReviewController,
+  deleteAssetReviewController,
 };

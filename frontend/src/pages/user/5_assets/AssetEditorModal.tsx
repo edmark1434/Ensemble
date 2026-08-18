@@ -24,6 +24,8 @@ const LIMITS: Record<AssetType, number> = {
   video: 100 * 1024 * 1024,
   audio: 50 * 1024 * 1024,
 };
+const MAX_BUNDLE_FILES = 20;
+const MAX_BUNDLE_BYTES = 500 * 1024 * 1024;
 
 function cleanTag(value: string) {
   return value.trim().replace(/^#+/, "").trim().replace(/\s+/g, " ");
@@ -91,9 +93,9 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
   const [description, setDescription] = useState("");
   const [priceCredits, setPriceCredits] = useState("0");
   const [status, setStatus] = useState<AssetStatus>("published");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
-  const [originalPreviewUrl, setOriginalPreviewUrl] = useState("");
+  const [originalPreviewUrls, setOriginalPreviewUrls] = useState<string[]>([]);
   const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
@@ -106,7 +108,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
     setDescription(asset?.description || "");
     setPriceCredits(String(asset?.price_credits ?? 0));
     setStatus(asset?.status || "published");
-    setFile(null);
+    setFiles([]);
     setThumbnailFile(null);
     setTags(asset?.tags || []);
     setTagInput("");
@@ -123,14 +125,14 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
   }, [onClose, open, saving]);
 
   useEffect(() => {
-    if (!open || !file) {
-      setOriginalPreviewUrl("");
+    if (!open || files.length === 0) {
+      setOriginalPreviewUrls([]);
       return;
     }
-    const previewUrl = URL.createObjectURL(file);
-    setOriginalPreviewUrl(previewUrl);
-    return () => URL.revokeObjectURL(previewUrl);
-  }, [file, open]);
+    const previewUrls = files.map((file) => URL.createObjectURL(file));
+    setOriginalPreviewUrls(previewUrls);
+    return () => previewUrls.forEach((previewUrl) => URL.revokeObjectURL(previewUrl));
+  }, [files, open]);
 
   useEffect(() => {
     if (!open || !thumbnailFile) {
@@ -144,23 +146,37 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
 
   if (!open) return null;
 
-  const type = file ? MIME_TO_TYPE[file.type] : undefined;
+  const primaryFile = files[0];
+  const type = primaryFile ? MIME_TO_TYPE[primaryFile.type] : undefined;
 
-  const selectFile = (selected: File | null) => {
+  const addFiles = (selected: File[]) => {
     setError("");
-    if (!selected) return setFile(null);
-    const selectedType = MIME_TO_TYPE[selected.type];
-    if (!selectedType) {
-      setFile(null);
-      setError("Choose a supported image, MP4 video, MP3, WAV, or OGG audio file.");
-      return;
+    if (selected.length === 0) return;
+    const combinedFiles = [...files, ...selected];
+    if (combinedFiles.length > MAX_BUNDLE_FILES) {
+      return setError(`Choose no more than ${MAX_BUNDLE_FILES} original files.`);
     }
-    if (selected.size > LIMITS[selectedType]) {
-      setFile(null);
-      setError(`${selectedType[0].toUpperCase()}${selectedType.slice(1)} files must be ${LIMITS[selectedType] / 1024 / 1024}MB or smaller.`);
-      return;
+    const seen = new Set<string>();
+    let totalBytes = 0;
+    for (const selectedFile of combinedFiles) {
+      const selectedType = MIME_TO_TYPE[selectedFile.type];
+      const identity = `${selectedFile.name}:${selectedFile.size}:${selectedFile.lastModified}`;
+      if (!selectedType) {
+        return setError("Choose only supported images, MP4 videos, MP3, WAV, or OGG audio files.");
+      }
+      if (seen.has(identity)) {
+        return setError("The same original file cannot be selected more than once.");
+      }
+      if (selectedFile.size > LIMITS[selectedType]) {
+        return setError(`${selectedFile.name} exceeds the ${LIMITS[selectedType] / 1024 / 1024}MB ${selectedType} limit.`);
+      }
+      seen.add(identity);
+      totalBytes += selectedFile.size;
     }
-    setFile(selected);
+    if (totalBytes > MAX_BUNDLE_BYTES) {
+      return setError("The combined original files must be 500MB or smaller.");
+    }
+    setFiles(combinedFiles);
   };
 
   const selectThumbnail = (selected: File | null) => {
@@ -221,7 +237,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
     if (!cleanName || cleanName.length > 50) return setError("Enter an asset title up to 50 characters.");
     if (!cleanDescription || cleanDescription.length > 5000) return setError("Enter an asset description up to 5,000 characters.");
     if (!Number.isInteger(price) || price < 0 || price > 100000000) return setError("Enter a valid whole-number price.");
-    if (!asset && (!file || !type)) return setError("Choose the original media file to upload.");
+    if (!asset && (!primaryFile || !type || files.length === 0)) return setError("Choose at least one original file to upload.");
     if (!asset && !thumbnailFile) return setError("Choose a thumbnail image.");
 
     setSaving(true);
@@ -235,15 +251,16 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
           tags: submittedTags,
         });
         onSaved(response.data.asset);
-      } else if (file && type && thumbnailFile) {
-        const metadata = await inspectMedia(file, type);
-        const [proxyFile, preparedThumbnail] = await Promise.all([
-          createAssetProxy(file, type),
+      } else if (primaryFile && type && thumbnailFile) {
+        const metadata = await inspectMedia(primaryFile, type);
+        const [previewFiles, preparedThumbnail] = await Promise.all([
+          Promise.all(files.map((originalFile) =>
+            createAssetProxy(originalFile, MIME_TO_TYPE[originalFile.type]))),
           prepareAssetThumbnail(thumbnailFile),
         ]);
-        const [originalUpload, proxyUpload, thumbnailUpload] = await Promise.all([
-          uploadFileWithIntent(file, "asset-originals"),
-          uploadFileWithIntent(proxyFile, "assets"),
+        const [originalUploads, previewUploads, thumbnailUpload] = await Promise.all([
+          Promise.all(files.map((originalFile) => uploadFileWithIntent(originalFile, "asset-originals"))),
+          Promise.all(previewFiles.map((previewFile) => uploadFileWithIntent(previewFile, "assets"))),
           uploadFileWithIntent(preparedThumbnail, "assets"),
         ]);
         const response = await api.post<{ asset: AssetRecord }>("/api/assets", {
@@ -252,8 +269,8 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
           priceCredits: price,
           status,
           tags: submittedTags,
-          originalFileId: originalUpload.fileId,
-          proxyFileId: proxyUpload.fileId,
+          originalFileIds: originalUploads.map((upload) => upload.fileId),
+          previewFileIds: previewUploads.map((upload) => upload.fileId),
           thumbnailFileId: thumbnailUpload.fileId,
           type,
           ...metadata,
@@ -275,7 +292,7 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
         <div className="sticky top-0 z-10 flex items-start justify-between border-b border-gray-200 bg-white px-5 py-4 dark:border-white/10 dark:bg-[#10131e]">
           <div>
             <h2 id="asset-editor-title" className="text-lg font-bold text-gray-900 dark:text-white">{asset ? "Edit asset" : "Upload asset"}</h2>
-            <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{asset ? "Update the listing details visible in the library." : "Share an image, video, or audio file with the community."}</p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{asset ? "Update the listing details visible in the library." : "Create a package with one or multiple protected original files."}</p>
           </div>
           <button type="button" onClick={onClose} disabled={saving} className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50 dark:hover:bg-white/5 dark:hover:text-white" aria-label="Close">
             <X className="h-5 w-5" />
@@ -287,19 +304,19 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
             <div className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-800 dark:text-zinc-200">Original file <span className="text-red-500">*</span></label>
-                <input ref={originalInputRef} type="file" className="hidden" accept="image/jpeg,image/png,image/gif,image/webp,image/avif,video/mp4,audio/mpeg,audio/wav,audio/x-wav,audio/ogg" onChange={(event) => selectFile(event.target.files?.[0] || null)} />
+                <label className="mb-2 block text-sm font-semibold text-gray-800 dark:text-zinc-200">Original files <span className="text-red-500">*</span></label>
+                <input ref={originalInputRef} type="file" multiple className="hidden" accept="image/jpeg,image/png,image/gif,image/webp,image/avif,video/mp4,audio/mpeg,audio/wav,audio/x-wav,audio/ogg" onChange={(event) => { addFiles(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} />
                 <button type="button" onClick={() => originalInputRef.current?.click()} className="flex min-h-28 w-full min-w-0 items-center gap-3 overflow-hidden rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-left transition hover:border-blue-400 hover:bg-blue-50/50 dark:border-white/15 dark:bg-white/[0.025] dark:hover:border-blue-500/60 dark:hover:bg-blue-500/5">
-                  {file && type === "image" && originalPreviewUrl ? (
-                    <img src={originalPreviewUrl} alt="Selected original" draggable={false} className="h-16 w-16 shrink-0 rounded-lg object-cover" />
+                  {primaryFile && type === "image" && originalPreviewUrls[0] ? (
+                    <img src={originalPreviewUrls[0]} alt="Selected primary original" draggable={false} className="h-16 w-16 shrink-0 rounded-lg object-cover" />
                   ) : (
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600/10 text-blue-500 dark:text-blue-300">
-                      {file ? <FileIcon className="h-5 w-5" /> : <Upload className="h-5 w-5" />}
+                      {primaryFile ? <FileIcon className="h-5 w-5" /> : <Upload className="h-5 w-5" />}
                     </span>
                   )}
                   <span className="min-w-0">
-                    <span className="block text-sm font-semibold text-gray-900 dark:text-white">{file ? `${type?.[0].toUpperCase()}${type?.slice(1)} selected` : "Choose original file"}</span>
-                    <span className="mt-0.5 block text-xs leading-5 text-gray-500 dark:text-zinc-500">{file ? "Click to replace the protected original" : "Stored as the protected, full-quality original"}</span>
+                    <span className="block text-sm font-semibold text-gray-900 dark:text-white">{files.length ? `${files.length} original ${files.length === 1 ? "file" : "files"} selected` : "Choose original files"}</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-gray-500 dark:text-zinc-500">{files.length ? "Click to add more files" : "Select 1–20 files, up to 500MB combined"}</span>
                   </span>
                 </button>
               </div>
@@ -323,28 +340,28 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
               </div>
               </div>
 
-              {(originalPreviewUrl || thumbnailPreviewUrl) && (
+              {(originalPreviewUrls.length > 0 || thumbnailPreviewUrl) && (
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {originalPreviewUrl && (
-                    <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-dark-base">
-                      <div className="border-b border-gray-200 px-4 py-2.5 dark:border-white/10"><p className="text-xs font-semibold text-gray-700 dark:text-zinc-300">Original file preview</p></div>
-                      <div className="flex min-h-48 items-center justify-center overflow-hidden p-3">
-                        {type === "image" ? (
-                          <img src={originalPreviewUrl} alt="Original asset preview" draggable={false} className="max-h-72 w-full rounded-lg object-contain" />
-                        ) : type === "video" ? (
-                          <video src={originalPreviewUrl} controls preload="metadata" className="max-h-72 w-full rounded-lg bg-black" />
-                        ) : (
-                          <div className="flex w-full flex-col items-center gap-4 px-2 text-blue-500 dark:text-blue-300">
-                            <FileAudio className="h-10 w-10" />
-                            <audio src={originalPreviewUrl} controls preload="metadata" className="w-full" />
-                          </div>
-                        )}
+                  {originalPreviewUrls.length > 0 && (
+                    <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-[#080a12]">
+                      <div className="border-b border-gray-200 px-4 py-2.5 dark:border-white/10"><p className="text-xs font-semibold text-gray-700 dark:text-zinc-300">Package originals ({files.length})</p></div>
+                      <div className="max-h-80 space-y-2 overflow-y-auto p-3">
+                        {files.map((selectedFile, index) => {
+                          const selectedType = MIME_TO_TYPE[selectedFile.type];
+                          return (
+                            <div key={`${selectedFile.name}-${selectedFile.size}-${selectedFile.lastModified}`} className="flex min-w-0 items-center gap-3 rounded-lg border border-gray-200 bg-white p-2 dark:border-white/10 dark:bg-white/[0.025]">
+                              {selectedType === "image" ? <img src={originalPreviewUrls[index]} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" /> : selectedType === "video" ? <video src={originalPreviewUrls[index]} muted preload="metadata" className="h-12 w-12 shrink-0 rounded-md bg-black object-cover" /> : <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-blue-500/10 text-blue-500"><FileAudio className="h-5 w-5" /></span>}
+                              <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold" title={selectedFile.name}>{selectedFile.name}</p><p className="mt-1 text-[10px] text-gray-500 dark:text-zinc-500">{selectedType} · {(selectedFile.size / 1024 / 1024).toFixed(1)}MB{index === 0 ? " · primary preview" : ""}</p></div>
+                              <button type="button" onClick={() => setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))} disabled={saving} className="rounded-md p-1.5 text-gray-500 transition hover:bg-red-500/10 hover:text-red-500" aria-label={`Remove ${selectedFile.name}`}><X className="h-3.5 w-3.5" /></button>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
 
                   {thumbnailPreviewUrl && (
-                    <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-dark-base">
+                    <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-white/10 dark:bg-[#080a12]">
                       <div className="border-b border-gray-200 px-4 py-2.5 dark:border-white/10"><p className="text-xs font-semibold text-gray-700 dark:text-zinc-300">Listing thumbnail preview</p></div>
                       <div className="flex min-h-48 items-center justify-center overflow-hidden p-3">
                         <img src={thumbnailPreviewUrl} alt="Selected asset thumbnail preview" draggable={false} className="max-h-72 w-full rounded-lg object-contain" />
