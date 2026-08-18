@@ -84,7 +84,24 @@ export function setupMirrorOutFromStateManager(
   localOrigin: string,
   syncGuard: SyncGuard,
 ): () => void {
+  // stateManager.subscribe is backed by an RxJS BehaviorSubject, which
+  // replays the CURRENT value synchronously to a new subscriber before any
+  // real change has happened. At the point use-collab-doc.ts wires this up,
+  // stateManager still holds its pre-hydration default (empty) state — the
+  // real snapshot hasn't been written into it yet, that happens later in
+  // the same effect. Without this guard, that synchronous replay fires
+  // sync() unguarded (isApplyingRemote is still false here too) and
+  // reconciles the doc down to stateManager's stale empty state, wiping
+  // whatever was just applied from the backend snapshot before isBlank is
+  // even computed. Skip exactly one emission — the replay — then behave
+  // normally for every real change after it.
+  let skippedInitialReplay = false;
+
   const sync = () => {
+    if (!skippedInitialReplay) {
+      skippedInitialReplay = true;
+      return;
+    }
     if (syncGuard.isApplyingRemote) return;
     const state = stateManager.getState();
     schema.doc.transact(() => {
