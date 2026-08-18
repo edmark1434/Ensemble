@@ -7,10 +7,10 @@ import type { GigMainContext } from "../gig_main";
 import { GigList } from "../gig_components/gig_lists";
 
 const GigServicesPage: React.FC = () => {
-  const { filteredGigs, viewType, toggleSaveGig } = useOutletContext<GigMainContext>();
+  const { filteredGigs, viewType, loading, toggleSaveGig } = useOutletContext<GigMainContext>();
   const { id } = useParams();
 
-  if (filteredGigs.length === 0) {
+  if (!loading && filteredGigs.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-4">
         <div className="rounded-full bg-gray-100 dark:bg-white/5 p-6 mb-6 ring-1 ring-gray-200 dark:ring-white/10">
@@ -31,6 +31,7 @@ const GigServicesPage: React.FC = () => {
       viewType={viewType}
       onToggleSave={toggleSaveGig}
       baseRoute="/gigs/services"
+      loading={loading}
     />
   );
 };

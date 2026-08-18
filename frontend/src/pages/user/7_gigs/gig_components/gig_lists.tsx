@@ -12,14 +12,62 @@ interface GigListProps {
   gigs: Gig[];
   activeGigId?: string;
   viewType?: ViewType;
+  loading?: boolean;
   onToggleSave: (e: React.MouseEvent, gigId: string) => void;
   baseRoute: string;
 }
+
+export const GigCardSkeleton: React.FC<{ viewType?: ViewType }> = ({ viewType = "grid" }) => {
+  if (viewType === "grid") {
+    return (
+      <div className="flex flex-col rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-4 animate-pulse space-y-4">
+        <div className="h-44 w-full rounded-xl bg-gray-100 dark:bg-white/5" />
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <div className="h-4 w-12 rounded bg-gray-200 dark:bg-white/10" />
+            <div className="h-4 w-16 rounded bg-gray-100 dark:bg-white/5" />
+          </div>
+          <div className="h-5 w-3/4 rounded bg-gray-200 dark:bg-white/10" />
+          <div className="h-4 w-1/2 rounded bg-gray-100 dark:bg-white/5" />
+        </div>
+        <div className="pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between">
+          <div className="h-4 w-20 rounded bg-gray-100 dark:bg-white/5" />
+          <div className="h-4 w-16 rounded bg-gray-100 dark:bg-white/5" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col md:flex-row gap-6 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-5 animate-pulse">
+      <div className="hidden md:block h-32 w-full md:w-56 shrink-0 rounded-xl bg-gray-100 dark:bg-white/5" />
+      <div className="flex-1 flex flex-col justify-between py-1">
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <div className="h-4 w-12 rounded bg-gray-200 dark:bg-white/10" />
+            <div className="h-4 w-16 rounded bg-gray-200 dark:bg-white/10" />
+            <div className="h-4 w-14 rounded bg-gray-100 dark:bg-white/5" />
+          </div>
+          <div className="h-6 w-3/4 rounded bg-gray-200 dark:bg-white/10" />
+          <div className="space-y-1.5">
+            <div className="h-4 w-full rounded bg-gray-100 dark:bg-white/5" />
+            <div className="h-4 w-5/6 rounded bg-gray-100 dark:bg-white/5" />
+          </div>
+        </div>
+        <div className="flex items-center gap-4 pt-3 border-t border-gray-100 dark:border-white/5 mt-3">
+          <div className="h-6 w-6 rounded-full bg-gray-200 dark:bg-white/10" />
+          <div className="h-4 w-24 rounded bg-gray-100 dark:bg-white/5" />
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const GigList: React.FC<GigListProps> = ({
   gigs,
   activeGigId,
   viewType = "grid",
+  loading,
   onToggleSave,
   baseRoute,
 }) => {
@@ -33,6 +81,16 @@ export const GigList: React.FC<GigListProps> = ({
       return "Just now";
     }
   };
+
+  if (loading) {
+    return (
+      <div className={viewType === "grid" ? "grid grid-cols-2 xl:grid-cols-3 gap-4" : "flex flex-col gap-4"}>
+        {[1, 2, 3, 4, 5, 6].map((n) => (
+          <GigCardSkeleton key={n} viewType={viewType} />
+        ))}
+      </div>
+    );
+  }
 
   if (gigs.length === 0) {
     return (

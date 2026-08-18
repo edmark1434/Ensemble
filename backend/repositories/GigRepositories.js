@@ -20,9 +20,9 @@ async function createGigRepository(gigData) {
         // 1. Insert base gig
         const gigQuery = `
             INSERT INTO gigs (
-                freelancer_account_id, title, description, payment_type, no_of_concurrent_max, status, terms_id, first_draft_delivery, additional_work_rate, category
+                freelancer_account_id, title, description, payment_type, no_of_concurrent_max, status, category
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+                $1, $2, $3, $4, $5, $6, $7
             ) RETURNING gig_id;
         `;
         const gigValues = [
@@ -32,9 +32,6 @@ async function createGigRepository(gigData) {
             'milestone', 
             gigData.slots || 1, 
             'active',
-            termsId,
-            gigData.firstDraftDelivery || '',
-            gigData.additionalWorkRate || 50,
             gigData.category || 'Other'
         ];
         const res = await client.query(gigQuery, gigValues);
@@ -77,14 +74,26 @@ async function createGigRepository(gigData) {
 
         // 4. Insert Skills (Tags)
         if (gigData.skills && gigData.skills.length > 0) {
-            const tagQuery = `
+            const gigTagQuery = `
                 INSERT INTO gig_tags (gig_id, tag_id)
                 VALUES ($1, $2)
+                ON CONFLICT DO NOTHING
             `;
-            for (const tagId of gigData.skills) {
-                // Ignore if tagId is not a valid UUID format (if frontend sends a mock string)
-                if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(tagId)) {
-                    await client.query(tagQuery, [gigId, tagId]);
+            for (const skill of gigData.skills) {
+                if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(skill)) {
+                    await client.query(gigTagQuery, [gigId, skill]);
+                } else {
+                    let tagId = null;
+                    const exist = await client.query(`SELECT tag_id FROM tags WHERE name = $1 LIMIT 1`, [skill]);
+                    if (exist.rows.length > 0) {
+                        tagId = exist.rows[0].tag_id;
+                    } else {
+                        const newTag = await client.query(`INSERT INTO tags (name) VALUES ($1) RETURNING tag_id`, [skill]);
+                        tagId = newTag.rows[0].tag_id;
+                    }
+                    if (tagId) {
+                        await client.query(gigTagQuery, [gigId, tagId]);
+                    }
                 }
             }
         }
@@ -162,9 +171,6 @@ async function getAllGigsRepository(filters) {
             g.category as category,
             g.no_of_concurrent_max as slots,
             g.created_at as "postedAt",
-            g.first_draft_delivery,
-            g.additional_work_rate,
-            tos.terms_description as terms_of_service,
             a.display_name as "postedBy",
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
             (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as thumbnail,
@@ -181,7 +187,6 @@ async function getAllGigsRepository(filters) {
             (SELECT json_agg(json_build_object('name', gm.name, 'description', gm.description)) FROM gig_milestones gm WHERE gm.gig_id = g.gig_id) as milestones
         FROM gigs g
         JOIN accounts a ON g.freelancer_account_id = a.account_id
-        LEFT JOIN terms_of_service tos ON g.terms_id = tos.terms_id
         WHERE g.status = 'active'
         ORDER BY g.created_at DESC
     `;
@@ -189,6 +194,7 @@ async function getAllGigsRepository(filters) {
     
     // Map to frontend interface Gig
     return res.rows.map(row => {
+        const cleanArray = (arr) => (arr && arr[0] !== null) ? arr : [];
         return {
             id: row.id,
             postedBy: row.postedBy || 'Unknown',
@@ -197,14 +203,14 @@ async function getAllGigsRepository(filters) {
             description: row.description,
             category: row.category,
             slots: row.slots,
-            termsOfService: row.terms_of_service || '',
-            skills: row.skills || [],
-            firstDraftDelivery: row.first_draft_delivery || '',
+            termsOfService: '',
+            skills: cleanArray(row.skills),
+            firstDraftDelivery: cleanArray(row.tiers).length > 0 ? `${cleanArray(row.tiers)[0].daysOfDelivery} Days` : 'N/A',
             thumbnail: row.thumbnail || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b',
-            gallery: row.gallery && row.gallery.length ? row.gallery : [row.thumbnail || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b'],
-            milestones: row.milestones || [],
-            tiers: row.tiers || [],
-            additionalWorkRate: row.additional_work_rate || 50,
+            gallery: cleanArray(row.gallery).length ? cleanArray(row.gallery) : [row.thumbnail || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b'],
+            milestones: cleanArray(row.milestones),
+            tiers: cleanArray(row.tiers),
+            additionalWorkRate: 50,
             questionnaires: [],
             postedAt: row.postedAt,
             timeAgo: 'Just now',

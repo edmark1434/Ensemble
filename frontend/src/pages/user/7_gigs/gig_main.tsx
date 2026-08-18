@@ -17,17 +17,32 @@ import type { Gig } from "./gig_datasets";
 import GigViewDetails from "./gig_components/GigViewDetails";
 
 export interface GigMainContext {
+  loading: boolean;
   gigsList: Gig[];
   filteredGigs: Gig[];
   viewType: ViewType;
   toggleSaveGig: (e: React.MouseEvent, gigId: string) => void;
 }
 
+const SidebarSkeleton = () => (
+  <div className="space-y-6">
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none p-5 backdrop-blur-sm">
+      <div className="mb-4 h-3 w-20 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
+      <div className="flex flex-wrap gap-2">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="h-7 w-20 animate-pulse rounded-full bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
 const GigMain: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams();
 
+  const [loading, setLoading] = useState(true);
   const [viewType, setViewType] = useState<ViewType>("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategoryFilter, setActiveCategoryFilter] = useState("All");
@@ -37,6 +52,7 @@ const GigMain: React.FC = () => {
 
   useEffect(() => {
     const fetchGigs = async () => {
+      setLoading(true);
       try {
         const response = await api.get("/api/gigs");
         if (response.data.success && response.data.data) {
@@ -44,24 +60,30 @@ const GigMain: React.FC = () => {
             const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || '';
             const mapUrl = (path: string) => {
               if (!path) return undefined;
+              if (!cloudFrontUrl && path.includes('public')) return undefined; // Fallback to unsplash for broken seeded paths
               if (path.startsWith('http') || path.startsWith('/')) return path;
               return `${cloudFrontUrl}${path.startsWith('/') ? '' : '/'}${path}`;
             };
             
             return {
               ...g,
-              thumbnail: mapUrl(g.thumbnail) || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b',
-              clientAvatar: mapUrl(g.clientAvatar) || 'https://i.pravatar.cc/150',
+              thumbnail: mapUrl(g.thumbnail) || "https://d2dl0agwn9kque.cloudfront.net/gig_thumbnails/ede6f8d1-cc62-4afd-be9f-11f044d86122/placeholder_1787040672764_8a5d64b3.png",
+              clientAvatar: g.clientAvatar ? `${cloudFrontUrl}${g.clientAvatar.startsWith('/') ? '' : '/'}${g.clientAvatar}` : undefined,
               gallery: (g.gallery || []).map((p: string) => mapUrl(p))
             };
           });
           setGigsList(mappedGigs);
         } else {
-          setGigsList(sampleGigs);
+          console.error("API returned unsuccessful data", response.data);
+          // Don't fallback to sampleGigs!
+          // setGigsList(sampleGigs);
         }
       } catch (err) {
         console.error("Error fetching gigs:", err);
-        setGigsList(sampleGigs);
+        // Don't fallback to sampleGigs!
+        // setGigsList(sampleGigs);
+      } finally {
+        setLoading(false);
       }
     };
     fetchGigs();
@@ -135,6 +157,7 @@ const GigMain: React.FC = () => {
   const contextValue: GigMainContext = {
     gigsList,
     filteredGigs,
+    loading,
     viewType,
     toggleSaveGig,
   };
@@ -170,12 +193,18 @@ const GigMain: React.FC = () => {
         <div className={`grid grid-cols-1 ${showFilters ? 'lg:grid-cols-4' : 'lg:grid-cols-1'} gap-8 items-start`}>
           {showFilters && (
             <div className="space-y-6 sticky top-24 lg:col-span-1">
-              <GigCategories
-                categories={dynamicCategories}
-                activeCategory={activeCategoryFilter}
-                onCategoryChange={setActiveCategoryFilter}
-              />
-              {/* Future GigFilters can go here */}
+              {loading ? (
+                <SidebarSkeleton />
+              ) : (
+                <>
+                  <GigCategories
+                    categories={dynamicCategories}
+                    activeCategory={activeCategoryFilter}
+                    onCategoryChange={setActiveCategoryFilter}
+                  />
+                  {/* Future GigFilters can go here */}
+                </>
+              )}
             </div>
           )}
 

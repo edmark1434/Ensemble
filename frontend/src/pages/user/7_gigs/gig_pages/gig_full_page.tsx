@@ -22,14 +22,15 @@ const GigFullPage: React.FC = () => {
             const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || '';
             const mapUrl = (path: string) => {
               if (!path) return undefined;
+              if (!cloudFrontUrl && path.includes('public')) return undefined;
               if (path.startsWith('http') || path.startsWith('/')) return path;
               return `${cloudFrontUrl}${path.startsWith('/') ? '' : '/'}${path}`;
             };
             
             return {
               ...g,
-              thumbnail: mapUrl(g.thumbnail) || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b',
-              clientAvatar: mapUrl(g.clientAvatar) || 'https://i.pravatar.cc/150',
+              thumbnail: mapUrl(g.thumbnail) || "https://d2dl0agwn9kque.cloudfront.net/gig_thumbnails/ede6f8d1-cc62-4afd-be9f-11f044d86122/placeholder_1787040672764_8a5d64b3.png",
+              clientAvatar: g.clientAvatar ? `${cloudFrontUrl}${g.clientAvatar.startsWith('/') ? '' : '/'}${g.clientAvatar}` : undefined,
               gallery: (g.gallery || []).map((p: string) => mapUrl(p))
             };
           });
