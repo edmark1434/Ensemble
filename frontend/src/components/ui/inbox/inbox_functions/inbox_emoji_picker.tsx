@@ -30,7 +30,7 @@ export const InboxEmojiPicker: React.FC<InboxEmojiPickerProps> = ({
   return (
     <div
       ref={pickerRef}
-      className={`absolute z-50 max-w-[280px] sm:max-w-[300px] rounded-2xl border border-white/10 bg-[#12141f]/95 backdrop-blur-md p-1.5 shadow-2xl ${
+      className={`absolute z-50 max-w-[280px] sm:max-w-[300px] rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-dark-base/95 backdrop-blur-md p-1.5 shadow-2xl ${
         isSender ? "bottom-full mb-2 right-0" : "top-full mt-2 left-0"
       }`}
     >
@@ -114,7 +114,7 @@ export const InboxReactionBadges: React.FC<InboxReactionBadgesProps> = ({
         isSender ? "-left-2" : "-right-2"
       }`}
     >
-      <div className="flex gap-0.5 rounded-full bg-[#12141f] border border-white/10 p-0.5 shadow-md">
+      <div className="flex gap-0.5 rounded-full bg-gray-50 dark:bg-dark-base border border-gray-200 dark:border-white/10 p-0.5 shadow-md">
         {grouped.map((group) => {
           const reactedByMe = group.accountIds.includes(currentUserId);
           return (
@@ -125,13 +125,13 @@ export const InboxReactionBadges: React.FC<InboxReactionBadgesProps> = ({
               className={`flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs transition ${
                 reactedByMe
                   ? "bg-blue-500/20 text-blue-300"
-                  : "hover:bg-white/10 text-zinc-300"
+                  : "hover:bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-300"
               }`}
               title={`${group.count} reaction${group.count > 1 ? "s" : ""}`}
             >
               <span>{group.react_type}</span>
               {group.count > 1 && (
-                <span className="text-[10px] text-zinc-300">{group.count}</span>
+                <span className="text-[10px] text-gray-600 dark:text-zinc-300">{group.count}</span>
               )}
             </button>
           );

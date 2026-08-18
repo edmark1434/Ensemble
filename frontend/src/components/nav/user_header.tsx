@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, Settings, LogOut, User, Search, Crown } from "lucide-react";
+import { Bell, ChevronDown, Settings, LogOut, User, Search } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import useGlobalState from "@/lib/global_state";
@@ -142,20 +142,29 @@ useEffect(() => {
       try {
         const audio = new Audio("/sounds/notification.mp3");
         audio.play().catch(e => console.log("Audio play blocked:", e));
-      } catch (err) {}
+      } catch {
+        // Notification audio is optional and may be blocked by the browser.
+      }
 
       return [notification, ...prev];
     });
   };
 
+  const handleWalletBalanceUpdated = ({ balance_credits }: { balance_credits: number }) => {
+    const nextBalance = Number(balance_credits);
+    if (Number.isFinite(nextBalance)) setCredits(nextBalance);
+  };
+
   socket.on("notificationRead", handleNotificationRead);
   socket.on("allNotificationsRead", handleAllNotificationsRead);
   socket.on("notification", handleNewNotification);
+  socket.on("walletBalanceUpdated", handleWalletBalanceUpdated);
 
   return () => {
     socket.off("notificationRead", handleNotificationRead);
     socket.off("allNotificationsRead", handleAllNotificationsRead);
     socket.off("notification", handleNewNotification);
+    socket.off("walletBalanceUpdated", handleWalletBalanceUpdated);
   };
 }, [userInfo?.account_id]);
   
@@ -341,7 +350,7 @@ useEffect(() => {
   if (isCheckingAccess) {
     return (
       <header
-        className={`sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12]/95 backdrop-blur-md transition-all duration-300 ${
+        className={`sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/95 backdrop-blur-md transition-all duration-300 ${
             (!isCollapsed ? "md:p-0" : "md:pl-20")
         }`}
       >
@@ -369,7 +378,7 @@ useEffect(() => {
   return showHeader ? (
     <>
       <header
-        className={`sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12]/95 backdrop-blur-md transition-all duration-300 ${
+        className={`sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/95 backdrop-blur-md transition-all duration-300 ${
             (!isCollapsed ? "md:p-0" : "md:pl-20")
         }`}
       >
@@ -404,7 +413,7 @@ useEffect(() => {
               </div>
 
               {isCreatorSearchOpen && headerSearchInput.replace(/^@/, "").trim().length >= 2 && (
-                <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#151824] shadow-xl dark:shadow-2xl">
+                <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-xl dark:shadow-2xl">
                   {isSearchingCreators ? (
                     <p className="px-4 py-3 text-center text-xs text-gray-500 dark:text-zinc-400">Searching creators...</p>
                   ) : creatorSearchResults.length > 0 ? (
@@ -450,7 +459,7 @@ useEffect(() => {
               >
                 <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
                 <CreditIcon className="h-4 w-4 text-yellow-500" />
-                <span className="text-sm font-bold text-amber-600 dark:text-yellow-200">{userCredits.toLocaleString()}</span>
+                <span className="text-sm font-bold text-gray-900 dark:text-yellow-200">{userCredits.toLocaleString()}</span>
                 {isHovered && (
                   <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] text-white shadow-lg animate-fade-in">
                     Go to Credit Shop
@@ -509,7 +518,7 @@ useEffect(() => {
               </button>
 
               {isProfileOpen && (
-                <div className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-xl dark:shadow-2xl backdrop-blur-xl animate-fade-in">
+                <div className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-xl dark:shadow-2xl backdrop-blur-xl animate-fade-in">
                   <div className="border-b border-gray-200 dark:border-white/10 p-3">
                     <p className="text-sm font-medium text-gray-900 dark:text-white">{userInfo?.username || "User"}</p>
                     <p className="text-xs text-gray-500 dark:text-zinc-500">{userInfo?.email || "user@ensemble.com"}</p>

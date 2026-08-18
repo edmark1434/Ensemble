@@ -12,10 +12,10 @@ import { Eye, EyeOff } from "lucide-react";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
-  bg:        "#080a12",
-  bgPanel:   "#0d0f1a",
-  bgInput:   "#13151f",
-  border:    "#2a2d3e",
+  bg:        "#121214",
+  bgPanel:   "#1e1f22",
+  bgInput:   "#27282b",
+  border:    "rgba(255, 255, 255, 0.1)",
   borderFoc: "#4a6fa5",
   accent:    "#4a6fa5",
   text:      "#ffffff",
@@ -62,7 +62,7 @@ function VideoBg() {
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: "radial-gradient(circle, rgba(8,10,18,0.2) 0%, rgba(8,10,18,0.75) 100%)"
+          background: "radial-gradient(circle, rgba(18,18,20,0.2) 0%, rgba(18,18,20,0.85) 100%)"
         }}
       />
 
@@ -414,6 +414,15 @@ export default function LoginPage({
         
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: ${T.bg}; font-family: ${T.fontBody}; -webkit-font-smoothing: antialiased; }
+        
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover, 
+        input:-webkit-autofill:focus, 
+        input:-webkit-autofill:active {
+          -webkit-box-shadow: 0 0 0 30px ${T.bgInput} inset !important;
+          -webkit-text-fill-color: ${T.text} !important;
+          transition: background-color 5000s ease-in-out 0s;
+        }
         
         @keyframes ens-spin { to { transform: rotate(360deg); } }
         

@@ -100,7 +100,7 @@ export const CreateTiers: React.FC<CreateTiersProps> = ({
                     placeholder="Tier Title (e.g. Basic Edit)"
                     value={tier.title}
                     onChange={(e) => updateTier(index, "title", e.target.value)}
-                    className={`w-full rounded-xl border bg-white dark:bg-[#080a12] shadow-sm dark:shadow-none px-3 py-2 text-xs font-bold text-gray-900 dark:text-white outline-none transition-all ${
+                    className={`w-full rounded-xl border bg-white dark:bg-dark-base shadow-sm dark:shadow-none px-3 py-2 text-xs font-bold text-gray-900 dark:text-white outline-none transition-all ${
                       errors[`tier_${index}_title`] ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
                     }`}
                   />
@@ -112,7 +112,7 @@ export const CreateTiers: React.FC<CreateTiersProps> = ({
                     placeholder="Briefly describe what is included..."
                     value={tier.description}
                     onChange={(e) => updateTier(index, "description", e.target.value)}
-                    className={`w-full h-20 rounded-xl border bg-white dark:bg-[#080a12] shadow-sm dark:shadow-none px-3 py-2 text-xs text-gray-900 dark:text-white outline-none transition-all resize-none ${
+                    className={`w-full h-20 rounded-xl border bg-white dark:bg-dark-base shadow-sm dark:shadow-none px-3 py-2 text-xs text-gray-900 dark:text-white outline-none transition-all resize-none ${
                       errors[`tier_${index}_description`] ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
                     }`}
                   />
@@ -127,7 +127,7 @@ export const CreateTiers: React.FC<CreateTiersProps> = ({
                       min="1"
                       value={tier.daysOfDelivery}
                       onChange={(e) => updateTier(index, "daysOfDelivery", parseInt(e.target.value) || 1)}
-                      className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12] px-2 py-1.5 text-xs text-center text-gray-900 dark:text-white outline-none focus:border-blue-500/50 transition-all"
+                      className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base px-2 py-1.5 text-xs text-center text-gray-900 dark:text-white outline-none focus:border-blue-500/50 transition-all"
                     />
                   </div>
                   <div>
@@ -137,7 +137,7 @@ export const CreateTiers: React.FC<CreateTiersProps> = ({
                       min="0"
                       value={tier.revisions}
                       onChange={(e) => updateTier(index, "revisions", parseInt(e.target.value) || 0)}
-                      className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12] px-2 py-1.5 text-xs text-center text-gray-900 dark:text-white outline-none focus:border-blue-500/50 transition-all"
+                      className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base px-2 py-1.5 text-xs text-center text-gray-900 dark:text-white outline-none focus:border-blue-500/50 transition-all"
                     />
                   </div>
                 </div>
@@ -151,7 +151,7 @@ export const CreateTiers: React.FC<CreateTiersProps> = ({
                       min="5"
                       value={tier.price}
                       onChange={(e) => updateTier(index, "price", parseInt(e.target.value) || 0)}
-                      className={`w-full rounded-xl border bg-white dark:bg-[#080a12] shadow-sm dark:shadow-none pl-7 pr-3 py-2 text-sm font-black text-gray-900 dark:text-white outline-none transition-all ${
+                      className={`w-full rounded-xl border bg-white dark:bg-dark-base shadow-sm dark:shadow-none pl-7 pr-3 py-2 text-sm font-black text-gray-900 dark:text-white outline-none transition-all ${
                         errors[`tier_${index}_price`] ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
                       }`}
                     />

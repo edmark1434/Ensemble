@@ -68,7 +68,7 @@ export const MilestoneSubmissionForm: React.FC<Props> = ({ contractId, milestone
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Type your update here..."
                 rows={3}
-                className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-[#080a12]/50 p-3.5 text-xs font-sans text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 transition focus:border-emerald-500/50 focus:outline-none resize-none leading-relaxed shadow-sm dark:shadow-none"
+                className="w-full rounded-xl border border-gray-300 dark:border-white/10 bg-white dark:bg-dark-base/50 p-3.5 text-xs font-sans text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 transition focus:border-emerald-500/50 focus:outline-none resize-none leading-relaxed shadow-sm dark:shadow-none"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 required={mediaList.length === 0}
             />

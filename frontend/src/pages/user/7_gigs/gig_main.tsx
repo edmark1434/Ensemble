@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { Filter } from "lucide-react";
 import { Outlet, useNavigate, useLocation, useParams } from "react-router-dom";
 import UserHeader from "@/components/nav/user_header";
+import api from "@/lib/axios";
 
 // Modular Component Imports
 import GigSearchBar from "./gig_components/gig_searchbar";
@@ -35,8 +36,35 @@ const GigMain: React.FC = () => {
   const [selectedGig, setSelectedGig] = useState<Gig | null>(null);
 
   useEffect(() => {
-    // For now, load dummy data
-    setGigsList(sampleGigs);
+    const fetchGigs = async () => {
+      try {
+        const response = await api.get("/api/gigs");
+        if (response.data.success && response.data.data) {
+          const mappedGigs = response.data.data.map((g: any) => {
+            const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || '';
+            const mapUrl = (path: string) => {
+              if (!path) return undefined;
+              if (path.startsWith('http') || path.startsWith('/')) return path;
+              return `${cloudFrontUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+            };
+            
+            return {
+              ...g,
+              thumbnail: mapUrl(g.thumbnail) || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b',
+              clientAvatar: mapUrl(g.clientAvatar) || 'https://i.pravatar.cc/150',
+              gallery: (g.gallery || []).map((p: string) => mapUrl(p))
+            };
+          });
+          setGigsList(mappedGigs);
+        } else {
+          setGigsList(sampleGigs);
+        }
+      } catch (err) {
+        console.error("Error fetching gigs:", err);
+        setGigsList(sampleGigs);
+      }
+    };
+    fetchGigs();
   }, []);
 
   useEffect(() => {
@@ -112,7 +140,7 @@ const GigMain: React.FC = () => {
   };
 
   return (
-    <div className="w-full min-h-screen bg-gray-50 dark:bg-[#080a12] relative">
+    <div className="w-full min-h-screen bg-gray-50 dark:bg-dark-base relative">
       {/* Sticky User Header */}
       <div className="z-10 bg-white dark:bg-[#0a0a0a] border-b border-gray-200 dark:border-white/10 sticky top-0 md:static">
         <UserHeader pageTitle="Gig Market" credits={1250} />
@@ -128,7 +156,7 @@ const GigMain: React.FC = () => {
               onClick={() => setShowFilters(!showFilters)}
               className={`flex items-center justify-center p-2 rounded-lg transition-colors border ${
                 showFilters 
-                  ? 'bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400' 
+                  ? 'bg-gray-100 dark:bg-white/10 border-gray-300 dark:border-white/20 text-gray-900 dark:text-white' 
                   : 'bg-white dark:bg-white/5 shadow-sm dark:shadow-none border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-100 dark:bg-white/10'
               }`}
               title="Toggle Filters"

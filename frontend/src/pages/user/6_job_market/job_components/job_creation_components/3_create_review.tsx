@@ -62,7 +62,7 @@ const CustomDropdown: React.FC<CustomSelectProps> = ({
         <button
           type="button"
           onClick={() => setIsOpen((prev) => !prev)}
-          className={`w-full flex items-center justify-between rounded-xl border bg-white dark:bg-[#0d0f1a] px-3.5 py-2.5 text-xs text-left transition-all ${
+          className={`w-full flex items-center justify-between rounded-xl border bg-white dark:bg-dark-surface px-3.5 py-2.5 text-xs text-left transition-all ${
             error
               ? "border-red-500/50 focus:border-red-500"
               : isOpen
@@ -92,7 +92,7 @@ const CustomDropdown: React.FC<CustomSelectProps> = ({
                 animate={{ opacity: 1, y: 4, scale: 1 }}
                 exit={{ opacity: 0, y: -6, scale: 0.98 }}
                 transition={{ duration: 0.15, ease: "easeOut" }}
-                className="absolute left-0 right-0 z-30 max-h-48 overflow-y-auto rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-1.5 shadow-2xl space-y-0.5 custom-scrollbar"
+                className="absolute left-0 right-0 z-30 max-h-48 overflow-y-auto rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-1.5 shadow-2xl space-y-0.5 custom-scrollbar"
               >
                 {options.map((opt) => {
                   const isSelected = value === opt;

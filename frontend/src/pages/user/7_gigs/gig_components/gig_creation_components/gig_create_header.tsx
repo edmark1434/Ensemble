@@ -50,7 +50,7 @@ export const GigCreateHeader: React.FC<GigCreateHeaderProps> = ({
                       ? "bg-green-500 border-green-500 text-white"
                       : isActive
                       ? "bg-blue-500/20 border-blue-500 text-blue-600 dark:text-blue-400 ring-4 ring-blue-500/10"
-                      : "bg-white dark:bg-[#0d0f1a] border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-500"
+                      : "bg-white dark:bg-dark-surface border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-500"
                   }`}
                 >
                   {isCompleted ? <Check className="h-4 w-4" /> : step.id}

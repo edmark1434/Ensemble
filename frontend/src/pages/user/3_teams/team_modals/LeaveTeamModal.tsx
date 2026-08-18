@@ -30,7 +30,7 @@ const LeaveTeamModal: React.FC<LeaveTeamModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d0f1a] p-6 shadow-2xl animate-scale-in">
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-dark-surface p-6 shadow-2xl animate-scale-in">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <LogOut className="h-5 w-5 text-red-400" />

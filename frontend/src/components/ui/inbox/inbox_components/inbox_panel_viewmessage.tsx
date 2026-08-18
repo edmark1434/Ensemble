@@ -37,23 +37,23 @@ export const InboxPanelViewMessage: React.FC<InboxPanelViewMessageProps> = ({
       className="flex-1 overflow-y-auto px-4 py-4 inbox-scroll-thin flex flex-col"
     >
       {messageLoading ? (
-        <div className="flex flex-1 items-center justify-center text-zinc-500 text-sm">
+        <div className="flex flex-1 items-center justify-center text-gray-500 dark:text-zinc-500 text-sm">
           Loading messages...
         </div>
       ) : error ? (
         <div className="flex flex-1 flex-col items-center justify-center text-center">
           <AlertCircle className="mb-2 h-8 w-8 text-red-400" />
-          <p className="text-sm text-zinc-400">{error}</p>
+          <p className="text-sm text-gray-500 dark:text-zinc-400">{error}</p>
           <button
             type="button"
             onClick={onRetry}
-            className="mt-3 rounded-lg bg-white/10 px-3 py-1.5 text-xs text-white hover:bg-white/15"
+            className="mt-3 rounded-lg bg-gray-100 dark:bg-white/10 px-3 py-1.5 text-xs text-gray-900 dark:text-white hover:bg-white/15"
           >
             Try again
           </button>
         </div>
       ) : messages.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center text-zinc-500 text-sm">
+        <div className="flex flex-1 items-center justify-center text-gray-500 dark:text-zinc-500 text-sm">
           No messages yet. Say hello!
         </div>
       ) : (
@@ -63,7 +63,7 @@ export const InboxPanelViewMessage: React.FC<InboxPanelViewMessageProps> = ({
               type="button"
               disabled={loadingOlder}
               onClick={onLoadOlder}
-              className="mx-auto mb-3 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs text-zinc-300 hover:bg-white/10 disabled:opacity-50"
+              className="mx-auto mb-3 rounded-full border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-4 py-1.5 text-xs text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:bg-white/10 disabled:opacity-50"
             >
               {loadingOlder ? "Loading..." : "Load older messages"}
             </button>

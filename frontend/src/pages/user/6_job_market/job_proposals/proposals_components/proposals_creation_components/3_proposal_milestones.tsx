@@ -1,5 +1,6 @@
 import React from "react";
-import { Plus, Trash2, ArrowRight, Clock, RefreshCcw, Layers } from "lucide-react";
+import { Plus, Trash2, ArrowRight, Clock, RefreshCcw, Layers, GripVertical } from "lucide-react";
+import { Reorder } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
 
 export interface Milestone {
@@ -66,7 +67,7 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
   return (
     <div className="space-y-5 text-left">
       <div>
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-0.5">Escrow Milestones Breakdown</h2>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-0.5">Milestone Breakdown</h2>
         <p className="text-xs text-gray-500 dark:text-zinc-400">Outline deliverables and revision limits for step-by-step client approval.</p>
       </div>
 
@@ -80,11 +81,11 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
         </div>
         <div>
           <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase">Payout Per Milestone</span>
-          <p className="text-sm font-bold text-emerald-400">{milestonePayout.toLocaleString()}</p>
+          <p className="text-sm font-bold text-gray-700 dark:text-zinc-300">{milestonePayout.toLocaleString()}</p>
         </div>
         <div>
           <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase">Overage Revision Fee</span>
-          <p className="text-xs font-bold text-blue-400">
+          <p className="text-xs font-bold text-gray-700 dark:text-zinc-300">
             +{overageRateBonus.toLocaleString()} ({additionalWorkRate}%)
           </p>
         </div>
@@ -93,13 +94,16 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
       {errors.milestones && <p className="text-[11px] text-red-400">{errors.milestones}</p>}
 
       {/* Milestone Cards List */}
-      <div className="space-y-4">
+      <Reorder.Group axis="y" values={milestones} onReorder={setMilestones} className="space-y-4">
         {milestones.map((m, idx) => (
-          <div key={m.id} className="p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 space-y-3 relative group">
+          <Reorder.Item key={m.id} value={m} className="p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface space-y-3 relative group">
             <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-2">
-              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Layers className="h-3.5 w-3.5" /> Step {idx + 1} • {milestonePayout.toLocaleString()} Credits
-              </span>
+              <div className="flex items-center gap-2">
+                <GripVertical className="h-4 w-4 text-gray-300 dark:text-zinc-600 cursor-grab active:cursor-grabbing" />
+                <span className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Layers className="h-3.5 w-3.5 text-gray-400 dark:text-zinc-500" /> Milestone {idx + 1} - <CreditIcon className="h-3 w-3 text-yellow-500" /> {milestonePayout.toLocaleString()} Credits
+                </span>
+              </div>
               {milestones.length > 1 && (
                 <button
                   type="button"
@@ -133,7 +137,7 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
             <div className="grid grid-cols-2 gap-3 pt-1">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase flex items-center gap-1">
-                  <Clock className="h-3 w-3 text-blue-400" /> Estimated Hours
+                  <Clock className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> Estimated Hours
                 </label>
                 <input
                   type="number"
@@ -145,7 +149,7 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
 
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase flex items-center gap-1">
-                  <RefreshCcw className="h-3 w-3 text-emerald-400" /> Max Included Revisions
+                  <RefreshCcw className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> Max Included Revisions
                 </label>
                 <input
                   type="number"
@@ -155,9 +159,9 @@ export const ProposalMilestonesStep: React.FC<ProposalMilestonesProps> = ({
                 />
               </div>
             </div>
-          </div>
+          </Reorder.Item>
         ))}
-      </div>
+      </Reorder.Group>
 
       <button
         type="button"

@@ -731,7 +731,7 @@ const InboxMain = () => {
           data-message-id={message._id}
           className="my-4 flex justify-center"
         >
-          <span className="rounded-full bg-white/5 px-4 py-1.5 text-xs text-zinc-500">
+          <span className="rounded-full bg-gray-50 dark:bg-white/5 px-4 py-1.5 text-xs text-gray-500 dark:text-zinc-500">
             {message.message_content}
           </span>
         </div>
@@ -760,7 +760,7 @@ const InboxMain = () => {
             <div className="relative max-w-[75%] flex flex-col">
               {isGroupMessage && (
                 <span
-                  className={`mb-1 px-1 text-[11px] font-medium text-zinc-400 ${
+                  className={`mb-1 px-1 text-[11px] font-medium text-gray-500 dark:text-zinc-400 ${
                     isSender ? "self-end" : "self-start"
                   }`}
                 >
@@ -783,8 +783,8 @@ const InboxMain = () => {
                   hasText ? "px-4 py-2.5" : "p-1.5"
                 } ${
                   isSender
-                    ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-none"
-                    : "bg-white/10 text-white rounded-bl-none border border-white/5"
+                    ? "bg-gradient-to-r from-blue-600 to-blue-500 text-gray-900 dark:text-white rounded-br-none"
+                    : "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white rounded-bl-none border border-gray-100 dark:border-white/5"
                 } ${pinned ? "ring-1 ring-yellow-400/40" : ""}`}
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
@@ -824,7 +824,7 @@ const InboxMain = () => {
                               type: a.attachment_type,
                             })
                           }
-                          className="relative min-h-20 w-full rounded-xl overflow-hidden bg-black/40 border border-white/10 flex items-center justify-center cursor-pointer hover:opacity-90 transition"
+                          className="relative min-h-20 w-full rounded-xl overflow-hidden bg-black/40 border border-gray-200 dark:border-white/10 flex items-center justify-center cursor-pointer hover:opacity-90 transition"
                         >
                           {isFile ? (
                             <a
@@ -945,7 +945,7 @@ const InboxMain = () => {
                     setActiveEmojiPickerId(isPickerOpen ? null : message._id);
                     setActiveMenuId(null);
                   }}
-                  className="rounded-full p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white transition"
+                  className="rounded-full p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white transition"
                 >
                   <Smile className="h-4 w-4" />
                 </button>
@@ -962,7 +962,7 @@ const InboxMain = () => {
               <button
                 onClick={() => handleReply(message)}
                 title="Reply"
-                className="rounded-full p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white transition"
+                className="rounded-full p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white transition"
               >
                 <Reply className="h-4 w-4" />
               </button>
@@ -973,7 +973,7 @@ const InboxMain = () => {
                     setActiveMenuId(isMenuOpen ? null : message._id);
                     setActiveEmojiPickerId(null);
                   }}
-                  className="rounded-full p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white transition"
+                  className="rounded-full p-1.5 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white transition"
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </button>
@@ -982,7 +982,7 @@ const InboxMain = () => {
                   <div
                     className={`absolute bottom-full mb-2 ${
                       isSender ? "right-0" : "left-0"
-                    } z-50 w-36 rounded-xl border border-white/10 bg-[#12141f] p-1 shadow-xl text-xs text-zinc-200`}
+                    } z-50 w-36 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-dark-base p-1 shadow-xl text-xs text-gray-900 dark:text-zinc-200`}
                     style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                   >
                     {isSender && (
@@ -994,7 +994,7 @@ const InboxMain = () => {
                             setActiveMenuId(null);
                             textareaRef.current?.focus();
                           }}
-                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-white/10"
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-gray-100 dark:bg-white/10"
                         >
                           <Pencil className="h-3.5 w-3.5 text-emerald-400" />
                           Edit
@@ -1019,7 +1019,7 @@ const InboxMain = () => {
                         }
                         setActiveMenuId(null);
                       }}
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-white/10"
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-gray-100 dark:bg-white/10"
                     >
                       {pinned ? (
                         <>
@@ -1039,7 +1039,7 @@ const InboxMain = () => {
                           setReportModalMessage(message);
                           setActiveMenuId(null);
                         }}
-                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-zinc-300 hover:bg-white/10"
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-gray-600 dark:text-zinc-300 hover:bg-gray-100 dark:bg-white/10"
                       >
                         <Flag className="h-3.5 w-3.5 text-red-400" />
                         Report
@@ -1056,13 +1056,13 @@ const InboxMain = () => {
   };
 
   return (
-    <div className="w-full h-screen bg-[#080a12] flex flex-col overflow-hidden">
+    <div className="w-full h-screen bg-gray-50 dark:bg-dark-base flex flex-col overflow-hidden">
       <UserHeader pageTitle="Inbox" credits={1250} />
 
-      <div className="w-full flex-1 min-h-0 overflow-hidden flex border-t border-white/10 relative">
+      <div className="w-full flex-1 min-h-0 overflow-hidden flex border-t border-gray-200 dark:border-white/10 relative">
         {/* Animated Left Conversation Sidebar (Transitions smoothly between w-80/w-96 and compact w-20) */}
         <div
-          className={`flex-shrink-0 flex flex-col border-r border-white/10 bg-[#0d0f1a] transition-all duration-300 ease-in-out ${
+          className={`flex-shrink-0 flex flex-col border-r border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface transition-all duration-300 ease-in-out ${
             isSidebarCollapsed ? "w-20" : "w-80 md:w-96"
           }`}
         >

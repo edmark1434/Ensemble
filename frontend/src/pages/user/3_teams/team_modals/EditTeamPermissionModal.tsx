@@ -146,8 +146,8 @@ const EditTeamPermissionModal: React.FC<EditTeamPermissionModalProps> = ({
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in-modal overflow-y-auto py-8">
-        <div className="w-full max-w-5xl rounded-2xl border border-white/10 bg-[#0d0f1a] p-6 shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
-          <div className="flex items-center justify-between mb-4 sticky top-0 bg-[#0d0f1a] pb-2">
+        <div className="w-full max-w-5xl rounded-2xl border border-white/10 bg-dark-surface p-6 shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-between mb-4 sticky top-0 bg-dark-surface pb-2">
             <h3 className="text-xl font-semibold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
               Edit Member Permissions
             </h3>
@@ -201,10 +201,10 @@ const EditTeamPermissionModal: React.FC<EditTeamPermissionModalProps> = ({
                     <select
                       value={selectedMember.role}
                       onChange={(e) => handleRoleChange(e.target.value)}
-                      className="w-full rounded-lg border border-white/20 bg-[#1a1f2e] px-4 py-2 text-sm text-white focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+                      className="w-full rounded-lg border border-white/20 bg-dark-surface px-4 py-2 text-sm text-white focus:border-blue-500/50 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
                     >
                       {roles.map((role) => (
-                        <option key={role.id} value={role.name} className="bg-[#1a1f2e] text-white">
+                        <option key={role.id} value={role.name} className="bg-dark-surface text-white">
                           {role.name}
                         </option>
                       ))}
@@ -228,7 +228,7 @@ const EditTeamPermissionModal: React.FC<EditTeamPermissionModalProps> = ({
                     value={newRoleName}
                     onChange={(e) => setNewRoleName(e.target.value)}
                     placeholder="New role name"
-                    className="rounded-lg border border-white/20 bg-[#1a1f2e] px-3 py-1 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none"
+                    className="rounded-lg border border-white/20 bg-dark-surface px-3 py-1 text-sm text-white placeholder:text-zinc-500 focus:border-blue-500/50 focus:outline-none"
                   />
                   <button
                     onClick={handleAddRole}
@@ -286,7 +286,7 @@ const EditTeamPermissionModal: React.FC<EditTeamPermissionModalProps> = ({
       {/* Unsaved Changes Warning Modal */}
       {showUnsavedWarning && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in-modal">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0d0f1a] p-6 shadow-2xl animate-scale-in">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-dark-surface p-6 shadow-2xl animate-scale-in">
             <div className="flex items-center gap-3 mb-4">
               <AlertTriangle className="h-6 w-6 text-yellow-500" />
               <h3 className="text-xl font-semibold text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>

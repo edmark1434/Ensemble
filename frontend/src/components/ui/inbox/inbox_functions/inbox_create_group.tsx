@@ -126,11 +126,11 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-2xl border border-white/10 bg-[#12141f] p-6 shadow-2xl text-white"
+        className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-dark-base p-6 shadow-2xl text-gray-900 dark:text-white"
         style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-4">
+        <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 pb-4">
           <div className="flex items-center gap-2">
             <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400">
               <Users className="h-5 w-5" />
@@ -139,7 +139,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="rounded-full p-1 text-zinc-400 hover:bg-white/10 hover:text-white transition"
+            className="rounded-full p-1 text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white transition"
           >
             <X className="h-5 w-5" />
           </button>
@@ -149,7 +149,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           {/* Group Name Input */}
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1">
+            <label className="block text-xs font-medium text-gray-500 dark:text-zinc-400 mb-1">
               Group Name <span className="text-red-400">*</span>
             </label>
             <input
@@ -157,14 +157,14 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
               placeholder="e.g., Ensemble Dev Squad"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+              className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-3.5 py-2.5 text-sm text-gray-900 dark:text-white outline-none placeholder:text-gray-500 dark:text-zinc-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
               required
             />
           </div>
 
           {/* Member Search & Dropdown Suggestions */}
           <div className="relative">
-            <label className="block text-xs font-medium text-zinc-400 mb-1">
+            <label className="block text-xs font-medium text-gray-500 dark:text-zinc-400 mb-1">
               Add Members
             </label>
             <input
@@ -176,18 +176,18 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
                 setSearchTerm(e.target.value);
                 setIsDropdownOpen(true);
               }}
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
+              className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 px-3.5 py-2.5 text-sm text-gray-900 dark:text-white outline-none placeholder:text-gray-500 dark:text-zinc-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition"
             />
 
             {/* Suggested Accounts Dropdown */}
             {isDropdownOpen && filteredSuggestions.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1.5 z-20 max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-[#1a1d2d] p-1 shadow-2xl inbox-scroll-thin">
+              <div className="absolute top-full left-0 right-0 mt-1.5 z-20 max-h-48 overflow-y-auto rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-1 shadow-2xl inbox-scroll-thin">
                 {filteredSuggestions.map((account) => (
                   <button
                     key={account.account_id}
                     type="button"
                     onClick={() => handleSelectMember(account)}
-                    className="flex w-full items-center gap-2.5 rounded-lg p-2 text-left hover:bg-white/10 transition"
+                    className="flex w-full items-center gap-2.5 rounded-lg p-2 text-left hover:bg-gray-100 dark:bg-white/10 transition"
                   >
                     <img
                       src={account.avatar}
@@ -195,10 +195,10 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
                       className="h-8 w-8 rounded-full object-cover"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-white truncate">
+                      <p className="text-xs font-medium text-gray-900 dark:text-white truncate">
                         {account.name}
                       </p>
-                      <p className="text-[10px] text-zinc-400 truncate">
+                      <p className="text-[10px] text-gray-500 dark:text-zinc-400 truncate">
                         {account.username}
                       </p>
                     </div>
@@ -208,7 +208,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
               </div>
             )}
             {isDropdownOpen && isSearching && (
-              <div className="absolute left-0 right-0 top-full z-20 mt-1.5 rounded-xl border border-white/10 bg-[#1a1d2d] p-3 text-center text-xs text-zinc-400">
+              <div className="absolute left-0 right-0 top-full z-20 mt-1.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-3 text-center text-xs text-gray-500 dark:text-zinc-400">
                 Searching handles...
               </div>
             )}
@@ -217,7 +217,7 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
           {/* Selected Members Chips */}
           {selectedMembers.length > 0 && (
             <div>
-              <label className="block text-[11px] font-medium text-zinc-400 mb-1.5">
+              <label className="block text-[11px] font-medium text-gray-500 dark:text-zinc-400 mb-1.5">
                 Selected Members ({selectedMembers.length})
               </label>
               <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto inbox-scroll-thin">
@@ -247,18 +247,18 @@ export const InboxCreateGroupModal: React.FC<InboxCreateGroupModalProps> = ({
 
           {/* Form Action Buttons */}
           {error && <p className="text-xs text-red-400">{error}</p>}
-          <div className="flex items-center justify-end gap-2 pt-4 border-t border-white/10">
+          <div className="flex items-center justify-end gap-2 pt-4 border-t border-gray-200 dark:border-white/10">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl px-4 py-2 text-sm text-zinc-400 hover:bg-white/5 hover:text-white transition"
+              className="rounded-xl px-4 py-2 text-sm text-gray-500 dark:text-zinc-400 hover:bg-gray-50 dark:bg-white/5 hover:text-gray-900 dark:text-white transition"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!groupName.trim() || selectedMembers.length === 0 || isSubmitting}
-              className="rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2 text-sm font-medium text-white shadow-lg shadow-blue-500/20 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              className="rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2 text-sm font-medium text-gray-900 dark:text-white shadow-lg shadow-blue-500/20 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
               {isSubmitting ? "Creating..." : "Create Group"}
             </button>

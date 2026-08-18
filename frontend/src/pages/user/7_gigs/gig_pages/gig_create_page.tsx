@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import useGlobalState from "@/lib/global_state";
+import api from "@/lib/axios";
+import { uploadFileWithIntent } from "@/lib/uploadFile";
 
 // Types
 import type { GigTier, Milestone, Questionnaire } from "../gig_datasets";
@@ -31,6 +33,7 @@ const GigCreatePage: React.FC = () => {
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState(""); // Using URL for frontend mock
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
 
   // --- SLIDE 2: DELIVERY ---
   const [slots, setSlots] = useState<number>(1);
@@ -38,13 +41,14 @@ const GigCreatePage: React.FC = () => {
   const [skills, setSkills] = useState<string[]>([]);
   const [firstDraftDelivery, setFirstDraftDelivery] = useState("");
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]); // Using URLs for frontend mock
+  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
 
   // --- SLIDE 3: TIERS & MILESTONES ---
   const [tiers, setTiers] = useState<GigTier[]>([
-    { tierName: "Basic", title: "", description: "", daysOfDelivery: 1, revisions: 1, price: 100 },
-    { tierName: "Standard", title: "", description: "", daysOfDelivery: 3, revisions: 2, price: 300 }
+    { tierName: "Basic", title: "Essential Delivery", description: "Standard quality output perfect for simple projects.", daysOfDelivery: 1, revisions: 1, price: 100 },
+    { tierName: "Standard", title: "Pro Delivery", description: "High-quality output with source files and extra revisions.", daysOfDelivery: 3, revisions: 2, price: 300 }
   ]);
-  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [milestones, setMilestones] = useState<Milestone[]>([{ name: "Kickoff", description: "Initial setup and requirements gathering." }]);
   const [additionalWorkRate, setAdditionalWorkRate] = useState<number>(50);
 
   // --- SLIDE 4: QUESTIONNAIRES ---
@@ -68,10 +72,11 @@ const GigCreatePage: React.FC = () => {
   const handleNext = (targetSlide: number) => {
     if (currentSlide === 1 && targetSlide === 2) {
       const stepErrors: Record<string, string> = {};
-      if (!title.trim()) stepErrors.title = "Service Title is required.";
-      if (!description.trim()) stepErrors.description = "Service Description is required.";
-      if (!category) stepErrors.category = "Please select a category.";
-      
+      if (!title.trim()) stepErrors.title = "Service title is required";
+      if (!description.trim()) stepErrors.description = "Service description is required";
+      if (!category) stepErrors.category = "Category is required";
+      if (!thumbnailFile) stepErrors.thumbnail = "Thumbnail image is required";
+
       if (Object.keys(stepErrors).length > 0) {
         setErrors(stepErrors);
         return;
@@ -81,9 +86,10 @@ const GigCreatePage: React.FC = () => {
 
     if (currentSlide === 2 && targetSlide === 3) {
       const stepErrors: Record<string, string> = {};
-      if (skills.length === 0) stepErrors.skills = "At least 1 skill is required.";
-      if (!firstDraftDelivery) stepErrors.firstDraftDelivery = "Please specify delivery timeline.";
-      if (!termsOfService) stepErrors.termsOfService = "Please select terms of service.";
+      if (skills.length === 0) stepErrors.skills = "At least 1 skill is required";
+      if (!firstDraftDelivery) stepErrors.firstDraftDelivery = "Timeline is required";
+      if (!termsOfService.trim()) stepErrors.termsOfService = "Terms of service are required";
+      if (galleryFiles.length === 0) stepErrors.galleryUrls = "At least 1 supporting picture is required";
       
       if (Object.keys(stepErrors).length > 0) {
         setErrors(stepErrors);
@@ -110,6 +116,9 @@ const GigCreatePage: React.FC = () => {
 
     if (currentSlide === 4 && targetSlide === 5) {
       const stepErrors: Record<string, string> = {};
+      if (milestones.length === 0) {
+        stepErrors.milestones = "At least 1 milestone is required";
+      }
       milestones.forEach((m, index) => {
         if (!m.name.trim()) stepErrors[`milestone_${index}_name`] = "Name required";
         if (!m.description.trim()) stepErrors[`milestone_${index}_desc`] = "Description required";
@@ -149,23 +158,91 @@ const GigCreatePage: React.FC = () => {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    // Backend hookup point for creation goes here.
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      let thumbnailFileId = null;
+      let galleryFileIds: string[] = [];
+
+      const uploadPromises: Promise<void>[] = [];
+
+      if (thumbnailFile) {
+        uploadPromises.push(
+          uploadFileWithIntent(thumbnailFile, "gig_thumbnails").then(res => {
+            thumbnailFileId = res.fileId;
+          })
+        );
+      }
+
+      galleryFiles.forEach((file, index) => {
+        uploadPromises.push(
+          uploadFileWithIntent(file, "gig_galleries").then(res => {
+            // Need to retain order, but a simple push is okay because order doesn't strictly matter for the array unless specified.
+            // S3 attachments index handles order later, but we'll push in order using indices
+            galleryFileIds[index] = res.fileId;
+          })
+        );
+      });
+
+      await Promise.all(uploadPromises);
+
+      const gigPayload = {
+        title,
+        description,
+        category,
+        slots,
+        termsOfService,
+        firstDraftDelivery,
+        additionalWorkRate,
+        tiers,
+        milestones,
+        questionnaires,
+        skills,
+        thumbnailFileId,
+        galleryFileIds,
+      };
+
+      await api.post("/api/gigs", gigPayload);
       setIsSuccessOpen(true);
-    }, 1500);
+    } catch (err: any) {
+      console.error("Error creating gig:", err);
+      alert(err.response?.data?.message || err.message || "Failed to create gig");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <div className="relative min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-gray-200 overflow-hidden font-inter transition-colors duration-300">
-      {/* Background Patterns */}
-      <div className="pointer-events-none fixed inset-0 z-0 opacity-[0.03] dark:opacity-20 mix-blend-overlay dark:mix-blend-screen transition-opacity duration-300">
-        <ShapeGrid color={theme === "light" ? "#000000" : "#ffffff"} />
+    <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-gray-200 overflow-hidden font-inter transition-colors duration-300">
+      {/* Background Grid Animation */}
+      <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
+        <ShapeGrid
+          shape="square"
+          squareSize={48}
+          direction="diagonal"
+          speed={0.4}
+          borderColor={theme === 'dark' ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.06)"}
+          hoverFillColor={theme === 'dark' ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
+          hoverTrailAmount={3}
+        />
       </div>
 
-      <div className="relative z-10 flex min-h-screen flex-col px-4 py-8 md:px-12 lg:px-24">
+      <div className="relative z-10 mx-auto max-w-4xl flex min-h-screen flex-col px-4 py-8 md:py-12 w-full">
+        {/* Title Heading Display */}
+        <motion.div
+          initial={{ opacity: 0, y: -15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+          className="mb-8"
+        >
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
+            Creating a Gig Post
+          </h1>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+            Fill in the details below to publish a new service offering to the marketplace.
+          </p>
+        </motion.div>
+
         {/* Header (Stepper) */}
-        <div className="mb-6">
+        <div className="mb-6 w-full">
           <GigCreateHeader currentSlide={currentSlide} onReturn={handleReturnTrigger} />
         </div>
 
@@ -181,7 +258,7 @@ const GigCreatePage: React.FC = () => {
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <div className="rounded-3xl bg-white dark:bg-[#0d0f1a]/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
+                  <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
                     <CreateCoreInfo
                       title={title}
                       setTitle={setTitle}
@@ -191,6 +268,7 @@ const GigCreatePage: React.FC = () => {
                       setCategory={setCategory}
                       previewUrl={thumbnailUrl}
                       setPreviewUrl={setThumbnailUrl}
+                      setThumbnailFile={setThumbnailFile}
                       isDragging={false}
                       setIsDragging={() => {}}
                       errors={errors}
@@ -209,7 +287,7 @@ const GigCreatePage: React.FC = () => {
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <div className="rounded-3xl bg-white dark:bg-[#0d0f1a]/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
+                  <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
                     <CreateDelivery
                       slots={slots}
                       setSlots={setSlots}
@@ -221,6 +299,7 @@ const GigCreatePage: React.FC = () => {
                       setFirstDraftDelivery={setFirstDraftDelivery}
                       galleryUrls={galleryUrls}
                       setGalleryUrls={setGalleryUrls}
+                      setGalleryFiles={setGalleryFiles}
                       errors={errors}
                       setErrors={setErrors}
                       onBack={() => handleNext(1)}
@@ -237,7 +316,7 @@ const GigCreatePage: React.FC = () => {
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <div className="rounded-3xl bg-white dark:bg-[#0d0f1a]/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
+                  <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
                     <CreateTiers
                       tiers={tiers}
                       setTiers={setTiers}
@@ -260,7 +339,7 @@ const GigCreatePage: React.FC = () => {
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <div className="rounded-3xl bg-white dark:bg-[#0d0f1a]/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
+                  <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
                     <CreateMilestones
                       milestones={milestones}
                       setMilestones={setMilestones}
@@ -281,7 +360,7 @@ const GigCreatePage: React.FC = () => {
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <div className="rounded-3xl bg-white dark:bg-[#0d0f1a]/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
+                  <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
                     <CreateForms
                       questionnaires={questionnaires}
                       setQuestionnaires={setQuestionnaires}
@@ -302,7 +381,7 @@ const GigCreatePage: React.FC = () => {
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <div className="rounded-3xl bg-white dark:bg-[#0d0f1a]/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
+                  <div className="rounded-3xl bg-white dark:bg-dark-surface/80 p-8 shadow-sm dark:shadow-2xl border border-gray-200 dark:border-white/5 backdrop-blur-xl">
                     <CreateReview
                       title={title}
                       description={description}

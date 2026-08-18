@@ -279,7 +279,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
 
   if (isInitializing) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white flex items-center justify-center p-6">
         <div className="text-center space-y-3">
           <div className="h-8 w-8 rounded-full border-4 border-blue-500/20 border-t-blue-500 animate-spin mx-auto" />
           <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium animate-pulse">Loading proposal details...</p>
@@ -290,7 +290,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
 
   if (!proposal) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white flex items-center justify-center p-6">
         <div className="text-center space-y-3">
           <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">Proposal application not found.</p>
           {debugInfo && (
@@ -322,7 +322,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
   const isJobDeleted = proposal?.jobStatus === "Deleted" || !!proposal?.jobDeletedAt;
 
   return (
-    <div className="relative w-full min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-16">
+    <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-16">
       {/* Animated Background Grid */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-30">
         <ShapeGrid
@@ -379,7 +379,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
           <div className="lg:col-span-7 space-y-6">
 
             {/* SECTION 1: Applicant Profile Header, Target Job & Financial Metrics */}
-            <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-6 backdrop-blur-xl shadow-2xl space-y-5">
+            <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 backdrop-blur-xl shadow-2xl space-y-5">
 
               {/* 1. APPLICANT (PROPOSER) AT TOP */}
               <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 dark:border-white/5 pb-5">
@@ -557,7 +557,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             </div>
 
             {/* SECTION 2: Cover Letter Pitch */}
-            <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-6 backdrop-blur-xl shadow-2xl space-y-3">
+            <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 backdrop-blur-xl shadow-2xl space-y-3">
               <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
                 Cover Letter & Pitch Rationale
               </h3>
@@ -572,7 +572,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
           <div className="lg:col-span-5 space-y-6">
 
             {/* SECTION 3: Milestone Roadmap */}
-            <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-6 backdrop-blur-xl shadow-2xl space-y-4">
+            <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 backdrop-blur-xl shadow-2xl space-y-4">
               <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
                 <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
                   <Layers className="h-4 w-4 text-emerald-400" /> Milestone Roadmap
@@ -612,7 +612,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             </div>
 
             {/* SECTION 4: Terms of Service */}
-            <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-6 backdrop-blur-xl shadow-2xl space-y-4">
+            <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 backdrop-blur-xl shadow-2xl space-y-4">
               <div className="flex items-center gap-3 pb-3 border-b border-gray-100 dark:border-white/5">
                 <div className="h-10 w-10 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
                   <FileText className="h-5 w-5" />
@@ -635,7 +635,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
         </div>
 
         {/* ================= SECTION 5: EXPANDABLE HOVER DECISION CONTROLS (BOTTOM) ================= */}
-        <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-4">
+        <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-4">
 
           <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 pb-3">
             <h3 className="text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -759,7 +759,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-6 shadow-2xl space-y-4 text-left"
+              className="w-full max-w-md rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-2xl space-y-4 text-left"
             >
               <div className="space-y-2">
                 <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -798,7 +798,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-2xl rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-6 shadow-2xl space-y-6 text-left my-8"
+              className="w-full max-w-2xl rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-2xl space-y-6 text-left my-8"
             >
               {/* Header */}
               <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/10 pb-4">
@@ -992,7 +992,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-6 shadow-2xl space-y-4 text-left"
+              className="w-full max-w-md rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 shadow-2xl space-y-4 text-left"
             >
               <div className="flex items-center gap-3 text-red-400 pb-2 border-b border-gray-100 dark:border-white/5">
                 <XCircle className="h-6 w-6" />

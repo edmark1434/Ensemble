@@ -116,8 +116,10 @@ const ProposalsCreatePage: React.FC = () => {
 
     if (!bidAmount || rawBid <= 0) {
       stepErrors.bidAmount = "A valid bid amount is required.";
-    } else if (job && (rawBid < job.minBudget || rawBid > job.maxBudget)) {
-      stepErrors.bidAmount = `Your bid must be between ${job.minBudget.toLocaleString()} and ${job.maxBudget.toLocaleString()}.`;
+    } else if (job && rawBid < job.minBudget) {
+      stepErrors.bidAmount = `Please increase your bid to the minimum budget of ${job.minBudget.toLocaleString()}.`;
+    } else if (job && rawBid > job.maxBudget) {
+      stepErrors.bidAmount = `Please do not exceed the maximum budget of ${job.maxBudget.toLocaleString()}.`;
     }
     if (!coverLetter.trim() || coverLetter.length < 50) {
       stepErrors.coverLetter = "Cover pitch must be at least 50 characters long.";
@@ -177,7 +179,7 @@ const ProposalsCreatePage: React.FC = () => {
   };
 
   return (
-    <div className="relative w-full min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-12">
+    <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-12">
       {/* Background Grid */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
         <ShapeGrid
@@ -207,7 +209,7 @@ const ProposalsCreatePage: React.FC = () => {
 
         <ProposalCreateHeader currentSlide={currentSlide} onReturn={handleReturnTrigger} />
 
-        <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6">
+        <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6">
           <AnimatePresence mode="wait">
             {currentSlide === 1 && (
               <motion.div key="step-1" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}>

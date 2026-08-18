@@ -43,7 +43,7 @@ export const DashboardTaskDetail = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] flex items-center justify-center">
+            <div className="min-h-screen bg-gray-50 dark:bg-dark-base flex items-center justify-center">
                 <LoaderCircle className="h-8 w-8 text-emerald-500 animate-spin" />
             </div>
         );
@@ -51,7 +51,7 @@ export const DashboardTaskDetail = () => {
 
     if (!task) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] flex items-center justify-center text-gray-900 dark:text-white">
+            <div className="min-h-screen bg-gray-50 dark:bg-dark-base flex items-center justify-center text-gray-900 dark:text-white">
                 Task not found.
             </div>
         );
@@ -83,7 +83,7 @@ export const DashboardTaskDetail = () => {
         'bg-zinc-500/10 border-zinc-500/20 text-gray-600 dark:text-zinc-400';
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
+        <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
             <UserHeader pageTitle={isFreelancer ? "My Task" : "To Review"} credits={user?.wallet?.balance_credits || 0} />
             
             <div className="mx-auto max-w-7xl p-6 md:p-8 h-[calc(100vh-100px)] flex flex-col">
@@ -155,7 +155,7 @@ export const DashboardTaskDetail = () => {
                         </div>
 
                         {/* Milestones Stepper */}
-                        <div className="bg-white dark:bg-[#0d0f1a]/70 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10 rounded-2xl p-5 flex-1 overflow-y-auto inbox-scroll-thin min-h-0">
+                        <div className="bg-white dark:bg-dark-surface/70 shadow-sm dark:shadow-none border border-gray-200 dark:border-white/10 rounded-2xl p-5 flex-1 overflow-y-auto inbox-scroll-thin min-h-0">
                             <div className="flex items-center justify-between mb-5">
                                 <h2 className="text-base font-bold text-gray-900 dark:text-white uppercase tracking-wide">Milestones</h2>
                                 <button 
@@ -214,7 +214,7 @@ export const DashboardTaskDetail = () => {
                                                             <img src="/icons/lottie/credit.png" alt="credits" className="w-3 h-3 object-contain" onError={(e) => { e.currentTarget.style.display = 'none' }} />
                                                             {milestone.credits} Credits
                                                         </div>
-                                                        <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border ${isLocked ? 'bg-gray-100 dark:bg-zinc-900 text-gray-500 dark:text-zinc-600 border-gray-200 dark:border-zinc-800' : statusColors}`}>
+                                                        <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border ${isLocked ? 'bg-gray-100 dark:bg-dark-surface text-gray-500 dark:text-zinc-600 border-gray-200 dark:border-white/5' : statusColors}`}>
                                                             {isLocked ? 'LOCKED' : milestone.status.replace(/_/g, ' ')}
                                                         </span>
                                                     </div>

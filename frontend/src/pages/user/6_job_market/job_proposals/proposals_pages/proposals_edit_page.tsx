@@ -21,6 +21,7 @@ import { sampleSentProposals } from "../proposals_datasets";
 import { sampleJobs } from "../../job_datasets";
 import type { Job } from "../../job_components/job_lists";
 import type { ProposalItemData } from "../proposals_components/proposals_list";
+import { useJobs } from "@/hooks/useJobs";
 
 export const ProposalsEditPage: React.FC = () => {
   const theme = useGlobalState((state) => state.theme);
@@ -48,24 +49,85 @@ export const ProposalsEditPage: React.FC = () => {
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
+  const { fetchProposalById, fetchJobs } = useJobs();
+  const [isLoading, setIsLoading] = useState(true);
+
   // Fetch Existing Proposal & Associated Job Data
   useEffect(() => {
-    if (proposalId) {
-      const foundProposal = sampleSentProposals.find((p) => p.id === proposalId);
-      if (foundProposal) {
-        setProposal(foundProposal);
-        setBidAmount(foundProposal.bidAmount.toString());
-        setAdditionalWorkRate(foundProposal.additionalWorkRate);
-        setCoverLetter(foundProposal.coverLetter);
-        setTosContent(foundProposal.tosContent);
-        setMilestones(foundProposal.milestones || []);
+    const loadData = async () => {
+      if (!proposalId) return;
+      try {
+        const p = await fetchProposalById(proposalId);
+        const mappedProposal: ProposalItemData = {
+          id: p.proposal_id,
+          jobId: p.job_id,
+          jobTitle: p.job_title || "Unknown Job",
+          partyName: p.freelancer_name || p.freelancer_handle || "Unknown",
+          partyAvatar: p.freelancer_avatar_path
+            ? `${import.meta.env.VITE_CLOUDFRONT_URL}${p.freelancer_avatar_path.startsWith('/') ? '' : '/'}${p.freelancer_avatar_path}`
+            : undefined,
+          bidAmount: parseFloat(p.rate_credits) || 0,
+          additionalWorkRate: parseFloat(p.revision_price_credits) || 0,
+          status: p.status,
+          submittedAt: new Date(p.created_at).toLocaleDateString(),
+          coverLetter: p.letter || "",
+          tosContent: p.terms || sampleTosTemplates[0].content,
+          milestones: p.milestones || [],
+          type: "sent",
+        };
 
-        const foundJob = sampleJobs.find((j) => j.id === foundProposal.jobId);
-        if (foundJob) {
-          setJob(foundJob);
+        setProposal(mappedProposal);
+        setBidAmount(mappedProposal.bidAmount.toString());
+        setAdditionalWorkRate(mappedProposal.additionalWorkRate);
+        setCoverLetter(mappedProposal.coverLetter);
+        setTosContent(mappedProposal.tosContent);
+        setMilestones(mappedProposal.milestones || []);
+
+        try {
+          const jobs = await fetchJobs();
+          const foundJob = jobs.find((j: any) => j.job_id === p.job_id);
+          if (foundJob) {
+            setJob({
+              id: foundJob.job_id,
+              title: foundJob.title,
+              minBudget: parseFloat(foundJob.rate_credits_min) || 0,
+              maxBudget: parseFloat(foundJob.rate_credits_max) || 0,
+              priceRange: `${(parseFloat(foundJob.rate_credits_min) || 0).toLocaleString()} - ${(parseFloat(foundJob.rate_credits_max) || 0).toLocaleString()}`,
+              description: foundJob.description || "",
+              createdAt: foundJob.created_at || "",
+              status: foundJob.status || "",
+              tags: foundJob.tags || [],
+            } as Job);
+          }
+        } catch (jobErr) {
+          console.warn("Failed to fetch job info", jobErr);
         }
+
+      } catch (err) {
+        // Fallback to sample data for mock UI interactions
+        const foundProposal = sampleSentProposals.find((p) => p.id === proposalId);
+        if (foundProposal) {
+          setProposal(foundProposal);
+          setBidAmount(foundProposal.bidAmount.toString());
+          setAdditionalWorkRate(foundProposal.additionalWorkRate);
+          setCoverLetter(foundProposal.coverLetter);
+          setTosContent(foundProposal.tosContent);
+          setMilestones(foundProposal.milestones || []);
+
+          const foundJob = sampleJobs.find((j) => j.id === foundProposal.jobId);
+          if (foundJob) {
+            setJob(foundJob);
+          }
+        } else {
+          setProposal(null);
+        }
+      } finally {
+        setIsLoading(false);
       }
-    }
+    };
+
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [proposalId]);
 
   const handleReturnTrigger = () => {
@@ -78,6 +140,10 @@ export const ProposalsEditPage: React.FC = () => {
 
     if (!bidAmount || rawBid <= 0) {
       stepErrors.bidAmount = "A valid bid amount is required.";
+    } else if (job && rawBid < job.minBudget) {
+      stepErrors.bidAmount = `Please increase your bid to the minimum budget of ${job.minBudget.toLocaleString()}.`;
+    } else if (job && rawBid > job.maxBudget) {
+      stepErrors.bidAmount = `Please do not exceed the maximum budget of ${job.maxBudget.toLocaleString()}.`;
     }
     if (!coverLetter.trim() || coverLetter.length < 50) {
       stepErrors.coverLetter = "Cover pitch must be at least 50 characters long.";
@@ -125,9 +191,19 @@ export const ProposalsEditPage: React.FC = () => {
     setIsSuccessOpen(true);
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white flex items-center justify-center p-6">
+        <div className="text-center text-sm text-gray-500 dark:text-zinc-400 font-medium animate-pulse">
+          Loading proposal data...
+        </div>
+      </div>
+    );
+  }
+
   if (!proposal) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white flex items-center justify-center p-6">
         <div className="text-center space-y-3">
           <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">Proposal application not found.</p>
           <button
@@ -142,7 +218,7 @@ export const ProposalsEditPage: React.FC = () => {
   }
 
   return (
-    <div className="relative w-full min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-12">
+    <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-12">
       {/* Background Animated Grid */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
         <ShapeGrid
@@ -165,8 +241,8 @@ export const ProposalsEditPage: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Editing Proposal Application</h1>
           <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
-            Updating proposal for Job ID <span className="font-mono text-blue-400">{proposal.jobId}</span>:{" "}
-            <strong className="text-gray-900 dark:text-white">{proposal.jobTitle}</strong>
+            Updating proposal for:{" "}
+            <strong className="text-gray-900 dark:text-white">{job?.title || proposal.jobTitle}</strong>
           </p>
         </div>
 
@@ -174,7 +250,7 @@ export const ProposalsEditPage: React.FC = () => {
         <ProposalEditHeader currentSlide={currentSlide} onReturn={handleReturnTrigger} />
 
         {/* Wizard Slide Container */}
-        <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6">
+        <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6">
           <AnimatePresence mode="wait">
             {currentSlide === 1 && (
               <motion.div

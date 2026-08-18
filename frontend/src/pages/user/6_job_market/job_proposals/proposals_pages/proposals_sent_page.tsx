@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import { Search } from "lucide-react";
 import ProposalsList, {
   type ProposalStatus,
 } from "../proposals_components/proposals_list";
@@ -19,6 +21,7 @@ export const ProposalsSentPage: React.FC = () => {
     revisionRateSort,
     dateSort,
     viewType,
+    setChildProposalsCounts,
   } = useOutletContext<ProposalsMainContext>();
 
   const [proposals, setProposals] = useState<any[]>([]);
@@ -73,6 +76,24 @@ export const ProposalsSentPage: React.FC = () => {
       )
     );
   };
+
+  useEffect(() => {
+    if (setChildProposalsCounts) {
+      const counts = {
+        All: proposals.length,
+        Pending: 0,
+        Shortlisted: 0,
+        Accepted: 0,
+        Rejected: 0,
+      };
+      proposals.forEach((p) => {
+        if (p.status in counts) {
+          counts[p.status as keyof typeof counts]++;
+        }
+      });
+      setChildProposalsCounts(counts);
+    }
+  }, [proposals, setChildProposalsCounts]);
 
   // Full Filter & Sort Engine for Sent Proposals
   const filtered = proposals
@@ -134,16 +155,16 @@ export const ProposalsSentPage: React.FC = () => {
   if (proposals.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-4 text-center">
-        <div className="w-16 h-16 bg-white dark:bg-white/5 shadow-sm dark:shadow-none rounded-full flex items-center justify-center mb-2">
-          <span className="text-2xl">🚀</span>
+        <div className="w-24 h-24 flex items-center justify-center mb-2 opacity-80 pointer-events-none">
+          <DotLottieReact src="/icons/lottie/no-result.lottie" autoplay loop />
         </div>
         <h3 className="text-lg font-bold text-gray-900 dark:text-white">No Proposals Sent Yet</h3>
         <p className="text-xs text-gray-500 dark:text-zinc-400 max-w-sm">You haven't applied to any jobs yet. Start exploring the job market to find your next gig!</p>
         <button
           onClick={() => navigate('/jobs/postings')}
-          className="mt-4 px-6 py-2.5 rounded-xl bg-blue-500 text-xs font-bold text-gray-900 dark:text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20"
+          className="mt-4 px-6 py-2.5 rounded-xl bg-blue-500 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
         >
-          Look for Jobs
+          <Search className="h-4 w-4" /> Look for Jobs
         </button>
       </div>
     );

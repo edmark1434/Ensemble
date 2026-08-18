@@ -16,15 +16,15 @@ const GigDetailsView: React.FC<GigDetailsViewProps> = ({ gig, onClose }) => {
       <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z- transition-opacity" onClick={onClose} />
 
       {/* Right Drawer */}
-      <div className="fixed right-0 top-0 bottom-0 w-full md:w-1/2 bg-[#0d0f1a] border-l border-white/10 z- shadow-2xl flex flex-col animate-slide-in-right">
+      <div className="fixed right-0 top-0 bottom-0 w-full md:w-1/2 bg-dark-surface border-l border-white/10 z- shadow-2xl flex flex-col animate-slide-in-right">
 
         {/* Header Image */}
-        <div className="relative h-64 shrink-0 bg-zinc-950 border-b border-white/5">
+        <div className="relative h-64 shrink-0 bg-dark-base border-b border-white/5">
           <img src={gig.thumbnail} alt="" className="w-full h-full object-cover opacity-60" />
           <button onClick={onClose} className="absolute top-5 left-5 h-10 w-10 flex items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-md transition hover:scale-110">
             <X className="h-5 w-5" />
           </button>
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0d0f1a] to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-dark-surface to-transparent" />
         </div>
 
         {/* Scrollable Content */}
@@ -89,7 +89,7 @@ const GigDetailsView: React.FC<GigDetailsViewProps> = ({ gig, onClose }) => {
         </div>
 
         {/* Footer Action */}
-        <div className="p-6 border-t border-white/10 bg-[#0d0f1a] shrink-0">
+        <div className="p-6 border-t border-white/10 bg-dark-surface shrink-0">
           <button className="w-full py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
             <Send className="h-4 w-4" /> Send Request for {selectedTier.toUpperCase()}
           </button>

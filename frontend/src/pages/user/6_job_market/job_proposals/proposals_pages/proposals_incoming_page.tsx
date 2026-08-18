@@ -20,6 +20,7 @@ export const ProposalsIncomingPage: React.FC = () => {
     revisionRateSort,
     dateSort,
     viewType,
+    setChildProposalsCounts,
   } = useOutletContext<ProposalsMainContext>();
 
   const [proposals, setProposals] = useState<any[]>([]);
@@ -63,6 +64,15 @@ export const ProposalsIncomingPage: React.FC = () => {
               : "/placeholder.svg"
           });
         }
+
+        // Calculate and report status counts to parent
+        const counts = { All: mapped.length, Pending: 0, Shortlisted: 0, Accepted: 0, Rejected: 0 };
+        mapped.forEach((p: any) => {
+          if (p.status in counts) {
+            counts[p.status as keyof typeof counts]++;
+          }
+        });
+        setChildProposalsCounts(counts);
       } catch (err) {
         console.error("Failed to load incoming proposals", err);
       } finally {
@@ -161,7 +171,7 @@ export const ProposalsIncomingPage: React.FC = () => {
   return (
     <div className="space-y-4 text-left">
       {/* Target Job Header Bar */}
-      <div className="flex items-center justify-between gap-4 p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 backdrop-blur-sm">
+      <div className="flex items-center justify-between gap-4 p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface backdrop-blur-sm">
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => navigate("/jobs/proposals")}

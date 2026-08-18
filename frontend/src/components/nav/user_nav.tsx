@@ -106,7 +106,7 @@ const UserNav: React.FC<UserNavProps> = () => {
     return (
        <>
           <aside
-             className={`fixed inset-y-0 left-0 z-20 flex flex-col border-r border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12] transition-all duration-300 ${
+             className={`fixed inset-y-0 left-0 z-20 flex flex-col border-r border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base transition-all duration-300 ${
                 isCollapsed ? "w-20" : "w-64"
              }`}
           >
@@ -157,7 +157,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                            {isActive && (
                                               <motion.div
                                                  layoutId="activeNavBackground"
-                                                 className="absolute inset-0 rounded-lg bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-gray-800/40 dark:to-gray-700/20 shadow-sm border border-gray-200 dark:border-gray-700/50 nav-rainbow-shine"
+                                                 className="absolute inset-0 rounded-lg bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-white/10 dark:to-white/5 shadow-sm border border-gray-200 dark:border-white/10 nav-rainbow-shine"
                                                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
                                               />
                                            )}
@@ -179,7 +179,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                               {isActive && (
                                                  <motion.div
                                                     layoutId="activeNavBackgroundCollapsed"
-                                                    className="absolute inset-0 rounded-lg bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-gray-800/40 dark:to-gray-700/20 shadow-sm border border-gray-200 dark:border-gray-700/50 nav-rainbow-shine"
+                                                    className="absolute inset-0 rounded-lg bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-white/10 dark:to-white/5 shadow-sm border border-gray-200 dark:border-white/10 nav-rainbow-shine"
                                                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
                                                  />
                                               )}
@@ -230,7 +230,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                            <NavLink to={to}>
                                               <div
                                                  className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors duration-200 ${
-                                                    isActive ? "bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-gray-800/40 dark:to-gray-700/20 shadow-sm border border-gray-200 dark:border-gray-700/50 text-gray-900 dark:text-gray-100 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
+                                                    isActive ? "bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-white/10 dark:to-white/5 shadow-sm border border-gray-200 dark:border-white/10 text-gray-900 dark:text-gray-100 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
                                                  }`}
                                               >
                                                  {isActive && (
@@ -258,14 +258,14 @@ const UserNav: React.FC<UserNavProps> = () => {
                             </div>
 
                             <div className="absolute left-full -ml-6 pl-6 hidden w-52 group-hover:block z-50">
-                               <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-1.5 shadow-xl dark:shadow-2xl animate-fade-in">
+                               <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-1.5 shadow-xl dark:shadow-2xl animate-fade-in">
                                   <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-500 border-b border-gray-100 dark:border-white/5 mb-1">Jobs</p>
                                   <ul className="space-y-0.5">
                                      {jobsState.map(({ label, icon: Icon, to }) => {
                                         const isActive = isJobItemActive(to);
                                         return (
                                            <li key={label}>
-                                              <NavLink to={to} className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-gray-800/40 dark:to-gray-700/20 shadow-sm border border-gray-200 dark:border-gray-700/50 text-gray-900 dark:text-gray-100 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"}`}>
+                                              <NavLink to={to} className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-white/10 dark:to-white/5 shadow-sm border border-gray-200 dark:border-white/10 text-gray-900 dark:text-gray-100 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"}`}>
                                                  <Icon className="h-3.5 w-3.5 shrink-0" />
                                                  <span>{label}</span>
                                               </NavLink>
@@ -295,7 +295,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                            {({ isActive }) => (
                                               <div
                                                  className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-sm transition-colors duration-200 ${
-                                                    isActive ? "bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-gray-800/40 dark:to-gray-700/20 shadow-sm border border-gray-200 dark:border-gray-700/50 text-gray-900 dark:text-gray-100 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
+                                                    isActive ? "bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-white/10 dark:to-white/5 shadow-sm border border-gray-200 dark:border-white/10 text-gray-900 dark:text-gray-100 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
                                                  }`}
                                               >
                                                  {isActive && (
@@ -323,12 +323,12 @@ const UserNav: React.FC<UserNavProps> = () => {
                             </div>
 
                             <div className="absolute left-full -ml-6 pl-6 hidden w-52 group-hover:block z-50">
-                               <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-1.5 shadow-xl dark:shadow-2xl animate-fade-in">
+                               <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-1.5 shadow-xl dark:shadow-2xl animate-fade-in">
                                   <p className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-500 border-b border-gray-100 dark:border-white/5 mb-1">Gigs</p>
                                   <ul className="space-y-0.5">
                                      {gigsState.map(({ label, icon: Icon, to }) => (
                                         <li key={label}>
-                                           <NavLink to={to} className={({ isActive }) => `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-gray-800/40 dark:to-gray-700/20 shadow-sm border border-gray-200 dark:border-gray-700/50 text-gray-900 dark:text-gray-100 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"}`}>
+                                           <NavLink to={to} className={({ isActive }) => `flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs transition-all duration-200 ${isActive ? "bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-white/10 dark:to-white/5 shadow-sm border border-gray-200 dark:border-white/10 text-gray-900 dark:text-gray-100 font-medium" : "text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"}`}>
                                               <Icon className="h-3.5 w-3.5 shrink-0" />
                                               <span>{label}</span>
                                            </NavLink>
@@ -365,7 +365,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                            {isActive && (
                                               <motion.div
                                                  layoutId="activeNavBackground"
-                                                 className="absolute inset-0 rounded-lg bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-gray-800/40 dark:to-gray-700/20 shadow-sm border border-gray-200 dark:border-gray-700/50 nav-rainbow-shine"
+                                                 className="absolute inset-0 rounded-lg bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-white/10 dark:to-white/5 shadow-sm border border-gray-200 dark:border-white/10 nav-rainbow-shine"
                                                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
                                               />
                                            )}
@@ -387,7 +387,7 @@ const UserNav: React.FC<UserNavProps> = () => {
                                               {isActive && (
                                                  <motion.div
                                                     layoutId="activeNavBackgroundCollapsed"
-                                                    className="absolute inset-0 rounded-lg bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-gray-800/40 dark:to-gray-700/20 shadow-sm border border-gray-200 dark:border-gray-700/50 nav-rainbow-shine"
+                                                    className="absolute inset-0 rounded-lg bg-gradient-to-r from-gray-100 to-gray-200/50 dark:from-white/10 dark:to-white/5 shadow-sm border border-gray-200 dark:border-white/10 nav-rainbow-shine"
                                                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
                                                  />
                                               )}

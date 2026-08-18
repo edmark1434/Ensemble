@@ -73,7 +73,7 @@ export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
   }
 
   return (
-    <div className="inbox-scroll-thin flex-shrink-0 max-h-36 overflow-y-auto bg-[#0d0f1a]">
+    <div className="inbox-scroll-thin flex-shrink-0 max-h-36 overflow-y-auto bg-white dark:bg-dark-surface">
       {liveGoogleMeeting && <LiveGoogleMeetingBanner call={liveGoogleMeeting} />}
       <div className="px-4 py-2">
       {isTicket && (
@@ -83,8 +83,8 @@ export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
               {ticketNumber || "Ticket"}
             </span>
             {ticketDetails?.type && (
-              <span className="text-[11px] text-zinc-400">
-                Type: <span className="text-zinc-200">{ticketDetails.type}</span>
+              <span className="text-[11px] text-gray-500 dark:text-zinc-400">
+                Type: <span className="text-gray-900 dark:text-zinc-200">{ticketDetails.type}</span>
               </span>
             )}
             {ticketDetails?.status && (
@@ -99,12 +99,12 @@ export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
             )}
           </div>
           {ticketDetails?.subject && (
-            <p className="mt-1 text-xs font-medium text-white">
+            <p className="mt-1 text-xs font-medium text-gray-900 dark:text-white">
               {ticketDetails.subject}
             </p>
           )}
           {description && (
-            <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-zinc-400">
+            <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-gray-500 dark:text-zinc-400">
               {description}
             </p>
           )}
@@ -117,13 +117,13 @@ export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
         return (
           <div
             key={pin.message_id}
-            className="flex items-center justify-between gap-2 py-1 text-xs text-zinc-300"
+            className="flex items-center justify-between gap-2 py-1 text-xs text-gray-600 dark:text-zinc-300"
             style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
           >
             <button
               type="button"
               onClick={() => onJumpTo?.(pin.message_id)}
-              className="flex items-center gap-2 min-w-0 flex-1 text-left hover:text-white transition"
+              className="flex items-center gap-2 min-w-0 flex-1 text-left hover:text-gray-900 dark:text-white transition"
             >
               <Pin className="h-3.5 w-3.5 text-yellow-400 flex-shrink-0" />
               <span className="truncate">{msg.message_content || "Photo"}</span>
@@ -131,7 +131,7 @@ export const InboxPinnedBanner: React.FC<InboxPinnedBannerProps> = ({
             <button
               type="button"
               onClick={() => onUnpin(pin.message_id)}
-              className="rounded-full p-1 text-zinc-500 hover:bg-white/10 hover:text-white transition flex-shrink-0"
+              className="rounded-full p-1 text-gray-500 dark:text-zinc-500 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white transition flex-shrink-0"
             >
               <X className="h-3.5 w-3.5" />
             </button>

@@ -86,7 +86,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  if (loading) return <div className="h-48 w-full bg-gray-200 dark:bg-white/5 animate-pulse rounded-2xl" />;
+  if (loading) return <div className="h-48 w-full bg-gray-200 dark:bg-dark-elevated animate-pulse rounded-2xl" />;
 
 
 
@@ -100,7 +100,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             onClick={() => { if (avatarUrl) setIsAvatarExpanded(true); }}
             className={`h-28 w-28 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 dark:from-zinc-700 dark:to-zinc-800 p-0.5 shadow-xl shadow-gray-500/5 ${avatarUrl ? 'cursor-pointer hover:scale-105 transition-transform' : ''}`}
           >
-            <div className="h-full w-full rounded-full bg-gray-100 dark:bg-[#080a12] overflow-hidden flex items-center justify-center">
+            <div className="h-full w-full rounded-full bg-gray-100 dark:bg-dark-base overflow-hidden flex items-center justify-center">
               {avatarUrl ? (
                 <img src={avatarUrl} alt="Profile Media" className="w-full h-full object-cover" />
               ) : (
@@ -205,8 +205,8 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
 
               {/* Floating Meta Dashboard Pane */}
               {isMetadataOpen && (
-                <div className="absolute top-full left-1/2 md:left-0 transform -translate-x-1/2 md:translate-x-0 mt-2 w-80 rounded-xl border border-gray-200 dark:border-white/15 bg-white dark:bg-[#0b0e17] p-3 shadow-2xl z-50 animate-fadeIn font-mono text-[11px] text-gray-600 dark:text-zinc-400 space-y-1.5">
-                  <div className="absolute -top-1 left-1/2 md:left-4 transform -translate-x-1/2 md:translate-x-0 w-2 h-2 bg-white dark:bg-[#0b0e17] border-t border-l border-gray-200 dark:border-white/15 rotate-45" />
+                <div className="absolute top-full left-1/2 md:left-0 transform -translate-x-1/2 md:translate-x-0 mt-2 w-80 rounded-xl border border-gray-200 dark:border-white/15 bg-white dark:bg-dark-base p-3 shadow-2xl z-50 animate-fadeIn font-mono text-[11px] text-gray-600 dark:text-zinc-400 space-y-1.5">
+                  <div className="absolute -top-1 left-1/2 md:left-4 transform -translate-x-1/2 md:translate-x-0 w-2 h-2 bg-white dark:bg-dark-base border-t border-l border-gray-200 dark:border-white/15 rotate-45" />
                   <div className="flex items-start gap-2 border-b border-gray-200 dark:border-white/10 pb-1.5 mb-1.5">
                     <span className="font-bold text-gray-700 dark:text-zinc-300">Full Name:</span>
                     <span className="leading-normal text-gray-800 dark:text-white">

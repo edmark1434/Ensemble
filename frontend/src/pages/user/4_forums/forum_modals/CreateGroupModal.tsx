@@ -278,7 +278,7 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/80 px-4 py-6 backdrop-blur-sm animate-fade-in-modal sm:items-center sm:py-8">
-      <div className="my-auto w-full max-w-lg rounded-2xl border border-white/10 bg-[#0d0f1a] p-6 shadow-2xl animate-scale-in max-h-[calc(100vh-3rem)] overflow-y-auto">
+      <div className="my-auto w-full max-w-lg rounded-2xl border border-white/10 bg-dark-surface p-6 shadow-2xl animate-scale-in max-h-[calc(100vh-3rem)] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Users className="h-5 w-5 text-blue-400" />

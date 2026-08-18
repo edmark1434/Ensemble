@@ -31,7 +31,7 @@ const PLATFORM_MAP: Record<string, { label: string; icon: any; color: string }> 
 };
 
 export const SocialLinksSectionSkeleton: React.FC = () => (
-  <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-[#0b0e17]/60 p-4 space-y-2.5 animate-pulse">
+  <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-dark-base/60 p-4 space-y-2.5 animate-pulse">
     <div className="h-4 w-32 bg-white/10 rounded" />
     <div className="h-4 w-full bg-white/5 rounded" />
   </div>
@@ -76,7 +76,7 @@ export const SocialLinksSection_ProfileDisplay: React.FC<SocialLinksProps> = ({
   };
 
   return (
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-[#0b0e17]/60 backdrop-blur-md p-4 text-gray-800 dark:text-zinc-300 shadow-xl font-['Plus Jakarta Sans',sans-serif] space-y-3 relative h-fit w-full">
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-dark-base/60 backdrop-blur-md p-4 text-gray-800 dark:text-zinc-300 shadow-xl font-['Plus Jakarta Sans',sans-serif] space-y-3 relative h-fit w-full">
 
       {/* ==================== HEADER CONTROL PANEL ==================== */}
       <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-2">
@@ -138,7 +138,7 @@ export const SocialLinksSection_ProfileDisplay: React.FC<SocialLinksProps> = ({
                     <select
                       value={link.platform.toLowerCase()}
                       onChange={(e) => handleUpdateLink(idx, "platform", e.target.value)}
-                      className="appearance-none bg-white dark:bg-[#121624] text-xs text-gray-900 dark:text-white font-bold px-3 py-2 pr-8 rounded-xl border border-gray-200 dark:border-white/5 focus:outline-none focus:border-blue-500/40 cursor-pointer h-[38px] transition-colors"
+                      className="appearance-none bg-white dark:bg-dark-surface text-xs text-gray-900 dark:text-white font-bold px-3 py-2 pr-8 rounded-xl border border-gray-200 dark:border-white/5 focus:outline-none focus:border-blue-500/40 cursor-pointer h-[38px] transition-colors"
                     >
                       {Object.keys(PLATFORM_MAP).map((key) => (
                         <option key={key} value={key}>
@@ -214,7 +214,7 @@ export const SocialLinksSection_ProfileDisplay: React.FC<SocialLinksProps> = ({
                       rel="noopener noreferrer"
                       className="group flex items-center gap-2.5 rounded-xl border border-gray-200 dark:border-white/[0.03] bg-gray-50 dark:bg-white/[0.01] p-2 h-[42px] transition-all duration-300 hover:border-gray-300 dark:hover:border-white/10 hover:bg-gray-100 dark:hover:bg-white/[0.02] w-full box-border"
                     >
-                      <div className="bg-white dark:bg-[#121624] border border-gray-200 dark:border-white/5 rounded-full p-1.5 flex items-center justify-center flex-shrink-0 w-6 h-6 transition-colors group-hover:bg-gray-100 dark:group-hover:bg-[#161b2c]">
+                      <div className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/5 rounded-full p-1.5 flex items-center justify-center flex-shrink-0 w-6 h-6 transition-colors group-hover:bg-gray-100 dark:group-hover:bg-[#161b2c]">
                         <Icon className={`h-3.5 w-3.5 flex-shrink-0 ${colorClass}`} />
                       </div>
                       <span className="text-[11px] font-semibold text-gray-600 dark:text-zinc-400 truncate flex-1 group-hover:text-gray-900 dark:group-hover:text-white transition-colors group-hover:underline">

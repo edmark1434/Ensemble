@@ -21,7 +21,7 @@ interface BadgeSectionProps {
 }
 
 export const BadgeSideSectionSkeleton: React.FC = () => (
-  <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-[#0b0e17]/60 p-5 space-y-3 animate-pulse">
+  <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-dark-base/60 p-5 space-y-3 animate-pulse">
     <div className="flex justify-between items-center">
       <div className="h-4 w-28 bg-white/10 rounded" />
       <div className="h-4 w-4 bg-white/10 rounded" />
@@ -55,7 +55,7 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
   ];
 
   return (
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0b0e17]/90 p-4 text-gray-800 dark:text-zinc-300 shadow-xl font-['Plus Jakarta Sans',sans-serif] space-y-3 relative z-20">
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/90 p-4 text-gray-800 dark:text-zinc-300 shadow-xl font-['Plus Jakarta Sans',sans-serif] space-y-3 relative z-20">
 
       {/* Header Panel */}
       <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-2">
@@ -70,7 +70,7 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
               <HelpCircle className="h-3 w-3" />
             </button>
 
-            <div className="absolute left-full top-0 ml-4 w-80 p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#070913] shadow-[0_20px_50px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.8)] opacity-0 scale-95 pointer-events-none transition-all duration-200 ease-out group-hover/help:opacity-100 group-hover/help:scale-100 z-50 text-left space-y-3 origin-top-left">
+            <div className="absolute left-full top-0 ml-4 w-80 p-4 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-[0_20px_50px_rgba(0,0,0,0.1)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.8)] opacity-0 scale-95 pointer-events-none transition-all duration-200 ease-out group-hover/help:opacity-100 group-hover/help:scale-100 z-50 text-left space-y-3 origin-top-left">
               <div className="absolute right-full top-3.5 border-[6px] border-transparent border-r-white dark:border-r-[#070913]" />
               <div className="absolute right-full top-3.5 -mr-[1px] border-[6px] border-transparent border-r-gray-200 dark:border-r-white/10 -z-10" />
 
@@ -140,7 +140,7 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
                 {displayBadges.map((b) => (
                   <div
                     key={b.id}
-                    className="group relative flex items-center justify-center w-[54px] h-[54px] mx-auto rounded-full transition-all duration-200 cursor-help border bg-gray-50 dark:bg-[#0d111d] border-transparent dark:border-white/[0.03]"
+                    className="group relative flex items-center justify-center w-[54px] h-[54px] mx-auto rounded-full transition-all duration-200 cursor-help border bg-gray-50 dark:bg-dark-surface border-transparent dark:border-white/[0.03]"
                     onMouseEnter={(e) => {
                       e.currentTarget.style.borderColor = b.borderColor;
                       e.currentTarget.style.backgroundColor = b.glowColor + "05";
@@ -151,7 +151,7 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
                     }}
                   >
                     <div
-                      className="bg-white dark:bg-[#121624] border border-gray-200 dark:border-white/5 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 w-12 h-12 p-1.5"
+                      className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/5 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 w-12 h-12 p-1.5"
                       onMouseEnter={(e) => { e.currentTarget.style.boxShadow = `0 0 10px ${b.glowColor}`; }}
                       onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; }}
                     >
@@ -159,11 +159,11 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
                     </div>
 
                     {/* Tooltip */}
-                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 w-80 p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#070913] shadow-[0_25px_60px_-10px_rgba(0,0,0,0.1)] dark:shadow-[0_25px_60px_-10px_rgba(0,0,0,0.85)] opacity-0 scale-95 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 z-50 text-left space-y-4 origin-left">
+                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 w-80 p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-[0_25px_60px_-10px_rgba(0,0,0,0.1)] dark:shadow-[0_25px_60px_-10px_rgba(0,0,0,0.85)] opacity-0 scale-95 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 z-50 text-left space-y-4 origin-left">
                       <div className="absolute right-full top-1/2 -translate-y-1/2 border-[6px] border-transparent border-r-white dark:border-r-[#070913]" />
                       <div className="absolute right-full top-1/2 -translate-y-1/2 -mr-[1px] border-[6px] border-transparent border-r-gray-200 dark:border-r-white/10 -z-10" />
                       <div className="flex items-center gap-4 border-b border-gray-200 dark:border-white/5 pb-3">
-                        <div className="bg-white dark:bg-[#121624] border border-gray-200 dark:border-white/10 rounded-full p-2 flex items-center justify-center flex-shrink-0 w-16 h-16 shadow-xl relative" style={{ boxShadow: `0 0 20px ${b.glowColor}30` }}>
+                        <div className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-full p-2 flex items-center justify-center flex-shrink-0 w-16 h-16 shadow-xl relative" style={{ boxShadow: `0 0 20px ${b.glowColor}30` }}>
                           <img src={b.icon} alt={b.name} className="w-full h-full object-contain filter drop-shadow-[0_4px_8px_rgba(0,0,0,0.1)] dark:drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]" />
                         </div>
                         <div className="space-y-1 min-w-0 flex-1">
@@ -198,7 +198,7 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
                 {displayBadges.map((b) => (
                   <div
                     key={b.id}
-                    className="group relative flex items-center gap-2.5 p-2 rounded-xl transition-all duration-200 cursor-help border bg-gray-50 dark:bg-[#0d111d] border-transparent dark:border-white/[0.03]"
+                    className="group relative flex items-center gap-2.5 p-2 rounded-xl transition-all duration-200 cursor-help border bg-gray-50 dark:bg-dark-surface border-transparent dark:border-white/[0.03]"
                     onMouseEnter={(e) => {
                       e.currentTarget.style.borderColor = b.borderColor;
                       e.currentTarget.style.backgroundColor = b.glowColor + "05";
@@ -209,7 +209,7 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
                     }}
                   >
                     <div
-                      className="bg-white dark:bg-[#121624] border border-gray-200 dark:border-white/5 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 w-8 h-8 p-1"
+                      className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/5 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 w-8 h-8 p-1"
                       onMouseEnter={(e) => { e.currentTarget.style.boxShadow = `0 0 10px ${b.glowColor}`; }}
                       onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; }}
                     >
@@ -223,11 +223,11 @@ export const BadgeSideSection_ProfileDisplay: React.FC<BadgeSectionProps> = ({
                     </div>
 
                     {/* Tooltip */}
-                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 w-80 p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#070913] shadow-[0_25px_60px_-10px_rgba(0,0,0,0.1)] dark:shadow-[0_25px_60px_-10px_rgba(0,0,0,0.85)] opacity-0 scale-95 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 z-50 text-left space-y-4 origin-left">
+                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 w-80 p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-[0_25px_60px_-10px_rgba(0,0,0,0.1)] dark:shadow-[0_25px_60px_-10px_rgba(0,0,0,0.85)] opacity-0 scale-95 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:scale-100 z-50 text-left space-y-4 origin-left">
                       <div className="absolute right-full top-1/2 -translate-y-1/2 border-[6px] border-transparent border-r-white dark:border-r-[#070913]" />
                       <div className="absolute right-full top-1/2 -translate-y-1/2 -mr-[1px] border-[6px] border-transparent border-r-gray-200 dark:border-r-white/10 -z-10" />
                       <div className="flex items-center gap-4 border-b border-gray-200 dark:border-white/5 pb-3">
-                        <div className="bg-white dark:bg-[#121624] border border-gray-200 dark:border-white/10 rounded-full p-2 flex items-center justify-center flex-shrink-0 w-16 h-16 shadow-xl relative" style={{ boxShadow: `0 0 20px ${b.glowColor}30` }}>
+                        <div className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-full p-2 flex items-center justify-center flex-shrink-0 w-16 h-16 shadow-xl relative" style={{ boxShadow: `0 0 20px ${b.glowColor}30` }}>
                           <img src={b.icon} alt={b.name} className="w-full h-full object-contain filter drop-shadow-[0_4px_8px_rgba(0,0,0,0.1)] dark:drop-shadow-[0_4px_8px_rgba(0,0,0,0.6)]" />
                         </div>
                         <div className="space-y-1 min-w-0 flex-1">

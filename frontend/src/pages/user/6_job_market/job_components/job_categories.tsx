@@ -18,7 +18,7 @@ const JobCategories: React.FC<JobCategoriesProps> = ({
   onCategoryChange
 }) => {
   return (
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/60 shadow-sm dark:shadow-none p-5 backdrop-blur-sm space-y-3">
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none p-5 backdrop-blur-sm space-y-3">
       <h2 className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase tracking-[0.2em]">
         Categories
       </h2>

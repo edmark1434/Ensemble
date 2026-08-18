@@ -68,7 +68,7 @@ const PopupReportJob: React.FC<PopupReportJobProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 8 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-[#0d0f1a] p-5 shadow-2xl z-10"
+            className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-dark-surface p-5 shadow-2xl z-10"
           >
             <AnimatePresence mode="wait">
               {!isSubmitted ? (

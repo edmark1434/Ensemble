@@ -28,11 +28,12 @@ export interface ProposalsMainContext {
   dateSort: "inc" | "dec" | null;
   viewType: ViewType;
   loading: boolean;
+  setChildProposalsCounts: React.Dispatch<React.SetStateAction<Record<string, number> | null>>;
 }
 
 const ProposalSidebarSkeleton = () => (
   <div className="space-y-6">
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/60 shadow-sm dark:shadow-none p-5 backdrop-blur-sm space-y-3">
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none p-5 backdrop-blur-sm space-y-3">
       <div className="h-3 w-28 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
       <div className="space-y-2">
         {[1, 2, 3, 4, 5].map((i) => (
@@ -40,7 +41,7 @@ const ProposalSidebarSkeleton = () => (
         ))}
       </div>
     </div>
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/60 shadow-sm dark:shadow-none p-5 backdrop-blur-sm space-y-4">
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none p-5 backdrop-blur-sm space-y-4">
       <div className="h-3 w-24 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
       <div className="space-y-3">
         <div className="h-8 flex-1 animate-pulse rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
@@ -73,7 +74,9 @@ export const ProposalsMain: React.FC = () => {
   const [revisionRateSort, setRevisionRateSort] = useState<"inc" | "dec" | null>(null);
   const [dateSort, setDateSort] = useState<"inc" | "dec" | null>(null);
 
-  const [viewType, setViewType] = useState<ViewType>("list");
+  const [viewType, setViewType] = useState<ViewType>("grid");
+  
+  const [childProposalsCounts, setChildProposalsCounts] = useState<Record<string, number> | null>(null);
 
   // Simulated initial loading timer
   useEffect(() => {
@@ -83,7 +86,24 @@ export const ProposalsMain: React.FC = () => {
 
   // Dynamically calculate status counts depending on active route context
   const statusCounts: StatusFilterItem[] = useMemo(() => {
-    const activeDataset = isSentPage ? sampleSentProposals : sampleIncomingProposals;
+    if (childProposalsCounts) {
+      return [
+        { label: "All", count: childProposalsCounts.All || 0 },
+        { label: "Pending", count: childProposalsCounts.Pending || 0 },
+        { label: "Shortlisted", count: childProposalsCounts.Shortlisted || 0 },
+        { label: "Accepted", count: childProposalsCounts.Accepted || 0 },
+        { label: "Rejected", count: childProposalsCounts.Rejected || 0 },
+      ];
+    }
+
+    let activeDataset = isSentPage ? sampleSentProposals : sampleIncomingProposals;
+
+    // Filter by jobId if we're viewing a specific job's proposals
+    const pathParts = location.pathname.split("/");
+    const possibleJobId = pathParts[4]; // e.g. /jobs/proposals/incoming/jobId
+    if (possibleJobId && possibleJobId !== "") {
+      activeDataset = activeDataset.filter(p => p.jobId === possibleJobId);
+    }
 
     const counts = {
       All: activeDataset.length,
@@ -106,7 +126,7 @@ export const ProposalsMain: React.FC = () => {
       { label: "Accepted", count: counts.Accepted },
       { label: "Rejected", count: counts.Rejected },
     ];
-  }, [isSentPage]);
+  }, [isSentPage, location.pathname, childProposalsCounts]);
 
   const handleClearFilters = () => {
     setSearchQuery("");
@@ -121,7 +141,7 @@ export const ProposalsMain: React.FC = () => {
   };
 
   return (
-    <div className="w-full min-h-screen bg-gray-50 dark:bg-[#080a12] relative">
+    <div className="w-full min-h-screen bg-gray-50 dark:bg-dark-base relative">
       {/* Sticky User Header */}
       <div className="sticky top-0 z-50">
         <UserHeader pageTitle="Job Proposals" credits={1250} />
@@ -140,7 +160,7 @@ export const ProposalsMain: React.FC = () => {
                 onClick={() => setShowFilters(!showFilters)}
                 className={`flex items-center justify-center p-2 rounded-lg transition-colors border ${
                   showFilters
-                    ? "bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30 text-blue-600 dark:text-blue-400"
+                    ? "bg-gray-100 dark:bg-white/10 border-gray-300 dark:border-white/20 text-gray-900 dark:text-white"
                     : "bg-white dark:bg-white/5 shadow-sm dark:shadow-none border-gray-200 dark:border-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-gray-100 dark:bg-white/10"
                 }`}
                 title="Toggle Filters"
@@ -213,6 +233,7 @@ export const ProposalsMain: React.FC = () => {
                   dateSort,
                   viewType,
                   loading,
+                  setChildProposalsCounts,
                 } satisfies ProposalsMainContext
               }
             />

@@ -683,7 +683,7 @@ const CommentItem = ({
                     <MoreVertical className="h-3 w-3" />
                   </button>
                   {showCommentMenu && (
-                    <div className="absolute right-0 mt-1 w-28 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-xl z-20">
+                    <div className="absolute right-0 mt-1 w-28 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-xl z-20">
                       <button
                         onClick={() => {
                           setIsEditing(true);
@@ -945,7 +945,7 @@ const renderPostCard = (post: any, showGroupName: boolean = true) => {
                   <MoreVertical className="h-4 w-4" />
                 </button>
                 {postMenuOpen === post.id && (
-                  <div className="absolute right-0 mt-1 w-36 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-xl overflow-hidden z-20">
+                  <div className="absolute right-0 mt-1 w-36 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-xl overflow-hidden z-20">
                     <button
                       onClick={() => {
                         setEditingPost(post);
@@ -2020,7 +2020,7 @@ const Forums = () => {
                     <MoreVertical className="h-4 w-4" />
                   </button>
                   {postMenuOpen === post.id && (
-                    <div className="absolute right-0 mt-1 w-36 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-xl overflow-hidden z-20">
+                    <div className="absolute right-0 mt-1 w-36 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-xl overflow-hidden z-20">
                       <button
                         onClick={() => {
                           setEditingPost(post);
@@ -2230,7 +2230,7 @@ const Forums = () => {
   // ==================== LOADING STATE ====================
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
         <UserHeader pageTitle="Forums" credits={1250} />
         <div className="mx-auto max-w-7xl p-6 md:p-8">
           <div className="mb-6 flex items-center justify-between">
@@ -2297,7 +2297,7 @@ const Forums = () => {
   const feedBlocked = activeTab === "feed" && selectedGroupIds.length === 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
       <UserHeader pageTitle="Forums" credits={1250} />
 
       <div className="mx-auto max-w-7xl p-6 md:p-8">

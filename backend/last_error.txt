@@ -1,0 +1,5 @@
+error: null value in column "name" of relation "gig_milestones" violates not-null constraint
+    at C:\Users\Rexshimura\PycharmProjects\EnsembleProject\backend\node_modules\pg\lib\client.js:631:17
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async createGigRepository (C:\Users\Rexshimura\PycharmProjects\EnsembleProject\backend\repositories\GigRepositories.js:57:17)
+    at async createGigController (C:\Users\Rexshimura\PycharmProjects\EnsembleProject\backend\controllers\GigControllers.js:42:23)

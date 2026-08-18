@@ -132,7 +132,7 @@ const GigMarketplace: React.FC = () => {
   }, [searchQuery, activeCategory, activeTab, savedGigs, filters]);
 
     return (
-    <div className="w-full min-h-screen bg-[#080a12] text-white overflow-x-hidden relative">
+    <div className="w-full min-h-screen bg-dark-base text-white overflow-x-hidden relative">
       <UserHeader pageTitle="Gig Marketplace" credits={1250} />
 
       <div className="mx-auto max-w-7xl p-6 md:p-8 w-full">

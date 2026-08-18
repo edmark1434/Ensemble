@@ -283,7 +283,7 @@ export default function UserSettings() {
   ] as const;
 
   return (
-    <div className="min-h-screen w-full bg-white dark:bg-[#080a12] text-gray-900 dark:text-zinc-200 p-6 md:p-12 font-['Plus_Jakarta_Sans',sans-serif]">
+    <div className="min-h-screen w-full bg-white dark:bg-dark-base text-gray-900 dark:text-zinc-200 p-6 md:p-12 font-['Plus_Jakarta_Sans',sans-serif]">
       <div className="max-w-7xl mx-auto space-y-8">
 
         {/* Fullscreen Header & Expandable Circle Back Button */}
@@ -352,7 +352,7 @@ export default function UserSettings() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -15 }}
                 transition={{ duration: 0.22, ease: "easeInOut" }}
-                className="bg-white dark:bg-[#0d0f1a] p-8 rounded-2xl border border-gray-200 dark:border-white/10 shadow-lg dark:shadow-2xl"
+                className="bg-white dark:bg-dark-surface p-8 rounded-2xl border border-gray-200 dark:border-white/10 shadow-lg dark:shadow-2xl"
               >
                 {activeTab === "account" && (
                   <UserSettingsAccountDetails
@@ -400,7 +400,7 @@ export default function UserSettings() {
       {/* Unsaved Changes Confirmation Modal */}
       {showUnsavedModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white dark:bg-[#0d0f1a] border border-gray-200 dark:border-white/10 rounded-2xl p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-md bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-2xl p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3 text-amber-500 dark:text-amber-400">
               <AlertCircle className="h-6 w-6 shrink-0" />
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Unsaved Changes</h3>

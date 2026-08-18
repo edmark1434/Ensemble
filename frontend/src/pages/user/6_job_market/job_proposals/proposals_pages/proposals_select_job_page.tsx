@@ -1,7 +1,8 @@
 import React from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ClipboardList, ChevronRight, Calendar, Clock, Briefcase, Users } from "lucide-react";
+import { ClipboardList, ChevronRight, Calendar, Clock, Briefcase, Users, Plus } from "lucide-react";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import type { ProposalsMainContext } from "../proposals_main";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
@@ -23,7 +24,7 @@ const getTimeAgo = (date: Date): string => {
 };
 
 export const SelectJobCardSkeleton: React.FC = () => (
-  <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/40 overflow-hidden animate-pulse space-y-4 flex flex-col justify-between">
+  <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface overflow-hidden animate-pulse space-y-4 flex flex-col justify-between">
     {/* Skeleton Thumbnail */}
     <div className="h-36 w-full bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
 
@@ -123,9 +124,25 @@ export const ProposalsSelectJobPage: React.FC = () => {
           ))}
         </div>
       ) : filteredJobs.length === 0 ? (
-        <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/60 shadow-sm dark:shadow-none p-12 text-center">
-          <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">No job postings found matching your search.</p>
-        </div>
+        myJobPosts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 space-y-4 text-center">
+            <div className="w-24 h-24 flex items-center justify-center mb-2 opacity-80 pointer-events-none">
+              <DotLottieReact src="/icons/lottie/no-result.lottie" autoplay loop />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">No Job Postings Found</h3>
+            <p className="text-xs text-gray-500 dark:text-zinc-400 max-w-sm">You haven't posted any jobs yet. Post a job to start receiving proposals from talented freelancers!</p>
+            <button
+              onClick={() => navigate('/jobs/create')}
+              className="mt-4 px-6 py-2.5 rounded-xl bg-blue-500 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+            >
+              <Plus className="h-4 w-4" /> Post a Job
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none p-12 text-center">
+            <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">No job postings found matching your search.</p>
+          </div>
+        )
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {filteredJobs.map((job) => (
@@ -134,7 +151,7 @@ export const ProposalsSelectJobPage: React.FC = () => {
               whileHover={{ y: -3 }}
               transition={{ duration: 0.2 }}
               onClick={() => navigate(`/jobs/proposals/incoming/${job.id}`)}
-              className="group rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/80 overflow-hidden backdrop-blur-sm shadow-xl hover:border-white/20 cursor-pointer transition flex flex-col justify-between"
+              className="group rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface overflow-hidden backdrop-blur-sm shadow-xl hover:border-white/20 cursor-pointer transition flex flex-col justify-between"
             >
               {/* Thumbnail Image Header */}
               <div className="relative h-36 w-full bg-zinc-950 overflow-hidden border-b border-gray-100 dark:border-white/5 shrink-0">
@@ -143,7 +160,7 @@ export const ProposalsSelectJobPage: React.FC = () => {
                   alt={job.title}
                   className="w-full h-full object-cover opacity-75 group-hover:scale-105 transition-transform duration-300"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0d0f1a] via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dark-surface via-transparent to-transparent" />
 
                 {/* Status Floating Badge */}
                 <div className="absolute top-3 right-3 flex items-center justify-end">

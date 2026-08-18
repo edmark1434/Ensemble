@@ -13,18 +13,19 @@ import {
   LogOut,
   MessageCircle,
   MoreVertical,
+  Search,
   ShieldCheck,
   Star,
   Trash2,
   UserPlus,
   Users,
+  XCircle,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import UserHeader from "@/components/nav/user_header";
 import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
-import JoinRequestsModal from "./team_modals/JoinRequestsModal";
 import EditTeamModal, {
   type TeamFormValues,
 } from "./team_modals/EditTeamModal";
@@ -61,6 +62,7 @@ type Member = {
   role: string;
   status: string;
   avatar_path?: string;
+  requested_at?: string;
 };
 type Review = {
   team_review_id: string;
@@ -77,6 +79,7 @@ type Tab =
   | "assets"
   | "reviews"
   | "members"
+  | "requests"
   | "wallet"
   | "transactions";
 
@@ -104,11 +107,11 @@ export default function SelectedTeam() {
   const [transactionTotalPages, setTransactionTotalPages] = useState(1);
   const [transactionSearch, setTransactionSearch] = useState('');
   const [transactionDate, setTransactionDate] = useState('');
+  const [requestSearch, setRequestSearch] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("about");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  const [showRequests, setShowRequests] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showLeave, setShowLeave] = useState(false);
   const [showReport, setShowReport] = useState(false);
@@ -136,6 +139,8 @@ export default function SelectedTeam() {
       if (nextTeam.current_user_membership?.permissions.can_manage_requests) {
         const response = await api.get(`/api/teams/${id}/requests`);
         setRequests(response.data.data || []);
+      } else {
+        setRequests([]);
       }
     } catch (error: unknown) {
       const message = axiosMessage(error, "Unable to load Team");
@@ -162,6 +167,43 @@ export default function SelectedTeam() {
       void loadTeam(false);
     } catch (error: unknown) {
       showErrorToast(axiosMessage(error, "Action failed"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const requestToJoin = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const response = await api.post(`/api/teams/${id}/join`);
+      const membership = response.data.data as { role: string; status: string };
+      setTeam((current) => current ? {
+        ...current,
+        current_user_membership: {
+          role: membership.role,
+          status: membership.status,
+          permissions: {},
+        },
+      } : current);
+      showSuccessToast("Join request submitted for approval");
+    } catch (error: unknown) {
+      showErrorToast(axiosMessage(error, "Unable to submit join request"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const manageJoinRequest = async (accountId: string, action: "approve" | "deny") => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await api.patch(`/api/teams/${id}/requests/${accountId}/${action}`);
+      setRequests((current) => current.filter((request) => request.account_id !== accountId));
+      showSuccessToast(action === "approve" ? "Join request approved" : "Join request denied");
+      void loadTeam(false);
+    } catch (error: unknown) {
+      showErrorToast(axiosMessage(error, "Unable to update join request"));
     } finally {
       setSaving(false);
     }
@@ -341,10 +383,16 @@ export default function SelectedTeam() {
   const pendingRequests = requests.filter(
     (member) => member.status === "Pending",
   );
+  const normalizedRequestSearch = requestSearch.trim().toLowerCase();
+  const filteredPendingRequests = pendingRequests.filter((member) =>
+    !normalizedRequestSearch
+    || member.display_name.toLowerCase().includes(normalizedRequestSearch)
+    || member.handle.toLowerCase().includes(normalizedRequestSearch)
+  );
 
   return (
     <Page title={team.display_name}>
-      <div className="relative h-48 overflow-hidden bg-[#1e2130]">
+      <div className="relative h-48 overflow-hidden bg-dark-surface">
         {team.avatar_path && (
           <img
             src={imageUrl(team.avatar_path)}
@@ -352,7 +400,7 @@ export default function SelectedTeam() {
             className="h-full w-full object-cover"
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#080a12] via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-dark-base via-transparent to-transparent" />
         <button
           onClick={() => navigate("/teams")}
           className="absolute left-4 top-4 rounded-full bg-black/50 p-2 text-gray-900 dark:text-white"
@@ -417,8 +465,9 @@ export default function SelectedTeam() {
           )}
           {permissions.can_manage_requests && (
             <button
-              onClick={() => setShowRequests(true)}
+              onClick={() => setActiveTab("requests")}
               className="relative rounded-full bg-black/50 p-2 text-gray-900 dark:text-white"
+              title="View pending join requests"
             >
               <Bell className="h-5 w-5" />
               {pendingRequests.length > 0 && (
@@ -457,7 +506,7 @@ export default function SelectedTeam() {
               <MoreVertical className="h-5 w-5" />
             </button>
             {showMenu && (
-              <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-2 shadow-2xl">
+              <div className="absolute right-0 z-20 mt-2 w-52 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-2 shadow-2xl">
                 {permissions.can_update_team && (
                   <button
                     onClick={() => setShowEdit(true)}
@@ -508,12 +557,17 @@ export default function SelectedTeam() {
 
         {!membership && (
           <button
-            onClick={() => void mutate("/join")}
+            onClick={() => void requestToJoin()}
             disabled={saving}
-            className="mb-6 rounded-full bg-blue-500 px-5 py-2 text-gray-900 dark:text-white disabled:opacity-50"
+            className="mb-6 cursor-pointer rounded-full bg-blue-500 px-5 py-2 text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Ask to Join
+            {saving ? "Submitting request..." : "Ask to Join"}
           </button>
+        )}
+        {membership?.status === "Pending" && (
+          <div className="mb-6 rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+            Your request to join this Team is pending approval.
+          </div>
         )}
         {membership?.status === "Invited" && (
           <div className="mb-6 flex gap-2">
@@ -564,6 +618,8 @@ export default function SelectedTeam() {
         <TeamTabs
           active={activeTab}
           showWallet={Boolean(permissions.can_view_wallet)}
+          showRequests={Boolean(permissions.can_manage_requests)}
+          requestCount={pendingRequests.length}
           onSelect={selectTab}
         />
         <TeamTabContent
@@ -572,6 +628,8 @@ export default function SelectedTeam() {
           members={members}
           reviews={reviews}
           wallet={wallet}
+          requests={filteredPendingRequests}
+          requestSearch={requestSearch}
           canManage={Boolean(permissions.can_manage_members)}
           isOwner={membership?.role === "Owner"}
           saving={saving}
@@ -589,6 +647,9 @@ export default function SelectedTeam() {
             void mutate("/transfer-ownership", "patch", { accountId: account })
           }
           onDistributeFunds={() => setShowDistribution(true)}
+          onRequestSearch={setRequestSearch}
+          onApproveRequest={(account) => void manageJoinRequest(account, "approve")}
+          onDenyRequest={(account) => void manageJoinRequest(account, "deny")}
           transactionSearch={transactionSearch}
           transactionDate={transactionDate}
           transactionPage={transactionPage}
@@ -601,22 +662,6 @@ export default function SelectedTeam() {
         />
       </main>
 
-      <JoinRequestsModal
-        isOpen={showRequests}
-        onClose={() => setShowRequests(false)}
-        requests={pendingRequests.map((member) => ({
-          id: member.account_id,
-          name: member.display_name,
-          avatar: imageUrl(member.avatar_path),
-          requestedAt: "recently",
-        }))}
-        onAccept={(account) =>
-          void mutate(`/requests/${account}/approve`, "patch")
-        }
-        onReject={(account) =>
-          void mutate(`/requests/${account}/deny`, "patch")
-        }
-      />
       <LeaveTeamModal
         isOpen={showLeave}
         onClose={() => setShowLeave(false)}
@@ -661,14 +706,14 @@ export default function SelectedTeam() {
       />
       {showDistribution && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-md rounded-xl border border-white/10 bg-[#12131a] p-5 shadow-2xl">
+          <div className="w-full max-w-md rounded-xl border border-white/10 bg-dark-base p-5 shadow-2xl">
             <h2 className="text-lg font-semibold text-white">Distribute Team funds</h2>
             <p className="mt-2 text-sm text-zinc-400">
               Send credits from the Team account wallet to an active member’s account wallet. Available: {Number(wallet?.available_balance || 0).toLocaleString()} credits.
             </p>
             <label className="mt-4 block text-sm text-zinc-300">
               Team member
-              <select value={distributionRecipientId} onChange={(event) => setDistributionRecipientId(event.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-[#12131a] px-3 py-2 text-white outline-none focus:border-blue-400">
+              <select value={distributionRecipientId} onChange={(event) => setDistributionRecipientId(event.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-dark-base px-3 py-2 text-white outline-none focus:border-blue-400">
                 <option value="">Select a member</option>
                 {members.filter((member) => member.status === 'Active').map((member) => <option key={member.account_id} value={member.account_id}>{member.display_name} (@{member.handle})</option>)}
               </select>
@@ -699,10 +744,14 @@ export default function SelectedTeam() {
 function TeamTabs({
   active,
   showWallet,
+  showRequests,
+  requestCount,
   onSelect,
 }: {
   active: Tab;
   showWallet: boolean;
+  showRequests: boolean;
+  requestCount: number;
   onSelect: (tab: Tab) => void;
 }) {
   const tabs: Array<{ id: Tab; label: string; icon: typeof Info }> = [
@@ -713,6 +762,7 @@ function TeamTabs({
     { id: "reviews", label: "Reviews", icon: Star },
     { id: "members", label: "Members", icon: Users },
   ];
+  if (showRequests) tabs.push({ id: "requests", label: "Pending Requests", icon: UserPlus });
   if (showWallet) { tabs.push({ id: "wallet", label: "Wallet", icon: Briefcase }); tabs.push({ id: "transactions", label: "Transactions", icon: ArrowRightLeft }); }
   return (
     <div className="mb-6 flex flex-wrap gap-1 border-b border-gray-200 dark:border-white/10">
@@ -724,6 +774,11 @@ function TeamTabs({
         >
           <Icon className="h-4 w-4" />
           {label}
+          {id === "requests" && requestCount > 0 && (
+            <span className="grid h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+              {requestCount}
+            </span>
+          )}
         </button>
       ))}
     </div>
@@ -736,6 +791,8 @@ function TeamTabContent({
   members,
   reviews,
   wallet,
+  requests,
+  requestSearch,
   canManage,
   isOwner,
   saving,
@@ -745,6 +802,9 @@ function TeamTabContent({
   onRole,
   onTransfer,
   onDistributeFunds,
+  onRequestSearch,
+  onApproveRequest,
+  onDenyRequest,
   transactions, transactionSearch, transactionDate, transactionPage, transactionTotalPages, onTransactionSearch, onTransactionDate, onLoadTransactions,
   onReview,
 }: {
@@ -753,6 +813,8 @@ function TeamTabContent({
   members: Member[];
   reviews: Review[];
   wallet: Wallet | null;
+  requests: Member[];
+  requestSearch: string;
   canManage: boolean;
   isOwner: boolean;
   saving: boolean;
@@ -762,6 +824,9 @@ function TeamTabContent({
   onRole: (account: string, role: string) => void;
   onTransfer: (account: string) => void;
   onDistributeFunds: () => void;
+  onRequestSearch: (value: string) => void;
+  onApproveRequest: (account: string) => void;
+  onDenyRequest: (account: string) => void;
   transactions: TeamTransaction[]; transactionSearch: string; transactionDate: string; transactionPage: number; transactionTotalPages: number; onTransactionSearch: (value: string) => void; onTransactionDate: (value: string) => void; onLoadTransactions: (page?: number) => void;
   onReview: () => void;
 }) {
@@ -808,6 +873,77 @@ function TeamTabContent({
           </div>
         )}
       </div>
+    );
+  if (active === "requests")
+    return (
+      <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/[0.03] dark:shadow-none">
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Pending join requests</h3>
+            <p className="text-sm text-gray-500 dark:text-zinc-400">Review people who asked to join this Team.</p>
+          </div>
+          <label className="flex min-w-64 items-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-500 focus-within:border-blue-400 dark:border-white/10 dark:bg-white/[0.04] dark:text-zinc-400">
+            <Search className="mr-2 h-4 w-4 shrink-0" />
+            <input
+              value={requestSearch}
+              onChange={(event) => onRequestSearch(event.target.value)}
+              placeholder="Search name or username"
+              className="w-full bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400 dark:text-white dark:placeholder:text-zinc-600"
+            />
+          </label>
+        </div>
+
+        {requests.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-gray-200 py-12 text-center dark:border-white/10">
+            <UserPlus className="mx-auto h-10 w-10 text-gray-400 dark:text-zinc-600" />
+            <p className="mt-3 font-medium text-gray-700 dark:text-zinc-300">
+              {requestSearch.trim() ? "No matching join requests" : "No pending join requests"}
+            </p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-zinc-500">
+              {requestSearch.trim() ? "Try another name or username." : "New requests will appear here for approval."}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {requests.map((request) => (
+              <article key={request.account_id} className="flex flex-col gap-3 rounded-xl border border-gray-200 p-4 dark:border-white/10 sm:flex-row sm:items-center">
+                {request.avatar_path ? (
+                  <img src={imageUrl(request.avatar_path)} alt={request.display_name} className="h-12 w-12 rounded-full object-cover" />
+                ) : (
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-blue-500/15 text-sm font-semibold text-blue-300">
+                    {request.display_name.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-gray-900 dark:text-white">{request.display_name}</p>
+                  <p className="truncate text-sm text-gray-500 dark:text-zinc-400">@{request.handle}</p>
+                  <p className="mt-1 text-xs text-gray-400 dark:text-zinc-500">
+                    Requested {request.requested_at ? new Date(request.requested_at).toLocaleString() : "recently"}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => onApproveRequest(request.account_id)}
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-emerald-500 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Check className="h-4 w-4" /> Approve
+                  </button>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => onDenyRequest(request.account_id)}
+                    className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-red-400/30 px-3 py-2 text-sm font-medium text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <XCircle className="h-4 w-4" /> Deny
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
     );
   if (active === "wallet")
     return wallet ? (
@@ -921,7 +1057,7 @@ function Page({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white">
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white">
       <UserHeader pageTitle={title} />
       {children}
     </div>

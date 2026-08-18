@@ -921,7 +921,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] font-['Plus Jakarta Sans',sans-serif] text-gray-900 dark:text-zinc-300 antialiased selection:bg-blue-500/30">
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-base font-['Plus Jakarta Sans',sans-serif] text-gray-900 dark:text-zinc-300 antialiased selection:bg-blue-500/30">
       <UserHeader pageTitle="Profile" credits={1250} />
 
       <div className="mx-auto max-w-7xl p-4 md:p-8 space-y-5">

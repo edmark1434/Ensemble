@@ -140,7 +140,7 @@ export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ userDetails, 
             <div
               key={job.id}
               onClick={() => navigate(`/jobs/postings/${job.id}`)}
-              className="group relative flex cursor-pointer flex-col justify-between rounded-xl border border-gray-200 dark:border-white/10 bg-white/50 dark:bg-[#0b0e17]/50 p-4 transition-all hover:border-blue-500/30 hover:bg-white dark:hover:bg-[#0b0e17] hover:shadow-lg hover:shadow-blue-500/5"
+              className="group relative flex cursor-pointer flex-col justify-between rounded-xl border border-gray-200 dark:border-white/10 bg-white/50 dark:bg-dark-base/50 p-4 transition-all hover:border-blue-500/30 hover:bg-white dark:hover:bg-dark-base hover:shadow-lg hover:shadow-blue-500/5"
             >
               <button
                 onClick={(e) => handleToggleSave(e, job.id.toString())}

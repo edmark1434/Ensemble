@@ -134,7 +134,7 @@ export const TosMain: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white">
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white">
       {/* Top Header */}
       <UserHeader pageTitle="Terms of Service" credits={1250} />
 
@@ -144,7 +144,7 @@ export const TosMain: React.FC = () => {
         /* Animated Main Container */
         <div className="mx-auto max-w-7xl p-6 md:p-8 space-y-8 animate-fade-in">
           {/* Banner Title */}
-          <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-zinc-950/60 shadow-sm dark:shadow-none p-6 md:p-8 backdrop-blur-xl">
+          <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white/80 dark:bg-dark-surface/60 shadow-sm dark:shadow-none p-6 md:p-8 backdrop-blur-xl">
             <div className="relative z-10">
               <h1
                 className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white md:text-3xl"
@@ -162,7 +162,7 @@ export const TosMain: React.FC = () => {
           <div className="grid gap-8 lg:grid-cols-12">
             {/* LEFT: TOS Form Creator */}
             <div className="lg:col-span-5">
-              <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900/40 shadow-sm dark:shadow-none p-6 shadow-xl backdrop-blur-xl">
+              <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 shadow-sm dark:shadow-none p-6 shadow-xl backdrop-blur-xl">
                 <div className="mb-5 flex items-center gap-2">
                   <Plus className="h-4 w-4 text-blue-400" />
                   <h2
@@ -249,7 +249,7 @@ export const TosMain: React.FC = () => {
                     return (
                       <div
                         key={tos.id}
-                        className="overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900/30 transition hover:border-white/20"
+                        className="overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/30 transition hover:border-white/20"
                       >
                         {/* Accordion Header */}
                         <div
@@ -309,7 +309,7 @@ export const TosMain: React.FC = () => {
                           }`}
                         >
                           <div className="overflow-hidden">
-                            <div className="border-t border-gray-100 dark:border-white/5 bg-white/80 dark:bg-zinc-950/60 shadow-sm dark:shadow-none p-4 text-xs leading-relaxed text-gray-600 dark:text-zinc-300 font-mono whitespace-pre-wrap">
+                            <div className="border-t border-gray-100 dark:border-white/5 bg-white/80 dark:bg-dark-surface/60 shadow-sm dark:shadow-none p-4 text-xs leading-relaxed text-gray-600 dark:text-zinc-300 font-mono whitespace-pre-wrap">
                               {tos.terms_content}
                             </div>
                           </div>

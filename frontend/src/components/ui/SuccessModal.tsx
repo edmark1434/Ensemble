@@ -32,7 +32,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
 
   return (
     /* Adjusted layout bounds to shift modal center offset precisely into the main right-hand panel view context */
-    <div className="fixed top-0 bottom-0 right-0 left-0 md:left-64 z- flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in overflow-hidden">
+    <div className="fixed top-0 bottom-0 right-0 left-0 md:left-64 z-50 flex items-center justify-center p-4 bg-white/80 dark:bg-black/85 backdrop-blur-md animate-fade-in overflow-hidden">
 
       {/* --- VIBRANT BACKGROUND BLUR GLOW BLOBS --- */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">

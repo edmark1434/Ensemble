@@ -128,7 +128,7 @@ function SummaryCard({
   color: string;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/70 shadow-sm dark:shadow-none p-5 shadow-xl">
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/70 shadow-sm dark:shadow-none p-5 shadow-xl">
       <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-gray-500 dark:text-zinc-500">{label}</p>
       <p className={`mt-3 flex items-center gap-2 text-2xl font-bold tabular-nums ${color}`}>
         <CircleDollarSign className="h-5 w-5" aria-hidden="true" />
@@ -254,7 +254,7 @@ export const TransactionHistoryMain = () => {
   }, [selectedTransaction]);
 
   return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-gray-50 dark:bg-[#080a12] text-gray-900 dark:text-white">
+    <div className="min-h-screen w-full overflow-x-hidden bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white">
       <UserHeader pageTitle="Transaction History" />
 
       <main className="mx-auto w-full max-w-7xl p-5 md:p-8">
@@ -279,7 +279,7 @@ export const TransactionHistoryMain = () => {
           </button>
         </div>
 
-        <section className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/60 shadow-sm dark:shadow-none shadow-2xl">
+        <section className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/60 shadow-sm dark:shadow-none shadow-2xl">
           <div className="border-b border-gray-200 dark:border-white/10 p-3" role="tablist" aria-label="Transaction views">
             <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-5">
               {(["Summary", "Credits", "Assets", "Fund Transfer", "Fee"] as MainTab[]).map((tab) => {
@@ -483,7 +483,7 @@ export const TransactionHistoryMain = () => {
               <div className="flex flex-col items-center justify-between gap-4 border-t border-gray-200 dark:border-white/10 p-4 text-xs text-gray-500 dark:text-zinc-400 sm:flex-row">
                 <label className="flex items-center gap-2">
                   <span>Rows per page</span>
-                  <select value={rowsPerPage} onChange={(event) => setRowsPerPage(Number(event.target.value) as RowLimit)} className="rounded-lg border border-gray-200 dark:border-white/10 bg-[#151722] px-2 py-1.5 text-gray-900 dark:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                  <select value={rowsPerPage} onChange={(event) => setRowsPerPage(Number(event.target.value) as RowLimit)} className="rounded-lg border border-gray-200 dark:border-white/10 bg-dark-base px-2 py-1.5 text-gray-900 dark:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                     <option value={10}>10</option><option value={25}>25</option><option value={50}>50</option>
                   </select>
                 </label>
@@ -516,9 +516,9 @@ export const TransactionHistoryMain = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="transaction-detail-title"
-            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shadow-2xl"
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-2xl"
           >
-            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a]/95 p-5 backdrop-blur-md">
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/95 p-5 backdrop-blur-md">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-400">Transaction details</p>
                 <h2 id="transaction-detail-title" className="mt-1 text-xl font-bold text-gray-900 dark:text-white">{displayType(transactionCategory(selectedTransaction))}</h2>

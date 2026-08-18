@@ -121,7 +121,7 @@ export const IncomingProposals: React.FC = () => {
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#080a12] text-white overflow-x-hidden">
+    <div className="w-full min-h-screen bg-dark-base text-white overflow-x-hidden">
       <UserHeader pageTitle="Incoming Proposals" credits={1250} />
 
       <div className="mx-auto max-w-7xl p-6 md:p-8 w-full">
@@ -140,7 +140,7 @@ export const IncomingProposals: React.FC = () => {
           </div>
         ) : sampleMyJobsProposals.length === 0 ? (
           /* Empty State Display */
-          <div className="rounded-3xl border border-dashed border-white/10 bg-[#0d0f1a]/40 p-12 text-center max-w-md mx-auto space-y-4 mt-12">
+          <div className="rounded-3xl border border-dashed border-white/10 bg-dark-surface p-12 text-center max-w-md mx-auto space-y-4 mt-12">
             <AlertCircle className="h-10 w-10 mx-auto text-zinc-500" />
             <div>
               <h3 className="text-base font-bold">No Proposals Received</h3>
@@ -163,7 +163,7 @@ export const IncomingProposals: React.FC = () => {
                     className={`group relative overflow-hidden rounded-2xl border p-4 transition-all cursor-pointer flex items-center gap-4 ${
                       isSelected 
                         ? "border-blue-500 bg-blue-500/5 shadow-[0_0_25px_rgba(59,130,246,0.08)]" 
-                        : "border-white/10 bg-[#0d0f1a]/40 hover:border-white/20"
+                        : "border-white/10 bg-dark-surface hover:border-white/20"
                     }`}
                   >
                     <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-white/5 bg-zinc-900">
@@ -199,7 +199,7 @@ export const IncomingProposals: React.FC = () => {
                   {activeJob.proposals.map((proposal) => (
                     <div
                       key={proposal.id}
-                      className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-5 md:p-6 backdrop-blur-sm space-y-4 transition-all hover:border-white/20"
+                      className="rounded-2xl border border-white/10 bg-dark-surface p-5 md:p-6 backdrop-blur-sm space-y-4 transition-all hover:border-white/20"
                     >
                       {/* Submissions Summary Header Layout */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">

@@ -127,7 +127,7 @@ const NotificationsPage: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen bg-gray-50 dark:bg-[#080a12] flex flex-col">
+    <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base flex flex-col">
       {/* Background Grid Animation */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-40">
         <ShapeGrid
@@ -174,7 +174,7 @@ const NotificationsPage: React.FC = () => {
         </div>
 
         {/* Notifications List container */}
-        <div className="bg-white dark:bg-[#0d0f1a] border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl overflow-hidden min-h-[500px]">
+        <div className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-2xl shadow-xl overflow-hidden min-h-[500px]">
           {loading ? (
             <div className="flex flex-col items-center justify-center h-64 text-gray-400 dark:text-zinc-500">
               <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mb-4" />

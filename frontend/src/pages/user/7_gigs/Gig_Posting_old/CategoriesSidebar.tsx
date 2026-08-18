@@ -17,7 +17,7 @@ const CategoriesSidebar: React.FC<CategoriesSidebarProps> = ({
   onCategoryChange
 }) => {
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-5 backdrop-blur-sm">
+    <div className="rounded-2xl border border-white/10 bg-dark-surface/60 p-5 backdrop-blur-sm">
       <h2 className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em] mb-4">
         Gig Categories
       </h2>

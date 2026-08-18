@@ -42,7 +42,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
       </div>
 
       <div
-        className={`fixed right-0 top-0 bottom-0 w-full md:w-[500px] lg:w-[560px] bg-white dark:bg-[#0d0f1a] border-l border-gray-200 dark:border-white/10 z-[101] shadow-2xl flex flex-col transition-transform duration-300 ${
+        className={`fixed right-0 top-0 bottom-0 w-full md:w-[500px] lg:w-[560px] bg-white dark:bg-dark-surface border-l border-gray-200 dark:border-white/10 z-[101] shadow-2xl flex flex-col transition-transform duration-300 ${
           selectedJob ? "translate-x-0" : "translate-x-full"
         }`}
       >
@@ -54,7 +54,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                 alt=""
                 className="w-full h-full object-cover opacity-60"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-[#0d0f1a] via-transparent to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dark-surface via-transparent to-transparent" />
               
               {onToggleSave && (
                 <button
@@ -215,7 +215,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
             </div>
 
             {/* Sticky Action Footer */}
-            <div className="p-4 border-t border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] shrink-0 space-y-3">
+            <div className="p-4 border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shrink-0 space-y-3">
               <div className="flex items-center justify-between text-[11px] font-medium text-gray-500 dark:text-zinc-400 px-1">
                 <span className="flex items-center gap-1 text-gray-600 dark:text-zinc-300">
                   <Briefcase className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-500" />

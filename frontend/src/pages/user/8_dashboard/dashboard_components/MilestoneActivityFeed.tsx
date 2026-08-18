@@ -49,8 +49,8 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
     
     if (isLocked) {
         return (
-            <div className="flex flex-col items-center justify-center h-full text-zinc-500 py-24 bg-[#0d0f1a]/70 shadow-xl">
-                <div className="bg-zinc-900/50 p-6 rounded-full border border-white/5 mb-4">
+            <div className="flex flex-col items-center justify-center h-full text-zinc-500 py-24 bg-dark-surface/70 shadow-xl">
+                <div className="bg-dark-surface/50 p-6 rounded-full border border-white/5 mb-4">
                     <AlertCircle className="h-10 w-10 text-zinc-600" />
                 </div>
                 <h3 className="text-xl font-bold text-white mb-2">Milestone Locked</h3>
@@ -60,7 +60,7 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
     }
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-[#0d0f1a]/70 rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden shadow-xl">
+        <div className="flex flex-col h-full bg-white dark:bg-dark-surface/70 rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden shadow-xl">
             
             {/* Header */}
             <div className="px-6 py-4 border-b border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 flex items-center justify-between">

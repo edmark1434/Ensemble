@@ -145,7 +145,7 @@ export default function Teams() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#080a12]">
+    <div className="min-h-screen bg-gray-50 dark:bg-dark-base">
       <UserHeader pageTitle="Teams" />
 
       <main className="mx-auto max-w-7xl p-6 md:p-8">
@@ -159,7 +159,7 @@ export default function Teams() {
         <div className="mb-6 flex flex-wrap gap-3">
           <button
             onClick={() => setIsJoinModalOpen(true)}
-            className="flex cursor-pointer items-center gap-2 rounded-full border border-white bg-white px-5 py-2.5 text-sm font-medium text-black shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-zinc-200 hover:shadow-md active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080a12]"
+            className="flex cursor-pointer items-center gap-2 rounded-full border border-white bg-white px-5 py-2.5 text-sm font-medium text-black shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-zinc-200 hover:shadow-md active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-dark-base"
           >
             <UserPlus className="h-4 w-4" />
             Join with Code
@@ -179,7 +179,7 @@ export default function Teams() {
 
           <button
             onClick={() => setIsCreateModalOpen(true)}
-            className="flex cursor-pointer items-center gap-2 rounded-full border border-blue-500 bg-blue-500 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-400 hover:bg-blue-400 hover:shadow-md hover:shadow-blue-500/20 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080a12]"
+            className="flex cursor-pointer items-center gap-2 rounded-full border border-blue-500 bg-blue-500 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-400 hover:bg-blue-400 hover:shadow-md hover:shadow-blue-500/20 active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-dark-base"
           >
             <Plus className="h-4 w-4" />
             Create a Team
@@ -214,7 +214,7 @@ export default function Teams() {
                 onClick={() => navigate(`/teams/${team.team_id}`)}
                 className="group cursor-pointer overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-gradient-to-br from-white/5 to-transparent transition hover:scale-[1.02] hover:border-white/20"
               >
-                <div className="relative h-24 overflow-hidden bg-[#1e2130]">
+                <div className="relative h-24 overflow-hidden bg-dark-surface">
                   {team.avatar_path ? (
                     <img
                       src={getImageUrl(team.avatar_path)}
@@ -226,7 +226,7 @@ export default function Teams() {
                       {team.display_name.slice(0, 2).toUpperCase()}
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#080a12] via-transparent to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-dark-base via-transparent to-transparent" />
                 </div>
 
                 <div className="p-4">
@@ -275,7 +275,7 @@ export default function Teams() {
 
       {isJoinModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-6">
+          <div className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6">
             <h3 className="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
               Join a Team
             </h3>

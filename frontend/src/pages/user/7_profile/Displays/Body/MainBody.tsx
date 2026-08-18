@@ -44,9 +44,9 @@ const tabOptions: { key: TabType; label: string; icon: React.ReactNode }[] = [
 export const DetailsListBodySkeleton: React.FC = () => (
   <div className="space-y-4 animate-pulse">
     <div className="flex flex-wrap gap-2 border-b border-gray-200 dark:border-white/5 pb-3">
-      {[...Array(6)].map((_, i) => <div key={i} className="h-8 w-24 bg-gray-200 dark:bg-white/10 rounded-xl" />)}
+      {[...Array(6)].map((_, i) => <div key={i} className="h-8 w-24 bg-gray-200 dark:bg-dark-elevated rounded-xl" />)}
     </div>
-    <div className="border border-gray-200 dark:border-white/10 bg-white/40 dark:bg-[#0b0e17]/40 rounded-2xl h-[500px] w-full" />
+    <div className="border border-gray-200 dark:border-white/10 bg-white/40 dark:bg-dark-base/40 rounded-2xl h-[500px] w-full" />
   </div>
 );
 
@@ -73,7 +73,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
     <div className="space-y-5 font-['Plus Jakarta Sans',sans-serif]">
 
       {/* ==================== SMOOTH NAVIGATION BAR ==================== */}
-      <div className="flex flex-wrap gap-1 bg-gray-100/50 dark:bg-[#0b0e17]/40 border border-gray-200 dark:border-white/5 p-1 rounded-2xl w-fit">
+      <div className="flex flex-wrap gap-1 bg-gray-100/50 dark:bg-dark-base/40 border border-gray-200 dark:border-white/5 p-1 rounded-2xl w-fit">
         {tabOptions.map((tab) => {
           const isActive = activeTab === tab.key;
           return (
@@ -103,7 +103,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
       </div>
 
       {/* ==================== CONTENT PANEL LAYER CONTROLLER ==================== */}
-      <div className="bg-white/80 dark:bg-[#0b0e17]/60 backdrop-blur-md border border-gray-200 dark:border-white/10 rounded-2xl p-6 shadow-2xl min-h-[500px] flex flex-col relative overflow-hidden">
+      <div className="bg-white/80 dark:bg-dark-base/60 backdrop-blur-md border border-gray-200 dark:border-white/10 rounded-2xl p-6 shadow-2xl min-h-[500px] flex flex-col relative overflow-hidden">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}

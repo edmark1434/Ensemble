@@ -12,10 +12,10 @@ const GigCard: React.FC<GigCardProps> = ({ gig, isSaved, onSave, onClick }) => {
   return (
     <div
       onClick={onClick}
-      className="group flex flex-col md:flex-row gap-6 rounded-2xl border border-white/10 bg-[#0d0f1a]/40 p-5 transition-all cursor-pointer hover:border-white/20"
+      className="group flex flex-col md:flex-row gap-6 rounded-2xl border border-white/10 bg-dark-surface/40 p-5 transition-all cursor-pointer hover:border-white/20"
     >
       {/* Left Side: Thumbnail Display Box */}
-      <div className="h-40 w-full md:w-64 shrink-0 overflow-hidden rounded-xl bg-zinc-900 border border-white/5 relative">
+      <div className="h-40 w-full md:w-64 shrink-0 overflow-hidden rounded-xl bg-dark-surface border border-white/5 relative">
         <img
           src={gig.thumbnail}
           alt=""

@@ -59,7 +59,7 @@ export const GalleryLightbox: React.FC<GalleryLightboxProps> = ({
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="relative z-10 w-full max-w-4xl max-h-[90vh] flex flex-col bg-white/80 dark:bg-[#0a0a0a]/80 backdrop-blur-3xl rounded-3xl overflow-hidden shadow-2xl mx-4 border border-black/5 dark:border-white/10"
+              className="relative z-10 w-full max-w-4xl max-h-[90vh] flex flex-col bg-white/80 dark:bg-dark-base/80 backdrop-blur-3xl rounded-3xl overflow-hidden shadow-2xl mx-4 border border-black/5 dark:border-white/10"
             >
               <AnimatePresence mode="wait">
                 <motion.div
@@ -94,7 +94,7 @@ export const GalleryLightbox: React.FC<GalleryLightboxProps> = ({
                   </div>
 
                   {/* Bottom Info Section */}
-                  <div className="w-full bg-white/40 dark:bg-[#111111]/60 border-t border-white/30 dark:border-white/10 flex flex-col p-6 lg:p-8">
+                  <div className="w-full bg-white/40 dark:bg-dark-base/60 border-t border-white/30 dark:border-white/10 flex flex-col p-6 lg:p-8">
                     <div className="flex items-start justify-between mb-4 pr-8 lg:pr-0">
                       <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{selectedItem.title}</h2>
                       {isOwner && (

@@ -23,7 +23,7 @@ interface FilterSidebarProps {
 
 const FilterSidebar: React.FC<FilterSidebarProps> = ({ filters, setters, onClear }) => {
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#0d0f1a]/60 p-5 backdrop-blur-sm space-y-6">
+    <div className="rounded-2xl border border-white/10 bg-dark-surface/60 p-5 backdrop-blur-sm space-y-6">
 
       {/* Sidebar Header Title Banner */}
       <div className="flex items-center justify-between pb-2 border-b border-white/5">

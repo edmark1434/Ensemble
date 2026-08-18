@@ -21,10 +21,10 @@ const mockDisputes = [
 export const MeritSectionSkeleton: React.FC<{ viewMode?: "merit" | "ratings" | "both" }> = ({ viewMode = "both" }) => (
   <div className={`grid grid-cols-1 gap-4 animate-pulse ${viewMode === "both" ? "md:grid-cols-3" : "max-w-2xl mx-auto w-full"}`}>
     {(viewMode === "both" || viewMode === "merit") && (
-      <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 h-[88px]" />
+      <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-dark-elevated h-[88px]" />
     )}
     {(viewMode === "both" || viewMode === "ratings") && (
-      <div className={`${viewMode === "both" ? "md:col-span-2" : ""} rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 h-[88px]`} />
+      <div className={`${viewMode === "both" ? "md:col-span-2" : ""} rounded-xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-dark-elevated h-[88px]`} />
     )}
   </div>
 );
@@ -152,7 +152,7 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
 
         {/* ==================== RIGHT CARD: RATING BREAKDOWN TABLE ==================== */}
         {(viewMode === "both" || viewMode === "ratings") && (
-        <div className={`${viewMode === "both" ? "md:col-span-2" : ""} rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-[#0b0e17]/60 backdrop-blur-md text-gray-800 dark:text-zinc-300 shadow-xl flex flex-col justify-between transition-all duration-300 ${
+        <div className={`${viewMode === "both" ? "md:col-span-2" : ""} rounded-2xl border border-gray-200 dark:border-white/10 bg-white/60 dark:bg-dark-base/60 backdrop-blur-md text-gray-800 dark:text-zinc-300 shadow-xl flex flex-col justify-between transition-all duration-300 ${
           isCollapsed ? "p-3 justify-center gap-2" : "p-5 gap-4"
         }`}>
 
@@ -256,7 +256,7 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
       {/* ==================== SYSTEM POPUP OVERLAY MODAL: DISPUTE HISTORY ==================== */}
       {isDisputeModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn text-gray-900 dark:text-white">
-          <div className="relative w-full max-w-lg rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#080a12] p-5 shadow-2xl space-y-4">
+          <div className="relative w-full max-w-lg rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base p-5 shadow-2xl space-y-4">
 
             <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-3">
               <div className="flex items-center gap-2">

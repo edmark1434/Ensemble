@@ -57,7 +57,7 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({ isOpen, onClos
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-[#0a0c10] border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-dark-base border border-white/10 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                 
                 {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b border-white/10">
@@ -136,7 +136,7 @@ export const RateReviewModal: React.FC<RateReviewModalProps> = ({ isOpen, onClos
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-white/10 bg-zinc-950/50 flex justify-end gap-3">
+                <div className="p-6 border-t border-white/10 bg-dark-surface/50 flex justify-end gap-3">
                     <button
                         onClick={onClose}
                         disabled={isSubmitting}

@@ -39,7 +39,7 @@ export const ClaimCreditsModal: React.FC<ClaimCreditsModalProps> = ({ isOpen, on
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-[#0a0c10] border border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-dark-base border border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                 
                 {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b border-white/10">
@@ -87,7 +87,7 @@ export const ClaimCreditsModal: React.FC<ClaimCreditsModalProps> = ({ isOpen, on
                     </div>
 
                     {/* Final Balance Preview */}
-                    <div className="bg-[#080a12]/50 border border-white/5 rounded-xl p-4 flex items-center justify-between">
+                    <div className="bg-dark-base/50 border border-white/5 rounded-xl p-4 flex items-center justify-between">
                         <span className="text-sm font-semibold text-zinc-400">New Wallet Balance:</span>
                         <span className="flex items-center gap-1 font-mono text-lg font-bold text-white">
                             <CreditIcon className="w-5 h-5 text-yellow-500" /> 
@@ -97,7 +97,7 @@ export const ClaimCreditsModal: React.FC<ClaimCreditsModalProps> = ({ isOpen, on
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-white/10 bg-zinc-950/50 flex justify-end gap-3">
+                <div className="p-6 border-t border-white/10 bg-dark-surface/50 flex justify-end gap-3">
                     <button
                         onClick={onClose}
                         disabled={isSubmitting || isClaimed}
