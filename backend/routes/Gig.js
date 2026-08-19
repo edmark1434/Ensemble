@@ -10,7 +10,8 @@ const {
     getIncomingOrdersController,
     getMyOrdersController,
     getGigByIdController,
-    updateGigController
+    updateGigController,
+    deleteGigController
 } = require('../controllers/GigControllers');
 const requireAuth = require('../middleware/RequireAuth');
 const requireCompletedOnboarding = require('../middleware/RequireCompletedOnboarding');
@@ -32,6 +33,9 @@ router.get('/:id', getGigByIdController);
 
 // PUT /api/gigs/:id
 router.put('/:id', updateGigController);
+
+// DELETE /api/gigs/:id
+router.delete('/:id', deleteGigController);
 
 // POST /api/gigs/:id/save
 router.post('/:id/save', toggleGigSaveController);

@@ -8,7 +8,8 @@ const {
     getIncomingOrdersRepository,
     getMyOrdersRepository,
     getGigByIdRepository,
-    updateGigRepository
+    updateGigRepository,
+    deleteGigRepository
 } = require('../repositories/GigRepositories');
 
 async function createGigController(req, res) {
@@ -115,7 +116,6 @@ async function getGigByIdController(req, res) {
     }
 }
 
-
 async function updateGigController(req, res) {
     try {
         const freelancer_account_id = req.user?.account_id;
@@ -146,6 +146,23 @@ async function updateGigController(req, res) {
     }
 }
 
+async function deleteGigController(req, res) {
+    try {
+        const freelancer_account_id = req.user?.account_id;
+        const gigId = req.params.id;
+
+        if (!freelancer_account_id) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+
+        await deleteGigRepository(gigId, freelancer_account_id);
+        res.status(200).json({ success: true, message: 'Gig successfully deleted' });
+    } catch (error) {
+        console.error("Error in deleteGigController:", error);
+        res.status(500).json({ success: false, message: 'Failed to delete gig' });
+    }
+}
+
 module.exports = {
     updateGigController,
     createGigController,
@@ -155,5 +172,6 @@ module.exports = {
     submitGigOrderController,
     getIncomingOrdersController,
     getMyOrdersController,
-    getGigByIdController
+    getGigByIdController,
+    deleteGigController
 };
