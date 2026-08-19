@@ -127,7 +127,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
           </div>
         </div>
 
-{/* THUMBNAIL (FIRST ON TOP) */}
+        {/* THUMBNAIL (FIRST ON TOP) */}
         <div className="w-full h-64 sm:h-80 md:h-96 rounded-2xl overflow-hidden mb-6 bg-gray-100 dark:bg-white/5 relative border border-gray-200 dark:border-white/10">
           <img src={gig.thumbnail} alt={gig.title} className="w-full h-full object-cover" />
         </div>
@@ -147,8 +147,8 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
           </div>
           <div className="flex flex-col sm:items-end gap-2">
             <div className="text-xs text-gray-500 font-medium">{gig.timeAgo ? `Posted ${gig.timeAgo}` : gig.postedAt ? `Posted ${gig.postedAt}` : "Posted Recently"}</div>
-            <button 
-              onClick={() => navigate(`/profile/${gig.postedBy}`)} 
+            <button
+              onClick={() => navigate(`/profile/${gig.postedBy}`)}
               className="text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
             >
               View Profile
@@ -160,7 +160,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
           {/* DESCRIPTION */}
           <section>
             <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">About This Service</h3>
-            <div 
+            <div
               className="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed max-w-none prose prose-sm dark:prose-invert"
               dangerouslySetInnerHTML={{ __html: gig.description.replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>") }}
             />
@@ -190,7 +190,92 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
             </section>
           )}
 
-          {/* QUESTIONNAIRES */}
+          {/* TIERS TABS (DRAWER ONLY) */}
+          {!isPage && (
+          <section>
+            <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Pricing Packages</h3>
+            <div className="rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-dark-base">
+              <div className="flex border-b border-gray-200 dark:border-white/10">
+                {gig.tiers.map((tier, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setActiveTierIdx(idx)}
+                    className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${
+                      activeTierIdx === idx 
+                        ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-b-2 border-blue-500" 
+                        : "text-gray-500 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/5"
+                    }`}
+                  >
+                    {tier.tierName}
+                  </button>
+                ))}
+              </div>
+              <div className="p-5">
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="text-lg font-bold text-gray-900 dark:text-white">{activeTier?.title}</h4>
+                  <span className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString()}</span>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-zinc-400 mb-6">{activeTier?.description}</p>
+
+                <div className="flex items-center gap-4 text-xs font-medium text-gray-700 dark:text-zinc-300 mb-6">
+                  <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-gray-400" /> {activeTier?.daysOfDelivery} Days Delivery</span>
+                  <span className="flex items-center gap-1.5"><PlayCircle className="h-4 w-4 text-gray-400" /> {activeTier?.revisions} Revisions</span>
+                </div>
+
+                <button
+                  onClick={() => navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
+                  className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
+                >
+                  Continue ({activeTier?.price?.toLocaleString()} Credits)
+                </button>
+              </div>
+            </div>
+            {gig.additionalWorkRate > 0 && (
+              <p className="text-[10px] text-gray-500 mt-2 text-center">
+                * Additional work outside of scope will be billed with a {gig.additionalWorkRate}% markup.
+              </p>
+            )}
+          </section>
+          )}
+
+          {/* SUPPORTING IMAGES */}
+          {gig.gallery && gig.gallery.length > 0 && (
+            <section>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Supporting Images</h3>
+              <div className="flex gap-3 overflow-x-auto custom-scrollbar pb-4 snap-x">
+                {gig.gallery.map((img, idx) => (
+                  <div key={idx} className="h-40 sm:h-56 min-w-[70%] sm:min-w-[45%] shrink-0 rounded-xl overflow-hidden snap-center relative bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10">
+                    <img src={img} alt={`Gallery ${idx}`} className="h-full w-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* MILESTONES */}
+          {gig.milestones && gig.milestones.length > 0 && (
+            <section>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Project Milestones</h3>
+              <div className="space-y-4">
+                {gig.milestones.map((m, idx) => (
+                  <div key={idx} className="flex gap-4">
+                    <div className="flex flex-col items-center">
+                      <div className="h-6 w-6 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs">
+                        {idx + 1}
+                      </div>
+                      {idx < gig.milestones.length - 1 && <div className="w-[2px] h-full bg-gray-200 dark:bg-white/10 mt-1" />}
+                    </div>
+                    <div className="pb-4">
+                      <h4 className="font-bold text-gray-900 dark:text-white text-sm mb-1">{m.name}</h4>
+                      <p className="text-xs text-gray-600 dark:text-zinc-400">{m.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* QUESTIONNAIRES (MOVED TO LAST) */}
           {gig.questionnaires && gig.questionnaires.length > 0 && (
             <section>
               <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Requirements / Questionnaire</h3>
@@ -229,94 +314,6 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
             </section>
           )}
 
-          {/* TIERS TABS (DRAWER ONLY) */}
-          {!isPage && (
-          <section>
-            <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Pricing Packages</h3>
-            <div className="rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-dark-base">
-              <div className="flex border-b border-gray-200 dark:border-white/10">
-                {gig.tiers.map((tier, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setActiveTierIdx(idx)}
-                    className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${
-                      activeTierIdx === idx 
-                        ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-b-2 border-blue-500" 
-                        : "text-gray-500 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/5"
-                    }`}
-                  >
-                    {tier.tierName}
-                  </button>
-                ))}
-              </div>
-              <div className="p-5">
-                <div className="flex justify-between items-start mb-2">
-                  <h4 className="text-lg font-bold text-gray-900 dark:text-white">{activeTier?.title}</h4>
-                  <span className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString()}</span>
-                </div>
-                <p className="text-sm text-gray-600 dark:text-zinc-400 mb-6">{activeTier?.description}</p>
-                
-                <div className="flex items-center gap-4 text-xs font-medium text-gray-700 dark:text-zinc-300 mb-6">
-                  <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-gray-400" /> {activeTier?.daysOfDelivery} Days Delivery</span>
-                  <span className="flex items-center gap-1.5"><PlayCircle className="h-4 w-4 text-gray-400" /> {activeTier?.revisions} Revisions</span>
-                </div>
-                
-                <button 
-                  onClick={() => navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
-                  className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
-                >
-                  Continue ({activeTier?.price?.toLocaleString()} Credits)
-                </button>
-              </div>
-            </div>
-            {gig.additionalWorkRate > 0 && (
-              <p className="text-[10px] text-gray-500 mt-2 text-center">
-                * Additional work outside of scope will be billed with a {gig.additionalWorkRate}% markup.
-              </p>
-            )}
-          </section>
-          )}
-
-          {/* SUPPORTING IMAGES */}
-          {gig.gallery && gig.gallery.length > 0 && (
-            <section>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Supporting Images</h3>
-              <div className="flex gap-3 overflow-x-auto custom-scrollbar pb-4 snap-x">
-                {gig.gallery.map((img, idx) => (
-                  <div key={idx} className="h-40 sm:h-56 min-w-[70%] sm:min-w-[45%] shrink-0 rounded-xl overflow-hidden snap-center relative bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10">
-                    <img src={img} alt={`Gallery ${idx}`} className="h-full w-full object-cover" />
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-
-
-          {/* MILESTONES */}
-          {gig.milestones && gig.milestones.length > 0 && (
-            <section>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Project Milestones</h3>
-              <div className="space-y-4">
-                {gig.milestones.map((m, idx) => (
-                  <div key={idx} className="flex gap-4">
-                    <div className="flex flex-col items-center">
-                      <div className="h-6 w-6 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs">
-                        {idx + 1}
-                      </div>
-                      {idx < gig.milestones.length - 1 && <div className="w-[2px] h-full bg-gray-200 dark:bg-white/10 mt-1" />}
-                    </div>
-                    <div className="pb-4">
-                      <h4 className="font-bold text-gray-900 dark:text-white text-sm mb-1">{m.name}</h4>
-                      <p className="text-xs text-gray-600 dark:text-zinc-400">{m.description}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          
         </div>
         </div>
 
@@ -347,13 +344,13 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
                   <span className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString()}</span>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-zinc-400 mb-6">{activeTier?.description}</p>
-                
+
                 <div className="flex flex-col gap-3 text-xs font-medium text-gray-700 dark:text-zinc-300 mb-6">
                   <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-gray-400" /> {activeTier?.daysOfDelivery} Days Delivery</span>
                   <span className="flex items-center gap-1.5"><PlayCircle className="h-4 w-4 text-gray-400" /> {activeTier?.revisions} Revisions</span>
                 </div>
-                
-                <button 
+
+                <button
                   onClick={() => navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
                   className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
                 >
@@ -382,7 +379,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
           <span className="text-xs text-gray-500">Selected: {activeTier?.tierName}</span>
           <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString()}</span>
         </div>
-        <button 
+        <button
           onClick={() => navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
           className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
         >

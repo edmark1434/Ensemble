@@ -85,7 +85,7 @@ export const HomeFeaturedGigs: React.FC = () => {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      // Insert save handler here if available
+                      // Insert save handler here if needed
                     }}
                     className={`absolute top-2 right-2 rounded-full bg-white/80 dark:bg-black/50 p-1.5 backdrop-blur-sm transition ${
                       gig.isSaved
@@ -134,10 +134,15 @@ export const HomeFeaturedGigs: React.FC = () => {
                   {gig.title}
                 </h3>
 
-                {/* Description */}
+                {/* Rich-Formatted Description */}
                 <div
                   className="text-xs text-gray-500 dark:text-zinc-400 line-clamp-2 mb-3 leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: gig.description }}
+                  dangerouslySetInnerHTML={{
+                    __html: (gig.description || "")
+                      .replace(/\n/g, "<br/>")
+                      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+                      .replace(/\*(.*?)\*/g, "<em>$1</em>"),
+                  }}
                 />
 
                 {/* Skills */}
