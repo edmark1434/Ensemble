@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+// src/pages/user/7_gigs/gig_pages/gig_edit_page.tsx
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trash2 } from "lucide-react";
@@ -6,6 +7,7 @@ import ShapeGrid from "@/components/ui/ShapeGrid";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
+import PopupConfirmReturn from "@/pages/user/6_job_market/job_components/job_popups/popup_confirm_return";
 
 // Types
 import type { GigTier, Milestone, Questionnaire } from "../gig_datasets";
@@ -29,8 +31,12 @@ const GigEditPage: React.FC = () => {
   const theme = useGlobalState((state) => state.theme);
 
   const [currentSlide, setCurrentSlide] = useState<number>(1);
+  const [isDiscardOpen, setIsDiscardOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
+
+  // Snapshot for dirty-check comparison
+  const [initialSnapshot, setInitialSnapshot] = useState<string>("");
 
   // --- SLIDE 1: CORE INFO ---
   const [title, setTitle] = useState("");
@@ -48,11 +54,8 @@ const GigEditPage: React.FC = () => {
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
 
   // --- SLIDE 3: TIERS & MILESTONES ---
-  const [tiers, setTiers] = useState<GigTier[]>([
-    { tierName: "Basic", title: "Essential Delivery", description: "Standard quality output perfect for simple projects.", daysOfDelivery: 1, revisions: 1, price: 100 },
-    { tierName: "Standard", title: "Pro Delivery", description: "High-quality output with source files and extra revisions.", daysOfDelivery: 3, revisions: 2, price: 300 }
-  ]);
-  const [milestones, setMilestones] = useState<Milestone[]>([{ name: "Kickoff", description: "Initial setup and requirements gathering." }]);
+  const [tiers, setTiers] = useState<GigTier[]>([]);
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [additionalWorkRate, setAdditionalWorkRate] = useState<number>(50);
 
   // --- SLIDE 4: QUESTIONNAIRES ---
@@ -69,28 +72,56 @@ const GigEditPage: React.FC = () => {
         if (data) {
           setIsOwnGig(Boolean(data.isOwnGig));
 
-          const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || '';
+          const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || "";
           const mapUrl = (path: string) => {
             if (!path) return "";
-            if (!cloudFrontUrl && path.includes('public')) return "";
-            if (path.startsWith('http') || path.startsWith('/')) return path;
+            if (!cloudFrontUrl && path.includes("public")) return "";
+            if (path.startsWith("http") || path.startsWith("/")) return path;
             return `${cloudFrontUrl}/${path}`;
           };
 
-          setTitle(data.title || "");
-          setDescription(data.description || "");
-          setCategory(data.category || "");
-          setThumbnailUrl(mapUrl(data.thumbnail) || "");
-          setSlots(data.slots || 1);
-          setTermsOfService(data.termsOfService || "");
-          setSkills(data.skills || []);
-          setFirstDraftDelivery(data.firstDraftDelivery || "");
-          if (data.gallery) {
-            setGalleryUrls(data.gallery.map((p: string) => mapUrl(p)).filter(Boolean));
-          }
-          if (data.tiers) setTiers(data.tiers);
-          if (data.milestones) setMilestones(data.milestones);
-          if (data.questionnaires) setQuestionnaires(data.questionnaires);
+          const initialTitle = data.title || "";
+          const initialDesc = data.description || "";
+          const initialCat = data.category || "";
+          const initialThumb = mapUrl(data.thumbnail) || "";
+          const initialSlots = data.slots || 1;
+          const initialTos = data.termsOfService || "";
+          const initialSkills = data.skills || [];
+          const initialTimeline = data.firstDraftDelivery || "";
+          const initialGallery = data.gallery ? data.gallery.map((p: string) => mapUrl(p)).filter(Boolean) : [];
+          const initialTiers = data.tiers || [];
+          const initialMilestones = data.milestones || [];
+          const initialQuestions = data.questionnaires || [];
+
+          setTitle(initialTitle);
+          setDescription(initialDesc);
+          setCategory(initialCat);
+          setThumbnailUrl(initialThumb);
+          setSlots(initialSlots);
+          setTermsOfService(initialTos);
+          setSkills(initialSkills);
+          setFirstDraftDelivery(initialTimeline);
+          setGalleryUrls(initialGallery);
+          setTiers(initialTiers);
+          setMilestones(initialMilestones);
+          setQuestionnaires(initialQuestions);
+
+          // Save snapshot of initial values to detect actual user changes
+          setInitialSnapshot(
+            JSON.stringify({
+              title: initialTitle,
+              description: initialDesc,
+              category: initialCat,
+              slots: initialSlots,
+              termsOfService: initialTos,
+              skills: initialSkills,
+              firstDraftDelivery: initialTimeline,
+              galleryUrls: initialGallery,
+              tiers: initialTiers,
+              milestones: initialMilestones,
+              questionnaires: initialQuestions,
+            })
+          );
         }
       } catch (err) {
         console.error("Failed to fetch gig details:", err);
@@ -100,6 +131,51 @@ const GigEditPage: React.FC = () => {
     };
     if (id) fetchGig();
   }, [id]);
+
+  // Check if anything actually changed from what was initially loaded
+  const hasUnsavedChanges = useMemo(() => {
+    if (!initialSnapshot) return false;
+    if (thumbnailFile !== null || galleryFiles.length > 0) return true;
+
+    const currentSnapshot = JSON.stringify({
+      title,
+      description,
+      category,
+      slots,
+      termsOfService,
+      skills,
+      firstDraftDelivery,
+      galleryUrls,
+      tiers,
+      milestones,
+      questionnaires,
+    });
+
+    return currentSnapshot !== initialSnapshot;
+  }, [
+    initialSnapshot,
+    title,
+    description,
+    category,
+    slots,
+    termsOfService,
+    skills,
+    firstDraftDelivery,
+    galleryUrls,
+    tiers,
+    milestones,
+    questionnaires,
+    thumbnailFile,
+    galleryFiles,
+  ]);
+
+  const handleReturnTrigger = () => {
+    if (hasUnsavedChanges) {
+      setIsDiscardOpen(true);
+    } else {
+      navigate("/gigs/my-services");
+    }
+  };
 
   const handleDeletePost = async () => {
     if (!window.confirm("Are you sure you want to delete this service? It will no longer appear in the marketplace.")) {
@@ -115,22 +191,6 @@ const GigEditPage: React.FC = () => {
       alert(err.response?.data?.message || "Failed to delete gig");
     } finally {
       setIsDeleting(false);
-    }
-  };
-
-  if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center dark:bg-dark-base text-gray-500">Loading service details...</div>;
-  }
-
-  const hasUnsavedChanges = Boolean(title || description || category);
-
-  const handleReturnTrigger = () => {
-    if (hasUnsavedChanges) {
-      if (window.confirm("You have unsaved changes. Discard?")) {
-        navigate("/gigs/my-services");
-      }
-    } else {
-      navigate("/gigs/my-services");
     }
   };
 
@@ -197,9 +257,9 @@ const GigEditPage: React.FC = () => {
 
     if (currentSlide === 5 && targetSlide === 6) {
       const stepErrors: Record<string, string> = {};
-      questionnaires.forEach((q, i) => {
+      questionnaires.forEach((q) => {
         if (!q.question.trim()) stepErrors[`question_${q.id}_question`] = "Question text is required";
-        if (q.type === 'choice') {
+        if (q.type === "choice") {
           if (!q.options || q.options.length < 2) {
             stepErrors[`question_${q.id}_options_length`] = "Multiple choice requires at least 2 options";
           } else {
@@ -231,7 +291,7 @@ const GigEditPage: React.FC = () => {
 
       if (thumbnailFile) {
         uploadPromises.push(
-          uploadFileWithIntent(thumbnailFile, "gig_thumbnails").then(res => {
+          uploadFileWithIntent(thumbnailFile, "gig_thumbnails").then((res) => {
             thumbnailFileId = res.fileId;
           })
         );
@@ -239,7 +299,7 @@ const GigEditPage: React.FC = () => {
 
       galleryFiles.forEach((file, index) => {
         uploadPromises.push(
-          uploadFileWithIntent(file, "gig_galleries").then(res => {
+          uploadFileWithIntent(file, "gig_galleries").then((res) => {
             galleryFileIds[index] = res.fileId;
           })
         );
@@ -273,6 +333,14 @@ const GigEditPage: React.FC = () => {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center dark:bg-dark-base text-gray-500">
+        Loading service details...
+      </div>
+    );
+  }
+
   return (
     <div className="relative min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-gray-200 overflow-hidden font-inter transition-colors duration-300">
       {/* Background Grid Animation */}
@@ -282,8 +350,8 @@ const GigEditPage: React.FC = () => {
           squareSize={48}
           direction="diagonal"
           speed={0.4}
-          borderColor={theme === 'dark' ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.06)"}
-          hoverFillColor={theme === 'dark' ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
+          borderColor={theme === "dark" ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.06)"}
+          hoverFillColor={theme === "dark" ? "rgba(59, 130, 246, 0.15)" : "rgba(59, 130, 246, 0.1)"}
           hoverTrailAmount={3}
         />
       </div>
@@ -488,6 +556,16 @@ const GigEditPage: React.FC = () => {
       <CreationSuccess
         isOpen={isSuccessOpen}
         onConfirm={() => navigate("/gigs/my-services")}
+      />
+
+      <PopupConfirmReturn
+        isOpen={isDiscardOpen}
+        onConfirm={() => {
+          setIsDiscardOpen(false);
+          navigate("/gigs/my-services");
+        }}
+        onCancel={() => setIsDiscardOpen(false)}
+        description="All unsaved changes to this service offering will be permanently lost."
       />
     </div>
   );

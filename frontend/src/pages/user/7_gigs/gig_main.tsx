@@ -119,7 +119,10 @@ const GigMain: React.FC = () => {
     return gigsList.filter((gig) => {
       if (isSavedTab) return gig.isSaved;
       if (isMyServicesTab) return gig.isOwnGig;
-      return true; // Default services tab
+
+      // Default All Services tab: only show open services
+      const isOpen = gig.status?.toLowerCase() === "open" || !gig.status;
+      return isOpen;
     });
   }, [gigsList, location.pathname]);
 

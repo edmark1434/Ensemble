@@ -17,7 +17,7 @@ async function createGigRepository(gigData) {
             termsId = tosRes.rows[0].terms_id;
         }
 
-        // 1. Insert base gig
+        // 1. Insert base gig with 'Open' status
         const gigQuery = `
             INSERT INTO gigs (
                 freelancer_account_id, title, description, payment_type, no_of_concurrent_max, status, category
@@ -26,12 +26,12 @@ async function createGigRepository(gigData) {
             ) RETURNING gig_id;
         `;
         const gigValues = [
-            gigData.freelancer_account_id, 
-            gigData.title, 
-            gigData.description, 
-            'milestone', 
-            gigData.slots || 1, 
-            'active',
+            gigData.freelancer_account_id,
+            gigData.title,
+            gigData.description,
+            'milestone',
+            gigData.slots || 1,
+            'Open',
             gigData.category || 'Other'
         ];
         const res = await client.query(gigQuery, gigValues);
@@ -47,11 +47,11 @@ async function createGigRepository(gigData) {
             for (const tier of gigData.tiers) {
                 const tierTitle = `${tier.tierName} - ${tier.title}`;
                 await client.query(tierQuery, [
-                    gigId, 
-                    tierTitle, 
-                    tier.description || '', 
-                    Number(tier.price) || 0, 
-                    Number(tier.daysOfDelivery) || 1, 
+                    gigId,
+                    tierTitle,
+                    tier.description || '',
+                    Number(tier.price) || 0,
+                    Number(tier.daysOfDelivery) || 1,
                     Number(tier.revisions) || 0
                 ]);
             }
@@ -97,7 +97,7 @@ async function createGigRepository(gigData) {
                 }
             }
         }
-        
+
         // 5. Insert Requirements (Questionnaires)
         if (gigData.questionnaires && gigData.questionnaires.length > 0) {
             const reqQuery = `
@@ -172,7 +172,11 @@ async function getAllGigsRepository(filters, accountId = null) {
             g.title,
             g.description,
             g.category as category,
-            g.status as status,
+            CASE 
+                WHEN LOWER(g.status) = 'active' THEN 'Open'
+                WHEN LOWER(g.status) = 'paused' THEN 'Closed'
+                ELSE g.status
+            END as status,
             g.no_of_concurrent_max as slots,
             g.created_at as "postedAt",
             g.freelancer_account_id,
@@ -195,7 +199,7 @@ async function getAllGigsRepository(filters, accountId = null) {
             (SELECT COUNT(*) FROM gig_requests gr JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id WHERE gt.gig_id = g.gig_id) as "ordersCount"
         FROM gigs g
         JOIN accounts a ON g.freelancer_account_id = a.account_id
-        WHERE g.status != 'archived' AND g.status != 'deleted'
+        WHERE LOWER(g.status) != 'archived' AND LOWER(g.status) != 'deleted'
         ORDER BY g.created_at DESC
     `;
     const res = accountId ? await pool.query(query, [accountId]) : await pool.query(query);
@@ -209,7 +213,7 @@ async function getAllGigsRepository(filters, accountId = null) {
             title: row.title,
             description: row.description,
             category: row.category,
-            status: row.status,
+            status: row.status || 'Open',
             slots: row.slots,
             termsOfService: row.termsOfService || '',
             skills: cleanArray(row.skills),
@@ -260,7 +264,13 @@ async function toggleGigSaveRepository(gigId, accountId) {
 async function getSavedGigsRepository(accountId) {
     const query = `
         SELECT 
-            g.gig_id as id, g.title, g.description, g.category as category, g.status as status, g.no_of_concurrent_max as slots,
+            g.gig_id as id, g.title, g.description, g.category as category,
+            CASE 
+                WHEN LOWER(g.status) = 'active' THEN 'Open'
+                WHEN LOWER(g.status) = 'paused' THEN 'Closed'
+                ELSE g.status
+            END as status,
+            g.no_of_concurrent_max as slots,
             g.created_at as "postedAt", a.display_name as "postedBy",
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
             (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as thumbnail,
@@ -278,7 +288,7 @@ async function getSavedGigsRepository(accountId) {
         FROM gigs g
         JOIN accounts a ON g.freelancer_account_id = a.account_id
         JOIN gig_saves gs ON gs.gig_id = g.gig_id
-        WHERE gs.account_id = $1 AND g.status != 'archived' AND g.status != 'deleted'
+        WHERE gs.account_id = $1 AND LOWER(g.status) != 'archived' AND LOWER(g.status) != 'deleted'
         ORDER BY gs.created_at DESC
     `;
     const res = await pool.query(query, [accountId]);
@@ -286,7 +296,7 @@ async function getSavedGigsRepository(accountId) {
         const cleanArray = (arr) => (arr && arr[0] !== null) ? arr : [];
         return {
             id: row.id, postedBy: row.postedBy || 'Unknown', clientAvatar: row.clientAvatar || 'https://i.pravatar.cc/150',
-            title: row.title, description: row.description, category: row.category, status: row.status, slots: row.slots,
+            title: row.title, description: row.description, category: row.category, status: row.status || 'Open', slots: row.slots,
             skills: cleanArray(row.skills), thumbnail: row.thumbnail || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b',
             gallery: cleanArray(row.gallery).length ? cleanArray(row.gallery) : [row.thumbnail],
             milestones: cleanArray(row.milestones), tiers: cleanArray(row.tiers),
@@ -300,7 +310,6 @@ async function submitGigOrderRepository(accountId, gigId, orderData) {
     try {
         await client.query('BEGIN');
 
-        // Insert into gig_requests
         const requestQuery = `
             INSERT INTO gig_requests (client_account_id, gig_tier_id, project_brief, status)
             VALUES ($1, $2, $3, $4) RETURNING gig_request_id
@@ -309,7 +318,6 @@ async function submitGigOrderRepository(accountId, gigId, orderData) {
         const requestRes = await client.query(requestQuery, requestValues);
         const requestId = requestRes.rows[0].gig_request_id;
 
-        // Insert responses if any
         if (orderData.responses && orderData.responses.length > 0) {
             const responseQuery = `
                 INSERT INTO gig_responses (gig_request_id, gig_requirement_id, response)
@@ -372,7 +380,13 @@ async function getMyOrdersRepository(accountId) {
 async function getGigByIdRepository(gigId, accountId = null) {
     const query = `
         SELECT 
-            g.gig_id as id, g.title, g.description, g.category as category, g.status as status, g.no_of_concurrent_max as slots,
+            g.gig_id as id, g.title, g.description, g.category as category,
+            CASE 
+                WHEN LOWER(g.status) = 'active' THEN 'Open'
+                WHEN LOWER(g.status) = 'paused' THEN 'Closed'
+                ELSE g.status
+            END as status,
+            g.no_of_concurrent_max as slots,
             g.created_at as "postedAt", a.display_name as "postedBy",
             g.freelancer_account_id,
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
@@ -406,7 +420,7 @@ async function getGigByIdRepository(gigId, accountId = null) {
             (SELECT COUNT(*) FROM gig_requests gr JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id WHERE gt.gig_id = g.gig_id) as "ordersCount"
         FROM gigs g
         JOIN accounts a ON g.freelancer_account_id = a.account_id
-        WHERE g.gig_id = $1 AND g.status != 'archived' AND g.status != 'deleted'
+        WHERE g.gig_id = $1 AND LOWER(g.status) != 'archived' AND LOWER(g.status) != 'deleted'
     `;
     const res = await pool.query(query, [gigId, accountId]);
     if (res.rows.length === 0) return null;
@@ -420,7 +434,7 @@ async function getGigByIdRepository(gigId, accountId = null) {
         title: row.title,
         description: row.description,
         category: row.category,
-        status: row.status,
+        status: row.status || 'Open',
         slots: row.slots,
         skills: cleanArray(row.skills),
         thumbnail: row.thumbnail || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b',

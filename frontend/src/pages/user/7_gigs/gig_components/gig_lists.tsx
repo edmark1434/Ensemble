@@ -119,6 +119,7 @@ export const GigList: React.FC<GigListProps> = ({
       <AnimatePresence mode="popLayout">
         {gigs.map((gig) => {
           const isActive = activeGigId === gig.id;
+          const isOpen = gig.status?.toLowerCase() === "open" || !gig.status;
 
           if (viewType === "grid") {
             return (
@@ -181,16 +182,16 @@ export const GigList: React.FC<GigListProps> = ({
                     </div>
                   </div>
 
-                  {/* Category Pill Tags */}
+                  {/* Category & Status Badges */}
                   <div className="flex flex-wrap items-center gap-1.5 mb-2">
                     <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
-                        gig.status?.toLowerCase() === "open" || !gig.status
-                          ? "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
-                          : "bg-red-100 text-red-700 border-red-300 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                        isOpen
+                          ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
+                          : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
                       }`}
                     >
-                      {gig.status || "Open"}
+                      {isOpen ? "Open" : "Closed"}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                       {gig.category || "General"}
@@ -211,7 +212,7 @@ export const GigList: React.FC<GigListProps> = ({
                   <h3 className="text-sm font-bold leading-tight text-gray-900 dark:text-white mb-1.5 line-clamp-1 hover:text-blue-600 transition-colors">
                     {gig.title}
                   </h3>
-                  <div 
+                  <div
                     className="text-[12px] text-gray-500 dark:text-zinc-400 line-clamp-2 leading-relaxed mb-3"
                     dangerouslySetInnerHTML={{ __html: gig.description.replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>") }}
                   />
@@ -308,13 +309,13 @@ export const GigList: React.FC<GigListProps> = ({
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
-                        gig.status?.toLowerCase() === "open" || !gig.status
-                          ? "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
-                          : "bg-red-100 text-red-700 border-red-300 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                        isOpen
+                          ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
+                          : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
                       }`}
                     >
-                      {gig.status || "Open"}
+                      {isOpen ? "Open" : "Closed"}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                       {gig.category || "General"}
@@ -337,11 +338,11 @@ export const GigList: React.FC<GigListProps> = ({
                     </h3>
                   </div>
 
-                  <div 
+                  <div
                     className="text-[13px] text-gray-600 dark:text-zinc-400 line-clamp-2 leading-relaxed"
                     dangerouslySetInnerHTML={{ __html: gig.description.replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>") }}
                   />
-                  
+
                   {Array.isArray(gig.skills) && gig.skills.length > 0 && (
                     <div className="flex flex-wrap items-center gap-1.5 mb-1">
                       <Wrench className="h-3 w-3 text-gray-400 dark:text-zinc-400 shrink-0 mr-0.5" />
@@ -384,16 +385,16 @@ export const GigList: React.FC<GigListProps> = ({
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className="flex flex-wrap items-center gap-2 text-[10px] font-medium text-gray-500 dark:text-zinc-400">
                     <span className="bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/5 flex items-center gap-1">
                       <Users className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> {gig.slots} Slots
                     </span>
                     <span className="bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/5 flex items-center gap-1">
-                      <ShoppingCart className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> 0 Orders
+                      <ShoppingCart className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> {gig.ordersCount || 0} Orders
                     </span>
                     <span className="bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/5 flex items-center gap-1">
-                      <Heart className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> 0 Saves
+                      <Heart className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> {gig.savesCount || 0} Saves
                     </span>
                     <span className="bg-gray-100 dark:bg-white/5 px-2.5 py-1 rounded-md border border-gray-200 dark:border-white/5 flex items-center gap-1">
                       <Send className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> {gig.firstDraftDelivery || "Fast"} Delivery
