@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, useOutletContext } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
@@ -14,6 +13,7 @@ import { MeritSection_ProfileDisplay } from "./Displays/MeritSection_ProfileDisp
 import { BadgeSideSection_ProfileDisplay } from "./Displays/BadgeSideSection_ProfileDisplay.tsx";
 import { SkillsSideSection_ProfileDisplay } from "./Displays/SkillsSideSection_ProfileDisplay.tsx";
 import { SocialLinksSection_ProfileDisplay } from "./Displays/SocialLinksSection_ProfileDisplay.tsx";
+import { ProfileSetupWidget } from "./Displays/ProfileSetupWidget.tsx";
 import { MainBody } from "./Displays/Body/MainBody.tsx";
 import type { TabType } from "./Displays/Body/MainBody.tsx";
 import type { PortfolioItem } from "./Displays/Body/Profile_Portfolio.tsx";
@@ -91,17 +91,11 @@ const services = [
   { id: 1, title: "Professional Logo Design", description: "Unique, modern logo design with 3 concepts and unlimited revisions", price: 499, deliveryTime: "3 days", rating: 4.9, orders: 127 }
 ];
 
-// Helper function to construct avatar URL
 const constructAvatarUrl = (path: string | undefined): string | undefined => {
   if (!path) return undefined;
-
-  if (path.startsWith('http')) {
-    return path;
-  }
-
+  if (path.startsWith('http')) return path;
   const cloudfrontUrl = import.meta.env.VITE_CLOUDFRONT_URL;
   if (!cloudfrontUrl) return path;
-
   const cleanPath = path.startsWith('/') ? path.substring(1) : path;
   return `${cloudfrontUrl}/${cleanPath}`;
 };
@@ -132,7 +126,6 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
   const id = profileAccountId || user?.account_id;
   const hasInvalidProfileId = Boolean(profileAccountId && !isUuid(profileAccountId));
 
-  // Outlet context handler for global chat control
   const { openChatWithUser } = useOutletContext<{
     openChatWithUser: (target?: ChatTarget) => void;
   }>();
@@ -149,7 +142,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
 
   const [avatarPresets, setAvatarPresets] = useState<Preset[]>([]);
   const [currentAvatar, setCurrentAvatar] = useState<Preset | null>(null);
-  
+
   const [isFollowing, setIsFollowing] = useState(false);
   const [isFollowedBy, setIsFollowedBy] = useState(false);
   const [followersModalType, setFollowersModalType] = useState<"followers" | "following" | null>(null);
@@ -176,7 +169,6 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
     createdAt: attachment.created_at,
   });
 
-  // Open Chat Trigger Handler
   const handleOpenChat = () => {
     if (!userDetails || !id) return;
     const fullName = [userDetails.name, userDetails.middleName, userDetails.suffix]
@@ -217,93 +209,8 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
   const uploadFile = async (file: File, folder: "profile" | "documents" = "profile"): Promise<string> => {
     try {
       return (await uploadFileWithIntent(file, folder)).key;
-      const response = await api.post("/api/files/upload-url", {
-        folder: "profile",
-        filename: file.name,
-        contentType: file.type,
-      });
-
-      if (!response.data.success) {
-        throw new Error(response.data.message || 'Failed to get upload URL');
-      }
-
-      let { uploadUrl, key, expiresIn, maxFileSize } = response.data;
-
-      console.log('📤 Upload URL received:', {
-        key,
-        expiresIn: `${expiresIn} seconds`,
-        maxFileSize: `${maxFileSize / 1024 / 1024}MB`
-      });
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000);
-
-      let uploadResponse = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: {
-          "Content-Type": file.type,
-        },
-        body: file,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (uploadResponse.status === 403) {
-        console.log("⚠️ Upload URL expired, requesting new one...");
-
-        const newResponse = await api.post("/api/files/upload-url", {
-          folder: "profile",
-          filename: file.name,
-          contentType: file.type,
-        });
-
-        if (!newResponse.data.success) {
-          throw new Error(newResponse.data.message || 'Failed to get new upload URL');
-        }
-
-        const { uploadUrl: newUploadUrl, key: newKey } = newResponse.data;
-
-        uploadResponse = await fetch(newUploadUrl, {
-          method: "PUT",
-          headers: {
-            "Content-Type": file.type,
-          },
-          body: file,
-        });
-
-        key = newKey;
-      }
-
-      if (!uploadResponse.ok) {
-        if (uploadResponse.status === 413) {
-          throw new Error('File is too large. Maximum size is 5MB.');
-        }
-        if (uploadResponse.status === 415) {
-          throw new Error('File type not supported.');
-        }
-        throw new Error(`Upload failed with status ${uploadResponse.status}`);
-      }
-
-      console.log('✅ File uploaded successfully:', key);
-      return key;
-
     } catch (error: any) {
       console.error('❌ Upload error:', error);
-
-      if (error.name === 'AbortError') {
-        throw new Error('Upload timed out. Please try again.');
-      }
-      if (error.response?.status === 401) {
-        throw new Error('Please log in to upload files.');
-      }
-      if (error.response?.status === 429) {
-        throw new Error('Too many upload attempts. Please try again later.');
-      }
-      if (error.response?.status === 400) {
-        throw new Error(error.response?.data?.message || 'Invalid file or folder.');
-      }
-
       throw new Error(error.message || 'Failed to upload image. Please try again.');
     }
   };
@@ -395,8 +302,6 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
       } else if (currentAvatarData && typeof currentAvatarData === 'object') {
         currentAvatarItems = [currentAvatarData];
       }
-
-      console.log("Fetched current avatar data:", currentAvatarItems);
 
       let combinedPresets = [...presetFiles];
 
@@ -496,7 +401,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
 
   const saveProfileDetails = async (updatedData: any) => {
     try {
-      const formattedRoles = updatedData.roles 
+      const formattedRoles = updatedData.roles
         ? updatedData.roles.map((r: string) => ({ role_id: 0, role_name: r }))
         : updatedData.role;
 
@@ -517,7 +422,6 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
       const registryIds = updatedBadgesList.map(b => b.id);
       const response = await api.put('/api/accounts/profile/badges/curate', { registryIds });
       if (response.data.success) {
-        // Update local user details state to reflect new display_order
         setUserDetails((prev) => {
           if (!prev) return prev;
           const newBadges = (prev.badges || []).map(b => ({ ...b, display_order: null }));
@@ -537,28 +441,21 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
       toast.error("Failed executing operations pipeline data push.");
     }
   };
+
   const saveSkillsCuration = async (originalSkills: SkillObject[], updatedSkills: SkillObject[]) => {
     setIsSavingSkills(true);
-
     try {
-      console.log("📊 Skills Save - Original Skills:", originalSkills);
-      console.log("📊 Skills Save - Updated Skills:", updatedSkills);
-
       const response = await api.put('/api/tags/skills', {
         originalSkills: originalSkills,
         updatedSkills: updatedSkills
       });
 
-      console.log("📊 API Response:", response.data);
-
       if (response.data.success) {
         setUserDetails((prev) => (prev ? { ...prev, skills: updatedSkills } : null));
-
         const { added, removed, modified, totalSkills } = response.data.data;
         toast.success(
           `Skills updated: ${added} added, ${removed} removed, ${modified} modified. Total: ${totalSkills} skills`
         );
-
         setIsSkillsModalOpen(false);
       } else {
         toast.error(response.data.message || "Failed to update skills");
@@ -574,7 +471,6 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
   const saveSocialLinks = async (updatedLinksList: SocialLink[]) => {
     try {
       const originalLinks = userDetails?.social_links || [];
-
       const payload = {
         originalLinks: originalLinks.map(link => ({
           account_link_id: link.account_link_id,
@@ -588,11 +484,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         }))
       };
 
-      console.log("📊 Social Links Payload:", payload);
-
       const response = await api.put('/api/accounts/update-profile-social-media', payload);
-
-      console.log("📊 API Response:", response.data);
 
       if (response.data.success) {
         const updatedLinksWithIds = response.data.result.updatedLinks || updatedLinksList;
@@ -615,9 +507,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
 
   useEffect(() => {
     const fetchProfile = async () => {
-      if (!id) {
-        return;
-      }
+      if (!id) return;
 
       if (!isUuid(id)) {
         setProfileNotFound(true);
@@ -650,7 +540,7 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
           api.get(`/api/accounts/profile/${id}/attachments`),
           api.get(`/api/accounts/${id}/galleries`)
         ]);
-        
+
         if (!isOwner) {
           try {
              const followStatus = await api.get(`/api/accounts/${id}/follow-status`);
@@ -675,24 +565,18 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         if (!profileData || typeof profileData !== "object") {
           throw new Error("Profile data was not returned by the server");
         }
-        
-        console.log("PROFILE DATA RECEIVED: ", profileData);
 
         const avatarUrl = constructAvatarUrl(profileData.avatar_preset_url);
-
         setAvailableSkills(tagsResponse.data.data || []);
 
         try {
           const userSkillsResponse = await api.get(`/api/tags/users/${id}/tags`);
-
           const compiledCompoundSkills: SkillObject[] = (userSkillsResponse.data.data || []).map((tag: any) => ({
             tag_id: tag.tag_id,
             name: tag.tag_name || tag.name,
             proficiency: tag.proficiency?.toLowerCase() || "beginner",
             years: tag.years || 0
           }));
-
-          let avatarUrl = constructAvatarUrl(profileData.avatar_preset_url);
 
           setUserDetails({
             username: profileData.username || profileData.handle,
@@ -722,76 +606,31 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
           });
         } catch (skillsError) {
           console.error("Error fetching user skills:", skillsError);
-
-          try {
-            const userId = user?.account_id || profileData.user_id;
-            const userTagResponse = await api.get(`/api/tags/users/${userId}/tags`);
-
-            const compiledCompoundSkills: SkillObject[] = (userTagResponse.data.tags || []).map((tag: any) => ({
-              tag_id: tag.tag_id,
-              name: tag.name,
-              proficiency: tag.proficiency?.toLowerCase() || "beginner",
-              years: tag.years || 0
-            }));
-
-            let avatarUrl = constructAvatarUrl(profileData.avatar_preset_url);
-
-            setUserDetails({
-              username: profileData.username || profileData.handle,
-              name: profileData.name || profileData.display_name,
-              middleName: profileData.middleName || profileData.middlename,
-              suffix: profileData.suffix,
-              birthdate: profileData.birthdate || profileData.birth_date,
-              country: profileData.country,
-              zipCode: profileData.zipCode || profileData.zip_code,
-              role: profileData.roles || profileData.role || [],
-              email_address: profileData.email_address,
-              location: profileData.location,
-              joinedDate: profileData.joinedDate || profileData.joineddate || profileData.created_at,
-              verification_status: profileData.verification_status,
-              bio: profileData.bio || profileData.description,
-              tagline: profileData.tagline,
-              merit_score: profileData.merit_score || 0,
-              avatar_file_id: profileData.avatar_file_id,
-              avatar_preset_url: avatarUrl,
-              skills: compiledCompoundSkills,
-              badges: profileData.badges || [],
-              social_links: accountLinkResponse.data.links || accountLinkResponse.data || [],
-              subscriptionType: profileData.subscriptiontype || "Free",
-              followers_count: Number(profileData.followers_count) || 0,
-              following_count: Number(profileData.following_count) || 0
-            });
-          } catch (fallbackError) {
-            console.error("Error fetching user skills from fallback:", fallbackError);
-
-            let avatarUrl = constructAvatarUrl(profileData.avatar_preset_url);
-
-            setUserDetails({
-              username: profileData.username || profileData.handle,
-              name: profileData.name || profileData.display_name,
-              middleName: profileData.middleName || profileData.middlename,
-              suffix: profileData.suffix,
-              birthdate: profileData.birthdate || profileData.birth_date,
-              country: profileData.country,
-              zipCode: profileData.zipCode || profileData.zip_code,
-              role: profileData.roles || profileData.role || [],
-              email_address: profileData.email_address,
-              location: profileData.location,
-              joinedDate: profileData.joinedDate || profileData.joineddate || profileData.created_at,
-              verification_status: profileData.verification_status,
-              bio: profileData.bio || profileData.description,
-              tagline: profileData.tagline,
-              merit_score: profileData.merit_score || 0,
-              avatar_file_id: profileData.avatar_file_id,
-              avatar_preset_url: avatarUrl,
-              skills: [],
-              badges: profileData.badges || [],
-              social_links: accountLinkResponse.data.links || accountLinkResponse.data || [],
-              subscriptionType: profileData.subscriptiontype || "Free",
-              followers_count: Number(profileData.followers_count) || 0,
-              following_count: Number(profileData.following_count) || 0
-            });
-          }
+          setUserDetails({
+            username: profileData.username || profileData.handle,
+            name: profileData.name || profileData.display_name,
+            middleName: profileData.middleName || profileData.middlename,
+            suffix: profileData.suffix,
+            birthdate: profileData.birthdate || profileData.birth_date,
+            country: profileData.country,
+            zipCode: profileData.zipCode || profileData.zip_code,
+            role: profileData.roles || profileData.role || [],
+            email_address: profileData.email_address,
+            location: profileData.location,
+            joinedDate: profileData.joinedDate || profileData.joineddate || profileData.created_at,
+            verification_status: profileData.verification_status,
+            bio: profileData.bio || profileData.description,
+            tagline: profileData.tagline,
+            merit_score: profileData.merit_score || 0,
+            avatar_file_id: profileData.avatar_file_id,
+            avatar_preset_url: avatarUrl,
+            skills: [],
+            badges: profileData.badges || [],
+            social_links: accountLinkResponse.data.links || accountLinkResponse.data || [],
+            subscriptionType: profileData.subscriptiontype || "Free",
+            followers_count: Number(profileData.followers_count) || 0,
+            following_count: Number(profileData.following_count) || 0
+          });
         }
 
         const minimumDelay = 800;
@@ -818,24 +657,41 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
     void fetchProfile();
   }, [id, validatedProfileId]);
 
-  const [highlightField, setHighlightField] = useState<"bio" | "tagline" | undefined>();
+  const [highlightField, setHighlightField] = useState<"bio" | "tagline" | "tagline-and-bio" | undefined>();
 
-  const openModalWithHighlight = (field: "bio" | "tagline") => {
+  const openModalWithHighlight = (field: "bio" | "tagline" | "tagline-and-bio") => {
     setHighlightField(field);
     setIsProfileModalOpen(true);
   };
 
   const completionSteps = [
-    { check: !!userDetails?.avatar_preset_url && !userDetails.avatar_preset_url.includes('default'), label: 'Upload an Avatar', action: () => setIsAvatarModalOpen(true) },
-    { check: !!userDetails?.tagline, label: 'Add a Tagline', action: () => openModalWithHighlight("tagline") },
-    { check: !!userDetails?.bio, label: 'Add a Bio', action: () => openModalWithHighlight("bio") },
-    { check: !!userDetails?.introduction, label: 'Add an Introduction', action: () => { setActiveTab('introduction'); window.scrollTo({ top: 300, behavior: 'smooth' }); } },
-    { check: !!userDetails?.skills && userDetails.skills.length > 0, label: 'Add Skills', action: () => setIsSkillsModalOpen(true) },
-    { check: portfolioItems.length > 0, label: 'Add a Portfolio item', action: () => { setActiveTab('portfolio'); window.scrollTo({ top: 300, behavior: 'smooth' }); } }
+    {
+      check: !!userDetails?.avatar_preset_url && !userDetails.avatar_preset_url.includes('default'),
+      label: 'Upload an Avatar',
+      action: () => setIsAvatarModalOpen(true)
+    },
+    {
+      check: !!userDetails?.tagline && !!userDetails?.bio,
+      label: 'Add Tagline & Bio',
+      action: () => openModalWithHighlight("tagline-and-bio")
+    },
+    {
+      check: !!userDetails?.introduction,
+      label: 'Add an Introduction',
+      action: () => { setActiveTab('introduction'); window.scrollTo({ top: 300, behavior: 'smooth' }); }
+    },
+    {
+      check: !!userDetails?.skills && userDetails.skills.length > 0,
+      label: 'Add Skills',
+      action: () => setIsSkillsModalOpen(true)
+    },
+    {
+      check: portfolioItems.length > 0,
+      label: 'Add a Portfolio item',
+      action: () => { setActiveTab('portfolio'); window.scrollTo({ top: 300, behavior: 'smooth' }); }
+    }
   ];
 
-  const [isProfileSetupExpanded, setIsProfileSetupExpanded] = useState(true);
-  
   const [hasCompletedProfileSetup, setHasCompletedProfileSetup] = useState(() => {
     return localStorage.getItem(`profileSetupCompleted_${user?.account_id}`) === 'true';
   });
@@ -855,12 +711,10 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
     const handleProfileReset = async () => {
       setHasCompletedProfileSetup(false);
       localStorage.removeItem(`profileSetupCompleted_${user?.account_id}`);
-      // Reset tagline to trigger incomplete state
       try {
         await api.put(`/api/accounts/update-profile-details`, { original: { tagline: userDetails?.tagline || "" }, updates: { tagline: "" } });
         setUserDetails(prev => {
           if (!prev) return prev;
-          // ALSO remove the badge so we can earn it again!
           const newBadges = (prev.badges || []).filter(b => b.id !== "setup-profile");
           return { ...prev, tagline: "", badges: newBadges };
         });
@@ -868,9 +722,9 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         console.error("Failed to reset tagline", e);
       }
     };
-    
+
     const handleShowCongrats = () => setShowCongrats(true);
-    
+
     window.addEventListener('profileSetupReset', handleProfileReset);
     window.addEventListener('profileSetupShowCongrats', handleShowCongrats);
     return () => {
@@ -881,20 +735,18 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
 
   useEffect(() => {
     if (completionScore === 100 && isOwner) {
-      // 1. Show congrats modal if they just completed it
       if (!hasCompletedProfileSetup) {
         setShowCongrats(true);
         setHasCompletedProfileSetup(true);
         localStorage.setItem(`profileSetupCompleted_${user?.account_id}`, 'true');
         window.dispatchEvent(new Event('profileSetupStatusUpdate'));
       }
-      
-      // 2. Retroactively grant the badge if they are at 100% but missing it
+
       if (userDetails && !userDetails.badges?.some(b => b.id === "setup-profile")) {
         setUserDetails(prev => {
           if (!prev) return prev;
           if (prev.badges?.some(b => b.id === "setup-profile")) return prev;
-          
+
           const nextOrder = Math.max(-1, ...(prev.badges || []).filter(b => b.display_order !== null).map(b => b.display_order!)) + 1;
           const newBadges = [...(prev.badges || []), { id: "setup-profile", display_order: nextOrder }];
           return { ...prev, badges: newBadges };
@@ -904,7 +756,6 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
     }
   }, [completionScore, hasCompletedProfileSetup, isOwner, user?.account_id, userDetails]);
 
-  // Synchronize global user subscription changes (from testing widget) to the local profile view
   useEffect(() => {
     if (isOwner && user?.subscription_type && userDetails) {
       if (userDetails.subscriptionType !== user.subscription_type) {
@@ -925,75 +776,16 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
       <UserHeader pageTitle="Profile" credits={1250} />
 
       <div className="mx-auto max-w-7xl p-4 md:p-8 space-y-5">
-        
-        {/* Profile Completion Widget (Owner Only) */}
-        {!loading && isOwner && !hasCompletedProfileSetup && (
-          <div className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-2xl p-5 shadow-sm flex flex-col gap-4 transition-all duration-300">
-            <div className="flex flex-col md:flex-row items-center gap-6 w-full">
-              <div className="flex-1 w-full">
-                <div 
-                  className="flex items-center justify-between mb-2 cursor-pointer group"
-                  onClick={() => setIsProfileSetupExpanded(!isProfileSetupExpanded)}
-                >
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-gray-900 dark:text-white group-hover:text-blue-500 transition-colors">Profile Setup ({completionScore}%)</h3>
-                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isProfileSetupExpanded ? "rotate-180" : ""}`} />
-                  </div>
-                  <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                    {nextStep ? `Next: ${nextStep.label}` : 'All done!'}
-                  </span>
-                </div>
-                <div className="h-2.5 w-full bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full transition-all duration-1000 ease-out rounded-full ${getProgressColor(completionScore)}`}
-                    style={{ width: `${completionScore}%` }}
-                  />
-                </div>
-              </div>
-              {nextStep && (
-                <button 
-                  onClick={nextStep.action}
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-full transition-colors whitespace-nowrap shadow-sm w-full md:w-auto"
-                >
-                  Complete Now
-                </button>
-              )}
-            </div>
-            
-            {/* Collapsible Checklist */}
-            <div 
-              className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 border-gray-100 dark:border-white/10 transition-all duration-300 overflow-hidden ${
-                isProfileSetupExpanded ? "border-t pt-4 mt-2 opacity-100 max-h-[500px]" : "max-h-0 opacity-0 border-transparent m-0 p-0"
-              }`}
-            >
-              {completionSteps.map((step, idx) => (
-                <button 
-                  key={idx} 
-                  onClick={!step.check ? step.action : undefined}
-                  className={`flex items-center gap-2 text-sm font-medium text-left transition-colors ${
-                    step.check 
-                      ? 'text-green-600 dark:text-green-400 cursor-default' 
-                      : 'text-gray-400 dark:text-zinc-500 hover:text-blue-500 dark:hover:text-blue-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-white/5 p-1 -ml-1 rounded'
-                  }`}
-                  title={!step.check ? 'Click to complete this step' : 'Completed'}
-                >
-                  {step.check ? (
-                    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  )}
-                  <span className="truncate">{step.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+
+        {isOwner && !hasCompletedProfileSetup && (
+          <ProfileSetupWidget
+            completionScore={completionScore}
+            completionSteps={completionSteps}
+            nextStep={nextStep}
+            getProgressColor={getProgressColor}
+          />
         )}
 
-        {/* Top Personal Banner Details */}
         <TopSection_ProfileDisplay
           loading={loading}
           username={userDetails?.username}
@@ -1026,12 +818,10 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
           onChatClick={handleOpenChat}
           onVerificationClick={() => navigate("/account-verification-status")}
         />
-        {/* These data-dependent sections are intentionally not mounted until the
-            profile lookup succeeds. Their child components fetch galleries. */}
-        {!loading && confirmedProfileId === id && (
+
+        {confirmedProfileId === id && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr]">
 
-          {/* Left Sidebar Column */}
           <div className="space-y-4 h-fit">
             <BadgeSideSection_ProfileDisplay
               loading={loading}
@@ -1055,7 +845,6 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
             />
           </div>
 
-          {/* Right Main Activity Feeds Panels */}
           <div className="space-y-4">
             <MainBody
               loading={loading}
@@ -1081,7 +870,6 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         )}
       </div>
 
-      {/* System Parameter Modals */}
       <AvatarEditModal
         isOpen={isAvatarModalOpen}
         onClose={() => setIsAvatarModalOpen(false)}
@@ -1111,18 +899,17 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
         />
       )}
 
-      {/* Congratulations Modal */}
       <AnimatePresence>
         {showCongrats && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.3 }}
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             />
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -1139,23 +926,10 @@ export default function Profile({ validatedProfileId }: ProfileProps) {
               <button
                 onClick={() => {
                   setShowCongrats(false);
-                  
-                  // Grant the setup-profile badge locally if not already owned
                   if (!userDetails?.badges?.some(b => b.id === "setup-profile")) {
-                    toast.success("You earned the Profile Complete Badge! 🏅");
-                    // Attempt API call if backend supports it (Optional)
                     api.post('/api/accounts/grant-badge', { badgeId: 'setup-profile' }).catch(() => {});
-                    
-                    setUserDetails(prev => {
-                      if (!prev) return prev;
-                      
-                      // Auto-display it by giving it the next available display_order
-                      const nextOrder = Math.max(-1, ...(prev.badges || []).filter(b => b.display_order !== null).map(b => b.display_order!)) + 1;
-                      
-                      const newBadges = [...(prev.badges || []), { id: "setup-profile", display_order: nextOrder }];
-                      return { ...prev, badges: newBadges };
-                    });
                   }
+                  window.location.reload();
                 }}
                 className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl font-bold transition-all shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40"
               >
