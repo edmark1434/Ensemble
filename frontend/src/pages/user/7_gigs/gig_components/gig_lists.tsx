@@ -213,7 +213,7 @@ export const GigList: React.FC<GigListProps> = ({
                   </h3>
                   <div 
                     className="text-[12px] text-gray-500 dark:text-zinc-400 line-clamp-2 leading-relaxed mb-3"
-                    dangerouslySetInnerHTML={{ __html: gig.description }}
+                    dangerouslySetInnerHTML={{ __html: gig.description.replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>") }}
                   />
                 </div>
 
@@ -339,7 +339,7 @@ export const GigList: React.FC<GigListProps> = ({
 
                   <div 
                     className="text-[13px] text-gray-600 dark:text-zinc-400 line-clamp-2 leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: gig.description }}
+                    dangerouslySetInnerHTML={{ __html: gig.description.replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>") }}
                   />
                   
                   {Array.isArray(gig.skills) && gig.skills.length > 0 && (

@@ -162,7 +162,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
             <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">About This Service</h3>
             <div 
               className="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed max-w-none prose prose-sm dark:prose-invert"
-              dangerouslySetInnerHTML={{ __html: gig.description }}
+              dangerouslySetInnerHTML={{ __html: gig.description.replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>") }}
             />
           </section>
 
@@ -203,15 +203,15 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
                         <h4 className="font-bold text-gray-900 dark:text-white text-sm">{q.question}</h4>
                         <div className="flex gap-2 mt-2">
                           <span className="text-xs px-2 py-1 rounded bg-white dark:bg-dark-base border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 font-medium">
-                            {q.type === 'file-upload' ? 'File Upload' : q.type === 'multiple-choice' ? 'Multiple Choice' : 'Text Answer'}
+                            {(q.type === 'attachment' || q.type === 'file' || q.type === 'file-upload') ? 'File Upload' : (q.type === 'multiple_choice' || q.type === 'choice' || q.type === 'multiple-choice') ? 'Multiple Choice' : 'Text Answer'}
                           </span>
-                          {q.required && (
+                          {(q.required || q.isRequired) && (
                             <span className="text-xs px-2 py-1 rounded bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 font-medium">
                               Required
                             </span>
                           )}
                         </div>
-                        {q.type === 'multiple-choice' && q.options && (
+                        {(q.type === 'multiple_choice' || q.type === 'choice' || q.type === 'multiple-choice') && q.options && (
                           <ul className="mt-3 space-y-2 ml-1">
                             {q.options.map((opt, i) => (
                               <li key={i} className="text-sm text-gray-600 dark:text-zinc-400 flex items-center gap-2">
@@ -316,23 +316,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
             </section>
           )}
 
-          {/* REQUIREMENTS */}
-          {gig.questionnaires && gig.questionnaires.length > 0 && (
-            <section>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Requirements</h3>
-              <div className="space-y-2">
-                {gig.questionnaires.map((q, idx) => (
-                  <div key={idx} className="p-3 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
-                    <p className="text-xs font-medium text-gray-800 dark:text-zinc-200"><span className="text-gray-400 mr-2">{idx + 1}.</span> {q.question}</p>
-                    <div className="mt-2 text-[10px] font-bold text-gray-500 uppercase flex gap-2">
-                      <span className="bg-gray-200 dark:bg-white/10 px-1.5 py-0.5 rounded">{q.type}</span>
-                      {q.required && <span className="bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded">Required</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+          
         </div>
         </div>
 

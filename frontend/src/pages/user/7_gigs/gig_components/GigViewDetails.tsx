@@ -157,7 +157,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 </h4>
                   <div 
                     className="bg-white/[0.01] border border-gray-100 dark:border-white/5 p-3.5 rounded-xl text-[13px] text-gray-600 dark:text-zinc-300 leading-relaxed max-w-none prose prose-sm dark:prose-invert"
-                    dangerouslySetInnerHTML={{ __html: selectedGig.description }}
+                    dangerouslySetInnerHTML={{ __html: selectedGig.description.replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>") }}
                   />
               </div>
 
@@ -207,15 +207,15 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                             <h4 className="font-bold text-gray-900 dark:text-white text-[13px]">{q.question}</h4>
                             <div className="flex gap-2 mt-1.5">
                               <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/5 text-gray-500 font-medium">
-                                {q.type === 'file-upload' ? 'File Upload' : q.type === 'multiple-choice' ? 'Multiple Choice' : 'Text Answer'}
+                                {(q.type === 'attachment' || q.type === 'file' || q.type === 'file-upload') ? 'File Upload' : (q.type === 'multiple_choice' || q.type === 'choice' || q.type === 'multiple-choice') ? 'Multiple Choice' : 'Text Answer'}
                               </span>
-                              {q.required && (
+                              {(q.required || q.isRequired) && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 font-medium">
                                   Required
                                 </span>
                               )}
                             </div>
-                            {q.type === 'multiple-choice' && q.options && (
+                            {(q.type === 'multiple_choice' || q.type === 'choice' || q.type === 'multiple-choice') && q.options && (
                               <ul className="mt-2.5 space-y-1.5 ml-1">
                                 {q.options.map((opt, i) => (
                                   <li key={i} className="text-[12px] text-gray-600 dark:text-zinc-400 flex items-center gap-2">

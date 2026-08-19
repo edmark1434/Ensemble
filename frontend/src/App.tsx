@@ -43,6 +43,7 @@ import ProposalsViewDetailsAsAuthor from '@/pages/user/6_job_market/job_proposal
 import GigMain from '@/pages/user/7_gigs/gig_main.tsx'
 import GigServicesPage from '@/pages/user/7_gigs/gig_pages/gig_services_page.tsx'
 import GigCreatePage from '@/pages/user/7_gigs/gig_pages/gig_create_page.tsx'
+import GigEditPage from '@/pages/user/7_gigs/gig_pages/gig_edit_page.tsx'
 import GigFullPage from '@/pages/user/7_gigs/gig_pages/gig_full_page.tsx'
 import GigOrderPage from '@/pages/user/7_gigs/gig_pages/gig_order_page.tsx'
 import OrdersMain from '@/pages/user/7_gigs/gig_orders/orders_main.tsx'
@@ -260,6 +261,7 @@ function App() {
             <Route path='sent' element={<SentOrders />} />
           </Route>
           <Route path='/gigs/create' element={<GigCreatePage />} />
+          <Route path='/gigs/edit/:id' element={<GigEditPage />} />
           <Route path='/gigs/services/:id/page' element={<GigFullPage />} />
           <Route path='/gigs/services/:id/order' element={<GigOrderPage />} />
           <Route path='/verification' element={<Verification />} />

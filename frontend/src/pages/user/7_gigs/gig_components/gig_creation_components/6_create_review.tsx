@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ArrowLeft, CheckCircle2, Rocket, Calendar, MapPin, Tag, Box, Layers, DollarSign } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Rocket, Calendar, MapPin, Tag, Box, Layers, DollarSign, Edit2 } from "lucide-react";
 import { motion } from "framer-motion";
 import type { GigTier, Milestone, Questionnaire } from "../../gig_datasets";
 
@@ -19,6 +19,7 @@ interface CreateReviewProps {
   questionnaires: Questionnaire[];
   onBack: () => void;
   onSubmit: () => Promise<void> | void;
+  onEdit?: (step: number) => void;
 }
 
 export const CreateReview: React.FC<CreateReviewProps> = ({
@@ -37,6 +38,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
   questionnaires,
   onBack,
   onSubmit,
+  onEdit,
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -59,7 +61,16 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
       <div className="space-y-6">
         {/* Core Details Summary */}
         <div className="p-5 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02]">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 mb-4 border-b border-gray-200 dark:border-white/10 pb-2">Core Information</h3>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 mb-4 border-b border-gray-200 dark:border-white/10 pb-2 flex justify-between items-center">
+            <div className="flex items-center">
+              <span>Core Information</span>
+            {onEdit && (
+              <button onClick={() => onEdit(1)} className="text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 transition-colors ml-2" title="Edit section">
+                <Edit2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+            </div>
+          </h3>
           <div className="flex flex-col md:flex-row gap-5">
             {thumbnailUrl && (
               <img src={thumbnailUrl} alt="Thumbnail" className="w-24 h-24 object-cover rounded-xl border border-gray-200 dark:border-white/10" />
@@ -72,7 +83,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
                 <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> First Draft in {firstDraftDelivery}</span>
               </div>
               <div className="text-xs text-gray-700 dark:text-zinc-300 mt-2 line-clamp-2">
-                {description}
+                <div dangerouslySetInnerHTML={{ __html: description.replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>") }} />
               </div>
             </div>
           </div>

@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import useGlobalState from "@/lib/global_state";
@@ -19,7 +19,9 @@ import CreateForms from "../gig_components/gig_creation_components/5_create_form
 import CreateReview from "../gig_components/gig_creation_components/6_create_review";
 import CreationSuccess from "../gig_components/gig_creation_components/7_creation_success";
 
-const GigCreatePage: React.FC = () => {
+const GigEditPage: React.FC = () => {
+  const { id } = useParams();
+  const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   const theme = useGlobalState((state) => state.theme);
   
@@ -27,6 +29,9 @@ const GigCreatePage: React.FC = () => {
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
+
+  
+
 
   // --- SLIDE 1: CORE INFO ---
   const [title, setTitle] = useState("");
@@ -57,6 +62,48 @@ const GigCreatePage: React.FC = () => {
   // --- VALIDATION & ERRORS ---
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
+  useEffect(() => {
+    const fetchGig = async () => {
+      try {
+        const res = await api.get(`/api/gigs/${id}`);
+        const data = res.data.data;
+        if (data) {
+          const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || '';
+          const mapUrl = (path: string) => {
+            if (!path) return "";
+            if (!cloudFrontUrl && path.includes('public')) return "";
+            if (path.startsWith('http') || path.startsWith('/')) return path;
+            return `${cloudFrontUrl}/${path}`;
+          };
+
+          setTitle(data.title || "");
+          setDescription(data.description || "");
+          setCategory(data.category || "");
+          setThumbnailUrl(mapUrl(data.thumbnail) || "");
+          setSlots(data.slots || 1);
+          setTermsOfService(data.termsOfService || "");
+          setSkills(data.skills || []);
+          setFirstDraftDelivery(data.firstDraftDelivery || "");
+          if (data.gallery) {
+            setGalleryUrls(data.gallery.map((p: string) => mapUrl(p)).filter(Boolean));
+          }
+          if (data.tiers) setTiers(data.tiers);
+          if (data.milestones) setMilestones(data.milestones);
+          if (data.questionnaires) setQuestionnaires(data.questionnaires);
+        }
+      } catch (err) {
+        console.error("Failed to fetch gig details:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    if (id) fetchGig();
+  }, [id]);
+
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center dark:bg-dark-base text-gray-500">Loading service details...</div>;
+  }
+
   const hasUnsavedChanges = Boolean(title || description || category);
 
   const handleReturnTrigger = () => {
@@ -75,7 +122,7 @@ const GigCreatePage: React.FC = () => {
       if (!title.trim()) stepErrors.title = "Service title is required";
       if (!description.trim()) stepErrors.description = "Service description is required";
       if (!category) stepErrors.category = "Category is required";
-      if (!thumbnailFile) stepErrors.thumbnail = "Thumbnail image is required";
+      if (!thumbnailFile && !thumbnailUrl) stepErrors.thumbnail = "Thumbnail image is required";
 
       if (Object.keys(stepErrors).length > 0) {
         setErrors(stepErrors);
@@ -89,7 +136,7 @@ const GigCreatePage: React.FC = () => {
       if (skills.length === 0) stepErrors.skills = "At least 1 skill is required";
       if (!firstDraftDelivery) stepErrors.firstDraftDelivery = "Timeline is required";
       if (!termsOfService.trim()) stepErrors.termsOfService = "Terms of service are required";
-      if (galleryFiles.length === 0) stepErrors.galleryUrls = "At least 1 supporting picture is required";
+      if (galleryFiles.length === 0 && galleryUrls.length === 0) stepErrors.galleryUrls = "At least 1 supporting picture is required";
       
       if (Object.keys(stepErrors).length > 0) {
         setErrors(stepErrors);
@@ -200,7 +247,7 @@ const GigCreatePage: React.FC = () => {
         galleryFileIds,
       };
 
-      await api.post("/api/gigs", gigPayload);
+      await api.put(`/api/gigs/${id}`, gigPayload);
       setIsSuccessOpen(true);
     } catch (err: any) {
       console.error("Error creating gig:", err);
@@ -228,18 +275,18 @@ const GigCreatePage: React.FC = () => {
       <div className="relative z-10 mx-auto max-w-4xl flex min-h-screen flex-col px-4 py-8 md:py-12 w-full">
         {/* Title Heading Display */}
         <motion.div
-          initial={{ opacity: 0, y: -15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
-          className="mb-8"
-        >
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
-            Creating a Gig Post
-          </h1>
-          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
-            Fill in the details below to publish a new service offering to the marketplace.
-          </p>
-        </motion.div>
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.1 }}
+            className="mb-8"
+          >
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
+              Editing a Gig Post
+            </h1>
+            <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+              Update the details below to modify your service offering.
+            </p>
+          </motion.div>
 
         {/* Header (Stepper) */}
         <div className="mb-6 w-full">
@@ -416,4 +463,4 @@ const GigCreatePage: React.FC = () => {
   );
 };
 
-export default GigCreatePage;
+export default GigEditPage;

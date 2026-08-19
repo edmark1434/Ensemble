@@ -10,7 +10,10 @@ export interface Questionnaire {
   isRequired?: boolean;
   limit?: number; // for multiple choice
   multipleAnswer?: boolean;
+  allowMultiple?: boolean;
   options?: string[]; // for multiple choice
+  fileTypes?: string[]; // "image", "document", "video" etc
+  fileLimit?: number;
 }
 
 export interface GigTier {

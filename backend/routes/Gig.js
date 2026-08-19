@@ -9,7 +9,8 @@ const {
     submitGigOrderController,
     getIncomingOrdersController,
     getMyOrdersController,
-    getGigByIdController
+    getGigByIdController,
+    updateGigController
 } = require('../controllers/GigControllers');
 const requireAuth = require('../middleware/RequireAuth');
 const requireCompletedOnboarding = require('../middleware/RequireCompletedOnboarding');
@@ -28,6 +29,9 @@ router.get('/orders/sent', getMyOrdersController);
 
 // GET /api/gigs/:id
 router.get('/:id', getGigByIdController);
+
+// PUT /api/gigs/:id
+router.put('/:id', updateGigController);
 
 // POST /api/gigs/:id/save
 router.post('/:id/save', toggleGigSaveController);

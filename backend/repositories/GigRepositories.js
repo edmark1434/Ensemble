@@ -107,12 +107,12 @@ async function createGigRepository(gigData) {
             `;
             for (let i = 0; i < gigData.questionnaires.length; i++) {
                 const q = gigData.questionnaires[i];
-                let type = 'free_text';
-                if (q.type === 'Multiple Choice') type = 'multiple_choice';
-                if (q.type === 'Attachment') type = 'attachment';
+                let type = 'text';
+                if (q.type === 'Multiple Choice' || q.type === 'choice' || q.type === 'multiple-choice' || q.type === 'multiple_choice') type = 'choice';
+                if (q.type === 'Attachment' || q.type === 'file' || q.type === 'file-upload' || q.type === 'attachment') type = 'file';
                 
                 const reqRes = await client.query(reqQuery, [
-                    gigId, type, q.question, q.isRequired
+                    gigId, type, q.question, q.isRequired, q.multipleAnswer || false, q.fileLimit || null, JSON.stringify(q.fileTypes || [])
                 ]);
                 
                 const reqId = reqRes.rows[0].gig_requirement_id;
@@ -207,9 +207,9 @@ async function getAllGigsRepository(filters, accountId = null) {
             description: row.description,
             category: row.category,
             slots: row.slots,
-            termsOfService: '',
+            termsOfService: row.termsOfService || '',
             skills: cleanArray(row.skills),
-            firstDraftDelivery: cleanArray(row.tiers).length > 0 ? `${cleanArray(row.tiers)[0].daysOfDelivery} Days` : 'N/A',
+            firstDraftDelivery: cleanArray(row.tiers).length > 0 ? (cleanArray(row.tiers)[0].daysOfDelivery == 1 ? '1 Day' : `${cleanArray(row.tiers)[0].daysOfDelivery} Days`) : 'N/A',
             thumbnail: row.thumbnail || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b',
             gallery: cleanArray(row.gallery).length ? cleanArray(row.gallery) : [row.thumbnail || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b'],
             milestones: cleanArray(row.milestones),
@@ -374,6 +374,7 @@ async function getGigByIdRepository(gigId, accountId = null) {
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
             (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as thumbnail,
             (SELECT json_agg(f.path) FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index > 0) as gallery,
+            (SELECT terms_description FROM terms_of_service WHERE account_id = g.freelancer_account_id AND terms_type = 'gigs' ORDER BY created_at DESC LIMIT 1) as "termsOfService",
             (SELECT json_agg(t.name) FROM gig_tags gt JOIN tags t ON gt.tag_id = t.tag_id WHERE gt.gig_id = g.gig_id) as skills,
             (SELECT json_agg(json_build_object(
                 'tierId', gt.gig_tier_id,
@@ -390,6 +391,9 @@ async function getGigByIdRepository(gigId, accountId = null) {
                 'type', gr.type,
                 'question', gr.question,
                 'isRequired', gr.is_required,
+                  'multipleAnswer', gr.multiple_answer,
+                  'fileLimit', gr.file_limit,
+                  'fileTypes', gr.file_types,
                 'options', (SELECT json_agg(grc.name) FROM gig_requirement_choices grc WHERE grc.gig_requirement_id = gr.gig_requirement_id)
             )) FROM gig_requirements gr WHERE gr.gig_id = g.gig_id) as questionnaires,
             CASE WHEN $2::uuid IS NOT NULL THEN (SELECT EXISTS(SELECT 1 FROM gig_saves gs WHERE gs.gig_id = g.gig_id AND gs.account_id = $2)) ELSE FALSE END as "isSaved",
@@ -428,7 +432,109 @@ async function getGigByIdRepository(gigId, accountId = null) {
     };
 }
 
+
+async function updateGigRepository(gigId, accountId, gigData) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Verify ownership
+        const gigCheck = await client.query('SELECT * FROM gigs WHERE gig_id = $1 AND freelancer_account_id = $2', [gigId, accountId]);
+        if (gigCheck.rows.length === 0) throw new Error('Gig not found or unauthorized');
+
+        if (gigData.termsOfService) {
+            await client.query(
+                'INSERT INTO terms_of_service (terms_title, terms_description, terms_type, account_id) VALUES ($1, $2, $3, $4)',
+                ['Gig Custom Terms', gigData.termsOfService, 'gigs', accountId]
+            );
+        }
+
+        await client.query(
+            'UPDATE gigs SET title = $1, description = $2, no_of_concurrent_max = $3, category = $4 WHERE gig_id = $5',
+            [gigData.title, gigData.description, gigData.slots || 1, gigData.category || 'Other', gigId]
+        );
+
+        await client.query('DELETE FROM gig_tiers WHERE gig_id = $1', [gigId]);
+        await client.query('DELETE FROM gig_milestones WHERE gig_id = $1', [gigId]);
+        await client.query('DELETE FROM gig_tags WHERE gig_id = $1', [gigId]);
+        await client.query('DELETE FROM gig_requirement_choices WHERE gig_requirement_id IN (SELECT gig_requirement_id FROM gig_requirements WHERE gig_id = $1)', [gigId]);
+        await client.query('DELETE FROM gig_requirements WHERE gig_id = $1', [gigId]);
+
+        if (gigData.tiers && gigData.tiers.length > 0) {
+            for (const tier of gigData.tiers) {
+                await client.query(
+                    'INSERT INTO gig_tiers (gig_id, title, description, rate_credits, delivery_days, no_of_revisions_max) VALUES ($1, $2, $3, $4, $5, $6)',
+                    [gigId, `${tier.tierName} - ${tier.title}`, tier.description, tier.price, tier.daysOfDelivery, tier.revisions]
+                );
+            }
+        }
+
+        if (gigData.milestones && gigData.milestones.length > 0) {
+            for (let i = 0; i < gigData.milestones.length; i++) {
+                const m = gigData.milestones[i];
+                await client.query(
+                    'INSERT INTO gig_milestones (gig_id, index, name, description) VALUES ($1, $2, $3, $4)',
+                    [gigId, i, m.name, m.description]
+                );
+            }
+        }
+
+        if (gigData.skills && gigData.skills.length > 0) {
+            for (const skill of gigData.skills) {
+                let tagId;
+                const tagRes = await client.query('SELECT tag_id FROM tags WHERE name = $1', [skill]);
+                if (tagRes.rows.length > 0) {
+                    tagId = tagRes.rows[0].tag_id;
+                } else {
+                    const newTag = await client.query('INSERT INTO tags (name) VALUES ($1) RETURNING tag_id', [skill]);
+                    tagId = newTag.rows[0].tag_id;
+                }
+                await client.query('INSERT INTO gig_tags (gig_id, tag_id) VALUES ($1, $2)', [gigId, tagId]);
+            }
+        }
+
+        if (gigData.questionnaires && gigData.questionnaires.length > 0) {
+            for (const q of gigData.questionnaires) {
+                const reqQuery = 'INSERT INTO gig_requirements (gig_id, type, question, is_required, multiple_answer, file_limit, file_types) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING gig_requirement_id';
+                let qType = 'text';
+                if (q.type === 'Multiple Choice' || q.type === 'choice' || q.type === 'multiple-choice' || q.type === 'multiple_choice') qType = 'choice';
+                if (q.type === 'Attachment' || q.type === 'file' || q.type === 'file-upload' || q.type === 'attachment') qType = 'file';
+                const qRes = await client.query(reqQuery, [gigId, qType, q.question, q.isRequired ? true : false, q.multipleAnswer || false, q.fileLimit || null, JSON.stringify(q.fileTypes || [])]);
+                const reqId = qRes.rows[0].gig_requirement_id;
+
+                if (q.options && q.options.length > 0) {
+                    for (const opt of q.options) {
+                        await client.query('INSERT INTO gig_requirement_choices (gig_requirement_id, name) VALUES ($1, $2)', [reqId, opt]);
+                    }
+                }
+            }
+        }
+
+        if (gigData.thumbnailFileId) {
+            await client.query('DELETE FROM gig_attachments WHERE gig_id = $1 AND index = 0', [gigId]);
+            await client.query('INSERT INTO gig_attachments (gig_id, file_id, index) VALUES ($1, $2, 0)', [gigId, gigData.thumbnailFileId]);
+        }
+        
+        if (gigData.galleryFileIds && gigData.galleryFileIds.length > 0) {
+            await client.query('DELETE FROM gig_attachments WHERE gig_id = $1 AND index > 0', [gigId]);
+            let gIndex = 1;
+            for (const gId of gigData.galleryFileIds) {
+                await client.query('INSERT INTO gig_attachments (gig_id, file_id, index) VALUES ($1, $2, $3)', [gigId, gId, gIndex++]);
+            }
+        }
+
+        await client.query('COMMIT');
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('updateGigRepository error:', err);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
 module.exports = {
+    updateGigRepository,
     createGigRepository,
     getAllGigsRepository,
     toggleGigSaveRepository,
