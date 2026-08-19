@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import {
-  Crown,
   Check,
   Shield,
   ArrowRight,
@@ -8,6 +7,7 @@ import {
   Minus,
   ChevronDown,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import UserHeader from "@/components/nav/user_header.tsx";
 import { useNavigate, useLocation } from "react-router-dom";
 import api from "@/lib/axios.ts";
@@ -89,6 +89,29 @@ const formatPHP = (value: number) =>
 
 const CREDIT_RATE = 1.25;
 
+const planOrderMap: Record<string, number> = {
+  free: 1,
+  freemium: 1,
+  basic: 1,
+  premium: 2,
+  pro: 2,
+  business: 3,
+  studio: 3,
+  enterprise: 4,
+};
+
+const getSubscriptionIcon = (type: string) => {
+  switch (type.toLowerCase()) {
+    case "premium":
+      return "/icons/subscription/premium.png";
+    case "business":
+    case "studio":
+      return "/icons/subscription/studio.png";
+    default:
+      return "/icons/subscription/freemium.png";
+  }
+};
+
 const CreditShop: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -145,8 +168,15 @@ const CreditShop: React.FC = () => {
         console.log("Fetch wallet response:", getWalletResponse.data);
         setCurrentBalance(getWalletResponse.data?.wallet?.balance_credits || 0);
 
-        const plansData = planResponse.data.plans || [];
+        const plansData: Membership[] = planResponse.data.plans || [];
         console.log("Fetched memberships:", plansData);
+
+        // Sort plans: Free (Left) -> Premium (Center) -> Business (Right)
+        const sortedPlans = [...plansData].sort((a, b) => {
+          const rankA = planOrderMap[a.name.toLowerCase()] ?? (a.price === 0 ? 0 : a.price);
+          const rankB = planOrderMap[b.name.toLowerCase()] ?? (b.price === 0 ? 0 : b.price);
+          return rankA - rankB;
+        });
 
         const subscriptionData = userSubscriptionResponse.data.subscription;
         console.log("Fetched user subscription:", subscriptionData);
@@ -185,7 +215,7 @@ const CreditShop: React.FC = () => {
           console.log("User has NO subscription");
         }
 
-        setMemberships(plansData);
+        setMemberships(sortedPlans);
       } catch (error) {
         console.error("Error fetching memberships:", error);
         setMemberships([]);
@@ -362,16 +392,7 @@ const CreditShop: React.FC = () => {
 
     const isEligibleForTrial = !hasXenditPlan && isOnFreePlan && hasFreeTrial && !isFree;
 
-    console.log(`\n===== BUTTON STATE: ${tier.name} =====`);
-    console.log(`isUserSubscribed: ${isUserSubscribed}`);
-    console.log(`hasXenditPlan: ${hasXenditPlan}`);
-    console.log(`isOnFreePlan: ${isOnFreePlan}`);
-    console.log(`isCurrentPlan: ${currentPlan}`);
-    console.log(`tier price: ${tier.price}`);
-    console.log(`isEligibleForTrial: ${isEligibleForTrial}`);
-
     if (currentPlan) {
-      console.log(`This is the current plan`);
       return {
         buttonText: "Current Plan",
         isDisabled: true,
@@ -383,7 +404,6 @@ const CreditShop: React.FC = () => {
     }
 
     if (isFree) {
-      console.log(`This is the free plan`);
       return {
         buttonText: "Free Tier",
         isDisabled: true,
@@ -396,18 +416,13 @@ const CreditShop: React.FC = () => {
 
     if (isUserSubscribed && hasXenditPlan && !isOnFreePlan) {
       const currentPlanDetails = getCurrentPlan();
-      console.log(`currentPlanDetails:`, currentPlanDetails);
-
       if (currentPlanDetails) {
-        console.log(`Comparing: ${tier.price} vs ${currentPlanDetails.price}`);
-
         if (tier.price > currentPlanDetails.price) {
           const proratedPrice = calculateProratedAmount(
             tier.price,
             currentPlanDetails.price,
             userSubscription!
           );
-          console.log(`✅ UPGRADE to ${tier.name}! Prorated: ${proratedPrice}`);
           return {
             buttonText: `Upgrade to ${tier.name}`,
             isDisabled: false,
@@ -417,7 +432,6 @@ const CreditShop: React.FC = () => {
             isCurrent: false,
           };
         } else if (tier.price < currentPlanDetails.price) {
-          console.log(`⬇️ DOWNGRADE to ${tier.name}`);
           return {
             buttonText: `Downgrade to ${tier.name}`,
             isDisabled: false,
@@ -431,7 +445,6 @@ const CreditShop: React.FC = () => {
     }
 
     if (isEligibleForTrial) {
-      console.log(`🎯 Free trial available: ${tier.days_of_trials} days`);
       return {
         buttonText: `Start Free Trial (${tier.days_of_trials} days)`,
         isDisabled: false,
@@ -442,7 +455,6 @@ const CreditShop: React.FC = () => {
       };
     }
 
-    console.log(`📝 Default Subscribe button`);
     return {
       buttonText: "Subscribe Plan",
       isDisabled: false,
@@ -515,7 +527,7 @@ const CreditShop: React.FC = () => {
           </div>
         </div>
 
-        {/* Navigation Tabs */}
+        {/* Navigation Tabs with Layout Animation */}
         <div className="border-b border-gray-200 dark:border-white/10">
           <nav className="flex gap-8" aria-label="Tabs">
             <button
@@ -526,7 +538,11 @@ const CreditShop: React.FC = () => {
             >
               Top up Credits
               {activeTab === "topup" && (
-                <span className="absolute -bottom-px left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                <motion.span
+                  layoutId="tabUnderline"
+                  className="absolute -bottom-px left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]"
+                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                />
               )}
             </button>
             <button
@@ -537,312 +553,338 @@ const CreditShop: React.FC = () => {
             >
               Subscription Plans
               {activeTab === "membership" && (
-                <span className="absolute -bottom-px left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                <motion.span
+                  layoutId="tabUnderline"
+                  className="absolute -bottom-px left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-500 rounded-full shadow-[0_0_8px_rgba(59,130,246,0.5)]"
+                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                />
               )}
             </button>
           </nav>
         </div>
 
-        {/* TOP UP SECTION */}
-        {activeTab === "topup" && (
-          <div className="space-y-6">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {creditPacks.map((pack) => {
-                const isBestValue = pack.id === "vault";
-                return (
-                  <div
-                    key={pack.id}
-                    className="flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 p-5 shadow-sm dark:shadow-xl hover:border-blue-500/30 transition-all duration-300 group backdrop-blur-xl"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{pack.name}</h3>
-                        {isBestValue && (
-                          <span className="rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-2.5 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
-                            Best Value
-                          </span>
-                        )}
-                      </div>
+        {/* Animated Tab Content Transition */}
+        <AnimatePresence mode="wait">
+          {/* TOP UP SECTION */}
+          {activeTab === "topup" && (
+            <motion.div
+              key="topup"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
+              className="space-y-6"
+            >
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                {creditPacks.map((pack) => {
+                  const isBestValue = pack.id === "vault";
+                  return (
+                    <div
+                      key={pack.id}
+                      className="flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 p-5 shadow-sm dark:shadow-xl hover:border-blue-500/30 transition-all duration-300 group backdrop-blur-xl"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{pack.name}</h3>
+                          {isBestValue && (
+                            <span className="rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-2.5 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                              Best Value
+                            </span>
+                          )}
+                        </div>
 
-                      {/* Credit Value (Top) */}
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <CreditIcon className="h-5 w-5 text-yellow-500 shrink-0" />
-                        <p className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
-                          {pack.credits.toLocaleString()}
-                          <span className="text-xs font-normal text-gray-500 dark:text-zinc-400 ml-1">Credits</span>
+                        {/* Credit Value (Top) */}
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <CreditIcon className="h-5 w-5 text-yellow-500 shrink-0" />
+                          <p className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
+                            {pack.credits.toLocaleString()}
+                            <span className="text-xs font-normal text-gray-500 dark:text-zinc-400 ml-1">Credits</span>
+                          </p>
+                        </div>
+
+                        {/* Peso Value (Under) */}
+                        <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">
+                          {formatPHP(pack.price)}
                         </p>
                       </div>
 
-                      {/* Peso Value (Under) */}
-                      <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">
-                        {formatPHP(pack.price)}
-                      </p>
+                      <button
+                        onClick={() => handlePackCheckout(pack)}
+                        className="mt-6 w-full rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-xs font-bold text-white transition-all shadow-md shadow-blue-500/20"
+                      >
+                        Buy Pack
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Custom Amount Section */}
+              <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 overflow-hidden shadow-sm dark:shadow-xl backdrop-blur-xl">
+                <button
+                  onClick={() => setShowCustom(!showCustom)}
+                  className="flex w-full items-center justify-between px-6 py-4 text-left hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">Enter a Custom Credit Amount</p>
+                    <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                      {formatPHP(CREDIT_RATE)} per credit • Minimum 10 credits
+                    </p>
+                  </div>
+                  <ChevronDown
+                    className={`h-4 w-4 text-gray-500 dark:text-zinc-400 transition-transform duration-300 ${
+                      showCustom ? "rotate-180 text-blue-600 dark:text-blue-400" : ""
+                    }`}
+                  />
+                </button>
+
+                {showCustom && (
+                  <div className="border-t border-gray-100 dark:border-white/5 px-6 py-6 space-y-4">
+                    <label className="text-xs font-medium text-gray-700 dark:text-zinc-400 block">
+                      Number of Credits
+                    </label>
+                    <div className="flex items-center gap-2 max-w-xs">
+                      <button
+                        onClick={decrementCredits}
+                        aria-label="Decrease amount"
+                        className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </button>
+                      <div className="relative flex-1">
+                        <input
+                          type="number"
+                          value={customCredits}
+                          onChange={handleCustomInputChange}
+                          min={10}
+                          max={10000}
+                          className="h-10 w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-center text-sm font-bold text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 transition-colors pl-8 pr-3"
+                        />
+                        <CreditIcon className="h-4 w-4 text-yellow-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+                      <button
+                        onClick={incrementCredits}
+                        aria-label="Increase amount"
+                        className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {[50, 100, 250, 500, 1000].map((amount) => (
+                        <button
+                          key={amount}
+                          onClick={() => setCustomCredits(amount)}
+                          className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium border transition-all ${
+                            customCredits === amount
+                              ? "border-blue-500/50 bg-blue-50 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300"
+                              : "border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                          }`}
+                        >
+                          <CreditIcon className="h-3.5 w-3.5" />
+                          <span>{amount}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 px-4 py-3">
+                      <span className="text-xs text-gray-500 dark:text-zinc-400">Total Due</span>
+                      <span className="text-base font-bold text-gray-900 dark:text-white">
+                        {formatPHP(Math.round(customCredits * CREDIT_RATE * 100) / 100)}
+                      </span>
                     </div>
 
                     <button
-                      onClick={() => handlePackCheckout(pack)}
-                      className="mt-6 w-full rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-xs font-bold text-white transition-all shadow-md shadow-blue-500/20"
+                      onClick={handleCustomCheckout}
+                      disabled={customCredits < 10}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-xs font-bold text-white transition-all shadow-md shadow-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      Buy Pack
+                      Continue to Checkout
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* MEMBERSHIP SECTION */}
+          {activeTab === "membership" && (
+            <motion.div
+              key="membership"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
+              className="grid gap-6 md:grid-cols-3 items-stretch"
+            >
+              {memberships.map((tier) => {
+                const isFree = tier.price === 0;
+                const isPremium = tier.name.toLowerCase() === "premium";
+                const isBusiness = tier.name.toLowerCase() === "business" || tier.name.toLowerCase() === "studio";
+                const currentPlan = isCurrentPlan(tier.plan_id);
+
+                const { buttonText, isDisabled, isUpgrade, isDowngrade, proratedPrice, isCurrent } =
+                  getMembershipButtonState(tier);
+                const isEligibleForTrial = !hasXenditPlan && isOnFreePlan && tier.days_of_trials > 0 && !isFree;
+                const showTrialBadge = isEligibleForTrial;
+                const currentPlanDetails = getCurrentPlan();
+
+                return (
+                  <div
+                    key={tier.plan_id}
+                    className={`flex flex-col justify-between rounded-2xl border p-6 relative transition-all duration-300 backdrop-blur-xl ${
+                      isCurrent && !isFree
+                        ? "border-emerald-500/60 bg-white dark:bg-dark-surface/80 shadow-[0_0_20px_rgba(16,185,129,0.08)]"
+                        : isPremium
+                        ? "border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 hover:border-amber-500/40 hover:bg-gradient-to-b hover:from-amber-500/[0.08] hover:via-yellow-500/[0.03] hover:to-transparent shadow-sm dark:shadow-none hover:shadow-lg dark:hover:shadow-amber-500/5"
+                        : isBusiness
+                        ? "border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 hover:border-cyan-500/40 hover:bg-gradient-to-br hover:from-cyan-500/[0.08] hover:via-yellow-400/[0.04] hover:to-purple-500/[0.08] shadow-sm dark:shadow-none hover:shadow-lg dark:hover:shadow-cyan-500/5"
+                        : "border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 hover:border-gray-300 dark:hover:border-white/20"
+                    }`}
+                  >
+                    {/* Badges */}
+                    {isCurrent && (
+                      <div className="absolute -top-3 left-4 bg-emerald-500 text-white text-[10px] font-extrabold tracking-wider uppercase px-3 py-0.5 rounded-full shadow-md">
+                        Current Plan
+                      </div>
+                    )}
+
+                    {isUpgrade && !isCurrent && hasXenditPlan && !isOnFreePlan && (
+                      <div className="absolute -top-3 left-4 bg-blue-600 text-white text-[10px] font-extrabold tracking-wider uppercase px-3 py-0.5 rounded-full shadow-md">
+                        Upgrade
+                      </div>
+                    )}
+
+                    {isDowngrade && !isCurrent && hasXenditPlan && !isOnFreePlan && (
+                      <div className="absolute -top-3 left-4 bg-amber-500 text-white text-[10px] font-extrabold tracking-wider uppercase px-3 py-0.5 rounded-full shadow-md">
+                        Downgrade
+                      </div>
+                    )}
+
+                    {showTrialBadge && (
+                      <div className="absolute -top-3 left-4 bg-blue-600 text-white text-[10px] font-bold px-3 py-0.5 rounded-full shadow-md">
+                        {tier.days_of_trials}-Day Free Trial
+                      </div>
+                    )}
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2.5">
+                          <img
+                            src={getSubscriptionIcon(tier.name)}
+                            alt={tier.name}
+                            className="h-8 w-8 object-contain drop-shadow-[0_3px_10px_rgba(255,255,255,0.18)]"
+                          />
+                          <span>{tier.name}</span>
+                        </h3>
+                        {isPremium && (
+                          <span className="rounded-full bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-2.5 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-300">
+                            Most popular
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-zinc-400 mb-5">{tier.description}</p>
+
+                      <div className="text-3xl font-extrabold text-gray-900 dark:text-white mb-2">
+                        {isFree ? (
+                          "Free"
+                        ) : (
+                          <>
+                            {isUpgrade && proratedPrice !== null && proratedPrice > 0 && hasXenditPlan && !isOnFreePlan && (
+                              <>
+                                <span className="line-through text-gray-400 dark:text-zinc-500 text-xl mr-2">{formatPHP(tier.price)}</span>
+                                <span className="text-emerald-600 dark:text-emerald-400">{formatPHP(proratedPrice)}</span>
+                                <span className="text-xs font-normal text-emerald-600 dark:text-emerald-400 ml-1">(prorated)</span>
+                              </>
+                            )}
+                            {isUpgrade && proratedPrice !== null && proratedPrice === 0 && hasXenditPlan && !isOnFreePlan && (
+                              <>
+                                <span className="line-through text-gray-400 dark:text-zinc-500 text-xl mr-2">{formatPHP(tier.price)}</span>
+                                <span className="text-emerald-600 dark:text-emerald-400">Free</span>
+                                <span className="text-xs font-normal text-emerald-600 dark:text-emerald-400 ml-1">(prorated)</span>
+                              </>
+                            )}
+                            {(!isUpgrade || proratedPrice === null || !hasXenditPlan || isOnFreePlan) &&
+                              formatPHP(tier.price)}
+                          </>
+                        )}
+                        {tier.billing_period === "MONTH" && !isFree && (
+                          <span className="text-xs font-normal text-gray-500 dark:text-zinc-400"> /mo</span>
+                        )}
+                      </div>
+
+                      {isUpgrade &&
+                        proratedPrice !== null &&
+                        !isCurrent &&
+                        isUserSubscribed &&
+                        hasXenditPlan &&
+                        !isOnFreePlan &&
+                        currentPlanDetails && (
+                          <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1.5">
+                            <span>⏱️</span>
+                            <span>
+                              Prorated charge of {formatPHP(proratedPrice)} (based on remaining period of {currentPlanDetails.name} plan)
+                            </span>
+                          </p>
+                        )}
+
+                      {isEligibleForTrial && (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1.5">
+                          <span>✦</span>
+                          <span>Try free for {tier.days_of_trials} days, then {formatPHP(tier.price)}/mo</span>
+                        </p>
+                      )}
+
+                      <div className="h-px bg-gray-200 dark:bg-white/10 my-6" />
+
+                      <ul className="space-y-3 mb-8">
+                        {tier.features && tier.features.length > 0 ? (
+                          tier.features.map((feature) => (
+                            <li key={feature.feature_id} className="flex items-start gap-2 text-xs">
+                              <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                              <span className="text-gray-700 dark:text-zinc-300">
+                                {feature.description}{" "}
+                                <span className="font-semibold text-gray-900 dark:text-white bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 px-1.5 py-0.5 rounded text-[11px] ml-1 inline-block">
+                                  {feature.value}
+                                </span>
+                              </span>
+                            </li>
+                          ))
+                        ) : (
+                          <li className="text-xs text-gray-400 dark:text-zinc-500">No features available</li>
+                        )}
+                      </ul>
+                    </div>
+
+                    <button
+                      onClick={() => handleMembershipCheckout(tier)}
+                      disabled={isDisabled}
+                      className={`w-full rounded-xl py-2.5 text-xs font-bold transition-all shadow-sm ${
+                        isDisabled
+                          ? "border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-zinc-500 cursor-not-allowed"
+                          : isUpgrade && hasXenditPlan && !isOnFreePlan
+                          ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-500/20"
+                          : isDowngrade && hasXenditPlan && !isOnFreePlan
+                          ? "bg-amber-500 text-white hover:bg-amber-600 shadow-amber-500/20"
+                          : "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-500/20"
+                      }`}
+                    >
+                      {buttonText}
+                      {isUpgrade && !isDisabled && hasXenditPlan && !isOnFreePlan && (
+                        <span className="ml-1.5 text-xs">↑</span>
+                      )}
+                      {isDowngrade && !isDisabled && hasXenditPlan && !isOnFreePlan && (
+                        <span className="ml-1.5 text-xs">↓</span>
+                      )}
                     </button>
                   </div>
                 );
               })}
-            </div>
-
-            {/* Custom Amount Section */}
-            <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 overflow-hidden shadow-sm dark:shadow-xl backdrop-blur-xl">
-              <button
-                onClick={() => setShowCustom(!showCustom)}
-                className="flex w-full items-center justify-between px-6 py-4 text-left hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors"
-              >
-                <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">Enter a Custom Credit Amount</p>
-                  <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                    {formatPHP(CREDIT_RATE)} per credit • Minimum 10 credits
-                  </p>
-                </div>
-                <ChevronDown
-                  className={`h-4 w-4 text-gray-500 dark:text-zinc-400 transition-transform duration-300 ${
-                    showCustom ? "rotate-180 text-blue-600 dark:text-blue-400" : ""
-                  }`}
-                />
-              </button>
-
-              {showCustom && (
-                <div className="border-t border-gray-100 dark:border-white/5 px-6 py-6 space-y-4">
-                  <label className="text-xs font-medium text-gray-700 dark:text-zinc-400 block">
-                    Number of Credits
-                  </label>
-                  <div className="flex items-center gap-2 max-w-xs">
-                    <button
-                      onClick={decrementCredits}
-                      aria-label="Decrease amount"
-                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
-                    >
-                      <Minus className="h-4 w-4" />
-                    </button>
-                    <div className="relative flex-1">
-                      <input
-                        type="number"
-                        value={customCredits}
-                        onChange={handleCustomInputChange}
-                        min={10}
-                        max={10000}
-                        className="h-10 w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-center text-sm font-bold text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 transition-colors pl-8 pr-3"
-                      />
-                      <CreditIcon className="h-4 w-4 text-yellow-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    </div>
-                    <button
-                      onClick={incrementCredits}
-                      aria-label="Increase amount"
-                      className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {[50, 100, 250, 500, 1000].map((amount) => (
-                      <button
-                        key={amount}
-                        onClick={() => setCustomCredits(amount)}
-                        className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium border transition-all ${
-                          customCredits === amount
-                            ? "border-blue-500/50 bg-blue-50 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300"
-                            : "border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
-                        }`}
-                      >
-                        <CreditIcon className="h-3.5 w-3.5" />
-                        <span>{amount}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5 px-4 py-3">
-                    <span className="text-xs text-gray-500 dark:text-zinc-400">Total Due</span>
-                    <span className="text-base font-bold text-gray-900 dark:text-white">
-                      {formatPHP(Math.round(customCredits * CREDIT_RATE * 100) / 100)}
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={handleCustomCheckout}
-                    disabled={customCredits < 10}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-xs font-bold text-white transition-all shadow-md shadow-blue-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    Continue to Checkout
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* MEMBERSHIP SECTION */}
-        {activeTab === "membership" && (
-          <div className="grid gap-6 md:grid-cols-3 items-stretch">
-            {memberships.map((tier) => {
-              const isFree = tier.price === 0;
-              const isPopular = tier.name === "Premium";
-              const currentPlan = isCurrentPlan(tier.plan_id);
-
-              const { buttonText, isDisabled, isUpgrade, isDowngrade, proratedPrice, isCurrent } =
-                getMembershipButtonState(tier);
-              const isEligibleForTrial = !hasXenditPlan && isOnFreePlan && tier.days_of_trials > 0 && !isFree;
-              const showTrialBadge = isEligibleForTrial;
-              const currentPlanDetails = getCurrentPlan();
-
-              return (
-                <div
-                  key={tier.plan_id}
-                  className={`flex flex-col justify-between rounded-2xl border p-6 relative transition-all duration-300 backdrop-blur-xl ${
-                    isCurrent
-                      ? "border-emerald-500/60 bg-emerald-50/50 dark:bg-[#0d131f] shadow-[0_0_20px_rgba(16,185,129,0.1)]"
-                      : isPopular && !isCurrent
-                      ? "border-blue-500/40 bg-white dark:bg-dark-surface/80 shadow-md dark:shadow-xl"
-                      : "border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 hover:border-gray-300 dark:hover:border-white/20"
-                  }`}
-                >
-                  {/* Badges */}
-                  {isCurrent && (
-                    <div className="absolute -top-3 left-4 bg-emerald-500 text-white text-[10px] font-extrabold tracking-wider uppercase px-3 py-0.5 rounded-full shadow-md">
-                      Current Plan
-                    </div>
-                  )}
-
-                  {isUpgrade && !isCurrent && hasXenditPlan && !isOnFreePlan && (
-                    <div className="absolute -top-3 left-4 bg-blue-600 text-white text-[10px] font-extrabold tracking-wider uppercase px-3 py-0.5 rounded-full shadow-md">
-                      Upgrade
-                    </div>
-                  )}
-
-                  {isDowngrade && !isCurrent && hasXenditPlan && !isOnFreePlan && (
-                    <div className="absolute -top-3 left-4 bg-amber-500 text-white text-[10px] font-extrabold tracking-wider uppercase px-3 py-0.5 rounded-full shadow-md">
-                      Downgrade
-                    </div>
-                  )}
-
-                  {showTrialBadge && (
-                    <div className="absolute -top-3 left-4 bg-blue-600 text-white text-[10px] font-bold px-3 py-0.5 rounded-full shadow-md">
-                      {tier.days_of_trials}-Day Free Trial
-                    </div>
-                  )}
-
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        {!isFree && <Crown className="h-4 w-4 text-amber-500 dark:text-amber-400" />}
-                        {tier.name}
-                      </h3>
-                      {isPopular && !isCurrent && (
-                        <span className="rounded-full bg-blue-50 dark:bg-white/10 border border-blue-200 dark:border-white/10 px-2.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-white">
-                          Most popular
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500 dark:text-zinc-400 mb-5">{tier.description}</p>
-
-                    <div className="text-3xl font-extrabold text-gray-900 dark:text-white mb-2">
-                      {isFree ? (
-                        "Free"
-                      ) : (
-                        <>
-                          {isUpgrade && proratedPrice !== null && proratedPrice > 0 && hasXenditPlan && !isOnFreePlan && (
-                            <>
-                              <span className="line-through text-gray-400 dark:text-zinc-500 text-xl mr-2">{formatPHP(tier.price)}</span>
-                              <span className="text-emerald-600 dark:text-emerald-400">{formatPHP(proratedPrice)}</span>
-                              <span className="text-xs font-normal text-emerald-600 dark:text-emerald-400 ml-1">(prorated)</span>
-                            </>
-                          )}
-                          {isUpgrade && proratedPrice !== null && proratedPrice === 0 && hasXenditPlan && !isOnFreePlan && (
-                            <>
-                              <span className="line-through text-gray-400 dark:text-zinc-500 text-xl mr-2">{formatPHP(tier.price)}</span>
-                              <span className="text-emerald-600 dark:text-emerald-400">Free</span>
-                              <span className="text-xs font-normal text-emerald-600 dark:text-emerald-400 ml-1">(prorated)</span>
-                            </>
-                          )}
-                          {(!isUpgrade || proratedPrice === null || !hasXenditPlan || isOnFreePlan) &&
-                            formatPHP(tier.price)}
-                        </>
-                      )}
-                      {tier.billing_period === "MONTH" && !isFree && (
-                        <span className="text-xs font-normal text-gray-500 dark:text-zinc-400"> /mo</span>
-                      )}
-                    </div>
-
-                    {isUpgrade &&
-                      proratedPrice !== null &&
-                      !isCurrent &&
-                      isUserSubscribed &&
-                      hasXenditPlan &&
-                      !isOnFreePlan &&
-                      currentPlanDetails && (
-                        <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1.5">
-                          <span>⏱️</span>
-                          <span>
-                            Prorated charge of {formatPHP(proratedPrice)} (based on remaining period of {currentPlanDetails.name} plan)
-                          </span>
-                        </p>
-                      )}
-
-                    {isEligibleForTrial && (
-                      <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1.5">
-                        <span>✦</span>
-                        <span>Try free for {tier.days_of_trials} days, then {formatPHP(tier.price)}/mo</span>
-                      </p>
-                    )}
-
-                    <div className="h-px bg-gray-200 dark:bg-white/10 my-6" />
-
-                    <ul className="space-y-3 mb-8">
-                      {tier.features && tier.features.length > 0 ? (
-                        tier.features.map((feature) => (
-                          <li key={feature.feature_id} className="flex items-start gap-2 text-xs">
-                            <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                            <span className="text-gray-700 dark:text-zinc-300">
-                              {feature.description}{" "}
-                              <span className="font-semibold text-gray-900 dark:text-white bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 px-1.5 py-0.5 rounded text-[11px] ml-1 inline-block">
-                                {feature.value}
-                              </span>
-                            </span>
-                          </li>
-                        ))
-                      ) : (
-                        <li className="text-xs text-gray-400 dark:text-zinc-500">No features available</li>
-                      )}
-                    </ul>
-                  </div>
-
-                  <button
-                    onClick={() => handleMembershipCheckout(tier)}
-                    disabled={isDisabled}
-                    className={`w-full rounded-xl py-2.5 text-xs font-bold transition-all shadow-sm ${
-                      isDisabled
-                        ? "border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 text-gray-400 dark:text-zinc-500 cursor-not-allowed"
-                        : isUpgrade && hasXenditPlan && !isOnFreePlan
-                        ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-500/20"
-                        : isDowngrade && hasXenditPlan && !isOnFreePlan
-                        ? "bg-amber-500 text-white hover:bg-amber-600 shadow-amber-500/20"
-                        : isPopular
-                        ? "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-500/20"
-                        : "bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-white/20"
-                    }`}
-                  >
-                    {buttonText}
-                    {isUpgrade && !isDisabled && hasXenditPlan && !isOnFreePlan && (
-                      <span className="ml-1.5 text-xs">↑</span>
-                    )}
-                    {isDowngrade && !isDisabled && hasXenditPlan && !isOnFreePlan && (
-                      <span className="ml-1.5 text-xs">↓</span>
-                    )}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Footer Note */}
         <p className="mt-10 text-center text-xs text-gray-500 dark:text-zinc-500">
