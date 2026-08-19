@@ -1,197 +1,432 @@
 import React, { useState } from "react";
-import { 
-  X, Star, Clock, Users, ArrowRight, CheckCircle2, Bookmark, Share2, 
-  ChevronRight, MapPin, Tag, Box, Layers, PlayCircle, Plus, FileText, Maximize2
+import { createPortal } from "react-dom";
+import {
+  X, Star, Clock, Users, Bookmark, Share2,
+  ChevronRight, ChevronLeft, ChevronDown, PlayCircle, Edit2, Flag, Maximize2, User, FileText, CheckCircle2, HelpCircle, Wrench, MessageSquare, ZoomIn
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import type { Gig, GigTier } from "../gig_datasets";
-import SuccessModal from "@/components/ui/SuccessModal";
+import { motion, AnimatePresence } from "framer-motion";
+import type { Gig } from "../gig_datasets";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import PopupReportGig from "./PopupReportGig";
+import { GigsOtherServices } from "./gigs_other_services";
 
 interface GigRichTextProps {
-  gig: Gig;
+  gig?: Gig | null;
+  isLoading?: boolean;
   onClose: () => void;
   layout?: "drawer" | "page";
+  onReportGig?: (gig: Gig) => void;
 }
 
-export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout = "drawer" }) => {
+export const GigRichText: React.FC<GigRichTextProps> = ({
+  gig,
+  isLoading = false,
+  onClose,
+  layout = "drawer",
+  onReportGig
+}) => {
   const isPage = layout === "page";
-  console.log("GigRichText layout mode:", layout, "isPage:", isPage);
   const navigate = useNavigate();
   const [activeTierIdx, setActiveTierIdx] = useState(0);
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [isSuccessOpen, setIsSuccessOpen] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
-  const activeTier = gig.tiers[activeTierIdx];
+  // Lightbox Modal state
+  const [activeLightboxImg, setActiveLightboxImg] = useState<string | null>(null);
 
-  const handleCheckout = () => {
-    setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
-      setIsCheckoutOpen(false);
-      setIsSuccessOpen(true);
-    }, 1500);
+  // Default: Only Terms of Service is expanded
+  const [isMilestonesOpen, setIsMilestonesOpen] = useState(false);
+  const [isTermsOpen, setIsTermsOpen] = useState(true);
+  const [isQuestionnairesOpen, setIsQuestionnairesOpen] = useState(false);
+
+  // Compile all images for next/prev lightbox switching
+  const allImages = React.useMemo(() => {
+    if (!gig) return [];
+    const list: string[] = [];
+    if (gig.thumbnail) list.push(gig.thumbnail);
+    if (gig.gallery && Array.isArray(gig.gallery)) {
+      gig.gallery.forEach((img) => {
+        if (img && !list.includes(img)) list.push(img);
+      });
+    }
+    return list;
+  }, [gig]);
+
+  const handlePrevLightbox = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!activeLightboxImg) return;
+    const currentIndex = allImages.indexOf(activeLightboxImg);
+    const prevIndex = (currentIndex - 1 + allImages.length) % allImages.length;
+    setActiveLightboxImg(allImages[prevIndex]);
   };
 
-  const allImages = [gig.thumbnail, ...(gig.gallery || [])].filter(Boolean);
+  const handleNextLightbox = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!activeLightboxImg) return;
+    const currentIndex = allImages.indexOf(activeLightboxImg);
+    const nextIndex = (currentIndex + 1) % allImages.length;
+    setActiveLightboxImg(allImages[nextIndex]);
+  };
 
-  return (
-    <div className={`w-full flex-col relative ${isPage ? "" : "flex h-[calc(100vh-120px)] overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm sticky top-[100px]"}`}>
-      
-      {/* HEADER */}
-      {!isPage && (
-      <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 px-6 py-4 bg-white/80 dark:bg-dark-surface/80 backdrop-blur-md z-10">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onClose}
-            className="rounded-full p-2 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors lg:hidden"
-          >
-            <ChevronRight className="h-5 w-5 text-gray-500" />
-          </button>
-          <div className="flex flex-col">
-            <span className="text-sm font-bold text-gray-900 dark:text-white">Service Details</span>
+  // Keyboard navigation for lightbox
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!activeLightboxImg) return;
+      if (e.key === "Escape") setActiveLightboxImg(null);
+      if (e.key === "ArrowLeft") {
+        const currentIndex = allImages.indexOf(activeLightboxImg);
+        const prevIndex = (currentIndex - 1 + allImages.length) % allImages.length;
+        setActiveLightboxImg(allImages[prevIndex]);
+      }
+      if (e.key === "ArrowRight") {
+        const currentIndex = allImages.indexOf(activeLightboxImg);
+        const nextIndex = (currentIndex + 1) % allImages.length;
+        setActiveLightboxImg(allImages[nextIndex]);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeLightboxImg, allImages]);
+
+  // SKELETON PLACEHOLDER VIEW
+  if (isLoading || !gig) {
+    return (
+      <div className={`w-full flex-col relative ${isPage ? "" : "flex h-[calc(100vh-120px)] overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm sticky top-[100px]"}`}>
+        {!isPage && (
+          <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 px-6 py-4">
+            <div className="h-4 w-28 rounded-md bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+              <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => navigate(`/gigs/services/${gig.id}/full`)}
-            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400 group relative"
-            title="View Full Page"
-          >
-            <Maximize2 className="h-4 w-4" />
-          </button>
-          <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400">
-            <Share2 className="h-4 w-4" />
-          </button>
-          <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400">
-            <Bookmark className={`h-4 w-4 ${gig.isSaved ? "fill-blue-500 text-blue-500" : ""}`} />
-          </button>
-          <button onClick={onClose} className="hidden lg:block p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400">
-            <X className="h-5 w-5" />
-          </button>
+        )}
+
+        <div className={`${isPage ? "w-full" : "flex-1 overflow-y-auto custom-scrollbar p-6"}`}>
+          <div className={`${isPage ? "flex flex-col lg:flex-row gap-8 items-start" : ""}`}>
+            {/* Left Column Skeleton */}
+            <div className={`${isPage ? "flex-1 min-w-0" : ""} space-y-6`}>
+              {/* Badges Skeleton */}
+              <div className="flex items-center gap-2 pt-2">
+                <div className="h-6 w-14 rounded bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+                <div className="h-6 w-20 rounded bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+                <div className="h-6 w-28 rounded bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+                <div className="h-6 w-16 rounded bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+              </div>
+
+              {/* Title Skeleton */}
+              <div className="space-y-2">
+                <div className="h-8 w-3/4 rounded-xl bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+                <div className="h-8 w-1/2 rounded-xl bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+              </div>
+
+              {/* Thumbnail Skeleton */}
+              <div className="w-full h-64 sm:h-80 md:h-96 rounded-2xl bg-gray-200 dark:bg-zinc-800/80 animate-pulse" />
+
+              {/* Supporting Images Skeleton */}
+              <div className="space-y-2">
+                <div className="h-4 w-32 rounded bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+                <div className="flex gap-2.5">
+                  <div className="h-24 sm:h-32 w-[30%] rounded-xl bg-gray-200 dark:bg-zinc-800 animate-pulse shrink-0" />
+                  <div className="h-24 sm:h-32 w-[30%] rounded-xl bg-gray-200 dark:bg-zinc-800 animate-pulse shrink-0" />
+                  <div className="h-24 sm:h-32 w-[30%] rounded-xl bg-gray-200 dark:bg-zinc-800 animate-pulse shrink-0" />
+                </div>
+              </div>
+
+              {/* Description Skeleton */}
+              <div className="space-y-2.5 pt-2">
+                <div className="h-5 w-36 rounded bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+                <div className="h-4 w-full rounded bg-gray-200 dark:bg-zinc-800/70 animate-pulse" />
+                <div className="h-4 w-full rounded bg-gray-200 dark:bg-zinc-800/70 animate-pulse" />
+                <div className="h-4 w-4/5 rounded bg-gray-200 dark:bg-zinc-800/70 animate-pulse" />
+                <div className="h-4 w-2/3 rounded bg-gray-200 dark:bg-zinc-800/70 animate-pulse" />
+              </div>
+            </div>
+
+            {/* Right Column Skeleton (Page Layout) */}
+            {isPage && (
+              <div className="w-full lg:w-[400px] shrink-0 space-y-4 pt-2">
+                {/* Profile Card Skeleton */}
+                <div className="p-3.5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+                    <div className="space-y-1.5">
+                      <div className="h-2.5 w-16 rounded bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+                      <div className="h-3.5 w-24 rounded bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+                    </div>
+                  </div>
+                  <div className="h-7 w-20 rounded-lg bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+                </div>
+
+                {/* Package Card Skeleton */}
+                <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base p-6 space-y-4">
+                  <div className="flex gap-2 border-b border-gray-200 dark:border-white/10 pb-4">
+                    <div className="h-8 flex-1 rounded bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+                    <div className="h-8 flex-1 rounded bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <div className="h-5 w-28 rounded bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+                    <div className="h-6 w-20 rounded bg-gray-200 dark:bg-zinc-800 animate-pulse" />
+                  </div>
+                  <div className="h-12 w-full rounded bg-gray-200 dark:bg-zinc-800/60 animate-pulse" />
+                  <div className="h-11 w-full rounded-xl bg-blue-600/50 animate-pulse" />
+                </div>
+
+                {/* Accordion Skeletons */}
+                <div className="h-12 w-full rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-dark-surface/80 animate-pulse" />
+                <div className="h-12 w-full rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-dark-surface/80 animate-pulse" />
+              </div>
+            )}
+          </div>
+
+          {isPage && (
+            <div className="mt-16 pt-8 border-t border-gray-200 dark:border-white/10">
+              <GigsOtherServices currentGigId="" />
+            </div>
+          )}
         </div>
       </div>
-      )}
+    );
+  }
 
-      {/* SCROLLABLE CONTENT */}
-      <div className={`${isPage ? "w-full" : "flex-1 overflow-y-auto custom-scrollbar p-6"}`}>
-        <div className={`${isPage ? "flex flex-col lg:flex-row gap-8 items-start" : ""}`}>
-          <div className={`${isPage ? "flex-1 min-w-0" : ""}`}>
-        
-        {/* THUMBNAIL (FIRST ON TOP) */}
-        <div className="w-full h-64 sm:h-80 md:h-96 rounded-2xl overflow-hidden mb-6 bg-gray-100 dark:bg-white/5 relative border border-gray-200 dark:border-white/10">
-          <img src={gig.thumbnail} alt={gig.title} className="w-full h-full object-cover" />
-        </div>
+  const activeTier = gig?.tiers?.[activeTierIdx];
 
-        {/* BADGES */}
-        <div className="mt-4 flex flex-wrap items-center gap-2 mb-6">
-          <span className={`px-2.5 py-1 rounded text-[11px] font-bold border ${gig.status?.toLowerCase() === "closed" ? "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20" : "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20"}`}>
-            {gig.status || "Open"}
-          </span>
-          <span className="px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-bold text-gray-600 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
-            {gig.category}
-          </span>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-medium text-gray-700 dark:text-zinc-300">
-            <Clock className="h-3.5 w-3.5 text-gray-500" />
-            First Draft: {gig.firstDraftDelivery}
+  const termsContent =
+    gig?.termsOfService ||
+    (gig as any)?.terms_of_service ||
+    (gig as any)?.terms ||
+    (gig as any)?.tos ||
+    (gig as any)?.service_terms ||
+    "";
+
+  const handleOpenReport = () => {
+    if (onReportGig) {
+      onReportGig(gig);
+    } else {
+      setIsReportModalOpen(true);
+    }
+  };
+
+  const handleViewProfile = () => {
+    if (!gig) return;
+
+    if (gig.isOwnGig) {
+      navigate("/profile");
+      return;
+    }
+
+    const creatorId =
+      gig.client_account_id ||
+      gig.creator_account_id ||
+      gig.freelancerAccountId ||
+      (gig as any).account_id ||
+      (gig as any).accountId ||
+      (gig as any).user_id ||
+      (gig as any).userId ||
+      (gig as any).account?.account_id ||
+      (gig as any).creator?.account_id ||
+      (gig as any).user?.account_id;
+
+    if (creatorId) {
+      navigate(`/profile/${creatorId}`);
+    } else {
+      console.warn("Could not find creator account ID on gig object:", gig);
+    }
+  };
+
+  const renderProfileCard = () => (
+    <div className="p-3.5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 shadow-sm dark:shadow-xl backdrop-blur-xl flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2.5 min-w-0">
+        {gig.clientAvatar ? (
+          <img
+            src={gig.clientAvatar}
+            alt=""
+            className="h-10 w-10 rounded-full object-cover border border-gray-200 dark:border-white/10 shrink-0"
+          />
+        ) : (
+          <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-zinc-800 flex items-center justify-center text-xs text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 shrink-0">
+            {gig.postedBy ? gig.postedBy.charAt(0) : "U"}
           </div>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-medium text-gray-700 dark:text-zinc-300">
-            <Users className="h-3.5 w-3.5 text-gray-500" />
-            {gig.slots} Slots
-          </div>
-        </div>
-
-        {/* TITLE */}
-        <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white mb-6 leading-tight">
-          {gig.title}
-        </h1>
-
-        {/* AUTHOR & META */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 p-4 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/5">
-          <div className="flex items-center gap-3">
-            <img src={gig.clientAvatar} alt={gig.postedBy} className="h-12 w-12 rounded-full object-cover border border-gray-200 dark:border-white/10" />
-            <div>
-              <div className="font-bold text-sm text-gray-900 dark:text-white">{gig.postedBy}</div>
-              <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
-                <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-                <span className="font-bold text-gray-700 dark:text-zinc-300">{gig.clientRating}</span>
-                <span>({gig.ratingCount} reviews)</span>
-              </div>
+        )}
+        <div className="text-left min-w-0">
+          <p className="text-[9px] uppercase text-gray-500 dark:text-zinc-500 font-bold tracking-wider">
+            Service Creator
+          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-bold text-gray-900 dark:text-white leading-tight truncate">
+              {gig.postedBy}
+            </p>
+            <div className="flex items-center gap-1 rounded-md bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400 border border-gray-100 dark:border-white/5 shrink-0">
+              <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
+              <span>{gig.clientRating || 0} ({gig.ratingCount || 0})</span>
             </div>
           </div>
-          <div className="flex flex-col sm:items-end gap-2">
-            <div className="text-xs text-gray-500 font-medium">{gig.timeAgo ? `Posted ${gig.timeAgo}` : gig.postedAt ? `Posted ${gig.postedAt}` : "Posted Recently"}</div>
-            <button 
-              onClick={() => navigate(`/profile/${gig.postedBy}`)} 
-              className="text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={handleViewProfile}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-white transition shrink-0"
+      >
+        <User className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />
+        <span>View Profile</span>
+      </button>
+    </div>
+  );
+
+  const renderMilestones = () => {
+    if (!gig.milestones || gig.milestones.length === 0) return null;
+    return (
+      <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 shadow-sm overflow-hidden backdrop-blur-xl">
+        <button
+          type="button"
+          onClick={() => setIsMilestonesOpen((prev) => !prev)}
+          className="w-full p-4 flex items-center justify-between hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-gray-400 dark:text-zinc-500" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900 dark:text-white">
+              Project Milestones ({gig.milestones.length})
+            </h3>
+          </div>
+          <ChevronDown
+            className={`h-4 w-4 text-gray-400 dark:text-zinc-400 transition-transform duration-200 ${
+              isMilestonesOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+
+        <AnimatePresence initial={false}>
+          {isMilestonesOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden border-t border-gray-100 dark:border-white/5"
             >
-              View Profile
-            </button>
-          </div>
-        </div>
-
-        <div className="space-y-10">
-          {/* DESCRIPTION */}
-          <section>
-            <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">About This Service</h3>
-            <div className="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed whitespace-pre-line">
-              {gig.description}
-            </div>
-          </section>
-
-          {/* SKILLS */}
-          {gig.skills && gig.skills.length > 0 && (
-            <section>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Skills Applied</h3>
-              <div className="flex flex-wrap gap-2">
-                {gig.skills.map((skill, idx) => (
-                  <span key={idx} className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-xs font-medium text-gray-700 dark:text-zinc-300">
-                    {skill}
-                  </span>
+              <div className="p-4 space-y-4">
+                {gig.milestones.map((m, idx) => (
+                  <div key={idx} className="flex gap-3.5">
+                    <div className="flex flex-col items-center">
+                      <div className="h-6 w-6 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs shrink-0">
+                        {idx + 1}
+                      </div>
+                      {idx < gig.milestones.length - 1 && (
+                        <div className="w-[2px] h-full bg-gray-200 dark:bg-white/10 mt-1" />
+                      )}
+                    </div>
+                    <div className="pb-2 min-w-0 flex-1">
+                      <h4 className="font-bold text-gray-900 dark:text-white text-xs mb-0.5">{m.name}</h4>
+                      <p className="text-[11px] text-gray-600 dark:text-zinc-400 leading-relaxed">{m.description}</p>
+                    </div>
+                  </div>
                 ))}
               </div>
-            </section>
+            </motion.div>
           )}
+        </AnimatePresence>
+      </div>
+    );
+  };
 
-          {/* TERMS OF SERVICE */}
-          {gig.termsOfService && (
-            <section>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Terms of Service</h3>
-              <div className="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed whitespace-pre-line bg-gray-50 dark:bg-white/5 p-4 rounded-xl border border-gray-200 dark:border-white/10">
-                {gig.termsOfService}
+  const renderTermsOfService = () => {
+    if (!termsContent) return null;
+    return (
+      <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 shadow-sm overflow-hidden backdrop-blur-xl">
+        <button
+          type="button"
+          onClick={() => setIsTermsOpen((prev) => !prev)}
+          className="w-full p-4 flex items-center justify-between hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-gray-400 dark:text-zinc-500" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900 dark:text-white">
+              Terms of Service
+            </h3>
+          </div>
+          <ChevronDown
+            className={`h-4 w-4 text-gray-400 dark:text-zinc-400 transition-transform duration-200 ${
+              isTermsOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+
+        <AnimatePresence initial={false}>
+          {isTermsOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden border-t border-gray-100 dark:border-white/5"
+            >
+              <div className="p-4 text-xs text-gray-600 dark:text-zinc-400 leading-relaxed whitespace-pre-line font-mono bg-gray-50/50 dark:bg-white/[0.01]">
+                {termsContent}
               </div>
-            </section>
+            </motion.div>
           )}
+        </AnimatePresence>
+      </div>
+    );
+  };
 
-          {/* QUESTIONNAIRES */}
-          {gig.questionnaires && gig.questionnaires.length > 0 && (
-            <section>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Requirements / Questionnaire</h3>
-              <div className="space-y-4 bg-gray-50 dark:bg-white/5 p-4 rounded-xl border border-gray-200 dark:border-white/10">
+  const renderQuestionnaires = () => {
+    if (!gig.questionnaires || gig.questionnaires.length === 0) return null;
+    return (
+      <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 shadow-sm overflow-hidden backdrop-blur-xl">
+        <button
+          type="button"
+          onClick={() => setIsQuestionnairesOpen((prev) => !prev)}
+          className="w-full p-4 flex items-center justify-between hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <HelpCircle className="h-4 w-4 text-gray-400 dark:text-zinc-500" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900 dark:text-white">
+              Requirements / Questionnaire ({gig.questionnaires.length})
+            </h3>
+          </div>
+          <ChevronDown
+            className={`h-4 w-4 text-gray-400 dark:text-zinc-400 transition-transform duration-200 ${
+              isQuestionnairesOpen ? "rotate-180" : ""
+            }`}
+          />
+        </button>
+
+        <AnimatePresence initial={false}>
+          {isQuestionnairesOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden border-t border-gray-100 dark:border-white/5"
+            >
+              <div className="p-4 space-y-4">
                 {gig.questionnaires.map((q, idx) => (
-                  <div key={idx} className="pb-4 border-b border-gray-200 dark:border-white/10 last:border-0 last:pb-0">
-                    <div className="flex items-start gap-3">
-                      <span className="text-blue-500 font-bold text-sm mt-0.5">{idx + 1}.</span>
-                      <div>
-                        <h4 className="font-bold text-gray-900 dark:text-white text-sm">{q.question}</h4>
+                  <div key={idx} className="pb-3 border-b border-gray-100 dark:border-white/5 last:border-0 last:pb-0">
+                    <div className="flex items-start gap-2.5">
+                      <span className="text-blue-500 font-bold text-xs mt-0.5 shrink-0">{idx + 1}.</span>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="font-bold text-gray-900 dark:text-white text-xs leading-snug">{q.question}</h4>
                         <div className="flex gap-2 mt-2">
-                          <span className="text-xs px-2 py-1 rounded bg-white dark:bg-dark-base border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 font-medium">
-                            {q.type === 'file-upload' ? 'File Upload' : q.type === 'multiple-choice' ? 'Multiple Choice' : 'Text Answer'}
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-gray-100 dark:bg-dark-base border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300 font-medium">
+                            {(q.type === 'attachment' || q.type === 'file' || q.type === 'file-upload') ? 'File Upload' : (q.type === 'multiple_choice' || q.type === 'choice' || q.type === 'multiple-choice') ? 'Multiple Choice' : 'Text Answer'}
                           </span>
-                          {q.required && (
-                            <span className="text-xs px-2 py-1 rounded bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 font-medium">
+                          {(q.required || q.isRequired) && (
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 font-medium">
                               Required
                             </span>
                           )}
                         </div>
-                        {q.type === 'multiple-choice' && q.options && (
-                          <ul className="mt-3 space-y-2 ml-1">
+                        {(q.type === 'multiple_choice' || q.type === 'choice' || q.type === 'multiple-choice') && q.options && (
+                          <ul className="mt-2.5 space-y-1.5 ml-1">
                             {q.options.map((opt, i) => (
-                              <li key={i} className="text-sm text-gray-600 dark:text-zinc-400 flex items-center gap-2">
+                              <li key={i} className="text-xs text-gray-600 dark:text-zinc-400 flex items-center gap-2">
                                 <div className="w-1.5 h-1.5 rounded-full bg-gray-400 dark:bg-zinc-500 shrink-0" />
-                                {opt}
+                                <span>{opt}</span>
                               </li>
                             ))}
                           </ul>
@@ -201,315 +436,466 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
                   </div>
                 ))}
               </div>
-            </section>
+            </motion.div>
           )}
+        </AnimatePresence>
+      </div>
+    );
+  };
 
-          {/* TIERS TABS (DRAWER ONLY) */}
-          {!isPage && (
-          <section>
-            <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Pricing Packages</h3>
-            <div className="rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-dark-base">
-              <div className="flex border-b border-gray-200 dark:border-white/10">
-                {gig.tiers.map((tier, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setActiveTierIdx(idx)}
-                    className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${
-                      activeTierIdx === idx 
-                        ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-b-2 border-blue-500" 
-                        : "text-gray-500 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/5"
-                    }`}
-                  >
-                    {tier.tierName}
-                  </button>
-                ))}
-              </div>
-              <div className="p-5">
-                <div className="flex justify-between items-start mb-2">
-                  <h4 className="text-lg font-bold text-gray-900 dark:text-white">{activeTier.title}</h4>
-                  <span className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{activeTier.price.toLocaleString()}</span>
-                </div>
-                <p className="text-sm text-gray-600 dark:text-zinc-400 mb-6">{activeTier.description}</p>
-                
-                <div className="flex items-center gap-4 text-xs font-medium text-gray-700 dark:text-zinc-300 mb-6">
-                  <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-gray-400" /> {activeTier.daysOfDelivery} Days Delivery</span>
-                  <span className="flex items-center gap-1.5"><PlayCircle className="h-4 w-4 text-gray-400" /> {activeTier.revisions} Revisions</span>
-                </div>
-                
-                <button 
-                  onClick={() => setIsCheckoutOpen(true)}
-                  className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
-                >
-                  Continue ({activeTier.price.toLocaleString()} Credits)
-                </button>
+  const renderReviews = () => (
+    <section className="pt-4 border-t border-gray-200 dark:border-white/5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-bold text-gray-900 dark:text-white">Rates & Reviews</h3>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">Feedback from clients on completed orders</p>
+        </div>
+        <div className="flex items-center gap-2 bg-gray-50 dark:bg-white/5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/10">
+          <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+          <span className="text-sm font-bold text-gray-900 dark:text-white">{gig.clientRating || 5.0}</span>
+          <span className="text-xs text-gray-400 dark:text-zinc-500">({gig.ratingCount || 0} reviews)</span>
+        </div>
+      </div>
+
+      <div className="p-6 rounded-2xl border border-dashed border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.01] flex flex-col items-center justify-center text-center space-y-2">
+        <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-gray-400 dark:text-zinc-500">
+          <MessageSquare className="h-5 w-5" />
+        </div>
+        <p className="text-xs font-semibold text-gray-700 dark:text-zinc-300">No public reviews yet</p>
+        <p className="text-[11px] text-gray-500 dark:text-zinc-500 max-w-sm">
+          Reviews and verified client ratings will appear here once orders for this service are completed.
+        </p>
+      </div>
+    </section>
+  );
+
+  return (
+    <>
+      <div className={`w-full flex-col relative ${isPage ? "" : "flex h-[calc(100vh-120px)] overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm sticky top-[100px]"}`}>
+
+        {/* HEADER */}
+        {!isPage && (
+          <div className="flex items-center justify-between border-b border-gray-100 dark:border-white/5 px-6 py-4 bg-white/80 dark:bg-dark-surface/80 backdrop-blur-md z-10">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onClose}
+                className="rounded-full p-2 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors lg:hidden"
+              >
+                <ChevronRight className="h-5 w-5 text-gray-500" />
+              </button>
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-gray-900 dark:text-white">Service Details</span>
               </div>
             </div>
-            {gig.additionalWorkRate > 0 && (
-              <p className="text-[10px] text-gray-500 mt-2 text-center">
-                * Additional work outside of scope will be billed with a {gig.additionalWorkRate}% markup.
-              </p>
-            )}
-          </section>
-          )}
-
-          {/* SUPPORTING IMAGES */}
-          {gig.gallery && gig.gallery.length > 0 && (
-            <section>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Supporting Images</h3>
-              <div className="flex gap-3 overflow-x-auto custom-scrollbar pb-4 snap-x">
-                {gig.gallery.map((img, idx) => (
-                  <div key={idx} className="h-40 sm:h-56 min-w-[70%] sm:min-w-[45%] shrink-0 rounded-xl overflow-hidden snap-center relative bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10">
-                    <img src={img} alt={`Gallery ${idx}`} className="h-full w-full object-cover" />
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-
-
-          {/* MILESTONES */}
-          {gig.milestones && gig.milestones.length > 0 && (
-            <section>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Project Milestones</h3>
-              <div className="space-y-4">
-                {gig.milestones.map((m, idx) => (
-                  <div key={idx} className="flex gap-4">
-                    <div className="flex flex-col items-center">
-                      <div className="h-6 w-6 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs">
-                        {idx + 1}
-                      </div>
-                      {idx < gig.milestones.length - 1 && <div className="w-[2px] h-full bg-gray-200 dark:bg-white/10 mt-1" />}
-                    </div>
-                    <div className="pb-4">
-                      <h4 className="font-bold text-gray-900 dark:text-white text-sm mb-1">{m.name}</h4>
-                      <p className="text-xs text-gray-600 dark:text-zinc-400">{m.description}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* REQUIREMENTS */}
-          {gig.questionnaires && gig.questionnaires.length > 0 && (
-            <section>
-              <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Requirements</h3>
-              <div className="space-y-2">
-                {gig.questionnaires.map((q, idx) => (
-                  <div key={idx} className="p-3 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
-                    <p className="text-xs font-medium text-gray-800 dark:text-zinc-200"><span className="text-gray-400 mr-2">{idx + 1}.</span> {q.question}</p>
-                    <div className="mt-2 text-[10px] font-bold text-gray-500 uppercase flex gap-2">
-                      <span className="bg-gray-200 dark:bg-white/10 px-1.5 py-0.5 rounded">{q.type}</span>
-                      {q.required && <span className="bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded">Required</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-        </div>
-        </div>
-
-        {/* TIERS TABS (PAGE SIDEBAR) */}
-        {isPage && (
-        <div className="w-full lg:w-[400px] shrink-0 sticky top-32 space-y-6">
-          <section>
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">Pricing Packages</h3>
-            <div className="rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-dark-base shadow-sm">
-              <div className="flex border-b border-gray-200 dark:border-white/10">
-                {gig.tiers.map((tier, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setActiveTierIdx(idx)}
-                    className={`flex-1 py-4 text-xs font-bold uppercase tracking-wider transition-colors ${
-                      activeTierIdx === idx 
-                        ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-b-2 border-blue-500" 
-                        : "text-gray-500 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/5"
-                    }`}
-                  >
-                    {tier.tierName}
-                  </button>
-                ))}
-              </div>
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-2">
-                  <h4 className="text-lg font-bold text-gray-900 dark:text-white">{activeTier.title}</h4>
-                  <span className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{activeTier.price.toLocaleString()}</span>
-                </div>
-                <p className="text-sm text-gray-600 dark:text-zinc-400 mb-6">{activeTier.description}</p>
-                
-                <div className="flex flex-col gap-3 text-xs font-medium text-gray-700 dark:text-zinc-300 mb-6">
-                  <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-gray-400" /> {activeTier.daysOfDelivery} Days Delivery</span>
-                  <span className="flex items-center gap-1.5"><PlayCircle className="h-4 w-4 text-gray-400" /> {activeTier.revisions} Revisions</span>
-                </div>
-                
-                <button 
-                  onClick={() => setIsCheckoutOpen(true)}
-                  className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
-                >
-                  Continue ({activeTier.price.toLocaleString()} Credits)
-                </button>
-              </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate(`/gigs/services/${gig.id}/full`)}
+                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400 group relative"
+                title="View Full Page"
+              >
+                <Maximize2 className="h-4 w-4" />
+              </button>
+              <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400">
+                <Share2 className="h-4 w-4" />
+              </button>
+              <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400">
+                <Bookmark className={`h-4 w-4 ${gig.isSaved ? "fill-blue-500 text-blue-500" : ""}`} />
+              </button>
+              <button onClick={onClose} className="hidden lg:block p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400">
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            {gig.additionalWorkRate > 0 && (
-              <p className="text-[11px] text-gray-500 mt-3 text-center">
-                * Additional work outside of scope will be billed with a {gig.additionalWorkRate}% markup.
-              </p>
-            )}
-          </section>
-        </div>
+          </div>
         )}
-      </div>
 
-      {/* Padding for action bar */}
-      {!isPage && <div className="h-24"></div>}
-    </div>
+        {/* SCROLLABLE CONTENT */}
+        <div className={`${isPage ? "w-full" : "flex-1 overflow-y-auto custom-scrollbar p-6"}`}>
+          <div className={`${isPage ? "flex flex-col lg:flex-row gap-8 items-start" : ""}`}>
+            <div className={`${isPage ? "flex-1 min-w-0" : ""}`}>
 
-      {/* ACTION BAR (MOBILE ONLY) */}
-      {!isPage && (
-      <div className="lg:hidden absolute bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-dark-surface/80 backdrop-blur-md border-t border-gray-200 dark:border-white/10 flex justify-between items-center gap-4">
-        <div className="flex flex-col">
-          <span className="text-xs text-gray-500">Selected: {activeTier.tierName}</span>
-          <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier.price.toLocaleString()}</span>
-        </div>
-        <button 
-          onClick={() => setIsCheckoutOpen(true)}
-          className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
-        >
-          Order Now
-        </button>
-      </div>
-      )}
-
-      {/* CHECKOUT MODAL */}
-      <AnimatePresence>
-        {isCheckoutOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-2xl bg-white dark:bg-dark-surface rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
-            >
-              <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-start shrink-0">
-                <div>
-                  <h2 className="text-xl font-black text-gray-900 dark:text-white">Order Request</h2>
-                  <p className="text-xs font-medium text-gray-500 mt-1">You don't have to pay right away. This simply calculates the estimated price.</p>
+              {/* BADGES */}
+              <div className="mt-4 flex flex-wrap items-center gap-2 mb-6">
+                <span className={`px-2.5 py-1 rounded text-[11px] font-bold border ${gig.status?.toLowerCase() === "closed" ? "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20" : "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20"}`}>
+                  {gig.status || "Open"}
+                </span>
+                <span className="px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-bold text-gray-600 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
+                  {gig.category}
+                </span>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-medium text-gray-700 dark:text-zinc-300">
+                  <Clock className="h-3.5 w-3.5 text-gray-500" />
+                  First Draft: {gig.firstDraftDelivery || (gig.tiers && gig.tiers.length > 0 ? `${gig.tiers[0].daysOfDelivery} Days` : 'N/A')}
                 </div>
-                <button onClick={() => setIsCheckoutOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white bg-gray-100 dark:bg-white/5 p-2 rounded-full transition-colors">
-                  <X className="h-5 w-5" />
-                </button>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-medium text-gray-700 dark:text-zinc-300">
+                  <Users className="h-3.5 w-3.5 text-gray-500" />
+                  {gig.slots} Slots
+                </div>
               </div>
 
-              <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-8">
-                
-                {/* 1. Project Brief */}
+              {/* 1. TITLE & ACTIONS */}
+              <div className="flex justify-between items-start gap-4 mb-6">
+                <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white leading-tight">
+                  {gig.title}
+                </h1>
+                <div className="flex shrink-0">
+                  {gig.isOwnGig ? (
+                    <button
+                      onClick={() => navigate(`/gigs/edit/${gig.id}`)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-xs hover:bg-blue-500/20 transition-colors"
+                      title="Edit Service"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                      Edit Service
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleOpenReport}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-400 font-bold text-xs hover:bg-gray-50 dark:hover:bg-white/10 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                      title="Report Service"
+                    >
+                      <Flag className="h-3.5 w-3.5" />
+                      Report Gig
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* AUTHOR & META (DRAWER ONLY) */}
+              {!isPage && <div className="mb-8">{renderProfileCard()}</div>}
+
+              <div className="space-y-6">
+                {/* 2. THUMBNAIL */}
                 <section>
-                  <label className="block text-sm font-bold text-gray-900 dark:text-white mb-2">1. Project Brief <span className="text-red-500">*</span></label>
-                  <textarea 
-                    className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-4 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px] resize-none"
-                    placeholder="Describe what you need done in detail..."
-                  />
+                  <div
+                    onClick={() => {
+                      if (gig.thumbnail) setActiveLightboxImg(gig.thumbnail);
+                    }}
+                    className="w-full h-64 sm:h-80 md:h-96 rounded-2xl overflow-hidden bg-gray-100 dark:bg-white/5 relative border border-gray-200 dark:border-white/10 group cursor-pointer"
+                  >
+                    <img src={gig.thumbnail} alt={gig.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" />
+
+                    {/* Bottom Gradient Scrim */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
+
+                    {/* Expand Badge Overlay */}
+                    <div className="absolute top-4 right-4 z-10 p-2 rounded-xl bg-black/50 backdrop-blur-md text-white/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[11px] font-bold">
+                      <ZoomIn className="h-4 w-4" />
+                      <span>Expand</span>
+                    </div>
+
+                    {/* Skills Overlay with single Wrench Icon */}
+                    {gig.skills && gig.skills.length > 0 && (
+                      <div className="absolute bottom-4 left-4 right-4 z-10" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-wrap gap-2 items-center">
+                          <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-black/60 backdrop-blur-md border border-white/15 text-zinc-300 shadow-sm shrink-0">
+                            <Wrench className="h-3.5 w-3.5" />
+                          </div>
+                          {gig.skills.map((skill, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-md border border-white/15 text-xs font-semibold text-white shadow-sm"
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </section>
 
-                {/* 2. Questionnaires */}
-                {gig.questionnaires && gig.questionnaires.length > 0 && (
-                  <section className="space-y-4">
-                    <label className="block text-sm font-bold text-gray-900 dark:text-white mb-1">2. Requirements</label>
-                    {gig.questionnaires.map((q, idx) => (
-                      <div key={idx} className="space-y-3 p-5 rounded-2xl border border-gray-100 dark:border-white/5 bg-white dark:bg-dark-base shadow-sm">
-                        <p className="text-sm font-bold text-gray-800 dark:text-zinc-200"><span className="text-red-500 mr-1">{q.required ? "*" : ""}</span>{idx + 1}. {q.question}</p>
-                        {q.type === "multiple-choice" ? (
-                           <select className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-3.5 text-sm font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                             <option value="">Select an option</option>
-                             {q.options?.map((opt, oIdx) => <option key={oIdx} value={opt}>{opt}</option>)}
-                           </select>
-                        ) : q.type === "file-upload" ? (
-                           <div className="flex items-center gap-2 mt-2">
-                             <input type="file" className="text-xs file:mr-4 file:py-2.5 file:px-5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 dark:file:bg-blue-500/10 file:text-blue-700 dark:file:text-blue-400 hover:file:bg-blue-100 cursor-pointer" />
-                           </div>
-                        ) : (
-                           <textarea className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-4 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Your answer..." rows={2}></textarea>
-                        )}
-                      </div>
-                    ))}
+                {/* 3. SUPPORTING IMAGES */}
+                {gig.gallery && gig.gallery.length > 0 && (
+                  <section>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
+                        Supporting Images ({gig.gallery.length})
+                      </h3>
+                      <span className="text-[10px] text-gray-400 dark:text-zinc-500 hidden sm:inline">
+                        Click to expand
+                      </span>
+                    </div>
+                    <div className="flex gap-3 overflow-x-auto thin-gallery-scrollbar pb-3 snap-x">
+                      {gig.gallery.map((img, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => setActiveLightboxImg(img)}
+                          className="group relative h-28 sm:h-36 min-w-[40%] sm:min-w-[30%] shrink-0 rounded-2xl overflow-hidden snap-center bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 cursor-pointer shadow-sm hover:shadow-lg transition-all"
+                        >
+                          <img
+                            src={img}
+                            alt={`Gallery ${idx}`}
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 pointer-events-none"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white backdrop-blur-[1px]">
+                            <ZoomIn className="h-5 w-5" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </section>
                 )}
 
-                {/* 3. Tier Summary */}
-                <section>
-                  <label className="block text-sm font-bold text-gray-900 dark:text-white mb-3">Order Summary</label>
-                  <div className="bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 rounded-2xl p-5">
-                    <div className="flex gap-4 items-center pb-4 border-b border-gray-200 dark:border-white/10 mb-4">
-                      <img src={gig.thumbnail} alt="" className="h-12 w-12 rounded-lg object-cover" />
-                      <div>
-                        <h3 className="font-bold text-sm text-gray-900 dark:text-white line-clamp-1">{gig.title}</h3>
-                        <p className="text-xs font-bold text-blue-600 dark:text-blue-400 mt-1">{activeTier.tierName} Package</p>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-medium text-gray-600 dark:text-zinc-400">Delivery Time</span>
-                        <span className="text-xs font-bold text-gray-900 dark:text-white">{activeTier.daysOfDelivery} Days</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-medium text-gray-600 dark:text-zinc-400">Revisions</span>
-                        <span className="text-xs font-bold text-gray-900 dark:text-white">{activeTier.revisions}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-medium text-gray-600 dark:text-zinc-400">Base Price</span>
-                        <span className="text-xs font-bold text-gray-900 dark:text-white">{activeTier.price.toLocaleString()} Credits</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-medium text-gray-600 dark:text-zinc-400">Platform Fee (5%)</span>
-                        <span className="text-xs font-bold text-gray-900 dark:text-white">{(activeTier.price * 0.05).toLocaleString()} Credits</span>
-                      </div>
-                      
-                      <div className="h-px w-full bg-gray-200 dark:bg-white/10 my-3" />
-                      
-                      <div className="flex justify-between items-center">
-                        <span className="text-base font-black text-gray-900 dark:text-white">Estimated Total</span>
-                        <span className="text-lg font-black text-blue-600 dark:text-blue-400 flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{(activeTier.price * 1.05).toLocaleString()} Credits</span>
-                      </div>
-                    </div>
-                  </div>
+                {/* 4. ABOUT THIS SERVICE */}
+                <section className="pt-2">
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white mb-3">About This Service</h3>
+                  <div
+                    className="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed max-w-none prose prose-sm dark:prose-invert"
+                    dangerouslySetInnerHTML={{ __html: gig.description.replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>") }}
+                  />
                 </section>
 
-              </div>
+                {/* 5. RATES & REVIEWS */}
+                {renderReviews()}
 
-              <div className="p-6 border-t border-gray-100 dark:border-white/5 shrink-0 bg-white dark:bg-dark-base">
-                <button
-                  onClick={handleCheckout}
-                  disabled={isProcessing}
-                  className="w-full py-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-50 flex justify-center items-center gap-2"
-                >
-                  {isProcessing ? (
-                    <>
-                      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }} className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full" />
-                      Processing...
-                    </>
-                  ) : (
-                    "Submit Order Request"
+                {/* DRAWER-ONLY SECTIONS (STACKED TOGETHER) */}
+                {!isPage && (
+                  <>
+                    <section>
+                      <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">Pricing Packages</h3>
+                      <div className="rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-dark-base">
+                        <div className="flex border-b border-gray-200 dark:border-white/10">
+                          {gig.tiers.map((tier, idx) => (
+                            <button
+                              key={idx}
+                              onClick={() => setActiveTierIdx(idx)}
+                              className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-colors ${
+                                activeTierIdx === idx 
+                                ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-b-2 border-blue-500" 
+                                : "text-gray-500 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/5"
+                              }`}
+                            >
+                              {tier.tierName}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="p-5">
+                          <div className="flex justify-between items-start mb-2">
+                            <h4 className="text-lg font-bold text-gray-900 dark:text-white">{activeTier?.title}</h4>
+                            <span className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString()}</span>
+                          </div>
+                          <p className="text-sm text-gray-600 dark:text-zinc-400 mb-6">{activeTier?.description}</p>
+
+                          <div className="flex items-center gap-4 text-xs font-medium text-gray-700 dark:text-zinc-300 mb-6">
+                            <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-gray-400" /> {activeTier?.daysOfDelivery} Days Delivery</span>
+                            <span className="flex items-center gap-1.5"><PlayCircle className="h-4 w-4 text-gray-400" /> {activeTier?.revisions} Revisions</span>
+                          </div>
+
+                          <button
+                            onClick={() => navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
+                            className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
+                          >
+                            Continue ({activeTier?.price?.toLocaleString()} Credits)
+                          </button>
+                        </div>
+                      </div>
+                      {gig.additionalWorkRate > 0 && (
+                        <p className="text-[10px] text-gray-500 mt-2 text-center">
+                          * Additional work outside of scope will be billed with a {gig.additionalWorkRate}% markup.
+                        </p>
+                      )}
+                    </section>
+
+                    {renderMilestones()}
+                    {renderTermsOfService()}
+                    {renderQuestionnaires()}
+                  </>
+                )}
+
+              </div>
+            </div>
+
+            {/* PAGE RIGHT SIDEBAR */}
+            {isPage && (
+              <div className="w-full lg:w-[400px] shrink-0 sticky top-[148px] space-y-4">
+                {renderProfileCard()}
+
+                {/* Pricing Packages Box */}
+                <section>
+                  <div className="rounded-2xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-dark-base shadow-sm">
+                    <div className="flex border-b border-gray-200 dark:border-white/10">
+                      {gig.tiers.map((tier, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setActiveTierIdx(idx)}
+                          className={`flex-1 py-4 text-xs font-bold uppercase tracking-wider transition-colors ${
+                            activeTierIdx === idx 
+                              ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-b-2 border-blue-500" 
+                              : "text-gray-500 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/5"
+                          }`}
+                        >
+                          {tier.tierName}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="p-6">
+                      <div className="flex justify-between items-start mb-2">
+                        <h4 className="text-lg font-bold text-gray-900 dark:text-white">{activeTier?.title}</h4>
+                        <span className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString()}</span>
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-zinc-400 mb-6">{activeTier?.description}</p>
+
+                      <div className="flex flex-col gap-3 text-xs font-medium text-gray-700 dark:text-zinc-300 mb-6">
+                        <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-gray-400" /> {activeTier?.daysOfDelivery} Days Delivery</span>
+                        <span className="flex items-center gap-1.5"><PlayCircle className="h-4 w-4 text-gray-400" /> {activeTier?.revisions} Revisions</span>
+                      </div>
+
+                      <button
+                        onClick={() => navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
+                        className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
+                      >
+                        Continue ({activeTier?.price?.toLocaleString()} Credits)
+                      </button>
+                    </div>
+                  </div>
+                  {gig.additionalWorkRate > 0 && (
+                    <p className="text-[11px] text-gray-500 mt-3 text-center">
+                      * Additional work outside of scope will be billed with a {gig.additionalWorkRate}% markup.
+                    </p>
                   )}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                </section>
 
-      <SuccessModal
-        isOpen={isSuccessOpen}
-        message="Order Successfully Sent"
-        onConfirm={() => setIsSuccessOpen(false)}
+                {/* Collapsible Project Milestones */}
+                {renderMilestones()}
+
+                {/* Collapsible Terms of Service */}
+                {renderTermsOfService()}
+
+                {/* Collapsible Requirements / Questionnaire */}
+                {renderQuestionnaires()}
+              </div>
+            )}
+          </div>
+
+          {/* 6. OTHER SERVICES YOU MAY LIKE (STANDALONE COMPONENT) */}
+          {isPage && <GigsOtherServices currentGigId={gig.id} />}
+
+          {!isPage && <div className="h-24"></div>}
+        </div>
+
+        {/* ACTION BAR (MOBILE ONLY) */}
+        {!isPage && (
+          <div className="lg:hidden absolute bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-dark-surface/80 backdrop-blur-md border-t border-gray-200 dark:border-white/10 flex justify-between items-center gap-4">
+            <div className="flex flex-col">
+              <span className="text-xs text-gray-500">Selected: {activeTier?.tierName}</span>
+              <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString()}</span>
+            </div>
+            <button
+              onClick={() => navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
+              className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
+            >
+              Order Now
+            </button>
+          </div>
+        )}
+
+      </div>
+
+      {/* ==================== EXPANDED LIGHTBOX PREVIEW MODAL ==================== */}
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {activeLightboxImg && (
+            <div className="fixed inset-0 z-[300000] flex items-center justify-center p-4 md:p-8">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setActiveLightboxImg(null)}
+                className="absolute inset-0 bg-black/90 backdrop-blur-md cursor-pointer"
+                aria-label="Close modal backdrop"
+              />
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setActiveLightboxImg(null)}
+                className="absolute top-4 right-4 z-50 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                title="Close (Esc)"
+              >
+                <X className="h-6 w-6" />
+              </button>
+
+              {/* Navigation Arrows */}
+              {allImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handlePrevLightbox}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                    title="Previous Image"
+                  >
+                    <ChevronLeft className="h-6 w-6" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextLightbox}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                    title="Next Image"
+                  >
+                    <ChevronRight className="h-6 w-6" />
+                  </button>
+                </>
+              )}
+
+              {/* Image Presentation */}
+              <motion.div
+                key={activeLightboxImg}
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.92 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                className="relative max-w-5xl max-h-[85vh] w-full flex items-center justify-center z-10 pointer-events-none"
+              >
+                <img
+                  src={activeLightboxImg}
+                  alt="Enlarged gallery preview"
+                  className="max-h-[85vh] max-w-full rounded-2xl object-contain shadow-2xl ring-1 ring-white/10 pointer-events-auto"
+                />
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* Embedded Thin Scrollbar Styling with Smooth Expand-on-Hover */}
+      <style>{`
+        .thin-gallery-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(255, 255, 255, 0.25) rgba(255, 255, 255, 0.03);
+        }
+        .thin-gallery-scrollbar::-webkit-scrollbar {
+          height: 6px;
+          transition: height 0.2s ease-in-out;
+        }
+        .thin-gallery-scrollbar:hover::-webkit-scrollbar {
+          height: 12px;
+        }
+        .thin-gallery-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.03);
+          border-radius: 9999px;
+        }
+        .thin-gallery-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.25);
+          border-radius: 9999px;
+          transition: background 0.2s ease-in-out;
+        }
+        .thin-gallery-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.45);
+        }
+      `}</style>
+
+      {/* Popup Report Modal */}
+      <PopupReportGig
+        isOpen={isReportModalOpen}
+        gigTitle={gig.title}
+        onClose={() => setIsReportModalOpen(false)}
+        onSubmitReport={(reason, details) => {
+          console.log("Report submitted for gig:", gig.id, reason, details);
+        }}
       />
-    </div>
+    </>
   );
 };
+
+export default GigRichText;

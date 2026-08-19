@@ -1,10 +1,9 @@
 import React, { useState } from "react";
-import { Clock, Users, Star, Send, MousePointerClick, User, FileText, PlayCircle, MapPin, Tag, Box, Layers, Bookmark } from "lucide-react";
+import { Clock, Users, Star, MousePointerClick, User, PlayCircle, Bookmark, Edit2, ShoppingCart, Flag } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Gig } from "../gig_datasets";
-import { AnimatePresence, motion } from "framer-motion";
-import SuccessModal from "@/components/ui/SuccessModal";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import PopupReportGig from "./PopupReportGig";
 
 interface GigViewDetailsProps {
   selectedGig: Gig | null;
@@ -16,24 +15,47 @@ interface GigViewDetailsProps {
 const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, onReportGig, onToggleSave }) => {
   const navigate = useNavigate();
   const [activeTierIdx, setActiveTierIdx] = useState(0);
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [isSuccessOpen, setIsSuccessOpen] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   const activeTier = selectedGig?.tiers[activeTierIdx];
 
-  const handleCheckout = () => {
-    setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
-      setIsCheckoutOpen(false);
-      setIsSuccessOpen(true);
-    }, 1500);
+  const handleOpenCheckout = () => {
+    navigate(`/gigs/services/${selectedGig?.id}/order`, { state: { tierIndex: activeTierIdx } });
   };
 
   const handleViewProfile = () => {
     if (!selectedGig) return;
-    navigate(`/profile/${selectedGig.postedBy}`); // Placeholder logic
+
+    if (selectedGig.isOwnGig) {
+      navigate("/profile");
+      return;
+    }
+
+    const creatorId =
+      selectedGig.client_account_id ||
+      selectedGig.creator_account_id ||
+      selectedGig.freelancerAccountId ||
+      (selectedGig as any).account_id ||
+      (selectedGig as any).accountId ||
+      (selectedGig as any).user_id ||
+      (selectedGig as any).userId ||
+      (selectedGig as any).account?.account_id ||
+      (selectedGig as any).creator?.account_id ||
+      (selectedGig as any).user?.account_id;
+
+    if (creatorId) {
+      navigate(`/profile/${creatorId}`);
+    } else {
+      console.warn("Could not find creator account ID on gig object:", selectedGig);
+    }
+  };
+
+  const handleTriggerReport = () => {
+    if (onReportGig && selectedGig) {
+      onReportGig(selectedGig);
+    } else {
+      setIsReportModalOpen(true);
+    }
   };
 
   return (
@@ -57,7 +79,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
           selectedGig ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        {selectedGig && activeTier && (
+        {selectedGig && (
           <>
             <div className="relative h-48 shrink-0 bg-dark-base border-b border-gray-100 dark:border-white/5">
               <img
@@ -66,7 +88,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 className="w-full h-full object-cover opacity-60"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dark-surface via-transparent to-transparent" />
-              
+
               {onToggleSave && (
                 <button
                   title="Save Gig"
@@ -101,7 +123,24 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                     <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300">
                       {selectedGig.category}
                     </span>
+                    {selectedGig.tiers && selectedGig.tiers.length > 0 && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-800 dark:text-zinc-300">
+                        {selectedGig.tiers.length} Tiers
+                      </span>
+                    )}
                   </div>
+
+                  {!selectedGig.isOwnGig && (
+                    <button
+                      type="button"
+                      title="Report Gig"
+                      onClick={handleTriggerReport}
+                      className="p-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-red-400 transition border border-gray-200 dark:border-white/10 flex items-center gap-1 text-xs"
+                    >
+                      <Flag className="h-3.5 w-3.5" />
+                      <span className="text-[10px] font-medium">Report</span>
+                    </button>
+                  )}
                 </div>
 
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white leading-snug mb-1">
@@ -121,49 +160,57 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
               </div>
 
               {/* Tiers Tabs */}
-              <div className="space-y-2">
-                <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400">
-                  Pricing Packages
-                </h4>
-                <div className="rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-dark-base shadow-sm">
-                  <div className="flex border-b border-gray-200 dark:border-white/10">
-                    {selectedGig.tiers.map((tier, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setActiveTierIdx(idx)}
-                        className={`flex-1 py-2.5 text-[11px] font-bold uppercase tracking-wider transition-colors ${
-                          activeTierIdx === idx 
-                            ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-b-2 border-blue-500" 
-                            : "text-gray-500 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/5"
-                        }`}
-                      >
-                        {tier.tierName}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="text-sm font-bold text-gray-900 dark:text-white">{activeTier.title}</h4>
-                      <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier.price.toLocaleString()}</span>
+              {selectedGig.tiers && selectedGig.tiers.length > 0 && activeTier && (
+                <div className="space-y-2">
+                  <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400">
+                    Pricing Packages
+                  </h4>
+                  <div className="rounded-xl border border-gray-200 dark:border-white/10 overflow-hidden bg-white dark:bg-dark-base shadow-sm">
+                    <div className="flex border-b border-gray-200 dark:border-white/10">
+                      {selectedGig.tiers.map((tier, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setActiveTierIdx(idx)}
+                          className={`flex-1 py-2.5 text-[11px] font-bold uppercase tracking-wider transition-colors ${
+                            activeTierIdx === idx 
+                              ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-b-2 border-blue-500" 
+                              : "text-gray-500 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/5"
+                          }`}
+                        >
+                          {tier.tierName}
+                        </button>
+                      ))}
                     </div>
-                    <p className="text-xs text-gray-600 dark:text-zinc-400 mb-4">{activeTier.description}</p>
-                    
-                    <div className="flex items-center gap-4 text-[11px] font-medium text-gray-700 dark:text-zinc-300">
-                      <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-gray-400" /> {activeTier.daysOfDelivery} Days Delivery</span>
-                      <span className="flex items-center gap-1.5"><PlayCircle className="h-3.5 w-3.5 text-gray-400" /> {activeTier.revisions} Revisions</span>
+                    <div className="p-4">
+                      <div className="mb-2">
+                        <h4 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
+                          {activeTier.title}
+                        </h4>
+                        <div className="mt-1 flex items-center gap-1.5 text-base font-black text-yellow-500">
+                          <CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />
+                          <span>{activeTier.price?.toLocaleString()}</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-600 dark:text-zinc-400 mb-4">{activeTier.description}</p>
+
+                      <div className="flex items-center gap-4 text-[11px] font-medium text-gray-700 dark:text-zinc-300">
+                        <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-gray-400" /> {activeTier.daysOfDelivery} Days Delivery</span>
+                        <span className="flex items-center gap-1.5"><PlayCircle className="h-3.5 w-3.5 text-gray-400" /> {activeTier.revisions} Revisions</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Description */}
               <div className="space-y-2">
                 <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400">
                   About This Service
                 </h4>
-                <div className="bg-white/[0.01] border border-gray-100 dark:border-white/5 p-3.5 rounded-xl text-[13px] text-gray-600 dark:text-zinc-300 leading-relaxed whitespace-pre-line">
-                  {selectedGig.description}
-                </div>
+                <div
+                  className="bg-white/[0.01] border border-gray-100 dark:border-white/5 p-3.5 rounded-xl text-[13px] text-gray-600 dark:text-zinc-300 leading-relaxed max-w-none prose prose-sm dark:prose-invert"
+                  dangerouslySetInnerHTML={{ __html: selectedGig.description.replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>") }}
+                />
               </div>
 
               {/* Skills Applied */}
@@ -197,47 +244,6 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 </div>
               )}
 
-              {/* Questionnaire */}
-              {selectedGig.questionnaires && selectedGig.questionnaires.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400">
-                    Requirements / Questionnaire
-                  </h4>
-                  <div className="space-y-3 bg-white/[0.01] border border-gray-100 dark:border-white/5 p-3.5 rounded-xl">
-                    {selectedGig.questionnaires.map((q, idx) => (
-                      <div key={idx} className="pb-3 border-b border-gray-100 dark:border-white/5 last:border-0 last:pb-0">
-                        <div className="flex items-start gap-2">
-                          <span className="text-blue-500 font-bold text-[13px]">{idx + 1}.</span>
-                          <div>
-                            <h4 className="font-bold text-gray-900 dark:text-white text-[13px]">{q.question}</h4>
-                            <div className="flex gap-2 mt-1.5">
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/5 text-gray-500 font-medium">
-                                {q.type === 'file-upload' ? 'File Upload' : q.type === 'multiple-choice' ? 'Multiple Choice' : 'Text Answer'}
-                              </span>
-                              {q.required && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 font-medium">
-                                  Required
-                                </span>
-                              )}
-                            </div>
-                            {q.type === 'multiple-choice' && q.options && (
-                              <ul className="mt-2.5 space-y-1.5 ml-1">
-                                {q.options.map((opt, i) => (
-                                  <li key={i} className="text-[12px] text-gray-600 dark:text-zinc-400 flex items-center gap-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-zinc-600 shrink-0" />
-                                    {opt}
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* Milestones */}
               {selectedGig.milestones && selectedGig.milestones.length > 0 && (
                 <div className="space-y-2">
@@ -263,8 +269,52 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 </div>
               )}
 
-              {/* Client Profile Card */}
-              <div className="p-3.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] flex items-center justify-between gap-3">
+              {/* Questionnaire */}
+              {selectedGig.questionnaires && selectedGig.questionnaires.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400">
+                    Requirements / Questionnaire
+                  </h4>
+                  <div className="space-y-3 bg-white/[0.01] border border-gray-100 dark:border-white/5 p-3.5 rounded-xl">
+                    {selectedGig.questionnaires.map((q, idx) => (
+                      <div key={idx} className="pb-3 border-b border-gray-100 dark:border-white/5 last:border-0 last:pb-0">
+                        <div className="flex items-start gap-2">
+                          <span className="text-blue-500 font-bold text-[13px]">{idx + 1}.</span>
+                          <div>
+                            <h4 className="font-bold text-gray-900 dark:text-white text-[13px]">{q.question}</h4>
+                            <div className="flex gap-2 mt-1.5">
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/5 text-gray-500 font-medium">
+                                {(q.type === 'attachment' || q.type === 'file' || q.type === 'file-upload') ? 'File Upload' : (q.type === 'multiple_choice' || q.type === 'choice' || q.type === 'multiple-choice') ? 'Multiple Choice' : 'Text Answer'}
+                              </span>
+                              {(q.required || q.isRequired) && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 font-medium">
+                                  Required
+                                </span>
+                              )}
+                            </div>
+                            {(q.type === 'multiple_choice' || q.type === 'choice' || q.type === 'multiple-choice') && q.options && (
+                              <ul className="mt-2.5 space-y-1.5 ml-1">
+                                {q.options.map((opt, i) => (
+                                  <li key={i} className="text-[12px] text-gray-600 dark:text-zinc-400 flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-zinc-600 shrink-0" />
+                                    {opt}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Sticky Action Footer */}
+            <div className="p-4 border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shrink-0 space-y-3">
+              {/* Creator Profile Card */}
+              <div className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
                   {selectedGig.clientAvatar ? (
                     <img src={selectedGig.clientAvatar} alt="" className="h-8 w-8 rounded-full object-cover border border-gray-200 dark:border-white/10 shrink-0" />
@@ -290,41 +340,78 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 </div>
 
                 <button
+                  type="button"
                   onClick={handleViewProfile}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
                 >
                   <User className="h-3.5 w-3.5 text-blue-400" />
                   <span>View Profile</span>
                 </button>
               </div>
-            </div>
 
-            {/* Sticky Action Footer */}
-            <div className="p-4 border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shrink-0 space-y-3">
-              <div className="flex items-center justify-between px-1">
-                <span className="text-[11px] text-gray-500">Total</span>
-                <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier.price.toLocaleString()}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    navigate(`/gigs/services/${selectedGig.id}/page`);
-                  }}
-                  className="px-4 flex items-center justify-center rounded-xl bg-gray-100 dark:bg-white/5 py-3 text-xs font-bold text-gray-700 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-white/10 transition active:scale-[0.98] shrink-0 border border-gray-200 dark:border-white/10"
-                >
-                  View Full
-                </button>
-                <button
-                  onClick={() => setIsCheckoutOpen(true)}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 active:scale-[0.98]"
-                >
-                  Order {activeTier.tierName} Package
-                </button>
-              </div>
+              {selectedGig.isOwnGig ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      navigate(`/gigs/services/${selectedGig.id}/page`);
+                    }}
+                    className="px-4 flex items-center justify-center rounded-xl bg-gray-100 dark:bg-white/5 py-3 text-xs font-bold text-gray-700 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-white/10 transition active:scale-[0.98] shrink-0 border border-gray-200 dark:border-white/10"
+                  >
+                    View Full
+                  </button>
+                  <button
+                    onClick={() => navigate(`/gigs/edit/${selectedGig.id}`)}
+                    className="p-3 aspect-square flex items-center justify-center rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition shrink-0"
+                    title="Edit Service"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => navigate('/gigs/orders')}
+                    className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 py-3 text-xs font-bold text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-zinc-700 transition"
+                  >
+                    <ShoppingCart className="h-4 w-4 text-blue-400" /> Manage Orders
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-[11px] text-gray-500">Total</span>
+                    <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString() || "0"}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        navigate(`/gigs/services/${selectedGig.id}/page`);
+                      }}
+                      className="px-4 flex items-center justify-center rounded-xl bg-gray-100 dark:bg-white/5 py-3 text-xs font-bold text-gray-700 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-white/10 transition active:scale-[0.98] shrink-0 border border-gray-200 dark:border-white/10"
+                    >
+                      View Full
+                    </button>
+                    <button
+                      onClick={handleOpenCheckout}
+                      disabled={!activeTier}
+                      className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Order {activeTier?.tierName || "Package"}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </>
         )}
       </div>
+
+      {/* Popup Report Modal */}
+      <PopupReportGig
+        isOpen={isReportModalOpen}
+        gigTitle={selectedGig?.title}
+        onClose={() => setIsReportModalOpen(false)}
+        onSubmitReport={(reason, details) => {
+          console.log("Report submitted for gig:", selectedGig?.id, reason, details);
+        }}
+      />
 
       <style>{`
         .thin-scrollbar::-webkit-scrollbar { width: 5px; }
@@ -332,72 +419,6 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
         .thin-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
         .thin-scrollbar::-webkit-scrollbar-track { background: transparent; }
       `}</style>
-
-      {/* Checkout Modal */}
-      {selectedGig && activeTier && (
-        <AnimatePresence>
-          {isCheckoutOpen && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-            >
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                className="w-full max-w-sm bg-white dark:bg-dark-surface rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden shadow-2xl"
-              >
-                <div className="p-5 border-b border-gray-100 dark:border-white/5 flex justify-between items-center">
-                  <h2 className="text-base font-bold text-gray-900 dark:text-white">Confirm Order</h2>
-                </div>
-                <div className="p-5 space-y-5">
-                  <div className="flex gap-3 p-3 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
-                    <img src={selectedGig.thumbnail} alt="" className="h-12 w-12 rounded-lg object-cover" />
-                    <div>
-                      <h3 className="font-bold text-xs text-gray-900 dark:text-white line-clamp-2">{selectedGig.title}</h3>
-                      <p className="text-[10px] text-gray-500 mt-0.5">{activeTier.tierName} Package</p>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-600 dark:text-zinc-400">Subtotal</span>
-                      <span className="font-bold text-gray-900 dark:text-white">{activeTier.price.toLocaleString()} Credits</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-600 dark:text-zinc-400">Platform Fee (5%)</span>
-                      <span className="font-bold text-gray-900 dark:text-white">{(activeTier.price * 0.05).toLocaleString()} Credits</span>
-                    </div>
-                    <div className="h-px w-full bg-gray-200 dark:bg-white/10 my-2" />
-                    <div className="flex justify-between text-sm">
-                      <span className="font-bold text-gray-900 dark:text-white">Total</span>
-                      <span className="font-black text-blue-600 dark:text-blue-400">{(activeTier.price * 1.05).toLocaleString()} Credits</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => setIsCheckoutOpen(false)} disabled={isProcessing} className="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-zinc-300 font-bold text-xs hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">
-                      Cancel
-                    </button>
-                    <button onClick={handleCheckout} disabled={isProcessing} className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-50 flex justify-center items-center gap-2">
-                      {isProcessing ? "Processing..." : "Pay with Credits"}
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      )}
-
-      <SuccessModal
-        isOpen={isSuccessOpen}
-        message="Your order has been placed! The seller will reach out to you shortly via messages."
-        onConfirm={() => {
-          setIsSuccessOpen(false);
-          onClose(); // Close drawer on success
-        }}
-      />
     </>
   );
 };

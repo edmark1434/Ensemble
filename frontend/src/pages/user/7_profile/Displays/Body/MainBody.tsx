@@ -1,12 +1,11 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FolderOpen, Briefcase, FileText, TrendingUp, Image as ImageIcon, Clock } from "lucide-react";
+import { FolderOpen, Briefcase, FileText, Image as ImageIcon } from "lucide-react";
 
 // Sub-component Imports
 import { Profile_Portfolio } from "./Profile_Portfolio";
 import { Profile_Services } from "./Profile_Services";
 import { Profile_JobPosts } from "./Profile_JobPosts";
-import { Profile_Projects } from "./Profile_Projects";
 import { Profile_Assets } from "./Profile_Assets";
 import { Profile_History } from "./Profile_History";
 import { Profile_Introduction } from "./Profile_Introduction";
@@ -50,13 +49,11 @@ export const DetailsListBodySkeleton: React.FC = () => (
   </div>
 );
 
-// FIXED: Renamed export from DetailsListBody_ProfileDisplay to MainBody
 export const MainBody: React.FC<DetailsListBodyProps> = ({
   loading,
   activeTab,
   onTabChange,
   portfolioItems = [],
-  services = [],
   isOwner = false,
   onUploadPDF,
   onAddExternalLink,
@@ -84,7 +81,6 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                 isActive ? "text-white" : "text-gray-500 dark:text-zinc-400 hover:text-gray-800 dark:hover:text-zinc-200"
               }`}
             >
-              {/* Sliding Background Pill */}
               {isActive && (
                 <motion.div
                   layoutId="activeTabPill"
@@ -113,24 +109,33 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
             transition={{ duration: 0.2, ease: "easeInOut" }}
             className="flex-1 flex flex-col"
           >
-            {activeTab === "introduction" && <Profile_Introduction introduction={userDetails?.introduction} isOwner={isOwner} onSave={onUpdateIntroduction} accountId={accountId || ""} onViewMoreGallery={() => onTabChange("gallery")} />}
+            {activeTab === "introduction" && (
+              <Profile_Introduction
+                introduction={userDetails?.introduction}
+                isOwner={isOwner}
+                isLoading={loading}
+                onSave={onUpdateIntroduction}
+                accountId={accountId || ""}
+                onViewMoreGallery={() => onTabChange("gallery")}
+              />
+            )}
             {activeTab === "performance" && (
               <div className="flex flex-col h-full space-y-4">
                 {/* Subtabs for Performance */}
                 <div className="flex border-b border-gray-200 dark:border-white/10">
-                  <button 
+                  <button
                     onClick={() => setPerformanceTab("merit")}
                     className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 ${performanceTab === "merit" ? "border-blue-600 text-blue-600 dark:text-blue-400" : "border-transparent text-gray-500 hover:text-gray-800 dark:text-zinc-400 dark:hover:text-zinc-200"}`}
                   >
                     Merit Score
                   </button>
-                  <button 
+                  <button
                     onClick={() => setPerformanceTab("ratings")}
                     className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 ${performanceTab === "ratings" ? "border-blue-600 text-blue-600 dark:text-blue-400" : "border-transparent text-gray-500 hover:text-gray-800 dark:text-zinc-400 dark:hover:text-zinc-200"}`}
                   >
                     Ratings
                   </button>
-                  <button 
+                  <button
                     onClick={() => setPerformanceTab("history")}
                     className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 ${performanceTab === "history" ? "border-blue-600 text-blue-600 dark:text-blue-400" : "border-transparent text-gray-500 hover:text-gray-800 dark:text-zinc-400 dark:hover:text-zinc-200"}`}
                   >
@@ -151,6 +156,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                         assetRating={4.7}
                         successfulJobsCount={6}
                         viewMode="merit"
+                        isOwner={isOwner}
                       />
                     </div>
                   )}
@@ -166,12 +172,13 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                         assetRating={4.7}
                         successfulJobsCount={6}
                         viewMode="ratings"
+                        isOwner={isOwner}
                       />
                     </div>
                   )}
                   {performanceTab === "history" && (
                     <div className="pt-2">
-                      <Profile_History />
+                      <Profile_History isOwner={isOwner} />
                     </div>
                   )}
                 </div>
@@ -181,6 +188,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
               <Profile_Portfolio
                 portfolioItems={portfolioItems}
                 isOwner={isOwner}
+                isLoading={loading}
                 onUploadPDF={onUploadPDF}
                 onAddExternalLink={onAddExternalLink}
                 onDeleteItem={onDeletePortfolioItem}
@@ -189,9 +197,15 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
             {activeTab === "gallery" && (
               <Profile_Gallery accountId={accountId || ""} isOwner={isOwner} />
             )}
-            {activeTab === "services" && <Profile_Services services={services} />}
-            {activeTab === "job-posts" && <Profile_JobPosts userDetails={userDetails} accountId={accountId} />}
-            {activeTab === "assets" && <Profile_Assets />}
+            {activeTab === "services" && (
+              <Profile_Services accountId={accountId} isOwner={isOwner} />
+            )}
+            {activeTab === "job-posts" && (
+              <Profile_JobPosts userDetails={userDetails} accountId={accountId} isOwner={isOwner} />
+            )}
+            {activeTab === "assets" && (
+              <Profile_Assets isOwner={isOwner} isLoading={loading} />
+            )}
           </motion.div>
         </AnimatePresence>
       </div>
