@@ -1,7 +1,8 @@
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import {
   X, Star, Clock, Users, Bookmark, Share2,
-  ChevronRight, ChevronDown, PlayCircle, Edit2, Flag, Maximize2, User, FileText, CheckCircle2, HelpCircle, Wrench, MessageSquare
+  ChevronRight, ChevronLeft, ChevronDown, PlayCircle, Edit2, Flag, Maximize2, User, FileText, CheckCircle2, HelpCircle, Wrench, MessageSquare, ZoomIn
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -30,10 +31,63 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
   const [activeTierIdx, setActiveTierIdx] = useState(0);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
+  // Lightbox Modal state
+  const [activeLightboxImg, setActiveLightboxImg] = useState<string | null>(null);
+
   // Default: Only Terms of Service is expanded
   const [isMilestonesOpen, setIsMilestonesOpen] = useState(false);
   const [isTermsOpen, setIsTermsOpen] = useState(true);
   const [isQuestionnairesOpen, setIsQuestionnairesOpen] = useState(false);
+
+  // Compile all images for next/prev lightbox switching
+  const allImages = React.useMemo(() => {
+    if (!gig) return [];
+    const list: string[] = [];
+    if (gig.thumbnail) list.push(gig.thumbnail);
+    if (gig.gallery && Array.isArray(gig.gallery)) {
+      gig.gallery.forEach((img) => {
+        if (img && !list.includes(img)) list.push(img);
+      });
+    }
+    return list;
+  }, [gig]);
+
+  const handlePrevLightbox = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!activeLightboxImg) return;
+    const currentIndex = allImages.indexOf(activeLightboxImg);
+    const prevIndex = (currentIndex - 1 + allImages.length) % allImages.length;
+    setActiveLightboxImg(allImages[prevIndex]);
+  };
+
+  const handleNextLightbox = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!activeLightboxImg) return;
+    const currentIndex = allImages.indexOf(activeLightboxImg);
+    const nextIndex = (currentIndex + 1) % allImages.length;
+    setActiveLightboxImg(allImages[nextIndex]);
+  };
+
+  // Keyboard navigation for lightbox
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!activeLightboxImg) return;
+      if (e.key === "Escape") setActiveLightboxImg(null);
+      if (e.key === "ArrowLeft") {
+        const currentIndex = allImages.indexOf(activeLightboxImg);
+        const prevIndex = (currentIndex - 1 + allImages.length) % allImages.length;
+        setActiveLightboxImg(allImages[prevIndex]);
+      }
+      if (e.key === "ArrowRight") {
+        const currentIndex = allImages.indexOf(activeLightboxImg);
+        const nextIndex = (currentIndex + 1) % allImages.length;
+        setActiveLightboxImg(allImages[nextIndex]);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeLightboxImg, allImages]);
 
   // SKELETON PLACEHOLDER VIEW
   if (isLoading || !gig) {
@@ -138,7 +192,6 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
 
   const activeTier = gig?.tiers?.[activeTierIdx];
 
-  // Robust extraction of Terms of Service from all possible API response keys
   const termsContent =
     gig?.termsOfService ||
     (gig as any)?.terms_of_service ||
@@ -511,17 +564,28 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
               {!isPage && <div className="mb-8">{renderProfileCard()}</div>}
 
               <div className="space-y-6">
-                {/* 2. THUMBNAIL (WITH 1 WRENCH ICON OVERLAID ON SKILLS) */}
+                {/* 2. THUMBNAIL */}
                 <section>
-                  <div className="w-full h-64 sm:h-80 md:h-96 rounded-2xl overflow-hidden bg-gray-100 dark:bg-white/5 relative border border-gray-200 dark:border-white/10 group">
-                    <img src={gig.thumbnail} alt={gig.title} className="w-full h-full object-cover" />
+                  <div
+                    onClick={() => {
+                      if (gig.thumbnail) setActiveLightboxImg(gig.thumbnail);
+                    }}
+                    className="w-full h-64 sm:h-80 md:h-96 rounded-2xl overflow-hidden bg-gray-100 dark:bg-white/5 relative border border-gray-200 dark:border-white/10 group cursor-pointer"
+                  >
+                    <img src={gig.thumbnail} alt={gig.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" />
 
                     {/* Bottom Gradient Scrim */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
 
+                    {/* Expand Badge Overlay */}
+                    <div className="absolute top-4 right-4 z-10 p-2 rounded-xl bg-black/50 backdrop-blur-md text-white/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[11px] font-bold">
+                      <ZoomIn className="h-4 w-4" />
+                      <span>Expand</span>
+                    </div>
+
                     {/* Skills Overlay with single Wrench Icon */}
                     {gig.skills && gig.skills.length > 0 && (
-                      <div className="absolute bottom-4 left-4 right-4 z-10">
+                      <div className="absolute bottom-4 left-4 right-4 z-10" onClick={(e) => e.stopPropagation()}>
                         <div className="flex flex-wrap gap-2 items-center">
                           <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-black/60 backdrop-blur-md border border-white/15 text-zinc-300 shadow-sm shrink-0">
                             <Wrench className="h-3.5 w-3.5" />
@@ -543,13 +607,29 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                 {/* 3. SUPPORTING IMAGES */}
                 {gig.gallery && gig.gallery.length > 0 && (
                   <section>
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400 mb-2">
-                      Supporting Images
-                    </h3>
-                    <div className="flex gap-2.5 overflow-x-auto thin-gallery-scrollbar pb-2.5 snap-x">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-zinc-400">
+                        Supporting Images ({gig.gallery.length})
+                      </h3>
+                      <span className="text-[10px] text-gray-400 dark:text-zinc-500 hidden sm:inline">
+                        Click to expand
+                      </span>
+                    </div>
+                    <div className="flex gap-3 overflow-x-auto thin-gallery-scrollbar pb-3 snap-x">
                       {gig.gallery.map((img, idx) => (
-                        <div key={idx} className="h-24 sm:h-32 min-w-[35%] sm:min-w-[28%] shrink-0 rounded-xl overflow-hidden snap-center relative bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10">
-                          <img src={img} alt={`Gallery ${idx}`} className="h-full w-full object-cover" />
+                        <div
+                          key={idx}
+                          onClick={() => setActiveLightboxImg(img)}
+                          className="group relative h-28 sm:h-36 min-w-[40%] sm:min-w-[30%] shrink-0 rounded-2xl overflow-hidden snap-center bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 cursor-pointer shadow-sm hover:shadow-lg transition-all"
+                        >
+                          <img
+                            src={img}
+                            alt={`Gallery ${idx}`}
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 pointer-events-none"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white backdrop-blur-[1px]">
+                            <ZoomIn className="h-5 w-5" />
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -711,21 +791,97 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
 
       </div>
 
-      {/* Embedded Thin Scrollbar Styling */}
+      {/* ==================== EXPANDED LIGHTBOX PREVIEW MODAL ==================== */}
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {activeLightboxImg && (
+            <div className="fixed inset-0 z-[300000] flex items-center justify-center p-4 md:p-8">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setActiveLightboxImg(null)}
+                className="absolute inset-0 bg-black/90 backdrop-blur-md cursor-pointer"
+                aria-label="Close modal backdrop"
+              />
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setActiveLightboxImg(null)}
+                className="absolute top-4 right-4 z-50 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                title="Close (Esc)"
+              >
+                <X className="h-6 w-6" />
+              </button>
+
+              {/* Navigation Arrows */}
+              {allImages.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handlePrevLightbox}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                    title="Previous Image"
+                  >
+                    <ChevronLeft className="h-6 w-6" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNextLightbox}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 z-50 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                    title="Next Image"
+                  >
+                    <ChevronRight className="h-6 w-6" />
+                  </button>
+                </>
+              )}
+
+              {/* Image Presentation */}
+              <motion.div
+                key={activeLightboxImg}
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.92 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                className="relative max-w-5xl max-h-[85vh] w-full flex items-center justify-center z-10 pointer-events-none"
+              >
+                <img
+                  src={activeLightboxImg}
+                  alt="Enlarged gallery preview"
+                  className="max-h-[85vh] max-w-full rounded-2xl object-contain shadow-2xl ring-1 ring-white/10 pointer-events-auto"
+                />
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* Embedded Thin Scrollbar Styling with Smooth Expand-on-Hover */}
       <style>{`
+        .thin-gallery-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(255, 255, 255, 0.25) rgba(255, 255, 255, 0.03);
+        }
         .thin-gallery-scrollbar::-webkit-scrollbar {
-          height: 4px;
+          height: 6px;
+          transition: height 0.2s ease-in-out;
+        }
+        .thin-gallery-scrollbar:hover::-webkit-scrollbar {
+          height: 12px;
         }
         .thin-gallery-scrollbar::-webkit-scrollbar-track {
           background: rgba(255, 255, 255, 0.03);
           border-radius: 9999px;
         }
         .thin-gallery-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.2);
+          background: rgba(255, 255, 255, 0.25);
           border-radius: 9999px;
+          transition: background 0.2s ease-in-out;
         }
         .thin-gallery-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.35);
+          background: rgba(255, 255, 255, 0.45);
         }
       `}</style>
 
