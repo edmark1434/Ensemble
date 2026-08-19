@@ -5,11 +5,9 @@ const {
     getActivePaymentSessions,
     updatePaymentByReference,
     updateTopUpStatus,
-    updateWalletFromTopUp,
     updatePaymentMethodStatus,
-    updatePlatformWalletBalance,
-    getPlatformWallet,
-    createCreditTransaction 
+    settleSuccessfulTopUp,
+    getPaidTopUpsMissingTransactions,
 } = require("../repositories/PaymentRepositories");
 
 const {
@@ -24,8 +22,6 @@ const {
 const {
     createNotification
 } = require("../repositories/NotificationRepositories");
-const { CREDIT_TRANSACTION_TYPE } = require("./CreditTransactionEnums");
-
 const {getIo} = require('../lib/WebSocket');
 const { reconcileCashoutsServices } = require('../services/CashoutServices');
 const { cleanupExpiredOnboardingAvatars } = require('../services/OnboardingServices');
@@ -181,6 +177,24 @@ async function reconcilePayment(payment) {
                 return;
         }
 
+        if (payment.payment_type === "TOPUP" && status === "PAID") {
+            const settlement = await settleSuccessfulTopUp(payment.reference_id, paymentRequest);
+            if (settlement.requiresRepair) {
+                console.error(`Paid top-up ${payment.reference_id} is missing its credit ledger and requires audited repair; wallet was not credited again.`);
+                return;
+            }
+            if (!settlement.alreadySettled) {
+                io.to(String(settlement.accountId)).emit("notification", settlement.notification);
+                io.to(String(settlement.accountId)).emit("walletBalanceUpdated", {
+                    balanceCredits: settlement.walletBalance,
+                });
+                savePaymentMethod(paymentRequest).catch((error) => {
+                    console.error(`Failed to save payment method for ${payment.reference_id}:`, error.message);
+                });
+            }
+            return;
+        }
+
         if (status !== payment.status) {
             await updatePaymentByReference(payment.reference_id, {
                 status,
@@ -204,47 +218,13 @@ async function reconcilePayment(payment) {
                     paymentRequest.channel_code ?? payment.channel_code
             };
 
-            const result = await updateTopUpStatus(
+            await updateTopUpStatus(
                 payment.reference_id,
                 status,
                 payload.payment_id,
                 payload.channel_code
             );
 
-            if (
-                payment.payment_type === "TOPUP" &&
-                status === "PAID"
-            ) {
-                const userWallet = await updateWalletFromTopUp(
-                    payment.user_id,
-                    result.credits_granted
-                );
-                await savePaymentMethod(paymentRequest);
-                const getPlatformWalletDetails = await getPlatformWallet();
-
-                const userTransaction = await createCreditTransaction({
-                    type: CREDIT_TRANSACTION_TYPE.FUND_TRANSFER,
-                    amount_credits: result.credits_granted,
-                    status: "completed",
-                    source_wallet_id: getPlatformWalletDetails.wallet_id,
-                    destination_wallet_id: userWallet.wallet_id,
-                    fee_transaction_id: null,
-                    reference_table: "payments",
-                    reference_id: payment.reference_id
-                });
-                await updatePlatformWalletBalance(result.credits_granted, 'add');
-                const notification = await createNotification({
-                    message: `Your wallet has been credited with ${result.credits_granted} credits.`,
-                    is_read: false,
-                    reference_table: "credit_transactions",
-                    reference_prefix: "TOPUP",
-                    reference_path: `${payment.redirect_url || payment.payment_link_url || `${process.env.FRONTEND_URL}/transactions`}`,
-                    reference_id: userTransaction.credit_transaction_id,
-                    user_id: payment.user_id
-                });
-                const io = getIo();
-                io.to(notification.account_id).emit("notification", notification);
-            }
         }
     } catch (err) {
         console.error("Reconciliation error details:",err);
@@ -253,6 +233,11 @@ async function reconcilePayment(payment) {
 
 async function reconcilePendingPayments() {
     const payments = await getActivePaymentSessions();
+
+    const incompletePaidTopUps = await getPaidTopUpsMissingTransactions();
+    for (const topUp of incompletePaidTopUps) {
+        console.error(`Paid top-up ${topUp.reference_id} has no credit transaction and requires audited repair; no wallet mutation was attempted.`);
+    }
 
     if (!payments.length) {
         console.log("No pending payments.");

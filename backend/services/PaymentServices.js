@@ -9,7 +9,6 @@ const {
     getPaymentByReferenceId,
     updatePaymentByReference,
     updateTopUpStatus,
-    updateWalletFromTopUp,
     createTopUpPaymentSession,
     createSubscriptionPayment,
     getPaymentCheckOutByPayload,
@@ -19,11 +18,8 @@ const {
     paymentMethodExists,
     getAllPaymentMethodsByUserId,
     updatePaymentMethodStatus,
-    getPlatformWallet,
-    createCreditTransaction,
-    updatePlatformWalletBalance,
+    settleSuccessfulTopUp,
 } = require("../repositories/PaymentRepositories");
-const { CREDIT_TRANSACTION_TYPE } = require("../lib/CreditTransactionEnums");
 const {
     getSubcriptionByUserIdRepositories,
     getPlandetailsByPlanIdRepositories,
@@ -243,73 +239,25 @@ async function xenditWebhookHandler(req, res) {
             return res.sendStatus(200);
         }
 
-        if (payment.status === "PAID") {
-            return res.status(200).json({
-                message: "Already processed."
-            });
-        }
-
         if (data.status === "SUCCEEDED") {
-
-            await pool.query("BEGIN");
-
-            try {
-                const getPlatformWalletDetails = await getPlatformWallet();
-                await savePaymentMethod(data);
-                await updatePaymentByReference(payment.reference_id, {
-                    status: "PAID",
-                    payment_id: data.payment_id,
-                    payment_request_id: data.payment_request_id,
-                    processed_at: new Date(),
-                    channel_code: data.channel_code
-                });
-
-                const result =
-                    await updateTopUpStatus(
-                        payment.reference_id,
-                        "PAID",
-                        data.payment_id,
-                        data.channel_code
-                    );
-                
-                const userWallet = await updateWalletFromTopUp(
-                    payment.user_id,
-                    result.credits_granted
-                );
-                const userTransaction = await createCreditTransaction({
-                    type: CREDIT_TRANSACTION_TYPE.FUND_TRANSFER,
-                    amount_credits: result.credits_granted,
-                    status: "completed",
-                    source_wallet_id: getPlatformWalletDetails.wallet_id,
-                    destination_wallet_id: userWallet.wallet_id,
-                    fee_transaction_id: null,
-                    reference_table: "payments",
-                    reference_id: payment.payment_id
-                });
-                await updatePlatformWalletBalance(result.credits_granted, 'add');
-                const notification = await createNotification({
-                    message: `Your wallet has been credited with ${result.credits_granted} credits.`,
-                    is_read: false,
-                    reference_table: "credit_transactions",
-                    reference_prefix: "TOPUP",
-                    reference_path: `${payment.redirect_url || `${process.env.FRONTEND_URL}/transactions`}`,
-                    reference_id: userTransaction.credit_transaction_id,
-                    user_id: payment.user_id,
-                });
-                const io = getIo();
-                io.to(notification.account_id).emit("notification", notification);
-                await pool.query("COMMIT");
-
-                return res.status(200).json({
-                    message: "Payment processed."
-                });
-
-            } catch (err) {
-
-                await pool.query("ROLLBACK");
-                throw err;
+            const settlement = await settleSuccessfulTopUp(payment.reference_id, data);
+            if (settlement.requiresRepair) {
+                console.error(`Paid top-up ${payment.reference_id} is missing its credit ledger and requires audited repair; wallet was not credited again.`);
+                return res.status(200).json({ message: "Payment requires ledger repair." });
             }
-
+            if (!settlement.alreadySettled) {
+                const io = getIo();
+                io.to(String(settlement.accountId)).emit("notification", settlement.notification);
+                io.to(String(settlement.accountId)).emit("walletBalanceUpdated", {
+                    balanceCredits: settlement.walletBalance,
+                });
+                savePaymentMethod(data).catch((error) => {
+                    console.error(`Failed to save payment method for ${payment.reference_id}:`, error.message);
+                });
+            }
+            return res.status(200).json({
+                message: settlement.alreadySettled ? "Already processed." : "Payment processed."
+            });
         } else if (
             data.status === "FAILED" ||
             data.status === "EXPIRED"

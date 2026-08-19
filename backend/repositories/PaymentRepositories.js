@@ -494,6 +494,227 @@ async function createCreditTransaction(data) {
     }
 }
 
+async function settleSuccessfulTopUp(referenceId, provider = {}) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const paymentResult = await client.query(`
+            SELECT p.*, t.credits_granted
+            FROM payments p
+            INNER JOIN topups t ON t.topup_id = p.reference_id
+            WHERE p.reference_id = $1 AND p.payment_type = 'TOPUP'
+            FOR UPDATE OF p, t
+        `, [referenceId]);
+        const payment = paymentResult.rows[0];
+        if (!payment) throw new Error(`Top-up payment not found: ${referenceId}`);
+
+        const existingResult = await client.query(`
+            SELECT * FROM credit_transactions
+            WHERE reference_table = 'payments'
+              AND reference_id = $1
+              AND type = 'Fund Transfer'
+            LIMIT 1
+        `, [payment.id]);
+        if (existingResult.rows[0]) {
+            await client.query('COMMIT');
+            return { alreadySettled: true, payment, transaction: existingResult.rows[0], notification: null };
+        }
+
+        // A legacy partial settlement may already have credited the wallet. Never
+        // guess and credit it again; surface it for an explicit audited repair.
+        if (payment.status === 'PAID') {
+            await client.query('ROLLBACK');
+            return { alreadySettled: false, requiresRepair: true, payment };
+        }
+
+        const platformWalletResult = await client.query(`
+            SELECT wallet_id, status FROM wallets
+            WHERE type = 'platform wallets'
+            LIMIT 1
+            FOR UPDATE
+        `);
+        const userWalletResult = await client.query(`
+            SELECT w.wallet_id, w.status
+            FROM wallets w
+            INNER JOIN account_wallets aw ON aw.wallet_id = w.wallet_id
+            INNER JOIN users u ON u.account_id = aw.account_id
+            WHERE u.user_id = $1 AND w.type = 'account wallets'
+            LIMIT 1
+            FOR UPDATE OF w
+        `, [payment.user_id]);
+        const platformWallet = platformWalletResult.rows[0];
+        const userWallet = userWalletResult.rows[0];
+        if (!platformWallet || !userWallet) throw new Error('Top-up wallet is not configured');
+        if (String(platformWallet.status).toLowerCase() !== 'active' || String(userWallet.status).toLowerCase() !== 'active') {
+            throw new Error('Top-up wallet is inactive');
+        }
+
+        const paymentId = provider.payment_id ?? provider.latest_payment_id ?? payment.payment_id ?? null;
+        const channelCode = provider.channel_code ?? payment.channel_code ?? null;
+        await client.query(`
+            UPDATE payments
+            SET status = 'PAID', payment_id = COALESCE($2, payment_id),
+                payment_request_id = COALESCE($3, payment_request_id),
+                channel_code = COALESCE($4, channel_code), processed_at = NOW(), updated_at = NOW()
+            WHERE reference_id = $1
+        `, [referenceId, paymentId, provider.payment_request_id ?? null, channelCode]);
+        await client.query(`
+            UPDATE topups
+            SET status = 'PAID', xendit_payment_id = COALESCE($2, xendit_payment_id),
+                xendit_channel_code = COALESCE($3, xendit_channel_code)
+            WHERE topup_id = $1
+        `, [referenceId, paymentId, channelCode]);
+        const updatedWallet = (await client.query(`
+            UPDATE wallets SET balance_credits = balance_credits + $1 WHERE wallet_id = $2
+            RETURNING balance_credits
+        `, [payment.credits_granted, userWallet.wallet_id])).rows[0];
+
+        const transaction = (await client.query(`
+            INSERT INTO credit_transactions (
+                type, amount_credits, status, source_wallet_id, destination_wallet_id,
+                fee_transaction_id, reference_table, reference_id
+            ) VALUES ('Fund Transfer', $1, 'completed', $2, $3, NULL, 'payments', $4)
+            RETURNING *
+        `, [payment.credits_granted, platformWallet.wallet_id, userWallet.wallet_id, payment.id])).rows[0];
+
+        const accountId = (await client.query(
+            'SELECT account_id FROM users WHERE user_id = $1',
+            [payment.user_id]
+        )).rows[0]?.account_id;
+        if (!accountId) throw new Error('Top-up account not found');
+        const notification = (await client.query(`
+            INSERT INTO notifications (
+                message, is_read, reference_table, reference_prefix,
+                reference_path, reference_id, account_id
+            ) VALUES ($1, false, 'credit_transactions', 'TOPUP', $2, $3, $4)
+            RETURNING *
+        `, [
+            `Your wallet has been credited with ${payment.credits_granted} credits.`,
+            payment.redirect_url || `${process.env.FRONTEND_URL}/transactions`,
+            transaction.credit_transaction_id,
+            accountId,
+        ])).rows[0];
+
+        await client.query('COMMIT');
+        return {
+            alreadySettled: false,
+            requiresRepair: false,
+            payment: { ...payment, status: 'PAID' },
+            transaction,
+            notification,
+            accountId,
+            balanceDelta: Number(payment.credits_granted),
+            walletBalance: Number(updatedWallet.balance_credits),
+        };
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
+    }
+}
+
+async function getPaidTopUpsMissingTransactions(limit = 100) {
+    const result = await pool.query(`
+        SELECT p.id, p.reference_id, p.user_id, p.credits, p.processed_at
+        FROM payments p
+        INNER JOIN topups t ON t.topup_id = p.reference_id
+        WHERE p.payment_type = 'TOPUP'
+          AND p.status = 'PAID'
+          AND t.status = 'PAID'
+          AND NOT EXISTS (
+              SELECT 1 FROM credit_transactions ct
+              WHERE ct.reference_table = 'payments'
+                AND ct.reference_id = p.id
+                AND ct.type = 'Fund Transfer'
+          )
+        ORDER BY p.processed_at ASC NULLS FIRST
+        LIMIT $1
+    `, [limit]);
+    return result.rows;
+}
+
+async function repairPaidTopUpArtifacts(referenceId) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const payment = (await client.query(`
+            SELECT p.*, t.credits_granted
+            FROM payments p
+            INNER JOIN topups t ON t.topup_id = p.reference_id
+            WHERE p.reference_id = $1
+              AND p.payment_type = 'TOPUP'
+              AND p.status = 'PAID'
+              AND t.status = 'PAID'
+            FOR UPDATE OF p, t
+        `, [referenceId])).rows[0];
+        if (!payment) throw new Error(`Paid top-up not found: ${referenceId}`);
+
+        const existing = (await client.query(`
+            SELECT * FROM credit_transactions
+            WHERE reference_table = 'payments'
+              AND reference_id = $1
+              AND type = 'Fund Transfer'
+            LIMIT 1
+        `, [payment.id])).rows[0];
+        if (existing) {
+            await client.query('COMMIT');
+            return { repaired: false, transaction: existing, notification: null };
+        }
+
+        const platformWallet = (await client.query(`
+            SELECT wallet_id FROM wallets WHERE type = 'platform wallets' LIMIT 1
+        `)).rows[0];
+        const destination = (await client.query(`
+            SELECT w.wallet_id, u.account_id
+            FROM users u
+            INNER JOIN account_wallets aw ON aw.account_id = u.account_id
+            INNER JOIN wallets w ON w.wallet_id = aw.wallet_id
+            WHERE u.user_id = $1 AND w.type = 'account wallets'
+            LIMIT 1
+        `, [payment.user_id])).rows[0];
+        if (!platformWallet || !destination) throw new Error('Top-up wallet is not configured');
+
+        // This repair deliberately does not mutate either wallet. It is only for
+        // a top-up whose wallet credit was independently confirmed beforehand.
+        const transaction = (await client.query(`
+            INSERT INTO credit_transactions (
+                type, amount_credits, status, source_wallet_id, destination_wallet_id,
+                fee_transaction_id, reference_table, reference_id, created_at
+            ) VALUES ('Fund Transfer', $1, 'completed', $2, $3, NULL, 'payments', $4,
+                      COALESCE($5, NOW()))
+            RETURNING *
+        `, [
+            payment.credits_granted,
+            platformWallet.wallet_id,
+            destination.wallet_id,
+            payment.id,
+            payment.processed_at,
+        ])).rows[0];
+        const notification = (await client.query(`
+            INSERT INTO notifications (
+                message, is_read, reference_table, reference_prefix,
+                reference_path, reference_id, account_id
+            ) VALUES ($1, false, 'credit_transactions', 'TOPUP', $2, $3, $4)
+            RETURNING *
+        `, [
+            `Your wallet has been credited with ${payment.credits_granted} credits.`,
+            payment.redirect_url || `${process.env.FRONTEND_URL}/transactions`,
+            transaction.credit_transaction_id,
+            destination.account_id,
+        ])).rows[0];
+
+        await client.query('COMMIT');
+        return { repaired: true, transaction, notification };
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
+    }
+}
+
 
 module.exports = {
     createPaymentMethod,
@@ -516,4 +737,7 @@ module.exports = {
     getPlatformWallet,
     updatePlatformWalletBalance,
     createCreditTransaction,
+    settleSuccessfulTopUp,
+    getPaidTopUpsMissingTransactions,
+    repairPaidTopUpArtifacts,
 };
