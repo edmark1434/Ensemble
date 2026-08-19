@@ -1,5 +1,28 @@
 # Current Task
 
+## Active Task — Atomic Top-up Settlement and Reconciliation
+
+Make successful credit top-ups atomic and idempotent across the Xendit webhook and payment reconciliation job. A successful top-up must update payment/top-up status, credit the user wallet, write exactly one `Fund Transfer` ledger row using the internal payment UUID, and persist exactly one notification in a single PostgreSQL transaction. Realtime events must be emitted only after commit. Already-paid top-ups missing ledger artifacts must be detected without automatically crediting their wallets again.
+
+### Acceptance Criteria
+
+* [x] Webhook and background reconciliation share one durable settlement operation.
+* [x] `credit_transactions.reference_id` uses `payments.id`, not the external `TOPUP-*` reference.
+* [x] Payment status, top-up status, wallet mutation, ledger insert, and notification commit atomically.
+* [x] Concurrent/repeated provider events cannot credit a wallet twice.
+* [x] Realtime notification and wallet events emit only after commit.
+* [x] Paid top-ups missing ledger artifacts are reported for safe repair without another wallet credit.
+* [x] A focused database migration adds the required idempotency constraint.
+* [x] Backend syntax and focused behavior checks pass.
+
+**Status:** Completed August 19, 2026.
+
+**Implementation summary:** Added a single-client PostgreSQL settlement operation shared by the Xendit webhook and reconciliation job. It locks the payment/top-up and wallets, uses the internal payment UUID for the ledger reference, credits the user wallet, persists one ledger row and notification, and commits before emitting realtime notification/wallet events. A partial unique index prevents duplicate top-up ledger entries. Reconciliation reports legacy paid top-ups missing ledger records without guessing whether to credit their wallets. Added an explicit artifact-only repair operation for independently confirmed wallet credits.
+
+**Repair performed:** Repaired the real 1,600-credit top-up `TOPUP-2654caff-b903-45fc-9651-2d828532bdc0` by inserting its missing ledger and notification records. The repair did not change the wallet balance. Two unrelated seed top-ups with missing ledgers were detected and intentionally left unchanged.
+
+**Verification:** Applied migration 137, confirmed the repaired payment/top-up remain `PAID`, and confirmed exactly one matching credit transaction and one notification. Backend syntax checks and `git diff --check` passed.
+
 ## Active Follow-up — Asset Previews, Likes, Saves, and Buyer Reviews
 
 Provide one safe public derivative preview for every file in an asset package. Package Contents must render these previews blurred for users who do not own the package and without a lock replacement; full-quality originals remain available only through the existing authorized signed-URL endpoints after purchase or to the creator. Add durable asset likes and saves, including authenticated idempotent API actions, counts/state in asset responses, and a Saved library view. Add `asset_reviews` so each active purchaser can submit at most one 1–5 star review, update or delete their own review, and non-purchasers/creators cannot review. Keep the controller → service → repository boundary and change only marketplace-asset schema and feature files.
