@@ -64,8 +64,21 @@ const GigMain: React.FC = () => {
               return `${cloudFrontUrl}${path.startsWith('/') ? '' : '/'}${path}`;
             };
 
+            const creatorAccountId =
+              g.client_account_id ||
+              g.creator_account_id ||
+              g.account_id ||
+              g.accountId ||
+              g.user_id ||
+              g.userId ||
+              g.account?.account_id ||
+              g.creator?.account_id ||
+              g.user?.account_id ||
+              g.postedById;
+
             return {
               ...g,
+              client_account_id: creatorAccountId,
               thumbnail: mapUrl(g.thumbnail) || "https://d2dl0agwn9kque.cloudfront.net/gig_thumbnails/ede6f8d1-cc62-4afd-be9f-11f044d86122/placeholder_1787040672764_8a5d64b3.png",
               clientAvatar: g.clientAvatar ? `${cloudFrontUrl}${g.clientAvatar.startsWith('/') ? '' : '/'}${g.clientAvatar}` : undefined,
               gallery: (g.gallery || []).map((p: string) => mapUrl(p))
@@ -120,7 +133,6 @@ const GigMain: React.FC = () => {
       if (isSavedTab) return gig.isSaved;
       if (isMyServicesTab) return gig.isOwnGig;
 
-      // Default All Services tab: only show open services
       const isOpen = gig.status?.toLowerCase() === "open" || !gig.status;
       return isOpen;
     });

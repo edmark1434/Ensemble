@@ -33,6 +33,8 @@ export interface Milestone {
 
 export interface Gig {
   id: string;
+  client_account_id?: string;
+  creator_account_id?: string;
   postedBy: string;
   clientAvatar?: string;
   title: string;
@@ -49,7 +51,7 @@ export interface Gig {
   tiers: GigTier[];
   additionalWorkRate: number;
   questionnaires: Questionnaire[];
-  
+
   // UI helpers (similar to Jobs)
   postedAt: string;
   timeAgo: string;

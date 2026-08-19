@@ -1,9 +1,7 @@
 import React, { useState } from "react";
-import { Clock, Users, Star, Send, MousePointerClick, User, FileText, PlayCircle, MapPin, Tag, Box, Layers, Bookmark, Edit2, ShoppingCart, Flag } from "lucide-react";
+import { Clock, Users, Star, MousePointerClick, User, PlayCircle, Bookmark, Edit2, ShoppingCart } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Gig } from "../gig_datasets";
-import { AnimatePresence, motion } from "framer-motion";
-import SuccessModal from "@/components/ui/SuccessModal";
 import { CreditIcon } from "@/components/ui/credit-icon";
 
 interface GigViewDetailsProps {
@@ -13,7 +11,7 @@ interface GigViewDetailsProps {
   onToggleSave?: (gigId: string) => void;
 }
 
-const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, onReportGig, onToggleSave }) => {
+const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, onToggleSave }) => {
   const navigate = useNavigate();
   const [activeTierIdx, setActiveTierIdx] = useState(0);
 
@@ -28,8 +26,25 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
 
     if (selectedGig.isOwnGig) {
       navigate("/profile");
+      return;
+    }
+
+    const creatorId =
+      selectedGig.client_account_id ||
+      selectedGig.creator_account_id ||
+      selectedGig.freelancerAccountId ||
+      (selectedGig as any).account_id ||
+      (selectedGig as any).accountId ||
+      (selectedGig as any).user_id ||
+      (selectedGig as any).userId ||
+      (selectedGig as any).account?.account_id ||
+      (selectedGig as any).creator?.account_id ||
+      (selectedGig as any).user?.account_id;
+
+    if (creatorId) {
+      navigate(`/profile/${creatorId}`);
     } else {
-      navigate(`/profile/${selectedGig.client_account_id || selectedGig.creator_account_id || selectedGig.postedBy}`);
+      console.warn("Could not find creator account ID on gig object:", selectedGig);
     }
   };
 
@@ -145,7 +160,6 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                       ))}
                     </div>
                     <div className="p-4">
-                      {/* Title & Price stacked vertically */}
                       <div className="mb-2">
                         <h4 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
                           {activeTier.title}
@@ -304,6 +318,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 </div>
 
                 <button
+                  type="button"
                   onClick={handleViewProfile}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
                 >
