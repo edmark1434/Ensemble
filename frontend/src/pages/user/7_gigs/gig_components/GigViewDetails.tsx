@@ -25,7 +25,12 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
 
   const handleViewProfile = () => {
     if (!selectedGig) return;
-    navigate(`/profile/${selectedGig.postedBy}`); // Placeholder logic
+
+    if (selectedGig.isOwnGig) {
+      navigate("/profile");
+    } else {
+      navigate(`/profile/${selectedGig.client_account_id || selectedGig.creator_account_id || selectedGig.postedBy}`);
+    }
   };
 
   return (
@@ -58,7 +63,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 className="w-full h-full object-cover opacity-60"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dark-surface via-transparent to-transparent" />
-              
+
               {onToggleSave && (
                 <button
                   title="Save Gig"
@@ -140,7 +145,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                         <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier.price?.toLocaleString()}</span>
                       </div>
                       <p className="text-xs text-gray-600 dark:text-zinc-400 mb-4">{activeTier.description}</p>
-                      
+
                       <div className="flex items-center gap-4 text-[11px] font-medium text-gray-700 dark:text-zinc-300">
                         <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-gray-400" /> {activeTier.daysOfDelivery} Days Delivery</span>
                         <span className="flex items-center gap-1.5"><PlayCircle className="h-3.5 w-3.5 text-gray-400" /> {activeTier.revisions} Revisions</span>
@@ -155,10 +160,10 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400">
                   About This Service
                 </h4>
-                  <div 
-                    className="bg-white/[0.01] border border-gray-100 dark:border-white/5 p-3.5 rounded-xl text-[13px] text-gray-600 dark:text-zinc-300 leading-relaxed max-w-none prose prose-sm dark:prose-invert"
-                    dangerouslySetInnerHTML={{ __html: selectedGig.description.replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>") }}
-                  />
+                <div
+                  className="bg-white/[0.01] border border-gray-100 dark:border-white/5 p-3.5 rounded-xl text-[13px] text-gray-600 dark:text-zinc-300 leading-relaxed max-w-none prose prose-sm dark:prose-invert"
+                  dangerouslySetInnerHTML={{ __html: selectedGig.description.replace(/\n/g, "<br/>").replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\*(.*?)\*/g, "<em>$1</em>") }}
+                />
               </div>
 
               {/* Skills Applied */}
@@ -188,6 +193,31 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                   </h4>
                   <div className="bg-white/[0.01] border border-gray-100 dark:border-white/5 p-3.5 rounded-xl text-[13px] text-gray-600 dark:text-zinc-300 leading-relaxed whitespace-pre-line">
                     {selectedGig.termsOfService}
+                  </div>
+                </div>
+              )}
+
+              {/* Milestones */}
+              {selectedGig.milestones && selectedGig.milestones.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400">
+                    Project Milestones
+                  </h4>
+                  <div className="space-y-3 bg-white/[0.01] border border-gray-100 dark:border-white/5 p-3.5 rounded-xl">
+                    {selectedGig.milestones.map((m, idx) => (
+                      <div key={idx} className="flex gap-3">
+                        <div className="flex flex-col items-center mt-0.5">
+                          <div className="h-5 w-5 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-[10px]">
+                            {idx + 1}
+                          </div>
+                          {idx < selectedGig.milestones.length - 1 && <div className="w-[1.5px] h-full bg-gray-200 dark:bg-white/10 mt-1" />}
+                        </div>
+                        <div className="pb-2">
+                          <h4 className="font-bold text-gray-900 dark:text-white text-[13px]">{m.name}</h4>
+                          <p className="text-[11px] text-gray-600 dark:text-zinc-400 mt-0.5">{m.description}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -232,34 +262,12 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                   </div>
                 </div>
               )}
+            </div>
 
-              {/* Milestones */}
-              {selectedGig.milestones && selectedGig.milestones.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="text-[10px] uppercase font-bold tracking-wider text-gray-500 dark:text-zinc-400">
-                    Project Milestones
-                  </h4>
-                  <div className="space-y-3 bg-white/[0.01] border border-gray-100 dark:border-white/5 p-3.5 rounded-xl">
-                    {selectedGig.milestones.map((m, idx) => (
-                      <div key={idx} className="flex gap-3">
-                        <div className="flex flex-col items-center mt-0.5">
-                          <div className="h-5 w-5 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-[10px]">
-                            {idx + 1}
-                          </div>
-                          {idx < selectedGig.milestones.length - 1 && <div className="w-[1.5px] h-full bg-gray-200 dark:bg-white/10 mt-1" />}
-                        </div>
-                        <div className="pb-2">
-                          <h4 className="font-bold text-gray-900 dark:text-white text-[13px]">{m.name}</h4>
-                          <p className="text-[11px] text-gray-600 dark:text-zinc-400 mt-0.5">{m.description}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Client Profile Card */}
-              <div className="p-3.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] flex items-center justify-between gap-3">
+            {/* Sticky Action Footer */}
+            <div className="p-4 border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shrink-0 space-y-3">
+              {/* Creator Profile Card */}
+              <div className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
                   {selectedGig.clientAvatar ? (
                     <img src={selectedGig.clientAvatar} alt="" className="h-8 w-8 rounded-full object-cover border border-gray-200 dark:border-white/10 shrink-0" />
@@ -292,10 +300,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                   <span>View Profile</span>
                 </button>
               </div>
-            </div>
 
-            {/* Sticky Action Footer */}
-            <div className="p-4 border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shrink-0 space-y-3">
               {selectedGig.isOwnGig ? (
                 <div className="flex items-center gap-2">
                   <button
