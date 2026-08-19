@@ -98,36 +98,42 @@ async function createGigRepository(gigData) {
             }
         }
         
-        // 5. Insert Requirements (Questionnaires)
-        if (gigData.questionnaires && gigData.questionnaires.length > 0) {
-            const reqQuery = `
-                INSERT INTO gig_requirements (
-                    gig_id, type, question, is_required
-                ) VALUES ($1, $2, $3, $4) RETURNING gig_requirement_id;
+// 5. Insert Requirements (Questionnaires)
+if (gigData.questionnaires && gigData.questionnaires.length > 0) {
+    const reqQuery = `
+        INSERT INTO gig_requirements (
+            gig_id, type, question, is_required, multiple_answer, file_limit, file_types
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING gig_requirement_id;
+    `;
+    for (let i = 0; i < gigData.questionnaires.length; i++) {
+        const q = gigData.questionnaires[i];
+        let type = 'text';
+        if (q.type === 'Multiple Choice' || q.type === 'choice' || q.type === 'multiple-choice' || q.type === 'multiple_choice') type = 'choice';
+        if (q.type === 'Attachment' || q.type === 'file' || q.type === 'file-upload' || q.type === 'attachment') type = 'file';
+
+        const reqRes = await client.query(reqQuery, [
+            gigId,
+            type,
+            q.question,
+            q.isRequired ? true : false,
+            q.multipleAnswer || false,
+            q.fileLimit || null,
+            JSON.stringify(q.fileTypes || [])
+        ]);
+
+        const reqId = reqRes.rows[0].gig_requirement_id;
+
+        if ((type === 'choice' || type === 'multiple_choice') && q.options && q.options.length > 0) {
+            const choiceQuery = `
+                INSERT INTO gig_requirement_choices (gig_requirement_id, name)
+                VALUES ($1, $2)
             `;
-            for (let i = 0; i < gigData.questionnaires.length; i++) {
-                const q = gigData.questionnaires[i];
-                let type = 'text';
-                if (q.type === 'Multiple Choice' || q.type === 'choice' || q.type === 'multiple-choice' || q.type === 'multiple_choice') type = 'choice';
-                if (q.type === 'Attachment' || q.type === 'file' || q.type === 'file-upload' || q.type === 'attachment') type = 'file';
-                
-                const reqRes = await client.query(reqQuery, [
-                    gigId, type, q.question, q.isRequired, q.multipleAnswer || false, q.fileLimit || null, JSON.stringify(q.fileTypes || [])
-                ]);
-                
-                const reqId = reqRes.rows[0].gig_requirement_id;
-                
-                if (type === 'multiple_choice' && q.options) {
-                    const choiceQuery = `
-                        INSERT INTO gig_requirement_choices (gig_requirement_id, name)
-                        VALUES ($1, $2)
-                    `;
-                    for (let j = 0; j < q.options.length; j++) {
-                        await client.query(choiceQuery, [reqId, q.options[j]]);
-                    }
-                }
+            for (let j = 0; j < q.options.length; j++) {
+                await client.query(choiceQuery, [reqId, q.options[j]]);
             }
         }
+    }
+}
 
         // 6. Insert Attachments (Thumbnails/Gallery)
         if (gigData.thumbnailFileId) {

@@ -98,6 +98,11 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                     <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300">
                       {selectedGig.category}
                     </span>
+                    {selectedGig.tiers && selectedGig.tiers.length > 0 && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-800 dark:text-zinc-300">
+                        {selectedGig.tiers.length} Tiers
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -140,9 +145,15 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                       ))}
                     </div>
                     <div className="p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="text-sm font-bold text-gray-900 dark:text-white">{activeTier.title}</h4>
-                        <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier.price?.toLocaleString()}</span>
+                      {/* Title & Price stacked vertically */}
+                      <div className="mb-2">
+                        <h4 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
+                          {activeTier.title}
+                        </h4>
+                        <div className="mt-1 flex items-center gap-1.5 text-base font-black text-yellow-500">
+                          <CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />
+                          <span>{activeTier.price?.toLocaleString()}</span>
+                        </div>
                       </div>
                       <p className="text-xs text-gray-600 dark:text-zinc-400 mb-4">{activeTier.description}</p>
 
