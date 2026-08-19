@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { Clock, Users, Star, MousePointerClick, User, PlayCircle, Bookmark, Edit2, ShoppingCart } from "lucide-react";
+import { Clock, Users, Star, MousePointerClick, User, PlayCircle, Bookmark, Edit2, ShoppingCart, Flag } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Gig } from "../gig_datasets";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import PopupReportGig from "./PopupReportGig";
 
 interface GigViewDetailsProps {
   selectedGig: Gig | null;
@@ -11,9 +12,10 @@ interface GigViewDetailsProps {
   onToggleSave?: (gigId: string) => void;
 }
 
-const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, onToggleSave }) => {
+const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, onReportGig, onToggleSave }) => {
   const navigate = useNavigate();
   const [activeTierIdx, setActiveTierIdx] = useState(0);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
   const activeTier = selectedGig?.tiers[activeTierIdx];
 
@@ -45,6 +47,14 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
       navigate(`/profile/${creatorId}`);
     } else {
       console.warn("Could not find creator account ID on gig object:", selectedGig);
+    }
+  };
+
+  const handleTriggerReport = () => {
+    if (onReportGig && selectedGig) {
+      onReportGig(selectedGig);
+    } else {
+      setIsReportModalOpen(true);
     }
   };
 
@@ -119,6 +129,18 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                       </span>
                     )}
                   </div>
+
+                  {!selectedGig.isOwnGig && (
+                    <button
+                      type="button"
+                      title="Report Gig"
+                      onClick={handleTriggerReport}
+                      className="p-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-red-400 transition border border-gray-200 dark:border-white/10 flex items-center gap-1 text-xs"
+                    >
+                      <Flag className="h-3.5 w-3.5" />
+                      <span className="text-[10px] font-medium">Report</span>
+                    </button>
+                  )}
                 </div>
 
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white leading-snug mb-1">
@@ -320,7 +342,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 <button
                   type="button"
                   onClick={handleViewProfile}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
                 >
                   <User className="h-3.5 w-3.5 text-blue-400" />
                   <span>View Profile</span>
@@ -380,6 +402,16 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
           </>
         )}
       </div>
+
+      {/* Popup Report Modal */}
+      <PopupReportGig
+        isOpen={isReportModalOpen}
+        gigTitle={selectedGig?.title}
+        onClose={() => setIsReportModalOpen(false)}
+        onSubmitReport={(reason, details) => {
+          console.log("Report submitted for gig:", selectedGig?.id, reason, details);
+        }}
+      />
 
       <style>{`
         .thin-scrollbar::-webkit-scrollbar { width: 5px; }
