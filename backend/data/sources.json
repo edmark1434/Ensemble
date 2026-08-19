@@ -1,0 +1,21 @@
+[
+  { "category": "public", "name": "Frequently Asked Questions", "url": "/landing/FAQ", "file": "public/faq.md", "enabled": true },
+  { "category": "public", "name": "How to Hire", "url": "/landing/HowToHire", "file": "public/how-to-hire.md", "enabled": true },
+  { "category": "public", "name": "How to Work", "url": "/landing/HowToWork", "file": "public/how-to-work.md", "enabled": true },
+  { "category": "platform", "name": "About Ensemble", "url": "/landing/AboutUs", "file": "platform/about-and-features.md", "enabled": true },
+  { "category": "account", "name": "Account and Verification", "url": "/settings", "file": "account/account-and-verification.md", "enabled": true },
+  { "category": "collaboration", "name": "Collaboration Workspace", "url": "/projects", "file": "collaboration/collaboration.md", "enabled": true },
+  { "category": "communication", "name": "Chat, Inbox, Calls, and Meetings", "url": "/inbox/*", "file": "communication/chat-and-calls.md", "enabled": true },
+  { "category": "collaboration", "name": "Forums", "url": "/forums", "file": "collaboration/forums.md", "enabled": true },
+  { "category": "marketplace", "name": "Asset Marketplace", "url": "/assets", "file": "marketplace/assets.md", "enabled": true },
+  { "category": "work", "name": "Jobs, Proposals, Gigs, and Contracts", "url": "/jobs/postings", "file": "work/jobs-gigs-contracts.md", "enabled": true },
+  { "category": "payments", "name": "Credits and Transactions", "url": "/credits", "file": "payments/credits-and-transactions.md", "enabled": true },
+  { "category": "support", "name": "Support and Notifications", "url": "/landing/SubmitATicket", "file": "support/support.md", "enabled": true },
+  { "category": "support", "name": "Tickets, Purchases, and Reports", "url": "/landing/SubmitATicket", "file": "support/tickets-purchases-reports.md", "enabled": true },
+  { "category": "governance", "name": "Moderation, Violations, Reports, and Disputes", "url": "/admin/moderation", "file": "governance/moderation-and-violations.md", "enabled": true },
+  { "category": "operations", "name": "Administration", "url": "/admin/dashboard", "file": "operations/admin.md", "enabled": true },
+  { "category": "operations", "name": "Specialist Moderator Portals", "url": "/moderator/support", "file": "operations/moderator-portals.md", "enabled": true },
+  { "category": "legal", "name": "Legal Information", "url": "/landing/TermsOfService", "file": "legal/legal.md", "enabled": true },
+  { "category": "database", "name": "Current Platform Settings", "url": "/credits#current-platform-settings", "file": "generated/platform-settings.md", "enabled": true },
+  { "category": "database", "name": "Current Ensemble Plans", "url": "/credits-subscriptions#current-plans", "file": "generated/plans.md", "enabled": true }
+]

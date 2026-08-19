@@ -26,6 +26,7 @@ const cashoutRoutes = require('./Cashout');
 const onboardingRoutes = require('./Onboarding');
 const assetRoutes = require('./Asset');
 const gigRoutes = require('./Gig');
+const chatRoutes = require('./Chat');
 const requireCompletedOnboarding = require('../middleware/RequireCompletedOnboarding');
 const checkSession = require('../middleware/CheckSession');
 const { issueCsrfToken } = require('../middleware/CsrfProtection');
@@ -34,6 +35,7 @@ const { getAllCountriesController,
 } = require('../controllers/SystemControllers')
 
 router.get('/csrf-token', checkSession, issueCsrfToken);
+router.use('/chat', chatRoutes);
 router.use(requireCompletedOnboarding);
 router.use('/onboarding', onboardingRoutes);
 router.use('/inbox', inboxRoutes);

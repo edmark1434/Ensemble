@@ -1,1103 +1,1426 @@
-# Current Task
+# Current Task — Build Simple HTML Documentation RAG Backend
 
-## Active Task — Atomic Top-up Settlement and Reconciliation
+## Active Frontend Chatbot Redesign
 
-Make successful credit top-ups atomic and idempotent across the Xendit webhook and payment reconciliation job. A successful top-up must update payment/top-up status, credit the user wallet, write exactly one `Fund Transfer` ledger row using the internal payment UUID, and persist exactly one notification in a single PostgreSQL transaction. Realtime events must be emitted only after commit. Already-paid top-ups missing ledger artifacts must be detected without automatically crediting their wallets again.
+Refactor the public support chatbot so it matches Ensemble's landing-page theme while preserving the existing anonymous RAG API integration.
 
-### Acceptance Criteria
+Acceptance criteria:
 
-* [x] Webhook and background reconciliation share one durable settlement operation.
-* [x] `credit_transactions.reference_id` uses `payments.id`, not the external `TOPUP-*` reference.
-* [x] Payment status, top-up status, wallet mutation, ledger insert, and notification commit atomically.
-* [x] Concurrent/repeated provider events cannot credit a wallet twice.
-* [x] Realtime notification and wallet events emit only after commit.
-* [x] Paid top-ups missing ledger artifacts are reported for safe repair without another wallet credit.
-* [x] A focused database migration adds the required idempotency constraint.
-* [x] Backend syntax and focused behavior checks pass.
+* [x] Use the existing dark surfaces, blue accent, typography, borders, and spacing conventions without gradients.
+* [x] Provide a responsive chat workspace with quick questions, assistant status, reset, and guest-access guidance.
+* [x] Preserve conversation history, rate-limit/error feedback, loading state, and backend-verified inline links.
+* [x] Support an accessible multi-line composer with Enter to send and Shift+Enter for a new line.
+* [x] Pass focused frontend linting and the production build.
+* [x] Brand the assistant as Joeds AI using the Ensemble logo, including a reduced-motion-safe thinking animation.
 
-**Status:** Completed August 19, 2026.
+## Active Public Chatbot Integration and Hardening
 
-**Implementation summary:** Added a single-client PostgreSQL settlement operation shared by the Xendit webhook and reconciliation job. It locks the payment/top-up and wallets, uses the internal payment UUID for the ledger reference, credits the user wallet, persists one ledger row and notification, and commits before emitting realtime notification/wallet events. A partial unique index prevents duplicate top-up ledger entries. Reconciliation reports legacy paid top-ups missing ledger records without guessing whether to credit their wallets. Added an explicit artifact-only repair operation for independently confirmed wallet credits.
+Connect the landing-page chatbot to the documentation API and enforce public RAG safety controls on the backend.
 
-**Repair performed:** Repaired the real 1,600-credit top-up `TOPUP-2654caff-b903-45fc-9651-2d828532bdc0` by inserting its missing ledger and notification records. The repair did not change the wallet balance. Two unrelated seed top-ups with missing ledgers were detected and intentionally left unchanged.
+Acceptance criteria:
 
-**Verification:** Applied migration 137, confirmed the repaired payment/top-up remain `PAID`, and confirmed exactly one matching credit transaction and one notification. Backend syntax checks and `git diff --check` passed.
+* [x] Connect `page_AskOurChatbot.tsx` to `POST /api/chat` through the shared Axios client.
+* [x] Display loading, safe errors, answers, and backend-verified source links.
+* [x] Prevent duplicate/empty/overlength submissions in the UI and backend.
+* [x] Rate-limit the public chat endpoint with consistent JSON errors.
+* [x] Reject common prompt-injection and secret-exfiltration instructions before embedding or Claude calls.
+* [x] Exclude staff/admin/moderator documents before sending retrieval context to Claude.
+* [x] Refuse unrelated questions when public-document similarity is insufficient.
+* [x] Strengthen Claude instructions so retrieved content is treated as untrusted reference data.
+* [x] Pass focused backend checks and the frontend production build.
+* [x] Handle common conversational intents before documentation retrieval.
+* [x] Accept and validate a bounded recent conversation history without requiring a session.
+* [x] Use recent user turns to resolve contextual Ensemble follow-up questions during retrieval.
+* [x] Use RAG only when public Ensemble documentation meets the relevance threshold.
+* [x] Generate a scoped conversational reply when documentation retrieval is unnecessary.
+* [x] Present only the closest verified source links as a sentence inside the assistant response.
+* [x] Render verified page citations inline at the exact sentence where the assistant mentions a route.
 
-## Active Follow-up — Asset Previews, Likes, Saves, and Buyer Reviews
+## Active Database-Backed Documentation Sources
 
-Provide one safe public derivative preview for every file in an asset package. Package Contents must render these previews blurred for users who do not own the package and without a lock replacement; full-quality originals remain available only through the existing authorized signed-URL endpoints after purchase or to the creator. Add durable asset likes and saves, including authenticated idempotent API actions, counts/state in asset responses, and a Saved library view. Add `asset_reviews` so each active purchaser can submit at most one 1–5 star review, update or delete their own review, and non-purchasers/creators cannot review. Keep the controller → service → repository boundary and change only marketplace-asset schema and feature files.
+Generate current Markdown documentation from approved PostgreSQL data before each RAG ingestion.
 
-### Acceptance Criteria
+Acceptance criteria:
 
-* [x] A reversible append-only migration adds a public derivative file relationship to each bundle item and safely backfills existing items from the package thumbnail.
-* [x] New one-file and multi-file assets upload and atomically persist one derivative preview for every protected original.
-* [x] Public asset responses expose derivative preview paths but never original paths or original signed URLs.
-* [x] Package Contents shows clear derivative previews to creators/purchasers and blurred derivative previews to other users without fetching protected originals.
-* [x] Original preview/download endpoints remain restricted to the creator or an active purchaser.
-* [x] Reversible `asset_likes`, `asset_saves`, and `asset_reviews` tables enforce one active relationship/review per account and asset.
-* [x] Authenticated like/save actions are idempotent and asset responses include current-account state and aggregate counts.
-* [x] Saved assets are available through the paginated Assets Library.
-* [x] Only an active purchaser can create or update one 1–5 star review; only its author can update/delete it.
-* [x] Asset Details shows review totals/average, buyer review controls, and active reviews without a page reload.
-* [x] Backend validation and authorization remain authoritative.
-* [x] Relevant migration, repository/service/controller/route checks, focused database verification, frontend lint, and production build pass.
+* [x] Read plan definitions from the existing `plans` table, never user-specific `subscriptions`.
+* [x] Read only whitelisted public fields from `platform_settings` sections `platform` and `economy`.
+* [x] Generate deterministic Markdown under `backend/data/generated` before source loading.
+* [x] Register generated platform settings and plan documents in the existing source catalog.
+* [x] Preserve existing Markdown chunks by using distinct source URLs.
+* [x] Verify generated content and re-ingest all enabled sources successfully.
 
-**Follow-up status:** Completed August 18, 2026.
+## Active Embedding Refactor — Local Hugging Face
 
-**Implementation summary:** Added and applied the reversible marketplace-engagement migration. Every protected bundle original now references a safe public image derivative; existing items use their listing thumbnail, while new images receive a resized watermarked WebP, videos receive a watermarked still frame, and audio files receive a non-playable visual card. Public asset list/detail responses expose only this derivative metadata. Package Contents renders the derivative clearly for creators and active purchasers and blurred for other users, while the existing signed original preview/download endpoints remain entitlement-protected. Added durable, soft-deletable `asset_likes`, `asset_saves`, and `asset_reviews` records with one row per account/asset, authenticated idempotent like/save endpoints, aggregate/current-user state, and a paginated Saved library view. Buyer Reviews supports one 1–5 star review per active purchaser with author-only edit/delete controls and immediate local UI updates; creators and non-purchasers are rejected by backend authorization.
+The RAG embedding provider is being changed from an OpenAI-compatible HTTP API to a locally cached Hugging Face Transformers.js feature-extraction pipeline.
 
-**Verification:** Both asset migrations are applied. Live schema checks confirmed all eight active bundle items have a non-null preview relationship and confirmed the primary, foreign-key, uniqueness, rating, text-length, and index protections on all three engagement tables. A read-only repository check loaded an existing package and confirmed its public payload had matching preview metadata and no protected `asset-originals/` path. Rollback-only database checks confirmed like/save set/unset idempotency and purchaser review create, duplicate rejection, update, and delete; a service check confirmed a non-purchaser receives HTTP 403. Backend syntax checks and Asset route loading passed. Targeted Assets ESLint, `git diff --check`, and the frontend TypeScript/Vite production build passed. The production build retains the repository's existing dynamic-import and large-chunk warnings; route loading also triggered the environment's existing Redis network-access warnings after the route itself loaded.
+Acceptance criteria:
 
-## Active Follow-up — Multi-file Asset Bundles
+* [x] Use `sentence-transformers/all-MiniLM-L6-v2` for both document and question embeddings.
+* [x] Produce normalized 384-dimensional vectors and enforce the matching configuration.
+* [x] Add an append-only migration from `VECTOR(1536)` to `VECTOR(384)`.
+* [x] Remove the embedding API URL/key requirement while preserving Claude for final answer generation.
+* [x] Load and reuse one local model pipeline per backend process.
+* [x] Re-ingest all derived document chunks after switching models.
 
-Allow one marketplace asset package to contain one or many protected original files. Add `media_asset_bundle_files` as the normalized child of `media_assets`, backfill every existing `original_file_id` as bundle position zero, then remove the legacy `media_assets.original_file_id` foreign key and column. Keep `thumbnail_file_id` as the package cover and `proxy_file_id` as the safe public preview. Asset creation must accept multiple finalized, account-owned originals, enforce per-file and aggregate limits, persist all bundle relationships atomically, and retain one-file creation. Asset Details must list every bundle file; creators and active purchasers may request a separate 60-second signed preview/download URL per file, while public list/detail responses must never contain original paths or signed URLs. Update only direct schema consumers, including the video editor's one-file media-asset flow.
+## Active Data-Source Decision — Frontend Route Knowledge
 
-### Acceptance Criteria
+The RAG source of truth is the repository's React route source rather than runtime scraping of the Vite SPA. Curated Markdown is stored under `backend/data/` by category, with `backend/data/sources.json` mapping each knowledge document to its application-relative frontend URL. This avoids ingesting the empty shared `index.html` returned when Axios requests a client-rendered route.
 
-* [x] An append-only reversible migration creates `media_asset_bundle_files` with keys, ordering, constraints, indexes, and timestamps.
-* [x] Every existing non-deleted and deleted media asset original is backfilled before `media_assets.original_file_id` is removed.
-* [x] Migration down restores `original_file_id` from the first ordered bundle item before removing the bundle table.
-* [x] Asset creation accepts 1–20 original files and validates distinct IDs, finalized ownership, protected placement, MIME support, per-file size, and a 500MB aggregate limit on the backend.
-* [x] The first original remains the source for public proxy generation and top-level media metadata; the selected thumbnail remains the package cover.
-* [x] Media asset, market listing, bundle-file rows, tags, and file-use checks are committed atomically.
-* [x] Public asset list/detail responses include only safe bundle metadata and never original paths or signed URLs.
-* [x] Only the creator or an active purchaser can request a signed preview/download URL for a specific active bundle file.
-* [x] Asset Details lists all included originals and opens the selected authorized file in the protected viewer.
-* [x] New single-file and multi-file packages both work, while existing assets remain accessible as one-file bundles.
-* [x] Direct video-editor media-asset inserts/read queries use the bundle table and preserve their existing one-file behavior.
-* [x] No unrelated feature files are modified.
+### Data preparation acceptance criteria
 
-**Follow-up status:** Completed August 18, 2026.
-
-**Implementation summary:** Added and applied the append-only `media_asset_bundle_files` migration, backfilled each former `media_assets.original_file_id` at position zero, and removed the legacy column. Marketplace asset creation now accepts one to twenty finalized protected originals, enforces distinct ownership, MIME, placement, per-file, and 500MB aggregate rules on the backend, and inserts the media record, ordered originals, listing, and tags in one transaction. The first selected original still produces the public proxy and top-level media metadata; the separate thumbnail remains the package cover. Public asset responses return only safe ordered file metadata. Creator and active-purchaser preview/download endpoints authorize the requested bundle-file ID before returning a 60-second signed URL. The create modal supports one or many originals, appends files selected in later picker sessions, preserves valid selections when a new selection fails validation, and allows individual removal. Asset Details renders visual image/video cards for authorized package originals instead of filename-led rows, uses a media visual when no frame is available, and displays locked blurred cover cards without fetching originals for non-purchasers. Clicking an authorized preview opens the selected file in the protected viewer. Seed and video-editor direct schema consumers now create/read position-zero bundle rows for their existing single-file flows, and the affected video-editor routes use the current media UUID after the old public-ID column removal.
-
-**Verification:** The migration applied successfully. Live schema inspection confirmed six child-table columns, one primary key, two foreign keys, two uniqueness constraints, and five indexes; all five existing media assets were backfilled and none retained or lacked the legacy original relationship. A rollback-only two-original creation reached ordered positions zero and one atomically, and a follow-up query confirmed no verification data persisted. Read-only authorization checks confirmed public results contain no original path or signed URL, creators can select an exact child file, unrelated child IDs return no result, and an unauthorized account receives `ASSET_PURCHASE_REQUIRED`. Empty, duplicate, and 21-file payloads returned backend validation errors. Backend syntax checks and route loading, targeted Assets ESLint, `git diff --check`, and the frontend TypeScript/Vite production build passed. The four changed video-editor TypeScript files parsed without diagnostics; a full video-editor type/build check could not run because that package's dependencies are not installed in this workspace and restricted npm access prevented `npx` from fetching TypeScript. Existing frontend dynamic-import and large-chunk warnings remain unrelated.
-
-## Active Follow-up — Asset Replies and Marketplace Purchase Fee
-
-Complete the existing `asset_replies` feature with authenticated create, edit, and soft-delete operations scoped to an active comment on an accessible asset. Add nested reply rendering and controls to Asset Details. Enhance the existing purchase confirmation modal to show the asset thumbnail/name, total price, current account-wallet balance, and projected balance after purchase. Define the marketplace asset transaction-fee percentage in one backend constant, calculate all fee amounts server-side using integer credits, deduct the fee from the creator's proceeds, credit the platform wallet, and persist a linked `Fee` credit transaction atomically with the purchase. Show creators the fee percentage, fee credits, and net proceeds per sale. No schema change is required.
-
-### Acceptance Criteria
-
-* [x] Active asset comments return typed active replies with safe public author fields.
-* [x] Authenticated users can create replies only under an active comment belonging to the requested accessible asset.
-* [x] Reply authors can edit or soft-delete their own replies; other accounts cannot mutate them.
-* [x] Reply text is trimmed and backend-limited to 2,000 characters.
-* [x] Asset Details renders replies and responsive create/edit/delete controls without reloading the page.
-* [x] The purchase confirmation shows asset identity, total credits, current balance, and balance after purchase.
-* [x] Insufficient balance prevents confirmation on the frontend and remains enforced by the backend.
-* [x] A single backend constant defines the marketplace asset transaction-fee percentage.
-* [x] Buyer debit, creator net credit, platform fee credit, purchase ledger, linked fee ledger, entitlement, and notifications commit atomically.
-* [x] The fee uses deterministic integer-credit rounding and can never exceed the asset price.
-* [x] Asset creators see the configured percentage, fee amount, and expected net proceeds.
-* [x] No database migration or schema change is introduced.
-
-**Follow-up status:** Completed August 17, 2026.
-
-**Implementation summary:** Completed the existing `asset_replies` persistence path with nested authenticated create, author-only edit, and author-only soft-delete endpoints. Comment responses now include active typed replies with safe author identity/avatar fields, and Asset Details adds inline reply forms, nested reply rendering, editing, deletion confirmation, and local state updates without a page reload. The purchase dialog now shows the asset thumbnail and name, total price, authoritative current wallet balance, and projected balance after purchase. Added a single backend marketplace asset fee constant set to 8%. Paid purchases debit the buyer by the listing price, credit the creator with price minus fee, credit the platform wallet with the fee, link a `Fee` ledger row to the `Asset Purchase` row, persist ownership and notifications, and commit all mutations in one transaction. Fees round upward to the next whole credit and are capped at the listing price. Owners see the percentage, fee credits, and net proceeds on Asset Details.
-
-**Verification:** Backend syntax checks passed for the constant, repository, service, controller, and route modules. A rollback-only reply workflow confirmed trimmed creation, safe response fields, author-only update rejection, authorized update, soft deletion, and nested active-reply listing without persisting test data. A rollback-only paid purchase confirmed the 8% deterministic fee calculation, linked fee transaction, creator net calculation, two prepared notifications, and unchanged balances/ledgers after rollback. Targeted Assets frontend ESLint, `git diff --check`, and the frontend TypeScript/Vite production build passed. The route graph loaded, after which the local verification process reported the environment's existing Redis network-access errors. Existing unrelated dynamic-import and bundle-size build warnings remain.
-
-## Active Follow-up — Durable User-Owned Market Assets and Original Viewer
-
-Create `user_market_assets` as the durable entitlement table for purchased/claimed assets, while retaining `credit_transactions` as the financial audit ledger. The table must store `user_id`, `market_asset_id`, purchase `price`, ownership `status`, `created_at`, and nullable `deleted_at`, enforce one row per user/market asset, and backfill existing completed non-refunded Asset Purchases. Future purchase transactions must write the wallet transfer, credit transaction, ownership row, and notifications atomically. Purchased-list, protected-original authorization, and deletion safeguards must use the ownership table. Asset Details must use the thumbnail as its cover and provide an authorized Original File section that requests a short-lived inline signed URL only when opened in a modal; the permanent original storage path must remain absent from public API responses.
-
-### Acceptance Criteria
-
-* [x] An append-only migration creates `user_market_assets` with foreign keys, checks, indexes, timestamps, and a reversible down migration.
-* [x] Existing completed, non-refunded user Asset Purchases are backfilled without duplicates.
-* [x] New successful purchases atomically insert or reactivate a `user_market_assets` row using the authenticated buyer's `user_id`.
-* [x] `credit_transactions` remains the payment/audit record and `user_market_assets` becomes the entitlement source of truth.
-* [x] Purchased listing, asset detail access, original-file access, and delete safeguards use active ownership rows.
-* [x] Creator ownership remains in `media_assets.owner_user_id` and is not transferred.
-* [x] Asset Details cover renders `thumbnail_path`, not `proxy_path` or the original.
-* [x] An Original File card appears for creators and active purchasers and opens an accessible modal.
-* [x] The modal obtains a short-lived inline signed URL from an authenticated/authorized endpoint on demand.
-* [x] Image, video, and audio originals render with appropriate native elements in the modal.
-* [x] Original storage paths remain absent from list/detail API responses.
-
-**Follow-up status:** Completed August 17, 2026.
-
-**Implementation summary:** Added and applied the append-only `user_market_assets` migration with one entitlement per user/asset, active/refunded ownership status, purchase-price snapshot, timestamps, foreign keys, indexes, and a completed non-refunded purchase backfill. New purchases now write the credit ledger, ownership row, wallet changes, and notifications in one PostgreSQL transaction. Purchased listings, protected-original authorization, and deletion safeguards now use the ownership table. Asset Details uses the listing thumbnail as the cover and includes a protected Original File card; opening it requests an authenticated, authorization-checked, 60-second inline S3 URL and renders image, video, or audio media in a modal. The permanent original path remains server-only.
-
-**Verification:** The migration runner reported no pending migrations after application. Live schema inspection confirmed all six columns, primary key, foreign keys, status/price checks, and one active backfilled entitlement. Read-only repository/service checks confirmed the purchased listing and detail permissions use that entitlement, public detail responses omit `original_path`, and an authorized short-lived original preview URL can be generated. A full eligible purchase reached wallet updates, ledger insert, entitlement upsert, and two notification inserts while commit was deliberately replaced with rollback; follow-up queries confirmed no test entitlement or transaction persisted. Backend syntax checks, targeted Assets frontend ESLint, `git diff --check`, and the frontend TypeScript/Vite production build passed. Existing unrelated dynamic-import and bundle-size build warnings remain.
-
-## Active Follow-up — Asset Upload Modal Preview Layout
-
-Fix the create-asset modal upload controls so their dashed fields do not overflow into the preview section. After selection, show the actual original image rather than relying on its filename, and provide separate responsive previews for the original media and listing thumbnail. Support image, video, and audio originals using native browser preview elements where appropriate. All temporary object URLs must be revoked during replacement, reset, close, or unmount. This is a frontend-only adjustment with no API or schema changes.
-
-### Acceptance Criteria
-
-* [x] Original and thumbnail upload controls remain within their grid cells at all supported widths.
-* [x] Selected images render their actual visual content in the upload control and full preview area.
-* [x] Video originals use an inline video preview and audio originals use an inline audio preview.
-* [x] Original and thumbnail previews stack on small screens and display side-by-side when space permits.
-* [x] Replacing or clearing files revokes the previous object URLs.
-* [x] Existing upload validation and submission behavior remains unchanged.
-
-**Follow-up status:** Completed August 17, 2026.
-
-**Implementation summary:** Removed the conflicting full-height sizing from both upload buttons and added minimum-width/overflow containment so the dashed controls stay inside their responsive grid. Selected original and thumbnail images now render directly inside their upload controls instead of using filenames as the primary state. A separate responsive preview grid shows the full original image/video/audio alongside the listing thumbnail. Object URLs are created only while the modal is open and are revoked when a file is replaced, the modal closes, or the component unmounts.
-
-**Verification:** Targeted ESLint passed for `AssetEditorModal.tsx`, and the frontend TypeScript/Vite production build passed. Existing unrelated dynamic-import and bundle-size build warnings remain unchanged.
-
-## Active Follow-up — Asset Tags
-
-Add an optional tag field to asset creation and editing using the existing `tags` and `market_asset_tags` tables. Tags must be normalized, case-insensitively deduplicated, limited to 10 entries of at most 50 characters, persisted in the same transaction as the asset create/update, returned through existing asset responses, displayed in Asset Details, and included in asset search. Removing a tag from an asset must soft-delete only the `market_asset_tags` relationship and must not delete the shared `tags` catalog row. No schema change or migration is permitted.
-
-### Acceptance Criteria
-
-* [x] Create/edit forms provide an accessible chip-style tag input supporting Enter and comma.
-* [x] Users can remove selected tags before submission.
-* [x] Frontend and backend enforce at most 10 distinct tags and 50 characters per tag.
-* [x] Tag names are trimmed, optional leading `#` characters are removed, and duplicates are compared case-insensitively.
-* [x] Existing active tag rows are reused; missing tag rows are created safely.
-* [x] `market_asset_tags` relationships are inserted/reactivated transactionally with asset creation/update.
-* [x] Removed asset-tag relationships are soft-deleted without deleting global tags.
-* [x] Asset search matches active related tag names.
-* [x] Asset Details displays active tags.
-* [x] No database schema or migration change is made.
-
-**Follow-up status:** Completed August 17, 2026.
-
-**Implementation summary:** Asset create/edit payloads now accept normalized tag arrays. The backend removes leading `#` characters, collapses whitespace, performs case-insensitive deduplication, and enforces 10-tag/50-character limits. Asset repository transactions serialize missing-tag creation by normalized name, reuse active catalog tags, soft-delete the asset's previous relationships, and insert or reactivate the selected `market_asset_tags` rows. Asset search now matches active tag names. The modal provides removable tag chips with Enter/comma entry and preloads existing tags while editing, and Asset Details renders the saved tags.
-
-**Verification:** Backend syntax checks and targeted frontend ESLint passed. A real asset update traversed tag catalog lookup/creation and relationship synchronization with commit deliberately replaced by rollback; a follow-up query confirmed no test tag persisted. A live read-only tag-search query returned its related published asset. The frontend TypeScript/Vite production build passed. No migration or schema file was created.
-
-## Active Follow-up — Asset Preview and Credit Purchases
-
-Add an immediate thumbnail-image preview to the create-asset modal and implement credit-based asset purchasing without changing the database schema. A completed `Asset Purchase` credit transaction is the durable buyer entitlement; the original creator remains the listing/media owner. Purchases must atomically debit the buyer account wallet, credit the creator account wallet, persist buyer and creator notifications, prevent duplicate/concurrent charges, and unlock the existing protected-original download. Purchased assets must be recoverable after refresh through a Purchased library view. Realtime notification and wallet-balance updates must be emitted only after the transaction commits. Assets with a completed, non-refunded purchase must not be deleted while no refund/removal workflow exists.
-
-### Acceptance Criteria
-
-* [x] Selecting a thumbnail in the create modal shows an immediate preview and revokes temporary browser URLs safely.
-* [x] Authenticated non-owners can purchase published assets or claim zero-credit assets.
-* [x] Creator ownership is unchanged; buyers receive a ledger-backed entitlement.
-* [x] Buyer and creator account wallets are validated, locked, and updated atomically.
-* [x] Insufficient balance, inactive wallets, draft/deleted assets, and self-purchases are rejected without mutations.
-* [x] Repeated or concurrent purchase requests do not charge more than once.
-* [x] Buyer and creator notifications are stored durably and emitted through the existing authenticated Socket.IO rooms after commit.
-* [x] Buyer and creator wallet balances update in the shared header without a page refresh.
-* [x] The successful purchase updates Asset Details to Owned/Download without reloading.
-* [x] Purchased assets appear in a paginated Purchased library view and remain discoverable after refresh.
-* [x] Completed non-refunded purchases continue to authorize protected-original downloads.
-* [x] Assets with active purchases cannot be deleted without a refund/removal workflow.
-* [x] Asset purchases appear in the existing transaction history through `credit_transactions`.
-* [x] No database table, column, or migration is added or modified.
-
-**Follow-up status:** Completed August 17, 2026.
-
-**Implementation summary:** Added an in-modal thumbnail preview backed by a temporary object URL with cleanup. Added `POST /api/assets/:assetId/purchase`, which serializes purchase attempts per buyer/asset, locks both account wallets, validates publication/ownership/wallet/balance state, transfers the listed credits, records the completed `Asset Purchase`, and inserts buyer/creator notifications in one PostgreSQL transaction. The service emits committed notifications and wallet balances through existing account Socket.IO rooms. Asset responses now expose derived `is_purchased` and `can_download` flags without exposing the original path. The Assets Library includes a Purchased view, Asset Details changes from Purchase/Get to Owned/Download without reloading, and completed purchases block asset deletion. Creator ownership remains unchanged. No schema or migration was added.
-
-**Verification:** Backend syntax checks passed. Read-only discovery, owned, and purchased-list query execution passed against the configured PostgreSQL schema. A complete eligible-purchase repository execution reached both wallet updates, the ledger insert, and two notification inserts while its commit was deliberately replaced with rollback; a follow-up query confirmed zero persisted test purchases. Focused self-purchase and insufficient-balance checks passed. Targeted ESLint passed for all modified Assets files and the shared header. The frontend TypeScript/Vite production build passed. A real purchase was not committed against the configured data environment during automated verification.
-
-## Active Follow-up — Protected Asset Originals
-
-Separate new asset uploads into distinct `original_file_id`, `proxy_file_id`, and `thumbnail_file_id` records without changing the schema. Public asset APIs and media previews must expose only proxy/thumbnail paths. High-quality originals must use a private upload prefix and may be downloaded only through a short-lived signed URL after backend verification that the requester is the creator or has a completed, non-refunded Asset Purchase ledger entry for that asset. Image proxy and thumbnail derivatives must be generated before the final asset record is created. Existing image/video/audio browsing behavior must remain functional.
-
-**Follow-up status:** Completed August 17, 2026.
-
-**Implementation summary:** The create form requires separate original-media and thumbnail-image selections. New image uploads retain the untouched original under the private `asset-originals/` prefix, generate a maximum 1600px WebP proxy with an `Ensemble Preview` watermark, and process the selected thumbnail into a maximum 480px watermarked WebP. The three finalized, account-owned file IDs are validated as distinct and stored in their existing `media_assets` columns. Video/audio uploads also receive distinct original, proxy, and selected-thumbnail records; their playable proxy is currently a byte-for-byte preview copy because no video/audio transcoding service exists. Public list/detail responses no longer contain `original_path`. Creator/purchaser downloads use an authenticated 60-second S3 signed URL, with completed Asset Purchase and later Asset Refund entries checked through the existing credit ledger. Public image previews disable context-menu and dragging as a casual deterrent, while the valuable original remains absent from public responses. Existing legacy assets whose three file IDs already point to the same file require reprocessing/re-uploading to gain derivative separation. No database migration or schema change was made.
+* [x] FAQ and public hiring/working information is extracted from landing-page route source.
+* [x] Account, collaboration, marketplace, work, payments, support, and legal processes are categorized.
+* [x] Every knowledge source records a real route from `frontend/src/App.tsx` and its relevant source file(s).
+* [x] Dynamic URLs remain route patterns and are not presented as literal customer links.
+* [x] UI-only or incomplete behavior is labeled instead of represented as a durable backend capability.
+* [x] A machine-readable source catalog controls which Markdown documents are enabled for ingestion.
+* [x] Platform overview and advertised Ensemble features are covered.
+* [x] Credits cover top-ups, wallets, transfers, escrow, purchases, fees, cashouts, refunds, and ledger history.
+* [x] Chat, calls, Google meetings, forums, and collaboration routes are covered.
+* [x] Tickets, purchases, reports, disputes, violations, and moderation flows are covered.
+* [x] Admin and specialist moderator portals are documented as role-protected operational references.
 
 ## Objective
 
-Build the **Assets Library** feature using the platform's existing frontend theme, layout, components, coding patterns, and backend architecture.
+Build a simple, maintainable **RAG documentation support backend** using the project's existing architecture and conventions.
 
-The Assets Library must allow users to:
+Technology:
 
-* Create/upload assets
-* Post/publish assets
-* Browse/display assets
-* View individual assets
-* Edit their own assets
-* Delete their own assets
-* Comment on assets
-* Review/rate assets where supported by the existing database
-* View comments and reviews
-* Manage their uploaded assets
+* Node.js
+* Express.js
+* PostgreSQL
+* pgvector
+* Anthropic Claude
+* Axios
+* Cheerio
 
-Supported media asset types:
+Use Claude for the **final RAG/support response generation**.
 
-* Images
-* Videos
-* Audio
+Configured Claude model:
 
-The implementation must be based entirely on the existing:
+```env
+ANTHROPIC_MODEL=claude-sonnet-5
+```
 
-* `media_assets` table
-* Tables related to `media_assets`
-* Existing relationships
-* Existing database columns
-* Existing authentication/authorization system
-* Existing project architecture
-
-**Do not add, remove, rename, or modify database columns or tables.**
+Do not hardcode API keys, database credentials, or model values directly inside the source code.
 
 ---
 
-## Phase 1 — Inspect Before Coding
+# Critical Codebase Rules
 
-Before making any changes, inspect the existing codebase.
+## Do Not Modify Unrelated Files
 
-### Database
+Only modify files directly required for this RAG implementation.
 
-Inspect:
+Do NOT:
 
-* `media_assets`
-* Tables directly related to `media_assets`
-* Foreign keys
-* Existing asset ownership fields
-* Asset type/media type fields
-* File/storage references
-* Comment-related tables
-* Review/rating-related tables
-* User/account relationships
-* Existing timestamps/status fields
+* refactor unrelated features
+* rename unrelated files
+* move unrelated files
+* modify unrelated controllers
+* modify unrelated services
+* modify unrelated repositories
+* modify unrelated routes
+* modify unrelated frontend files
+* change unrelated database tables
+* change authentication logic
+* change middleware unrelated to RAG
+* perform unrelated cleanup
+* make opportunistic improvements outside the task
 
-Determine what functionality is already supported by the current schema.
+If an unrelated issue is discovered, leave it unchanged.
 
-Do **not** create migrations.
+The scope is strictly:
 
-Do **not** modify the database schema.
-
-If a requested feature cannot be supported by the existing tables, document the limitation instead of changing the database.
-
-### Existing Backend
-
-Search for existing:
-
-* Asset controllers
-* Asset services
-* Asset repositories
-* Asset routes
-* Upload APIs
-* File/storage services
-* Comments APIs
-* Reviews APIs
-* Authentication middleware
-* Authorization middleware
-* Validation utilities
-
-Reuse existing code whenever possible.
-
-### Existing Frontend
-
-Inspect previous completed platform features and identify:
-
-* Main layout
-* Sidebar
-* Navbar
-* Page container
-* Cards
-* Buttons
-* Inputs
-* Modals/dialogs
-* Dropdowns
-* Tabs
-* Search bars
-* Filters
-* Empty states
-* Loading skeletons
-* Toasts
-* Confirmation dialogs
-* Pagination
-* Typography
-* Spacing
-* Border radius
-* Shadows
-* Colors
-* Responsive behavior
-
-The Assets Library should look like it was originally designed as part of the same platform.
-
-Do not introduce a completely new visual design system.
+```text
+HTML documentation
+→ scrape
+→ clean
+→ chunk
+→ embed
+→ pgvector
+→ retrieve
+→ Claude
+→ answer + sources
+```
 
 ---
 
-## Phase 2 — Report Before Implementation
+# Preserve Existing Architecture
 
-Before coding, provide a short implementation report containing:
+Before creating or editing files:
 
-### Existing Database Support
+1. Inspect the existing repository.
+2. Identify current file naming conventions.
+3. Identify controller/service/repository conventions.
+4. Identify database configuration.
+5. Identify Express configuration.
+6. Identify environment variable conventions.
+7. Identify existing AI configuration.
+8. Identify existing error handling conventions.
+9. Identify existing logging conventions.
 
-List the relevant tables and explain what each one will be used for.
+Follow the existing project.
+
+If existing files already provide functionality such as:
+
+```text
+database connection
+Express app
+server
+environment configuration
+AI client
+logger
+error handler
+```
+
+reuse them.
+
+Do not create duplicate infrastructure.
+
+---
+
+# Follow Existing Naming Format
+
+The existing project's naming convention takes priority over examples in this task.
+
+For example, if the project uses:
+
+```text
+UserControllers.js
+UserServices.js
+UserRepositories.js
+```
+
+continue following that format.
+
+Do not suddenly introduce:
+
+```text
+user.controller.js
+user.service.js
+user.repository.js
+```
+
+The same applies to:
+
+* folders
+* functions
+* classes
+* variables
+* route naming
+* repository methods
+* service methods
+
+---
+
+# RAG Architecture
+
+```text
+DOCUMENT INGESTION
+
+Configured HTML URLs
+        ↓
+Axios
+        ↓
+HTML
+        ↓
+Cheerio
+        ↓
+Clean documentation
+        ↓
+Extract sections
+        ↓
+Chunk sections
+        ↓
+Create embedding
+        ↓
+PostgreSQL + pgvector
+```
+
+Chat:
+
+```text
+USER QUESTION
+      ↓
+Create question embedding
+      ↓
+pgvector similarity search
+      ↓
+Top relevant documentation chunks
+      ↓
+Question + retrieved documentation
+      ↓
+Claude Sonnet
+      ↓
+Grounded answer
+      ↓
+Answer + real documentation URLs
+```
+
+---
+
+# Environment Variables
+
+Do not place real credentials in any generated file.
+
+Only use placeholders.
+
+Create or extend:
+
+```text
+.env.example
+```
+
+with:
+
+```env
+PORT=
+
+DATABASE_URL=
+
+ANTHROPIC_API_KEY=
+ANTHROPIC_MODEL=claude-sonnet-5
+
+EMBEDDING_API_KEY=
+EMBEDDING_MODEL=
+```
+
+If the existing project already has equivalent variables, reuse its naming style.
+
+Do not overwrite existing `.env` values.
+
+Do not place actual secrets in:
+
+* source files
+* README
+* migrations
+* test scripts
+* logs
+* committed files
+
+---
+
+# Claude Configuration
+
+Use Anthropic Claude for the final AI support response.
+
+Install the Anthropic SDK only if it does not already exist:
+
+```bash
+npm install @anthropic-ai/sdk
+```
+
+Create or reuse the project's AI configuration.
+
+Conceptually:
+
+```js
+import Anthropic from "@anthropic-ai/sdk";
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY
+});
+
+export default anthropic;
+```
+
+Do not hardcode:
+
+```js
+"claude-sonnet-5"
+```
+
+throughout the application.
+
+Always use:
+
+```js
+process.env.ANTHROPIC_MODEL
+```
+
+Example:
+
+```js
+const response = await anthropic.messages.create({
+  model: process.env.ANTHROPIC_MODEL,
+  max_tokens: 1000,
+  messages: [
+    {
+      role: "user",
+      content: prompt
+    }
+  ]
+});
+```
+
+---
+
+# Important Embedding Separation
+
+Claude is being used for the **answer generation model**.
+
+The embedding system should remain a separate service.
+
+Architecture:
+
+```text
+Claude
+=
+understand retrieved context
++
+generate support answer
+```
+
+while:
+
+```text
+Embedding model
+=
+convert documentation into vectors
++
+convert questions into vectors
+```
+
+Do not attempt to store Claude chat output as the document embedding.
+
+Keep:
+
+```text
+EmbeddingService
+```
+
+separate from:
+
+```text
+ClaudeSupportService
+```
+
+---
+
+# HTML Source Configuration
+
+Documentation URLs must live in **one configurable array**.
+
+Do not hardcode documentation URLs inside:
+
+* scraper logic
+* controller
+* RAG retrieval
+* Claude service
+* embedding service
+
+Create or reuse an appropriate configuration file.
+
+Example:
+
+```js
+export const RAG_SOURCES = [
+  {
+    name: "Documentation Source 1",
+    url: "https://example.com/docs/page-1",
+    enabled: true
+  },
+
+  {
+    name: "Documentation Source 2",
+    url: "https://example.com/docs/page-2",
+    enabled: true
+  }
+];
+```
+
+This must be easy to extend later.
+
+Adding another source should require only:
+
+```js
+{
+  name: "New Documentation",
+  url: "https://example.com/docs/new",
+  enabled: true
+}
+```
+
+No scraper or retrieval logic should need modification.
+
+---
+
+# Source Object Format
+
+For V1 use:
+
+```js
+{
+  name: String,
+  url: String,
+  enabled: Boolean
+}
+```
+
+Do not add unnecessary configuration fields yet.
+
+Only ingest:
+
+```js
+source.enabled === true
+```
+
+Conceptually:
+
+```js
+for (const source of RAG_SOURCES) {
+  if (!source.enabled) continue;
+
+  await ingestSource(source);
+}
+```
+
+---
+
+# PostgreSQL + pgvector
+
+Use the existing local PostgreSQL installation.
+
+Do not add Docker.
+
+Enable:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+Create only the table required for this RAG feature.
+
+Example:
+
+```sql
+CREATE TABLE IF NOT EXISTS document_chunks (
+    id BIGSERIAL PRIMARY KEY,
+
+    title TEXT,
+
+    heading TEXT,
+
+    url TEXT NOT NULL,
+
+    content TEXT NOT NULL,
+
+    chunk_index INTEGER NOT NULL,
+
+    embedding VECTOR(EMBEDDING_DIMENSION),
+
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+Replace:
+
+```text
+EMBEDDING_DIMENSION
+```
+
+with the actual dimension required by the configured embedding model.
+
+Do not change unrelated database tables.
+
+---
+
+# HTML Scraper
+
+Use:
+
+```text
+Axios
++
+Cheerio
+```
+
+Flow:
+
+```text
+URL
+↓
+Axios
+↓
+HTML
+↓
+Cheerio
+↓
+clean documentation
+```
+
+Conceptual function:
+
+```js
+scrapeDocumentation(url)
+```
+
+Return:
+
+```js
+{
+  title: "...",
+  url: "...",
+
+  sections: [
+    {
+      heading: "...",
+      content: "..."
+    }
+  ]
+}
+```
+
+---
+
+# HTML Cleaning
+
+Remove irrelevant elements such as:
+
+```text
+script
+style
+nav
+footer
+header
+aside
+noscript
+```
+
+Prefer content from:
+
+```text
+main
+```
+
+then:
+
+```text
+article
+```
+
+then:
+
+```text
+body
+```
+
+Do not save the full unprocessed page HTML into the vector database.
+
+---
+
+# Preserve Documentation Structure
+
+Preserve useful elements such as:
+
+```text
+h1
+h2
+h3
+p
+ul
+ol
+li
+pre
+code
+```
+
+Group content under its corresponding heading.
+
+Example HTML:
+
+```html
+<h2>Reset Password</h2>
+
+<p>Open account settings.</p>
+
+<p>Select Security.</p>
+```
+
+should become conceptually:
+
+```js
+{
+  heading: "Reset Password",
+  content: "Open account settings.\n\nSelect Security."
+}
+```
+
+---
+
+# Chunking
+
+Create a reusable chunking service.
+
+Conceptual function:
+
+```js
+chunkSections(sections)
+```
+
+Requirements:
+
+* preserve section headings
+* split large sections
+* prefer paragraph boundaries
+* avoid empty chunks
+* maintain original order
+* avoid cutting sentences unnecessarily
+
+For V1, target roughly:
+
+```text
+1500–3000 characters
+```
+
+per chunk.
+
+Do not add a complicated chunking framework yet.
+
+---
+
+# Chunk Result
+
+Conceptual result:
+
+```js
+{
+  heading: "Pending Payments",
+  content: "Payments may remain pending while verification is completed...",
+  chunkIndex: 0
+}
+```
+
+If one section is too large:
+
+```text
+Pending Payments
+
+→ Chunk 0
+→ Chunk 1
+→ Chunk 2
+```
+
+Every chunk should still retain:
+
+```text
+heading = "Pending Payments"
+```
+
+---
+
+# Embedding Service
+
+Create or reuse one shared embedding service.
+
+Conceptual function:
+
+```js
+createEmbedding(text)
+```
+
+It must be reused for:
+
+```text
+1. documentation chunks during ingestion
+2. user questions during retrieval
+```
+
+Do not duplicate embedding API logic.
+
+---
+
+# Documentation Embedding Input
+
+Include context when creating document vectors.
+
+Use conceptually:
+
+```js
+const embeddingText = `
+Title: ${page.title}
+Section: ${chunk.heading}
+
+${chunk.content}
+`.trim();
+```
+
+Then:
+
+```js
+const embedding =
+  await createEmbedding(embeddingText);
+```
+
+---
+
+# Ingestion Pipeline
+
+The ingestion process must read the configurable:
+
+```text
+RAG_SOURCES
+```
+
+array.
+
+Pipeline:
+
+```text
+RAG_SOURCES
+      ↓
+enabled sources
+      ↓
+scrape URL
+      ↓
+Cheerio parsing
+      ↓
+sections
+      ↓
+chunks
+      ↓
+embedding
+      ↓
+PostgreSQL
+```
+
+Conceptually:
+
+```js
+for (const source of RAG_SOURCES) {
+  if (!source.enabled) {
+    continue;
+  }
+
+  const page =
+    await scrapeDocumentation(source.url);
+
+  const chunks =
+    chunkSections(page.sections);
+
+  for (const chunk of chunks) {
+    const embeddingText = `
+Title: ${page.title}
+Section: ${chunk.heading}
+
+${chunk.content}
+`.trim();
+
+    const embedding =
+      await createEmbedding(embeddingText);
+
+    await saveChunk({
+      title: page.title,
+      heading: chunk.heading,
+      url: page.url,
+      content: chunk.content,
+      chunkIndex: chunk.chunkIndex,
+      embedding
+    });
+  }
+}
+```
+
+---
+
+# Do Not Duplicate Data
+
+Running ingestion repeatedly must not endlessly create duplicate chunks.
+
+For V1:
+
+```text
+source URL
+   ↓
+delete existing chunks for THAT URL
+   ↓
+scrape current page
+   ↓
+chunk
+   ↓
+embed
+   ↓
+insert fresh chunks
+```
+
+Do not delete chunks belonging to unrelated sources.
+
+---
+
+# RAG Retrieval
+
+When the user asks:
+
+```text
+How do I reset my password?
+```
+
+perform:
+
+```text
+question
+↓
+createEmbedding(question)
+↓
+pgvector similarity search
+↓
+top relevant chunks
+```
+
+Conceptual SQL:
+
+```sql
+SELECT
+    id,
+    title,
+    heading,
+    url,
+    content,
+    1 - (embedding <=> $1::vector) AS similarity
+
+FROM document_chunks
+
+ORDER BY embedding <=> $1::vector
+
+LIMIT 5;
+```
+
+Do not scrape websites during a chat request.
+
+The chatbot must retrieve already-ingested data.
+
+---
+
+# Test Retrieval Before Claude
+
+Before sending results to Claude, verify:
+
+```text
+question
+→ embedding
+→ vector search
+→ relevant documentation
+```
+
+independently.
+
+If retrieval results are poor, fix retrieval/chunking instead of relying on Claude to compensate.
+
+---
+
+# Claude Support Service
+
+After retrieving the relevant chunks:
+
+```text
+user question
++
+retrieved documentation
++
+support instructions
+```
+
+are sent to:
+
+```env
+ANTHROPIC_MODEL=claude-sonnet-5
+```
+
+Conceptually:
+
+```js
+const response = await anthropic.messages.create({
+  model: process.env.ANTHROPIC_MODEL,
+  max_tokens: 1000,
+
+  system: SUPPORT_SYSTEM_PROMPT,
+
+  messages: [
+    {
+      role: "user",
+      content: contextPrompt
+    }
+  ]
+});
+```
+
+Follow the project's existing Anthropic wrapper if one already exists.
+
+Do not create a second Anthropic client if the repository already has one.
+
+---
+
+# Claude Instructions
+
+Use instructions equivalent to:
+
+```text
+You are a customer support documentation assistant.
+
+Use the retrieved documentation as the source of truth.
+
+Rules:
+
+1. Answer the customer's concern using the supplied documentation.
+
+2. Do not invent company policies.
+
+3. Do not invent company procedures.
+
+4. Do not invent product features.
+
+5. Do not invent documentation links.
+
+6. Only use source links provided with the retrieved documentation.
+
+7. If the retrieved documentation is insufficient, clearly say so.
+
+8. Prefer concise and useful answers.
+
+9. Give step-by-step instructions where appropriate.
+
+10. Never claim to have checked or modified the customer's account.
+
+11. Never claim an action occurred unless an authorized backend tool actually performed it.
+
+12. Recommend human support when account-specific investigation is required.
+```
+
+---
+
+# Claude Context Format
+
+Send retrieved documents clearly.
 
 Example:
 
 ```text
-media_assets
-Purpose:
-Main asset information.
+CUSTOMER QUESTION:
 
-Related table:
-Purpose:
-Comments associated with an asset.
+Why is my payment still pending?
 
-Related table:
-Purpose:
-Reviews associated with an asset.
+
+RETRIEVED DOCUMENTATION:
+
+
+SOURCE 1
+
+Title:
+Payment Troubleshooting
+
+Section:
+Pending Payments
+
+URL:
+https://example.com/docs/payments
+
+Content:
+Payments may remain pending while...
+
+
+SOURCE 2
+
+Title:
+Payment Verification
+
+Section:
+Processing
+
+URL:
+https://example.com/docs/payment-verification
+
+Content:
+...
 ```
-
-Use the actual tables discovered in the codebase.
-
-### Existing Code That Can Be Reused
-
-List relevant:
-
-* Components
-* Controllers
-* Services
-* Repositories
-* Routes
-* Utilities
-* Storage/file handling
-* Authentication middleware
-
-### Files Expected to Change
-
-List the exact files expected to be:
-
-* Created
-* Modified
-
-Only files directly related to the Assets Library should be changed.
 
 ---
 
-# Assets Library Frontend
+# Source URLs
 
-## 1. Assets Library Page
+The response source URLs must come directly from retrieved PostgreSQL rows.
 
-Create the main Assets Library page.
+Do not ask Claude to construct URLs.
 
-Suggested structure:
+Correct:
 
 ```text
-Assets Library
-Discover images, videos, and audio shared by the community.
-
-[ Search assets... ]        [ Upload Asset ]
-
-------------------------------------------------
-
-[ All ] [ Images ] [ Videos ] [ Audio ]
-
-------------------------------------------------
-
-Asset Grid / List
+PostgreSQL result
+→ source URL
+→ frontend response
 ```
 
-The layout should follow the existing platform theme.
-
----
-
-## 2. Asset Cards
-
-Each asset should be represented using the appropriate media preview.
-
-### Image
-
-Show:
-
-* Image thumbnail
-* Asset title
-* Creator
-* Asset type
-* Existing relevant metadata
-
-### Video
-
-Show:
-
-* Video thumbnail or preview
-* Play indicator
-* Asset title
-* Creator
-* Asset type
-* Existing relevant metadata
-
-### Audio
-
-Show:
-
-* Audio-style preview/card
-* Audio icon or existing preview
-* Asset title
-* Creator
-* Asset type
-* Existing relevant metadata
-
-Only display information already available from the existing tables/API.
-
-Do not invent database fields.
-
----
-
-# Filtering
-
-Allow filtering by:
+Incorrect:
 
 ```text
-All
-Images
-Videos
-Audio
+Claude
+→ guesses source URL
 ```
 
-Use the existing media type/type field in `media_assets`.
-
-If the existing schema uses different values, follow the existing values instead of modifying them.
-
 ---
 
-# Search
+# Chat Endpoint
 
-Allow users to search assets using fields already supported by the existing schema/API.
+Integrate into the existing Express architecture.
 
-Potential fields may include:
+Target concept:
 
-* Asset title
-* Asset name
-* Description
-* Creator
+```http
+POST /api/chat
+```
 
-Only implement fields actually available in the existing database.
+Input:
 
----
+```json
+{
+  "message": "How do I reset my password?"
+}
+```
 
-# Upload / Create Asset
-
-Add an:
+Flow:
 
 ```text
-Upload Asset
+request
+↓
+validation
+↓
+controller
+↓
+RAG retrieval
+↓
+question embedding
+↓
+pgvector
+↓
+relevant chunks
+↓
+Claude
+↓
+answer
+↓
+sources
 ```
 
-button.
+---
 
-Opening it should display the upload/create interface using the platform's existing modal/page patterns.
+# Response
 
-The form should only contain fields available in `media_assets` or its existing related tables.
+Return conceptually:
 
-Do not create new database fields just to support the frontend.
+```json
+{
+  "answer": "To reset your password, follow the documented password recovery process...",
 
-Supported uploads:
+  "sources": [
+    {
+      "title": "Account Documentation",
+      "heading": "Reset Password",
+      "url": "https://example.com/docs/account"
+    }
+  ]
+}
+```
+
+Deduplicate repeated sources where appropriate.
+
+Prefer:
 
 ```text
-Image
-Video
-Audio
+URL + heading
 ```
 
-Validate the uploaded asset type.
-
-Reuse the existing platform file upload/storage mechanism.
-
-Do not create another storage architecture if one already exists.
+as the deduplication key.
 
 ---
 
-# Asset Details Page
+# Environment Rules
 
-Selecting an asset should open its Asset Details page.
-
-Example structure:
-
-```text
-< Back to Assets
-
-------------------------------------------
-
-              MEDIA PREVIEW
-
-------------------------------------------
-
-Asset Title
-
-Creator information
-
-Existing asset metadata
-
-Description / existing information
-
-------------------------------------------
-
-Comments
-
-------------------------------------------
-
-Reviews
-```
-
-Adapt the exact fields according to the existing schema.
-
----
-
-# Media Preview
-
-Render assets according to their type.
-
-### Image
-
-Display a responsive image preview.
-
-### Video
-
-Use the project's existing media/video player where possible.
-
-Otherwise use a simple supported video player.
-
-Controls may include:
-
-* Play/pause
-* Seek
-* Volume
-* Fullscreen
-
-### Audio
-
-Use the project's existing audio component where possible.
-
-Otherwise use a simple audio player.
-
-Controls may include:
-
-* Play/pause
-* Seek
-* Volume
-
----
-
-# Asset CRUD
-
-Implement CRUD based on the existing database structure.
-
-## Create
-
-Authenticated users can create/upload assets.
-
-## Read
-
-Users can:
-
-* Browse assets
-* Search assets
-* Filter assets
-* View asset details
-
-## Update
-
-Asset owners can edit fields already supported by the database.
-
-Do not expose fields that users should not manually change.
-
-## Delete
-
-Asset owners can delete their assets.
-
-Before deleting, use the platform's existing confirmation dialog pattern.
-
-Ensure authorization is checked on the backend.
-
-Never rely only on frontend checks.
-
----
-
-# My Assets
-
-Provide a way for authenticated users to view assets they created.
+Only placeholders must be added to `.env.example`.
 
 Example:
 
-```text
-My Assets
+```env
+PORT=
 
-[ All ] [ Images ] [ Videos ] [ Audio ]
+DATABASE_URL=
 
-----------------------------------------
+ANTHROPIC_API_KEY=
+ANTHROPIC_MODEL=claude-sonnet-5
 
-My uploaded assets...
+EMBEDDING_API_KEY=
+EMBEDDING_MODEL=
 ```
 
-Each owned asset can expose actions such as:
+Do not populate real values.
 
-```text
-View
-Edit
-Delete
-```
+Do not modify the user's real `.env` unless absolutely necessary.
 
-Only expose actions permitted by the existing authorization rules.
-
----
-
-# Comments
-
-Use the existing comments-related table associated with assets.
-
-Asset Details should contain:
-
-```text
-Comments
-
-[ Write a comment... ] [ Post ]
-
-User
-Comment content
-Time
-```
-
-Support existing capabilities such as:
-
-* Create comment
-* View comments
-
-If supported by the existing schema/backend:
-
-* Edit own comment
-* Delete own comment
-
-Users must not edit or delete comments belonging to other users unless an existing moderator/admin permission allows it.
-
----
-
-# Reviews
-
-Use the existing review/rating table related to `media_assets`.
-
-Allow users to submit reviews using only fields already available in the database.
-
-Potential interface:
-
-```text
-Reviews
-
-Your Review
-
-★★★★★
-
-Write your review...
-
-[ Submit Review ]
-```
-
-Do not assume the database contains both ratings and text reviews.
-
-Inspect the schema first.
-
-For example:
-
-* If only rating exists → implement rating only.
-* If rating + review text exist → implement both.
-* If reviews contain other existing fields → use those appropriately.
-
-Do not modify the schema to support missing functionality.
-
----
-
-# Review Display
-
-Display reviews underneath the asset information.
-
-Example:
-
-```text
-Reviews
-
-John Doe
-★★★★★
-Very useful asset.
-
-Jane Doe
-★★★★☆
-Good quality.
-```
-
-Use actual supported fields from the existing tables.
-
----
-
-# Asset Creator Information
-
-Where supported by the existing user/account relationships, display basic creator information.
-
-Reuse existing user components where possible.
-
-Do not expose:
-
-* Private account information
-* Email addresses unless already intentionally public
-* Internal IDs
-* Sensitive profile information
-
----
-
-# Backend Requirements
-
-Follow the existing backend architecture.
-
-Example:
-
-```text
-Route
-   ↓
-Controller
-   ↓
-Service
-   ↓
-Repository
-   ↓
-Database
-```
-
-Do not bypass existing architecture conventions.
-
-If the project already follows another architecture, follow that architecture instead.
-
----
-
-# Authorization
-
-Protect all mutating operations.
-
-### Create Asset
-
-Requires authenticated user.
-
-### Edit Asset
-
-Requires:
-
-```text
-asset.owner/account/user == authenticated user
-```
-
-or an existing privileged role.
-
-### Delete Asset
-
-Same ownership/authorization requirement.
-
-### Comment
-
-Requires authentication if that matches the existing platform behavior.
-
-### Review
-
-Requires authentication if that matches the existing platform behavior.
-
-All important authorization must be verified on the backend.
-
----
-
-# API Behavior
-
-Reuse existing APIs when available.
-
-If missing endpoints are required, add only endpoints necessary for the Assets Library.
-
-Potential operations:
-
-```text
-GET    assets
-GET    asset details
-POST   asset
-PATCH  asset
-DELETE asset
-
-GET    asset comments
-POST   asset comment
-
-GET    asset reviews
-POST   asset review
-```
-
-Do not blindly create these exact routes.
-
-First inspect existing routing conventions and follow them.
-
----
-
-# Data Rules
-
-The database is the source of truth.
-
-Strict rules:
-
-```text
-DO NOT add database columns.
-DO NOT remove database columns.
-DO NOT rename database columns.
-DO NOT create replacement tables.
-DO NOT change existing relationships.
-DO NOT create migrations unless explicitly requested later.
-```
-
-Use the existing schema exactly as designed.
-
----
-
-# UI / UX Requirements
-
-Maintain consistency with existing platform pages.
-
-Reuse:
-
-* Existing design tokens
-* Existing Tailwind classes/patterns
-* Existing shared components
-* Existing buttons
-* Existing forms
-* Existing dialogs
-* Existing cards
-* Existing page headers
-* Existing loading indicators
-* Existing toast notifications
-
-Avoid creating duplicate components if equivalent reusable components already exist.
-
----
-
-# Responsive Design
-
-The Assets Library must work properly on:
-
-* Desktop
-* Tablet
-* Mobile
-
-Asset grids should adapt based on screen width.
-
-Do not break the existing platform sidebar or navigation behavior.
-
----
-
-# Loading States
-
-Provide loading states for:
-
-* Asset list
-* Asset details
-* Comments
-* Reviews
-* Upload
-* Update
-* Delete
-
-Reuse existing skeleton/loading components.
-
----
-
-# Empty States
-
-Provide appropriate empty states.
-
-Examples:
-
-```text
-No assets found.
-```
-
-```text
-You haven't uploaded any assets yet.
-```
-
-```text
-No comments yet.
-```
-
-```text
-No reviews yet.
-```
-
-Follow the tone/style used elsewhere in the platform.
+If `.env` already exists, leave existing values untouched.
 
 ---
 
 # Error Handling
 
+Follow the project's existing error handling system.
+
 Handle:
 
-* Failed asset loading
-* Failed uploads
-* Unsupported media type
-* Upload errors
-* Missing asset
-* Unauthorized editing
-* Unauthorized deletion
-* Failed comments
-* Failed reviews
-* Network errors
+* malformed URL
+* source disabled
+* HTTP timeout
+* HTML fetch failure
+* empty page content
+* chunking failure
+* embedding failure
+* PostgreSQL failure
+* vector retrieval failure
+* zero retrieved documents
+* Claude API failure
+* malformed chat request
 
-Use the platform's existing toast/error system.
-
-Do not expose:
-
-* Stack traces
-* SQL errors
-* Internal server paths
-* Sensitive server information
-
----
-
-# Performance
-
-Avoid unnecessary duplicate API requests.
-
-Do not repeatedly fetch the same asset information when already available.
-
-Media previews should not unnecessarily load full-size media when a smaller existing preview/thumbnail is available.
-
-Do not introduce performance-related infrastructure changes outside the scope of this feature.
+Never return sensitive internal errors to the frontend.
 
 ---
 
 # Security
 
-Validate all user-controlled data on the backend.
+Never expose:
 
-Do not trust:
+```text
+ANTHROPIC_API_KEY
+EMBEDDING_API_KEY
+DATABASE_URL
+database passwords
+stack traces
+raw SQL errors
+authorization headers
+```
 
-* Asset IDs
-* User IDs
-* Asset ownership values
-* Media type
-* Uploaded filename
-* MIME type
-* Review ownership
-* Comment ownership
-
-Use the project's existing authentication and authorization mechanisms.
-
----
-
-# Scope Restrictions
-
-Only modify files related to the Assets Library and required reusable integrations.
-
-Do not refactor unrelated features.
-
-Do not modify:
-
-* Authentication behavior
-* Payment features
-* Messaging
-* Jobs
-* Marketplace features outside Assets Library
-* User onboarding
-* Database schema
-* Existing unrelated APIs
-
-unless a direct dependency is required for the Assets Library.
+All Claude and embedding API calls must happen server-side.
 
 ---
 
-# Acceptance Criteria
+# Do Not Build Yet
 
-The task is complete when:
+Do not add:
 
-* [x] Existing `media_assets` and related tables were inspected before implementation.
-* [x] No database tables or columns were added, removed, or modified.
-* [x] Assets Library matches the existing platform theme.
-* [x] Existing reusable frontend components are reused where practical.
-* [x] Users can browse assets.
-* [x] Images are displayed correctly.
-* [x] Videos are displayed/playable correctly.
-* [x] Audio assets are displayed/playable correctly.
-* [x] Assets can be filtered by supported media type.
-* [x] Existing supported search functionality is implemented.
-* [x] Authenticated users can create/upload assets.
-* [x] Users can view individual asset details.
-* [x] Asset owners can edit their assets.
-* [x] Asset owners can delete their assets.
-* [x] Users cannot modify assets belonging to another user without existing privileged permissions.
-* [x] Comments use existing asset-related tables.
-* [x] Users can create/view comments according to existing permissions.
-* [x] Review support was evaluated against existing tables; no asset-related review persistence exists.
-* [x] The UI reports that reviews are unavailable instead of adding unsupported persistence or endpoints.
-* [x] My Assets displays the authenticated user's assets.
-* [x] Loading states are implemented.
-* [x] Empty states are implemented.
-* [x] API errors are handled gracefully.
-* [x] Duplicate/unnecessary requests are avoided.
-* [x] Desktop/mobile layouts are responsive.
-* [x] Existing authentication and authorization rules remain intact.
-* [x] No unrelated files/features were modified.
+```text
+Docker
+Redis
+LangChain
+LlamaIndex
+Pinecone
+Qdrant
+Playwright
+recursive crawling
+sitemap crawling
+scheduled ingestion
+conversation memory
+hybrid search
+reranking
+agents
+tool calling
+admin UI
+streaming
+```
+
+unless those features already exist and are directly necessary.
 
 ---
 
-# Verification
+# Development Order
 
-After implementation:
+Implement in this order:
 
-1. Run the frontend build.
-2. Run the backend.
-3. Run existing tests related to modified areas.
-4. Verify database queries use existing columns only.
-5. Verify no migration/schema file was created.
-6. Test image upload and display.
-7. Test video upload and playback.
-8. Test audio upload and playback.
-9. Test asset detail view.
-10. Test edit as asset owner.
-11. Test delete as asset owner.
-12. Attempt edit/delete as another user and confirm rejection.
-13. Test posting comments.
-14. Test viewing comments.
-15. Test submitting reviews.
-16. Test viewing reviews.
-17. Test filters.
-18. Test search.
-19. Test empty states.
-20. Test loading/error states.
-21. Test mobile responsiveness.
-22. Confirm existing platform features continue working.
+```text
+1. Inspect existing repository
 
----
+2. Identify naming conventions
 
-## Notes and Decisions
+3. Identify current architecture
 
-* Existing database schema is authoritative.
-* `media_assets` and its related tables must be reused.
-* No database schema modifications are allowed.
-* Images, videos, and audio are the supported asset categories.
-* Existing storage/upload architecture must be reused.
-* Existing platform theme and UI components must be reused.
-* Backend authorization must protect ownership-sensitive operations.
-* Requested functionality unsupported by the current schema should be documented rather than implemented through schema changes.
-* Keep changes isolated to the Assets Library and its direct dependencies.
+4. Reuse existing PostgreSQL configuration
 
----
+5. Reuse existing Anthropic/AI configuration if available
 
-## Status
+6. Add environment placeholders only
 
-Completed on August 17, 2026, with the existing-schema review limitation documented below.
+7. Add pgvector table/migration
 
-### Implementation Notes
+8. Add configurable RAG_SOURCES array
 
-* Added authenticated Assets API routes following route → controller → service → repository separation.
-* Reused `media_assets`, `market_assets`, `market_media_assets`, `files`, `upload_intents`, `asset_comments`, `asset_replies`, `market_asset_tags`, `tags`, `users`, and `accounts` without modifying the schema.
-* Asset ownership is derived on the backend from `media_assets.owner_user_id` through `users.account_id`; client-supplied ownership is never accepted.
-* Create operations accept only finalized, account-owned uploads under `assets/`, reject reused files, and verify that the persisted MIME category matches the requested media type.
-* Added public discovery, search, media-type filters, pagination, private My Assets listing, details, owner-only edit/delete, and own-comment create/edit/delete.
-* Added image, MP4 video, and MP3/WAV/OGG upload policies using the existing ownership-bound upload-intent flow. Local runtime configuration was updated to allow those audio MIME types; production deployments using `UPLOAD_ALLOWED_TYPES` must include them as well.
-* Added responsive Assets Library and Asset Details pages using the existing `Layout`, `UserHeader`, toast utilities, confirmation dialog, Axios/CSRF client, theme classes, and file-upload helper.
-* The existing `ratings` table is contract-bound through `contract_id` and has no relationship to `market_assets` or `media_assets`. Per the no-schema-change requirement, asset reviews were not persisted or exposed; the details UI communicates that reviews are unavailable.
-* No migration or schema file was created.
+9. Build HTML scraper
 
-### Verification Performed
+10. Build section extraction
 
-* Backend syntax checks passed for every created/modified Assets module and `FileServices.js`/`Api.js`.
-* The API route graph loaded successfully, and unauthenticated `GET /api/assets` returned HTTP 401.
-* Read-only PostgreSQL execution passed for discovery, My Assets, type filtering, asset details, comments, owner-update lookup, owner-delete lookup, and comment ownership queries.
-* Focused service validation checks passed for invalid media filters, invalid UUIDs, and invalid create payloads.
-* Targeted ESLint passed for all new Assets frontend files.
-* `npm run build` passed in `frontend` (TypeScript and Vite production build).
-* A separate backend start attempt reached PostgreSQL and MongoDB, but the environment's Redis connection was denied and port 4000 was already occupied by an existing server; route behavior was verified against that running server instead.
-* Destructive browser/database checks (real upload/create/edit/delete/comment writes and cross-account mutation attempts) were not run automatically against the configured data environment.
+11. Build chunker
+
+12. Build reusable embedding service
+
+13. Build ingestion script
+
+14. Verify chunks and vectors in PostgreSQL
+
+15. Build vector retrieval
+
+16. Test retrieval independently
+
+17. Build Claude support response service
+
+18. Add chat endpoint
+
+19. Return answer + real sources
+
+20. Test end-to-end
+```
 
 ---
 
-## Recent Completed Change Summary
+# Definition of Done
 
-The Team join-request flow was corrected before this Assets Library task began. **Ask to Join** now creates a pending membership instead of automatically activating the requester. Active Team owners and admins can review, search, approve, or deny requests from the **Pending Requests** tab, while unauthorized users cannot access the pending-request API. Join-by-code retains its existing Team-policy behavior. Backend syntax checks, targeted frontend lint, and the frontend production build passed for those changes.
+The feature is complete when:
+
+```text
+CONFIGURATION
+
+RAG_SOURCES = [
+  HTML URL,
+  HTML URL,
+  HTML URL
+]
+
+        ↓
+
+INGESTION
+
+HTML URL
+↓
+Axios
+↓
+Cheerio
+↓
+clean content
+↓
+sections
+↓
+chunks
+↓
+embedding
+↓
+PostgreSQL + pgvector
+
+
+        ↓
+
+CHAT
+
+User question
+↓
+question embedding
+↓
+pgvector similarity search
+↓
+top relevant chunks
+↓
+Claude Sonnet
+↓
+grounded support answer
+↓
+real source URLs
+```
+
+---
+
+# Final Critical Requirements
+
+1. Do not change unrelated files.
+2. Do not change unrelated functionality.
+3. Preserve existing code behavior.
+4. Inspect the repository first.
+5. Follow existing naming conventions.
+6. Follow existing backend architecture.
+7. Reuse existing infrastructure wherever possible.
+8. Do not create duplicate database or AI configurations.
+9. Do not rename or move existing files unnecessarily.
+10. Do not refactor unrelated code.
+11. Put all HTML documentation sources in one configurable array.
+12. New documentation sources must be addable by adding another array object.
+13. Do not hardcode documentation URLs throughout the codebase.
+14. Use only sources where `enabled === true`.
+15. Scrape HTML during ingestion, not during every chat request.
+16. Chunk documentation before embedding.
+17. Generate document embeddings during ingestion.
+18. Store embeddings in PostgreSQL + pgvector.
+19. Generate a question embedding for every search.
+20. Use pgvector to retrieve relevant chunks.
+21. Send only relevant chunks to Claude.
+22. Use `process.env.ANTHROPIC_MODEL`.
+23. Use `ANTHROPIC_MODEL=claude-sonnet-5`.
+24. Keep API keys as environment placeholders only.
+25. Do not hardcode real credentials.
+26. Preserve each document chunk's original URL.
+27. Return source URLs from PostgreSQL retrieval results.
+28. Never allow Claude to invent documentation URLs.
+29. Do not regenerate document embeddings for each chat.
+30. Keep V1 simple.
+
+# Main Goal
+
+Implement this foundation:
+
+```text
+CONFIGURE
+RAG_SOURCES array
+
+        ↓
+
+INGEST ONCE
+HTML
+→ scrape
+→ clean
+→ chunk
+→ embed
+→ store
+
+        ↓
+
+RETRIEVE MANY TIMES
+question
+→ embed
+→ pgvector
+→ relevant chunks
+→ Claude
+→ answer + sources
+```
+
+Do not expand the scope until this pipeline works correctly end-to-end.
+
+---
+
+# Implementation Status — August 19, 2026
+
+Implemented:
+
+* [x] Curated 17-source Markdown knowledge catalog under `backend/data`.
+* [x] CommonJS embedding service using a locally cached Hugging Face Transformers.js model.
+* [x] Reusable heading-preserving Markdown chunking.
+* [x] Transactional per-URL document replacement repository.
+* [x] pgvector cosine-similarity retrieval with configurable top-K and threshold.
+* [x] Claude Messages API support generation using `ANTHROPIC_MODEL`.
+* [x] Verified source deduplication and staff-route filtering.
+* [x] `POST /api/chat` controller/service/repository route for Postman and frontend use.
+* [x] `npm run rag:ingest` ingestion command.
+* [x] Backend `.env.example` placeholders without real credentials.
+* [x] Syntax, validation, chunking, source loading, and route-graph checks.
+
+Verified locally:
+
+* [x] pgvector migrations 138 and 139 are applied.
+* [x] The local MiniLM model returns normalized 384-dimensional vectors.
+* [x] Ingested 97 chunks from all 17 enabled documentation sources.
+* [x] Retrieval returns the credit-system documentation for a credit-system question.
+
+Remaining environment verification:
+
+* [ ] Update the real backend `.env` to use the 384-dimensional local model configuration.
+* [ ] Run Claude answer generation end to end with a valid `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL`.

@@ -8,6 +8,7 @@ const EXEMPT_PATHS = [
   /^\/(?:payment|cashouts)\/webhooks\//,
   /^\/verification\/webhook\//,
   /^\/google-meet\/oauth\/callback\/?$/,
+  /^\/chat\/?$/,
 ];
 
 function tokenKey(sessionId) {
