@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { FileText, Clock, DollarSign, Briefcase, Loader2, Wrench, Bookmark } from "lucide-react";
+import { FileText, Clock, DollarSign, Loader2, Wrench, Bookmark } from "lucide-react";
 import { useJobs } from "../../../../../hooks/useJobs";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -23,9 +23,10 @@ function getTimeAgo(date: Date) {
 interface ProfileJobPostsProps {
   userDetails?: any;
   accountId?: string;
+  isOwner?: boolean;
 }
 
-export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ userDetails, accountId }) => {
+export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ accountId, isOwner = false }) => {
   const { fetchJobs, toggleJobSave } = useJobs();
   const navigate = useNavigate();
   const [myJobs, setMyJobs] = useState<any[]>([]);
@@ -36,13 +37,13 @@ export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ userDetails, 
     try {
       const jobToUpdate = myJobs.find((j) => j.id === jobId);
       if (!jobToUpdate) return;
-      
+
       const willBeSaved = !jobToUpdate.isSaved;
       await toggleJobSave(jobId);
-      
+
       if (willBeSaved) toast.success("Job saved successfully!");
       else toast.success("Job removed from saved list");
-      
+
       setMyJobs((prev) =>
         prev.map((job) => {
           if (job.id === jobId) {
@@ -86,7 +87,7 @@ export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ userDetails, 
               savesCount: parseInt(j.saves_count) || 0,
             }))
             .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-          
+
           setMyJobs(userJobs);
         }
       } catch (error) {
@@ -114,24 +115,25 @@ export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ userDetails, 
 
   return (
     <div className="flex-1 space-y-4">
+      {/* Header Bar */}
       <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-2">
         <h4 className="text-xs font-extrabold text-gray-900 dark:text-white tracking-wider uppercase flex items-center gap-2">
-          <FileText className="h-4 w-4 text-blue-500" />
-          My Job Posts
+          <FileText className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
+          {isOwner ? "My Job Posts" : "Job Posts"}
         </h4>
         <span className="text-[10px] text-gray-500 dark:text-zinc-500 font-medium">
           {myJobs.length} active posts
         </span>
       </div>
-      
+
       {myJobs.length === 0 ? (
-        <div className="py-12">
+        <div className="py-2">
           <EmptyState
-            icon={Briefcase}
             title="No Job Posts Yet"
-            description="You haven't posted any jobs. Create your first job post to connect with talented editors!"
-            actionLabel="Post a Job"
-            onAction={() => navigate('/jobs/create')}
+            description={isOwner ? "You haven't posted any jobs. Create your first job post to connect with talented editors!" : "This user hasn't posted any jobs yet."}
+            actionLabel={isOwner ? "Post a Job" : undefined}
+            onAction={isOwner ? () => navigate('/jobs/create') : undefined}
+            className="!p-6 !py-8 [&_dotlottie-wc]:!h-20 [&_dotlottie-wc]:!w-20 [&_.grayscale]:!h-20 [&_.grayscale]:!w-20 [&_.grayscale]:!mb-2 [&_h3]:!text-sm [&_p]:!text-xs [&_button]:!mt-4 [&_button]:!py-2 [&_button]:!px-4 [&_button]:!text-xs"
           />
         </div>
       ) : (

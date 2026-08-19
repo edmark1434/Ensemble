@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Edit2, Check, Bold, Italic, List, Eye, EyeOff, Play, AlertTriangle } from "lucide-react";
+import { Edit2, Check, Bold, Italic, List, Eye, EyeOff, Play, AlertTriangle, User } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import api from "@/lib/axios.ts";
@@ -98,7 +98,7 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
       setIsLoading(true);
       const original = { introduction: introduction || "" };
       const updates = { introduction: content };
-      
+
       const response = await api.put('/api/accounts/update-profile-details', {
         original,
         updates
@@ -127,7 +127,25 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
   };
 
   return (
-    <div className="flex flex-col h-full relative pt-1">
+    <div className="flex-1 space-y-4 text-left">
+      {/* Header Bar matching Portfolio, Gallery & Services */}
+      <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-2">
+        <h4 className="text-xs font-extrabold text-gray-900 dark:text-white tracking-wider uppercase flex items-center gap-2">
+          <User className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
+          {isOwner ? "My Introduction" : "Introduction"}
+        </h4>
+
+        {isOwner && !isEditing && (
+          <button
+            onClick={() => setIsEditing(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] text-[11px] font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-all cursor-pointer shadow-sm"
+          >
+            <Edit2 className="h-3 w-3" />
+            <span>Edit Introduction</span>
+          </button>
+        )}
+      </div>
+
       <div className="w-full text-left">
         {isEditing ? (
           <div className="space-y-3">
@@ -163,11 +181,11 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
                 </button>
               </div>
             </div>
-            
+
             {isPreview ? (
               <div className="w-full min-h-[300px] rounded-b-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 p-5 text-sm overflow-y-auto break-words leading-relaxed">
                 {content ? (
-                  <ReactMarkdown 
+                  <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
                       strong: ({ node, ...props }) => <strong className="font-extrabold text-gray-900 dark:text-white" {...props} />,
@@ -188,13 +206,13 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
                 )}
               </div>
             ) : (
-              <textarea 
-                ref={textareaRef} 
-                rows={15} 
-                maxLength={3000} 
-                value={content} 
-                onChange={e => setContent(e.target.value)} 
-                className="w-full min-h-[300px] rounded-b-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900/50 p-5 text-sm text-gray-900 dark:text-zinc-200 outline-none focus:border-blue-500/50 transition-all resize-y break-words custom-scrollbar leading-relaxed" 
+              <textarea
+                ref={textareaRef}
+                rows={15}
+                maxLength={3000}
+                value={content}
+                onChange={e => setContent(e.target.value)}
+                className="w-full min-h-[300px] rounded-b-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900/50 p-5 text-sm text-gray-900 dark:text-zinc-200 outline-none focus:border-blue-500/50 transition-all resize-y break-words custom-scrollbar leading-relaxed"
                 placeholder="Write an introduction about yourself..."
               />
             )}
@@ -210,19 +228,9 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
           </div>
         ) : (
           <div className="relative w-full h-full text-gray-700 dark:text-zinc-300 leading-relaxed text-left">
-            {isOwner && (
-              <button 
-                onClick={() => setIsEditing(true)}
-                className="absolute top-0 right-0 p-2 rounded-xl text-gray-400 dark:text-zinc-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors z-10"
-                title="Edit Introduction"
-              >
-                <Edit2 className="h-5 w-5" />
-              </button>
-            )}
-            
             {content ? (
-              <div className="w-full max-w-none break-words pr-12 pb-10">
-                <ReactMarkdown 
+              <div className="w-full max-w-none break-words pb-6">
+                <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
                     strong: ({ node, ...props }) => <strong className="font-extrabold text-gray-900 dark:text-white" {...props} />,
@@ -248,15 +256,15 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
 
             {/* Featured Work Section */}
             {featuredWorks.length > 0 && !isEditing && (
-              <div className="mt-12 pt-8 border-t border-gray-200 dark:border-white/10">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <div className="mt-8 pt-6 border-t border-gray-200 dark:border-white/10">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xs font-extrabold text-gray-900 dark:text-white tracking-wider uppercase">
                     Featured Work
                   </h3>
                   {onViewMoreGallery && (
                     <button
                       onClick={onViewMoreGallery}
-                      className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors flex items-center gap-1"
+                      className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors flex items-center gap-1"
                     >
                       View More
                     </button>
@@ -268,16 +276,16 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
                     const isVideo = item.file_mimetype?.startsWith("video/");
 
                     return (
-                      <div 
-                        key={item.gallery_id} 
+                      <div
+                        key={item.gallery_id}
                         className="group relative rounded-2xl overflow-hidden aspect-[4/3] bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 cursor-pointer shadow-sm hover:shadow-lg transition-all"
                         onClick={() => setSelectedGalleryItem(item)}
                       >
                         {isVideo ? (
                           <div className="relative w-full h-full">
-                            <video 
-                              src={assetUrl} 
-                              className="w-full h-full object-cover" 
+                            <video
+                              src={assetUrl}
+                              className="w-full h-full object-cover"
                               preload="metadata"
                               muted
                               loop
@@ -303,10 +311,10 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
                 </div>
               </div>
             )}
-            <GalleryLightbox 
-              items={featuredWorks} 
-              selectedItem={selectedGalleryItem} 
-              setSelectedItem={setSelectedGalleryItem} 
+            <GalleryLightbox
+              items={featuredWorks}
+              selectedItem={selectedGalleryItem}
+              setSelectedItem={setSelectedGalleryItem}
               isOwner={isOwner}
               onEdit={handleEdit}
               onDelete={handleDeleteClick}
@@ -340,13 +348,13 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
                       initial={{ opacity: 0, scale: 0.95, y: 20 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                      className="relative w-full max-w-md bg-white dark:bg-dark-base rounded-2xl shadow-2xl overflow-hidden flex flex-col p-6 text-center"
+                      className="relative w-full max-w-md bg-white dark:bg-dark-base rounded-2xl shadow-2xl overflow-hidden flex flex-col p-6 text-center border border-gray-200 dark:border-white/10"
                     >
                       <div className="mx-auto w-12 h-12 bg-red-100 dark:bg-red-500/10 rounded-full flex items-center justify-center mb-4">
                         <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
                       </div>
                       <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Delete Gallery Item</h3>
-                      <p className="text-gray-500 dark:text-gray-400 mb-8">
+                      <p className="text-gray-500 dark:text-gray-400 mb-8 text-sm">
                         Are you sure you want to delete <span className="font-semibold text-gray-900 dark:text-gray-200">"{itemToDelete.title}"</span>? This action cannot be undone.
                       </p>
                       <div className="flex gap-3 justify-center">

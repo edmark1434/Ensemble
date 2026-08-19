@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Eye, Heart, ArrowUpRight, Layers, FileText, Globe, Scale, Upload, Plus, X, ExternalLink, HelpCircle, FolderOpen
+  Eye, Heart, ArrowUpRight, FileText, Globe, Scale, Upload, Plus, X, ExternalLink, HelpCircle, FolderOpen
 } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -34,7 +34,6 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
   onUploadPDF,
   onAddExternalLink,
   onDeleteItem,
-  onEditTermsOfService
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeViewItem, setActiveViewItem] = useState<PortfolioItem | null>(null);
@@ -80,155 +79,165 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
     document: { label: "CV / Resume", icon: FileText, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/10" },
     link: { label: "Website", icon: Globe, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/10" },
     tos: { label: "Terms of Service", icon: Scale, color: "text-purple-400", bg: "bg-purple-500/10", border: "border-purple-500/10" },
-    // FIXED: Fallback configuration mapping to handle unexpected item arrays safely
     fallback: { label: "Unknown", icon: HelpCircle, color: "text-zinc-400", bg: "bg-zinc-500/10", border: "border-zinc-500/10" }
   };
 
   return (
-    <div className="space-y-6 flex-1 TrulyRawFixUnsetOverflow">
+    <div className="space-y-4 flex-1 TrulyRawFixUnsetOverflow">
+      {/* Hidden File Input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept=".pdf"
+        className="hidden"
+      />
 
-      {/* ==================== ACTION UTILITY BAR ==================== */}
-      {isOwner && <div className="flex flex-wrap gap-2 pb-1 border-b border-gray-200 dark:border-white/5">
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          accept=".pdf"
-          className="hidden"
-        />
+      {/* Header Bar matching Gallery & Services */}
+      <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-2">
+        <h4 className="text-xs font-extrabold text-gray-900 dark:text-white tracking-wider uppercase flex items-center gap-2">
+          <FolderOpen className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
+          {isOwner ? "My Portfolio" : "Portfolio"}
+          <span className="text-[10px] font-medium text-gray-500 dark:text-zinc-500 lowercase">
+            ({portfolioItems.length})
+          </span>
+        </h4>
 
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] text-[11px] font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-all cursor-pointer"
-        >
-          <Upload className="h-3 w-3" />
-          <span>Upload CV / Resume (PDF)</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {isOwner && (
+            <>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] text-[11px] font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-all cursor-pointer shadow-sm"
+              >
+                <Upload className="h-3 w-3" />
+                <span>Upload CV / Resume (PDF)</span>
+              </button>
 
-        <button
-          onClick={() => setShowLinkModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] text-[11px] font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-all cursor-pointer"
-        >
-          <Plus className="h-3 w-3" />
-          <span>Embed Website Link</span>
-        </button>
-
-      </div>}
-
-      {/* ==================== UNIFORM SQUARE GRID ==================== */}
-      <div className="grid gap-5 grid-cols-2 md:grid-cols-3 content-start">
-        {portfolioItems.map((item) => {
-          // FIXED: Safely fetch configuration parameters or cleanly drop back to fallback options
-          const cfg = typeConfig[item.type] || typeConfig.fallback;
-          const CardIcon = cfg.icon;
-
-          return (
-            <div
-              key={item.id}
-              onClick={() => setActiveViewItem(item)}
-              className="group relative flex flex-col aspect-square justify-between bg-white dark:bg-dark-surface/30 rounded-2xl border border-gray-200 dark:border-white/5 overflow-hidden transition-all duration-300 hover:border-gray-300 dark:hover:border-white/15 hover:bg-gray-50 dark:hover:bg-dark-surface/50 cursor-pointer shadow-lg"
-            >
-              {isOwner && onDeleteItem && (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void onDeleteItem(String(item.id));
-                  }}
-                  className="absolute right-2 top-2 z-20 rounded-lg border border-red-200 dark:border-red-500/20 bg-white/90 dark:bg-black/60 p-1.5 text-red-500 dark:text-red-300 opacity-0 transition group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-500/20"
-                  title="Remove attachment"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-              <div className="relative flex-1 w-full bg-gray-100 dark:bg-zinc-900/40 border-b border-gray-200 dark:border-white/5 flex items-center justify-center overflow-hidden">
-                {item.type === "project" && item.thumbnail ? (
-                  <img
-                    src={item.thumbnail}
-                    alt={item.title}
-                    className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-                  />
-                ) : item.type === "document" && item.fileUrl ? (
-                  <>
-                    <iframe
-                      src={`${item.fileUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0`}
-                      title={`${item.title} PDF preview`}
-                      className="pointer-events-none h-full w-full border-0 bg-white"
-                      loading="lazy"
-                    />
-                    {/* Transparent overlay to intercept clicks from the iframe */}
-                    <div className="absolute inset-0 z-10" />
-                  </>
-                ) : item.type === "link" && item.externalUrl ? (
-                  <div className="relative h-full w-full bg-gray-100 dark:bg-zinc-950">
-                    <div className="absolute inset-0 flex items-center justify-center z-10">
-                      <div className={`p-4 rounded-2xl ${cfg.bg} ${cfg.color} border ${cfg.border}`}>
-                        <CardIcon className="h-6 w-6" />
-                      </div>
-                    </div>
-                    <iframe
-                      src={item.externalUrl}
-                      title={`${item.title} website preview`}
-                      className="pointer-events-none relative h-[200%] w-[200%] origin-top-left scale-50 border-0 bg-white"
-                      loading="lazy"
-                      sandbox="allow-scripts allow-same-origin allow-forms"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="absolute inset-0 z-10" />
-                  </div>
-                ) : (
-                  <div className={`p-4 rounded-2xl ${cfg.bg} ${cfg.color} border ${cfg.border} transition-transform duration-300 group-hover:scale-110 shadow-inner z-10`}>
-                    <CardIcon className="h-6 w-6" />
-                  </div>
-                )}
-
-                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-1 text-[11px] font-bold text-white backdrop-blur-[2px] z-20">
-                  <span>Expand Item</span>
-                  <ArrowUpRight className="h-3.5 w-3.5 ml-0.5" />
-                </div>
-              </div>
-
-              <div className="p-3.5 space-y-1 bg-white dark:bg-dark-base/20 relative z-10">
-                <div className="flex items-center justify-between gap-2">
-                  <span className={`text-[8px] font-mono font-black uppercase tracking-widest ${cfg.color}`}>
-                    {cfg.label}
-                  </span>
-                  {item.type === "project" && (
-                    <span className="text-[9px] text-gray-500 dark:text-zinc-500 font-bold flex items-center gap-1">
-                      <Heart className="h-2.5 w-2.5 text-red-400/70" /> {item.likes || 0}
-                    </span>
-                  )}
-                </div>
-                <h4 className="text-xs font-extrabold text-gray-900 dark:text-white tracking-wide truncate group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">
-                  {item.title}
-                </h4>
-                <p className="text-[10px] text-gray-600 dark:text-zinc-400 font-medium leading-normal line-clamp-1 opacity-70">
-                  {item.description}
-                </p>
-                {item.createdAt && (
-                  <p className="text-[9px] text-gray-400 dark:text-zinc-600">
-                    Added {new Date(item.createdAt).toLocaleDateString()}
-                  </p>
-                )}
-              </div>
-            </div>
-          );
-        })}
-
-        {portfolioItems.length === 0 && (
-          <div className="col-span-full py-12">
-            <EmptyState
-              icon={FolderOpen}
-              title="No portfolio items"
-              description={isOwner ? "Showcase your professional background! Add links or documents to your portfolio." : "This user hasn't added any portfolio items yet."}
-              actionLabel={isOwner ? "Upload Resume / CV" : undefined}
-              onAction={isOwner ? () => fileInputRef.current?.click() : undefined}
-            />
-          </div>
-        )}
+              <button
+                onClick={() => setShowLinkModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] text-[11px] font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-all cursor-pointer shadow-sm"
+              >
+                <Plus className="h-3 w-3" />
+                <span>Embed Website Link</span>
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* ==================== EXPANDED IMMERSIVE DISPLAY MODAL ==================== */}
+      {/* Uniform Square Grid or Empty State */}
+      {portfolioItems.length === 0 ? (
+        <div className="py-2">
+          <EmptyState
+            title="No portfolio items"
+            description={isOwner ? "Showcase your professional background! Add links or documents to your portfolio." : "This user hasn't added any portfolio items yet."}
+            actionLabel={isOwner ? "Upload Resume / CV" : undefined}
+            onAction={isOwner ? () => fileInputRef.current?.click() : undefined}
+            className="!p-6 !py-8 [&_dotlottie-wc]:!h-20 [&_dotlottie-wc]:!w-20 [&_.grayscale]:!h-20 [&_.grayscale]:!w-20 [&_.grayscale]:!mb-2 [&_h3]:!text-sm [&_p]:!text-xs [&_button]:!mt-4 [&_button]:!py-2 [&_button]:!px-4 [&_button]:!text-xs"
+          />
+        </div>
+      ) : (
+        <div className="grid gap-5 grid-cols-2 md:grid-cols-3 content-start">
+          {portfolioItems.map((item) => {
+            const cfg = typeConfig[item.type] || typeConfig.fallback;
+            const CardIcon = cfg.icon;
+
+            return (
+              <div
+                key={item.id}
+                onClick={() => setActiveViewItem(item)}
+                className="group relative flex flex-col aspect-square justify-between bg-white dark:bg-dark-surface/30 rounded-2xl border border-gray-200 dark:border-white/5 overflow-hidden transition-all duration-300 hover:border-gray-300 dark:hover:border-white/15 hover:bg-gray-50 dark:hover:bg-dark-surface/50 cursor-pointer shadow-lg"
+              >
+                {isOwner && onDeleteItem && (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void onDeleteItem(String(item.id));
+                    }}
+                    className="absolute right-2 top-2 z-20 rounded-lg border border-red-200 dark:border-red-500/20 bg-white/90 dark:bg-black/60 p-1.5 text-red-500 dark:text-red-300 opacity-0 transition group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-500/20"
+                    title="Remove attachment"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <div className="relative flex-1 w-full bg-gray-100 dark:bg-zinc-900/40 border-b border-gray-200 dark:border-white/5 flex items-center justify-center overflow-hidden">
+                  {item.type === "project" && item.thumbnail ? (
+                    <img
+                      src={item.thumbnail}
+                      alt={item.title}
+                      className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                    />
+                  ) : item.type === "document" && item.fileUrl ? (
+                    <>
+                      <iframe
+                        src={`${item.fileUrl}#page=1&toolbar=0&navpanes=0&scrollbar=0`}
+                        title={`${item.title} PDF preview`}
+                        className="pointer-events-none h-full w-full border-0 bg-white"
+                        loading="lazy"
+                      />
+                      <div className="absolute inset-0 z-10" />
+                    </>
+                  ) : item.type === "link" && item.externalUrl ? (
+                    <div className="relative h-full w-full bg-gray-100 dark:bg-zinc-950">
+                      <div className="absolute inset-0 flex items-center justify-center z-10">
+                        <div className={`p-4 rounded-2xl ${cfg.bg} ${cfg.color} border ${cfg.border}`}>
+                          <CardIcon className="h-6 w-6" />
+                        </div>
+                      </div>
+                      <iframe
+                        src={item.externalUrl}
+                        title={`${item.title} website preview`}
+                        className="pointer-events-none relative h-[200%] w-[200%] origin-top-left scale-50 border-0 bg-white"
+                        loading="lazy"
+                        sandbox="allow-scripts allow-same-origin allow-forms"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 z-10" />
+                    </div>
+                  ) : (
+                    <div className={`p-4 rounded-2xl ${cfg.bg} ${cfg.color} border ${cfg.border} transition-transform duration-300 group-hover:scale-110 shadow-inner z-10`}>
+                      <CardIcon className="h-6 w-6" />
+                    </div>
+                  )}
+
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-1 text-[11px] font-bold text-white backdrop-blur-[2px] z-20">
+                    <span>Expand Item</span>
+                    <ArrowUpRight className="h-3.5 w-3.5 ml-0.5" />
+                  </div>
+                </div>
+
+                <div className="p-3.5 space-y-1 bg-white dark:bg-dark-base/20 relative z-10">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`text-[8px] font-mono font-black uppercase tracking-widest ${cfg.color}`}>
+                      {cfg.label}
+                    </span>
+                    {item.type === "project" && (
+                      <span className="text-[9px] text-gray-500 dark:text-zinc-500 font-bold flex items-center gap-1">
+                        <Heart className="h-2.5 w-2.5 text-red-400/70" /> {item.likes || 0}
+                      </span>
+                    )}
+                  </div>
+                  <h4 className="text-xs font-extrabold text-gray-900 dark:text-white tracking-wide truncate group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors">
+                    {item.title}
+                  </h4>
+                  <p className="text-[10px] text-gray-600 dark:text-zinc-400 font-medium leading-normal line-clamp-1 opacity-70">
+                    {item.description}
+                  </p>
+                  {item.createdAt && (
+                    <p className="text-[9px] text-gray-400 dark:text-zinc-600">
+                      Added {new Date(item.createdAt).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Expanded Immersive Display Modal */}
       {mounted && document.body && createPortal(
         <AnimatePresence>
           {showLinkModal && (
@@ -286,99 +295,98 @@ export const Profile_Portfolio: React.FC<ProfilePortfolioProps> = ({
                 className="absolute inset-0 bg-black/80 backdrop-blur-md"
               />
 
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              transition={{ type: "spring", duration: 0.4 }}
-              className="relative w-full max-w-4xl bg-white/95 dark:bg-dark-base/95 border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden z-10 font-['Plus Jakarta Sans',sans-serif]"
-            >
-              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-white/5 bg-gray-50 dark:bg-white/[0.01]">
-                <div className="min-w-0">
-                  <span className={`text-[9px] font-mono font-black uppercase tracking-widest ${(typeConfig[activeViewItem.type] || typeConfig.fallback).color}`}>
-                    {(typeConfig[activeViewItem.type] || typeConfig.fallback).label}
-                  </span>
-                  <h3 className="text-sm font-black text-gray-900 dark:text-white truncate tracking-wide">
-                    {activeViewItem.title}
-                  </h3>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                transition={{ type: "spring", duration: 0.4 }}
+                className="relative w-full max-w-4xl bg-white/95 dark:bg-dark-base/95 border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden z-10 font-['Plus Jakarta Sans',sans-serif]"
+              >
+                <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-white/5 bg-gray-50 dark:bg-white/[0.01]">
+                  <div className="min-w-0">
+                    <span className={`text-[9px] font-mono font-black uppercase tracking-widest ${(typeConfig[activeViewItem.type] || typeConfig.fallback).color}`}>
+                      {(typeConfig[activeViewItem.type] || typeConfig.fallback).label}
+                    </span>
+                    <h3 className="text-sm font-black text-gray-900 dark:text-white truncate tracking-wide">
+                      {activeViewItem.title}
+                    </h3>
+                  </div>
+
+                  <button
+                    onClick={() => setActiveViewItem(null)}
+                    className="p-1.5 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] text-gray-500 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white transition-all cursor-pointer"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
 
-                <button
-                  onClick={() => setActiveViewItem(null)}
-                  className="p-1.5 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] text-gray-500 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white transition-all cursor-pointer"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50 dark:bg-zinc-950/20 [scrollbar-width:thin]">
+                  {activeViewItem.type === "project" && activeViewItem.thumbnail && (
+                    <div className="w-full rounded-xl overflow-hidden border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-zinc-900/40">
+                      <img src={activeViewItem.thumbnail} alt={activeViewItem.title} className="w-full h-auto max-h-[450px] object-contain mx-auto" />
+                    </div>
+                  )}
 
-              <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50 dark:bg-zinc-950/20 [scrollbar-width:thin]">
-                {activeViewItem.type === "project" && activeViewItem.thumbnail && (
-                  <div className="w-full rounded-xl overflow-hidden border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-zinc-900/40">
-                    <img src={activeViewItem.thumbnail} alt={activeViewItem.title} className="w-full h-auto max-h-[450px] object-contain mx-auto" />
-                  </div>
-                )}
-
-                {activeViewItem.type === "document" && activeViewItem.fileUrl && (
-                  <div className="w-full h-[500px] rounded-xl overflow-hidden border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-dark-surface/30">
-                    <iframe
-                      src={`${activeViewItem.fileUrl}#toolbar=0`}
-                      className="w-full h-full border-none"
-                      title={activeViewItem.title}
-                    />
-                  </div>
-                )}
-
-                {activeViewItem.type === "link" && activeViewItem.externalUrl && (
-                  <div className="space-y-3">
-                    <div className="h-[500px] w-full overflow-hidden rounded-xl border border-emerald-500/20 bg-white">
+                  {activeViewItem.type === "document" && activeViewItem.fileUrl && (
+                    <div className="w-full h-[500px] rounded-xl overflow-hidden border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-dark-surface/30">
                       <iframe
-                        src={activeViewItem.externalUrl}
-                        title={`${activeViewItem.title} website preview`}
-                        className="h-full w-full border-0"
-                        loading="lazy"
-                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                        referrerPolicy="no-referrer"
+                        src={`${activeViewItem.fileUrl}#toolbar=0`}
+                        className="w-full h-full border-none"
+                        title={activeViewItem.title}
                       />
                     </div>
-                    <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] p-3">
-                      <p className="min-w-0 truncate text-xs text-gray-500 dark:text-zinc-400">
-                        If the website blocks embedded previews, open it in a new tab.
-                      </p>
-                    <a
-                      href={activeViewItem.externalUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                        className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white transition-all hover:bg-emerald-500"
-                    >
-                        <span>Open Website</span>
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
+                  )}
+
+                  {activeViewItem.type === "link" && activeViewItem.externalUrl && (
+                    <div className="space-y-3">
+                      <div className="h-[500px] w-full overflow-hidden rounded-xl border border-emerald-500/20 bg-white">
+                        <iframe
+                          src={activeViewItem.externalUrl}
+                          title={`${activeViewItem.title} website preview`}
+                          className="h-full w-full border-0"
+                          loading="lazy"
+                          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] p-3">
+                        <p className="min-w-0 truncate text-xs text-gray-500 dark:text-zinc-400">
+                          If the website blocks embedded previews, open it in a new tab.
+                        </p>
+                        <a
+                          href={activeViewItem.externalUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white transition-all hover:bg-emerald-500"
+                        >
+                          <span>Open Website</span>
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {activeViewItem.type === "tos" && (
-                  <div className="p-5 md:p-6 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-dark-surface/50 font-sans text-xs text-gray-800 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap max-h-[450px] overflow-y-auto">
-                    {activeViewItem.description}
-                  </div>
-                )}
-
-                {activeViewItem.type !== "tos" && (
-                  <div className="space-y-1 pt-2 border-t border-gray-200 dark:border-white/5">
-                    <h5 className="text-[11px] font-black uppercase text-gray-500 dark:text-zinc-500 tracking-wider">Item Documentation Logs</h5>
-                    <p className="text-xs text-gray-600 dark:text-zinc-400 leading-relaxed font-medium">
+                  {activeViewItem.type === "tos" && (
+                    <div className="p-5 md:p-6 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-dark-surface/50 font-sans text-xs text-gray-800 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap max-h-[450px] overflow-y-auto">
                       {activeViewItem.description}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>,
+                    </div>
+                  )}
+
+                  {activeViewItem.type !== "tos" && (
+                    <div className="space-y-1 pt-2 border-t border-gray-200 dark:border-white/5">
+                      <h5 className="text-[11px] font-black uppercase text-gray-500 dark:text-zinc-500 tracking-wider">Item Documentation Logs</h5>
+                      <p className="text-xs text-gray-600 dark:text-zinc-400 leading-relaxed font-medium">
+                        {activeViewItem.description}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
         document.body
       )}
-
     </div>
   );
 };
