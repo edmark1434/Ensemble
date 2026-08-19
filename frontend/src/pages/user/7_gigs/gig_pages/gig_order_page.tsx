@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Loader2, CheckCircle2, Check, CreditCard, Box, MapPin, PlayCircle } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle2, Check, CreditCard, Box, MapPin, PlayCircle, Search } from "lucide-react";
 import api from "@/lib/axios";
 import type { Gig } from "../gig_datasets";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import useGlobalState from "@/lib/global_state";
 import PopupConfirmReturn from "@/pages/user/6_job_market/job_components/job_popups/popup_confirm_return";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 
 const ORDER_WIZARD_STEPS = [
   { id: 1, label: "Order Details" },
@@ -79,7 +80,7 @@ const GigOrderPage: React.FC = () => {
 
   const [gig, setGig] = useState<Gig | null>(null);
   const [loading, setLoading] = useState(true);
-  
+
   const [currentSlide, setCurrentSlide] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
@@ -101,7 +102,7 @@ const GigOrderPage: React.FC = () => {
             if (path.startsWith('http') || path.startsWith('/')) return path;
             return `${cloudFrontUrl}${path.startsWith('/') ? '' : '/'}${path}`;
           };
-          
+
           setGig({
             ...g,
             thumbnail: mapUrl(g.thumbnail) || "https://d2dl0agwn9kque.cloudfront.net/gig_thumbnails/ede6f8d1-cc62-4afd-be9f-11f044d86122/placeholder_1787040672764_8a5d64b3.png",
@@ -144,10 +145,22 @@ const GigOrderPage: React.FC = () => {
 
   if (!gig) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-dark-base flex flex-col items-center justify-center">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Service not found</h2>
-        <button onClick={() => navigate("/gigs/services")} className="mt-4 text-blue-600 hover:underline">
-          Go back
+      <div className="min-h-screen bg-gray-50 dark:bg-dark-base flex flex-col items-center justify-center py-20 px-4 text-center">
+        <div className="mb-6 h-36 w-36 grayscale opacity-80">
+          <DotLottieReact src="/icons/lottie/no-result.lottie" autoplay loop />
+        </div>
+        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+          Service Not Found
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-zinc-400 mb-8 max-w-md">
+          The freelance service you are looking for does not exist or might have been removed.
+        </p>
+        <button
+          onClick={() => navigate("/gigs/services")}
+          className="flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 shadow-lg shadow-blue-500/20"
+        >
+          <Search className="h-4 w-4" />
+          Explore Services
         </button>
       </div>
     );
@@ -226,7 +239,7 @@ const GigOrderPage: React.FC = () => {
                           onChange={(e) => setProjectBrief(e.target.value)}
                         />
                       </div>
-                      
+
                       {gig.questionnaires && gig.questionnaires.length > 0 && (
                         <div className="space-y-4">
                           <label className="block text-xs font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wide">Questionnaire</label>
@@ -235,14 +248,14 @@ const GigOrderPage: React.FC = () => {
                                 <p className="text-sm font-semibold text-gray-800 dark:text-zinc-200 mb-3">
                                   {q.question} {(q.required || q.isRequired) && <span className="text-red-500">*</span>}
                                 </p>
-                                
+
                                 {(q.type === "multiple-choice" || q.type === "choice" || q.type === 'multiple_choice') ? (
                                   q.multipleAnswer ? (
                                     <div className="space-y-2">
                                       {q.options?.map((opt, oIdx) => (
                                         <label key={oIdx} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface cursor-pointer hover:border-blue-500 transition-colors">
-                                          <input 
-                                            type="checkbox" 
+                                          <input
+                                            type="checkbox"
                                             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-600"
                                             checked={(questionAnswers[idx] || []).includes(opt)}
                                             onChange={(e) => {
@@ -261,8 +274,8 @@ const GigOrderPage: React.FC = () => {
                                     <div className="space-y-2">
                                       {q.options?.map((opt, oIdx) => (
                                         <label key={oIdx} className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface cursor-pointer hover:border-blue-500 transition-colors">
-                                          <input 
-                                            type="radio" 
+                                          <input
+                                            type="radio"
                                             name={`q-${idx}`}
                                             className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-600"
                                             checked={questionAnswers[idx] === opt}
@@ -288,7 +301,6 @@ const GigOrderPage: React.FC = () => {
                                           e.target.value = '';
                                           return;
                                         }
-                                        // Normally we'd upload this immediately and save the URL in questionAnswers, but for now we can just store the file object or name.
                                         setQuestionAnswers(prev => ({ ...prev, [idx]: file ? file.name : "" }));
                                       }}
                                     />
@@ -308,13 +320,13 @@ const GigOrderPage: React.FC = () => {
                             ))}
                         </div>
                       )}
-                      
+
                       <div className="flex gap-3 pt-6 mt-6 border-t border-gray-100 dark:border-white/5">
                         <button onClick={handleReturnTrigger} className="px-6 py-3 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-zinc-300 font-bold text-sm hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">
                           Discard
                         </button>
-                        <button 
-                          onClick={() => setCurrentSlide(2)} 
+                        <button
+                          onClick={() => setCurrentSlide(2)}
                           className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
                         >
                           Confirm Details & Next <span className="ml-1">→</span>
@@ -363,9 +375,9 @@ const GigOrderPage: React.FC = () => {
                       <button onClick={() => setCurrentSlide(1)} disabled={isProcessing} className="px-6 py-3 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-zinc-300 font-bold text-sm hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">
                         Back
                       </button>
-                      <button 
-                        onClick={handleCheckout} 
-                        disabled={isProcessing} 
+                      <button
+                        onClick={handleCheckout}
+                        disabled={isProcessing}
                         className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-50 flex justify-center items-center gap-2"
                       >
                         {isProcessing ? "Processing..." : "Pay with Credits"}

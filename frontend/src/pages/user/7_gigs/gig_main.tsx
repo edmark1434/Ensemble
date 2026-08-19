@@ -59,11 +59,11 @@ const GigMain: React.FC = () => {
             const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || '';
             const mapUrl = (path: string) => {
               if (!path) return undefined;
-              if (!cloudFrontUrl && path.includes('public')) return undefined; // Fallback to unsplash for broken seeded paths
+              if (!cloudFrontUrl && path.includes('public')) return undefined;
               if (path.startsWith('http') || path.startsWith('/')) return path;
               return `${cloudFrontUrl}${path.startsWith('/') ? '' : '/'}${path}`;
             };
-            
+
             return {
               ...g,
               thumbnail: mapUrl(g.thumbnail) || "https://d2dl0agwn9kque.cloudfront.net/gig_thumbnails/ede6f8d1-cc62-4afd-be9f-11f044d86122/placeholder_1787040672764_8a5d64b3.png",
@@ -199,7 +199,6 @@ const GigMain: React.FC = () => {
                     activeCategory={activeCategoryFilter}
                     onCategoryChange={setActiveCategoryFilter}
                   />
-                  {/* Future GigFilters can go here */}
                 </>
               )}
             </div>
@@ -214,7 +213,15 @@ const GigMain: React.FC = () => {
       {/* Slide-out details drawer */}
       <GigViewDetails
         selectedGig={selectedGig}
-        onClose={() => navigate("/gigs/services")}
+        onClose={() => {
+          if (location.pathname.includes("/saved-services")) {
+            navigate("/gigs/saved-services");
+          } else if (location.pathname.includes("/my-services")) {
+            navigate("/gigs/my-services");
+          } else {
+            navigate("/gigs/services");
+          }
+        }}
         onToggleSave={(gigId) => {
            const e = { stopPropagation: () => {} } as React.MouseEvent;
            toggleSaveGig(e, gigId);

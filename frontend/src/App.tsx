@@ -42,6 +42,8 @@ import ProposalsViewDetailsAsApplicant from '@/pages/user/6_job_market/job_propo
 import ProposalsViewDetailsAsAuthor from '@/pages/user/6_job_market/job_proposals/proposals_pages/proposals_view_details_as_author'
 import GigMain from '@/pages/user/7_gigs/gig_main.tsx'
 import GigServicesPage from '@/pages/user/7_gigs/gig_pages/gig_services_page.tsx'
+import GigSavesPage from '@/pages/user/7_gigs/gig_pages/gig_saves_page.tsx'
+import GigMyPostPage from '@/pages/user/7_gigs/gig_pages/gig_mypost_page.tsx'
 import GigCreatePage from '@/pages/user/7_gigs/gig_pages/gig_create_page.tsx'
 import GigEditPage from '@/pages/user/7_gigs/gig_pages/gig_edit_page.tsx'
 import GigFullPage from '@/pages/user/7_gigs/gig_pages/gig_full_page.tsx'
@@ -248,12 +250,15 @@ function App() {
           <Route path='/jobs/proposals/sent/:proposalId' element={<ProposalsViewDetailsAsApplicant />} />
           <Route path='/jobs/proposals/sent/:proposalId/offer/:contractId' element={<ProposalsViewDetailsAsApplicant />} />
 
+          {/* Gigs Layout & Sub-Routes */}
           <Route path='/gigs' element={<GigMain />}>
             <Route index element={<Navigate to="/gigs/services" replace />} />
             <Route path='services' element={<GigServicesPage />} />
             <Route path='services/:id' element={<GigServicesPage />} />
-            <Route path='saved-services' element={<GigServicesPage />} />
-            <Route path='my-services' element={<GigServicesPage />} />
+            <Route path='saved-services' element={<GigSavesPage />} />
+            <Route path='saved-services/:id' element={<GigSavesPage />} />
+            <Route path='my-services' element={<GigMyPostPage />} />
+            <Route path='my-services/:id' element={<GigMyPostPage />} />
           </Route>
           <Route path='/gigs/orders' element={<OrdersMain />}>
             <Route index element={<OrdersSelectGigPage />} />

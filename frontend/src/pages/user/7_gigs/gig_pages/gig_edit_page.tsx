@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { Trash2 } from "lucide-react";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
@@ -22,22 +23,20 @@ import CreationSuccess from "../gig_components/gig_creation_components/7_creatio
 const GigEditPage: React.FC = () => {
   const { id } = useParams();
   const [isLoading, setIsLoading] = useState(true);
+  const [isOwnGig, setIsOwnGig] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const navigate = useNavigate();
   const theme = useGlobalState((state) => state.theme);
-  
+
   const [currentSlide, setCurrentSlide] = useState<number>(1);
-  const [isDiscardOpen, setIsDiscardOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
-
-  
-
 
   // --- SLIDE 1: CORE INFO ---
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
-  const [thumbnailUrl, setThumbnailUrl] = useState(""); // Using URL for frontend mock
+  const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
 
   // --- SLIDE 2: DELIVERY ---
@@ -45,7 +44,7 @@ const GigEditPage: React.FC = () => {
   const [termsOfService, setTermsOfService] = useState("");
   const [skills, setSkills] = useState<string[]>([]);
   const [firstDraftDelivery, setFirstDraftDelivery] = useState("");
-  const [galleryUrls, setGalleryUrls] = useState<string[]>([]); // Using URLs for frontend mock
+  const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
 
   // --- SLIDE 3: TIERS & MILESTONES ---
@@ -68,6 +67,8 @@ const GigEditPage: React.FC = () => {
         const res = await api.get(`/api/gigs/${id}`);
         const data = res.data.data;
         if (data) {
+          setIsOwnGig(Boolean(data.isOwnGig));
+
           const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || '';
           const mapUrl = (path: string) => {
             if (!path) return "";
@@ -100,6 +101,23 @@ const GigEditPage: React.FC = () => {
     if (id) fetchGig();
   }, [id]);
 
+  const handleDeletePost = async () => {
+    if (!window.confirm("Are you sure you want to delete this service? It will no longer appear in the marketplace.")) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await api.delete(`/api/gigs/${id}`);
+      navigate("/gigs/my-services");
+    } catch (err: any) {
+      console.error("Failed to delete gig:", err);
+      alert(err.response?.data?.message || "Failed to delete gig");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center dark:bg-dark-base text-gray-500">Loading service details...</div>;
   }
@@ -109,10 +127,10 @@ const GigEditPage: React.FC = () => {
   const handleReturnTrigger = () => {
     if (hasUnsavedChanges) {
       if (window.confirm("You have unsaved changes. Discard?")) {
-        navigate("/gigs");
+        navigate("/gigs/my-services");
       }
     } else {
-      navigate("/gigs");
+      navigate("/gigs/my-services");
     }
   };
 
@@ -137,7 +155,7 @@ const GigEditPage: React.FC = () => {
       if (!firstDraftDelivery) stepErrors.firstDraftDelivery = "Timeline is required";
       if (!termsOfService.trim()) stepErrors.termsOfService = "Terms of service are required";
       if (galleryFiles.length === 0 && galleryUrls.length === 0) stepErrors.galleryUrls = "At least 1 supporting picture is required";
-      
+
       if (Object.keys(stepErrors).length > 0) {
         setErrors(stepErrors);
         return;
@@ -222,8 +240,6 @@ const GigEditPage: React.FC = () => {
       galleryFiles.forEach((file, index) => {
         uploadPromises.push(
           uploadFileWithIntent(file, "gig_galleries").then(res => {
-            // Need to retain order, but a simple push is okay because order doesn't strictly matter for the array unless specified.
-            // S3 attachments index handles order later, but we'll push in order using indices
             galleryFileIds[index] = res.fileId;
           })
         );
@@ -250,8 +266,8 @@ const GigEditPage: React.FC = () => {
       await api.put(`/api/gigs/${id}`, gigPayload);
       setIsSuccessOpen(true);
     } catch (err: any) {
-      console.error("Error creating gig:", err);
-      alert(err.response?.data?.message || err.message || "Failed to create gig");
+      console.error("Error updating gig:", err);
+      alert(err.response?.data?.message || err.message || "Failed to update gig");
     } finally {
       setIsSubmitting(false);
     }
@@ -273,20 +289,34 @@ const GigEditPage: React.FC = () => {
       </div>
 
       <div className="relative z-10 mx-auto max-w-4xl flex min-h-screen flex-col px-4 py-8 md:py-12 w-full">
-        {/* Title Heading Display */}
+        {/* Title Heading Display + Delete Button */}
         <motion.div
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.1 }}
-            className="mb-8"
-          >
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.1 }}
+          className="mb-8 flex items-center justify-between"
+        >
+          <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
               Editing a Gig Post
             </h1>
             <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
               Update the details below to modify your service offering.
             </p>
-          </motion.div>
+          </div>
+
+          {isOwnGig && (
+            <button
+              type="button"
+              onClick={handleDeletePost}
+              disabled={isDeleting}
+              className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-500/20 rounded-xl transition-all disabled:opacity-50"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>{isDeleting ? "Deleting..." : "Delete Service"}</span>
+            </button>
+          )}
+        </motion.div>
 
         {/* Header (Stepper) */}
         <div className="mb-6 w-full">
@@ -454,10 +484,10 @@ const GigEditPage: React.FC = () => {
           </div>
         </div>
       </div>
-      
+
       <CreationSuccess
         isOpen={isSuccessOpen}
-        onConfirm={() => navigate("/gigs")}
+        onConfirm={() => navigate("/gigs/my-services")}
       />
     </div>
   );
