@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { 
   X, Star, Clock, Users, ArrowRight, CheckCircle2, Bookmark, Share2, 
-  ChevronRight, MapPin, Tag, Box, Layers, PlayCircle, Plus, FileText, Maximize2
+  ChevronRight, MapPin, Tag, Box, Layers, PlayCircle, Plus, FileText, Maximize2, Edit2, Flag
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -99,10 +99,33 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
           </div>
         </div>
 
-{/* TITLE */}
-        <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white mb-6 leading-tight">
-          {gig.title}
-        </h1>
+        {/* TITLE & ACTIONS */}
+        <div className="flex justify-between items-start gap-4 mb-6">
+          <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white leading-tight">
+            {gig.title}
+          </h1>
+          <div className="flex shrink-0">
+            {gig.isOwnGig ? (
+              <button
+                onClick={() => navigate(`/gigs/edit/${gig.id}`)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-xs hover:bg-blue-500/20 transition-colors"
+                title="Edit Service"
+              >
+                <Edit2 className="h-3.5 w-3.5" />
+                Edit Service
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate(`/support/report?type=gig&id=${gig.id}`)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-400 font-bold text-xs hover:bg-gray-50 dark:hover:bg-white/10 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                title="Report Service"
+              >
+                <Flag className="h-3.5 w-3.5" />
+                Report Gig
+              </button>
+            )}
+          </div>
+        </div>
 
 {/* THUMBNAIL (FIRST ON TOP) */}
         <div className="w-full h-64 sm:h-80 md:h-96 rounded-2xl overflow-hidden mb-6 bg-gray-100 dark:bg-white/5 relative border border-gray-200 dark:border-white/10">
@@ -137,9 +160,10 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
           {/* DESCRIPTION */}
           <section>
             <h3 className="text-base font-bold text-gray-900 dark:text-white mb-4">About This Service</h3>
-            <div className="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed whitespace-pre-line">
-              {gig.description}
-            </div>
+            <div 
+              className="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed max-w-none prose prose-sm dark:prose-invert"
+              dangerouslySetInnerHTML={{ __html: gig.description }}
+            />
           </section>
 
           {/* SKILLS */}
@@ -238,7 +262,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
                 </div>
                 
                 <button 
-                  onClick={() => setIsCheckoutOpen(true)}
+                  onClick={() => navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
                   className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
                 >
                   Continue ({activeTier?.price?.toLocaleString()} Credits)
@@ -346,7 +370,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
                 </div>
                 
                 <button 
-                  onClick={() => setIsCheckoutOpen(true)}
+                  onClick={() => navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
                   className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
                 >
                   Continue ({activeTier?.price?.toLocaleString()} Credits)
@@ -375,7 +399,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
           <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString()}</span>
         </div>
         <button 
-          onClick={() => setIsCheckoutOpen(true)}
+          onClick={() => navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
           className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
         >
           Order Now
@@ -383,140 +407,8 @@ export const GigRichText: React.FC<GigRichTextProps> = ({ gig, onClose, layout =
       </div>
       )}
 
-      {/* CHECKOUT MODAL */}
-      <AnimatePresence>
-        {isCheckoutOpen && activeTier && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-2xl bg-white dark:bg-dark-surface rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
-            >
-              <div className="p-6 border-b border-gray-100 dark:border-white/5 flex justify-between items-start shrink-0">
-                <div>
-                  <h2 className="text-xl font-black text-gray-900 dark:text-white">Order Request</h2>
-                  <p className="text-xs font-medium text-gray-500 mt-1">You don't have to pay right away. This simply calculates the estimated price.</p>
-                </div>
-                <button onClick={() => setIsCheckoutOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white bg-gray-100 dark:bg-white/5 p-2 rounded-full transition-colors">
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-8">
-                
-                {/* 1. Project Brief */}
-                <section>
-                  <label className="block text-sm font-bold text-gray-900 dark:text-white mb-2">1. Project Brief <span className="text-red-500">*</span></label>
-                  <textarea 
-                    className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-4 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px] resize-none"
-                    placeholder="Describe what you need done in detail..."
-                  />
-                </section>
-
-                {/* 2. Questionnaires */}
-                {gig.questionnaires && gig.questionnaires.length > 0 && (
-                  <section className="space-y-4">
-                    <label className="block text-sm font-bold text-gray-900 dark:text-white mb-1">2. Requirements</label>
-                    {gig.questionnaires.map((q, idx) => (
-                      <div key={idx} className="space-y-3 p-5 rounded-2xl border border-gray-100 dark:border-white/5 bg-white dark:bg-dark-base shadow-sm">
-                        <p className="text-sm font-bold text-gray-800 dark:text-zinc-200"><span className="text-red-500 mr-1">{q.required ? "*" : ""}</span>{idx + 1}. {q.question}</p>
-                        {q.type === "multiple-choice" ? (
-                           <select 
-                             value={responses[q.id || ''] || ''}
-                             onChange={(e) => setResponses({ ...responses, [q.id || '']: e.target.value })}
-                             className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-3.5 text-sm font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                             <option value="">Select an option</option>
-                             {q.options?.map((opt, oIdx) => <option key={oIdx} value={opt}>{opt}</option>)}
-                           </select>
-                        ) : q.type === "file-upload" ? (
-                           <div className="flex items-center gap-2 mt-2">
-                             <input type="file" className="text-xs file:mr-4 file:py-2.5 file:px-5 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 dark:file:bg-blue-500/10 file:text-blue-700 dark:file:text-blue-400 hover:file:bg-blue-100 cursor-pointer" />
-                           </div>
-                        ) : (
-                           <textarea className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-4 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Your answer..." rows={2}></textarea>
-                        )}
-                      </div>
-                    ))}
-                  </section>
-                )}
-
-                {/* 3. Tier Summary */}
-                <section>
-                  <label className="block text-sm font-bold text-gray-900 dark:text-white mb-3">Order Summary</label>
-                  <div className="bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 rounded-2xl p-5">
-                    <div className="flex gap-4 items-center pb-4 border-b border-gray-200 dark:border-white/10 mb-4">
-                      <img src={gig.thumbnail} alt="" className="h-12 w-12 rounded-lg object-cover" />
-                      <div>
-                        <h3 className="font-bold text-sm text-gray-900 dark:text-white line-clamp-1">{gig.title}</h3>
-                        <p className="text-xs font-bold text-blue-600 dark:text-blue-400 mt-1">{activeTier?.tierName} Package</p>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-medium text-gray-600 dark:text-zinc-400">Delivery Time</span>
-                        <span className="text-xs font-bold text-gray-900 dark:text-white">{activeTier?.daysOfDelivery} Days</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-medium text-gray-600 dark:text-zinc-400">Revisions</span>
-                        <span className="text-xs font-bold text-gray-900 dark:text-white">{activeTier?.revisions}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-medium text-gray-600 dark:text-zinc-400">Base Price</span>
-                        <span className="text-xs font-bold text-gray-900 dark:text-white">{activeTier?.price?.toLocaleString()} Credits</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-medium text-gray-600 dark:text-zinc-400">Platform Fee (5%)</span>
-                        <span className="text-xs font-bold text-gray-900 dark:text-white">{((activeTier?.price || 0) * 0.05).toLocaleString()} Credits</span>
-                      </div>
-                      
-                      <div className="h-px w-full bg-gray-200 dark:bg-white/10 my-3" />
-                      
-                      <div className="flex justify-between items-center">
-                        <span className="text-base font-black text-gray-900 dark:text-white">Estimated Total</span>
-                        <span className="text-lg font-black text-blue-600 dark:text-blue-400 flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{((activeTier?.price || 0) * 1.05).toLocaleString()} Credits</span>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-              </div>
-
-              <div className="p-6 border-t border-gray-100 dark:border-white/5 shrink-0 bg-white dark:bg-dark-base">
-                <button
-                  onClick={handleCheckout}
-                  disabled={isProcessing}
-                  className="w-full py-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-50 flex justify-center items-center gap-2"
-                >
-                  {isProcessing ? (
-                    <>
-                      <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }} className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full" />
-                      Processing...
-                    </>
-                  ) : (
-                    "Submit Order Request"
-                  )}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <SuccessModal
-        isOpen={isSuccessOpen}
-        message="Order Successfully Sent"
-        onConfirm={() => {
-          setIsSuccessOpen(false);
-          navigate('/gigs/orders/sent');
-        }}
-      />
     </div>
   );
 };
+
+export default GigRichText;

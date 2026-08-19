@@ -44,6 +44,7 @@ import GigMain from '@/pages/user/7_gigs/gig_main.tsx'
 import GigServicesPage from '@/pages/user/7_gigs/gig_pages/gig_services_page.tsx'
 import GigCreatePage from '@/pages/user/7_gigs/gig_pages/gig_create_page.tsx'
 import GigFullPage from '@/pages/user/7_gigs/gig_pages/gig_full_page.tsx'
+import GigOrderPage from '@/pages/user/7_gigs/gig_pages/gig_order_page.tsx'
 import OrdersMain from '@/pages/user/7_gigs/gig_orders/orders_main.tsx'
 import OrdersSelectGigPage from '@/pages/user/7_gigs/gig_orders/orders_select_gig_page.tsx'
 import IncomingOrders from '@/pages/user/7_gigs/gig_orders/incoming_orders.tsx'
@@ -260,6 +261,7 @@ function App() {
           </Route>
           <Route path='/gigs/create' element={<GigCreatePage />} />
           <Route path='/gigs/services/:id/page' element={<GigFullPage />} />
+          <Route path='/gigs/services/:id/order' element={<GigOrderPage />} />
           <Route path='/verification' element={<Verification />} />
           <Route path='/orders' element={<SectionPlaceholder title='INCOMING ORDERS' />} />
           <Route path='/my-orders' element={<SectionPlaceholder title='MY ORDERS' />} />

@@ -146,6 +146,18 @@ export const GigList: React.FC<GigListProps> = ({
                     <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
 
                     <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                      {!gig.isOwnGig && (
+                        <button
+                          title="Report Post"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/support/report?type=gig&id=${gig.id}`);
+                          }}
+                          className="p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm text-gray-500 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                        >
+                          <Flag className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                       {gig.isOwnGig && (
                         <button
                           title="Edit Service"
@@ -196,12 +208,13 @@ export const GigList: React.FC<GigListProps> = ({
                     <span>{Math.min(...(gig.tiers?.map(t => t.price) || [0])).toLocaleString()}</span>
                     <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Starting at</span>
                   </div>
-                  <h3 className="text-gray-900 dark:text-white text-base font-bold mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-1">
+                  <h3 className="text-sm font-bold leading-tight text-gray-900 dark:text-white mb-1.5 line-clamp-1 hover:text-blue-600 transition-colors">
                     {gig.title}
                   </h3>
-                  <p className="text-[12px] text-gray-500 dark:text-zinc-400 line-clamp-2 leading-relaxed mb-3">
-                    {gig.description}
-                  </p>
+                  <div 
+                    className="text-[12px] text-gray-500 dark:text-zinc-400 line-clamp-2 leading-relaxed mb-3"
+                    dangerouslySetInnerHTML={{ __html: gig.description }}
+                  />
                 </div>
 
                 <div className="mt-2 pt-4 border-t border-gray-200 dark:border-white/5 flex flex-wrap items-center justify-between text-[10px] text-gray-500 dark:text-zinc-400 gap-3">
@@ -324,9 +337,10 @@ export const GigList: React.FC<GigListProps> = ({
                     </h3>
                   </div>
 
-                  <p className="text-[13px] text-gray-600 dark:text-zinc-400 line-clamp-2 leading-relaxed">
-                    {gig.description}
-                  </p>
+                  <div 
+                    className="text-[13px] text-gray-600 dark:text-zinc-400 line-clamp-2 leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: gig.description }}
+                  />
                   
                   {Array.isArray(gig.skills) && gig.skills.length > 0 && (
                     <div className="flex flex-wrap items-center gap-1.5 mb-1">

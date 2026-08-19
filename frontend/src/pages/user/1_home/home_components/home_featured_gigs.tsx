@@ -96,9 +96,10 @@ export const HomeFeaturedGigs: React.FC = () => {
                 </h3>
                 
                 {/* Description */}
-                <p className="text-xs text-gray-500 dark:text-zinc-400 line-clamp-2 mb-3 leading-relaxed">
-                  {gig.description}
-                </p>
+                <div 
+                  className="text-xs text-gray-500 dark:text-zinc-400 line-clamp-2 mb-3 leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: gig.description }}
+                />
 
                 {/* Skills */}
                 {Array.isArray(gig.skills) && gig.skills.length > 0 && (
