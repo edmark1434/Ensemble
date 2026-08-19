@@ -1,11 +1,26 @@
 // src/pages/user/1_home/home_components/home_featured_gigs.tsx
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Star, ArrowRight, Wrench } from "lucide-react";
-import { sampleGigs } from "../../7_gigs/gig_datasets";
+import api from "@/lib/axios";
 
 export const HomeFeaturedGigs: React.FC = () => {
   const navigate = useNavigate();
+  const [gigs, setGigs] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchGigs = async () => {
+      try {
+        const response = await api.get("/api/gigs");
+        if (response.data && response.data.success) {
+          setGigs(response.data.data.slice(0, 3));
+        }
+      } catch (error) {
+        console.error("Error fetching gigs:", error);
+      }
+    };
+    fetchGigs();
+  }, []);
 
   return (
     <section>
@@ -34,9 +49,9 @@ export const HomeFeaturedGigs: React.FC = () => {
       </div>
 
       <div className="grid gap-5 grid-cols-1 md:grid-cols-3">
-        {sampleGigs.slice(0, 3).map((gig) => {
+        {gigs.map((gig) => {
           const startingPrice = gig.tiers && gig.tiers.length > 0 
-            ? Math.min(...gig.tiers.map(t => t.price)) 
+            ? Math.min(...gig.tiers.map((t: any) => t.price)) 
             : 0;
 
           return (

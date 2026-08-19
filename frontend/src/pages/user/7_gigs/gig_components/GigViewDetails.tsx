@@ -19,8 +19,16 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [checkoutStep, setCheckoutStep] = useState<"form" | "confirm">("form");
+  const [projectBrief, setProjectBrief] = useState("");
+  const [questionAnswers, setQuestionAnswers] = useState<Record<string, string>>({});
 
   const activeTier = selectedGig?.tiers[activeTierIdx];
+
+  const handleOpenCheckout = () => {
+    setCheckoutStep("form");
+    setIsCheckoutOpen(true);
+  };
 
   const handleCheckout = () => {
     setIsProcessing(true);
@@ -343,7 +351,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                       View Full
                     </button>
                     <button
-                      onClick={() => setIsCheckoutOpen(true)}
+                      onClick={handleOpenCheckout}
                       disabled={!activeTier}
                       className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -381,7 +389,9 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 className="w-full max-w-sm bg-white dark:bg-dark-surface rounded-3xl border border-gray-200 dark:border-white/10 overflow-hidden shadow-2xl"
               >
                 <div className="p-5 border-b border-gray-100 dark:border-white/5 flex justify-between items-center">
-                  <h2 className="text-base font-bold text-gray-900 dark:text-white">Confirm Order</h2>
+                  <h2 className="text-base font-bold text-gray-900 dark:text-white">
+                    {checkoutStep === "form" ? "Order Requirements" : "Confirm Order"}
+                  </h2>
                 </div>
                 <div className="p-5 space-y-5">
                   <div className="flex gap-3 p-3 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
@@ -391,29 +401,89 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                       <p className="text-[10px] text-gray-500 mt-0.5">{activeTier?.tierName} Package</p>
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-600 dark:text-zinc-400">Subtotal</span>
-                      <span className="font-bold text-gray-900 dark:text-white">{activeTier?.price?.toLocaleString()} Credits</span>
+
+                  {checkoutStep === "form" ? (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-700 dark:text-zinc-300 mb-1.5">Project Brief</label>
+                        <textarea
+                          rows={3}
+                          className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-black/20 px-3 py-2 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500"
+                          placeholder="Describe what you need..."
+                          value={projectBrief}
+                          onChange={(e) => setProjectBrief(e.target.value)}
+                        />
+                      </div>
+                      
+                      {selectedGig.questionnaires && selectedGig.questionnaires.length > 0 && (
+                        <div className="space-y-3">
+                          <label className="block text-[11px] font-bold text-gray-700 dark:text-zinc-300">Questionnaire</label>
+                          {selectedGig.questionnaires.map((q, idx) => (
+                            <div key={idx}>
+                              <p className="text-[10px] font-semibold text-gray-600 dark:text-zinc-400 mb-1.5">
+                                {q.question} {q.required && <span className="text-red-500">*</span>}
+                              </p>
+                              {q.type === "multiple_choice" || q.type === "choice" ? (
+                                <select 
+                                  className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-black/20 px-3 py-2 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500"
+                                  value={questionAnswers[idx] || ""}
+                                  onChange={(e) => setQuestionAnswers(prev => ({ ...prev, [idx]: e.target.value }))}
+                                >
+                                  <option value="">Select an option</option>
+                                  {q.options?.map((opt, oIdx) => (
+                                    <option key={oIdx} value={opt}>{opt}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <input
+                                  type="text"
+                                  className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-black/20 px-3 py-2 text-xs text-gray-900 dark:text-white outline-none focus:border-blue-500"
+                                  placeholder="Your answer..."
+                                  value={questionAnswers[idx] || ""}
+                                  onChange={(e) => setQuestionAnswers(prev => ({ ...prev, [idx]: e.target.value }))}
+                                />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      <div className="flex gap-2 pt-2">
+                        <button onClick={() => setIsCheckoutOpen(false)} className="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-zinc-300 font-bold text-xs hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">
+                          Cancel
+                        </button>
+                        <button onClick={() => setCheckoutStep("confirm")} className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-colors shadow-lg shadow-blue-500/20">
+                          Continue to Payment
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-600 dark:text-zinc-400">Platform Fee (5%)</span>
-                      <span className="font-bold text-gray-900 dark:text-white">{((activeTier?.price || 0) * 0.05).toLocaleString()} Credits</span>
-                    </div>
-                    <div className="h-px w-full bg-gray-200 dark:bg-white/10 my-2" />
-                    <div className="flex justify-between text-sm">
-                      <span className="font-bold text-gray-900 dark:text-white">Total</span>
-                      <span className="font-black text-blue-600 dark:text-blue-400">{((activeTier?.price || 0) * 1.05).toLocaleString()} Credits</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => setIsCheckoutOpen(false)} disabled={isProcessing} className="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-zinc-300 font-bold text-xs hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">
-                      Cancel
-                    </button>
-                    <button onClick={handleCheckout} disabled={isProcessing} className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-50 flex justify-center items-center gap-2">
-                      {isProcessing ? "Processing..." : "Pay with Credits"}
-                    </button>
-                  </div>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-600 dark:text-zinc-400">Subtotal</span>
+                          <span className="font-bold text-gray-900 dark:text-white">{activeTier?.price?.toLocaleString()} Credits</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-600 dark:text-zinc-400">Platform Fee (5%)</span>
+                          <span className="font-bold text-gray-900 dark:text-white">{((activeTier?.price || 0) * 0.05).toLocaleString()} Credits</span>
+                        </div>
+                        <div className="h-px w-full bg-gray-200 dark:bg-white/10 my-2" />
+                        <div className="flex justify-between text-sm">
+                          <span className="font-bold text-gray-900 dark:text-white">Total</span>
+                          <span className="font-black text-blue-600 dark:text-blue-400">{((activeTier?.price || 0) * 1.05).toLocaleString()} Credits</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => setCheckoutStep("form")} disabled={isProcessing} className="flex-1 py-2.5 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-zinc-300 font-bold text-xs hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">
+                          Back
+                        </button>
+                        <button onClick={handleCheckout} disabled={isProcessing} className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-50 flex justify-center items-center gap-2">
+                          {isProcessing ? "Processing..." : "Pay with Credits"}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               </motion.div>
             </motion.div>
