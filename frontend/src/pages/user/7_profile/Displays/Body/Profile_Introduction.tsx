@@ -13,12 +13,12 @@ import { GalleryEditModal } from "../../Edits/GalleryEditModal";
 interface ProfileIntroductionProps {
   introduction?: string;
   isOwner?: boolean;
-  onSave?: (newIntro: string) => void;
+  isLoading?: boolean;
+  onSave?: (newIntro: string) => Promise<void> | void;
   accountId?: string;
   onViewMoreGallery?: () => void;
 }
 
-// Helper to construct asset URL
 const constructAssetUrl = (path: string | undefined): string | undefined => {
   if (!path) return undefined;
   if (path.startsWith('http')) return path;
@@ -28,27 +28,48 @@ const constructAssetUrl = (path: string | undefined): string | undefined => {
   return `${cloudfrontUrl}/${cleanPath}`;
 };
 
-export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ introduction, isOwner, onSave, accountId, onViewMoreGallery }) => {
+export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({
+  introduction,
+  isOwner,
+  isLoading = false,
+  onSave,
+  accountId,
+  onViewMoreGallery
+}) => {
   const [isEditing, setIsEditing] = useState(false);
   const [content, setContent] = useState(introduction || "");
   const [isPreview, setIsPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [featuredWorks, setFeaturedWorks] = useState<GalleryItem[]>([]);
+  const [isFeaturedLoading, setIsFeaturedLoading] = useState(true);
   const [selectedGalleryItem, setSelectedGalleryItem] = useState<GalleryItem | null>(null);
   const [itemToEdit, setItemToEdit] = useState<GalleryItem | null>(null);
   const [itemToDelete, setItemToDelete] = useState<GalleryItem | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const fetchFeaturedWorks = () => {
-    if (accountId) {
-      api.get(`/api/accounts/${accountId}/galleries`)
-        .then(res => setFeaturedWorks(res.data.slice(0, 3)))
-        .catch(err => console.error("Failed to fetch featured works:", err));
+  const fetchFeaturedWorks = async () => {
+    if (!accountId) {
+      setIsFeaturedLoading(false);
+      return;
+    }
+    try {
+      setIsFeaturedLoading(true);
+      const res = await api.get(`/api/accounts/${accountId}/galleries`);
+      setFeaturedWorks((res.data || []).slice(0, 3));
+    } catch (err) {
+      console.error("Failed to fetch featured works:", err);
+    } finally {
+      setIsFeaturedLoading(false);
     }
   };
 
   useEffect(() => {
     fetchFeaturedWorks();
   }, [accountId]);
+
+  useEffect(() => {
+    setContent(introduction || "");
+  }, [introduction]);
 
   const handleEdit = (item: GalleryItem) => {
     setItemToEdit(item);
@@ -91,11 +112,9 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
     }, 0);
   };
 
-  const [isLoading, setIsLoading] = useState(false);
-
   const handleSave = async () => {
     try {
-      setIsLoading(true);
+      setIsSaving(true);
       const original = { introduction: introduction || "" };
       const updates = { introduction: content };
 
@@ -106,7 +125,7 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
 
       if (response.data.success) {
         toast.success("Introduction saved successfully");
-        if (onSave) onSave(content);
+        if (onSave) await onSave(content);
         setIsEditing(false);
         setIsPreview(false);
       } else {
@@ -116,26 +135,25 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
       console.error("Error saving introduction:", error);
       toast.error(error.response?.data?.message || "Failed to save introduction");
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
   const getSanitizedContent = (text: string) => {
     if (!text) return text;
-    // Fix markdown bold syntax where user leaves spaces (e.g., "** text **" -> "**text**")
     return text.replace(/\*\*([^*]+)\*\*/g, (match, p1) => `**${p1.trim()}**`);
   };
 
   return (
     <div className="flex-1 space-y-4 text-left">
-      {/* Header Bar matching Portfolio, Gallery & Services */}
+      {/* Permanent Header Bar */}
       <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-2">
         <h4 className="text-xs font-extrabold text-gray-900 dark:text-white tracking-wider uppercase flex items-center gap-2">
           <User className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
           {isOwner ? "My Introduction" : "Introduction"}
         </h4>
 
-        {isOwner && !isEditing && (
+        {isOwner && !isEditing && !isLoading && (
           <button
             onClick={() => setIsEditing(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.02] text-[11px] font-bold text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/10 transition-all cursor-pointer shadow-sm"
@@ -147,7 +165,27 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
       </div>
 
       <div className="w-full text-left">
-        {isEditing ? (
+        {isLoading ? (
+          <div className="space-y-6 animate-pulse py-2">
+            {/* Bio text placeholder lines */}
+            <div className="space-y-3">
+              <div className="h-3.5 w-11/12 bg-gray-200 dark:bg-zinc-800 rounded-md" />
+              <div className="h-3.5 w-full bg-gray-200 dark:bg-zinc-800 rounded-md" />
+              <div className="h-3.5 w-4/5 bg-gray-200 dark:bg-zinc-800 rounded-md" />
+              <div className="h-3.5 w-2/3 bg-gray-200 dark:bg-zinc-800 rounded-md" />
+            </div>
+
+            {/* Featured work strip placeholder */}
+            <div className="mt-8 pt-6 border-t border-gray-200 dark:border-white/5 space-y-4">
+              <div className="h-3 w-28 bg-gray-200 dark:bg-zinc-800 rounded-md" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="aspect-[4/3] rounded-2xl bg-gray-200 dark:bg-zinc-800" />
+                <div className="aspect-[4/3] rounded-2xl bg-gray-200 dark:bg-zinc-800" />
+                <div className="aspect-[4/3] rounded-2xl bg-gray-200 dark:bg-zinc-800" />
+              </div>
+            </div>
+          </div>
+        ) : isEditing ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between bg-gray-100 dark:bg-white/5 p-2 rounded-t-xl border border-b-0 border-gray-200 dark:border-white/10">
               <div className="flex gap-1">
@@ -221,7 +259,7 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
               <button onClick={() => { setIsEditing(false); setContent(introduction || ""); setIsPreview(false); }} className="px-4 py-2 rounded-xl text-xs font-bold text-gray-500 hover:text-gray-700 dark:hover:text-zinc-300 transition">
                 Cancel
               </button>
-              <button onClick={handleSave} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-500 text-white text-xs font-bold hover:bg-blue-600 transition shadow-lg shadow-blue-500/20">
+              <button onClick={handleSave} disabled={isSaving} className="flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-500 text-white text-xs font-bold hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 disabled:opacity-50">
                 <Check className="h-4 w-4" /> Save Introduction
               </button>
             </div>
@@ -255,62 +293,74 @@ export const Profile_Introduction: React.FC<ProfileIntroductionProps> = ({ intro
             )}
 
             {/* Featured Work Section */}
-            {featuredWorks.length > 0 && !isEditing && (
-              <div className="mt-8 pt-6 border-t border-gray-200 dark:border-white/10">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xs font-extrabold text-gray-900 dark:text-white tracking-wider uppercase">
-                    Featured Work
-                  </h3>
-                  {onViewMoreGallery && (
-                    <button
-                      onClick={onViewMoreGallery}
-                      className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors flex items-center gap-1"
-                    >
-                      View More
-                    </button>
-                  )}
-                </div>
+            {isFeaturedLoading ? (
+              <div className="mt-8 pt-6 border-t border-gray-200 dark:border-white/10 space-y-4 animate-pulse">
+                <div className="h-3 w-28 bg-gray-200 dark:bg-zinc-800 rounded-md" />
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {featuredWorks.map(item => {
-                    const assetUrl = constructAssetUrl(item.file_url);
-                    const isVideo = item.file_mimetype?.startsWith("video/");
-
-                    return (
-                      <div
-                        key={item.gallery_id}
-                        className="group relative rounded-2xl overflow-hidden aspect-[4/3] bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 cursor-pointer shadow-sm hover:shadow-lg transition-all"
-                        onClick={() => setSelectedGalleryItem(item)}
-                      >
-                        {isVideo ? (
-                          <div className="relative w-full h-full">
-                            <video
-                              src={assetUrl}
-                              className="w-full h-full object-cover"
-                              preload="metadata"
-                              muted
-                              loop
-                              onMouseEnter={(e) => e.currentTarget.play()}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.pause();
-                                e.currentTarget.currentTime = 0;
-                              }}
-                            />
-                            <div className="absolute top-2 right-2 bg-black/60 p-1 rounded-full backdrop-blur-md">
-                              <Play className="w-3 h-3 text-white" fill="currentColor" />
-                            </div>
-                          </div>
-                        ) : (
-                          <img src={assetUrl} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
-                          <h4 className="text-white font-bold text-sm line-clamp-1">{item.title}</h4>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  <div className="aspect-[4/3] rounded-2xl bg-gray-200 dark:bg-zinc-800" />
+                  <div className="aspect-[4/3] rounded-2xl bg-gray-200 dark:bg-zinc-800" />
+                  <div className="aspect-[4/3] rounded-2xl bg-gray-200 dark:bg-zinc-800" />
                 </div>
               </div>
+            ) : (
+              featuredWorks.length > 0 && !isEditing && (
+                <div className="mt-8 pt-6 border-t border-gray-200 dark:border-white/10">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xs font-extrabold text-gray-900 dark:text-white tracking-wider uppercase">
+                      Featured Work
+                    </h3>
+                    {onViewMoreGallery && (
+                      <button
+                        onClick={onViewMoreGallery}
+                        className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors flex items-center gap-1"
+                      >
+                        View More
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {featuredWorks.map(item => {
+                      const assetUrl = constructAssetUrl(item.file_url);
+                      const isVideo = item.file_mimetype?.startsWith("video/");
+
+                      return (
+                        <div
+                          key={item.gallery_id}
+                          className="group relative rounded-2xl overflow-hidden aspect-[4/3] bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 cursor-pointer shadow-sm hover:shadow-lg transition-all"
+                          onClick={() => setSelectedGalleryItem(item)}
+                        >
+                          {isVideo ? (
+                            <div className="relative w-full h-full">
+                              <video
+                                src={assetUrl}
+                                className="w-full h-full object-cover"
+                                preload="metadata"
+                                muted
+                                loop
+                                onMouseEnter={(e) => e.currentTarget.play()}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.pause();
+                                  e.currentTarget.currentTime = 0;
+                                }}
+                              />
+                              <div className="absolute top-2 right-2 bg-black/60 p-1 rounded-full backdrop-blur-md">
+                                <Play className="w-3 h-3 text-white" fill="currentColor" />
+                              </div>
+                            </div>
+                          ) : (
+                            <img src={assetUrl} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
+                            <h4 className="text-white font-bold text-sm line-clamp-1">{item.title}</h4>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )
             )}
+
             <GalleryLightbox
               items={featuredWorks}
               selectedItem={selectedGalleryItem}

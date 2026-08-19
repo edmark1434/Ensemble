@@ -1,12 +1,11 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FolderOpen, Briefcase, FileText, TrendingUp, Image as ImageIcon, Clock } from "lucide-react";
+import { FolderOpen, Briefcase, FileText, Image as ImageIcon } from "lucide-react";
 
 // Sub-component Imports
 import { Profile_Portfolio } from "./Profile_Portfolio";
 import { Profile_Services } from "./Profile_Services";
 import { Profile_JobPosts } from "./Profile_JobPosts";
-import { Profile_Projects } from "./Profile_Projects";
 import { Profile_Assets } from "./Profile_Assets";
 import { Profile_History } from "./Profile_History";
 import { Profile_Introduction } from "./Profile_Introduction";
@@ -55,7 +54,6 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
   activeTab,
   onTabChange,
   portfolioItems = [],
-  services = [],
   isOwner = false,
   onUploadPDF,
   onAddExternalLink,
@@ -83,7 +81,6 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                 isActive ? "text-white" : "text-gray-500 dark:text-zinc-400 hover:text-gray-800 dark:hover:text-zinc-200"
               }`}
             >
-              {/* Sliding Background Pill */}
               {isActive && (
                 <motion.div
                   layoutId="activeTabPill"
@@ -116,6 +113,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
               <Profile_Introduction
                 introduction={userDetails?.introduction}
                 isOwner={isOwner}
+                isLoading={loading}
                 onSave={onUpdateIntroduction}
                 accountId={accountId || ""}
                 onViewMoreGallery={() => onTabChange("gallery")}
@@ -158,6 +156,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                         assetRating={4.7}
                         successfulJobsCount={6}
                         viewMode="merit"
+                        isOwner={isOwner}
                       />
                     </div>
                   )}
@@ -173,12 +172,13 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                         assetRating={4.7}
                         successfulJobsCount={6}
                         viewMode="ratings"
+                        isOwner={isOwner}
                       />
                     </div>
                   )}
                   {performanceTab === "history" && (
                     <div className="pt-2">
-                      <Profile_History />
+                      <Profile_History isOwner={isOwner} />
                     </div>
                   )}
                 </div>
@@ -188,6 +188,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
               <Profile_Portfolio
                 portfolioItems={portfolioItems}
                 isOwner={isOwner}
+                isLoading={loading}
                 onUploadPDF={onUploadPDF}
                 onAddExternalLink={onAddExternalLink}
                 onDeleteItem={onDeletePortfolioItem}
@@ -200,9 +201,11 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
               <Profile_Services accountId={accountId} isOwner={isOwner} />
             )}
             {activeTab === "job-posts" && (
-              <Profile_JobPosts userDetails={userDetails} accountId={accountId} />
+              <Profile_JobPosts userDetails={userDetails} accountId={accountId} isOwner={isOwner} />
             )}
-            {activeTab === "assets" && <Profile_Assets />}
+            {activeTab === "assets" && (
+              <Profile_Assets isOwner={isOwner} isLoading={loading} />
+            )}
           </motion.div>
         </AnimatePresence>
       </div>

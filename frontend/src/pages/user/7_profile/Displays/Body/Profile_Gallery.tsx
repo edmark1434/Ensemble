@@ -79,17 +79,9 @@ export const Profile_Gallery: React.FC<ProfileGalleryProps> = ({ accountId, isOw
     fetchGalleries();
   }, [fetchGalleries]);
 
-  if (loading) {
-    return (
-      <div className="w-full flex items-center justify-center p-12">
-        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex-1 space-y-4">
-      {/* Header Bar with Count/Limit and Add Item Button */}
+      {/* Permanent Header Bar */}
       <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-2">
         <h4 className="text-xs font-extrabold text-gray-900 dark:text-white tracking-wider uppercase flex items-center gap-2">
           <ImageIcon className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
@@ -118,7 +110,16 @@ export const Profile_Gallery: React.FC<ProfileGalleryProps> = ({ accountId, isOw
         </div>
       </div>
 
-      {items.length === 0 ? (
+      {loading ? (
+        /* Multi-column Masonry Skeleton matching gallery item cards */
+        <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4">
+          <div className="h-64 rounded-2xl bg-gray-200 dark:bg-zinc-800/60 border border-gray-200 dark:border-white/5 break-inside-avoid animate-pulse" />
+          <div className="h-48 rounded-2xl bg-gray-200 dark:bg-zinc-800/60 border border-gray-200 dark:border-white/5 break-inside-avoid animate-pulse" />
+          <div className="h-80 rounded-2xl bg-gray-200 dark:bg-zinc-800/60 border border-gray-200 dark:border-white/5 break-inside-avoid animate-pulse" />
+          <div className="h-52 rounded-2xl bg-gray-200 dark:bg-zinc-800/60 border border-gray-200 dark:border-white/5 break-inside-avoid animate-pulse" />
+          <div className="h-60 rounded-2xl bg-gray-200 dark:bg-zinc-800/60 border border-gray-200 dark:border-white/5 break-inside-avoid animate-pulse" />
+        </div>
+      ) : items.length === 0 ? (
         <div className="py-2">
           <EmptyState
             title="No gallery items found"
@@ -210,7 +211,6 @@ export const Profile_Gallery: React.FC<ProfileGalleryProps> = ({ accountId, isOw
         />
       )}
 
-      {/* Delete Confirmation Modal */}
       {createPortal(
         <AnimatePresence>
           {itemToDelete && (
