@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import {
   Crown,
   Check,
-  Wallet,
   Shield,
   ArrowRight,
   Plus,
@@ -14,6 +13,8 @@ import { useNavigate, useLocation } from "react-router-dom";
 import api from "@/lib/axios.ts";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import useGlobalState from "@/lib/global_state";
+import { CreditIcon } from "@/components/ui/credit-icon";
+import { WalletIcon } from "@/components/ui/wallet-icon";
 
 // ---- Data models ----
 interface CreditPack {
@@ -84,7 +85,7 @@ const creditPacks: CreditPack[] = [
 ];
 
 const formatPHP = (value: number) =>
-  `${value.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  `₱${value.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
 const CREDIT_RATE = 1.25;
 
@@ -494,15 +495,18 @@ const CreditShop: React.FC = () => {
         {/* Current Balance Card */}
         <div className="flex items-center justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 p-5 shadow-sm dark:shadow-xl backdrop-blur-xl">
           <div className="flex items-center gap-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400">
-              <Wallet className="h-5 w-5" />
-            </div>
+            <WalletIcon className="h-12 w-12" />
             <div>
-              <p className="text-xs font-medium text-gray-500 dark:text-zinc-400 uppercase tracking-wider">Current Balance</p>
-              <p className="text-xl font-bold text-gray-900 dark:text-white">
-                {currentBalance.toLocaleString()}{" "}
-                <span className="text-xs font-normal text-gray-500 dark:text-zinc-400">Credits</span>
+              <p className="text-[11px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider">
+                Current Balance
               </p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <CreditIcon className="h-4 w-4 text-yellow-500 shrink-0" />
+                <p className="text-2xl font-black text-gray-900 dark:text-white leading-none tracking-tight">
+                  {currentBalance.toLocaleString()}{" "}
+                  <span className="text-xs font-normal text-gray-500 dark:text-zinc-400">Credits</span>
+                </p>
+              </div>
             </div>
           </div>
           <div className="hidden sm:flex items-center gap-2 text-xs text-gray-600 dark:text-zinc-400 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/5 px-3 py-1.5 rounded-xl">
@@ -559,12 +563,22 @@ const CreditShop: React.FC = () => {
                           </span>
                         )}
                       </div>
-                      <p className="text-2xl font-extrabold text-gray-900 dark:text-white">
-                        {pack.credits.toLocaleString()}
-                        <span className="text-xs font-normal text-gray-500 dark:text-zinc-400 ml-1">Credits</span>
+
+                      {/* Credit Value (Top) */}
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <CreditIcon className="h-5 w-5 text-yellow-500 shrink-0" />
+                        <p className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
+                          {pack.credits.toLocaleString()}
+                          <span className="text-xs font-normal text-gray-500 dark:text-zinc-400 ml-1">Credits</span>
+                        </p>
+                      </div>
+
+                      {/* Peso Value (Under) */}
+                      <p className="text-sm text-gray-500 dark:text-zinc-400 font-medium">
+                        {formatPHP(pack.price)}
                       </p>
-                      <p className="text-sm text-gray-600 dark:text-zinc-400 mt-1 font-medium">{formatPHP(pack.price)}</p>
                     </div>
+
                     <button
                       onClick={() => handlePackCheckout(pack)}
                       className="mt-6 w-full rounded-xl bg-blue-600 hover:bg-blue-700 py-2.5 text-xs font-bold text-white transition-all shadow-md shadow-blue-500/20"
@@ -608,14 +622,17 @@ const CreditShop: React.FC = () => {
                     >
                       <Minus className="h-4 w-4" />
                     </button>
-                    <input
-                      type="number"
-                      value={customCredits}
-                      onChange={handleCustomInputChange}
-                      min={10}
-                      max={10000}
-                      className="h-10 flex-1 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-center text-sm font-bold text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 transition-colors"
-                    />
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        value={customCredits}
+                        onChange={handleCustomInputChange}
+                        min={10}
+                        max={10000}
+                        className="h-10 w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-center text-sm font-bold text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 transition-colors pl-8 pr-3"
+                      />
+                      <CreditIcon className="h-4 w-4 text-yellow-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
                     <button
                       onClick={incrementCredits}
                       aria-label="Increase amount"
@@ -630,13 +647,14 @@ const CreditShop: React.FC = () => {
                       <button
                         key={amount}
                         onClick={() => setCustomCredits(amount)}
-                        className={`rounded-xl px-3 py-1.5 text-xs font-medium border transition-all ${
+                        className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium border transition-all ${
                           customCredits === amount
                             ? "border-blue-500/50 bg-blue-50 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300"
                             : "border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
                         }`}
                       >
-                        {amount}
+                        <CreditIcon className="h-3.5 w-3.5" />
+                        <span>{amount}</span>
                       </button>
                     ))}
                   </div>
