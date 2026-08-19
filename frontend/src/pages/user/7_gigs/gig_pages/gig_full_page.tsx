@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { GigRichText } from "../gig_components/GigRichText";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import api from "@/lib/axios";
 import type { Gig } from "../gig_datasets";
@@ -14,16 +14,17 @@ const GigFullPage: React.FC = () => {
 
   useEffect(() => {
     const fetchGig = async () => {
+      setLoading(true);
       try {
         const response = await api.get(`/api/gigs/${id}`);
         if (response.data.success && response.data.data) {
           const g = response.data.data;
-          const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || '';
+          const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || "";
           const mapUrl = (path: string) => {
             if (!path) return undefined;
-            if (!cloudFrontUrl && path.includes('public')) return undefined;
-            if (path.startsWith('http') || path.startsWith('/')) return path;
-            return `${cloudFrontUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+            if (!cloudFrontUrl && path.includes("public")) return undefined;
+            if (path.startsWith("http") || path.startsWith("/")) return path;
+            return `${cloudFrontUrl}${path.startsWith("/") ? "" : "/"}${path}`;
           };
 
           const creatorAccountId =
@@ -38,11 +39,21 @@ const GigFullPage: React.FC = () => {
             g.user?.account_id ||
             g.postedById;
 
+          const resolvedTos =
+            g.termsOfService ||
+            g.terms_of_service ||
+            g.terms ||
+            g.tos ||
+            g.service_terms ||
+            "";
+
           setGig({
             ...g,
             client_account_id: creatorAccountId,
+            termsOfService: resolvedTos,
+            terms_of_service: resolvedTos,
             thumbnail: mapUrl(g.thumbnail) || "https://d2dl0agwn9kque.cloudfront.net/gig_thumbnails/ede6f8d1-cc62-4afd-be9f-11f044d86122/placeholder_1787040672764_8a5d64b3.png",
-            clientAvatar: g.clientAvatar ? `${cloudFrontUrl}${g.clientAvatar.startsWith('/') ? '' : '/'}${g.clientAvatar}` : undefined,
+            clientAvatar: g.clientAvatar ? `${cloudFrontUrl}${g.clientAvatar.startsWith("/") ? "" : "/"}${g.clientAvatar}` : undefined,
             gallery: (g.gallery || []).map((p: string) => mapUrl(p))
           });
         } else {
@@ -58,15 +69,7 @@ const GigFullPage: React.FC = () => {
     fetchGig();
   }, [id]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-dark-base flex flex-col items-center justify-center">
-        <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
-      </div>
-    );
-  }
-
-  if (!gig) {
+  if (!loading && !gig) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-dark-base flex flex-col items-center justify-center">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Service not found</h2>
@@ -95,7 +98,12 @@ const GigFullPage: React.FC = () => {
       </div>
 
       <div className="max-w-[1200px] w-full mx-auto py-8 px-4">
-        <GigRichText gig={gig} onClose={() => navigate(`/gigs/services`)} layout="page" />
+        <GigRichText
+          gig={gig}
+          isLoading={loading}
+          onClose={() => navigate(`/gigs/services`)}
+          layout="page"
+        />
       </div>
     </div>
   );

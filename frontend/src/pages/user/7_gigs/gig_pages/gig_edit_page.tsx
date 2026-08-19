@@ -85,7 +85,16 @@ const GigEditPage: React.FC = () => {
           const initialCat = data.category || "";
           const initialThumb = mapUrl(data.thumbnail) || "";
           const initialSlots = data.slots || 1;
-          const initialTos = data.termsOfService || "";
+
+          // Resolve TOS from all possible backend key variations
+          const initialTos =
+            data.termsOfService ||
+            data.terms_of_service ||
+            data.terms ||
+            data.tos ||
+            data.service_terms ||
+            "";
+
           const initialSkills = data.skills || [];
           const initialTimeline = data.firstDraftDelivery || "";
           const initialGallery = data.gallery ? data.gallery.map((p: string) => mapUrl(p)).filter(Boolean) : [];
@@ -313,6 +322,7 @@ const GigEditPage: React.FC = () => {
         category,
         slots,
         termsOfService,
+        terms_of_service: termsOfService,
         firstDraftDelivery,
         additionalWorkRate,
         tiers,

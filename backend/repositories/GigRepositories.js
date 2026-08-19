@@ -184,6 +184,7 @@ async function getAllGigsRepository(filters, accountId = null) {
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
             (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as thumbnail,
             (SELECT json_agg(f.path) FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id) as gallery,
+            (SELECT terms_description FROM terms_of_service WHERE account_id = g.freelancer_account_id AND terms_type = 'gigs' ORDER BY created_at DESC LIMIT 1) as "termsOfService",
             (SELECT json_agg(t.name) FROM gig_tags gt JOIN tags t ON gt.tag_id = t.tag_id WHERE gt.gig_id = g.gig_id) as skills,
             (SELECT json_agg(json_build_object(
                 'tierName', split_part(gt.title, ' - ', 1),
@@ -206,6 +207,7 @@ async function getAllGigsRepository(filters, accountId = null) {
 
     return res.rows.map(row => {
         const cleanArray = (arr) => (arr && arr[0] !== null) ? arr : [];
+        const cleanTiers = cleanArray(row.tiers);
         return {
             id: row.id,
             postedBy: row.postedBy || 'Unknown',
@@ -216,12 +218,13 @@ async function getAllGigsRepository(filters, accountId = null) {
             status: row.status || 'Open',
             slots: row.slots,
             termsOfService: row.termsOfService || '',
+            terms_of_service: row.termsOfService || '',
             skills: cleanArray(row.skills),
-            firstDraftDelivery: cleanArray(row.tiers).length > 0 ? (cleanArray(row.tiers)[0].daysOfDelivery == 1 ? '1 Day' : `${cleanArray(row.tiers)[0].daysOfDelivery} Days`) : 'N/A',
+            firstDraftDelivery: cleanTiers.length > 0 ? (cleanTiers[0].daysOfDelivery == 1 ? '1 Day' : `${cleanTiers[0].daysOfDelivery} Days`) : '1 Day',
             thumbnail: row.thumbnail || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b',
             gallery: cleanArray(row.gallery).length ? cleanArray(row.gallery) : [row.thumbnail || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b'],
             milestones: cleanArray(row.milestones),
-            tiers: cleanArray(row.tiers),
+            tiers: cleanTiers,
             additionalWorkRate: 50,
             questionnaires: [],
             postedAt: row.postedAt,
@@ -275,6 +278,7 @@ async function getSavedGigsRepository(accountId) {
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
             (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as thumbnail,
             (SELECT json_agg(f.path) FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id) as gallery,
+            (SELECT terms_description FROM terms_of_service WHERE account_id = g.freelancer_account_id AND terms_type = 'gigs' ORDER BY created_at DESC LIMIT 1) as "termsOfService",
             (SELECT json_agg(t.name) FROM gig_tags gt JOIN tags t ON gt.tag_id = t.tag_id WHERE gt.gig_id = g.gig_id) as skills,
             (SELECT json_agg(json_build_object(
                 'tierName', split_part(gt.title, ' - ', 1),
@@ -294,13 +298,26 @@ async function getSavedGigsRepository(accountId) {
     const res = await pool.query(query, [accountId]);
     return res.rows.map(row => {
         const cleanArray = (arr) => (arr && arr[0] !== null) ? arr : [];
+        const cleanTiers = cleanArray(row.tiers);
         return {
-            id: row.id, postedBy: row.postedBy || 'Unknown', clientAvatar: row.clientAvatar || 'https://i.pravatar.cc/150',
-            title: row.title, description: row.description, category: row.category, status: row.status || 'Open', slots: row.slots,
-            skills: cleanArray(row.skills), thumbnail: row.thumbnail || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b',
+            id: row.id,
+            postedBy: row.postedBy || 'Unknown',
+            clientAvatar: row.clientAvatar || 'https://i.pravatar.cc/150',
+            title: row.title,
+            description: row.description,
+            category: row.category,
+            status: row.status || 'Open',
+            slots: row.slots,
+            termsOfService: row.termsOfService || '',
+            terms_of_service: row.termsOfService || '',
+            skills: cleanArray(row.skills),
+            firstDraftDelivery: cleanTiers.length > 0 ? (cleanTiers[0].daysOfDelivery == 1 ? '1 Day' : `${cleanTiers[0].daysOfDelivery} Days`) : '1 Day',
+            thumbnail: row.thumbnail || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b',
             gallery: cleanArray(row.gallery).length ? cleanArray(row.gallery) : [row.thumbnail],
-            milestones: cleanArray(row.milestones), tiers: cleanArray(row.tiers),
-            postedAt: row.postedAt, isSaved: true
+            milestones: cleanArray(row.milestones),
+            tiers: cleanTiers,
+            postedAt: row.postedAt,
+            isSaved: true
         };
     });
 }
@@ -427,6 +444,8 @@ async function getGigByIdRepository(gigId, accountId = null) {
 
     const row = res.rows[0];
     const cleanArray = (arr) => (arr && arr[0] !== null) ? arr : [];
+    const cleanTiers = cleanArray(row.tiers);
+
     return {
         id: row.id,
         postedBy: row.postedBy || 'Unknown',
@@ -436,11 +455,16 @@ async function getGigByIdRepository(gigId, accountId = null) {
         category: row.category,
         status: row.status || 'Open',
         slots: row.slots,
+        termsOfService: row.termsOfService || '',
+        terms_of_service: row.termsOfService || '',
+        firstDraftDelivery: cleanTiers.length > 0
+            ? (cleanTiers[0].daysOfDelivery == 1 ? '1 Day' : `${cleanTiers[0].daysOfDelivery} Days`)
+            : '1 Day',
         skills: cleanArray(row.skills),
         thumbnail: row.thumbnail || 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b',
         gallery: cleanArray(row.gallery).length ? cleanArray(row.gallery) : [row.thumbnail],
         milestones: cleanArray(row.milestones),
-        tiers: cleanArray(row.tiers),
+        tiers: cleanTiers,
         questionnaires: cleanArray(row.questionnaires),
         postedAt: row.postedAt,
         isSaved: row.isSaved,
