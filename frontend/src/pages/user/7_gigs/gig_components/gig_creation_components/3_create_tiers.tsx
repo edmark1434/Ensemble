@@ -176,38 +176,35 @@ export const CreateTiers: React.FC<CreateTiersProps> = ({
 
       {/* Additional Rate */}
       <div>
-        <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1">Additional Work Rate</label>
-        <p className="text-[10px] text-gray-500 mb-2">Percentage markup applied for orders outside tier scope.</p>
-        <div className="flex items-center gap-4">
-          <input
-            type="range"
-            min="0"
-            max="100"
-            step="5"
+        <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+          ADDITIONAL WORK RATE <span className="text-red-500">*</span>
+        </label>
+        
+        <div className="relative">
+          <select
             value={additionalWorkRate}
             onChange={(e) => {
               setAdditionalWorkRate(parseInt(e.target.value) || 0);
               clearError("additionalWorkRate");
             }}
-            className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-white/10 accent-blue-600"
-          />
-          <div className="relative w-24 shrink-0">
-            <input
-              type="number"
-              min="0"
-              max="100"
-              value={additionalWorkRate}
-              onChange={(e) => {
-                setAdditionalWorkRate(parseInt(e.target.value) || 0);
-                clearError("additionalWorkRate");
-              }}
-              className={`w-full rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-3 pr-8 py-2.5 text-sm font-bold text-gray-900 dark:text-white outline-none transition-all ${
-                errors.additionalWorkRate ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50"
-              }`}
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400">%</span>
+            className={`w-full appearance-none rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none pl-10 pr-10 py-3 text-sm font-bold text-gray-900 dark:text-white outline-none transition-all cursor-pointer ${
+              errors.additionalWorkRate ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 focus:border-blue-500/50 hover:border-gray-300 dark:hover:border-white/20"
+            }`}
+          >
+            <option value={10}>+10% per extra revision pass</option>
+            <option value={15}>+15% per extra revision pass</option>
+            <option value={20}>+20% per extra revision pass</option>
+            <option value={25}>+25% per extra revision pass</option>
+            <option value={30}>+30% per extra revision pass</option>
+          </select>
+          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-500 font-bold text-sm">
+            %
+          </div>
+          <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+            <ChevronDown className="h-4 w-4" />
           </div>
         </div>
+        
         {errors.additionalWorkRate && <p className="text-[11px] text-red-400 mt-1">{errors.additionalWorkRate}</p>}
       </div>
 

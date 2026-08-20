@@ -17,7 +17,18 @@ export const OrdersSelectGigPage: React.FC = () => {
   useEffect(() => {
     api.get("/api/gigs").then((res) => {
       if (res.data && res.data.data) {
-        setGigs(res.data.data.filter((g: any) => g.isOwnGig));
+        const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || '';
+        const rawGigs = res.data.data.filter((g: any) => g.isOwnGig);
+        const mappedGigs = rawGigs.map((g: any) => ({
+          ...g,
+          thumbnail: g.thumbnail && !g.thumbnail.startsWith('http') 
+            ? `${cloudFrontUrl}${g.thumbnail.startsWith('/') ? '' : '/'}${g.thumbnail}` 
+            : g.thumbnail,
+          clientAvatar: g.clientAvatar && !g.clientAvatar.startsWith('http')
+            ? `${cloudFrontUrl}${g.clientAvatar.startsWith('/') ? '' : '/'}${g.clientAvatar}`
+            : g.clientAvatar,
+        }));
+        setGigs(mappedGigs);
       }
       setLoading(false);
     }).catch((err) => {

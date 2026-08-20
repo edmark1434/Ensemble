@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Loader2, CheckCircle2, Check, CreditCard, Box, MapPin, PlayCircle, Search } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle2, Check, CreditCard, Box, MapPin, PlayCircle, Search, FileText } from "lucide-react";
 import api from "@/lib/axios";
 import type { Gig } from "../gig_datasets";
 import { CreditIcon } from "@/components/ui/credit-icon";
@@ -9,10 +9,14 @@ import ShapeGrid from "@/components/ui/ShapeGrid";
 import useGlobalState from "@/lib/global_state";
 import PopupConfirmReturn from "@/pages/user/6_job_market/job_components/job_popups/popup_confirm_return";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import SuccessModal from "@/components/ui/SuccessModal";
+import { uploadFileWithIntent } from "@/lib/uploadFile";
+import { UploadCloud } from "lucide-react";
 
 const ORDER_WIZARD_STEPS = [
   { id: 1, label: "Order Details" },
-  { id: 2, label: "Review & Pay" },
+  { id: 2, label: "Questions" },
+  { id: 3, label: "Review & Pay" },
 ];
 
 const OrderCreateHeader = ({ currentSlide, onReturn }: { currentSlide: number; onReturn: () => void }) => {
@@ -84,10 +88,13 @@ const GigOrderPage: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState<{[key: number]: boolean}>({});
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
 
   const [projectBrief, setProjectBrief] = useState("");
   const [questionAnswers, setQuestionAnswers] = useState<Record<string, any>>({});
+  const [agreedToFreelancerTerms, setAgreedToFreelancerTerms] = useState(false);
+  const [agreedToPlatformTerms, setAgreedToPlatformTerms] = useState(false);
 
   useEffect(() => {
     const fetchGig = async () => {
@@ -127,12 +134,41 @@ const GigOrderPage: React.FC = () => {
     }
   };
 
-  const handleCheckout = () => {
+  const isStep2Valid = () => {
+    if (!gig?.questionnaires || gig.questionnaires.length === 0) return true;
+    for (let i = 0; i < gig.questionnaires.length; i++) {
+      const q = gig.questionnaires[i];
+      if (q.required || q.isRequired) {
+        const ans = questionAnswers[i];
+        if ((q.type === 'multiple-choice' || q.type === 'choice' || q.type === 'multiple_choice') && q.multipleAnswer) {
+          if (!ans || ans.length === 0) return false;
+        } else {
+          if (!ans || String(ans).trim() === '') return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  const handleCheckout = async () => {
     setIsProcessing(true);
-    setTimeout(() => {
+    try {
+      const payload = {
+        tierId: activeTier?.tierId,
+        projectBrief,
+        responses: Object.entries(questionAnswers).map(([idx, response]) => ({
+          requirementId: gig.questionnaires[parseInt(idx)]?.id,
+          response
+        }))
+      };
+      await api.post(`/api/gigs/${gig.id}/order`, payload);
       setIsProcessing(false);
       setIsSuccessOpen(true);
-    }, 1500);
+    } catch (err) {
+      console.error(err);
+      setIsProcessing(false);
+      alert("Failed to submit order. Please try again.");
+    }
   };
 
   if (loading) {
@@ -187,45 +223,39 @@ const GigOrderPage: React.FC = () => {
         transition={{ duration: 0.3 }}
         className="relative z-10 mx-auto max-w-3xl p-6 md:p-8 w-full space-y-6"
       >
-        {isSuccessOpen ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-dark-surface rounded-3xl border border-gray-200 dark:border-white/10 p-12 text-center shadow-2xl backdrop-blur-xl mt-12"
-          >
-            <div className="mx-auto w-16 h-16 bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mb-6">
-              <CheckCircle2 className="h-8 w-8" />
-            </div>
-            <h2 className="text-2xl font-black text-gray-900 dark:text-white mb-2">Order Successfully Sent</h2>
-            <p className="text-sm text-gray-500 dark:text-zinc-400 mb-8 max-w-sm mx-auto">
-              Your order has been placed! The seller will reach out to you shortly via messages to begin working.
-            </p>
-            <button
-              onClick={() => navigate('/gigs/orders')}
-              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl transition shadow-lg shadow-blue-500/20"
-            >
-              Go to My Orders
-            </button>
-          </motion.div>
-        ) : (
-          <>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Making an Order</h1>
-              <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
-                Applying for Gig ID <span className="font-mono text-blue-400">{gig.id}</span>:{" "}
-                <strong className="text-gray-900 dark:text-white">{gig.title}</strong>
-              </p>
-            </div>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Making an Order</h1>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+            Applying for Gig ID <span className="font-mono text-blue-400">{gig.id}</span>:{" "}
+            <strong className="text-gray-900 dark:text-white">{gig.title}</strong>
+          </p>
+        </div>
 
-            <OrderCreateHeader currentSlide={currentSlide} onReturn={handleReturnTrigger} />
+        <OrderCreateHeader currentSlide={currentSlide} onReturn={handleReturnTrigger} />
 
-            <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6">
+        <div className="rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface p-6 md:p-8 backdrop-blur-xl shadow-2xl space-y-6">
               <AnimatePresence mode="wait">
                 {currentSlide === 1 && (
                   <motion.div key="step-1" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} className="space-y-6">
                     <div>
                       <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">Order Details</h2>
-                      <p className="text-xs text-gray-500 dark:text-zinc-400">Specify your order requirements so the seller can start working.</p>
+                      <p className="text-xs text-gray-500 dark:text-zinc-400">Review your selected package and provide a project brief.</p>
+                    </div>
+
+                    <div className="p-4 rounded-xl border border-blue-100 dark:border-blue-900/30 bg-blue-50/50 dark:bg-blue-900/10 mb-6">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 mb-1">
+                            Selected Tier
+                          </span>
+                          <h3 className="font-bold text-gray-900 dark:text-white">{activeTier?.tierName} - {activeTier?.title}</h3>
+                        </div>
+                        <div className="text-right">
+                          <span className="block font-black text-blue-600 dark:text-blue-400">{activeTier?.price} Credits</span>
+                          <span className="text-xs text-gray-500">{activeTier?.daysOfDelivery} Days Delivery</span>
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-zinc-400">{activeTier?.description || "No description provided."}</p>
                     </div>
 
                     <div className="space-y-6">
@@ -240,14 +270,42 @@ const GigOrderPage: React.FC = () => {
                         />
                       </div>
 
-                      {gig.questionnaires && gig.questionnaires.length > 0 && (
+                      <div className="flex gap-3 pt-6 mt-6 border-t border-gray-100 dark:border-white/5">
+                        <button onClick={handleReturnTrigger} className="px-6 py-3 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-zinc-300 font-bold text-sm hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">
+                          Discard
+                        </button>
+                        <button
+                          onClick={() => setCurrentSlide(2)}
+                          disabled={!projectBrief.trim()}
+                          className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
+                        >
+                          Next: Questions <span className="ml-1">→</span>
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {currentSlide === 2 && (
+                  <motion.div key="step-2" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="space-y-6">
+                    <div>
+                      <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">Freelancer Questions</h2>
+                      <p className="text-xs text-gray-500 dark:text-zinc-400">Please answer the following questions required by the freelancer.</p>
+                    </div>
+
+                    <div className="space-y-6">
+                      {gig.questionnaires && gig.questionnaires.length > 0 ? (
                         <div className="space-y-4">
-                          <label className="block text-xs font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wide">Questionnaire</label>
                           {gig.questionnaires.map((q, idx) => (
                               <div key={idx} className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/10">
-                                <p className="text-sm font-semibold text-gray-800 dark:text-zinc-200 mb-3">
+                                <p className="text-sm font-semibold text-gray-800 dark:text-zinc-200 mb-1">
                                   {q.question} {(q.required || q.isRequired) && <span className="text-red-500">*</span>}
                                 </p>
+                                {(q.type === "multiple-choice" || q.type === "choice" || q.type === 'multiple_choice') && (
+                                  <p className="text-xs text-gray-500 dark:text-zinc-400 mb-3">
+                                    {q.multipleAnswer ? "Select one or more answers" : "Select only one answer"}
+                                  </p>
+                                )}
 
                                 {(q.type === "multiple-choice" || q.type === "choice" || q.type === 'multiple_choice') ? (
                                   q.multipleAnswer ? (
@@ -291,20 +349,112 @@ const GigOrderPage: React.FC = () => {
                                   <div>
                                     <input
                                       type="file"
-                                      accept={q.fileTypes?.length ? q.fileTypes.map(t => '.' + t).join(',') : '*'}
-                                      className="w-full text-sm file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 dark:file:bg-blue-500/10 file:text-blue-700 dark:file:text-blue-400 hover:file:bg-blue-100 cursor-pointer"
-                                      required={q.required || q.isRequired}
-                                      onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file && q.fileLimit && file.size > q.fileLimit * 1024 * 1024) {
-                                          alert(`File size must be less than ${q.fileLimit}MB`);
-                                          e.target.value = '';
-                                          return;
+                                      id={`file-upload-${idx}`}
+                                      accept={
+                                        q.fileTypes?.includes('pdf') ? '.pdf' :
+                                        q.fileTypes?.includes('image') ? '.png,.jpeg,.jpg' :
+                                        q.fileTypes?.includes('video') ? '.mp4,.mov' :
+                                        '.png,.jpeg,.jpg,.mp4,.mov,.pdf'
+                                      }
+                                      className="hidden"
+                                      required={(q.required || q.isRequired) && !questionAnswers[idx]}
+                                      multiple={q.fileTypes?.includes('image') ? (q.fileLimit || 1) > 1 : false}
+                                      onChange={async (e) => {
+                                        const fileArray = Array.from(e.target.files || []);
+                                        if (fileArray.length > 0) {
+                                          const isPdf = q.fileTypes?.includes('pdf');
+                                          const isImage = q.fileTypes?.includes('image');
+                                          const isVideo = q.fileTypes?.includes('video');
+                                          
+                                          const maxLimit = isPdf ? 1 : isVideo ? 1 : isImage ? (q.fileLimit || 1) : 5;
+                                          if (fileArray.length > maxLimit) {
+                                            alert(`You can only upload up to ${maxLimit} file(s).`);
+                                            e.target.value = '';
+                                            return;
+                                          }
+                                          
+                                          for (const file of fileArray) {
+                                            if (isPdf && !file.type.includes('pdf')) { alert("Only PDF allowed."); e.target.value = ''; return; }
+                                            if (isImage && !file.type.startsWith('image/')) { alert("Only images allowed."); e.target.value = ''; return; }
+                                            if (isVideo && !file.type.startsWith('video/')) { alert("Only videos allowed."); e.target.value = ''; return; }
+
+                                            const maxSizeMB = isVideo ? 15 : 10;
+                                            if (file.size > maxSizeMB * 1024 * 1024) {
+                                              alert(`File ${file.name} exceeds ${maxSizeMB}MB limit.`);
+                                              e.target.value = '';
+                                              return;
+                                            }
+                                          }
+
+                                          setUploadingFiles(prev => ({ ...prev, [idx]: true }));
+                                          try {
+                                            const keys = await Promise.all(fileArray.map(async file => {
+                                              // Fallback to existing folders if gig_orders is not yet loaded in their backend
+                                              const folder = file.type.includes('pdf') ? 'documents' : (file.type.startsWith('video/') ? 'assets' : 'documents');
+                                              const { key } = await uploadFileWithIntent(file, folder);
+                                              return key;
+                                            }));
+                                            setQuestionAnswers(prev => ({ ...prev, [idx]: keys.join(',') }));
+                                          } catch (err) {
+                                            console.error(err);
+                                            alert("Failed to upload file(s). Please try again.");
+                                          } finally {
+                                            setUploadingFiles(prev => ({ ...prev, [idx]: false }));
+                                          }
                                         }
-                                        setQuestionAnswers(prev => ({ ...prev, [idx]: file ? file.name : "" }));
                                       }}
                                     />
-                                    {q.fileLimit && <p className="mt-1.5 text-xs text-gray-500">Max size: {q.fileLimit}MB</p>}
+                                    <div className="flex flex-col sm:flex-row items-start gap-4 w-full">
+                                      <label
+                                        htmlFor={`file-upload-${idx}`}
+                                        className={`flex flex-col items-center justify-center w-full ${questionAnswers[idx] ? 'sm:w-48' : ''} shrink-0 min-h-[8rem] p-4 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${questionAnswers[idx] ? 'border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/5' : 'border-gray-300 dark:border-white/20 hover:bg-gray-50 dark:hover:bg-white/5'}`}
+                                      >
+                                        {uploadingFiles[idx] ? (
+                                          <div className="flex flex-col items-center">
+                                            <Loader2 className="h-6 w-6 text-blue-500 animate-spin mb-2" />
+                                            <span className="text-sm font-medium text-gray-500">Uploading...</span>
+                                          </div>
+                                        ) : (
+                                          <div className="flex flex-col items-center text-center text-gray-500 dark:text-zinc-400">
+                                            <UploadCloud className="h-6 w-6 mb-2 opacity-60" />
+                                            <span className="text-sm font-bold">{questionAnswers[idx] ? "Upload New" : "Upload File"}</span>
+                                            <span className="text-[10px] mt-1.5 text-center px-1">
+                                              {q.fileTypes?.includes('pdf') ? "PDF (Max 1, 10MB)" :
+                                               q.fileTypes?.includes('image') ? `Images (Max ${q.fileLimit || 1}, 10MB)` :
+                                               q.fileTypes?.includes('video') ? "Video (Max 1, 15MB)" :
+                                               "PDF, Image, or Video"}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </label>
+
+                                      {questionAnswers[idx] && (
+                                        <div className="flex-1 flex flex-wrap gap-3 items-start p-4 rounded-xl border border-emerald-100 bg-emerald-50/50 dark:border-emerald-900/30 dark:bg-emerald-900/10 min-h-[8rem] w-full">
+                                          {questionAnswers[idx].split(',').map((key, i) => {
+                                            const isImg = key.match(/\.(jpeg|jpg|gif|png|webp|avif)$/i);
+                                            const isVid = key.match(/\.(mp4|mov)$/i);
+                                            const url = `${import.meta.env.VITE_CLOUDFRONT_URL}/${key}`;
+                                            const filename = key.split('/').pop() || 'file';
+                                            return (
+                                              <div key={i} className="flex flex-col items-center gap-1.5 w-16">
+                                                <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-gray-200 dark:border-white/10 shadow-sm bg-white dark:bg-dark-base group">
+                                                  {isImg ? (
+                                                    <img src={url} alt="upload" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                                                  ) : isVid ? (
+                                                    <div className="flex items-center justify-center w-full h-full bg-blue-50 text-blue-500 dark:bg-blue-900/20"><PlayCircle className="w-6 h-6" /></div>
+                                                  ) : (
+                                                    <div className="flex items-center justify-center w-full h-full bg-red-50 text-red-500 dark:bg-red-900/20"><FileText className="w-6 h-6" /></div>
+                                                  )}
+                                                </div>
+                                                <span className="text-[9px] text-gray-600 dark:text-zinc-400 truncate w-full text-center px-0.5" title={filename}>
+                                                  {filename}
+                                                </span>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 ) : (
                                   <textarea
@@ -319,25 +469,30 @@ const GigOrderPage: React.FC = () => {
                               </div>
                             ))}
                         </div>
+                      ) : (
+                        <div className="py-8 text-center bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-200 dark:border-white/10">
+                          <p className="text-sm text-gray-500 dark:text-zinc-400">This gig does not have any additional requirements.</p>
+                        </div>
                       )}
 
                       <div className="flex gap-3 pt-6 mt-6 border-t border-gray-100 dark:border-white/5">
-                        <button onClick={handleReturnTrigger} className="px-6 py-3 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-zinc-300 font-bold text-sm hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">
-                          Discard
+                        <button onClick={() => setCurrentSlide(1)} className="px-6 py-3 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-zinc-300 font-bold text-sm hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">
+                          Back
                         </button>
                         <button
-                          onClick={() => setCurrentSlide(2)}
-                          className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
+                          onClick={() => setCurrentSlide(3)}
+                          disabled={!isStep2Valid()}
+                          className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:hover:bg-blue-600 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
                         >
-                          Confirm Details & Next <span className="ml-1">→</span>
+                          Review & Confirm <span className="ml-1">→</span>
                         </button>
                       </div>
                     </div>
                   </motion.div>
                 )}
 
-                {currentSlide === 2 && (
-                  <motion.div key="step-2" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="space-y-6">
+                {currentSlide === 3 && (
+                  <motion.div key="step-3" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="space-y-6">
                     <div>
                       <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">Review & Confirm</h2>
                       <p className="text-xs text-gray-500 dark:text-zinc-400">Please review your order details before making a payment.</p>
@@ -371,13 +526,43 @@ const GigOrderPage: React.FC = () => {
                       </div>
                     </div>
 
+                    <div className="space-y-3 pt-2">
+                      <label className="flex items-start gap-3 cursor-pointer group">
+                        <div className="pt-0.5">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 mt-0.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-600 cursor-pointer"
+                            checked={agreedToFreelancerTerms}
+                            onChange={(e) => setAgreedToFreelancerTerms(e.target.checked)}
+                          />
+                        </div>
+                        <span className="text-sm text-gray-600 dark:text-zinc-400 group-hover:text-gray-900 dark:group-hover:text-zinc-200 transition-colors">
+                          I certify that I have read and agree to the <strong className="font-semibold text-gray-800 dark:text-zinc-300">Freelancer's Terms of Service</strong> for this order.
+                        </span>
+                      </label>
+                      
+                      <label className="flex items-start gap-3 cursor-pointer group">
+                        <div className="pt-0.5">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 mt-0.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 dark:bg-gray-700 dark:border-gray-600 cursor-pointer"
+                            checked={agreedToPlatformTerms}
+                            onChange={(e) => setAgreedToPlatformTerms(e.target.checked)}
+                          />
+                        </div>
+                        <span className="text-sm text-gray-600 dark:text-zinc-400 group-hover:text-gray-900 dark:group-hover:text-zinc-200 transition-colors">
+                          I agree to the <strong className="font-semibold text-gray-800 dark:text-zinc-300">Platform Terms & Conditions</strong> and acknowledge that credits will be held in escrow upon acceptance.
+                        </span>
+                      </label>
+                    </div>
+
                     <div className="flex gap-3 pt-6 mt-6 border-t border-gray-100 dark:border-white/5">
-                      <button onClick={() => setCurrentSlide(1)} disabled={isProcessing} className="px-6 py-3 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-zinc-300 font-bold text-sm hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">
+                      <button onClick={() => setCurrentSlide(2)} disabled={isProcessing} className="px-6 py-3 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-zinc-300 font-bold text-sm hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">
                         Back
                       </button>
                       <button
                         onClick={handleCheckout}
-                        disabled={isProcessing}
+                        disabled={isProcessing || !agreedToFreelancerTerms || !agreedToPlatformTerms}
                         className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-50 flex justify-center items-center gap-2"
                       >
                         {isProcessing ? "Processing..." : "Pay with Credits"}
@@ -387,9 +572,15 @@ const GigOrderPage: React.FC = () => {
                 )}
               </AnimatePresence>
             </div>
-          </>
-        )}
       </motion.div>
+
+      <SuccessModal
+        isOpen={isSuccessOpen}
+        title="Order Successfully Sent!"
+        message="Your order has been placed! The seller will reach out to you shortly to begin working."
+        buttonText="Go to My Orders"
+        onConfirm={() => navigate('/gigs/orders')}
+      />
 
       <PopupConfirmReturn
         isOpen={isDiscardOpen}

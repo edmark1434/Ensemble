@@ -7,9 +7,12 @@ const {
     submitGigOrderRepository,
     getIncomingOrdersRepository,
     getMyOrdersRepository,
+    getOrderByIdRepository,
     getGigByIdRepository,
     updateGigRepository,
-    deleteGigRepository
+    deleteGigRepository,
+    acceptGigOrderRepository,
+    rejectGigOrderRepository
 } = require('../repositories/GigRepositories');
 
 async function createGigController(req, res) {
@@ -103,6 +106,17 @@ async function getMyOrdersController(req, res) {
     }
 }
 
+async function getOrderByIdController(req, res) {
+    try {
+        const order = await getOrderByIdRepository(req.params.orderId);
+        if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+        res.status(200).json({ success: true, data: order });
+    } catch (error) {
+        console.error("Error in getOrderByIdController:", error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+}
+
 async function getGigByIdController(req, res) {
     try {
         const gig = await getGigByIdRepository(req.params.id, req.user?.account_id);
@@ -163,6 +177,41 @@ async function deleteGigController(req, res) {
     }
 }
 
+async function acceptGigOrderController(req, res) {
+    try {
+        const freelancer_account_id = req.user?.account_id;
+        const orderId = req.params.orderId;
+
+        if (!freelancer_account_id) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+
+        const contractId = await acceptGigOrderRepository(orderId, freelancer_account_id);
+        res.status(200).json({ success: true, message: 'Gig order accepted successfully', contractId });
+    } catch (error) {
+        console.error("Error in acceptGigOrderController:", error);
+        res.status(500).json({ success: false, message: error.message || 'Failed to accept gig order' });
+    }
+}
+
+async function rejectGigOrderController(req, res) {
+    try {
+        const freelancer_account_id = req.user?.account_id;
+        const orderId = req.params.orderId;
+        const { reason } = req.body;
+
+        if (!freelancer_account_id) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+
+        await rejectGigOrderRepository(orderId, freelancer_account_id, reason);
+        res.status(200).json({ success: true, message: 'Gig order rejected successfully' });
+    } catch (error) {
+        console.error("Error in rejectGigOrderController:", error);
+        res.status(500).json({ success: false, message: error.message || 'Failed to reject gig order' });
+    }
+}
+
 module.exports = {
     updateGigController,
     createGigController,
@@ -172,6 +221,9 @@ module.exports = {
     submitGigOrderController,
     getIncomingOrdersController,
     getMyOrdersController,
+    getOrderByIdController,
     getGigByIdController,
-    deleteGigController
+    deleteGigController,
+    acceptGigOrderController,
+    rejectGigOrderController
 };

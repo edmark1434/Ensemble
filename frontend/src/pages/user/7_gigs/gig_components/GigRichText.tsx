@@ -10,6 +10,7 @@ import type { Gig } from "../gig_datasets";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import PopupReportGig from "./PopupReportGig";
 import { GigsOtherServices } from "./gigs_other_services";
+import useGlobalState from "@/lib/global_state";
 
 interface GigRichTextProps {
   gig?: Gig | null;
@@ -28,8 +29,11 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
 }) => {
   const isPage = layout === "page";
   const navigate = useNavigate();
+  const user = useGlobalState(state => state.user);
   const [activeTierIdx, setActiveTierIdx] = useState(0);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+
+  const isOwner = gig && user && String(user.account_id) === String(gig.client_account_id);
 
   // Lightbox Modal state
   const [activeLightboxImg, setActiveLightboxImg] = useState<string | null>(null);
@@ -692,10 +696,11 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                           </div>
 
                           <button
-                            onClick={() => navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
-                            className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
+                            onClick={() => !isOwner && navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
+                            disabled={isOwner}
+                            className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:shadow-none"
                           >
-                            Continue ({activeTier?.price?.toLocaleString()} Credits)
+                            {isOwner ? "You own this service" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
                           </button>
                         </div>
                       </div>
@@ -751,10 +756,11 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                       </div>
 
                       <button
-                        onClick={() => navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
-                        className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
+                        onClick={() => !isOwner && !gig.hasPendingOrder && navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
+                        disabled={isOwner || gig.hasPendingOrder}
+                        className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:shadow-none"
                       >
-                        Continue ({activeTier?.price?.toLocaleString()} Credits)
+                        {isOwner ? "You own this service" : gig.hasPendingOrder ? "Pending Order Exists" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
                       </button>
                     </div>
                   </div>
@@ -791,10 +797,11 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
               <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString()}</span>
             </div>
             <button
-              onClick={() => navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
-              className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20"
+              onClick={() => !isOwner && !gig.hasPendingOrder && navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
+              disabled={isOwner || gig.hasPendingOrder}
+              className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:shadow-none"
             >
-              Order Now
+              {isOwner ? "You own this service" : gig.hasPendingOrder ? "Pending Order" : "Order Now"}
             </button>
           </div>
         )}

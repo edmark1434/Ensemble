@@ -1,5 +1,5 @@
 import React, { type FormEvent, useRef, useState, type ChangeEvent } from "react";
-import { ArrowRight, X, Plus, Minus, Image as ImageIcon, ChevronDown, Check } from "lucide-react";
+import { ArrowRight, X, Plus, Minus, Image as ImageIcon, ChevronDown, Check, Edit2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface CreateDeliveryProps {
@@ -227,14 +227,19 @@ export const CreateDelivery: React.FC<CreateDeliveryProps> = ({
       </div>
 
       {/* Terms of Service */}
-      <div className="space-y-1.5 pt-2 border-t border-gray-200 dark:border-white/5">
-        <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase tracking-wider block mb-1">
-          Terms of Service <span className="text-red-500">*</span>
-        </label>
+      <div className="space-y-4 pt-6 border-t border-gray-200 dark:border-white/5">
+        <div>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            Terms of Service (TOS)
+          </h3>
+          <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
+            Select an existing TOS template or edit standard agreement terms for the client.
+          </p>
+        </div>
         
-        <div className="mb-2">
+        <div className="mb-2 w-full lg:w-1/2">
           <CustomDropdown
-            label="Load Terms Preset (Optional)"
+            label="SELECT TOS PRESET"
             value=""
             options={["Standard Platform TOS", "Strict IP Transfer TOS"]}
             placeholder="Select a template..."
@@ -250,6 +255,10 @@ export const CreateDelivery: React.FC<CreateDeliveryProps> = ({
         </div>
 
         <div className="relative">
+          <label className="text-[10px] font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+            <Edit2 className="h-3 w-3" />
+            ACTIVE CONTRACT TERMS (EDITABLE)
+          </label>
           <textarea
             rows={5}
             value={termsOfService}
@@ -258,7 +267,7 @@ export const CreateDelivery: React.FC<CreateDeliveryProps> = ({
               clearError("termsOfService");
             }}
             placeholder="Specify your terms of service..."
-            className={`w-full min-h-[120px] rounded-xl border bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-3.5 text-xs text-gray-900 dark:text-white outline-none transition-all resize-y leading-relaxed font-mono ${errors.termsOfService ? "border-red-500/50" : "border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20 focus:border-blue-500/50"}`}
+            className={`w-full min-h-[120px] rounded-xl border bg-gray-50 dark:bg-white/5 shadow-sm dark:shadow-none p-4 text-xs text-gray-900 dark:text-white outline-none transition-all resize-y leading-relaxed font-mono ${errors.termsOfService ? "border-red-500/50 focus:border-red-500" : "border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20 focus:border-blue-500/50"}`}
           />
         </div>
         {errors.termsOfService && <p className="text-[11px] text-red-400 mt-1">{errors.termsOfService}</p>}
