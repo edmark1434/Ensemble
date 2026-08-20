@@ -16,6 +16,7 @@ import { getMinTextDimensions } from "../utils/text";
 import {getMoveableTransform} from "@/features/editor/player/styles";
 import {getMinCaptionDimensions} from "@/features/editor/utils/captions";
 import {foldSkewYIntoScale} from "@/features/editor/utils/matrix-fold";
+import { broadcastLiveTransform, clearLiveTransform, subscribeToRemoteLiveTransforms, LiveTransformState } from "../collab/live-transform";
 
 let holdGroupPosition: Record<string, any> | null = null;
 let groupTextScaleStart: Record<string, {
@@ -23,6 +24,7 @@ let groupTextScaleStart: Record<string, {
   relLeft: number; relTop: number;
   foldedScaleXAtStart: number;
 }> | null = null;
+let groupScaleStartDims: Record<string, { width: number; height: number }> | null = null;
 let groupScaleAnchor: { x: number; y: number } | null = null;
 let groupRotateStart: Record<string, {
   rotate: number; skewX: number; scaleX: number; scaleY: number;
@@ -32,6 +34,7 @@ let groupRotatePivot: { x: number; y: number } | null = null;
 let dragStartEnd = false;
 
 const toRad = (deg: number) => (deg * Math.PI) / 180;
+const MIN_ITEM_DIMENSION = 50;
 
 interface SceneInteractionsProps {
   stateManager: StateManager;
@@ -54,14 +57,15 @@ function scaleDiv(
   scale: number,
   currentWidth: number,
   currentHeight: number
-) {
+): number | null {
   const div = document.querySelector(selector) as HTMLDivElement | null;
-  if (div) {
-    const fontSize = parseFloat(getComputedStyle(div).fontSize);
-    div.style.fontSize = `${fontSize * scale}px`;
-    div.style.width = `${currentWidth * scale}px`;
-    div.style.height = `${currentHeight * scale}px`;
-  }
+  if (!div) return null;
+  const fontSize = parseFloat(getComputedStyle(div).fontSize);
+  const newFontSize = fontSize * scale;
+  div.style.fontSize = `${newFontSize}px`;
+  div.style.width = `${currentWidth * scale}px`;
+  div.style.height = `${currentHeight * scale}px`;
+  return newFontSize;
 }
 
 export function SceneInteractions({
@@ -77,7 +81,8 @@ export function SceneInteractions({
     trackItemsMap,
     playerRef,
     setSceneMoveableRef,
-    trackItemIds
+    trackItemIds,
+    collabSchema,
   } = useStore();
   const moveableRef = useRef<Moveable>(null);
   const [selectionInfo, setSelectionInfo] =
@@ -128,6 +133,7 @@ export function SceneInteractions({
       setTargets(selInfo.targets as HTMLDivElement[]);
     };
     const timer = setTimeout(() => {
+      if (activeGestureRef.current) return;
       updateTargets();
     });
 
@@ -276,7 +282,9 @@ export function SceneInteractions({
     };
   }, []);
 
+  const activeGestureRef = useRef(false);
   useEffect(() => {
+    if (activeGestureRef.current) return;
     moveableRef.current?.moveable.updateRect();
   }, [trackItemsMap]);
 
@@ -319,6 +327,126 @@ export function SceneInteractions({
     targetsRef.current = targets;
   }, [targets]);
 
+  const remoteOverrideIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!collabSchema) return;
+
+    const applyPatch = (id: string, patch: LiveTransformState[string]) => {
+      const target = getTargetById(id) as HTMLDivElement | null;
+      if (!target) return;
+      if (patch.left !== undefined) target.style.left = `${patch.left}px`;
+      if (patch.top !== undefined) target.style.top = `${patch.top}px`;
+      if (patch.transform !== undefined) target.style.transform = patch.transform;
+      if (patch.width !== undefined) target.style.width = `${patch.width}px`;
+      if (patch.height !== undefined) target.style.height = `${patch.height}px`;
+
+      if (patch.width === undefined && patch.height === undefined && patch.fontSize === undefined) return;
+
+      const item = useStore.getState().trackItemsMap[id];
+      if (!item || (item.type !== "text" && item.type !== "caption")) return;
+
+      const animationDiv = target.firstElementChild?.firstElementChild as HTMLDivElement | null;
+      if (animationDiv) {
+        if (patch.width !== undefined) animationDiv.style.width = `${patch.width}px`;
+        if (patch.height !== undefined) animationDiv.style.height = `${patch.height}px`;
+      }
+
+      const selector = item.type === "text" ? `[data-text-id="${id}"]` : `#caption-${id}`;
+      const innerDiv = document.querySelector(selector) as HTMLDivElement | null;
+      if (innerDiv) {
+        if (patch.width !== undefined) innerDiv.style.width = `${patch.width}px`;
+        if (patch.height !== undefined) innerDiv.style.height = `${patch.height}px`;
+        if (patch.fontSize !== undefined) innerDiv.style.fontSize = `${patch.fontSize}px`;
+      }
+
+      if (item.type === "text" && (patch.width !== undefined || patch.height !== undefined)) {
+        const textAnimatedDiv = target.querySelector(`[data-text-anim-id="${id}"]`) as HTMLDivElement | null;
+        if (textAnimatedDiv) {
+          if (patch.width !== undefined) textAnimatedDiv.style.width = `${patch.width}px`;
+          if (patch.height !== undefined) textAnimatedDiv.style.height = `${patch.height}px`;
+        }
+      }
+    };
+
+    const resetToCommitted = (id: string) => {
+      const target = getTargetById(id) as HTMLDivElement | null;
+      const item = useStore.getState().trackItemsMap[id];
+      const details = item?.details;
+      if (!target || !details) return;
+      target.style.left = typeof details.left === "number" ? `${details.left}px` : String(details.left ?? "");
+      target.style.top = typeof details.top === "number" ? `${details.top}px` : String(details.top ?? "");
+      target.style.transform = getMoveableTransform(details, {});
+      if (details.width !== undefined) {
+        target.style.width = typeof details.width === "number" ? `${details.width}px` : String(details.width);
+      }
+      if (details.height !== undefined) {
+        target.style.height = typeof details.height === "number" ? `${details.height}px` : String(details.height);
+      }
+
+      if (item.type !== "text" && item.type !== "caption") return;
+
+      if (item.type === "text") {
+        const innerDiv = document.querySelector(`[data-text-id="${id}"]`) as HTMLDivElement | null;
+        if (innerDiv) {
+          innerDiv.style.width = "100%";
+          innerDiv.style.height = "100%";
+        }
+      }
+      const animationDiv = target.firstElementChild?.firstElementChild as HTMLDivElement | null;
+      if (animationDiv) {
+        animationDiv.style.height = "100%";
+        animationDiv.style.width = item.type === "caption" ? "100%" : "";
+      }
+    };
+
+    const resetTimersRef = { current: new Map<string, ReturnType<typeof setTimeout>>() };
+
+    const clearResetTimer = (id: string) => {
+      const timer = resetTimersRef.current.get(id);
+      if (timer) {
+        clearTimeout(timer);
+        resetTimersRef.current.delete(id);
+      }
+    };
+
+    // The ghost disappearing doesn't mean the real committed update has
+    // arrived yet — it's a separate, faster awareness message. Give the real
+    // Yjs update a moment to land (it usually will, well under this) before
+    // falling back to trackItemsMap, which may still be pre-drag stale. This
+    // only ever visibly matters for the "gesture abandoned without
+    // committing" case; the normal case is masked by the real update arriving
+    // first and this timer firing as a harmless no-op.
+    const scheduleReset = (id: string) => {
+      clearResetTimer(id);
+      const timer = setTimeout(() => {
+        resetTimersRef.current.delete(id);
+        resetToCommitted(id);
+      }, 400);
+      resetTimersRef.current.set(id, timer);
+    };
+
+    const unsubscribe = subscribeToRemoteLiveTransforms(collabSchema.awareness, (statesByClient) => {
+      const merged: LiveTransformState = {};
+      statesByClient.forEach((patches) => Object.assign(merged, patches));
+      const nextIds = new Set(Object.keys(merged));
+
+      remoteOverrideIdsRef.current.forEach((id) => {
+        if (!nextIds.has(id)) scheduleReset(id);
+      });
+      nextIds.forEach((id) => {
+        clearResetTimer(id);
+        applyPatch(id, merged[id]);
+      });
+      remoteOverrideIdsRef.current = nextIds;
+    });
+
+    return () => {
+      unsubscribe();
+      resetTimersRef.current.forEach((timer) => clearTimeout(timer));
+      resetTimersRef.current.clear();
+    };
+  }, [collabSchema]);
+
   return (
     <Moveable
       ref={moveableRef}
@@ -341,6 +469,10 @@ export function SceneInteractions({
       onDrag={({ target, top, left }) => {
         target.style.top = `${top}px`;
         target.style.left = `${left}px`;
+        if (collabSchema) {
+          const id = getIdFromClassName(target.className);
+          broadcastLiveTransform(collabSchema.awareness, { [id]: { left, top } });
+        }
       }}
       onDragEnd={({ target, isDrag }) => {
         if (!isDrag) return;
@@ -358,6 +490,7 @@ export function SceneInteractions({
             }
           }
         });
+        if (collabSchema) clearLiveTransform(collabSchema.awareness);
       }}
       onScaleStart={({ target }) => {
         scaleStartRef.current = rawScaleRef.current;
@@ -376,7 +509,12 @@ export function SceneInteractions({
         // untransformed box size — not a delta on top of the pre-gesture scale.
         // Don't multiply it by scaleStartRef, or every gesture after the first
         // squares the previous one.
-        const magnitude = Math.abs(scale[0]); // uniform magnitude, corner handle only
+
+        // Floor the magnitude so neither dimension of the unscaled box can drop
+        // below MIN_ITEM_DIMENSION once multiplied through.
+        const minMagnitude = MIN_ITEM_DIMENSION / Math.min(target.clientWidth, target.clientHeight);
+        const magnitude = Math.max(Math.abs(scale[0]), minMagnitude); // uniform magnitude, corner handle only
+
         const signX = scaleStartRef.current[0] < 0 ? -1 : 1;
         const signY = scaleStartRef.current[1] < 0 ? -1 : 1;
         const newScaleX = signX * magnitude;
@@ -402,6 +540,12 @@ export function SceneInteractions({
         if (moveY) newTop += diffY;
         target.style.left = `${newLeft}px`;
         target.style.top = `${newTop}px`;
+
+        if (collabSchema) {
+          broadcastLiveTransform(collabSchema.awareness, {
+            [targetId]: { left: newLeft, top: newTop, transform: target.style.transform },
+          });
+        }
       }}
       onScaleEnd={({ target }) => {
         const targetId = getIdFromClassName(target.className) as string;
@@ -427,6 +571,7 @@ export function SceneInteractions({
         delete target.dataset.liveScaleY;
 
         rawScaleRef.current = [parseFloat(finalScaleX), parseFloat(finalScaleY)];
+        if (collabSchema) clearLiveTransform(collabSchema.awareness);
       }}
       onRotateStart={({ target }) => {
         const targetId = getIdFromClassName(target.className) as string;
@@ -440,6 +585,12 @@ export function SceneInteractions({
         const newRotate = rotateStartRef.current + dist;
         target.style.transform = getMoveableTransform(details, { rotate: newRotate });
         target.dataset.liveRotate = String(newRotate);
+
+        if (collabSchema) {
+          broadcastLiveTransform(collabSchema.awareness, {
+            [targetId]: { transform: target.style.transform },
+          });
+        }
       }}
       onRotateEnd={({ target }) => {
         const targetId = getIdFromClassName(target.className) as string;
@@ -453,16 +604,20 @@ export function SceneInteractions({
           payload: { [targetId]: { details: { rotate: `${finalRotate}deg` } } }
         });
         delete target.dataset.liveRotate;
+        if (collabSchema) clearLiveTransform(collabSchema.awareness);
       }}
       onResize={({
         target,
-        width: nextWidth,
-        height: nextHeight,
+        width: rawWidth,
+        height: rawHeight,
         direction
       }) => {
         const id = getIdFromClassName(target.className);
         const currentItem = useStore.getState().trackItemsMap[id];
         if (!currentItem) return;
+
+        const nextWidth = Math.max(rawWidth, MIN_ITEM_DIMENSION);
+        const nextHeight = Math.max(rawHeight, MIN_ITEM_DIMENSION);
 
         if (direction[1] === 1 || direction[1] === -1) {
           if (currentItem.type === "progressSquare") {
@@ -491,6 +646,17 @@ export function SceneInteractions({
                 }
               }
             });
+
+            if (collabSchema) {
+              broadcastLiveTransform(collabSchema.awareness, {
+                [id]: {
+                  left: parseFloat(target.style.left),
+                  top: parseFloat(target.style.top),
+                  width: nextWidth,
+                  height: nextHeight,
+                },
+              });
+            }
             return;
           }
 
@@ -537,36 +703,59 @@ export function SceneInteractions({
                 }
               }
             });
+
+            if (collabSchema) {
+              broadcastLiveTransform(collabSchema.awareness, {
+                [id]: { width: nextWidth, height: finalHeight },
+              });
+            }
             return;
           }
 
           // default proportional scaling for corner handles and non-text types
           const currentWidth = target.clientWidth;
           const currentHeight = target.clientHeight;
-          const scaleY = nextHeight / currentHeight;
-          const scale = scaleY;
+          // nextHeight is already floored, but a height-driven scale can still
+          // carry width below the floor when the item is narrower than it is
+          // tall — clamp scale itself so whichever side is smaller can't pass it.
+          const minScale = MIN_ITEM_DIMENSION / Math.min(currentWidth, currentHeight);
+          const scale = Math.max(nextHeight / currentHeight, minScale);
+          const newWidth = currentWidth * scale;
+          const newHeight = currentHeight * scale;
 
-          target.style.width = `${currentWidth * scale}px`;
-          target.style.height = `${currentHeight * scale}px`;
+          target.style.width = `${newWidth}px`;
+          target.style.height = `${newHeight}px`;
+
+          let newFontSize: number | null = null;
 
           const animationDiv = target.firstElementChild?.firstElementChild as HTMLDivElement | null;
           if (animationDiv) {
-            animationDiv.style.width = `${currentWidth * scale}px`;
-            animationDiv.style.height = `${currentHeight * scale}px`;
+            animationDiv.style.width = `${newWidth}px`;
+            animationDiv.style.height = `${newHeight}px`;
 
             if (trackItemsMap[id].type === "text") {
-              scaleDiv(`[data-text-id="${id}"]`, scale, currentWidth, currentHeight);
+              newFontSize = scaleDiv(`[data-text-id="${id}"]`, scale, currentWidth, currentHeight);
 
               const textAnimatedDiv = target.querySelector(
                 `[data-text-anim-id="${id}"]`
               ) as HTMLDivElement | null;
               if (textAnimatedDiv) {
-                textAnimatedDiv.style.width = `${currentWidth * scale}px`;
-                textAnimatedDiv.style.height = `${currentHeight * scale}px`;
+                textAnimatedDiv.style.width = `${newWidth}px`;
+                textAnimatedDiv.style.height = `${newHeight}px`;
               }
             } else if (trackItemsMap[id].type === "caption") {
-              scaleDiv(`#caption-${id}`, scale, currentWidth, currentHeight);
+              newFontSize = scaleDiv(`#caption-${id}`, scale, currentWidth, currentHeight);
             }
+          }
+
+          if (collabSchema) {
+            broadcastLiveTransform(collabSchema.awareness, {
+              [id]: {
+                width: newWidth,
+                height: newHeight,
+                ...(newFontSize !== null ? { fontSize: newFontSize } : {}),
+              },
+            });
           }
         } else {
           const id = getIdFromClassName(target.className);
@@ -612,6 +801,12 @@ export function SceneInteractions({
                 }
               }
             });
+
+            if (collabSchema) {
+              broadcastLiveTransform(collabSchema.awareness, {
+                [id]: { width: clampedWidth, height: finalHeight },
+              });
+            }
           }
 
           if (trackItemsMap[id].type === "progressSquare") {
@@ -628,6 +823,7 @@ export function SceneInteractions({
               target.style.left = `${parseFloat(target.style.left) - diffWidth}px`;
               updateData.left = `${parseFloat(target.style.left) - diffWidth}px`;
             }
+
             setState({
               trackItemsMap: {
                 ...trackItemsMap,
@@ -641,6 +837,16 @@ export function SceneInteractions({
                 }
               }
             });
+
+            if (collabSchema) {
+              broadcastLiveTransform(collabSchema.awareness, {
+                [id]: {
+                  left: parseFloat(target.style.left),
+                  width: nextWidth,
+                  height: nextHeight,
+                },
+              });
+            }
           }
         }
       }}
@@ -649,7 +855,6 @@ export function SceneInteractions({
         if (trackItemsMap[targetId]?.details?.locked) return;
 
         const type = trackItemsMap[targetId].type;
-
         if (type === "text" || type === "caption") {
           const selector = type === "text"
             ? `[data-text-id="${targetId}"]`
@@ -692,9 +897,12 @@ export function SceneInteractions({
             }
           });
         }
+
+        if (collabSchema) clearLiveTransform(collabSchema.awareness);
       }}
       onDragGroup={({ events }) => {
         holdGroupPosition = {};
+        const livePatch: LiveTransformState = {};
         for (let i = 0; i < events.length; i++) {
           const event = events[i];
           const id = getIdFromClassName(event.target.className);
@@ -707,11 +915,10 @@ export function SceneInteractions({
             event.beforeTranslate[1];
           event.target.style.left = `${left}px`;
           event.target.style.top = `${top}px`;
-          holdGroupPosition[id] = {
-            left: left,
-            top: top
-          };
+          holdGroupPosition[id] = { left, top };
+          livePatch[id] = { left, top };
         }
+        if (collabSchema) broadcastLiveTransform(collabSchema.awareness, livePatch);
       }}
       onDragGroupEnd={() => {
         if (holdGroupPosition) {
@@ -735,11 +942,13 @@ export function SceneInteractions({
           }
           holdGroupPosition = null;
         }
+        if (collabSchema) clearLiveTransform(collabSchema.awareness);
       }}
       onScaleGroup={({ events }) => {
         const currentTrackItemsMap = useStore.getState().trackItemsMap;
         if (!holdGroupPosition) holdGroupPosition = {};
         if (!groupTextScaleStart) groupTextScaleStart = {};
+        if (!groupScaleStartDims) groupScaleStartDims = {};
 
         if (!groupScaleAnchor) {
           // one handle drives the whole group, so direction is shared across events
@@ -750,13 +959,41 @@ export function SceneInteractions({
           const groupWidth = rect?.width ?? 0;
           const groupHeight = rect?.height ?? 0;
 
-          // dragging the -1 side means the +1 side is the fixed anchor, and vice versa
           groupScaleAnchor = {
             x: xControl === 1 ? groupLeft : groupLeft + groupWidth,
             y: yControl === 1 ? groupTop : groupTop + groupHeight,
           };
         }
 
+        // Pre-pass: it's one shared handle driving every item's scale by the
+        // same ratio, so check up front whether THIS frame's magnitude would
+        // take any single item below the floor. If so, skip the whole frame —
+        // group holds at its last valid state and resumes the moment the user
+        // drags back out past the floor again.
+        let violatesFloor = false;
+        for (const event of events) {
+          const id = getIdFromClassName(event.target.className);
+          const target = event.target as HTMLDivElement;
+          const item = currentTrackItemsMap[id];
+          if (!item?.details) continue;
+
+          if (!groupScaleStartDims[id]) {
+            groupScaleStartDims[id] = { width: target.clientWidth, height: target.clientHeight };
+          }
+          const dims = groupScaleStartDims[id];
+
+          let magnitude = Math.abs(event.scale[0]);
+          if (item.type === "text" || item.type === "caption") {
+            const start = groupTextScaleStart[id];
+            if (start) magnitude = magnitude / (start.foldedScaleXAtStart || 1);
+          }
+
+          const minMagnitude = MIN_ITEM_DIMENSION / Math.min(dims.width, dims.height);
+          if (magnitude < minMagnitude) violatesFloor = true;
+        }
+        if (violatesFloor) return;
+
+        const livePatch: LiveTransformState = {};
         for (const event of events) {
           const id = getIdFromClassName(event.target.className);
           const target = event.target as HTMLDivElement;
@@ -795,7 +1032,7 @@ export function SceneInteractions({
             }
 
             const start = groupTextScaleStart[id];
-            const magnitude = Math.abs(event.scale[0]) / (start.foldedScaleXAtStart || 1); // CHANGED
+            const magnitude = Math.abs(event.scale[0]) / (start.foldedScaleXAtStart || 1);
             const newWidth = start.width * magnitude;
             const newHeight = start.height * magnitude;
             const newFontSize = start.fontSize * magnitude;
@@ -840,8 +1077,15 @@ export function SceneInteractions({
               left: newLeft,
               top: newTop,
             };
+            livePatch[id] = {
+              width: newWidth,
+              height: newHeight,
+              left: newLeft,
+              top: newTop,
+              transform: target.style.transform,
+              fontSize: newFontSize
+            }
           } else {
-            // UNCHANGED
             target.style.transform = event.transform;
             target.style.left = `${parseFloat(target.style.left) + event.drag.beforeTranslate[0]}px`;
             target.style.top = `${parseFloat(target.style.top) + event.drag.beforeTranslate[1]}px`;
@@ -850,8 +1094,15 @@ export function SceneInteractions({
               left: parseFloat(target.style.left),
               top: parseFloat(target.style.top),
             };
+            livePatch[id] = {
+              transform: target.style.transform,
+              left: parseFloat(target.style.left),
+              top: parseFloat(target.style.top),
+            };
           }
+
         }
+        if (collabSchema) broadcastLiveTransform(collabSchema.awareness, livePatch);
       }}
       onScaleGroupEnd={() => {
         if (holdGroupPosition) {
@@ -905,8 +1156,10 @@ export function SceneInteractions({
           }
           holdGroupPosition = null;
           groupTextScaleStart = null;
+          groupScaleStartDims = null;
           groupScaleAnchor = null;
         }
+        if (collabSchema) clearLiveTransform(collabSchema.awareness);
       }}
       onRotateGroup={({ events }) => {
         const currentTrackItemsMap = useStore.getState().trackItemsMap;
@@ -922,6 +1175,7 @@ export function SceneInteractions({
           };
         }
 
+        const livePatch: LiveTransformState = {};
         for (const event of events) {
           const id = getIdFromClassName(event.target.className);
           const target = event.target as HTMLDivElement;
@@ -1001,7 +1255,14 @@ export function SceneInteractions({
           target.dataset.liveScaleY = String(start.scaleY);
           target.dataset.liveLeft = String(newLeft);
           target.dataset.liveTop = String(newTop);
+
+          livePatch[id] = {
+            transform: target.style.transform,
+            left: parseFloat(target.style.left),
+            top: parseFloat(target.style.top),
+          };
         }
+        if (collabSchema) broadcastLiveTransform(collabSchema.awareness, livePatch);
       }}
       onRotateGroupEnd={() => {
         if (groupRotateStart) {
@@ -1043,6 +1304,7 @@ export function SceneInteractions({
           groupRotateStart = null;
           groupRotatePivot = null;
         }
+        if (collabSchema) clearLiveTransform(collabSchema.awareness);
       }}
     />
   );

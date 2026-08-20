@@ -12,9 +12,28 @@ function arraysEqual(a: string[], b: string[]): boolean {
 }
 
 function syncOrderArray(yArr: Y.Array<string>, next: string[]) {
-  if (arraysEqual(yArr.toArray(), next)) return;
-  yArr.delete(0, yArr.length);
-  yArr.push([...next]);
+  const current = yArr.toArray();
+  if (arraysEqual(current, next)) return;
+
+  // Remove entries no longer present first, back-to-front so earlier
+  // indices don't shift under us.
+  for (let i = current.length - 1; i >= 0; i--) {
+    if (!next.includes(current[i])) yArr.delete(i, 1);
+  }
+
+  // Then walk forward and fix up positions one at a time. Each mismatch
+  // becomes a single delete+insert of just that entry, not a wipe of the
+  // whole array — concurrent writers' ops interleave safely instead of
+  // colliding.
+  let working = yArr.toArray();
+  for (let i = 0; i < next.length; i++) {
+    if (working[i] !== next[i]) {
+      const existingIndex = working.indexOf(next[i], i);
+      if (existingIndex !== -1) yArr.delete(existingIndex, 1);
+      yArr.insert(i, [next[i]]);
+      working = yArr.toArray();
+    }
+  }
 }
 
 function reconcileContentMap<T extends Record<string, any>>(

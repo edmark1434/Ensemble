@@ -158,6 +158,7 @@ export function useCollabDoc(
       if (activeSessionId !== null) endSession(activeSessionId);
       useStore.getState().setCollabSchema(null, null);
       undoManager.destroy();
+      schema.awareness.destroy();
       doc.destroy();
       setCollab(null);
     };

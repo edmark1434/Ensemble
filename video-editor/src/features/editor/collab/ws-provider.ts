@@ -16,7 +16,14 @@ export function attachWsProvider(schema: CollabSchema, projectId: string, userId
 
   const ws = new WebSocket(wsUrl);
   ws.binaryType = "arraybuffer";
-  const awareness = new awarenessProtocol.Awareness(schema.doc);
+
+  const { awareness } = schema;
+
+  // setLocalStateField() is a no-op until local state exists at all —
+  // seed it once so awareness actually starts broadcasting.
+  if (awareness.getLocalState() === null) {
+    awareness.setLocalState({ user: { id: userId } });
+  }
 
   // Updates that fire before the socket is OPEN (e.g. hydrateDocFromState
   // on mount) get buffered here instead of dropped, then flushed on open.

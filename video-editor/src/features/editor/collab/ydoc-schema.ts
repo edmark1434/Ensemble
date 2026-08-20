@@ -7,9 +7,11 @@ import type {
   State,
 } from "@designcombo/types";
 import type { IMarker } from "../store/use-store";
+import * as awarenessProtocol from "y-protocols/awareness";
 
 export interface CollabSchema {
   doc: Y.Doc;
+  awareness: awarenessProtocol.Awareness;
   trackItems: Y.Map<Y.Map<any>>;
   trackItemIds: Y.Array<string>;
   transitions: Y.Map<Y.Map<any>>;
@@ -22,6 +24,7 @@ export interface CollabSchema {
 export function createCollabSchema(doc: Y.Doc): CollabSchema {
   return {
     doc,
+    awareness: new awarenessProtocol.Awareness(doc),
     trackItems: doc.getMap("trackItems"),
     trackItemIds: doc.getArray("trackItemIds"),
     transitions: doc.getMap("transitions"),
@@ -130,12 +133,23 @@ export function readStateFromDoc(schema: CollabSchema): DocSnapshot {
     markers.push(fromY<IMarker>(y));
   });
 
+  // trackItemIds / tracks[].items live in separate Y structures from
+  // trackItems and can drift under concurrent writes — never hand a
+  // dangling id to a consumer that assumes every id resolves to a real
+  // item.
+  const trackItemIds = schema.trackItemIds.toArray().filter((id) => id in trackItemsMap);
+  const transitionIds = schema.transitionIds.toArray().filter((id) => id in transitionsMap);
+  const tracks = schema.tracks.toArray().map((y) => {
+    const track = fromY<ITrack>(y);
+    return { ...track, items: (track.items ?? []).filter((id) => id in trackItemsMap) };
+  });
+
   return {
     trackItemsMap,
-    trackItemIds: schema.trackItemIds.toArray(),
+    trackItemIds,
     transitionsMap,
-    transitionIds: schema.transitionIds.toArray(),
-    tracks: schema.tracks.toArray().map((y) => fromY<ITrack>(y)),
+    transitionIds,
+    tracks,
     markers,
     size: schema.meta.get("size"),
     fps: schema.meta.get("fps"),
