@@ -54,7 +54,7 @@ export const ToastTestingWidget: React.FC = () => {
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="absolute bottom-6 right-6 w-[320px] bg-white dark:bg-[#0f172a]/95 backdrop-blur-md border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden flex flex-col pointer-events-auto"
+            className="absolute bottom-6 right-6 w-[320px] bg-white dark:bg-dark-surface/95 backdrop-blur-md border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl overflow-hidden flex flex-col pointer-events-auto"
           >
             {/* Draggable Header */}
             <div className="flex items-center justify-between p-2.5 border-b border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.02] cursor-move select-none">

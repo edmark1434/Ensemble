@@ -4,6 +4,7 @@ import useGlobalState from "./global_state";
 import api from "./axios";
 import { getStaffHomePath } from "./staffRoutes";
 import { ONBOARDING_COMPLETED_EVENT, wasOnboardingCompleted } from "./onboardingEvents";
+import { ProfileLoadingState } from "@/pages/user/7_profile/Displays/ProfileLoadingState.tsx";
 
 type OnboardingGateState = {
     accountId: string | null;
@@ -42,13 +43,8 @@ function requestOnboardingPath(accountId: string) {
     return request;
 }
 
-function RouteLoadingShell({ message = 'Loading account...' }: { message?: string } = {}) {
-    return createElement('div', {
-        className: 'min-h-screen flex items-center justify-center bg-gray-50 dark:bg-dark-base text-zinc-400 text-sm',
-        role: 'status',
-        'aria-live': 'polite',
-        'aria-label': 'Loading account',
-    }, message);
+function RouteLoadingShell() {
+    return createElement(ProfileLoadingState);
 }
 
 function getRedirectPath(user: { type?: string; role?: string | null } | null) {
@@ -237,9 +233,7 @@ export default function RouteMiddleware() {
     }, [isCheckingSession, resolvedUser, isPublicRoute, navigate]);
 
     if (onboardingVerificationFailed) {
-        return createElement(RouteLoadingShell, {
-            message: 'Unable to verify account setup. Please refresh and try again.',
-        });
+        return createElement(RouteLoadingShell);
     }
 
     if ((isCheckingSession || (resolvedUser?.type === 'User' && onboardingPath === undefined)) && !isPublicRoute && !isOnboardingRoute) {

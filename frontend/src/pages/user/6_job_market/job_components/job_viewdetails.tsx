@@ -177,9 +177,12 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   </div>
                 </div>
               )}
+            </div>
 
-              {/* Client Profile Card */}
-              <div className="p-3.5 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] flex items-center justify-between gap-3">
+            {/* Sticky Action Footer */}
+            <div className="p-4 border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shrink-0 space-y-3">
+              {/* Client Profile Card (Moved into Footer) */}
+              <div className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
                   {selectedJob.clientAvatar ? (
                     <img src={selectedJob.clientAvatar} alt="" className="h-8 w-8 rounded-full object-cover border border-gray-200 dark:border-white/10 shrink-0" />
@@ -212,10 +215,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   <span>View Profile</span>
                 </button>
               </div>
-            </div>
 
-            {/* Sticky Action Footer */}
-            <div className="p-4 border-t border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shrink-0 space-y-3">
               <div className="flex items-center justify-between text-[11px] font-medium text-gray-500 dark:text-zinc-400 px-1">
                 <span className="flex items-center gap-1 text-gray-600 dark:text-zinc-300">
                   <Briefcase className="h-3.5 w-3.5 text-gray-500 dark:text-zinc-500" />

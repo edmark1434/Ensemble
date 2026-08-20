@@ -398,6 +398,7 @@ const GigCreatePage: React.FC = () => {
                       questionnaires={questionnaires}
                       onBack={() => handleNext(5)}
                       onSubmit={handleSubmit}
+                      onEdit={(step) => setCurrentSlide(step)}
                     />
                   </div>
                 </motion.div>

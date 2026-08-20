@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { FileText, Clock, DollarSign, Briefcase, Loader2, Wrench, Bookmark } from "lucide-react";
+import { FileText, Clock, DollarSign, Wrench, Bookmark } from "lucide-react";
 import { useJobs } from "../../../../../hooks/useJobs";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { EmptyState } from "@/components/ui/EmptyState";
 
@@ -23,9 +23,10 @@ function getTimeAgo(date: Date) {
 interface ProfileJobPostsProps {
   userDetails?: any;
   accountId?: string;
+  isOwner?: boolean;
 }
 
-export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ userDetails, accountId }) => {
+export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ accountId, isOwner = false }) => {
   const { fetchJobs, toggleJobSave } = useJobs();
   const navigate = useNavigate();
   const [myJobs, setMyJobs] = useState<any[]>([]);
@@ -36,13 +37,13 @@ export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ userDetails, 
     try {
       const jobToUpdate = myJobs.find((j) => j.id === jobId);
       if (!jobToUpdate) return;
-      
+
       const willBeSaved = !jobToUpdate.isSaved;
       await toggleJobSave(jobId);
-      
+
       if (willBeSaved) toast.success("Job saved successfully!");
       else toast.success("Job removed from saved list");
-      
+
       setMyJobs((prev) =>
         prev.map((job) => {
           if (job.id === jobId) {
@@ -86,7 +87,7 @@ export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ userDetails, 
               savesCount: parseInt(j.saves_count) || 0,
             }))
             .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-          
+
           setMyJobs(userJobs);
         }
       } catch (error) {
@@ -103,35 +104,59 @@ export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ userDetails, 
     }
   }, [fetchJobs, accountId]);
 
-  if (isLoading) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center py-20 text-center space-y-3">
-        <Loader2 className="h-6 w-6 text-blue-500 animate-spin" />
-        <p className="text-[11px] text-gray-500 font-medium">Loading active job posts...</p>
-      </div>
-    );
-  }
-
   return (
     <div className="flex-1 space-y-4">
+      {/* Permanent Header Bar */}
       <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-2">
         <h4 className="text-xs font-extrabold text-gray-900 dark:text-white tracking-wider uppercase flex items-center gap-2">
-          <FileText className="h-4 w-4 text-blue-500" />
-          My Job Posts
+          <FileText className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
+          {isOwner ? "My Job Posts" : "Job Posts"}
+          <span className="text-[10px] font-medium text-gray-500 dark:text-zinc-500 lowercase">
+            ({myJobs.length})
+          </span>
         </h4>
         <span className="text-[10px] text-gray-500 dark:text-zinc-500 font-medium">
           {myJobs.length} active posts
         </span>
       </div>
-      
-      {myJobs.length === 0 ? (
-        <div className="py-12">
+
+      {isLoading ? (
+        <div className="grid gap-5 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <div
+              key={idx}
+              className="flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-4 animate-pulse"
+            >
+              <div>
+                <div className="mb-3 h-36 w-full rounded-xl bg-gray-200 dark:bg-zinc-800" />
+                <div className="mb-2 flex items-center gap-1.5">
+                  <div className="h-4 w-12 rounded bg-gray-200 dark:bg-zinc-800" />
+                  <div className="h-4 w-16 rounded bg-gray-200 dark:bg-zinc-800" />
+                </div>
+                <div className="mb-2 h-5 w-24 rounded bg-gray-200 dark:bg-zinc-800" />
+                <div className="mb-1.5 h-4 w-3/4 rounded bg-gray-200 dark:bg-zinc-800" />
+                <div className="mb-1 h-3 w-full rounded bg-gray-200 dark:bg-zinc-800" />
+                <div className="mb-3 h-3 w-2/3 rounded bg-gray-200 dark:bg-zinc-800" />
+                <div className="flex gap-1.5 mb-1">
+                  <div className="h-4 w-14 rounded-md bg-gray-200 dark:bg-zinc-800" />
+                  <div className="h-4 w-14 rounded-md bg-gray-200 dark:bg-zinc-800" />
+                </div>
+              </div>
+              <div className="mt-4 pt-3 border-t border-gray-200 dark:border-white/5 flex items-center justify-between">
+                <div className="h-3 w-20 rounded bg-gray-200 dark:bg-zinc-800" />
+                <div className="h-4 w-14 rounded-md bg-gray-200 dark:bg-zinc-800" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : myJobs.length === 0 ? (
+        <div className="py-2">
           <EmptyState
-            icon={Briefcase}
             title="No Job Posts Yet"
-            description="You haven't posted any jobs. Create your first job post to connect with talented editors!"
-            actionLabel="Post a Job"
-            onAction={() => navigate('/jobs/create')}
+            description={isOwner ? "You haven't posted any jobs. Create your first job post to connect with talented editors!" : "This user hasn't posted any jobs yet."}
+            actionLabel={isOwner ? "Post a Job" : undefined}
+            onAction={isOwner ? () => navigate('/jobs/create') : undefined}
+            className="!p-6 !py-8 [&_dotlottie-wc]:!h-20 [&_dotlottie-wc]:!w-20 [&_.grayscale]:!h-20 [&_.grayscale]:!w-20 [&_.grayscale]:!mb-2 [&_h3]:!text-sm [&_p]:!text-xs [&_button]:!mt-4 [&_button]:!py-2 [&_button]:!px-4 [&_button]:!text-xs"
           />
         </div>
       ) : (
@@ -153,9 +178,8 @@ export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ userDetails, 
               >
                 <Bookmark className={`h-4 w-4 ${job.isSaved ? "fill-current" : ""}`} />
               </button>
-              
+
               <div className="flex-1">
-                {/* Thumbnail Image */}
                 <div className="relative mb-3 h-36 w-full overflow-hidden rounded-xl border border-gray-100 dark:border-white/5 bg-gray-200 dark:bg-zinc-900">
                   <img
                     src={job.thumbnail}
@@ -165,7 +189,6 @@ export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ userDetails, 
                   <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
                 </div>
 
-                {/* Category & Status Pills */}
                 <div className="mb-2 flex flex-wrap items-center gap-1.5">
                   <span
                     className={`rounded border px-2 py-0.5 text-[10px] font-medium ${
@@ -184,13 +207,11 @@ export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ userDetails, 
                   </span>
                 </div>
 
-                {/* Price Range */}
                 <div className="mb-1 flex items-center gap-1 text-base font-black text-yellow-500">
                   <DollarSign className="h-4 w-4 shrink-0 text-yellow-500" />
                   <span>{job.priceRange}</span>
                 </div>
 
-                {/* Title & Description */}
                 <h3
                   className="mb-1 line-clamp-1 text-sm font-bold text-gray-900 dark:text-white transition-colors group-hover:text-blue-500 dark:group-hover:text-blue-400"
                   style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
@@ -203,7 +224,6 @@ export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ userDetails, 
                   </p>
                 </div>
 
-                {/* Skill Badges */}
                 {Array.isArray(job.skills) && job.skills.length > 0 && (
                   <div className="mb-3 flex flex-wrap items-center gap-1.5">
                     <Wrench className="h-3 w-3 shrink-0 text-gray-400 dark:text-zinc-400" />
@@ -224,7 +244,6 @@ export const Profile_JobPosts: React.FC<ProfileJobPostsProps> = ({ userDetails, 
                 )}
               </div>
 
-              {/* Time Ago Footer */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-500">
                   <Clock className="h-3 w-3" />

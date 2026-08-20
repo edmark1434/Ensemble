@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Maximize2, X, Play, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
+import { Plus, Maximize2, Play, AlertTriangle, Image as ImageIcon } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Image as ImageIcon } from "lucide-react";
 import api from "@/lib/axios";
 import { GalleryUploadModal } from "../../Edits/GalleryUploadModal";
 import { GalleryEditModal } from "../../Edits/GalleryEditModal";
@@ -25,7 +24,6 @@ interface ProfileGalleryProps {
   isOwner?: boolean;
 }
 
-// Helper to construct asset URL
 const constructAssetUrl = (path: string | undefined): string | undefined => {
   if (!path) return undefined;
   if (path.startsWith('http')) return path;
@@ -35,7 +33,7 @@ const constructAssetUrl = (path: string | undefined): string | undefined => {
   return `${cloudfrontUrl}/${cleanPath}`;
 };
 
-export const Profile_Gallery: React.FC<ProfileGalleryProps> = ({ accountId, isOwner }) => {
+export const Profile_Gallery: React.FC<ProfileGalleryProps> = ({ accountId, isOwner = false }) => {
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -81,45 +79,56 @@ export const Profile_Gallery: React.FC<ProfileGalleryProps> = ({ accountId, isOw
     fetchGalleries();
   }, [fetchGalleries]);
 
-  if (loading) {
-    return (
-      <div className="w-full flex items-center justify-center p-12">
-        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-          Gallery
+    <div className="flex-1 space-y-4">
+      {/* Permanent Header Bar */}
+      <div className="flex items-center justify-between border-b border-gray-200 dark:border-white/5 pb-2">
+        <h4 className="text-xs font-extrabold text-gray-900 dark:text-white tracking-wider uppercase flex items-center gap-2">
+          <ImageIcon className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
+          {isOwner ? "My Gallery" : "Gallery"}
+          <span className="text-[10px] font-medium text-gray-500 dark:text-zinc-500 lowercase">
+            ({items.length}/5)
+          </span>
+        </h4>
+
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] text-gray-500 dark:text-zinc-500 font-medium">
+            {items.length} active media
+          </span>
+
           {isOwner && (
-            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-              ({items.length}/5)
-            </span>
+            <button
+              onClick={() => setIsUploadModalOpen(true)}
+              disabled={items.length >= 5}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-400 dark:disabled:bg-zinc-800 disabled:cursor-not-allowed text-white rounded-xl text-xs font-semibold transition-colors shadow-sm cursor-pointer"
+              title={items.length >= 5 ? "Upload limit reached (5/5)" : "Add Item"}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Item</span>
+            </button>
           )}
-        </h2>
-        {isOwner && (
-          <button
-            onClick={() => setIsUploadModalOpen(true)}
-            disabled={items.length >= 5}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-full text-sm font-semibold transition-colors"
-            title={items.length >= 5 ? "Upload limit reached" : ""}
-          >
-            <Plus className="w-4 h-4" /> Add Item
-          </button>
-        )}
+        </div>
       </div>
 
-      {items.length === 0 ? (
-        <EmptyState
-          icon={ImageIcon}
-          title="No gallery items found"
-          description={isOwner ? "Showcase your best visual work! Upload images and videos to attract more clients." : "This user hasn't uploaded any gallery items yet."}
-          actionLabel={isOwner ? "Upload to Gallery" : undefined}
-          onAction={isOwner ? () => setIsUploadModalOpen(true) : undefined}
-        />
+      {loading ? (
+        /* Multi-column Masonry Skeleton matching gallery item cards */
+        <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4">
+          <div className="h-64 rounded-2xl bg-gray-200 dark:bg-zinc-800/60 border border-gray-200 dark:border-white/5 break-inside-avoid animate-pulse" />
+          <div className="h-48 rounded-2xl bg-gray-200 dark:bg-zinc-800/60 border border-gray-200 dark:border-white/5 break-inside-avoid animate-pulse" />
+          <div className="h-80 rounded-2xl bg-gray-200 dark:bg-zinc-800/60 border border-gray-200 dark:border-white/5 break-inside-avoid animate-pulse" />
+          <div className="h-52 rounded-2xl bg-gray-200 dark:bg-zinc-800/60 border border-gray-200 dark:border-white/5 break-inside-avoid animate-pulse" />
+          <div className="h-60 rounded-2xl bg-gray-200 dark:bg-zinc-800/60 border border-gray-200 dark:border-white/5 break-inside-avoid animate-pulse" />
+        </div>
+      ) : items.length === 0 ? (
+        <div className="py-2">
+          <EmptyState
+            title="No gallery items found"
+            description={isOwner ? "Showcase your best visual work! Upload images and videos to attract more clients." : "This user hasn't uploaded any gallery items yet."}
+            actionLabel={isOwner ? "Upload to Gallery" : undefined}
+            onAction={isOwner ? () => setIsUploadModalOpen(true) : undefined}
+            className="!p-6 !py-8 [&_dotlottie-wc]:!h-20 [&_dotlottie-wc]:!w-20 [&_.grayscale]:!h-20 [&_.grayscale]:!w-20 [&_.grayscale]:!mb-2 [&_h3]:!text-sm [&_p]:!text-xs [&_button]:!mt-4 [&_button]:!py-2 [&_button]:!px-4 [&_button]:!text-xs"
+          />
+        </div>
       ) : (
         <div className="columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4">
           {items.map((item) => {
@@ -127,17 +136,17 @@ export const Profile_Gallery: React.FC<ProfileGalleryProps> = ({ accountId, isOw
             const isVideo = item.file_mimetype?.startsWith("video/");
 
             return (
-              <div 
-                key={item.gallery_id} 
+              <div
+                key={item.gallery_id}
                 className="relative group rounded-2xl overflow-hidden break-inside-avoid bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 cursor-pointer shadow-sm hover:shadow-lg transition-all"
                 onClick={() => setSelectedItem(item)}
               >
                 {/* Media Render */}
                 {isVideo ? (
                   <div className="relative w-full">
-                    <video 
-                      src={assetUrl} 
-                      className="w-full h-auto object-cover" 
+                    <video
+                      src={assetUrl}
+                      className="w-full h-auto object-cover"
                       preload="metadata"
                       onMouseEnter={(e) => e.currentTarget.play()}
                       onMouseLeave={(e) => {
@@ -175,10 +184,10 @@ export const Profile_Gallery: React.FC<ProfileGalleryProps> = ({ accountId, isOw
         </div>
       )}
 
-      <GalleryLightbox 
-        items={items} 
-        selectedItem={selectedItem} 
-        setSelectedItem={setSelectedItem} 
+      <GalleryLightbox
+        items={items}
+        selectedItem={selectedItem}
+        setSelectedItem={setSelectedItem}
         isOwner={isOwner}
         onEdit={handleEdit}
         onDelete={handleDeleteClick}
@@ -202,7 +211,6 @@ export const Profile_Gallery: React.FC<ProfileGalleryProps> = ({ accountId, isOw
         />
       )}
 
-      {/* Delete Confirmation Modal */}
       {createPortal(
         <AnimatePresence>
           {itemToDelete && (
@@ -218,13 +226,13 @@ export const Profile_Gallery: React.FC<ProfileGalleryProps> = ({ accountId, isOw
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="relative w-full max-w-md bg-white dark:bg-dark-base rounded-2xl shadow-2xl overflow-hidden flex flex-col p-6 text-center"
+                className="relative w-full max-w-md bg-white dark:bg-dark-base rounded-2xl shadow-2xl overflow-hidden flex flex-col p-6 text-center border border-gray-200 dark:border-white/10"
               >
                 <div className="mx-auto w-12 h-12 bg-red-100 dark:bg-red-500/10 rounded-full flex items-center justify-center mb-4">
                   <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Delete Gallery Item</h3>
-                <p className="text-gray-500 dark:text-gray-400 mb-8">
+                <p className="text-gray-500 dark:text-gray-400 mb-8 text-sm">
                   Are you sure you want to delete <span className="font-semibold text-gray-900 dark:text-gray-200">"{itemToDelete.title}"</span>? This action cannot be undone.
                 </p>
                 <div className="flex gap-3 justify-center">
