@@ -235,20 +235,30 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
     }
   };
 
+  const hasValidAvatar = gig?.clientAvatar && !gig.clientAvatar.includes('pravatar.cc');
+
   const renderProfileCard = () => (
     <div className="p-3.5 rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/80 shadow-sm dark:shadow-xl backdrop-blur-xl flex items-center justify-between gap-3">
       <div className="flex items-center gap-2.5 min-w-0">
-        {gig.clientAvatar ? (
+        <div className="relative h-10 w-10 shrink-0">
           <img
-            src={gig.clientAvatar}
+            src={hasValidAvatar ? gig.clientAvatar : undefined}
             alt=""
-            className="h-10 w-10 rounded-full object-cover border border-gray-200 dark:border-white/10 shrink-0"
+            className={`h-10 w-10 rounded-full object-cover border border-gray-200 dark:border-white/10 ${!hasValidAvatar ? 'hidden' : ''}`}
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+              const fallback = e.currentTarget.nextElementSibling;
+              if (fallback) {
+                fallback.classList.remove('hidden');
+                fallback.classList.add('flex');
+              }
+            }}
           />
-        ) : (
-          <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-zinc-800 flex items-center justify-center text-xs text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 shrink-0">
+          <div className={`${hasValidAvatar ? 'hidden' : 'flex'} absolute inset-0 items-center justify-center rounded-full bg-gray-200 dark:bg-zinc-800 text-xs text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 overflow-hidden`}>
             {gig.postedBy ? gig.postedBy.charAt(0) : "U"}
           </div>
-        )}
+        </div>
+
         <div className="text-left min-w-0">
           <p className="text-[9px] uppercase text-gray-500 dark:text-zinc-500 font-bold tracking-wider">
             Service Creator
