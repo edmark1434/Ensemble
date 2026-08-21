@@ -723,6 +723,17 @@ export function SceneInteractions({
     updatePresenceOverlays();
   }, [zoom, updatePresenceOverlays]);
 
+  useEffect(() => {
+    let raf: number;
+    const tick = () => {
+      updatePresenceOverlays();
+      if (!activeGestureRef.current) moveableRef.current?.moveable.updateRect();
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [updatePresenceOverlays]);
+
   return (
     <>
       {portalTarget &&
