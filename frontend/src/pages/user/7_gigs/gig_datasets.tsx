@@ -41,6 +41,7 @@ export interface Gig {
   description: string;
   category: string;
   status?: string;
+  hasPendingOrder?: boolean;
   slots: number;
   termsOfService: string;
   skills: string[];

@@ -32,11 +32,16 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
               return isNotCurrent && isOpen;
             })
             .slice(0, 3)
-            .map((g: any) => ({
-              ...g,
-              thumbnail: mapUrl(g.thumbnail_path || g.thumbnail),
-              clientAvatar: g.client_avatar_path || g.clientAvatar ? mapUrl(g.client_avatar_path || g.clientAvatar) : undefined,
-            }));
+            .map((g: any) => {
+              const rawAvatar = g.client_avatar_path || g.clientAvatar;
+              const isValidAvatar = rawAvatar && !rawAvatar.includes('pravatar.cc');
+
+              return {
+                ...g,
+                thumbnail: mapUrl(g.thumbnail_path || g.thumbnail),
+                clientAvatar: isValidAvatar ? mapUrl(rawAvatar) : undefined,
+              };
+            });
           setGigs(mappedGigs);
         }
       } catch (error) {
@@ -125,6 +130,8 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
                 gig.tiers && gig.tiers.length > 0
                   ? Math.min(...gig.tiers.map((t: any) => Number(t.price) || 0))
                   : 0;
+
+              const hasValidAvatar = gig.clientAvatar && !gig.clientAvatar.includes('pravatar.cc');
 
               return (
                 <div
@@ -224,17 +231,25 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
                   {/* Footer */}
                   <div className="mt-auto pt-3 border-t border-gray-200 dark:border-white/5 flex items-center justify-between">
                     <div className="flex items-center gap-2 truncate">
-                      {gig.clientAvatar ? (
+                      <div className="relative h-6 w-6 shrink-0">
                         <img
-                          src={gig.clientAvatar}
+                          src={hasValidAvatar ? gig.clientAvatar : undefined}
                           alt={gig.postedBy}
-                          className="h-6 w-6 shrink-0 rounded-full object-cover border border-gray-300 dark:border-zinc-700"
+                          className={`h-6 w-6 rounded-full object-cover border border-gray-300 dark:border-zinc-700 ${!hasValidAvatar ? 'hidden' : ''}`}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const fallback = e.currentTarget.nextElementSibling;
+                            if (fallback) {
+                              fallback.classList.remove('hidden');
+                              fallback.classList.add('flex');
+                            }
+                          }}
                         />
-                      ) : (
-                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 text-[10px] font-bold text-gray-700 dark:text-white">
+                        <div className={`${hasValidAvatar ? 'hidden' : 'flex'} absolute inset-0 items-center justify-center rounded-full border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 text-[10px] font-bold text-gray-700 dark:text-white`}>
                           {gig.postedBy ? gig.postedBy.charAt(0) : "U"}
                         </div>
-                      )}
+                      </div>
+
                       <div className="flex flex-col truncate">
                         <span className="text-[11px] font-semibold text-gray-700 dark:text-zinc-300 truncate">
                           {gig.postedBy}

@@ -308,7 +308,49 @@ async function getContractsByUserId(accountId) {
         LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
         LEFT JOIN terms_of_service t ON p.terms_id = t.terms_id
         WHERE j.client_account_id = $1 OR p.freelancer_account_id = $1
-        ORDER BY c.created_at DESC
+
+        UNION ALL
+
+        SELECT 
+            c.contract_id,
+            c.contract_type,
+            c.starts_at,
+            c.rate_credits,
+            c.status,
+            c.created_at,
+            gr.gig_request_id as proposal_id,
+            g.gig_id as job_id,
+            g.title as job_title,
+            g.description as job_description,
+            0 as job_deadline,
+            gt.rate_credits as rate_credits_min,
+            gt.rate_credits as rate_credits_max,
+            g.additional_work_rate as additional_work_rate,
+            client_acc.display_name as client_name,
+            client_acc.handle as client_handle,
+            client_f.path as client_avatar,
+            gr.client_account_id as client_account_id,
+            free_acc.display_name as freelancer_name,
+            free_acc.handle as freelancer_handle,
+            free_f.path as freelancer_avatar,
+            g.freelancer_account_id as freelancer_account_id,
+            'Gig Terms' as terms_title,
+            'Standard terms from gig' as terms_content,
+            COALESCE(
+                (SELECT json_agg(json_build_object('id', cm.contract_milestone_id, 'name', cm.name, 'status', cm.status, 'revisions', cm.no_of_revisions_max, 'deadline', cm.deadline, 'credits', cm.credits)) FROM contract_milestones cm WHERE cm.contract_id = c.contract_id),
+                '[]'::json
+            ) as milestones
+        FROM contracts c
+        JOIN gig_contracts gc ON c.contract_id = gc.contract_id
+        JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
+        JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+        JOIN gigs g ON gt.gig_id = g.gig_id
+        JOIN accounts client_acc ON gr.client_account_id = client_acc.account_id
+        LEFT JOIN files client_f ON client_acc.avatar_file_id = client_f.file_id
+        JOIN accounts free_acc ON g.freelancer_account_id = free_acc.account_id
+        LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
+        WHERE gr.client_account_id = $1 OR g.freelancer_account_id = $1
+        ORDER BY created_at DESC
     `;
     const res = await pool.query(query, [accountId]);
     return res.rows;

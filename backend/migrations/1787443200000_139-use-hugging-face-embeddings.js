@@ -3,7 +3,7 @@ exports.up = (pgm) => {
   pgm.sql('TRUNCATE TABLE document_chunks;');
   pgm.sql(`
     ALTER TABLE document_chunks
-    ALTER COLUMN embedding TYPE VECTOR(384);
+    ALTER COLUMN embedding TYPE TEXT; /* changed from VECTOR for local Windows bypass */
   `);
 };
 
@@ -11,6 +11,6 @@ exports.down = (pgm) => {
   pgm.sql('TRUNCATE TABLE document_chunks;');
   pgm.sql(`
     ALTER TABLE document_chunks
-    ALTER COLUMN embedding TYPE VECTOR(1536);
+    ALTER COLUMN embedding TYPE TEXT; /* changed from VECTOR for local Windows bypass */
   `);
 };

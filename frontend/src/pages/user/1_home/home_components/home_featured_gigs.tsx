@@ -12,19 +12,31 @@ export const HomeFeaturedGigs: React.FC = () => {
       try {
         const response = await api.get("/api/gigs");
         if (response.data && response.data.success) {
-          const mappedGigs = response.data.data.slice(0, 3).map((g: any) => ({
-            ...g,
-            thumbnail: g.thumbnail_path || g.thumbnail
-              ? (g.thumbnail_path || g.thumbnail).startsWith("http")
-                ? (g.thumbnail_path || g.thumbnail)
-                : `${import.meta.env.VITE_CLOUDFRONT_URL}${(g.thumbnail_path || g.thumbnail).startsWith("/") ? "" : "/"}${g.thumbnail_path || g.thumbnail}`
-              : "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=600&q=80",
-            clientAvatar: g.client_avatar_path || g.clientAvatar
-              ? (g.client_avatar_path || g.clientAvatar).startsWith("http")
-                ? (g.client_avatar_path || g.clientAvatar)
-                : `${import.meta.env.VITE_CLOUDFRONT_URL}${(g.client_avatar_path || g.clientAvatar).startsWith("/") ? "" : "/"}${g.client_avatar_path || g.clientAvatar}`
-              : undefined,
-          }));
+          const mappedGigs = response.data.data.slice(0, 3).map((g: any) => {
+            const rawAvatar = g.client_avatar_path || g.clientAvatar || g.creator_avatar_path;
+
+            // Filter out default placeholder URLs so it triggers the initial letter fallback
+            const isValidAvatar = rawAvatar && !rawAvatar.includes('pravatar.cc');
+
+            const mappedAvatar = isValidAvatar
+              ? rawAvatar.startsWith("http")
+                ? rawAvatar
+                : `${import.meta.env.VITE_CLOUDFRONT_URL}${rawAvatar.startsWith("/") ? "" : "/"}${rawAvatar}`
+              : undefined;
+
+            const rawThumb = g.thumbnail_path || g.thumbnail;
+            const mappedThumb = rawThumb
+              ? rawThumb.startsWith("http")
+                ? rawThumb
+                : `${import.meta.env.VITE_CLOUDFRONT_URL}${rawThumb.startsWith("/") ? "" : "/"}${rawThumb}`
+              : undefined;
+
+            return {
+              ...g,
+              thumbnail: mappedThumb,
+              clientAvatar: mappedAvatar,
+            };
+          });
           setGigs(mappedGigs);
         }
       } catch (error) {
@@ -76,16 +88,21 @@ export const HomeFeaturedGigs: React.FC = () => {
               <div>
                 {/* Thumbnail Image */}
                 <div className="relative mb-3 h-36 w-full overflow-hidden rounded-xl border border-gray-100 dark:border-white/5 bg-gray-200 dark:bg-zinc-900">
-                  <img
-                    src={gig.thumbnail}
-                    alt={gig.title}
-                    className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
-                  />
+                  {gig.thumbnail ? (
+                    <img
+                      src={gig.thumbnail}
+                      alt={gig.title}
+                      className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center text-xs font-semibold text-gray-400 dark:text-zinc-600 bg-gray-100 dark:bg-zinc-800">
+                      No Thumbnail
+                    </div>
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      // Insert save handler here if needed
                     }}
                     className={`absolute top-2 right-2 rounded-full bg-white/80 dark:bg-black/50 p-1.5 backdrop-blur-sm transition ${
                       gig.isSaved
@@ -169,17 +186,25 @@ export const HomeFeaturedGigs: React.FC = () => {
               {/* Footer */}
               <div className="mt-auto pt-3 border-t border-gray-200 dark:border-white/5 flex items-center justify-between">
                 <div className="flex items-center gap-2 truncate">
-                  {gig.clientAvatar ? (
+                  <div className="relative h-5 w-5 shrink-0">
                     <img
                       src={gig.clientAvatar}
                       alt={gig.postedBy}
-                      className="h-6 w-6 shrink-0 rounded-full object-cover border border-gray-300 dark:border-zinc-700"
+                      className={`h-5 w-5 rounded-full object-cover border border-gray-300 dark:border-zinc-700 ${!gig.clientAvatar ? 'hidden' : ''}`}
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        const fallback = e.currentTarget.nextElementSibling;
+                        if (fallback) {
+                          fallback.classList.remove('hidden');
+                          fallback.classList.add('flex');
+                        }
+                      }}
                     />
-                  ) : (
-                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 text-[10px] font-bold text-gray-700 dark:text-white">
+                    <div className={`${gig.clientAvatar ? 'hidden' : 'flex'} absolute inset-0 items-center justify-center rounded-full border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 text-[9px] font-bold text-gray-700 dark:text-white`}>
                       {gig.postedBy ? gig.postedBy.charAt(0) : "U"}
                     </div>
-                  )}
+                  </div>
+
                   <div className="flex flex-col truncate">
                     <span className="text-[11px] font-semibold text-gray-700 dark:text-zinc-300 truncate">
                       {gig.postedBy}

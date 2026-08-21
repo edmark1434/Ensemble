@@ -43,7 +43,7 @@ export const CreateForms: React.FC<CreateFormsProps> = ({
   };
 
   const updateQuestion = (id: string, field: keyof Questionnaire, value: any) => {
-    setQuestionnaires(questionnaires.map(q => q.id === id ? { ...q, [field]: value } : q));
+    setQuestionnaires(prev => prev.map(q => q.id === id ? { ...q, [field]: value } : q));
     clearError(`question_${id}_${field}`);
   };
 
@@ -168,24 +168,89 @@ export const CreateForms: React.FC<CreateFormsProps> = ({
               
               {/* File Upload Options */}
               {q.type === "file" && (
-                <div className="pl-2 border-l-2 border-blue-500/50 ml-2 mb-4 space-y-3">
-                  <div className="flex gap-4 items-center">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold text-gray-700 dark:text-zinc-300 uppercase">Max Files</label>
-                      <input type="number" min="1" max="10" value={q.fileLimit || 1} onChange={e => updateQuestion(q.id, "fileLimit", parseInt(e.target.value))} className="w-20 rounded-lg border bg-white dark:bg-dark-base px-3 py-1.5 text-xs outline-none focus:border-blue-500 border-gray-200 dark:border-white/10" />
+                <div className="pl-2 border-l-2 border-blue-500/50 ml-2 mb-4 mt-3 space-y-3">
+                  <div className="flex flex-wrap items-center gap-4 text-xs">
+                    
+                    {/* The 3 Buttons */}
+                    <div className="flex flex-wrap items-stretch gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          updateQuestion(q.id, "fileTypes", ['pdf']);
+                          updateQuestion(q.id, "fileLimit", 1);
+                        }}
+                        className={`flex flex-col items-start px-3 py-2 rounded-lg font-semibold transition-all border ${
+                          q.fileTypes?.[0] === 'pdf'
+                            ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 shadow-sm"
+                            : "bg-white dark:bg-dark-base border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/5"
+                        }`}
+                      >
+                        <span className="text-sm">PDF Document</span>
+                        <span className="text-[10px] opacity-70 font-normal mt-0.5">Max 1 file, 10MB</span>
+                      </button>
+                      
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          updateQuestion(q.id, "fileTypes", ['image']);
+                          updateQuestion(q.id, "fileLimit", Math.min(Math.max(q.fileLimit || 1, 1), 5));
+                        }}
+                        className={`flex flex-col items-start px-3 py-2 rounded-lg font-semibold transition-all border ${
+                          q.fileTypes?.[0] === 'image'
+                            ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 shadow-sm"
+                            : "bg-white dark:bg-dark-base border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/5"
+                        }`}
+                      >
+                        <span className="text-sm">Images (.png, .jpg)</span>
+                        <span className="text-[10px] opacity-70 font-normal mt-0.5">Max 10MB each</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          updateQuestion(q.id, "fileTypes", ['video']);
+                          updateQuestion(q.id, "fileLimit", 1);
+                        }}
+                        className={`flex flex-col items-start px-3 py-2 rounded-lg font-semibold transition-all border ${
+                          q.fileTypes?.[0] === 'video'
+                            ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 shadow-sm"
+                            : "bg-white dark:bg-dark-base border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/5"
+                        }`}
+                      >
+                        <span className="text-sm">Video (.mp4, .mov)</span>
+                        <span className="text-[10px] opacity-70 font-normal mt-0.5">Max 1 file, 15MB</span>
+                      </button>
                     </div>
-                  </div>
-                  <div className="flex gap-2 text-xs flex-wrap">
-                    {["image", "document", "video", "archive"].map(ft => (
-                      <label key={ft} className="flex items-center gap-1.5 cursor-pointer text-gray-700 dark:text-zinc-300">
-                        <input type="checkbox" checked={q.fileTypes?.includes(ft)} onChange={e => {
-                          const current = q.fileTypes || [];
-                          if (e.target.checked) updateQuestion(q.id, "fileTypes", [...current, ft]);
-                          else updateQuestion(q.id, "fileTypes", current.filter(t => t !== ft));
-                        }} className="text-blue-500 rounded border-gray-300 focus:ring-blue-500" />
-                        <span className="capitalize">{ft}</span>
-                      </label>
-                    ))}
+
+                    {/* Adjustment Control */}
+                    {q.fileTypes?.[0] === 'image' && (
+                      <div className="flex items-center gap-3 bg-gray-50 dark:bg-white/5 p-1.5 px-3 rounded-xl border border-gray-100 dark:border-white/10 shrink-0">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase">Max Images (1-5):</span>
+                        <div className="flex items-center gap-2 bg-white dark:bg-dark-base rounded-lg border border-gray-200 dark:border-white/10 p-1">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); updateQuestion(q.id, "fileLimit", Math.max(1, (q.fileLimit || 1) - 1)); }}
+                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 transition-colors"
+                          >
+                            <span className="font-bold">-</span>
+                          </button>
+                          <span className="w-4 text-center font-bold text-sm text-gray-700 dark:text-zinc-300">
+                            {q.fileLimit || 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); updateQuestion(q.id, "fileLimit", Math.min(5, (q.fileLimit || 1) + 1)); }}
+                            className="w-6 h-6 flex items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 transition-colors"
+                          >
+                            <span className="font-bold">+</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                   </div>
                 </div>
               )}
@@ -193,32 +258,40 @@ export const CreateForms: React.FC<CreateFormsProps> = ({
 
               {q.type === "choice" && (
                 <div className="pl-2 border-l-2 border-blue-500/50 ml-2 space-y-3">
-                  <div className="flex items-center gap-4 mb-2">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input 
-                        type="radio" 
-                        name={`mode-${q.id}`} 
-                        checked={!q.allowMultiple}
-                        onChange={() => updateQuestion(q.id, "allowMultiple", false)}
-                        className="text-blue-500"
-                      />
-                      <span className="text-xs font-medium text-gray-700 dark:text-zinc-300">Single Choice</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input 
-                        type="radio" 
-                        name={`mode-${q.id}`} 
-                        checked={q.allowMultiple}
-                        onChange={() => updateQuestion(q.id, "allowMultiple", true)}
-                        className="text-blue-500"
-                      />
-                      <span className="text-xs font-medium text-gray-700 dark:text-zinc-300">Multiple Answers</span>
-                    </label>
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        updateQuestion(q.id, "multipleAnswer", false);
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+                        !q.multipleAnswer
+                          ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 shadow-sm"
+                          : "bg-white dark:bg-dark-base border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/5"
+                      }`}
+                    >
+                      Single Choice
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        updateQuestion(q.id, "multipleAnswer", true);
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+                        q.multipleAnswer
+                          ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/50 shadow-sm"
+                          : "bg-white dark:bg-dark-base border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-400 hover:border-gray-300 dark:hover:border-white/20 hover:bg-gray-50 dark:hover:bg-white/5"
+                      }`}
+                    >
+                      Multiple Answers
+                    </button>
                   </div>
 
                   {q.options?.map((opt, optIndex) => (
                     <div key={optIndex} className="flex items-center gap-2">
-                      <div className={`h-4 w-4 border ${q.allowMultiple ? 'rounded' : 'rounded-full'} border-gray-300 dark:border-white/20 flex-shrink-0`} />
+                      <div className={`h-4 w-4 border ${q.multipleAnswer ? 'rounded' : 'rounded-full'} border-gray-300 dark:border-white/20 flex-shrink-0`} />
                       <input
                         type="text"
                         placeholder={`Option ${optIndex + 1}`}

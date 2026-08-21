@@ -82,7 +82,6 @@ export const OrdersMain: React.FC = () => {
       return [
         { label: "All", count: childOrdersCounts.All || 0 },
         { label: "Pending", count: childOrdersCounts.Pending || 0 },
-        { label: "Shortlisted", count: childOrdersCounts.Shortlisted || 0 },
         { label: "Accepted", count: childOrdersCounts.Accepted || 0 },
         { label: "Rejected", count: childOrdersCounts.Rejected || 0 },
       ];
@@ -91,7 +90,6 @@ export const OrdersMain: React.FC = () => {
     return [
       { label: "All", count: 0 },
       { label: "Pending", count: 0 },
-      { label: "Shortlisted", count: 0 },
       { label: "Accepted", count: 0 },
       { label: "Rejected", count: 0 },
     ];

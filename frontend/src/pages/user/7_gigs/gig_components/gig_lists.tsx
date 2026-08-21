@@ -225,23 +225,34 @@ export const GigList: React.FC<GigListProps> = ({
                   </div>
 
                   <div className="mt-2 pt-4 border-t border-gray-200 dark:border-white/5 flex flex-wrap items-center justify-between text-[10px] text-gray-500 dark:text-zinc-400 gap-3">
-                    <div className="flex items-center gap-2">
-                      {gig.clientAvatar ? (
-                        <img src={gig.clientAvatar} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover border border-gray-200 dark:border-white/10" />
-                      ) : (
-                        <div className="h-6 w-6 shrink-0 rounded-full bg-gray-200 dark:bg-zinc-800 flex items-center justify-center text-[10px] text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 overflow-hidden">
-                          {gig.postedBy.charAt(0)}
+                    <div className="flex items-center gap-2 truncate">
+                      <div className="relative h-6 w-6 shrink-0">
+                        <img
+                          src={gig.clientAvatar}
+                          alt=""
+                          className={`h-6 w-6 rounded-full object-cover border border-gray-200 dark:border-white/10 ${!gig.clientAvatar ? 'hidden' : ''}`}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const fallback = e.currentTarget.nextElementSibling;
+                            if (fallback) {
+                              fallback.classList.remove('hidden');
+                              fallback.classList.add('flex');
+                            }
+                          }}
+                        />
+                        <div className={`${gig.clientAvatar ? 'hidden' : 'flex'} absolute inset-0 items-center justify-center rounded-full bg-gray-200 dark:bg-zinc-800 text-[10px] text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 overflow-hidden`}>
+                          {gig.postedBy ? gig.postedBy.charAt(0) : "U"}
                         </div>
-                      )}
-                      <div className="text-left leading-tight">
-                        <p className="text-xs font-bold text-gray-700 dark:text-zinc-300">{gig.postedBy}</p>
+                      </div>
+                      <div className="text-left leading-tight truncate">
+                        <p className="text-xs font-bold text-gray-700 dark:text-zinc-300 truncate">{gig.postedBy}</p>
                         <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-400">
                           <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
                           <span>{gig.clientRating} ({gig.ratingCount})</span>
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 text-[10px] font-medium text-gray-500 dark:text-zinc-400">
+                    <div className="flex items-center gap-2 text-[10px] font-medium text-gray-500 dark:text-zinc-400 shrink-0">
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3 text-gray-400 dark:text-zinc-500" /> {formatTimeAgo(gig.postedAt)}
                       </span>
@@ -378,16 +389,27 @@ export const GigList: React.FC<GigListProps> = ({
                   </div>
 
                   <div className="mt-2 pt-4 border-t border-gray-200 dark:border-white/5 flex flex-wrap items-center justify-between text-[10px] text-gray-500 dark:text-zinc-400 gap-3">
-                    <div className="flex items-center gap-2">
-                      {gig.clientAvatar ? (
-                        <img src={gig.clientAvatar} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover border border-gray-200 dark:border-white/10" />
-                      ) : (
-                        <div className="h-6 w-6 shrink-0 rounded-full bg-gray-200 dark:bg-zinc-800 flex items-center justify-center text-[10px] text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 overflow-hidden">
-                          {gig.postedBy.charAt(0)}
+                    <div className="flex items-center gap-2 truncate">
+                      <div className="relative h-6 w-6 shrink-0">
+                        <img
+                          src={gig.clientAvatar}
+                          alt=""
+                          className={`h-6 w-6 rounded-full object-cover border border-gray-200 dark:border-white/10 ${!gig.clientAvatar ? 'hidden' : ''}`}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const fallback = e.currentTarget.nextElementSibling;
+                            if (fallback) {
+                              fallback.classList.remove('hidden');
+                              fallback.classList.add('flex');
+                            }
+                          }}
+                        />
+                        <div className={`${gig.clientAvatar ? 'hidden' : 'flex'} absolute inset-0 items-center justify-center rounded-full bg-gray-200 dark:bg-zinc-800 text-[10px] text-gray-700 dark:text-white font-bold border border-gray-200 dark:border-white/10 overflow-hidden`}>
+                          {gig.postedBy ? gig.postedBy.charAt(0) : "U"}
                         </div>
-                      )}
-                      <div className="text-left leading-tight">
-                        <p className="text-xs font-bold text-gray-700 dark:text-zinc-300">{gig.postedBy}</p>
+                      </div>
+                      <div className="text-left leading-tight truncate">
+                        <p className="text-xs font-bold text-gray-700 dark:text-zinc-300 truncate">{gig.postedBy}</p>
                         <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-400">
                           <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
                           <span>{gig.clientRating} ({gig.ratingCount})</span>

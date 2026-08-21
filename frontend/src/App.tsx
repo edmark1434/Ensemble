@@ -51,7 +51,9 @@ import GigOrderPage from '@/pages/user/7_gigs/gig_pages/gig_order_page.tsx'
 import OrdersMain from '@/pages/user/7_gigs/gig_orders/orders_main.tsx'
 import OrdersSelectGigPage from '@/pages/user/7_gigs/gig_orders/orders_select_gig_page.tsx'
 import IncomingOrders from '@/pages/user/7_gigs/gig_orders/incoming_orders.tsx'
+import IncomingOrderDetail from '@/pages/user/7_gigs/gig_orders/incoming_order_detail.tsx'
 import SentOrders from '@/pages/user/7_gigs/gig_orders/sent_orders.tsx'
+import SentOrderDetail from '@/pages/user/7_gigs/gig_orders/sent_order_detail.tsx'
 import Verification from '@/pages/user/9_verification/Verification.tsx'
 import BusinessVerification from '@/pages/user/9_verification/BusinessVerification.tsx'
 import TransactionHistoryMain from '@/pages/user/11_transactionhistory/main.tsx'
@@ -265,6 +267,8 @@ function App() {
             <Route path='incoming/:gigId' element={<IncomingOrders />} />
             <Route path='sent' element={<SentOrders />} />
           </Route>
+          <Route path='/gigs/orders/incoming/:gigId/order/:orderId' element={<IncomingOrderDetail />} />
+          <Route path='/gigs/orders/sent/:orderId' element={<SentOrderDetail />} />
           <Route path='/gigs/create' element={<GigCreatePage />} />
           <Route path='/gigs/edit/:id' element={<GigEditPage />} />
           <Route path='/gigs/services/:id/page' element={<GigFullPage />} />
