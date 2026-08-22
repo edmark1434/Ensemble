@@ -201,7 +201,11 @@ export const GigList: React.FC<GigListProps> = ({
                       </span>
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                         {gig.category || "General"}
-                      </span>
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 flex items-center gap-1">
+                          <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" />
+                          {gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}
+                        </span>
                       {gig.tiers && gig.tiers.length > 0 && (
                         <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                           {gig.tiers.length} Tiers
@@ -248,7 +252,7 @@ export const GigList: React.FC<GigListProps> = ({
                         <p className="text-xs font-bold text-gray-700 dark:text-zinc-300 truncate">{gig.postedBy}</p>
                         <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-400">
                           <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
-                          <span>{gig.clientRating} ({gig.ratingCount})</span>
+                          <span>{gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}</span>
                         </div>
                       </div>
                     </div>
@@ -339,7 +343,11 @@ export const GigList: React.FC<GigListProps> = ({
                       </span>
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                         {gig.category || "General"}
-                      </span>
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 flex items-center gap-1">
+                          <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" />
+                          {gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}
+                        </span>
                       {gig.tiers && gig.tiers.length > 0 && (
                         <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                           {gig.tiers.length} Tiers
@@ -412,7 +420,7 @@ export const GigList: React.FC<GigListProps> = ({
                         <p className="text-xs font-bold text-gray-700 dark:text-zinc-300 truncate">{gig.postedBy}</p>
                         <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-400">
                           <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
-                          <span>{gig.clientRating} ({gig.ratingCount})</span>
+                          <span>{gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}</span>
                         </div>
                       </div>
                     </div>

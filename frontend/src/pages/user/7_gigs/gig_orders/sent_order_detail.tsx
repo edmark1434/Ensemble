@@ -12,7 +12,21 @@ export const SentOrderDetail = () => {
   const theme = useGlobalState((state) => state.theme);
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
   const [expandedMedia, setExpandedMedia] = useState<{ url: string, type: 'image' | 'video' | 'doc' } | null>(null);
+
+  const handleWithdraw = async () => {
+    setIsWithdrawing(true);
+    try {
+        await api.put(`/api/gigs/orders/${orderId}/withdraw`);
+        navigate('/gigs/orders/sent');
+    } catch (err) {
+        console.error("Failed to withdraw:", err);
+        alert("Failed to withdraw order.");
+        setIsWithdrawing(false);
+    }
+  };
 
   const formatAvatarUrl = (url: string) => {
     if (!url) return "";
@@ -207,8 +221,12 @@ export const SentOrderDetail = () => {
                       <button onClick={() => navigate(`/gigs/services/${order.gig_id}/order?edit=${order.id}`)} className="px-5 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-500/20 transition flex items-center gap-2">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg> Edit Order
                       </button>
-                      <button className="px-5 py-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition flex items-center gap-2">
-                          <XCircle className="w-4 h-4" /> Withdraw Order
+                      <button 
+                        disabled={isWithdrawing}
+                        onClick={() => setShowWithdrawConfirm(true)}
+                        className="px-5 py-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition flex items-center gap-2 disabled:opacity-50"
+                      >
+                        <XCircle className="w-4 h-4" /> Withdraw Order
                       </button>
                     </div>
                 )}
@@ -320,6 +338,35 @@ export const SentOrderDetail = () => {
                 </a>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Withdraw Modal */}
+      {showWithdrawConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm p-6 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Withdraw Order</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 leading-relaxed">
+              Are you sure you want to withdraw this pending order? This action cannot be undone.
+            </p>
+            <div className="flex gap-3 w-full">
+              <button 
+                onClick={() => setShowWithdrawConfirm(false)}
+                disabled={isWithdrawing}
+                className="flex-1 py-3 rounded-xl border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 font-bold text-sm hover:bg-gray-50 dark:hover:bg-white/5 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleWithdraw}
+                disabled={isWithdrawing}
+                className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-bold text-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isWithdrawing ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                {isWithdrawing ? 'Withdrawing...' : 'Withdraw'}
+              </button>
+            </div>
           </div>
         </div>
       )}

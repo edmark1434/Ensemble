@@ -36,6 +36,7 @@ const DashboardSkeletonLoader: React.FC = () => (
 
 interface DashboardTask {
     contract_id: string;
+    contract_type: string;
     contract_status: string;
     job_title: string;
     client_name: string;
@@ -304,7 +305,7 @@ const DashboardMain = () => {
                                                     <div className="flex-1 flex flex-col justify-center min-w-0 pr-4">
                                                         <div className="flex items-center gap-2 mb-1.5">
                                                             <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate">{task.job_title}</h4>
-                                                            <a href={`/jobs/postings/${task.job_id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white transition-colors shrink-0" title="View Original Job Post">
+                                                            <a href={task.contract_type === 'gig' ? `/gigs/services/${task.job_id}` : `/jobs/postings/${task.job_id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white transition-colors shrink-0" title={task.contract_type === 'gig' ? "View Original Gig Post" : "View Original Job Post"}>
                                                                 <ExternalLink className="h-3.5 w-3.5" />
                                                             </a>
                                                         </div>
@@ -327,7 +328,7 @@ const DashboardMain = () => {
                                                             {computedStatus}
                                                         </span>
                                                         <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded border bg-zinc-500/10 text-gray-600 dark:text-zinc-400 border-zinc-500/20">
-                                                            Job
+                                                            {task.contract_type === 'gig' ? 'Gig' : 'Job'}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -370,7 +371,7 @@ const DashboardMain = () => {
                                                     <div className="flex-1 flex flex-col justify-center min-w-0 pr-4">
                                                         <div className="flex items-center gap-2 mb-1.5">
                                                             <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate">{task.job_title}</h4>
-                                                            <a href={`/jobs/postings/${task.job_id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white transition-colors shrink-0" title="View Original Job Post">
+                                                            <a href={task.contract_type === 'gig' ? `/gigs/services/${task.job_id}` : `/jobs/postings/${task.job_id}`} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white transition-colors shrink-0" title={task.contract_type === 'gig' ? "View Original Gig Post" : "View Original Job Post"}>
                                                                 <ExternalLink className="h-3.5 w-3.5" />
                                                             </a>
                                                         </div>
@@ -393,7 +394,7 @@ const DashboardMain = () => {
                                                             {computedStatus}
                                                         </span>
                                                         <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded border bg-zinc-500/10 text-gray-600 dark:text-zinc-400 border-zinc-500/20">
-                                                            Job
+                                                            {task.contract_type === 'gig' ? 'Gig' : 'Job'}
                                                         </span>
                                                     </div>
                                                 </div>

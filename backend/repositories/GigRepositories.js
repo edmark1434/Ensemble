@@ -181,6 +181,22 @@ async function getAllGigsRepository(filters, accountId = null) {
             g.no_of_concurrent_max as slots,
             g.created_at as "postedAt",
             g.freelancer_account_id,
+            (
+                SELECT COALESCE(ROUND(AVG(r.stars_out_of_five), 1), 0.0)
+                FROM ratings r
+                JOIN gig_contracts gc ON r.contract_id = gc.contract_id
+                JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
+                JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+                WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+            ) as "clientRating",
+            (
+                SELECT COUNT(r.rating_id)
+                FROM ratings r
+                JOIN gig_contracts gc ON r.contract_id = gc.contract_id
+                JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
+                JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+                WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+            ) as "ratingCount",
             a.display_name as "postedBy",
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
             (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as thumbnail,
@@ -234,6 +250,8 @@ async function getAllGigsRepository(filters, accountId = null) {
             ratingCount: 0,
             isSaved: row.isSaved,
             isOwnGig: accountId ? row.freelancer_account_id === accountId : false,
+            clientRating: parseFloat(row.clientRating || 0),
+            ratingCount: parseInt(row.ratingCount || 0, 10),
             savesCount: parseInt(row.savesCount || 0, 10),
             ordersCount: parseInt(row.ordersCount || 0, 10),
             freelancerAccountId: row.freelancer_account_id,
@@ -277,6 +295,22 @@ async function getSavedGigsRepository(accountId) {
             g.no_of_concurrent_max as slots,
             g.created_at as "postedAt", a.display_name as "postedBy",
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
+            (
+                SELECT COALESCE(ROUND(AVG(r.stars_out_of_five), 1), 0.0)
+                FROM ratings r
+                JOIN gig_contracts gc ON r.contract_id = gc.contract_id
+                JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
+                JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+                WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+            ) as "clientRating",
+            (
+                SELECT COUNT(r.rating_id)
+                FROM ratings r
+                JOIN gig_contracts gc ON r.contract_id = gc.contract_id
+                JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
+                JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+                WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+            ) as "ratingCount",
             (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as thumbnail,
             (SELECT json_agg(f.path) FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id) as gallery,
             (SELECT terms_description FROM terms_of_service WHERE account_id = g.freelancer_account_id AND terms_type = 'gigs' ORDER BY created_at DESC LIMIT 1) as "termsOfService",
@@ -318,7 +352,9 @@ async function getSavedGigsRepository(accountId) {
             milestones: cleanArray(row.milestones),
             tiers: cleanTiers,
             postedAt: row.postedAt,
-            isSaved: true
+            isSaved: true,
+            clientRating: parseFloat(row.clientRating || 0),
+            ratingCount: parseInt(row.ratingCount || 0, 10)
         };
     });
 }
@@ -437,6 +473,22 @@ async function getGigByIdRepository(gigId, accountId = null) {
             g.created_at as "postedAt", a.display_name as "postedBy",
             g.freelancer_account_id,
             (SELECT path FROM files WHERE file_id = a.avatar_file_id) as "clientAvatar",
+            (
+                SELECT COALESCE(ROUND(AVG(r.stars_out_of_five), 1), 0.0)
+                FROM ratings r
+                JOIN gig_contracts gc ON r.contract_id = gc.contract_id
+                JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
+                JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+                WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+            ) as "clientRating",
+            (
+                SELECT COUNT(r.rating_id)
+                FROM ratings r
+                JOIN gig_contracts gc ON r.contract_id = gc.contract_id
+                JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
+                JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+                WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+            ) as "ratingCount",
             (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index = 0 LIMIT 1) as thumbnail,
             (SELECT json_agg(f.path) FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id AND ga.index > 0) as gallery,
             (SELECT terms_description FROM terms_of_service WHERE account_id = g.freelancer_account_id AND terms_type = 'gigs' ORDER BY created_at DESC LIMIT 1) as "termsOfService",
@@ -462,6 +514,23 @@ async function getGigByIdRepository(gigId, accountId = null) {
                 'options', (SELECT json_agg(grc.name) FROM gig_requirement_choices grc WHERE grc.gig_requirement_id = gr.gig_requirement_id)
             )) FROM gig_requirements gr WHERE gr.gig_id = g.gig_id) as questionnaires,
             CASE WHEN $2::uuid IS NOT NULL THEN (SELECT EXISTS(SELECT 1 FROM gig_saves gs WHERE gs.gig_id = g.gig_id AND gs.account_id = $2)) ELSE FALSE END as "isSaved",
+              (
+                  SELECT json_agg(json_build_object(
+                      'ratingId', r.rating_id,
+                      'stars', r.stars_out_of_five,
+                      'feedback', r.feedback,
+                      'createdAt', r.created_at,
+                      'reviewerName', a.display_name,
+                      'reviewerAvatar', f.path
+                  ))
+                  FROM ratings r
+                  JOIN accounts a ON r.account_id = a.account_id
+                  LEFT JOIN files f ON a.avatar_file_id = f.file_id
+                  JOIN gig_contracts gc ON r.contract_id = gc.contract_id
+                  JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
+                  JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+                  WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
+              ) as reviews,
             CASE WHEN $2::uuid IS NOT NULL THEN g.freelancer_account_id = $2 ELSE FALSE END as "isOwnGig",
             CASE WHEN $2::uuid IS NOT NULL THEN (
                 SELECT EXISTS(
@@ -505,8 +574,12 @@ async function getGigByIdRepository(gigId, accountId = null) {
         questionnaires: cleanArray(row.questionnaires),
         postedAt: row.postedAt,
         isSaved: row.isSaved,
-        isOwnGig: row.isOwnGig,
         hasPendingOrder: row.hasPendingOrder,
+        pendingOrderId: row.pendingOrderId,
+        reviews: row.reviews || [],
+        clientRating: parseFloat(row.clientRating || 0),
+        ratingCount: parseInt(row.ratingCount || 0, 10),
+        isOwnGig: row.isOwnGig,
         savesCount: parseInt(row.savesCount || 0, 10),
         ordersCount: parseInt(row.ordersCount || 0, 10),
         freelancerAccountId: row.freelancer_account_id

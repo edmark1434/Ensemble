@@ -4,6 +4,7 @@ async function getDashboardTasks(accountId) {
     const query = `
         SELECT 
             c.contract_id,
+            c.contract_type,
             c.status as contract_status,
             c.rate_credits as contract_value,
             c.revision_price_credits as revision_price_credits,
@@ -43,7 +44,54 @@ async function getDashboardTasks(accountId) {
         LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
         WHERE (j.client_account_id = $1 OR p.freelancer_account_id = $1)
           AND LOWER(c.status) IN ('active', 'waiting', 'done', 'completed')
-        ORDER BY c.created_at DESC
+        
+        UNION ALL
+        
+        SELECT 
+            c.contract_id,
+            c.contract_type,
+            c.status as contract_status,
+            c.rate_credits as contract_value,
+            c.revision_price_credits as revision_price_credits,
+            g.title as job_title,
+            g.gig_id as job_id,
+            'N/A' as job_difficulty,
+            (SELECT f.path FROM gig_attachments ga JOIN files f ON ga.file_id = f.file_id WHERE ga.gig_id = g.gig_id ORDER BY ga.index ASC LIMIT 1) as job_banner,
+            (SELECT t.name FROM gig_tags gt JOIN tags t ON gt.tag_id = t.tag_id WHERE gt.gig_id = g.gig_id LIMIT 1) as job_category,
+            client_acc.display_name as client_name,
+            client_acc.account_id as client_account_id,
+            client_f.path as client_avatar,
+            free_acc.display_name as freelancer_name,
+            free_acc.account_id as freelancer_account_id,
+            free_f.path as freelancer_avatar,
+            (
+                SELECT json_agg(json_build_object(
+                    'id', cm.contract_milestone_id,
+                    'index', cm.index,
+                    'name', cm.name,
+                    'status', cm.status,
+                    'credits', cm.credits,
+                    'revisions_max', cm.no_of_revisions_max,
+                    'deadline', cm.deadline
+                ) ORDER BY cm.index ASC)
+                FROM contract_milestones cm 
+                WHERE cm.contract_id = c.contract_id
+            ) as milestones,
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = gr.client_account_id LIMIT 1) as client_rating,
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = g.freelancer_account_id LIMIT 1) as freelancer_rating
+        FROM contracts c
+        JOIN gig_contracts gc ON c.contract_id = gc.contract_id
+        JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
+        JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+        JOIN gigs g ON gt.gig_id = g.gig_id
+        JOIN accounts client_acc ON gr.client_account_id = client_acc.account_id
+        LEFT JOIN files client_f ON client_acc.avatar_file_id = client_f.file_id
+        JOIN accounts free_acc ON g.freelancer_account_id = free_acc.account_id
+        LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
+        WHERE (gr.client_account_id = $1 OR g.freelancer_account_id = $1)
+          AND LOWER(c.status) IN ('active', 'waiting', 'done', 'completed')
+        
+        ORDER BY contract_id DESC
     `;
     const result = await pool.query(query, [accountId]);
     return result.rows;
@@ -53,6 +101,7 @@ async function getTaskById(contractId, accountId) {
     const query = `
         SELECT 
             c.contract_id,
+            c.contract_type,
             c.status as contract_status,
             c.rate_credits as contract_value,
             c.revision_price_credits as revision_price_credits,
@@ -103,6 +152,63 @@ async function getTaskById(contractId, accountId) {
         JOIN accounts free_acc ON p.freelancer_account_id = free_acc.account_id
         LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
         WHERE c.contract_id = $1 AND (j.client_account_id = $2 OR p.freelancer_account_id = $2)
+        
+        UNION ALL
+        
+        SELECT 
+            c.contract_id,
+            c.contract_type,
+            c.status as contract_status,
+            c.rate_credits as contract_value,
+            c.revision_price_credits as revision_price_credits,
+            g.title as job_title,
+            g.gig_id as job_id,
+            client_acc.display_name as client_name,
+            client_acc.account_id as client_account_id,
+            client_f.path as client_avatar,
+            free_acc.display_name as freelancer_name,
+            free_acc.account_id as freelancer_account_id,
+            free_f.path as freelancer_avatar,
+            (
+                SELECT json_agg(
+                    json_build_object(
+                        'id', cm.contract_milestone_id,
+                        'index', cm.index,
+                        'name', cm.name,
+                        'status', cm.status,
+                        'credits', cm.credits,
+                        'revisions_max', cm.no_of_revisions_max,
+                        'deadline', cm.deadline,
+                        'submissions', (
+                            SELECT json_agg(
+                                json_build_object(
+                                    'id', ms.milestone_submit_id,
+                                    'message', ms.message,
+                                    'attachments', ms.attachments,
+                                    'status', ms.status,
+                                    'submitted_at', ms.submitted_at
+                                ) ORDER BY ms.submitted_at DESC
+                            )
+                            FROM milestone_submits ms
+                            WHERE ms.contract_milestone_id = cm.contract_milestone_id
+                        )
+                    ) ORDER BY cm.index ASC
+                )
+                FROM contract_milestones cm 
+                WHERE cm.contract_id = c.contract_id
+            ) as milestones,
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = gr.client_account_id LIMIT 1) as client_rating,
+            (SELECT json_build_object('rating', r.stars_out_of_five, 'feedback', r.feedback, 'created_at', r.created_at) FROM ratings r WHERE r.contract_id = c.contract_id AND r.account_id = g.freelancer_account_id LIMIT 1) as freelancer_rating
+        FROM contracts c
+        JOIN gig_contracts gc ON c.contract_id = gc.contract_id
+        JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
+        JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+        JOIN gigs g ON gt.gig_id = g.gig_id
+        JOIN accounts client_acc ON gr.client_account_id = client_acc.account_id
+        LEFT JOIN files client_f ON client_acc.avatar_file_id = client_f.file_id
+        JOIN accounts free_acc ON g.freelancer_account_id = free_acc.account_id
+        LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
+        WHERE c.contract_id = $1 AND (gr.client_account_id = $2 OR g.freelancer_account_id = $2)
     `;
     const result = await pool.query(query, [contractId, accountId]);
     return result.rows[0];
@@ -115,6 +221,14 @@ async function verifyFreelancer(contractId, accountId) {
         JOIN job_contracts jc ON c.contract_id = jc.contract_id
         JOIN proposals p ON jc.proposal_id = p.proposal_id
         WHERE c.contract_id = $1 AND p.freelancer_account_id = $2
+        UNION ALL
+        SELECT 1
+        FROM contracts c
+        JOIN gig_contracts gc ON c.contract_id = gc.contract_id
+        JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
+        JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
+        JOIN gigs g ON gt.gig_id = g.gig_id
+        WHERE c.contract_id = $1 AND g.freelancer_account_id = $2
     `;
     const res = await pool.query(query, [contractId, accountId]);
     return res.rowCount > 0;
@@ -128,6 +242,12 @@ async function verifyClient(contractId, accountId) {
         JOIN proposals p ON jc.proposal_id = p.proposal_id
         JOIN jobs j ON p.job_id = j.job_id
         WHERE c.contract_id = $1 AND j.client_account_id = $2
+        UNION ALL
+        SELECT 1
+        FROM contracts c
+        JOIN gig_contracts gc ON c.contract_id = gc.contract_id
+        JOIN gig_requests gr ON gc.gig_request_id = gr.gig_request_id
+        WHERE c.contract_id = $1 AND gr.client_account_id = $2
     `;
     const res = await pool.query(query, [contractId, accountId]);
     return res.rowCount > 0;

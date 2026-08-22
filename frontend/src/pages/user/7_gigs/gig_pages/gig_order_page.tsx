@@ -621,7 +621,7 @@ const GigOrderPage: React.FC = () => {
         title={editOrderId ? "Order Successfully Updated!" : "Order Successfully Sent!"}
         message={editOrderId ? "Your order details have been saved." : "Your order has been placed! The seller will reach out to you shortly to begin working."}
         buttonText={editOrderId ? "VIEW ORDER" : "GO TO MY ORDERS"}
-        onConfirm={() => navigate(editOrderId ? `/gigs/orders/sent/${editOrderId}` : '/gigs/orders')}
+        onConfirm={() => navigate(editOrderId ? `/gigs/orders/sent/${editOrderId}` : '/gigs/orders/sent')}
       />
 
       <PopupConfirmReturn

@@ -25,13 +25,14 @@ export const SentOrders: React.FC = () => {
   useEffect(() => {
     api.get("/api/gigs/orders/sent").then((res) => {
       const fetched = res.data.data || [];
-      const mapped = fetched.map((o: any) => ({
+      const visibleOrders = fetched.filter((o: any) => o.status !== 'Withdrawn');
+      const mapped = visibleOrders.map((o: any) => ({
         ...o,
         freelancer_avatar: formatAvatarUrl(o.freelancer_avatar)
       }));
       
-      const counts = { All: fetched.length, Pending: 0, Accepted: 0, Rejected: 0 };
-      fetched.forEach((o: any) => {
+      const counts = { All: visibleOrders.length, Pending: 0, Accepted: 0, Rejected: 0 };
+      visibleOrders.forEach((o: any) => {
         const s = o.status || 'Pending';
         if (counts[s as keyof typeof counts] !== undefined) {
           counts[s as keyof typeof counts]++;
@@ -73,11 +74,18 @@ export const SentOrders: React.FC = () => {
     );
   }
 
+  const filteredOrders = orders.filter((o) => {
+    if (!context?.activeStatus || context.activeStatus === "All") return true;
+    return o.status === context.activeStatus;
+  });
+
   return (
     <div className="space-y-4">
 
       <div className={viewType === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-4"}>
-        {orders.map((order) => (
+        {filteredOrders.length === 0 ? (
+          <div className="col-span-full py-10 text-center text-sm text-gray-500">No {context?.activeStatus} orders found.</div>
+        ) : filteredOrders.map((order) => (
           <div
             key={order.id}
             onClick={() => navigate(`/gigs/orders/sent/${order.id}`)}

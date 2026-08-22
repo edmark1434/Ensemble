@@ -13,7 +13,8 @@ const {
     updateGigRepository,
     deleteGigRepository,
     acceptGigOrderRepository,
-    rejectGigOrderRepository
+    rejectGigOrderRepository,
+    withdrawGigOrderRepository
 } = require('../repositories/GigRepositories');
 
 async function createGigController(req, res) {
@@ -225,6 +226,23 @@ async function rejectGigOrderController(req, res) {
     }
 }
 
+async function withdrawGigOrderController(req, res) {
+    try {
+        const client_account_id = req.user?.account_id;
+        const orderId = req.params.orderId;
+
+        if (!client_account_id) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+
+        await withdrawGigOrderRepository(orderId, client_account_id);
+        res.status(200).json({ success: true, message: 'Gig order withdrawn successfully' });
+    } catch (error) {
+        console.error("Error in withdrawGigOrderController:", error);
+        res.status(500).json({ success: false, message: error.message || 'Failed to withdraw gig order' });
+    }
+}
+
 module.exports = {
     updateGigController,
     createGigController,
@@ -239,5 +257,6 @@ module.exports = {
     getGigByIdController,
     deleteGigController,
     acceptGigOrderController,
-    rejectGigOrderController
+    rejectGigOrderController,
+    withdrawGigOrderController
 };

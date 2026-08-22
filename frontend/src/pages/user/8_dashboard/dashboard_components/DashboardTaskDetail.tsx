@@ -106,17 +106,17 @@ export const DashboardTaskDetail = () => {
                                         {computedStatus}
                                     </span>
                                     <span className="text-[10px] uppercase font-bold px-2 py-1 rounded-md border bg-zinc-500/10 text-gray-600 dark:text-zinc-400 border-zinc-500/20 shrink-0">
-                                        Job
+                                        {task.contract_type === 'gig' ? 'Gig' : 'Job'}
                                     </span>
                                 </div>
                                 <div className="flex items-start gap-3">
                                     <h1 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight break-words line-clamp-3">{task.job_title}</h1>
                                     <a 
-                                        href={`/jobs/postings/${task.job_id}`} 
+                                        href={task.contract_type === 'gig' ? `/gigs/services/${task.job_id}` : `/jobs/postings/${task.job_id}`} 
                                         target="_blank" 
                                         rel="noreferrer" 
                                         className="flex items-center justify-center p-1.5 rounded-md bg-white dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white transition-colors shrink-0 mt-0.5"
-                                        title="View Original Job Post"
+                                        title={task.contract_type === 'gig' ? "View Original Gig Post" : "View Original Job Post"}
                                     >
                                         <ExternalLink className="h-4 w-4" />
                                     </a>

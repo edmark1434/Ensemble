@@ -129,7 +129,11 @@ export const HomeFeaturedGigs: React.FC = () => {
                   </span>
                   <span className="rounded border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-800 dark:text-zinc-300">
                     {gig.category}
-                  </span>
+                    </span>
+                    <span className="rounded border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                      <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" />
+                      {gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}
+                    </span>
                 </div>
 
                 {/* Price */}
@@ -211,10 +215,7 @@ export const HomeFeaturedGigs: React.FC = () => {
                     </span>
                     <div className="flex items-center gap-1 text-[10px] font-medium text-gray-500">
                       <Star className="h-2.5 w-2.5 fill-yellow-400 text-yellow-400" />
-                      <span className="text-gray-700 dark:text-zinc-300">
-                        {gig.clientRating || "5.0"}
-                      </span>
-                      <span>({gig.ratingCount || 0})</span>
+                      <span>{gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}</span>
                     </div>
                   </div>
                 </div>

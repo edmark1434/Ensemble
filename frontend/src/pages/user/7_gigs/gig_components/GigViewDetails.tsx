@@ -20,7 +20,11 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
   const activeTier = selectedGig?.tiers[activeTierIdx];
 
   const handleOpenCheckout = () => {
-    navigate(`/gigs/services/${selectedGig?.id}/order`, { state: { tierIndex: activeTierIdx } });
+    if (selectedGig?.hasPendingOrder && selectedGig?.pendingOrderId) {
+      navigate(`/gigs/orders/sent/${selectedGig.pendingOrderId}`);
+    } else {
+      navigate(`/gigs/services/${selectedGig?.id}/order`, { state: { tierIndex: activeTierIdx } });
+    }
   };
 
   const handleViewProfile = () => {
@@ -124,7 +128,11 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300">
                       {selectedGig.category}
-                    </span>
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 flex items-center gap-1">
+                        <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" />
+                        {selectedGig.ratingCount > 0 ? `${selectedGig.clientRating} (${selectedGig.ratingCount})` : "N/A"}
+                      </span>
                     {selectedGig.tiers && selectedGig.tiers.length > 0 && (
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                         {selectedGig.tiers.length} Tiers
@@ -403,10 +411,9 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                     </button>
                     <button
                       onClick={handleOpenCheckout}
-                      disabled={!activeTier}
-                      className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 active:scale-[0.98]"
                     >
-                      Order {activeTier?.tierName || "Package"}
+                      {selectedGig.hasPendingOrder ? "View My Order" : `Order ${activeTier?.tierName || "Package"}`}
                     </button>
                   </div>
                 </>
