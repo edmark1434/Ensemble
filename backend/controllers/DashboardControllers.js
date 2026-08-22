@@ -1,4 +1,4 @@
-const DashboardRepositories = require('../Repositories/DashboardRepositories');
+const DashboardRepositories = require('../repositories/DashboardRepositories');
 
 async function getTasks(req, res) {
     try {
