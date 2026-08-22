@@ -19,8 +19,6 @@ export const SentOrders: React.FC = () => {
   const formatAvatarUrl = (url: string) => {
     if (!url) return "";
     if (url.startsWith("http")) return url;
-    if (url.startsWith("/public/")) return url.replace("/public/", "/");
-    if (url.match(/^\/p\d+\.png$/) || url.match(/^p\d+\.png$/)) return url.startsWith('/') ? url : `/${url}`;
     return `${import.meta.env.VITE_CLOUDFRONT_URL}/${url.replace(/^\//, '')}`;
   };
 
@@ -31,13 +29,25 @@ export const SentOrders: React.FC = () => {
         ...o,
         freelancer_avatar: formatAvatarUrl(o.freelancer_avatar)
       }));
+      
+      const counts = { All: fetched.length, Pending: 0, Accepted: 0, Rejected: 0 };
+      fetched.forEach((o: any) => {
+        const s = o.status || 'Pending';
+        if (counts[s as keyof typeof counts] !== undefined) {
+          counts[s as keyof typeof counts]++;
+        }
+      });
+      if (context?.setChildOrdersCounts) {
+        context.setChildOrdersCounts(counts);
+      }
+
       setOrders(mapped);
       setLoading(false);
     }).catch((err) => {
       console.error(err);
       setLoading(false);
     });
-  }, []);
+  }, [context?.setChildOrdersCounts]);
 
   if (loading) {
     return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-blue-500" /></div>;

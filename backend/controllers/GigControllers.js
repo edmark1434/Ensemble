@@ -4,6 +4,7 @@ const {
     getAllGigsRepository,
     toggleGigSaveRepository,
     getSavedGigsRepository,
+    editGigOrderRepository,
     submitGigOrderRepository,
     getIncomingOrdersRepository,
     getMyOrdersRepository,
@@ -75,6 +76,18 @@ async function getSavedGigsController(req, res) {
         res.status(500).json({ success: false, message: 'Internal Server Error' });
     }
 }
+
+
+async function editGigOrderController(req, res) {
+    try {
+        await editGigOrderRepository(req.params.orderId, req.user.account_id, req.body);
+        res.status(200).json({ success: true });
+    } catch (error) {
+        console.error('Error in editGigOrderController:', error);
+        res.status(500).json({ success: false, message: 'Failed to edit gig order' });
+    }
+}
+
 
 async function submitGigOrderController(req, res) {
     try {
@@ -218,6 +231,7 @@ module.exports = {
     getAllGigsController,
     toggleGigSaveController,
     getSavedGigsController,
+    editGigOrderController,
     submitGigOrderController,
     getIncomingOrdersController,
     getMyOrdersController,

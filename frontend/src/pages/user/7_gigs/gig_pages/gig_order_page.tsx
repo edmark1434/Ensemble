@@ -80,7 +80,11 @@ const GigOrderPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useGlobalState((state) => state.theme);
-  const tierIndex = location.state?.tierIndex || 0;
+  
+  const searchParams = new URLSearchParams(location.search);
+  const editOrderId = searchParams.get('edit');
+  
+  const [tierIndex, setTierIndex] = useState(location.state?.tierIndex || 0);
 
   const [gig, setGig] = useState<Gig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,15 +97,15 @@ const GigOrderPage: React.FC = () => {
 
   const [projectBrief, setProjectBrief] = useState("");
   const [questionAnswers, setQuestionAnswers] = useState<Record<string, any>>({});
-  const [agreedToFreelancerTerms, setAgreedToFreelancerTerms] = useState(false);
-  const [agreedToPlatformTerms, setAgreedToPlatformTerms] = useState(false);
+  const [agreedToFreelancerTerms, setAgreedToFreelancerTerms] = useState(!!editOrderId);
+  const [agreedToPlatformTerms, setAgreedToPlatformTerms] = useState(!!editOrderId);
 
   useEffect(() => {
-    const fetchGig = async () => {
+    const fetchGigAndOrder = async () => {
       try {
-        const response = await api.get(`/api/gigs/${id}`);
-        if (response.data.success && response.data.data) {
-          const g = response.data.data;
+        const gigRes = await api.get(`/api/gigs/${id}`);
+        if (gigRes.data.success && gigRes.data.data) {
+          const g = gigRes.data.data;
           const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || '';
           const mapUrl = (path: string) => {
             if (!path) return undefined;
@@ -114,6 +118,33 @@ const GigOrderPage: React.FC = () => {
             ...g,
             thumbnail: mapUrl(g.thumbnail) || "https://d2dl0agwn9kque.cloudfront.net/gig_thumbnails/ede6f8d1-cc62-4afd-be9f-11f044d86122/placeholder_1787040672764_8a5d64b3.png",
           });
+
+          if (editOrderId) {
+             const orderRes = await api.get(`/api/gigs/orders/${editOrderId}`);
+             if (orderRes.data.success && orderRes.data.data) {
+                 const orderData = orderRes.data.data;
+                 setProjectBrief(orderData.project_brief || "");
+                 
+                 if (orderData.gig_tier_id) {
+                     const tIndex = g.tiers.findIndex((t: any) => t.tierId === orderData.gig_tier_id);
+                     if (tIndex !== -1) setTierIndex(tIndex);
+                 }
+                 
+                 const parsedAnswers: Record<string, any> = {};
+                 if (orderData.responses && Array.isArray(orderData.responses)) {
+                     orderData.responses.forEach((resp: any) => {
+                         const reqId = resp.question_id || resp.gig_requirement_id;
+                         const index = g.questionnaires?.findIndex((q: any) => q.id === reqId);
+                         if (index !== undefined && index !== -1) {
+                             parsedAnswers[index] = resp.response;
+                         } else {
+                             parsedAnswers[reqId] = resp.response;
+                         }
+                     });
+                 }
+                 setQuestionAnswers(parsedAnswers);
+             }
+          }
         }
       } catch (error) {
         console.error("Failed to fetch gig details:", error);
@@ -121,8 +152,8 @@ const GigOrderPage: React.FC = () => {
         setLoading(false);
       }
     };
-    fetchGig();
-  }, [id]);
+    fetchGigAndOrder();
+  }, [id, editOrderId]);
 
   const activeTier = gig?.tiers[tierIndex] || gig?.tiers[0];
 
@@ -157,11 +188,16 @@ const GigOrderPage: React.FC = () => {
         tierId: activeTier?.tierId,
         projectBrief,
         responses: Object.entries(questionAnswers).map(([idx, response]) => ({
-          requirementId: gig.questionnaires[parseInt(idx)]?.id,
-          response
+          requirementId: gig.questionnaires[parseInt(idx)]?.id || idx,
+          response: Array.isArray(response) ? response.join(', ') : response
         }))
       };
-      await api.post(`/api/gigs/${gig.id}/order`, payload);
+
+      if (editOrderId) {
+        await api.put(`/api/gigs/orders/${editOrderId}`, payload);
+      } else {
+        await api.post(`/api/gigs/${gig.id}/order`, payload);
+      }
       setIsProcessing(false);
       setIsSuccessOpen(true);
     } catch (err) {
@@ -224,7 +260,7 @@ const GigOrderPage: React.FC = () => {
         className="relative z-10 mx-auto max-w-3xl p-6 md:p-8 w-full space-y-6"
       >
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Making an Order</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">{editOrderId ? "Editing Order" : "Making an Order"}</h1>
           <p className="text-xs text-gray-500 dark:text-zinc-400 mt-1">
             Applying for Gig ID <span className="font-mono text-blue-400">{gig.id}</span>:{" "}
             <strong className="text-gray-900 dark:text-white">{gig.title}</strong>
@@ -262,12 +298,18 @@ const GigOrderPage: React.FC = () => {
                       <div>
                         <label className="block text-xs font-bold text-gray-700 dark:text-zinc-300 mb-2 uppercase tracking-wide">Project Brief <span className="text-red-500">*</span></label>
                         <textarea
-                          rows={4}
+                          rows={10}
+                          maxLength={1000}
                           className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-black/20 px-4 py-3 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all resize-none"
                           placeholder="Describe what you need in detail..."
                           value={projectBrief}
                           onChange={(e) => setProjectBrief(e.target.value)}
                         />
+                        <div className="flex justify-end mt-1">
+                          <span className={`text-[10px] ${projectBrief.length >= 1000 ? 'text-red-500 font-bold' : 'text-gray-400'}`}>
+                            {projectBrief.length} / 1000 characters
+                          </span>
+                        </div>
                       </div>
 
                       <div className="flex gap-3 pt-6 mt-6 border-t border-gray-100 dark:border-white/5">
@@ -565,7 +607,7 @@ const GigOrderPage: React.FC = () => {
                         disabled={isProcessing || !agreedToFreelancerTerms || !agreedToPlatformTerms}
                         className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-50 flex justify-center items-center gap-2"
                       >
-                        {isProcessing ? "Processing..." : "Pay with Credits"}
+                        {isProcessing ? "Processing..." : editOrderId ? "Save Changes" : "Pay with Credits"}
                       </button>
                     </div>
                   </motion.div>
@@ -576,10 +618,10 @@ const GigOrderPage: React.FC = () => {
 
       <SuccessModal
         isOpen={isSuccessOpen}
-        title="Order Successfully Sent!"
-        message="Your order has been placed! The seller will reach out to you shortly to begin working."
-        buttonText="Go to My Orders"
-        onConfirm={() => navigate('/gigs/orders')}
+        title={editOrderId ? "Order Successfully Updated!" : "Order Successfully Sent!"}
+        message={editOrderId ? "Your order details have been saved." : "Your order has been placed! The seller will reach out to you shortly to begin working."}
+        buttonText={editOrderId ? "VIEW ORDER" : "GO TO MY ORDERS"}
+        onConfirm={() => navigate(editOrderId ? `/gigs/orders/sent/${editOrderId}` : '/gigs/orders')}
       />
 
       <PopupConfirmReturn

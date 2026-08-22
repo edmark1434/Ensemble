@@ -66,7 +66,8 @@ interface UserNavProps {
 const UserNav: React.FC<UserNavProps> = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const [isCollapsed, setIsCollapsed] = useState(false);
+    const isCollapsed = useGlobalState((state) => state.isSidebarCollapsed);
+    const setIsCollapsed = useGlobalState((state) => state.setIsSidebarCollapsed);
     const [isJobsOpen, setIsJobsOpen] = useState(false);
     const [isGigsOpen, setIsGigsOpen] = useState(false);
 

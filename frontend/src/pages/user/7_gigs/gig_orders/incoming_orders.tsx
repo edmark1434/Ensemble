@@ -39,8 +39,6 @@ export const IncomingOrders: React.FC = () => {
       const formatAvatarUrl = (url: string) => {
         if (!url) return "";
         if (url.startsWith("http")) return url;
-        if (url.startsWith("/public/")) return url.replace("/public/", "/");
-        if (url.match(/^\/p\d+\.png$/) || url.match(/^p\d+\.png$/)) return url.startsWith('/') ? url : `/${url}`;
         return `${cloudFrontUrl}/${url.replace(/^\//, '')}`;
       };
 
@@ -48,6 +46,18 @@ export const IncomingOrders: React.FC = () => {
           ...o,
           client_avatar: formatAvatarUrl(o.client_avatar),
       }));
+      
+      const counts = { All: fetchedOrders.length, Pending: 0, Accepted: 0, Rejected: 0 };
+      fetchedOrders.forEach((o: any) => {
+        const s = o.status || 'Pending';
+        if (counts[s as keyof typeof counts] !== undefined) {
+          counts[s as keyof typeof counts]++;
+        }
+      });
+      if (context?.setChildOrdersCounts) {
+        context.setChildOrdersCounts(counts);
+      }
+
       setOrders(mappedOrders);
       setLoading(false);
     }).catch((err) => {

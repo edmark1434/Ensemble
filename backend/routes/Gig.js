@@ -14,7 +14,8 @@ const {
     updateGigController,
     deleteGigController,
     acceptGigOrderController,
-    rejectGigOrderController
+    rejectGigOrderController,
+    editGigOrderController
 } = require('../controllers/GigControllers');
 const requireAuth = require('../middleware/RequireAuth');
 const requireCompletedOnboarding = require('../middleware/RequireCompletedOnboarding');
@@ -48,6 +49,9 @@ router.post('/:id/save', toggleGigSaveController);
 
 // POST /api/gigs/:id/order
 router.post('/:id/order', submitGigOrderController);
+
+// PUT /api/gigs/orders/:orderId
+router.put('/orders/:orderId', editGigOrderController);
 
 // POST /api/gigs/orders/:orderId/accept
 router.post('/orders/:orderId/accept', acceptGigOrderController);

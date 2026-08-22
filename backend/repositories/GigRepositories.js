@@ -1,5 +1,6 @@
 // backend/repositories/GigRepositories.js
 const { pool } = require('../lib/Database');
+const { createNotification } = require('./NotificationRepositories');
 
 async function createGigRepository(gigData) {
     const client = await pool.connect();
@@ -327,6 +328,11 @@ async function submitGigOrderRepository(accountId, gigId, orderData) {
     try {
         await client.query('BEGIN');
 
+        const check = await client.query('SELECT freelancer_account_id FROM gigs WHERE gig_id = $1', [gigId]);
+        if (check.rows.length > 0 && check.rows[0].freelancer_account_id === accountId) {
+            throw new Error('You cannot order your own gig.');
+        }
+
         const requestQuery = `
             INSERT INTO gig_requests (client_account_id, gig_tier_id, project_brief, status)
             VALUES ($1, $2, $3, $4) RETURNING gig_request_id
@@ -641,7 +647,7 @@ async function acceptGigOrderRepository(orderId, freelancerAccountId) {
 
         // 1. Verify the order exists, is Pending, and belongs to the freelancer
         const reqCheckQuery = `
-            SELECT gr.gig_request_id, gr.status, gt.gig_tier_id, gt.rate_credits, gt.no_of_revisions_max, gt.gig_id, g.additional_work_rate
+            SELECT gr.gig_request_id, gr.status, gt.gig_tier_id, gt.rate_credits, gt.no_of_revisions_max, gt.gig_id, g.additional_work_rate, gr.client_account_id, g.title as gig_title
             FROM gig_requests gr
             JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
             JOIN gigs g ON gt.gig_id = g.gig_id
@@ -655,7 +661,7 @@ async function acceptGigOrderRepository(orderId, freelancerAccountId) {
             throw new Error('Gig order is not in Pending status');
         }
 
-        const { rate_credits, no_of_revisions_max, gig_id, additional_work_rate } = reqCheck.rows[0];
+        const { rate_credits, no_of_revisions_max, gig_id, additional_work_rate, client_account_id, gig_title } = reqCheck.rows[0];
 
         // 2. Update gig request status
         await client.query(
@@ -700,6 +706,23 @@ async function acceptGigOrderRepository(orderId, freelancerAccountId) {
             ]);
         }
 
+        await createNotification({
+            account_id: client_account_id,
+            message: `Your gig order for '${gig_title}' has been accepted! The contract has automatically started.`,
+            reference_table: 'contracts',
+            reference_prefix: 'CON',
+            reference_path: `/contracts/${contractId}`,
+            reference_id: contractId
+        });
+        await createNotification({
+            account_id: freelancerAccountId,
+            message: `You accepted the gig order for '${gig_title}'. The contract is now active.`,
+            reference_table: 'contracts',
+            reference_prefix: 'CON',
+            reference_path: `/contracts/${contractId}`,
+            reference_id: contractId
+        });
+
         await client.query('COMMIT');
         return contractId;
     } catch (err) {
@@ -718,7 +741,7 @@ async function rejectGigOrderRepository(orderId, freelancerAccountId, reason) {
 
         // Verify the order exists, is Pending, and belongs to the freelancer
         const reqCheckQuery = `
-            SELECT gr.gig_request_id, gr.status
+            SELECT gr.gig_request_id, gr.status, gr.client_account_id, g.title as gig_title
             FROM gig_requests gr
             JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
             JOIN gigs g ON gt.gig_id = g.gig_id
@@ -731,6 +754,7 @@ async function rejectGigOrderRepository(orderId, freelancerAccountId, reason) {
         if (reqCheck.rows[0].status !== 'Pending') {
             throw new Error('Gig order is not in Pending status');
         }
+        const { client_account_id, gig_title } = reqCheck.rows[0];
 
         await client.query(
             "UPDATE gig_requests SET status = 'Rejected', updated_at = NOW() WHERE gig_request_id = $1",
@@ -738,6 +762,15 @@ async function rejectGigOrderRepository(orderId, freelancerAccountId, reason) {
         );
         // Note: we might want to store the reason somewhere if gig_requests gets a reject_reason column,
         // but currently there's no such column in gig_requests (unlike proposals).
+
+        await createNotification({
+            account_id: client_account_id,
+            message: `Your gig order for '${gig_title}' was rejected by the freelancer. Reason: ${reason || 'No reason provided'}`,
+            reference_table: 'gig_requests',
+            reference_prefix: 'GIGR',
+            reference_path: `/gigs/orders/sent/${orderId}`,
+            reference_id: orderId
+        });
 
         await client.query('COMMIT');
         return true;
@@ -750,12 +783,66 @@ async function rejectGigOrderRepository(orderId, freelancerAccountId, reason) {
     }
 }
 
+
+async function editGigOrderRepository(orderId, accountId, orderData) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Check if the order is pending and belongs to the client
+        const checkQuery = `
+            SELECT status FROM gig_requests 
+            WHERE gig_request_id = $1 AND client_account_id = $2
+        `;
+        const checkRes = await client.query(checkQuery, [orderId, accountId]);
+        
+        if (checkRes.rows.length === 0) {
+            throw new Error('Order not found or unauthorized');
+        }
+        if (checkRes.rows[0].status !== 'Pending') {
+            throw new Error('Only pending orders can be edited');
+        }
+
+        // Update the tier and brief
+        const updateQuery = `
+            UPDATE gig_requests 
+            SET gig_tier_id = $1, project_brief = $2, updated_at = NOW()
+            WHERE gig_request_id = $3
+        `;
+        await client.query(updateQuery, [orderData.tierId, orderData.projectBrief, orderId]);
+
+        // Delete old responses
+        await client.query('DELETE FROM gig_responses WHERE gig_request_id = $1', [orderId]);
+
+        // Insert new responses
+        if (orderData.responses && orderData.responses.length > 0) {
+            const insertRespQuery = `
+                INSERT INTO gig_responses (gig_request_id, gig_requirement_id, response)
+                VALUES ($1, $2, $3)
+            `;
+            for (const resp of orderData.responses) {
+                await client.query(insertRespQuery, [orderId, resp.requirementId, resp.response]);
+            }
+        }
+
+        await client.query('COMMIT');
+        return true;
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Error in editGigOrderRepository:', err);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
 module.exports = {
     updateGigRepository,
     createGigRepository,
     getAllGigsRepository,
     toggleGigSaveRepository,
     getSavedGigsRepository,
+    editGigOrderRepository,
     submitGigOrderRepository,
     getIncomingOrdersRepository,
     getMyOrdersRepository,

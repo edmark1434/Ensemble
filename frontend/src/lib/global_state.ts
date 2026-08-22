@@ -12,7 +12,7 @@ import {create, type ExtractState, type StoreApi} from 'zustand'
 // Define Store type
 interface GlobalState {
   // State
-    isSidebarCollapsed: (state: ExtractState<StoreApi<GlobalState>>) => U;
+  isSidebarCollapsed: boolean
   user:            any | null
   isAuthenticated: boolean
   isLoading:       boolean
@@ -21,6 +21,7 @@ interface GlobalState {
   theme:           'light' | 'dark'
 
   // Actions
+  setIsSidebarCollapsed: (isCollapsed: boolean) => void
   setUser:            (user: any) => void
   setIsAuthenticated: (isAuthenticated: boolean) => void
   setIsLoading:       (isLoading: boolean) => void
@@ -33,6 +34,7 @@ interface GlobalState {
 // Pass type to create<GlobalState>
 const useGlobalState = create<GlobalState>((set) => ({
   // Initial state
+  isSidebarCollapsed: false,
   user:            null,
   isAuthenticated: false,
   isLoading:       false,
@@ -41,6 +43,7 @@ const useGlobalState = create<GlobalState>((set) => ({
   theme: (localStorage.getItem('theme') as 'light' | 'dark') || 'dark',
 
   // Actions
+  setIsSidebarCollapsed: (isCollapsed) => set({ isSidebarCollapsed: isCollapsed }),
   setUser:            (user) => set({ user, isAuthenticated: true }),
   setIsAuthenticated: (isAuthenticated) => set({ isAuthenticated }),
   setIsLoading:       (isLoading) => set({ isLoading }),

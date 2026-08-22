@@ -33,7 +33,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
   const [activeTierIdx, setActiveTierIdx] = useState(0);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
-  const isOwner = gig && user && String(user.account_id) === String(gig.client_account_id);
+  const isOwner = gig?.isOwnGig;
 
   // Lightbox Modal state
   const [activeLightboxImg, setActiveLightboxImg] = useState<string | null>(null);

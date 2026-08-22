@@ -12,12 +12,40 @@ export const IncomingOrderDetail = () => {
   const theme = useGlobalState((state) => state.theme);
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [expandedMedia, setExpandedMedia] = useState<{ url: string, type: 'image' | 'video' | 'doc' } | null>(null);
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [isAcceptModalOpen, setIsAcceptModalOpen] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleReject = async () => {
+    if (!rejectReason.trim()) return alert("Please provide a reason");
+    setIsProcessing(true);
+    try {
+        await api.post(`/api/gigs/orders/${order.id}/reject`, { reason: rejectReason });
+        navigate(-1);
+    } catch(e) {
+        alert("Failed to reject order");
+        setIsProcessing(false);
+    }
+  };
+
+  const handleAccept = async () => {
+    if (!agreedToTerms) return alert("You must agree to the terms");
+    setIsProcessing(true);
+    try {
+        await api.post(`/api/gigs/orders/${order.id}/accept`);
+        navigate('/contracts');
+    } catch(e) {
+        alert("Failed to accept order");
+        setIsProcessing(false);
+    }
+  };
 
   const formatAvatarUrl = (url: string) => {
     if (!url) return "";
     if (url.startsWith("http")) return url;
-    if (url.startsWith("/public/")) return url.replace("/public/", "/");
-    if (url.match(new RegExp("^/p\\d+\\.png$")) || url.match(new RegExp("^p\\d+\\.png$"))) return url.startsWith('/') ? url : `/${url}`;
     return String(import.meta.env.VITE_CLOUDFRONT_URL) + "/" + url.replace(/^\//, '');
   };
 
@@ -39,7 +67,24 @@ export const IncomingOrderDetail = () => {
   }, [orderId]);
 
   if (loading) {
-    return <div className="flex justify-center py-20"><Loader2 className="animate-spin h-8 w-8 text-blue-500" /></div>;
+    return (
+      <div className="relative w-full min-h-screen bg-gray-50 dark:bg-dark-base text-gray-900 dark:text-white overflow-x-hidden pt-6 pb-16">
+        <div className="max-w-6xl mx-auto p-4 md:p-8 animate-pulse w-full">
+            <div className="h-8 w-32 bg-gray-200 dark:bg-dark-surface rounded-xl mb-6"></div>
+            <div className="grid grid-cols-1 lg:grid-cols-8 gap-6">
+                <div className="lg:col-span-3 space-y-4">
+                    <div className="h-40 bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-3xl"></div>
+                    <div className="h-32 bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-3xl"></div>
+                    <div className="h-48 bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-3xl"></div>
+                </div>
+                <div className="lg:col-span-5 space-y-4">
+                    <div className="h-96 bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-3xl"></div>
+                    <div className="h-64 bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-3xl"></div>
+                </div>
+            </div>
+        </div>
+      </div>
+    );
   }
 
   if (!order) {
@@ -143,21 +188,26 @@ export const IncomingOrderDetail = () => {
                   </div>
                   
                   <div className="pt-3 border-t border-gray-200 dark:border-white/5 flex flex-col gap-2 text-[11px] text-gray-500 dark:text-gray-400">
-                      <div className="flex items-center justify-between">
-                          <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> Ordered Tier:</span>
-                          <span className="text-gray-900 dark:text-white font-mono">{order.tier_title}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                          <span className="flex items-center gap-1"><Send className="w-3 h-3 text-emerald-500 dark:text-emerald-400" /> Order Received Date:</span>
-                          <span className="text-gray-900 dark:text-white font-mono">{new Date(order.created_at).toLocaleDateString()}</span>
-                      </div>
+                        <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1 font-bold text-gray-700 dark:text-gray-300 text-sm"><Calendar className="w-4 h-4" /> Ordered Tier:</span>
+                            <span className="text-gray-900 dark:text-white font-bold text-sm flex items-center gap-2">
+                                {order.tier_title}
+                                <span className="text-yellow-500 font-bold flex items-center gap-1 bg-yellow-500/10 px-2 py-1 rounded-full text-[11px]">
+                                    <CreditIcon className="w-4 h-4" /> {order.price?.toLocaleString()}
+                                </span>
+                            </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1"><Send className="w-3 h-3 text-emerald-500 dark:text-emerald-400" /> Order Received Date:</span>
+                            <span className="text-gray-900 dark:text-white font-mono">{new Date(order.created_at).toLocaleDateString()}</span>
+                        </div>
                   </div>
               </div>
 
               {/* STATS */}
               <div className="grid grid-cols-3 gap-3">
                   <div className="p-3 rounded-xl bg-white dark:bg-white/5 flex flex-col border border-gray-100 dark:border-white/5">
-                      <span className="text-[10px] font-bold text-gray-500 uppercase mb-1">PROPOSED BID</span>
+                      <span className="text-[10px] font-bold text-gray-500 uppercase mb-1">TIER PRICE</span>
                       <span className="text-yellow-500 font-black text-lg flex items-center gap-1"><CreditIcon className="w-5 h-5" /> {order.price?.toLocaleString()}</span>
                   </div>
                   <div className="p-3 rounded-xl bg-white dark:bg-white/5 flex flex-col border border-gray-100 dark:border-white/5">
@@ -170,15 +220,29 @@ export const IncomingOrderDetail = () => {
                   </div>
               </div>
               
-              {/* PROJECT BRIEF */}
               <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm">
                   <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-4">PROJECT BRIEF</h3>
-                  <div className="p-4 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                  <div className="p-4 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words leading-relaxed">
                       {order.project_brief || "No project brief provided."}
                   </div>
               </div>
               
-              {/* QUESTIONNAIRE ANSWERS */}
+              {order.status === 'Pending' && (
+                  <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm flex items-center justify-between mt-6">
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-400">Status: <span className="text-yellow-500 font-bold">Pending Approval</span></span>
+                    <div className="flex gap-3">
+                      <button onClick={() => setIsRejectModalOpen(true)} className="px-5 py-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition flex items-center gap-2">
+                          <XCircle className="w-4 h-4" /> Reject Order
+                      </button>
+                      <button onClick={() => setIsAcceptModalOpen(true)} className="px-5 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4" /> Review & Accept
+                      </button>
+                    </div>
+                  </div>
+              )}
+          </div>
+
+          <div className="lg:col-span-5 space-y-4">
               <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm">
                 <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-4">QUESTIONNAIRE REQUIREMENTS</h3>
                 {order.responses && order.responses.length > 0 && order.responses[0]?.question_id ? (
@@ -197,8 +261,10 @@ export const IncomingOrderDetail = () => {
                                               const isVid = key.match(new RegExp("\\.(mp4|mov)$", "i"));
                                               const url = key.startsWith('http') ? key : String(import.meta.env.VITE_CLOUDFRONT_URL) + "/" + key;
                                               return (
-                                                <div key={j} className="relative w-14 h-14 rounded-lg overflow-hidden border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base group cursor-pointer hover:border-blue-500 transition-colors">
-                                                  <a href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>
+                                                <div key={j} onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setExpandedMedia({ url, type: isImg ? 'image' : isVid ? 'video' : 'doc' });
+                                                }} className="relative w-14 h-14 rounded-lg overflow-hidden border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base group cursor-pointer hover:border-blue-500 transition-colors">
                                                     {isImg ? (
                                                       <img src={url} alt="upload" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                                                     ) : isVid ? (
@@ -206,13 +272,29 @@ export const IncomingOrderDetail = () => {
                                                     ) : (
                                                       <div className="flex items-center justify-center w-full h-full bg-red-50 text-red-500 dark:bg-red-900/20"><FileText className="w-5 h-5" /></div>
                                                     )}
-                                                  </a>
                                                 </div>
                                               );
                                             })}
                                           </div>
                                         ) : (
-                                            <span>{resp.response || "No response."}</span>
+                                            <span className="break-words">{
+                                                (() => {
+                                                    const val = resp.response;
+                                                    if (!val) return "No response.";
+                                                    try {
+                                                        const parsed = JSON.parse(val);
+                                                        return Array.isArray(parsed) ? parsed.join(', ') : val;
+                                                    } catch {
+                                                        if (typeof val === 'string' && val.startsWith('{') && val.endsWith('}')) {
+                                                            const stripped = val.slice(1, -1);
+                                                            if (stripped) {
+                                                                return stripped.split(',').map(s => s.replace(/^"\\?"?|\\?"?"$/g, '').replace(/\\"/g, '"')).join(', ');
+                                                            }
+                                                        }
+                                                        return val;
+                                                    }
+                                                })()
+                                            }</span>
                                         )}
                                     </div>
                                 </div>
@@ -224,23 +306,6 @@ export const IncomingOrderDetail = () => {
                 )}
               </div>
               
-              {/* CONTROLS */}
-              <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm flex items-center justify-between mt-6">
-                <span className="text-xs font-bold text-gray-700 dark:text-gray-400">Current Status: <span className="text-yellow-500 font-bold">{order.status || 'Pending'}</span></span>
-                {order.status === 'Pending' && (
-                    <div className="flex items-center gap-3">
-                    <button className="px-5 py-2.5 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition flex items-center gap-2" onClick={async () => { if(confirm("Reject?")) { try { await api.post(`/api/gigs/orders/${order.id}/reject`, { reason: 'Reject' }); navigate(-1); } catch(e) { alert("Failed"); } } }}>
-                        <XCircle className="w-4 h-4" /> Reject Order
-                    </button>
-                    <button className="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 text-xs font-bold transition flex items-center gap-2" onClick={async () => { try { await api.post(`/api/gigs/orders/${order.id}/accept`); navigate('/contracts'); } catch(e) { alert("Failed"); } }}>
-                        <CheckCircle className="w-4 h-4" /> Accept & Start
-                    </button>
-                    </div>
-                )}
-              </div>
-          </div>
-
-          <div className="lg:col-span-5 space-y-4">
               {/* TOS */}
               <div className="p-5 rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm">
                   <div className="flex items-center gap-2 mb-4 text-blue-600 dark:text-blue-400">
@@ -257,6 +322,86 @@ export const IncomingOrderDetail = () => {
           </div>
         </div>
       </div>
+
+    {/* Reject Modal */}
+    {isRejectModalOpen && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-3xl p-6 w-full max-w-md shadow-xl">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Reject Gig Order</h3>
+          <p className="text-xs text-gray-500 mb-4">Please provide a reason for rejecting this order. The client will be notified.</p>
+          <textarea
+            className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-3 text-sm text-gray-900 dark:text-white resize-none outline-none focus:border-red-500 transition-colors"
+            rows={4}
+            placeholder="e.g., I don't have enough bandwidth right now..."
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+          />
+          <div className="flex items-center justify-end gap-3 mt-6">
+            <button onClick={() => setIsRejectModalOpen(false)} className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">Cancel</button>
+            <button disabled={isProcessing} onClick={handleReject} className="px-5 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-2">
+              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />} Confirm Reject
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Accept Modal */}
+    {isAcceptModalOpen && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-3xl p-6 w-full max-w-md shadow-xl">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Accept Gig Order</h3>
+          <p className="text-xs text-gray-500 mb-4">By accepting this order, a contract will be automatically generated with the milestones specified in this tier.</p>
+          
+          <label className="flex items-start gap-3 p-4 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 cursor-pointer group">
+            <div className="relative flex items-center justify-center mt-0.5">
+              <input type="checkbox" className="peer sr-only" checked={agreedToTerms} onChange={(e) => setAgreedToTerms(e.target.checked)} />
+              <div className="w-5 h-5 rounded border-2 border-gray-300 dark:border-gray-600 peer-checked:bg-emerald-500 peer-checked:border-emerald-500 transition-colors"></div>
+              <CheckCircle className="w-3 h-3 text-white absolute inset-0 m-auto opacity-0 peer-checked:opacity-100 transition-opacity" strokeWidth={4} />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-900 dark:text-white group-hover:text-emerald-500 transition-colors">I agree to the platform terms</p>
+              <p className="text-[10px] text-gray-500 mt-1">I commit to delivering the requested work according to the milestones and deadlines.</p>
+            </div>
+          </label>
+
+          <div className="flex items-center justify-end gap-3 mt-6">
+            <button onClick={() => setIsAcceptModalOpen(false)} className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">Cancel</button>
+            <button disabled={!agreedToTerms || isProcessing} onClick={handleAccept} className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition-colors disabled:opacity-50 flex items-center gap-2">
+              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />} Accept & Start
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Expanded Media Modal */}
+    {expandedMedia && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setExpandedMedia(null)}>
+        <div className="relative w-full max-w-4xl max-h-[90vh] flex flex-col items-center justify-center bg-transparent" onClick={(e) => e.stopPropagation()}>
+          <button onClick={() => setExpandedMedia(null)} className="absolute -top-10 right-0 p-2 text-white hover:text-gray-300 transition-colors">
+            <XCircle className="w-8 h-8" />
+          </button>
+          {expandedMedia.type === 'image' && (
+            <img src={expandedMedia.url} alt="Expanded" className="max-w-full max-h-[85vh] object-contain rounded-xl" />
+          )}
+          {expandedMedia.type === 'video' && (
+            <video src={expandedMedia.url} controls autoPlay className="max-w-full max-h-[85vh] rounded-xl outline-none bg-black" />
+          )}
+          {expandedMedia.type === 'doc' && (
+            <div className="bg-white dark:bg-dark-surface p-8 rounded-2xl flex flex-col items-center gap-4 text-center max-w-md w-full">
+              <FileText className="w-16 h-16 text-blue-500" />
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Document File</h3>
+              <p className="text-sm text-gray-500">This file type cannot be previewed directly in the browser.</p>
+              <a href={expandedMedia.url} target="_blank" rel="noopener noreferrer" className="px-6 py-3 rounded-xl bg-blue-500 text-white font-bold hover:bg-blue-600 transition-colors flex items-center gap-2">
+                <ExternalLink className="w-4 h-4" /> Open / Download File
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+
     </div>
   );
 };
