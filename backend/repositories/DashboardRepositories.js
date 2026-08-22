@@ -1,4 +1,4 @@
-const pool = require('../lib/database').pool;
+const pool = require('../lib/Database').pool;
 //jp
 async function getDashboardTasks(accountId) {
     const query = `
