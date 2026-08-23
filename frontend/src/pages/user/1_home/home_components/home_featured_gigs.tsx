@@ -1,11 +1,21 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Star, ArrowRight, Wrench, Bookmark, ShoppingCart } from "lucide-react";
+import { Star, ArrowRight, Wrench, Bookmark, ShoppingCart, Clock } from "lucide-react";
 import api from "@/lib/axios";
+import { formatDistanceToNow } from "date-fns";
 
 export const HomeFeaturedGigs: React.FC = () => {
   const navigate = useNavigate();
   const [gigs, setGigs] = useState<any[]>([]);
+
+  const formatTimeAgo = (dateStr: string | undefined) => {
+    if (!dateStr) return "Just now";
+    try {
+      return formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+    } catch {
+      return "Just now";
+    }
+  };
 
   useEffect(() => {
     const fetchGigs = async () => {
@@ -79,11 +89,13 @@ export const HomeFeaturedGigs: React.FC = () => {
               ? Math.min(...gig.tiers.map((t: any) => t.price))
               : 0;
 
+          const hasServiceRating = (gig.ratingCount || 0) > 0;
+
           return (
             <div
               key={gig.id}
               onClick={() => navigate(`/gigs/services/${gig.id}/page`)}
-              className="group flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 dark:hover:border-white/30 hover:bg-gray-50 dark:hover:bg-white/[0.06] cursor-pointer shadow-sm dark:shadow-none"
+              className="group flex flex-col justify-between rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface/40 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-gray-300 dark:hover:border-white/30 hover:bg-gray-50 dark:hover:bg-white/[0.06] cursor-pointer shadow-sm dark:shadow-none relative"
             >
               <div>
                 {/* Thumbnail Image */}
@@ -99,16 +111,20 @@ export const HomeFeaturedGigs: React.FC = () => {
                       No Thumbnail
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 dark:from-black/80 via-transparent to-transparent pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
 
-                  <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold z-10 border border-white/10">
-                    <ShoppingCart className="h-3 w-3" />
-                    <span>{gig.ordersCount || 0} Orders</span>
-                  </div>
-
-                  <div className="absolute bottom-2 left-2 flex items-center gap-1 text-white text-[11px] font-semibold drop-shadow-md z-10">
-                    <Star className="h-3 w-3 fill-white text-white" />
-                    <span>{gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}</span>
+                  {/* Orders and Service Rating grouped together at top-left */}
+                  <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
+                      <ShoppingCart className="h-3 w-3" />
+                      <span>{gig.ordersCount || 0} Orders</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-[10px] font-semibold border border-white/10 text-white">
+                      <Star className={`h-3 w-3 ${hasServiceRating ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-400"}`} />
+                      <span className={hasServiceRating ? "text-yellow-400" : "text-gray-300 dark:text-zinc-400"}>
+                        {hasServiceRating ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}
+                      </span>
+                    </div>
                   </div>
 
                   <button
@@ -127,20 +143,41 @@ export const HomeFeaturedGigs: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Badges */}
-                <div className="mb-2 flex items-center gap-1.5">
-                  <span
-                    className={`rounded border px-2 py-0.5 text-[10px] font-medium ${
-                      gig.status?.toLowerCase() === "closed"
-                        ? "border-red-300 bg-red-100 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
-                        : "border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
-                    }`}
-                  >
-                    {gig.status || "Open"}
-                  </span>
-                  <span className="rounded border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-800 dark:text-zinc-300">
-                    {gig.category}
-                  </span>
+                {/* Badges & Slots on Same Row */}
+                <div className="mb-2 flex items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`rounded border px-2 py-0.5 text-[10px] font-medium ${
+                        gig.status?.toLowerCase() === "closed"
+                          ? "border-red-300 bg-red-100 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
+                          : "border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400"
+                      }`}
+                    >
+                      {gig.status || "Open"}
+                    </span>
+                    <span className="rounded border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-800 dark:text-zinc-300">
+                      {gig.category}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 dark:bg-zinc-800 text-[10px] font-semibold text-gray-600 dark:text-zinc-300 border border-gray-300 dark:border-white/10 shrink-0">
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                    {gig.slots} Slots
+                  </div>
                 </div>
 
                 {/* Price */}
@@ -227,23 +264,10 @@ export const HomeFeaturedGigs: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-100 dark:bg-zinc-800 text-[10px] font-semibold text-gray-600 dark:text-zinc-300 border border-gray-300 dark:border-white/10 shrink-0">
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                  </svg>
-                  {gig.slots} Slots
+                {/* Date Posted at the bottom-right corner of the card without the word "about" */}
+                <div className="flex items-center gap-1 text-[10px] font-medium text-gray-400 dark:text-zinc-500 shrink-0 ml-2">
+                  <Clock className="h-3 w-3" />
+                  <span>{formatTimeAgo(gig.postedAt).replace(/^about\s+/i, "")}</span>
                 </div>
               </div>
             </div>

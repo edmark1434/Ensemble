@@ -128,11 +128,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300">
                       {selectedGig.category}
-                      </span>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 flex items-center gap-1">
-                        <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" />
-                        {selectedGig.ratingCount > 0 ? `${selectedGig.clientRating} (${selectedGig.ratingCount})` : "N/A"}
-                      </span>
+                    </span>
                     {selectedGig.tiers && selectedGig.tiers.length > 0 && (
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                         {selectedGig.tiers.length} Tiers
@@ -161,10 +157,6 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                   <div className="flex items-center gap-1.5">
                     <Clock className="h-3 w-3 text-gray-500 dark:text-zinc-500" />
                     <span>First Draft: {selectedGig.firstDraftDelivery}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Users className="h-3 w-3 text-gray-500 dark:text-zinc-500" />
-                    <span>{selectedGig.slots} Slots Available</span>
                   </div>
                 </div>
               </div>
@@ -326,11 +318,11 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
               {/* Creator Profile Card */}
               <div className="p-3 rounded-xl border border-gray-100 dark:border-white/5 bg-gray-50 dark:bg-white/[0.02] flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="relative h-8 w-8 shrink-0">
+                  <div className="relative h-9 w-9 shrink-0">
                     <img
                       src={hasValidAvatar ? selectedGig.clientAvatar : undefined}
                       alt=""
-                      className={`h-8 w-8 rounded-full object-cover border border-gray-200 dark:border-white/10 ${!hasValidAvatar ? 'hidden' : ''}`}
+                      className={`h-9 w-9 rounded-full object-cover border border-gray-200 dark:border-white/10 ${!hasValidAvatar ? 'hidden' : ''}`}
                       onError={(e) => {
                         e.currentTarget.style.display = 'none';
                         const fallback = e.currentTarget.nextElementSibling;
@@ -345,16 +337,23 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                     </div>
                   </div>
                   <div className="text-left min-w-0">
-                    <p className="text-[9px] uppercase text-gray-500 dark:text-zinc-500 font-bold tracking-wider">
-                      Service Creator
+                    <p className="text-xs font-bold text-gray-900 dark:text-white leading-tight truncate mb-1">
+                      {selectedGig.postedBy}
                     </p>
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs font-bold text-gray-900 dark:text-white leading-tight truncate">
-                        {selectedGig.postedBy}
-                      </p>
-                      <div className="flex items-center gap-1 rounded-md bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400 border border-gray-100 dark:border-white/5 shrink-0">
-                        <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
-                        <span>{selectedGig.clientRating} ({selectedGig.ratingCount})</span>
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-zinc-400">
+                        <span>Freelancer Rating:</span>
+                        <div className="flex items-center gap-0.5 font-medium text-gray-700 dark:text-zinc-200">
+                          <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
+                          <span>{selectedGig.clientRating} ({selectedGig.ratingCount})</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-zinc-400">
+                        <span>Service Rating:</span>
+                        <div className="flex items-center gap-0.5 font-medium text-gray-700 dark:text-zinc-200">
+                          <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
+                          <span>{selectedGig.ratingCount > 0 ? `${selectedGig.clientRating} (${selectedGig.ratingCount})` : "N/A"}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -397,7 +396,17 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
               ) : (
                 <>
                   <div className="flex items-center justify-between px-1">
-                    <span className="text-[11px] text-gray-500">Total</span>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                        <ShoppingCart className="h-3.5 w-3.5 text-gray-400" />
+                        <span>{selectedGig.ordersCount || 0} Orders</span>
+                      </div>
+                      <span className="text-gray-300 dark:text-zinc-700">•</span>
+                      <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                        <Users className="h-3.5 w-3.5 text-gray-400" />
+                        <span>{selectedGig.slots} Slots Available</span>
+                      </div>
+                    </div>
                     <span className="text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString() || "0"}</span>
                   </div>
                   <div className="flex items-center gap-2">

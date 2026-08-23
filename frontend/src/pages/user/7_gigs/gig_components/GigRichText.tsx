@@ -11,6 +11,7 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import PopupReportGig from "./PopupReportGig";
 import { GigsOtherServices } from "./gigs_other_services";
 import useGlobalState from "@/lib/global_state";
+import { formatDistanceToNow } from "date-fns";
 
 interface GigRichTextProps {
   gig?: Gig | null;
@@ -42,6 +43,15 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
   const [isMilestonesOpen, setIsMilestonesOpen] = useState(false);
   const [isTermsOpen, setIsTermsOpen] = useState(true);
   const [isQuestionnairesOpen, setIsQuestionnairesOpen] = useState(false);
+
+  const formatTimeAgo = (dateStr: string | undefined) => {
+    if (!dateStr) return "Just now";
+    try {
+      return formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+    } catch {
+      return "Just now";
+    }
+  };
 
   // Compile all images for next/prev lightbox switching
   const allImages = React.useMemo(() => {
@@ -195,6 +205,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
   }
 
   const activeTier = gig?.tiers?.[activeTierIdx];
+  const hasServiceRating = (gig.ratingCount || 0) > 0;
 
   const termsContent =
     gig?.termsOfService ||
@@ -264,16 +275,23 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
         </div>
 
         <div className="text-left min-w-0">
-          <p className="text-[9px] uppercase text-gray-500 dark:text-zinc-500 font-bold tracking-wider">
-            Service Creator
+          <p className="text-xs font-bold text-gray-900 dark:text-white leading-tight truncate mb-1">
+            {gig.postedBy}
           </p>
-          <div className="flex items-center gap-2">
-            <p className="text-xs font-bold text-gray-900 dark:text-white leading-tight truncate">
-              {gig.postedBy}
-            </p>
-            <div className="flex items-center gap-1 rounded-md bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400 border border-gray-100 dark:border-white/5 shrink-0">
-              <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
-              <span>{gig.clientRating || 0} ({gig.ratingCount || 0})</span>
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-zinc-400">
+              <span>Freelancer Rating:</span>
+              <div className="flex items-center gap-0.5 font-medium text-gray-700 dark:text-zinc-200">
+                <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
+                <span>{gig.clientRating || 0} ({gig.ratingCount || 0})</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-zinc-400">
+              <span>Service Rating:</span>
+              <div className="flex items-center gap-0.5 font-medium text-gray-700 dark:text-zinc-200">
+                <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
+                <span>{hasServiceRating ? `${gig.clientRating || 0} (${gig.ratingCount || 0})` : "N/A"}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -459,7 +477,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
 
     const renderReviews = () => {
     const reviews = gig.reviews || [];
-    
+
     return (
       <section className="pt-4 border-t border-gray-200 dark:border-white/5 space-y-4">
         <div className="flex items-center justify-between">
@@ -479,7 +497,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
             )}
           </div>
         </div>
-  
+
         {reviews.length === 0 ? (
             <div className="p-6 rounded-2xl border border-dashed border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.01] flex flex-col items-center justify-center text-center space-y-2">
             <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-gray-400 dark:text-zinc-500">
@@ -631,14 +649,22 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                     {/* Bottom Gradient Scrim */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
 
-                    <div className="absolute top-4 left-4 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/50 backdrop-blur-sm text-white text-xs font-semibold z-10 border border-white/10">
-                      <ShoppingCart className="h-4 w-4" />
-                      <span>{gig.ordersCount || 0} Orders</span>
+                    <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/50 backdrop-blur-sm text-white text-xs font-semibold border border-white/10">
+                        <ShoppingCart className="h-4 w-4" />
+                        <span>{gig.ordersCount || 0} Orders</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/50 backdrop-blur-sm text-xs font-semibold border border-white/10">
+                        <Star className={`h-4 w-4 ${hasServiceRating ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-400"}`} />
+                        <span className={hasServiceRating ? "text-yellow-400" : "text-gray-300 dark:text-zinc-400"}>
+                          {hasServiceRating ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="absolute bottom-4 left-4 flex items-center gap-1 text-white text-[13px] font-semibold drop-shadow-md z-10">
-                      <Star className="h-4 w-4 fill-white text-white" />
-                      <span>{gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}</span>
+                    <div className="absolute bottom-4 left-4 flex items-center gap-1.5 text-white text-[12px] font-medium drop-shadow-md z-10">
+                      <Clock className="h-3.5 w-3.5 text-zinc-300" />
+                      <span>Posted {formatTimeAgo(gig.postedAt)}</span>
                     </div>
 
                     {/* Expand Badge Overlay */}

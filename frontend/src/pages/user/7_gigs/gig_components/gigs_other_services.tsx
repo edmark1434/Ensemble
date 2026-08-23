@@ -132,6 +132,7 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
                   : 0;
 
               const hasValidAvatar = gig.clientAvatar && !gig.clientAvatar.includes('pravatar.cc');
+              const hasServiceRating = (gig.ratingCount || 0) > 0;
 
               return (
                 <div
@@ -152,14 +153,18 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 dark:from-black/80 via-transparent to-transparent pointer-events-none" />
 
-                      <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold z-10 border border-white/10">
-                        <ShoppingCart className="h-3 w-3" />
-                        <span>{gig.ordersCount || 0} Orders</span>
-                      </div>
-
-                      <div className="absolute bottom-2 left-2 flex items-center gap-1 text-white text-[11px] font-semibold drop-shadow-md z-10">
-                        <Star className="h-3 w-3 fill-white text-white" />
-                        <span>{gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}</span>
+                      {/* Orders and Service Rating grouped together at top-left */}
+                      <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
+                          <ShoppingCart className="h-3 w-3" />
+                          <span>{gig.ordersCount || 0} Orders</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-[10px] font-semibold border border-white/10 text-white">
+                          <Star className={`h-3 w-3 ${hasServiceRating ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-400"}`} />
+                          <span className={hasServiceRating ? "text-yellow-400" : "text-gray-300 dark:text-zinc-400"}>
+                            {hasServiceRating ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}
+                          </span>
+                        </div>
                       </div>
 
                       <button

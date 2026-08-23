@@ -123,6 +123,7 @@ export const GigList: React.FC<GigListProps> = ({
           {gigs.map((gig) => {
             const isActive = activeGigId === gig.id;
             const isOpen = gig.status?.toLowerCase() === "open" || !gig.status;
+            const hasServiceRating = gig.ratingCount > 0;
 
             if (viewType === "grid") {
               return (
@@ -149,14 +150,18 @@ export const GigList: React.FC<GigListProps> = ({
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 dark:from-black/80 via-transparent to-transparent pointer-events-none" />
 
-                      <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold z-10 border border-white/10">
-                        <ShoppingCart className="h-3 w-3" />
-                        <span>{gig.ordersCount || 0} Orders</span>
-                      </div>
-
-                      <div className="absolute bottom-2 left-2 flex items-center gap-1 text-white text-[11px] font-semibold drop-shadow-md z-10">
-                        <Star className="h-3 w-3 fill-white text-white" />
-                        <span>{gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}</span>
+                      {/* Orders and Service Rating Badges grouped at top-left */}
+                      <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
+                        <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
+                          <ShoppingCart className="h-3 w-3" />
+                          <span>{gig.ordersCount || 0} Orders</span>
+                        </div>
+                        <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold border border-white/10">
+                          <Star className={`h-3 w-3 ${hasServiceRating ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-400"}`} />
+                          <span className={hasServiceRating ? "text-yellow-400" : "text-gray-300 dark:text-zinc-400"}>
+                            {hasServiceRating ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
@@ -256,6 +261,7 @@ export const GigList: React.FC<GigListProps> = ({
                       </div>
                       <div className="text-left leading-tight truncate">
                         <p className="text-xs font-bold text-gray-700 dark:text-zinc-300 truncate">{gig.postedBy}</p>
+                        {/* Freelancer Overall Rating */}
                         <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-400">
                           <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
                           <span>{gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}</span>
@@ -297,13 +303,18 @@ export const GigList: React.FC<GigListProps> = ({
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 dark:from-black/80 via-transparent to-transparent pointer-events-none" />
 
-                  <div className="absolute bottom-2 left-2 flex items-center gap-1 text-white text-[11px] font-semibold drop-shadow-md z-10">
-                    <Star className="h-3 w-3 fill-white text-white" />
-                    <span>{gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}</span>
-                  </div>
-
-                  <div className="absolute bottom-2 right-2 text-white text-[11px] font-semibold drop-shadow-md z-10">
-                    {gig.ordersCount || 0} Orders
+                  {/* Orders and Service Rating badges grouped */}
+                  <div className="absolute bottom-2 left-2 flex items-center gap-2 z-10">
+                    <div className="flex items-center gap-1 text-white text-[11px] font-semibold drop-shadow-md">
+                      <ShoppingCart className="h-3 w-3" />
+                      <span>{gig.ordersCount || 0} Orders</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-[11px] font-semibold drop-shadow-md">
+                      <Star className={`h-3 w-3 ${hasServiceRating ? "fill-yellow-400 text-yellow-400" : "fill-gray-400 text-gray-400"}`} />
+                      <span className={hasServiceRating ? "text-yellow-400" : "text-gray-300 dark:text-zinc-400"}>
+                        {hasServiceRating ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
@@ -431,6 +442,7 @@ export const GigList: React.FC<GigListProps> = ({
                       </div>
                       <div className="text-left leading-tight truncate">
                         <p className="text-xs font-bold text-gray-700 dark:text-zinc-300 truncate">{gig.postedBy}</p>
+                        {/* Freelancer Overall Rating */}
                         <div className="flex items-center gap-1 text-[10px] text-gray-500 dark:text-zinc-400">
                           <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500" />
                           <span>{gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}</span>
