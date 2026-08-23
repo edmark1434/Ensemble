@@ -205,7 +205,74 @@ async function getProfileByAccountId(accountId) {
                 U.USER_ID as user_id,
                 COALESCE(V.IS_VERIFIED, FALSE) AS verification_status,
                 (SELECT COUNT(*) FROM account_followers WHERE followed_id = A.ACCOUNT_ID) AS followers_count,
-                (SELECT COUNT(*) FROM account_followers WHERE follower_id = A.ACCOUNT_ID) AS following_count
+                (SELECT COUNT(*) FROM account_followers WHERE follower_id = A.ACCOUNT_ID) AS following_count,
+                (SELECT COALESCE(AVG(stars_out_of_five), 0) FROM ratings WHERE account_id = A.ACCOUNT_ID) AS avg_rating,
+                (SELECT COUNT(*) FROM ratings WHERE account_id = A.ACCOUNT_ID) AS total_reviews,
+                (
+                    SELECT COALESCE(AVG(r.stars_out_of_five), 0) 
+                    FROM ratings r 
+                    JOIN contracts c ON r.contract_id = c.contract_id 
+                    LEFT JOIN gig_contracts gc ON c.contract_id = gc.contract_id 
+                    LEFT JOIN gig_requests req ON gc.gig_request_id = req.gig_request_id 
+                    LEFT JOIN gig_tiers tier ON req.gig_tier_id = tier.gig_tier_id 
+                    LEFT JOIN gigs g ON tier.gig_id = g.gig_id 
+                    LEFT JOIN job_contracts jc ON c.contract_id = jc.contract_id 
+                    LEFT JOIN proposals p ON jc.proposal_id = p.proposal_id 
+                    WHERE r.account_id = A.ACCOUNT_ID 
+                    AND (g.freelancer_account_id = A.ACCOUNT_ID OR p.freelancer_account_id = A.ACCOUNT_ID)
+                ) AS freelancer_rating,
+                (
+                    SELECT COALESCE(AVG(r.stars_out_of_five), 0) 
+                    FROM ratings r 
+                    JOIN contracts c ON r.contract_id = c.contract_id 
+                    LEFT JOIN gig_contracts gc ON c.contract_id = gc.contract_id 
+                    LEFT JOIN gig_requests req ON gc.gig_request_id = req.gig_request_id 
+                    LEFT JOIN job_contracts jc ON c.contract_id = jc.contract_id 
+                    LEFT JOIN proposals p ON jc.proposal_id = p.proposal_id 
+                    LEFT JOIN jobs j ON p.job_id = j.job_id 
+                    WHERE r.account_id = A.ACCOUNT_ID 
+                    AND (req.client_account_id = A.ACCOUNT_ID OR j.client_account_id = A.ACCOUNT_ID)
+                ) AS client_rating,
+                (
+                    SELECT COALESCE(AVG(r.stars_out_of_five), 0) FROM ratings r 
+                    JOIN contracts c ON r.contract_id = c.contract_id JOIN gig_contracts gc ON c.contract_id = gc.contract_id JOIN gig_requests req ON gc.gig_request_id = req.gig_request_id JOIN gig_tiers tier ON req.gig_tier_id = tier.gig_tier_id JOIN gigs g ON tier.gig_id = g.gig_id 
+                    WHERE r.account_id = A.ACCOUNT_ID AND g.freelancer_account_id = A.ACCOUNT_ID
+                ) AS freelancer_service_rating,
+                (
+                    SELECT COUNT(*) FROM ratings r 
+                    JOIN contracts c ON r.contract_id = c.contract_id JOIN gig_contracts gc ON c.contract_id = gc.contract_id JOIN gig_requests req ON gc.gig_request_id = req.gig_request_id JOIN gig_tiers tier ON req.gig_tier_id = tier.gig_tier_id JOIN gigs g ON tier.gig_id = g.gig_id 
+                    WHERE r.account_id = A.ACCOUNT_ID AND g.freelancer_account_id = A.ACCOUNT_ID
+                ) AS freelancer_service_count,
+                (
+                    SELECT COALESCE(AVG(r.stars_out_of_five), 0) FROM ratings r 
+                    JOIN contracts c ON r.contract_id = c.contract_id JOIN job_contracts jc ON c.contract_id = jc.contract_id JOIN proposals p ON jc.proposal_id = p.proposal_id 
+                    WHERE r.account_id = A.ACCOUNT_ID AND p.freelancer_account_id = A.ACCOUNT_ID
+                ) AS freelancer_job_rating,
+                (
+                    SELECT COUNT(*) FROM ratings r 
+                    JOIN contracts c ON r.contract_id = c.contract_id JOIN job_contracts jc ON c.contract_id = jc.contract_id JOIN proposals p ON jc.proposal_id = p.proposal_id 
+                    WHERE r.account_id = A.ACCOUNT_ID AND p.freelancer_account_id = A.ACCOUNT_ID
+                ) AS freelancer_job_count,
+                (
+                    SELECT COALESCE(AVG(r.stars_out_of_five), 0) FROM ratings r 
+                    JOIN contracts c ON r.contract_id = c.contract_id JOIN gig_contracts gc ON c.contract_id = gc.contract_id JOIN gig_requests req ON gc.gig_request_id = req.gig_request_id 
+                    WHERE r.account_id = A.ACCOUNT_ID AND req.client_account_id = A.ACCOUNT_ID
+                ) AS client_service_rating,
+                (
+                    SELECT COUNT(*) FROM ratings r 
+                    JOIN contracts c ON r.contract_id = c.contract_id JOIN gig_contracts gc ON c.contract_id = gc.contract_id JOIN gig_requests req ON gc.gig_request_id = req.gig_request_id 
+                    WHERE r.account_id = A.ACCOUNT_ID AND req.client_account_id = A.ACCOUNT_ID
+                ) AS client_service_count,
+                (
+                    SELECT COALESCE(AVG(r.stars_out_of_five), 0) FROM ratings r 
+                    JOIN contracts c ON r.contract_id = c.contract_id JOIN job_contracts jc ON c.contract_id = jc.contract_id JOIN proposals p ON jc.proposal_id = p.proposal_id JOIN jobs j ON p.job_id = j.job_id 
+                    WHERE r.account_id = A.ACCOUNT_ID AND j.client_account_id = A.ACCOUNT_ID
+                ) AS client_job_rating,
+                (
+                    SELECT COUNT(*) FROM ratings r 
+                    JOIN contracts c ON r.contract_id = c.contract_id JOIN job_contracts jc ON c.contract_id = jc.contract_id JOIN proposals p ON jc.proposal_id = p.proposal_id JOIN jobs j ON p.job_id = j.job_id 
+                    WHERE r.account_id = A.ACCOUNT_ID AND j.client_account_id = A.ACCOUNT_ID
+                ) AS client_job_count
             FROM ACCOUNTS A
             JOIN USERS U ON A.ACCOUNT_ID = U.ACCOUNT_ID
             LEFT JOIN VERIFICATIONS V ON A.ACCOUNT_ID = V.ACCOUNT_ID
@@ -383,7 +450,53 @@ async function updateUserRolesByAccountIdRepositories(accountId, roles) {
     }
 }
 
+async function getProfileReviewsByAccountId(accountId) {
+    try {
+        const queryText = `
+            SELECT 
+                r.rating_id, 
+                r.stars_out_of_five, 
+                r.feedback, 
+                r.created_at,
+                c.contract_id,
+                CASE 
+                    WHEN g.freelancer_account_id = $1 OR p.freelancer_account_id = $1 THEN 'freelancer'
+                    WHEN req.client_account_id = $1 OR j.client_account_id = $1 THEN 'client'
+                    ELSE 'unknown'
+                END as role_type,
+                COALESCE(u.first_name || ' ' || u.last_name, a.handle) as reviewer_name,
+                f.path as reviewer_avatar
+            FROM ratings r
+            JOIN contracts c ON r.contract_id = c.contract_id
+            LEFT JOIN gig_contracts gc ON c.contract_id = gc.contract_id
+            LEFT JOIN gig_requests req ON gc.gig_request_id = req.gig_request_id
+            LEFT JOIN gig_tiers tier ON req.gig_tier_id = tier.gig_tier_id
+            LEFT JOIN gigs g ON tier.gig_id = g.gig_id
+            LEFT JOIN job_contracts jc ON c.contract_id = jc.contract_id
+            LEFT JOIN proposals p ON jc.proposal_id = p.proposal_id
+            LEFT JOIN jobs j ON p.job_id = j.job_id
+            LEFT JOIN accounts a ON a.account_id = 
+                CASE 
+                    WHEN g.freelancer_account_id = $1 THEN req.client_account_id
+                    WHEN p.freelancer_account_id = $1 THEN j.client_account_id
+                    WHEN req.client_account_id = $1 THEN g.freelancer_account_id
+                    WHEN j.client_account_id = $1 THEN p.freelancer_account_id
+                END
+            LEFT JOIN users u ON a.account_id = u.account_id
+            LEFT JOIN files f ON a.avatar_file_id = f.file_id
+            WHERE r.account_id = $1
+            ORDER BY r.created_at DESC
+        `;
+        const result = await pool.query(queryText, [accountId]);
+        return result.rows;
+    } catch (err) {
+        console.error("Error fetching reviews for accountId", accountId, err);
+        throw err;
+    }
+}
+
 module.exports = {
+    getProfileReviewsByAccountId,
     updateProfileAccountRepositories,
     insertProfileSocialMediaRepositories,
     updateTaglineAndDescriptionRepositories,

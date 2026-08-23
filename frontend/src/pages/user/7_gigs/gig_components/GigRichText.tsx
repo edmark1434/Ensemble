@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import {
   X, Star, Clock, Users, Bookmark, Share2,
-  ChevronRight, ChevronLeft, ChevronDown, PlayCircle, Edit2, Flag, Maximize2, User, FileText, CheckCircle2, HelpCircle, Wrench, MessageSquare, ZoomIn
+  ChevronRight, ChevronLeft, ChevronDown, PlayCircle, Edit2, Flag, Maximize2, User, FileText, CheckCircle2, HelpCircle, Wrench, MessageSquare, ZoomIn, ShoppingCart
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -574,11 +574,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                 </span>
                 <span className="px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-bold text-gray-600 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
                   {gig.category}
-                  </span>
-                  <span className="px-2.5 py-1 rounded bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 text-[11px] font-bold flex items-center gap-1.5">
-                    <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
-                    {gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount} reviews)` : "N/A"}
-                  </span>
+                </span>
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-medium text-gray-700 dark:text-zinc-300">
                   <Clock className="h-3.5 w-3.5 text-gray-500" />
                   First Draft: {gig.firstDraftDelivery || (gig.tiers && gig.tiers.length > 0 ? `${gig.tiers[0].daysOfDelivery} Days` : 'N/A')}
@@ -635,6 +631,16 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                     {/* Bottom Gradient Scrim */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none" />
 
+                    <div className="absolute top-4 left-4 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/50 backdrop-blur-sm text-white text-xs font-semibold z-10 border border-white/10">
+                      <ShoppingCart className="h-4 w-4" />
+                      <span>{gig.ordersCount || 0} Orders</span>
+                    </div>
+
+                    <div className="absolute bottom-4 left-4 flex items-center gap-1 text-white text-[13px] font-semibold drop-shadow-md z-10">
+                      <Star className="h-4 w-4 fill-white text-white" />
+                      <span>{gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}</span>
+                    </div>
+
                     {/* Expand Badge Overlay */}
                     <div className="absolute top-4 right-4 z-10 p-2 rounded-xl bg-black/50 backdrop-blur-md text-white/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[11px] font-bold">
                       <ZoomIn className="h-4 w-4" />
@@ -643,7 +649,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
 
                     {/* Skills Overlay with single Wrench Icon */}
                     {gig.skills && gig.skills.length > 0 && (
-                      <div className="absolute bottom-4 left-4 right-4 z-10" onClick={(e) => e.stopPropagation()}>
+                      <div className="absolute bottom-12 left-4 right-4 z-10" onClick={(e) => e.stopPropagation()}>
                         <div className="flex flex-wrap gap-2 items-center">
                           <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-black/60 backdrop-blur-md border border-white/15 text-zinc-300 shadow-sm shrink-0">
                             <Wrench className="h-3.5 w-3.5" />

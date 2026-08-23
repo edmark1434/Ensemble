@@ -1,4 +1,5 @@
 const {
+    getProfileReviewsByAccountId,
     updateProfileAccountRepositories,
     updateTaglineAndDescriptionRepositories: updateTaglineAndDescription,
     getPersonalDetails,
@@ -365,7 +366,20 @@ async function getProfileCurrentAvatarByAccountIdService(accountId) {
     }
 }
 
+async function getProfileReviewsByAccountIdService(accountId) {
+    if (!accountId) {
+        throw new Error('Account ID is required');
+    }
+    try {
+        return await getProfileReviewsByAccountId(accountId);
+    } catch (err) {
+        console.error(`Error fetching reviews for accountId ${accountId}:`, err);
+        throw err;
+    }
+}
+
 module.exports = {
+    getProfileReviewsByAccountIdService,
     updateTaglineAndDescriptionServices,
     getPersonalDetailsServices,
     updateProfileUserServices,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Star, ArrowRight, Wrench, Bookmark } from "lucide-react";
+import { Star, ArrowRight, Wrench, Bookmark, ShoppingCart } from "lucide-react";
 import api from "@/lib/axios";
 
 export const HomeFeaturedGigs: React.FC = () => {
@@ -99,7 +99,18 @@ export const HomeFeaturedGigs: React.FC = () => {
                       No Thumbnail
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 dark:from-black/80 via-transparent to-transparent pointer-events-none" />
+
+                  <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold z-10 border border-white/10">
+                    <ShoppingCart className="h-3 w-3" />
+                    <span>{gig.ordersCount || 0} Orders</span>
+                  </div>
+
+                  <div className="absolute bottom-2 left-2 flex items-center gap-1 text-white text-[11px] font-semibold drop-shadow-md z-10">
+                    <Star className="h-3 w-3 fill-white text-white" />
+                    <span>{gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}</span>
+                  </div>
+
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -129,11 +140,7 @@ export const HomeFeaturedGigs: React.FC = () => {
                   </span>
                   <span className="rounded border border-gray-300 dark:border-white/10 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-semibold text-gray-800 dark:text-zinc-300">
                     {gig.category}
-                    </span>
-                    <span className="rounded border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400 flex items-center gap-1">
-                      <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" />
-                      {gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}
-                    </span>
+                  </span>
                 </div>
 
                 {/* Price */}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Star, ArrowRight, Wrench, Bookmark } from "lucide-react";
+import { Star, ArrowRight, Wrench, Bookmark, ShoppingCart } from "lucide-react";
 import api from "@/lib/axios";
 
 interface GigsOtherServicesProps {
@@ -150,7 +150,18 @@ export const GigsOtherServices: React.FC<GigsOtherServicesProps> = ({ currentGig
                         alt={gig.title}
                         className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 dark:from-black/80 via-transparent to-transparent pointer-events-none" />
+
+                      <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold z-10 border border-white/10">
+                        <ShoppingCart className="h-3 w-3" />
+                        <span>{gig.ordersCount || 0} Orders</span>
+                      </div>
+
+                      <div className="absolute bottom-2 left-2 flex items-center gap-1 text-white text-[11px] font-semibold drop-shadow-md z-10">
+                        <Star className="h-3 w-3 fill-white text-white" />
+                        <span>{gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}</span>
+                      </div>
+
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

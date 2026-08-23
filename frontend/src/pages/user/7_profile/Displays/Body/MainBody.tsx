@@ -8,6 +8,7 @@ import { Profile_Services } from "./Profile_Services";
 import { Profile_JobPosts } from "./Profile_JobPosts";
 import { Profile_Assets } from "./Profile_Assets";
 import { Profile_History } from "./Profile_History";
+import { Profile_Reviews } from "./Profile_Reviews";
 import { Profile_Introduction } from "./Profile_Introduction";
 import { Profile_Gallery } from "./Profile_Gallery";
 import { MeritSection_ProfileDisplay } from "../MeritSection_ProfileDisplay";
@@ -62,7 +63,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
   onUpdateIntroduction,
   accountId,
 }) => {
-  const [performanceTab, setPerformanceTab] = useState<"merit" | "ratings" | "history">("merit");
+  const [performanceTab, setPerformanceTab] = useState<"ratings" | "reviews" | "history">("ratings");
 
   if (loading) return <DetailsListBodySkeleton />;
 
@@ -124,16 +125,16 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                 {/* Subtabs for Performance */}
                 <div className="flex border-b border-gray-200 dark:border-white/10">
                   <button
-                    onClick={() => setPerformanceTab("merit")}
-                    className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 ${performanceTab === "merit" ? "border-blue-600 text-blue-600 dark:text-blue-400" : "border-transparent text-gray-500 hover:text-gray-800 dark:text-zinc-400 dark:hover:text-zinc-200"}`}
-                  >
-                    Merit Score
-                  </button>
-                  <button
                     onClick={() => setPerformanceTab("ratings")}
                     className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 ${performanceTab === "ratings" ? "border-blue-600 text-blue-600 dark:text-blue-400" : "border-transparent text-gray-500 hover:text-gray-800 dark:text-zinc-400 dark:hover:text-zinc-200"}`}
                   >
                     Ratings
+                  </button>
+                  <button
+                    onClick={() => setPerformanceTab("reviews")}
+                    className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 ${performanceTab === "reviews" ? "border-blue-600 text-blue-600 dark:text-blue-400" : "border-transparent text-gray-500 hover:text-gray-800 dark:text-zinc-400 dark:hover:text-zinc-200"}`}
+                  >
+                    Reviews
                   </button>
                   <button
                     onClick={() => setPerformanceTab("history")}
@@ -144,36 +145,33 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                 </div>
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 pb-4">
-                  {performanceTab === "merit" && (
-                    <div className="pt-2">
-                      <MeritSection_ProfileDisplay
-                        loading={loading}
-                        meritScore={userDetails?.merit_score}
-                        avgRating={4.8}
-                        totalReviews={portfolioItems.length}
-                        clientRating={4.9}
-                        freelancerRating={4.8}
-                        assetRating={4.7}
-                        successfulJobsCount={6}
-                        viewMode="merit"
-                        isOwner={isOwner}
-                      />
+                  {performanceTab === "ratings" && (
+                      <div className="pt-2">
+                          <MeritSection_ProfileDisplay
+                            loading={loading}
+                            meritScore={userDetails?.merit_score}
+                            avgRating={userDetails?.avg_rating ? Number(parseFloat(userDetails.avg_rating).toFixed(1)) : 0.0}
+                            totalReviews={userDetails?.total_reviews ? Number(userDetails.total_reviews) : 0}
+                            clientRating={userDetails?.client_rating ? Number(parseFloat(userDetails.client_rating).toFixed(1)) : 0.0}
+                            freelancerRating={userDetails?.freelancer_rating ? Number(parseFloat(userDetails.freelancer_rating).toFixed(1)) : 0.0}
+                            assetRating={userDetails?.asset_rating ? Number(parseFloat(userDetails.asset_rating).toFixed(1)) : 0.0}
+                            successfulJobsCount={userDetails?.successful_jobs_count ? Number(userDetails.successful_jobs_count) : 0}
+                            freelancerServiceRating={userDetails?.freelancer_service_rating ? Number(parseFloat(userDetails.freelancer_service_rating).toFixed(1)) : 0.0}
+                            freelancerServiceCount={userDetails?.freelancer_service_count ? Number(userDetails.freelancer_service_count) : 0}
+                            freelancerJobRating={userDetails?.freelancer_job_rating ? Number(parseFloat(userDetails.freelancer_job_rating).toFixed(1)) : 0.0}
+                            freelancerJobCount={userDetails?.freelancer_job_count ? Number(userDetails.freelancer_job_count) : 0}
+                            clientServiceRating={userDetails?.client_service_rating ? Number(parseFloat(userDetails.client_service_rating).toFixed(1)) : 0.0}
+                            clientServiceCount={userDetails?.client_service_count ? Number(userDetails.client_service_count) : 0}
+                            clientJobRating={userDetails?.client_job_rating ? Number(parseFloat(userDetails.client_job_rating).toFixed(1)) : 0.0}
+                            clientJobCount={userDetails?.client_job_count ? Number(userDetails.client_job_count) : 0}
+                            viewMode="ratings"
+                            isOwner={isOwner}
+                          />
                     </div>
                   )}
-                  {performanceTab === "ratings" && (
+                  {performanceTab === "reviews" && (
                     <div className="pt-2">
-                      <MeritSection_ProfileDisplay
-                        loading={loading}
-                        meritScore={userDetails?.merit_score}
-                        avgRating={4.8}
-                        totalReviews={portfolioItems.length}
-                        clientRating={4.9}
-                        freelancerRating={4.8}
-                        assetRating={4.7}
-                        successfulJobsCount={6}
-                        viewMode="ratings"
-                        isOwner={isOwner}
-                      />
+                      <Profile_Reviews isOwner={isOwner} accountId={accountId} />
                     </div>
                   )}
                   {performanceTab === "history" && (

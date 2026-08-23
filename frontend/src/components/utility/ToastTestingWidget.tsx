@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, CheckCircle, XCircle, Loader2, Info, GripHorizontal, Bell, User, Star } from "lucide-react";
 import { showSuccessToast, showErrorToast, showLoadingToast, dismissToast, toastConfig } from "./toast";
 import toast from "react-hot-toast";
+import { DevRateReviewModal } from './DevRateReviewModal';
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
 
@@ -12,7 +13,9 @@ export const ToastTestingWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [toastText, setToastText] = useState("This is a test notification!");
   const [profileStatus, setProfileStatus] = useState("Pending");
-  const [activeTab, setActiveTab] = useState<'toast' | 'profile' | 'membership'>('toast');
+  const [activeTab, setActiveTab] = useState<'toast' | 'profile' | 'membership' | 'rates'>('toast');
+  const [isRatingModalOpen, setIsRatingModalOpen] = useState(false);
+  const [selectedRatingType, setSelectedRatingType] = useState('Service Rating');
 
   useEffect(() => {
     const checkStatus = () => {
@@ -90,6 +93,12 @@ export const ToastTestingWidget: React.FC = () => {
               >
                 <Star className="w-3 h-3" /> Subs
               </button>
+              <button
+                onClick={() => setActiveTab('rates')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold rounded-t-lg transition ${activeTab === 'rates' ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400' : 'text-gray-500 hover:bg-gray-50 dark:hover:bg-white/5'}`}
+              >
+                <Star className="w-3 h-3" /> Rates
+              </button>
             </div>
 
             {/* Body */}
@@ -160,6 +169,30 @@ export const ToastTestingWidget: React.FC = () => {
                   })}
                 </div>
               )}
+
+              {activeTab === 'rates' && (
+                <div className="flex flex-col gap-1.5 h-full overflow-y-auto pr-1">
+                  {[
+                    'Service Rating',
+                    'Job Execution Rating',
+                    'Service Feedback Rating',
+                    'Job Feedback Rating',
+                    'Uploaded Assets Rating'
+                  ].map(rateType => (
+                    <button
+                      key={rateType}
+                      onClick={() => {
+                        setSelectedRatingType(rateType);
+                        setIsRatingModalOpen(true);
+                      }}
+                      className="w-full flex justify-between items-center px-2 py-1.5 bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 rounded text-[10px] font-bold text-gray-700 dark:text-gray-300 transition"
+                    >
+                      <span>{rateType}</span>
+                      <Star className="w-3 h-3 text-amber-500" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             
             {/* Footer */}
@@ -171,6 +204,12 @@ export const ToastTestingWidget: React.FC = () => {
           </motion.div>
         </div>
       )}
+      
+      <DevRateReviewModal 
+        isOpen={isRatingModalOpen}
+        onClose={() => setIsRatingModalOpen(false)}
+        ratingType={selectedRatingType}
+      />
     </AnimatePresence>,
     document.body
   );

@@ -147,9 +147,19 @@ export const GigList: React.FC<GigListProps> = ({
                         alt={gig.title}
                         className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 dark:from-black/60 via-transparent to-transparent" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 dark:from-black/80 via-transparent to-transparent pointer-events-none" />
 
-                      <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                      <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/50 backdrop-blur-sm text-white text-[10px] font-semibold z-10 border border-white/10">
+                        <ShoppingCart className="h-3 w-3" />
+                        <span>{gig.ordersCount || 0} Orders</span>
+                      </div>
+
+                      <div className="absolute bottom-2 left-2 flex items-center gap-1 text-white text-[11px] font-semibold drop-shadow-md z-10">
+                        <Star className="h-3 w-3 fill-white text-white" />
+                        <span>{gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}</span>
+                      </div>
+
+                      <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
                         {!gig.isOwnGig && (
                           <button
                             type="button"
@@ -201,10 +211,6 @@ export const GigList: React.FC<GigListProps> = ({
                       </span>
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                         {gig.category || "General"}
-                        </span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 flex items-center gap-1">
-                          <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" />
-                          {gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}
                         </span>
                       {gig.tiers && gig.tiers.length > 0 && (
                         <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
@@ -289,7 +295,18 @@ export const GigList: React.FC<GigListProps> = ({
                     alt={gig.title}
                     className="h-full w-full object-cover opacity-80 transition-transform duration-300 group-hover:scale-105 absolute inset-0"
                   />
-                  <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 dark:from-black/80 via-transparent to-transparent pointer-events-none" />
+
+                  <div className="absolute bottom-2 left-2 flex items-center gap-1 text-white text-[11px] font-semibold drop-shadow-md z-10">
+                    <Star className="h-3 w-3 fill-white text-white" />
+                    <span>{gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}</span>
+                  </div>
+
+                  <div className="absolute bottom-2 right-2 text-white text-[11px] font-semibold drop-shadow-md z-10">
+                    {gig.ordersCount || 0} Orders
+                  </div>
+
+                  <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
                     {!gig.isOwnGig && (
                       <button
                         type="button"
@@ -343,11 +360,7 @@ export const GigList: React.FC<GigListProps> = ({
                       </span>
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                         {gig.category || "General"}
-                        </span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20 flex items-center gap-1">
-                          <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" />
-                          {gig.ratingCount > 0 ? `${gig.clientRating} (${gig.ratingCount})` : "N/A"}
-                        </span>
+                      </span>
                       {gig.tiers && gig.tiers.length > 0 && (
                         <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                           {gig.tiers.length} Tiers
