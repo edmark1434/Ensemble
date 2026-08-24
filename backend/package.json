@@ -16,6 +16,7 @@
     "rollback": "node-pg-migrate down",
     "migration:create": "node-pg-migrate create",
     "rag:ingest": "node scripts/IngestDocumentation.js",
+    "assets:backfill-previews": "node scripts/BackfillAssetBundlePreviews.js",
     "db:create": "node lib/CreateDb.js",
     "rollback:all": "node-pg-migrate down 100"
   },
@@ -46,6 +47,7 @@
     "pg": "^8.20.0",
     "pgvector": "^0.3.0",
     "redis": "^5.11.0",
+    "sharp": "^0.34.5",
     "socket.io": "^4.8.3",
     "uuid": "^13.0.2"
   }

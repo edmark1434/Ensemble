@@ -402,7 +402,7 @@ export default function AssetDetails() {
             <section id="asset-bundle-files" className="mt-6 scroll-mt-24 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/[0.025]">
               <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
                 <div><h2 className="text-sm font-bold text-gray-900 dark:text-white">Package contents</h2><p className="mt-1 text-xs text-gray-500 dark:text-zinc-400">{asset.bundle_file_count} protected original {asset.bundle_file_count === 1 ? "file" : "files"}</p></div>
-                {!asset.can_download && <span className="text-xs font-semibold text-gray-500 dark:text-zinc-400">Blurred previews · purchase for original files</span>}
+                <span className="text-xs font-semibold text-gray-500 dark:text-zinc-400">Low-quality previews · originals require ownership</span>
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {asset.bundle_files.map((bundleFile) => (
@@ -601,14 +601,13 @@ function BundleFilePreview({
   const [failed, setFailed] = useState(false);
   const previewUrl = mediaUrl(bundleFile.preview_path);
   const format = bundleFile.mime_type.split("/")[1] || "file";
-  console.log(bundleFile);
   return (
     <article className="group min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-white/10 dark:bg-[#080a12]">
       <button
         type="button"
         onClick={onOpen}
         className="relative block aspect-video w-full cursor-pointer overflow-hidden bg-gray-100 text-left dark:bg-black/30"
-        aria-label={canAccessOriginal ? `View original ${bundleFile.name}` : `View blurred preview of ${bundleFile.name}`}
+        aria-label={canAccessOriginal ? `View original ${bundleFile.name}` : `View low-quality preview of ${bundleFile.name}`}
       >
         {previewUrl && !failed ? (
           <img
@@ -617,12 +616,12 @@ function BundleFilePreview({
             draggable={false}
             onContextMenu={(event) => event.preventDefault()}
             onError={() => setFailed(true)}
-            className={`h-full w-full object-cover transition duration-200 group-hover:scale-[1.02] ${canAccessOriginal ? "" : "scale-105 blur-md"}`}
+            className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
           />
         ) : (
           <span className="absolute inset-0 flex items-center justify-center"><BundleFileIcon mimeType={bundleFile.mime_type} /></span>
         )}
-        {!canAccessOriginal && <span className="absolute inset-0 bg-black/10" aria-hidden="true" />}
+        {!canAccessOriginal && <span className="absolute inset-0 bg-black/5" aria-hidden="true" />}
         <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/25 group-hover:opacity-100"><Eye className="h-7 w-7 text-white" /></span>
       </button>
       <div className="flex items-center justify-between gap-2 p-3">

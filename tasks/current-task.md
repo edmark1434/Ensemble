@@ -1,5 +1,40 @@
 # Current Task — Build Simple HTML Documentation RAG Backend
 
+## Active Follow-up — Per-file Low-quality Asset Package Previews
+
+Replace repeated package-thumbnail cards with a distinct public derivative generated from each protected original. The public derivative must be materially lower quality, resized, compressed, and watermarked so saving or inspecting the displayed image never yields the protected original. Existing image bundles that still use historical package thumbnails must be repaired through an idempotent S3/database backfill. Original preview/download access remains restricted to creators and active purchasers through existing signed endpoints. Change only asset-preview generation, persistence/backfill, Package Contents rendering, and directly required dependency/task files.
+
+### Acceptance Criteria
+
+* [x] Every new bundle original receives its own low-resolution WebP preview in the same ordered position.
+* [x] Image previews are reduced to at most 640px, never exceed 55% of source dimensions, use low WebP quality, and contain a baked-in watermark.
+* [x] New video stills and audio visuals use the same low-resolution preview ceiling and naming contract.
+* [x] Package Contents renders each file's public derivative without relying on removable CSS blur for quality reduction.
+* [x] Public asset responses and browser media requests never expose protected original paths or signed URLs.
+* [x] Creator/purchaser original preview and download behavior remains unchanged.
+* [x] An idempotent command repairs existing S3-backed image bundles whose preview still points to a package thumbnail.
+* [x] The backfill updates bundle preview references transactionally and updates the primary media proxy when position zero changes.
+* [x] Failed or raced backfills do not commit a partial database reference and clean up their newly uploaded object.
+* [x] Focused backend checks, derivative verification, frontend lint/build, and database verification pass.
+
+### Follow-up Status — Completed August 24, 2026
+
+Implementation notes:
+
+* New image, video-still, and audio-visual derivatives use a per-original `low-quality-preview` WebP contract capped at 640px and 55% of the source dimensions.
+* Image previews use WebP quality 36 and a baked-in Ensemble Preview watermark; Package Contents displays these derivatives directly while preserving protected original access for creators and active purchasers.
+* Added `npm run assets:backfill-previews` to generate and persist per-file previews for eligible historical S3-backed image originals. The repository update is transactional, compare-and-swap guarded, and updates the position-zero media proxy.
+* Backfilled five configured-environment bundle items successfully. A second dry run found zero candidates, confirming idempotency. Three legacy `/public/...` seed assets were intentionally excluded because they are not protected S3 originals.
+
+Verification performed:
+
+* Backend syntax/module checks passed for the preview repository, service, and backfill command; direct `sharp` dependency resolution passed.
+* Synthetic derivative checks produced 640x384 and 220x165 WebP files from 2000x1200 and 400x300 sources respectively.
+* All five repaired derivatives were verified as file-specific WebP images smaller than their protected originals; the three-file bundle now has three distinct preview paths.
+* Public asset response verification reported no protected original path and no signed URL; compare-and-swap verification rejected a stale update without inserting a file row.
+* Focused frontend ESLint passed and `npm run build` completed successfully. Existing dynamic-import and chunk-size build warnings remain unrelated to this follow-up.
+
+
 ## Active Frontend Chatbot Redesign
 
 Refactor the public support chatbot so it matches Ensemble's landing-page theme while preserving the existing anonymous RAG API integration.
