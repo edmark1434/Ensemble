@@ -11,7 +11,15 @@ export const HomeFeaturedGigs: React.FC = () => {
   const formatTimeAgo = (dateStr: string | undefined) => {
     if (!dateStr) return "Just now";
     try {
-      return formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+      let str = formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+      str = str.replace(/minutes?/, (m) => m === 'minutes' ? 'mins' : 'min')
+               .replace(/hours?/, (m) => m === 'hours' ? 'hrs' : 'hr')
+               .replace(/seconds?/, (m) => m === 'seconds' ? 'secs' : 'sec')
+               .replace(/days?/, 'd')
+               .replace(/months?/, 'm')
+               .replace(/years?/, (m) => m === 'years' ? 'yrs' : 'yr')
+               .replace('about ', '');
+      return str;
     } catch {
       return "Just now";
     }
