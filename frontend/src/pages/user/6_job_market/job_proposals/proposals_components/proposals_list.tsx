@@ -25,6 +25,8 @@ export interface ProposalItemData {
   contractId?: string;
   jobTitle: string;
   partyName: string;
+  clientAccountId?: string;
+  freelancerAccountId?: string;
   clientName?: string;
   clientAvatar?: string;
   partyAvatar?: string;

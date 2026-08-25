@@ -1,5 +1,20 @@
 # Current Task — Build Simple HTML Documentation RAG Backend
 
+## Active Follow-up — Proposal Profile Routes Use Account IDs
+
+Replace display-name/username profile navigation in the author and applicant proposal-detail views with stable account-ID routes.
+
+### Acceptance Criteria
+
+* [x] The proposal-detail API returns the job author's `client_account_id` alongside the proposal's existing `freelancer_account_id`.
+* [x] Both proposal-detail views map the client and freelancer account IDs into their local proposal model.
+* [x] Applicant profile buttons navigate with `freelancer_account_id`.
+* [x] Job-author profile buttons navigate with `client_account_id`.
+* [x] Missing identifiers do not generate malformed profile routes.
+* [x] Backend syntax validation and the frontend production build pass.
+
+Status: Completed August 25, 2026. Focused ESLint reports only pre-existing unused-variable, explicit-`any`, and hook-dependency findings in the touched legacy components.
+
 ## Active Follow-up — Per-file Low-quality Asset Package Previews
 
 Replace repeated package-thumbnail cards with a distinct public derivative generated from each protected original. The public derivative must be materially lower quality, resized, compressed, and watermarked so saving or inspecting the displayed image never yields the protected original. Existing image bundles that still use historical package thumbnails must be repaired through an idempotent S3/database backfill. Original preview/download access remains restricted to creators and active purchasers through existing signed endpoints. Change only asset-preview generation, persistence/backfill, Package Contents rendering, and directly required dependency/task files.

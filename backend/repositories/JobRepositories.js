@@ -335,6 +335,7 @@ async function getProposalByIdRepositories(proposalId) {
                 p.*,
                 j.title as job_title,
                 j.category as job_category,
+                j.client_account_id as client_account_id,
                 j.created_at as job_created_at,
                 j.status as job_status,
                 j.deleted_at as job_deleted_at,
