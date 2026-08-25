@@ -122,7 +122,7 @@ async function getSentProposalsController(req, res) {
 async function getProposalByIdController(req, res) {
     try {
         const { proposalId } = req.params;
-        const proposal = await JobServices.getProposalByIdServices(proposalId);
+        const proposal = await JobServices.getProposalByIdServices(proposalId, req.user?.account_id);
         if (!proposal) {
             return res.status(404).json({ success: false, message: 'Proposal not found' });
         }

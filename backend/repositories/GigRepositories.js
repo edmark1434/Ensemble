@@ -401,7 +401,7 @@ async function submitGigOrderRepository(accountId, gigId, orderData) {
 async function getIncomingOrdersRepository(accountId) {
     const query = `
         SELECT 
-            r.gig_request_id as id, r.status, r.created_at, r.project_brief,
+            r.gig_request_id as id, r.status, r.created_at, (to_jsonb(r)->>'project_brief') as project_brief,
             g.gig_id, g.title as gig_title,
             a.display_name as client_name, a.handle as client_handle,
             (SELECT f.path FROM files f WHERE f.file_id = a.avatar_file_id LIMIT 1) as client_avatar,
@@ -421,7 +421,7 @@ async function getIncomingOrdersRepository(accountId) {
 async function getMyOrdersRepository(accountId) {
     const query = `
         SELECT 
-            r.gig_request_id as id, r.status, r.created_at, r.project_brief,
+            r.gig_request_id as id, r.status, r.created_at, (to_jsonb(r)->>'project_brief') as project_brief,
             g.gig_id, g.title as gig_title,
             a.display_name as freelancer_name, a.handle as freelancer_handle,
             (SELECT f.path FROM files f WHERE f.file_id = a.avatar_file_id LIMIT 1) as freelancer_avatar,
@@ -438,11 +438,12 @@ async function getMyOrdersRepository(accountId) {
     return res.rows;
 }
 
-async function getOrderByIdRepository(orderId) {
+async function getOrderByIdRepository(orderId, accountId) {
     const query = `
         SELECT 
-            r.gig_request_id as id, r.status, r.created_at, r.project_brief,
+            r.gig_request_id as id, r.status, r.created_at, (to_jsonb(r)->>'project_brief') as project_brief,
             g.gig_id, g.title as gig_title,
+            r.client_account_id, g.freelancer_account_id,
             c.display_name as client_name, c.handle as client_handle,
             (SELECT f.path FROM files f WHERE f.file_id = c.avatar_file_id LIMIT 1) as client_avatar,
             f.display_name as freelancer_name, f.handle as freelancer_handle,
@@ -455,8 +456,9 @@ async function getOrderByIdRepository(orderId) {
         JOIN accounts c ON r.client_account_id = c.account_id
         JOIN accounts f ON g.freelancer_account_id = f.account_id
         WHERE r.gig_request_id = $1
+          AND (r.client_account_id = $2 OR g.freelancer_account_id = $2)
     `;
-    const res = await pool.query(query, [orderId]);
+    const res = await pool.query(query, [orderId, accountId]);
     return res.rows[0] || null;
 }
 

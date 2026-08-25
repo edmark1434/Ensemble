@@ -16,6 +16,7 @@ import {
 import type { ViewType } from "./proposals_list_viewtype";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { JobRichText } from "../../job_components/JobRichText";
+import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
 
 export type ProposalStatus = "Pending" | "Shortlisted" | "Accepted" | "Rejected";
 
@@ -25,6 +26,8 @@ export interface ProposalItemData {
   contractId?: string;
   jobTitle: string;
   partyName: string;
+  clientAccountId?: string;
+  freelancerAccountId?: string;
   clientName?: string;
   clientAvatar?: string;
   partyAvatar?: string;
@@ -250,7 +253,11 @@ export const ProposalsList: React.FC<ProposalsListProps> = ({
                           title="Open Discussion Chat"
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate(`/inbox?user=${encodeURIComponent(item.partyName)}`);
+                            void openMarketplaceConversation({
+                              contextType: "job_proposal",
+                              contextId: item.id,
+                              navigate,
+                            });
                           }}
                           className="p-1.5 rounded-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 transition-colors border border-blue-500/30"
                         >

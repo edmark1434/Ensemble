@@ -2,6 +2,7 @@ const {
     createInboxController,
     createGroupController,
     createEngagementChatController,
+    createMarketplaceChatController,
     createMessageController,
     replyMessageController,
     reactMessageController,
@@ -30,6 +31,7 @@ router.get('/', getAllInboxesByAccountIdController);
 router.post('/', createInboxController);
 router.post('/group', createGroupController);
 router.post('/engagement', createEngagementChatController);
+router.post('/marketplace', createMarketplaceChatController);
 router.post('/two-accounts', checkInboxByTwoAccountIdsController);
 
 router.post('/message', createMessageController);

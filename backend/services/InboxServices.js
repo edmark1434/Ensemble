@@ -1,6 +1,7 @@
 const { randomUUID } = require('crypto');
 const {
     createInboxRepositories,
+    createOrGetInboxByContextRepositories,
     createMessageRepositories,
     createReplyRepositories,
     getMessageByIdRepositories,
@@ -20,6 +21,8 @@ const {
     getInboxByAccountId,
     getInboxByTwoAccountIds,
 } = require('../repositories/InboxRepositories');
+const { getProposalByIdRepositories } = require('../repositories/JobRepositories');
+const { getOrderByIdRepository } = require('../repositories/GigRepositories');
 const { checkAccountIdService } = require('./AccountServices');
 const { getProfileCurrentAvatarByAccountIdService } = require('./ProfileServices');
 const { createNotificationServices } = require('./NotificationServices');
@@ -27,7 +30,15 @@ const { getAccountById } = require('../repositories/AccountRepositories');
 const { pool } = require('../lib/Database');
 const { createReport } = require('../repositories/ModeratorSharedRepositories');
 
-const CONVERSATION_TYPES = ['direct', 'engagement', 'group', 'ticket', 'dispute'];
+const CONVERSATION_TYPES = [
+    'direct',
+    'engagement',
+    'marketplace_job',
+    'marketplace_gig',
+    'group',
+    'ticket',
+    'dispute',
+];
 const MESSAGE_TYPES = ['text', 'image', 'video', 'audio', 'file', 'system'];
 const ENGAGEMENT_CONTEXT_FIELDS = [
     'engagement_id',
@@ -284,6 +295,7 @@ async function persistChatNotifications({
     message,
     prefix,
     onNotification,
+    referencePath,
 }) {
     const activeRecipientIds = new Set(
         (inbox.members || [])
@@ -310,7 +322,7 @@ async function persistChatNotifications({
                 is_read: false,
                 reference_table: 'inbox',
                 reference_prefix: prefix,
-                reference_path: `/inbox/direct?conversation=${inbox._id}`,
+                reference_path: referencePath || `/inbox/direct?conversation=${inbox._id}`,
                 reference_id: randomUUID(),
             });
             if (onNotification) await onNotification(accountId, notification);
@@ -406,6 +418,176 @@ async function createEngagementChatServices(payload, accountId) {
     return inbox;
 }
 
+const MARKETPLACE_CONTEXT_TYPES = new Set(['job_proposal', 'gig_order']);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function requireUuid(value, message) {
+    const normalized = String(value || '').trim();
+    if (!UUID_PATTERN.test(normalized)) {
+        throw new ChatServiceError(message);
+    }
+    return normalized;
+}
+
+function marketplacePreview(value) {
+    const preview = String(value || '').trim();
+    return preview ? preview.slice(0, 320) : null;
+}
+
+function marketplaceMembers(clientAccountId, freelancerAccountId) {
+    const now = new Date();
+    const accountIds = [...new Set([
+        String(clientAccountId || ''),
+        String(freelancerAccountId || ''),
+    ].filter(Boolean))];
+
+    if (accountIds.length !== 2) {
+        throw new ChatServiceError('Marketplace conversation participants are invalid', 409);
+    }
+
+    return accountIds.map((memberAccountId) => ({
+        account_id: memberAccountId,
+        role: 'member',
+        status: 'active',
+        joined_at: now,
+    }));
+}
+
+async function resolveMarketplaceContext(contextType, contextId, accountId) {
+    if (contextType === 'job_proposal') {
+        const proposal = await getProposalByIdRepositories(contextId, accountId);
+        if (!proposal) {
+            throw new ChatServiceError('Proposal not found', 404);
+        }
+        if (String(proposal.status || '').toLowerCase() !== 'shortlisted') {
+            throw new ChatServiceError(
+                'A proposal discussion is available after the proposal is shortlisted',
+                409
+            );
+        }
+
+        const members = marketplaceMembers(
+            proposal.client_account_id,
+            proposal.freelancer_account_id
+        );
+        await validateMemberAccounts(members);
+
+        return {
+            conversationType: 'marketplace_job',
+            context: { proposal_id: String(proposal.proposal_id) },
+            notificationMessage: `opened a discussion for "${proposal.job_title || 'Job proposal'}".`,
+            inboxPayload: {
+                conversation_name: proposal.job_title || 'Job proposal',
+                conversation_type: 'marketplace_job',
+                proposal_id: String(proposal.proposal_id),
+                job_id: String(proposal.job_id),
+                client_account_id: String(proposal.client_account_id),
+                freelancer_account_id: String(proposal.freelancer_account_id),
+                listing_type: 'job',
+                listing_title: proposal.job_title || 'Job proposal',
+                listing_preview: marketplacePreview(proposal.letter),
+                listing_path: `/jobs/postings/${proposal.job_id}`,
+                client_context_path: `/jobs/proposals/received/${proposal.proposal_id}`,
+                freelancer_context_path: `/jobs/proposals/sent/${proposal.proposal_id}`,
+                marketplace_status: proposal.status || null,
+                marketplace_amount_credits: Number(proposal.rate_credits) || 0,
+                members,
+            },
+        };
+    }
+
+    const order = await getOrderByIdRepository(contextId, accountId);
+    if (!order) {
+        throw new ChatServiceError('Gig order not found', 404);
+    }
+
+    const members = marketplaceMembers(
+        order.client_account_id,
+        order.freelancer_account_id
+    );
+    await validateMemberAccounts(members);
+
+    return {
+        conversationType: 'marketplace_gig',
+        context: { gig_request_id: String(order.id) },
+        notificationMessage: `opened a discussion for "${order.gig_title || 'Gig order'}".`,
+        inboxPayload: {
+            conversation_name: order.gig_title || 'Gig order',
+            conversation_type: 'marketplace_gig',
+            gig_request_id: String(order.id),
+            gig_id: String(order.gig_id),
+            client_account_id: String(order.client_account_id),
+            freelancer_account_id: String(order.freelancer_account_id),
+            listing_type: 'gig',
+            listing_title: order.gig_title || 'Gig order',
+            listing_preview: marketplacePreview(order.project_brief),
+            listing_path: `/gigs/services/${order.gig_id}/page`,
+            client_context_path: `/gigs/orders/sent/${order.id}`,
+            freelancer_context_path:
+                `/gigs/orders/incoming/${order.gig_id}/order/${order.id}`,
+            marketplace_status: order.status || null,
+            marketplace_amount_credits: Number(order.price) || 0,
+            members,
+        },
+    };
+}
+
+async function createMarketplaceChatServices(payload, accountId, callbacks = {}) {
+    const actorId = await requireAccount(accountId);
+    const contextType = String(payload?.context_type || '').trim();
+    if (!MARKETPLACE_CONTEXT_TYPES.has(contextType)) {
+        throw new ChatServiceError('Invalid marketplace context type');
+    }
+    const contextId = requireUuid(
+        payload?.context_id,
+        'A valid marketplace context ID is required'
+    );
+
+    const resolved = await resolveMarketplaceContext(contextType, contextId, actorId);
+    const now = new Date();
+    const { inbox, created } = await createOrGetInboxByContextRepositories(
+        resolved.conversationType,
+        resolved.context,
+        {
+            ...resolved.inboxPayload,
+            pinned_messages: [],
+            created_at: now,
+            updated_at: now,
+            deleted_at: null,
+        }
+    );
+
+    if (!inbox) {
+        throw new ChatServiceError('Unable to create marketplace conversation', 500);
+    }
+    if (!activeMember(inbox, actorId)) {
+        throw new ChatServiceError(
+            'You are not a member of this marketplace conversation',
+            403
+        );
+    }
+
+    if (created) {
+        await persistChatNotifications({
+            inbox,
+            actorId,
+            message: resolved.notificationMessage,
+            prefix: 'CHAT_MARKETPLACE_CREATED',
+            referencePath: `/inbox/marketplace?conversation=${inbox._id}`,
+            onNotification: callbacks.onNotification,
+        });
+
+        if (callbacks.onConversationCreated) {
+            await Promise.allSettled(
+                inbox.members.map((member) =>
+                    callbacks.onConversationCreated(String(member.account_id), inbox)
+                )
+            );
+        }
+    }
+
+    return { inbox, created };
+}
 async function createInboxServices(payload, accountId) {
     if (payload.conversation_type === 'group') {
         return await createGroupServices(payload, accountId);
@@ -1248,6 +1430,7 @@ module.exports = {
     createInboxServices,
     createGroupServices,
     createEngagementChatServices,
+    createMarketplaceChatServices,
     createOrReuseDirectChatServices,
     createMessageServices,
     replyMessageServices,

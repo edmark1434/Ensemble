@@ -5,6 +5,7 @@ import { InboxPanelViewMessage } from "../inbox_components/inbox_panel_viewmessa
 import { InboxPanelChatbox } from "../inbox_components/inbox_panel_chatbox";
 import { InboxPinnedBanner } from "../inbox_functions/inbox_pin_message";
 import { InboxSideDetails } from "../inbox_components/inbox_side_detail";
+import { MarketplaceContextCard } from "../inbox_components/marketplace_context_card";
 
 export const InboxPanelPage = ({
   selectedConversation,
@@ -77,6 +78,11 @@ export const InboxPanelPage = ({
           getConversationName={getConversationName}
           getAvatar={getAvatar}
           onToggleDetails={() => onShowDetailsChange?.(!showDetails)}
+        />
+
+        <MarketplaceContextCard
+          conversation={selectedConversation}
+          currentUserId={currentUserId}
         />
 
         <InboxPinnedBanner

@@ -38,6 +38,30 @@ async function ensureChatIndexes(database) {
       { conversation_type: 1, gig_id: 1 },
       { name: 'chat_inbox_gig_context', sparse: true }
     ),
+    database.collection('inbox').createIndex(
+      { conversation_type: 1, proposal_id: 1 },
+      {
+        name: 'chat_inbox_marketplace_job_context',
+        unique: true,
+        partialFilterExpression: {
+          conversation_type: 'marketplace_job',
+          proposal_id: { $type: 'string' },
+          deleted_at: null,
+        },
+      }
+    ),
+    database.collection('inbox').createIndex(
+      { conversation_type: 1, gig_request_id: 1 },
+      {
+        name: 'chat_inbox_marketplace_gig_context',
+        unique: true,
+        partialFilterExpression: {
+          conversation_type: 'marketplace_gig',
+          gig_request_id: { $type: 'string' },
+          deleted_at: null,
+        },
+      }
+    ),
     database.collection('google_meet_connections').createIndex(
       { account_id: 1 },
       { name: 'google_meet_connections_account', unique: true }
