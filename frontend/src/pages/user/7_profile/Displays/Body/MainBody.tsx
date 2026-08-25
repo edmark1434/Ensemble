@@ -64,6 +64,7 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
   accountId,
 }) => {
   const [performanceTab, setPerformanceTab] = useState<"ratings" | "reviews" | "history">("ratings");
+  const [reviewFilter, setReviewFilter] = useState<"All" | "As Freelancer" | "As a Client" | "Asset Creation">("All");
 
   if (loading) return <DetailsListBodySkeleton />;
 
@@ -166,12 +167,16 @@ export const MainBody: React.FC<DetailsListBodyProps> = ({
                             clientJobCount={userDetails?.client_job_count ? Number(userDetails.client_job_count) : 0}
                             viewMode="ratings"
                             isOwner={isOwner}
+                            onNavigateToReviews={(filter) => {
+                              setReviewFilter(filter);
+                              setPerformanceTab("reviews");
+                            }}
                           />
                     </div>
                   )}
                   {performanceTab === "reviews" && (
                     <div className="pt-2">
-                      <Profile_Reviews isOwner={isOwner} accountId={accountId} />
+                      <Profile_Reviews isOwner={isOwner} accountId={accountId} initialFilter={reviewFilter} />
                     </div>
                   )}
                   {performanceTab === "history" && (
