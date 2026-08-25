@@ -178,3 +178,13 @@ body {
     border-radius: inherit;
   }
 }
+
+
+@keyframes badge-shine {
+  0% { transform: translateX(-150%) skewX(-15deg); }
+  20% { transform: translateX(200%) skewX(-15deg); }
+  100% { transform: translateX(200%) skewX(-15deg); }
+}
+.animate-badge-shine {
+  animation: badge-shine 3s infinite;
+}
