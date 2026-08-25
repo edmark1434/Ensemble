@@ -1,3 +1,25 @@
+# Current Task - Marketplace Proposal and Gig Conversations
+
+Create or reuse a dedicated Marketplace inbox conversation from shortlisted proposal and gig-order actions. Participants and links are derived on the backend, creation is idempotent, and proposal/order context stays visible and clickable in chat.
+
+## Acceptance Criteria
+
+* [x] Proposal and gig-order detail access is limited to the client and freelancer involved.
+* [x] POST /api/inbox/marketplace accepts only a context type and UUID, then derives members and paths from PostgreSQL.
+* [x] Job proposal discussions require a shortlisted proposal.
+* [x] MongoDB uniqueness and atomic upsert prevent duplicate conversations for the same proposal/order.
+* [x] Durable notifications and new conversations broadcast in realtime after persistence.
+* [x] Marketplace conversations support tab filtering and notification/query deep links.
+* [x] Chat and Chat Details show a non-pinned, role-aware context card.
+* [x] Requested proposal and gig-order buttons no longer create chats from display names.
+* [x] Production build, backend syntax checks, and read-only participant authorization checks pass.
+
+Status: Completed August 25, 2026.
+
+Implementation notes: Added marketplace_job and marketplace_gig conversation types, a shared frontend action/context card, server-derived role links, and compatible gig project-brief reads. New-module ESLint passes; broader touched-file lint reports 38 pre-existing legacy errors and 2 warnings. Migration dry-run was not forced because the repository already has an out-of-order migration history.
+
+---
+
 # Current Task — Build Simple HTML Documentation RAG Backend
 
 ## Active Follow-up — Proposal Profile Routes Use Account IDs

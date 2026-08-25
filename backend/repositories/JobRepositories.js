@@ -328,7 +328,7 @@ async function getProposalsByFreelancerRepositories(accountId) {
     }
 }
 
-async function getProposalByIdRepositories(proposalId) {
+async function getProposalByIdRepositories(proposalId, accountId) {
     try {
         const query = `
             SELECT 
@@ -353,9 +353,11 @@ async function getProposalByIdRepositories(proposalId) {
             LEFT JOIN accounts c ON j.client_account_id = c.account_id
             LEFT JOIN accounts f_acc ON p.freelancer_account_id = f_acc.account_id
             LEFT JOIN terms_of_service t ON p.terms_id = t.terms_id
-            WHERE p.proposal_id = $1 AND p.deleted_at IS NULL
+            WHERE p.proposal_id = $1
+              AND p.deleted_at IS NULL
+              AND (p.freelancer_account_id = $2 OR j.client_account_id = $2)
         `;
-        const res = await pool.query(query, [proposalId]);
+        const res = await pool.query(query, [proposalId, accountId]);
         return res.rows[0];
     } catch (err) {
         console.error('Error in getProposalByIdRepositories:', err);

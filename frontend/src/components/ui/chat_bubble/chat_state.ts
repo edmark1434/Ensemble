@@ -155,6 +155,10 @@ interface ChatState {
     listing_preview?: string;
     listing_path?: string;
   }) => Promise<Inbox>;
+  createMarketplace: (payload: {
+    context_type: "job_proposal" | "gig_order";
+    context_id: string;
+  }) => Promise<Inbox>;
   updateGroupMember: (
     conversationId: string,
     accountId: string,
@@ -825,6 +829,15 @@ function bindSocketListeners() {
     }));
   });
 
+
+  socket.on("conversationCreated", (conversation: Inbox) => {
+    useChatState.setState((state) => ({
+      conversations: upsertConversation(state.conversations, conversation),
+    }));
+    socket.emit("joinRoom", {
+      conversation_id: String(conversation._id),
+    });
+  });
   socket.on(
     "conversationRenamed",
     ({
@@ -1644,6 +1657,21 @@ const useChatState = create<ChatState>((set, get) => ({
     return response.data;
   },
 
+
+  createMarketplace: async (payload) => {
+    const response = await api.post<{ inbox: Inbox; created: boolean }>(
+      "/api/inbox/marketplace",
+      payload
+    );
+    const inbox = response.data.inbox;
+    set((state) => ({
+      conversations: upsertConversation(state.conversations, inbox),
+    }));
+    socket.emit("joinRoom", {
+      conversation_id: String(inbox._id),
+    });
+    return inbox;
+  },
   updateGroupMember: async (conversationId, accountId, updates) => {
     const conversation = await emitWithAck<Inbox>("updateGroupMember", {
       conversation_id: String(conversationId),

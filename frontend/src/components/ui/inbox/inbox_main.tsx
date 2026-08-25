@@ -53,6 +53,11 @@ import { ChatImagePreview } from "./inbox_functions/chat_image_preview";
 const EMPTY_MESSAGES: Message[] = [];
 const EMPTY_TYPING_ACCOUNTS: string[] = [];
 const MESSAGE_PAGE_SIZE = 30;
+const MARKETPLACE_CONVERSATION_TYPES = new Set([
+  "engagement",
+  "marketplace_job",
+  "marketplace_gig",
+]);
 
 interface ProfileIdentity {
   name?: string;
@@ -346,7 +351,7 @@ const InboxMain = () => {
     () =>
       inboxList.filter((inbox) =>
         isMarketplace
-          ? inbox.conversation_type === "engagement"
+          ? MARKETPLACE_CONVERSATION_TYPES.has(inbox.conversation_type)
           : ["direct", "group", "ticket", "dispute"].includes(
               inbox.conversation_type
             )
@@ -370,6 +375,7 @@ const InboxMain = () => {
   useEffect(() => {
     const requestedConversationId = String(
       (location.state as { conversationId?: string } | null)?.conversationId ||
+        new URLSearchParams(location.search).get("conversation") ||
         ""
     );
     const activeIsVisible = tabConversations.some(
@@ -399,6 +405,7 @@ const InboxMain = () => {
     handleSelectConversation,
     location.state,
     location.pathname,
+    location.search,
     navigate,
     selectConversation,
     tabConversations,
@@ -430,7 +437,7 @@ const InboxMain = () => {
     if (!selectedConversation) return filteredConversations;
 
     const selectedBelongsToTab = isMarketplace
-      ? selectedConversation.conversation_type === "engagement"
+      ? MARKETPLACE_CONVERSATION_TYPES.has(selectedConversation.conversation_type)
       : ["direct", "group", "ticket", "dispute"].includes(
           selectedConversation.conversation_type
         );

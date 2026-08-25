@@ -53,8 +53,8 @@ async function getProposalsByFreelancerServices(accountId) {
     return await JobRepositories.getProposalsByFreelancerRepositories(accountId);
 }
 
-async function getProposalByIdServices(proposalId) {
-    return await JobRepositories.getProposalByIdRepositories(proposalId);
+async function getProposalByIdServices(proposalId, accountId) {
+    return await JobRepositories.getProposalByIdRepositories(proposalId, accountId);
 }
 
 async function updateProposalStatusServices(proposalId, accountId, status, rejectReason) {

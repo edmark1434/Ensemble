@@ -32,6 +32,7 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 
 import useGlobalState from "@/lib/global_state";
 import api from "@/lib/axios";
+import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
 
 export const ProposalsViewDetailsAsAuthor: React.FC = () => {
   const { user } = useGlobalState();
@@ -414,7 +415,11 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                       <button
                         title="Open Discussion Chat"
                         onClick={() =>
-                          navigate(`/inbox?user=${encodeURIComponent(proposal.partyName)}`)
+                          void openMarketplaceConversation({
+                            contextType: "job_proposal",
+                            contextId: proposal.id,
+                            navigate,
+                          })
                         }
                         className="p-1.5 rounded-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 transition-colors border border-blue-500/30"
                       >
@@ -694,7 +699,11 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
                   {/* Expandable Chat Button */}
                   <button
                     onClick={() =>
-                      navigate(`/inbox?user=${encodeURIComponent(proposal.partyName)}`)
+                      void openMarketplaceConversation({
+                        contextType: "job_proposal",
+                        contextId: proposal.id,
+                        navigate,
+                      })
                     }
                     className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none px-3.5 py-2.5 text-xs font-semibold text-gray-600 dark:text-zinc-300 transition-all duration-300 hover:bg-gray-100 dark:bg-white/10 hover:text-gray-900 dark:text-white"
                   >

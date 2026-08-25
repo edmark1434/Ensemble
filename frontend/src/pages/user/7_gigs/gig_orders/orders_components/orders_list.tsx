@@ -16,6 +16,7 @@ import {
 import type { ViewType } from "./orders_list_viewtype";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import { GigRichText } from "../../gig_components/GigRichText";
+import { openMarketplaceConversation } from "@/components/ui/inbox/marketplace_conversation";
 
 export type OrderStatus = "Pending" | "Shortlisted" | "Accepted" | "Rejected";
 
@@ -250,7 +251,11 @@ export const OrdersList: React.FC<OrdersListProps> = ({
                           title="Open Discussion Chat"
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate(`/inbox?user=${encodeURIComponent(item.partyName)}`);
+                            void openMarketplaceConversation({
+                              contextType: "gig_order",
+                              contextId: item.id,
+                              navigate,
+                            });
                           }}
                           className="p-1.5 rounded-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 transition-colors border border-blue-500/30"
                         >
