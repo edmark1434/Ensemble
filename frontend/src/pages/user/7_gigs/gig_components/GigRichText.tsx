@@ -48,7 +48,15 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
   const formatTimeAgo = (dateStr: string | undefined) => {
     if (!dateStr) return "Just now";
     try {
-      return formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+      let str = formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+      str = str.replace(/minutes?/, (m) => m === 'minutes' ? 'mins' : 'min')
+               .replace(/hours?/, (m) => m === 'hours' ? 'hrs' : 'hr')
+               .replace(/seconds?/, (m) => m === 'seconds' ? 'secs' : 'sec')
+               .replace(/days?/, 'd')
+               .replace(/months?/, 'm')
+               .replace(/years?/, (m) => m === 'years' ? 'yrs' : 'yr')
+               .replace('about ', '');
+      return str;
     } catch {
       return "Just now";
     }
@@ -523,45 +531,63 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
           </div>
         )}
 
-        {filteredReviews.length === 0 ? (
-            <div className="p-6 rounded-2xl border border-dashed border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.01] flex flex-col items-center justify-center text-center space-y-2">
-            <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-gray-400 dark:text-zinc-500">
-                <MessageSquare className="h-5 w-5" />
-            </div>
-            <p className="text-xs font-semibold text-gray-700 dark:text-zinc-300">No reviews found</p>
-            <p className="text-[11px] text-gray-500 dark:text-zinc-500 max-w-sm">
-                Try selecting a different star rating to see what clients are saying.
-            </p>
-            </div>
-        ) : (
-            <div className="space-y-4 max-h-[480px] overflow-y-auto thin-gallery-scrollbar pr-2 pb-2">
-                {filteredReviews.map((rev, i) => (
-                    <div key={rev.ratingId || i} className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm">
-                        <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-3">
-                                {rev.reviewerAvatar ? (
-                                    <img src={rev.reviewerAvatar.startsWith('http') ? rev.reviewerAvatar : (import.meta.env.VITE_CLOUDFRONT_URL || '') + (rev.reviewerAvatar.startsWith('/') ? '' : '/') + rev.reviewerAvatar} alt={rev.reviewerName} className="h-8 w-8 rounded-full object-cover bg-gray-100 dark:bg-white/10" />
-                                ) : (
-                                    <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs font-bold">
-                                        {rev.reviewerName.charAt(0)}
+        <motion.div layout className="relative min-h-[200px]">
+          <AnimatePresence mode="wait">
+            {filteredReviews.length === 0 ? (
+                <motion.div
+                  key="empty"
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -5 }}
+                  transition={{ duration: 0.15 }}
+                  className="p-6 rounded-2xl border border-dashed border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.01] flex flex-col items-center justify-center text-center space-y-2 absolute inset-0"
+                >
+                <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-gray-400 dark:text-zinc-500">
+                    <MessageSquare className="h-5 w-5" />
+                </div>
+                <p className="text-xs font-semibold text-gray-700 dark:text-zinc-300">No reviews found</p>
+                <p className="text-[11px] text-gray-500 dark:text-zinc-500 max-w-sm">
+                    Try selecting a different star rating to see what clients are saying.
+                </p>
+                </motion.div>
+            ) : (
+                <motion.div
+                  key={reviewFilter || 'all'}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-4 max-h-[480px] overflow-y-auto thin-gallery-scrollbar pr-2 pb-2"
+                >
+                    {filteredReviews.map((rev, i) => (
+                        <div key={rev.ratingId || i} className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-3">
+                                    {rev.reviewerAvatar ? (
+                                        <img src={rev.reviewerAvatar.startsWith('http') ? rev.reviewerAvatar : (import.meta.env.VITE_CLOUDFRONT_URL || '') + (rev.reviewerAvatar.startsWith('/') ? '' : '/') + rev.reviewerAvatar} alt={rev.reviewerName} className="h-8 w-8 rounded-full object-cover bg-gray-100 dark:bg-white/10" />
+                                    ) : (
+                                        <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs font-bold">
+                                            {rev.reviewerName.charAt(0)}
+                                        </div>
+                                    )}
+                                    <div>
+                                        <p className="text-sm font-bold text-gray-900 dark:text-white">{rev.reviewerName}</p>
+                                        <p className="text-[10px] text-gray-500 dark:text-zinc-400">{new Date(rev.createdAt).toLocaleDateString()}</p>
                                     </div>
-                                )}
-                                <div>
-                                    <p className="text-sm font-bold text-gray-900 dark:text-white">{rev.reviewerName}</p>
-                                    <p className="text-[10px] text-gray-500 dark:text-zinc-400">{new Date(rev.createdAt).toLocaleDateString()}</p>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    {[...Array(5)].map((_, i) => (
+                                        <Star key={i} className={`h-3.5 w-3.5 ${i < rev.stars ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300 dark:text-zinc-600'}`} />
+                                    ))}
                                 </div>
                             </div>
-                            <div className="flex items-center gap-1">
-                                {[...Array(5)].map((_, i) => (
-                                    <Star key={i} className={`h-3.5 w-3.5 ${i < rev.stars ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300 dark:text-zinc-600'}`} />
-                                ))}
-                            </div>
+                            <p className="text-sm text-gray-700 dark:text-zinc-300 whitespace-pre-wrap">{rev.feedback}</p>
                         </div>
-                        <p className="text-sm text-gray-700 dark:text-zinc-300 whitespace-pre-wrap">{rev.feedback}</p>
-                    </div>
-                ))}
-            </div>
-        )}
+                    ))}
+                </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
       </section>
     );
   };
@@ -608,12 +634,19 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
         {/* SCROLLABLE CONTENT */}
         <div className={`${isPage ? "w-full" : "flex-1 overflow-y-auto custom-scrollbar p-6"}`}>
           <div className={`${isPage ? "flex flex-col lg:flex-row gap-8 items-start" : ""}`}>
-            <div className={`${isPage ? "flex-1 min-w-0" : ""}`}>
+            <motion.div layout className={`${isPage ? "flex-1 min-w-0" : ""}`}>
 
               {/* BADGES */}
               <div className="mt-4 flex flex-wrap items-center gap-2 mb-6">
-                <span className={`px-2.5 py-1 rounded text-[11px] font-bold border ${gig.status?.toLowerCase() === "closed" ? "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20" : "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20"}`}>
-                  {gig.status || "Open"}
+                <span className={`relative overflow-hidden px-2.5 py-1 rounded text-[11px] font-black border ${
+                  gig.status?.toLowerCase() === "closed" 
+                    ? "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20" 
+                    : "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40"
+                }`}>
+                  <span className="relative z-10">{gig.status || "Open"}</span>
+                  {(!gig.status || gig.status?.toLowerCase() !== "closed") && (
+                    <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
+                  )}
                 </span>
                 <span className="px-2.5 py-1 rounded bg-gray-100 dark:bg-white/5 text-[11px] font-bold text-gray-600 dark:text-zinc-300 border border-gray-200 dark:border-white/10">
                   {gig.category}
@@ -819,7 +852,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                 )}
 
               </div>
-            </div>
+            </motion.div>
 
             {/* PAGE RIGHT SIDEBAR */}
             {isPage && (
@@ -844,33 +877,42 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                         </button>
                       ))}
                     </div>
-                    <div className="p-6">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="text-lg font-bold text-gray-900 dark:text-white">{activeTier?.title}</h4>
-                        <span className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString()}</span>
-                      </div>
-                      <p className="text-sm text-gray-600 dark:text-zinc-400 mb-6">{activeTier?.description}</p>
-
-                      <div className="flex flex-col gap-3 text-xs font-medium text-gray-700 dark:text-zinc-300 mb-6">
-                        <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-gray-400" /> {activeTier?.daysOfDelivery} Days Delivery</span>
-                        <span className="flex items-center gap-1.5"><PlayCircle className="h-4 w-4 text-gray-400" /> {activeTier?.revisions} Revisions</span>
-                      </div>
-
-                      <button
-                        onClick={() => {
-                          if (isOwner) return;
-                          if (gig.hasPendingOrder && gig.pendingOrderId) {
-                            navigate(`/gigs/orders/sent/${gig.pendingOrderId}`);
-                          } else {
-                            navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } });
-                          }
-                        }}
-                        disabled={isOwner}
-                        className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:shadow-none"
+                    <AnimatePresence mode="wait">
+                      <motion.div 
+                        key={activeTierIdx}
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        transition={{ duration: 0.15 }}
+                        className="p-6"
                       >
-                        {isOwner ? "You own this service" : gig.hasPendingOrder ? "View My Order" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
-                      </button>
-                    </div>
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="text-lg font-bold text-gray-900 dark:text-white">{activeTier?.title}</h4>
+                          <span className="text-xl font-black text-gray-900 dark:text-white flex items-center gap-1.5"><CreditIcon className="h-5 w-5 shrink-0 text-yellow-500" />{activeTier?.price?.toLocaleString()}</span>
+                        </div>
+                        <p className="text-sm text-gray-600 dark:text-zinc-400 mb-6">{activeTier?.description}</p>
+
+                        <div className="flex flex-col gap-3 text-xs font-medium text-gray-700 dark:text-zinc-300 mb-6">
+                          <span className="flex items-center gap-1.5"><Clock className="h-4 w-4 text-gray-400" /> {activeTier?.daysOfDelivery} Days Delivery</span>
+                          <span className="flex items-center gap-1.5"><PlayCircle className="h-4 w-4 text-gray-400" /> {activeTier?.revisions} Revisions</span>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            if (isOwner) return;
+                            if (gig.hasPendingOrder && gig.pendingOrderId) {
+                              navigate(`/gigs/orders/sent/${gig.pendingOrderId}`);
+                            } else {
+                              navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } });
+                            }
+                          }}
+                          disabled={isOwner}
+                          className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:shadow-none"
+                        >
+                          {isOwner ? "You own this service" : gig.hasPendingOrder ? "View My Order" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
+                        </button>
+                      </motion.div>
+                    </AnimatePresence>
                   </div>
                   {gig.additionalWorkRate > 0 && (
                     <p className="text-[11px] text-gray-500 mt-3 text-center">
@@ -892,7 +934,11 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
           </div>
 
           {/* 6. OTHER SERVICES YOU MAY LIKE (STANDALONE COMPONENT) */}
-          {isPage && <GigsOtherServices currentGigId={gig.id} />}
+          {isPage && (
+            <motion.div layout>
+              <GigsOtherServices currentGigId={gig.id} />
+            </motion.div>
+          )}
 
           {!isPage && <div className="h-24"></div>}
         </div>

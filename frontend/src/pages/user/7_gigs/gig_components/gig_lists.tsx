@@ -78,7 +78,15 @@ export const GigList: React.FC<GigListProps> = ({
   const formatTimeAgo = (dateStr: string | undefined) => {
     if (!dateStr) return "Just now";
     try {
-      return formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+      let str = formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+      str = str.replace(/minutes?/, (m) => m === 'minutes' ? 'mins' : 'min')
+               .replace(/hours?/, (m) => m === 'hours' ? 'hrs' : 'hr')
+               .replace(/seconds?/, (m) => m === 'seconds' ? 'secs' : 'sec')
+               .replace(/days?/, 'd')
+               .replace(/months?/, 'm')
+               .replace(/years?/, (m) => m === 'years' ? 'yrs' : 'yr')
+               .replace('about ', '');
+      return str;
     } catch {
       return "Just now";
     }
@@ -206,13 +214,16 @@ export const GigList: React.FC<GigListProps> = ({
                     {/* Category & Status Badges */}
                     <div className="flex flex-wrap items-center gap-1.5 mb-2">
                       <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                        className={`relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border ${
                           isOpen
-                            ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"
+                            ? "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40"
                             : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
                         }`}
                       >
-                        {isOpen ? "Open" : "Closed"}
+                        <span className="relative z-10">{isOpen ? "Open" : "Closed"}</span>
+                        {isOpen && (
+                          <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
+                        )}
                       </span>
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-zinc-800 border border-gray-300 dark:border-white/10 text-gray-800 dark:text-zinc-300">
                         {gig.category || "General"}
