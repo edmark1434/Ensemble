@@ -43,6 +43,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
   const [isMilestonesOpen, setIsMilestonesOpen] = useState(false);
   const [isTermsOpen, setIsTermsOpen] = useState(true);
   const [isQuestionnairesOpen, setIsQuestionnairesOpen] = useState(false);
+  const [reviewFilter, setReviewFilter] = useState<number | null>(null);
 
   const formatTimeAgo = (dateStr: string | undefined) => {
     if (!dateStr) return "Just now";
@@ -477,10 +478,11 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
 
     const renderReviews = () => {
     const reviews = gig.reviews || [];
+    const filteredReviews = reviewFilter !== null ? reviews.filter(r => r.stars === reviewFilter) : reviews;
 
     return (
       <section className="pt-4 border-t border-gray-200 dark:border-white/5 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h3 className="text-base font-bold text-gray-900 dark:text-white">Rates & Reviews</h3>
             <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">Feedback from clients on completed orders</p>
@@ -498,20 +500,43 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
           </div>
         </div>
 
-        {reviews.length === 0 ? (
+        {reviews.length > 0 && (
+          <div className="flex flex-wrap gap-2 pt-2">
+            {[5, 4, 3, 2, 1].map(star => {
+              const count = reviews.filter(r => r.stars === star).length;
+              return (
+                <button
+                  key={star}
+                  onClick={() => setReviewFilter(reviewFilter === star ? null : star)}
+                  disabled={count === 0}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                    reviewFilter === star 
+                      ? "bg-yellow-50 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-500 border-yellow-200 dark:border-yellow-500/30" 
+                      : "bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-400 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10"
+                  } ${count === 0 ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  <Star className={`h-3 w-3 ${reviewFilter === star ? "text-yellow-500 fill-yellow-500" : "text-gray-400 dark:text-zinc-500"}`} />
+                  {star} <span className="opacity-70 font-normal">({count})</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {filteredReviews.length === 0 ? (
             <div className="p-6 rounded-2xl border border-dashed border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.01] flex flex-col items-center justify-center text-center space-y-2">
             <div className="h-10 w-10 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-gray-400 dark:text-zinc-500">
                 <MessageSquare className="h-5 w-5" />
             </div>
-            <p className="text-xs font-semibold text-gray-700 dark:text-zinc-300">No public reviews yet</p>
+            <p className="text-xs font-semibold text-gray-700 dark:text-zinc-300">No reviews found</p>
             <p className="text-[11px] text-gray-500 dark:text-zinc-500 max-w-sm">
-                Reviews and verified client ratings will appear here once orders for this service are completed.
+                Try selecting a different star rating to see what clients are saying.
             </p>
             </div>
         ) : (
-            <div className="space-y-4">
-                {reviews.map((rev, i) => (
-                    <div key={rev.ratingId || i} className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5">
+            <div className="space-y-4 max-h-[480px] overflow-y-auto thin-gallery-scrollbar pr-2 pb-2">
+                {filteredReviews.map((rev, i) => (
+                    <div key={rev.ratingId || i} className="p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm">
                         <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-3">
                                 {rev.reviewerAvatar ? (

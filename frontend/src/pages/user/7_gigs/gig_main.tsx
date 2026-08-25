@@ -10,6 +10,8 @@ import GigTabs from "./gig_components/gig_tabs";
 import GigCategories from "./gig_components/gig_categories";
 import GigListViewType from "./gig_components/gig_list_viewtype";
 import type { ViewType } from "./gig_components/gig_list_viewtype";
+import GigFilters from "./gig_components/gig_filters";
+import type { GigFilterState } from "./gig_components/gig_filters";
 
 // Datasets & Types
 import type { Gig } from "./gig_datasets";
@@ -25,13 +27,32 @@ export interface GigMainContext {
 
 const SidebarSkeleton = () => (
   <div className="space-y-6">
+    {/* Categories Skeleton */}
     <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none p-5 backdrop-blur-sm">
-      <div className="mb-4 h-3 w-20 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
+      <div className="mb-4 h-3 w-24 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
       <div className="flex flex-wrap gap-2">
         {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="h-7 w-20 animate-pulse rounded-full bg-white dark:bg-white/5 shadow-sm dark:shadow-none" />
+          <div key={i} className="h-7 w-20 animate-pulse rounded-full bg-gray-100 dark:bg-white/5 shadow-sm dark:shadow-none" />
         ))}
       </div>
+    </div>
+
+    {/* Filters Skeleton */}
+    <div className="rounded-2xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-sm dark:shadow-none p-5 backdrop-blur-sm space-y-6">
+      <div className="flex justify-between items-center mb-2">
+        <div className="h-3 w-24 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
+        <div className="h-3 w-12 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
+      </div>
+      
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="space-y-3 pt-4 border-t border-gray-100 dark:border-white/5">
+          <div className="flex justify-between items-center">
+            <div className="h-3 w-28 animate-pulse rounded bg-gray-100 dark:bg-white/10" />
+            <div className="h-6 w-16 animate-pulse rounded bg-gray-100 dark:bg-white/5" />
+          </div>
+          <div className="h-8 w-full animate-pulse rounded-lg bg-gray-100 dark:bg-white/5" />
+        </div>
+      ))}
     </div>
   </div>
 );
@@ -48,6 +69,16 @@ const GigMain: React.FC = () => {
   const [gigsList, setGigsList] = useState<Gig[]>([]);
   const [showFilters, setShowFilters] = useState(true);
   const [selectedGig, setSelectedGig] = useState<Gig | null>(null);
+
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [priceSort, setPriceSort] = useState<"inc" | "dec" | null>(null);
+  const [tiersCount, setTiersCount] = useState("");
+  const [tiersSort, setTiersSort] = useState<"inc" | "dec" | null>(null);
+  const [dateSort, setDateSort] = useState<"inc" | "dec" | null>(null);
+  const [revisions, setRevisions] = useState("");
+  const [deliveryDays, setDeliveryDays] = useState("");
+  const [ratingSort, setRatingSort] = useState(false);
 
   useEffect(() => {
     const fetchGigs = async () => {
@@ -123,6 +154,15 @@ const GigMain: React.FC = () => {
   const handleClearFilters = () => {
     setSearchQuery("");
     setActiveCategoryFilter("All");
+    setMinPrice("");
+    setMaxPrice("");
+    setPriceSort(null);
+    setTiersCount("");
+    setTiersSort(null);
+    setDateSort(null);
+    setRevisions("");
+    setDeliveryDays("");
+    setRatingSort(false);
   };
 
   const tabFilteredGigs = useMemo(() => {
@@ -156,15 +196,99 @@ const GigMain: React.FC = () => {
   }, [tabFilteredGigs]);
 
   const filteredGigs = useMemo(() => {
-    return tabFilteredGigs.filter((gig) => {
+    let result = tabFilteredGigs.filter((gig) => {
       const matchesSearch =
         gig.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         gig.postedBy.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory =
         activeCategoryFilter === "All" || gig.category === activeCategoryFilter;
-      return matchesSearch && matchesCategory;
+      
+      if (!matchesSearch || !matchesCategory) return false;
+
+      // Extract tier metrics
+      const tiers = gig.tiers || [];
+      const numTiers = tiers.length;
+      
+      if (tiersCount && numTiers !== parseInt(tiersCount, 10)) {
+        return false;
+      }
+
+      let hasValidTier = false;
+      if (tiers.length > 0) {
+        for (const tier of tiers) {
+          let valid = true;
+          if (minPrice && tier.price < parseFloat(minPrice)) valid = false;
+          if (maxPrice && tier.price > parseFloat(maxPrice)) valid = false;
+          if (revisions && tier.revisions < parseInt(revisions, 10)) valid = false;
+          if (deliveryDays && tier.daysOfDelivery > parseInt(deliveryDays, 10)) valid = false;
+
+          if (valid) {
+            hasValidTier = true;
+            break;
+          }
+        }
+      } else {
+        // If no tiers, ensure we only fail if they strictly requested these
+        if (minPrice || maxPrice || revisions || deliveryDays) {
+          hasValidTier = false;
+        } else {
+          hasValidTier = true;
+        }
+      }
+
+      return hasValidTier;
     });
-  }, [tabFilteredGigs, searchQuery, activeCategoryFilter]);
+
+    // Sorting
+    result = [...result].sort((a, b) => {
+      if (ratingSort) {
+        const aRating = a.clientRating || 0;
+        const bRating = b.clientRating || 0;
+        if (aRating !== bRating) return bRating - aRating;
+      }
+
+      if (priceSort) {
+        const aMinPrice = a.tiers?.length ? Math.min(...a.tiers.map(t => t.price)) : 0;
+        const bMinPrice = b.tiers?.length ? Math.min(...b.tiers.map(t => t.price)) : 0;
+        if (aMinPrice !== bMinPrice) {
+          return priceSort === "inc" ? aMinPrice - bMinPrice : bMinPrice - aMinPrice;
+        }
+      }
+
+      if (tiersSort) {
+        const aTiers = a.tiers?.length || 0;
+        const bTiers = b.tiers?.length || 0;
+        if (aTiers !== bTiers) {
+          return tiersSort === "inc" ? aTiers - bTiers : bTiers - aTiers;
+        }
+      }
+
+      if (dateSort) {
+        const aDate = new Date(a.postedAt || 0).getTime();
+        const bDate = new Date(b.postedAt || 0).getTime();
+        if (aDate !== bDate) {
+          return dateSort === "inc" ? aDate - bDate : bDate - aDate;
+        }
+      }
+
+      return 0;
+    });
+
+    return result;
+  }, [
+    tabFilteredGigs,
+    searchQuery,
+    activeCategoryFilter,
+    minPrice,
+    maxPrice,
+    priceSort,
+    tiersCount,
+    tiersSort,
+    dateSort,
+    revisions,
+    deliveryDays,
+    ratingSort
+  ]);
 
   const contextValue: GigMainContext = {
     gigsList,
@@ -213,6 +337,31 @@ const GigMain: React.FC = () => {
                     categories={dynamicCategories}
                     activeCategory={activeCategoryFilter}
                     onCategoryChange={setActiveCategoryFilter}
+                  />
+                  <GigFilters
+                    filters={{
+                      minPrice,
+                      maxPrice,
+                      priceSort,
+                      tiersCount,
+                      tiersSort,
+                      dateSort,
+                      revisions,
+                      deliveryDays,
+                      ratingSort
+                    }}
+                    setters={{
+                      setMinPrice,
+                      setMaxPrice,
+                      setPriceSort,
+                      setTiersCount,
+                      setTiersSort,
+                      setDateSort,
+                      setRevisions,
+                      setDeliveryDays,
+                      setRatingSort
+                    }}
+                    onClear={handleClearFilters}
                   />
                 </>
               )}

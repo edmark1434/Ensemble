@@ -22,7 +22,18 @@ export const HomeFeaturedGigs: React.FC = () => {
       try {
         const response = await api.get("/api/gigs");
         if (response.data && response.data.success) {
-          const mappedGigs = response.data.data.slice(0, 3).map((g: any) => {
+          let allGigs = response.data.data;
+          allGigs.sort((a: any, b: any) => {
+            const aRating = a.clientRating || 0;
+            const bRating = b.clientRating || 0;
+            if (bRating !== aRating) return bRating - aRating;
+            
+            const aCount = a.ratingCount || 0;
+            const bCount = b.ratingCount || 0;
+            return bCount - aCount;
+          });
+          
+          const mappedGigs = allGigs.slice(0, 3).map((g: any) => {
             const rawAvatar = g.client_avatar_path || g.clientAvatar || g.creator_avatar_path;
 
             // Filter out default placeholder URLs so it triggers the initial letter fallback
