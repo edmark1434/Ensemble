@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Clock, Users, Star, MousePointerClick, User, PlayCircle, Bookmark, Edit2, ShoppingCart, Flag } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { Gig } from "../gig_datasets";
@@ -118,13 +119,16 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 <div className="flex items-center justify-between mb-2.5">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
+                      className={`relative overflow-hidden px-2 py-0.5 rounded text-[10px] font-bold border ${
                         selectedGig.status?.toLowerCase() === "open" || !selectedGig.status
-                          ? "bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20"
-                          : "bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20"
+                          ? "bg-emerald-100 text-emerald-700 border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)] dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40"
+                          : "bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20"
                       }`}
                     >
-                      {selectedGig.status || "Open"}
+                      <span className="relative z-10">{selectedGig.status || "Open"}</span>
+                      {(selectedGig.status?.toLowerCase() === "open" || !selectedGig.status) && (
+                        <span className="absolute inset-0 -translate-x-full animate-badge-shine bg-gradient-to-r from-transparent via-emerald-400/40 dark:via-emerald-400/30 to-transparent" />
+                      )}
                     </span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-zinc-800 border border-gray-200 dark:border-white/10 text-gray-600 dark:text-zinc-300">
                       {selectedGig.category}
@@ -183,23 +187,32 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                         </button>
                       ))}
                     </div>
-                    <div className="p-4">
-                      <div className="mb-2">
-                        <h4 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
-                          {activeTier.title}
-                        </h4>
-                        <div className="mt-1 flex items-center gap-1.5 text-base font-black text-yellow-500">
-                          <CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />
-                          <span>{activeTier.price?.toLocaleString()}</span>
+                    <AnimatePresence mode="wait">
+                      <motion.div 
+                        key={activeTierIdx}
+                        initial={{ opacity: 0, x: 10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        transition={{ duration: 0.15 }}
+                        className="p-4"
+                      >
+                        <div className="mb-2">
+                          <h4 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
+                            {activeTier.title}
+                          </h4>
+                          <div className="mt-1 flex items-center gap-1.5 text-base font-black text-yellow-500">
+                            <CreditIcon className="h-4 w-4 shrink-0 text-yellow-500" />
+                            <span>{activeTier.price?.toLocaleString()}</span>
+                          </div>
                         </div>
-                      </div>
-                      <p className="text-xs text-gray-600 dark:text-zinc-400 mb-4">{activeTier.description}</p>
+                        <p className="text-xs text-gray-600 dark:text-zinc-400 mb-4">{activeTier.description}</p>
 
-                      <div className="flex items-center gap-4 text-[11px] font-medium text-gray-700 dark:text-zinc-300">
-                        <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-gray-400" /> {activeTier.daysOfDelivery} Days Delivery</span>
-                        <span className="flex items-center gap-1.5"><PlayCircle className="h-3.5 w-3.5 text-gray-400" /> {activeTier.revisions} Revisions</span>
-                      </div>
-                    </div>
+                        <div className="flex items-center gap-4 text-[11px] font-medium text-gray-700 dark:text-zinc-300">
+                          <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-gray-400" /> {activeTier.daysOfDelivery} Days Delivery</span>
+                          <span className="flex items-center gap-1.5"><PlayCircle className="h-3.5 w-3.5 text-gray-400" /> {activeTier.revisions} Revisions</span>
+                        </div>
+                      </motion.div>
+                    </AnimatePresence>
                   </div>
                 </div>
               )}
