@@ -19,6 +19,7 @@ interface MeritSectionProps {
   clientServiceCount?: number;
   clientJobRating?: number;
   clientJobCount?: number;
+  onNavigateToReviews?: (filter: "All" | "As Freelancer" | "As a Client" | "Asset Creation") => void;
 }
 
 const mockDisputes = [
@@ -43,18 +44,19 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
   avgRating = 4.8,
   totalReviews = 47,
   clientRating = 4.9,
-  freelancerRating = 4.8,
-  assetRating = 4.7,
-  successfulJobsCount = 86,
+  freelancerRating = 4.7,
+  assetRating = 5.0,
+  successfulJobsCount = 24,
   viewMode = "both",
-  freelancerServiceRating = 0.0,
-  freelancerServiceCount = 0,
-  freelancerJobRating = 0.0,
-  freelancerJobCount = 0,
-  clientServiceRating = 0.0,
+  freelancerServiceRating = 4.8,
+  freelancerServiceCount = 12,
+  freelancerJobRating = 4.6,
+  freelancerJobCount = 8,
+  clientServiceRating = 0,
   clientServiceCount = 0,
-  clientJobRating = 0.0,
-  clientJobCount = 0,
+  clientJobRating = 5.0,
+  clientJobCount = 3,
+  onNavigateToReviews
 }) => {
   const [isDisputeModalOpen, setIsDisputeModalOpen] = useState(false);
 
@@ -158,7 +160,10 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
 
               {/* As a Freelancer Section */}
               <div className="pt-0.5 space-y-2.5">
-                <div className="flex items-center justify-between">
+                <div 
+                  className={`flex items-center justify-between ${onNavigateToReviews ? "cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg -mx-2 px-2 py-1 transition-colors" : ""}`}
+                  onClick={() => onNavigateToReviews?.("As Freelancer")}
+                >
                   <div className="flex items-center gap-2">
                     <Briefcase className="h-4 w-4 text-zinc-400" />
                     <span className="font-bold text-gray-900 dark:text-zinc-100">As a Freelancer</span>
@@ -206,7 +211,10 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
 
               {/* As a Client Section */}
               <div className="pt-2 space-y-2.5">
-                <div className="flex items-center justify-between">
+                <div 
+                  className={`flex items-center justify-between ${onNavigateToReviews ? "cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg -mx-2 px-2 py-1 transition-colors" : ""}`}
+                  onClick={() => onNavigateToReviews?.("As a Client")}
+                >
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4 text-zinc-400" />
                     <span className="font-bold text-gray-900 dark:text-zinc-100">As a Client</span>
@@ -254,7 +262,10 @@ export const MeritSection_ProfileDisplay: React.FC<MeritSectionProps> = ({
 
               {/* As an Asset Creator Section */}
               <div className="pt-2 space-y-2.5">
-                <div className="flex items-center justify-between">
+                <div 
+                  className={`flex items-center justify-between ${onNavigateToReviews ? "cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg -mx-2 px-2 py-1 transition-colors" : ""}`}
+                  onClick={() => onNavigateToReviews?.("Asset Creation")}
+                >
                   <div className="flex items-center gap-2">
                     <Package className="h-4 w-4 text-zinc-400" />
                     <span className="font-bold text-gray-900 dark:text-zinc-100">As an Asset Creator</span>
