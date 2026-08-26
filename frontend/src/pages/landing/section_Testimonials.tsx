@@ -1,5 +1,6 @@
 import React from "react";
 import FadeInScroll from "@/components/ui/FadeInScroll";
+import useGlobalState from "@/lib/global_state";
 
 const TESTIMONIALS = [
   { quote: "Ensemble completely changed how our post-production team collaborates. The live chat and timeline sync is magic.", author: "Sarah Jenkins", role: "Lead Editor", img: "https://i.pravatar.cc/100?img=1" },
@@ -10,8 +11,10 @@ const TESTIMONIALS = [
 ];
 
 const SectionTestimonials: React.FC = () => {
+  const theme = useGlobalState((state) => state.theme);
+
   return (
-    <section id="testimonials" style={{ background: "#080a12", padding: "100px 0", overflow: "hidden", position: "relative" }}>
+    <section id="testimonials" style={{ background: theme === 'dark' ? "#121214" : "#f9fafb", padding: "100px 0", overflow: "hidden", position: "relative", transition: "background 0.3s ease" }}>
       <style>{`
         @keyframes marquee-testimonials {
           0% { transform: translateX(0); }
@@ -27,19 +30,20 @@ const SectionTestimonials: React.FC = () => {
           animation-play-state: paused;
         }
         .testimonial-card {
-          background: #0d0f1a;
-          border: 1px solid #1e2130;
+          background: ${theme === 'dark' ? '#18181b' : '#ffffff'};
+          border: 1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'};
           border-radius: 16px;
           padding: 32px;
           width: 400px;
           display: flex;
           flex-direction: column;
           gap: 24px;
-          transition: transform 0.2s, background 0.2s;
+          transition: transform 0.2s, background 0.3s ease, box-shadow 0.3s ease;
+          box-shadow: ${theme === 'dark' ? 'none' : '0 4px 20px rgba(0,0,0,0.03)'};
         }
         .testimonial-card:hover {
           transform: translateY(-4px);
-          background: #111424;
+          background: ${theme === 'dark' ? '#27272a' : '#f8fafc'};
         }
       `}</style>
       
@@ -48,7 +52,7 @@ const SectionTestimonials: React.FC = () => {
           <h2 style={{ fontSize: "14px", color: "#3b82f6", fontWeight: 700, textTransform: "uppercase", letterSpacing: "4px", marginBottom: "16px" }}>
             Wall of Love
           </h2>
-          <h3 style={{ fontSize: "clamp(32px, 4vw, 42px)", fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>
+          <h3 style={{ fontSize: "clamp(32px, 4vw, 42px)", fontWeight: 800, color: theme === 'dark' ? "#fff" : "#111827", letterSpacing: "-0.02em", transition: "color 0.3s ease" }}>
             Trusted by creators worldwide
           </h3>
         </FadeInScroll>
@@ -60,14 +64,14 @@ const SectionTestimonials: React.FC = () => {
             {/* Double the array for seamless looping */}
             {[...TESTIMONIALS, ...TESTIMONIALS].map((t, i) => (
               <div key={i} className="testimonial-card">
-                <p style={{ color: "#f4f4f5", fontSize: "16px", lineHeight: 1.6, flexGrow: 1 }}>
+                <p style={{ color: theme === 'dark' ? "#e4e4e7" : "#4b5563", fontSize: "16px", lineHeight: 1.6, flexGrow: 1, transition: "color 0.3s ease" }}>
                   "{t.quote}"
                 </p>
                 <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                   <img src={t.img} alt={t.author} style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover" }} />
                   <div>
-                    <div style={{ color: "#fff", fontWeight: 700, fontSize: "15px" }}>{t.author}</div>
-                    <div style={{ color: "#7a8499", fontSize: "13px" }}>{t.role}</div>
+                    <div style={{ color: theme === 'dark' ? "#fff" : "#111827", fontWeight: 700, fontSize: "15px", transition: "color 0.3s ease" }}>{t.author}</div>
+                    <div style={{ color: theme === 'dark' ? "#a1a1aa" : "#6b7280", fontSize: "13px", transition: "color 0.3s ease" }}>{t.role}</div>
                   </div>
                 </div>
               </div>
