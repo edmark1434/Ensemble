@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import DriftWall from "@/components/ui/DriftWall";
 import StatsBar from "@/components/ui/StatsBar";
 import FadeInScroll from "@/components/ui/FadeInScroll";
+import useGlobalState from "@/lib/global_state";
 
 interface GalleryProps {
   isMuted?: boolean;
@@ -21,9 +22,9 @@ const ENSEMBLE_ECOSYSTEM = [
 ];
 
 const SectionGallery: React.FC<GalleryProps> = ({ isMuted = false }) => {
-  const [hasLoaded, setHasLoaded] = React.useState(false);
   const containerRef = useRef<HTMLElement>(null);
   const swooshAudioRef = useRef<HTMLAudioElement | null>(null);
+  const theme = useGlobalState((state) => state.theme);
 
   const isDragging = useRef<boolean>(false);
   const startX = useRef<number>(0);
@@ -33,24 +34,6 @@ const SectionGallery: React.FC<GalleryProps> = ({ isMuted = false }) => {
     // Initialize only the swoosh audio asset
     swooshAudioRef.current = new Audio("/sounds/swoosh.mp3");
     swooshAudioRef.current.volume = 0.45;
-  }, []);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setHasLoaded(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: "600px" } // Preload when it is 600px close
-    );
-    
-    observer.observe(containerRef.current);
-    
-    return () => observer.disconnect();
   }, []);
 
   const handleDragStart = (clientX: number) => {
@@ -97,74 +80,99 @@ const SectionGallery: React.FC<GalleryProps> = ({ isMuted = false }) => {
     <section
       ref={containerRef}
       id="gallery-showcase"
+      className="bg-white dark:bg-[#121214]"
       style={{
-        background: "#080a12",
-        padding: "80px 0 40px",
         position: "relative",
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
-        gap: "32px"
+        justifyContent: "center",
+        minHeight: "100vh",
+        gap: "0px", // Removed gap since heading moved
+        transition: "background 0.3s ease"
       }}
     >
-      <div style={{ textAlign: "center", maxWidth: "1300px", margin: "0 auto", padding: "0 40px" }}>
-        <FadeInScroll distance={20} duration={0.6}>
-          <h3 style={{ fontSize: "clamp(28px, 3.5vw, 38px)", fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>
-            Ensemble is...
-          </h3>
-        </FadeInScroll>
-      </div>
-
       <div
         style={{ 
           width: "100%", 
-          height: "600px", 
+          height: "100vh", 
           position: "relative", 
-          pointerEvents: "none" 
+          pointerEvents: "none",
+          overflow: "hidden", // Ensure shifted images do not break page width
+          transform: "translateZ(0)", // Force GPU composite layer
+          willChange: "transform" // Prevent Chrome from destroying layer when off-screen
         }}
       >
-        {hasLoaded ? (
+        <div style={{ position: "absolute", inset: 0, transform: "translateX(20%)" }}>
           <DriftWall
             items={driftWallItems}
-            columns={5}
+            columns={3}
+            tileWidth={360}
+            tileHeight={240}
+            gap={24}
             speed={30}
             parallax={0.6}
             pauseOnHover={false}
-            overlayColor="#080a12"
+            overlayColor={theme === 'dark' ? '#121214' : '#ffffff'}
             grayscale={false}
           />
-        ) : (
-          <div style={{ width: "100%", height: "100%", background: "#080a12" }} />
-        )}
-      </div>
+        </div>
+
+        {/* Left Side Gradient Overlay */}
+        <div style={{
+          position: "absolute",
+          top: 0, left: 0, bottom: 0,
+          width: "70%",
+          background: theme === 'dark' ? "linear-gradient(to right, #121214 20%, rgba(18,18,20,0.85) 60%, transparent 100%)" : "linear-gradient(to right, #ffffff 20%, rgba(255,255,255,0.85) 60%, transparent 100%)",
+          zIndex: 5,
+          transition: "background 0.3s ease"
+        }} />
+
+        {/* Top Gradient Overlay (To blend seamlessly from the Hero section above) */}
+      <div style={{
+        position: "absolute",
+        top: 0, left: 0, right: 0,
+        height: "15%",
+        background: theme === 'dark' ? "linear-gradient(to bottom, #121214 0%, transparent 100%)" : "linear-gradient(to bottom, #ffffff 0%, transparent 100%)",
+        zIndex: 10,
+        transition: "background 0.3s ease",
+        pointerEvents: "none"
+      }} />
+
+      {/* Right Side Gradient Overlay (To blend seamlessly into the horizontal adjacent section) */}
+        <div style={{
+          position: "absolute",
+          top: 0, right: 0, bottom: 0,
+          width: "20%",
+          background: theme === 'dark' ? "linear-gradient(to left, #121214 0%, transparent 100%)" : "linear-gradient(to left, #ffffff 0%, transparent 100%)",
+          zIndex: 5,
+          transition: "background 0.3s ease",
+          pointerEvents: "none"
+        }} />
 
         {/* Text Overlay */}
         <div style={{
           position: "absolute",
           top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
+          left: "8%",
+          transform: "translateY(-50%)",
           pointerEvents: "none",
-          textAlign: "center",
-          background: "rgba(8, 10, 18, 0.45)",
-          backdropFilter: "blur(14px)",
-          WebkitBackdropFilter: "blur(14px)",
-          border: "1px solid rgba(255, 255, 255, 0.08)",
-          padding: "40px 56px",
-          borderRadius: "24px",
-          maxWidth: "860px",
+          textAlign: "left",
+          maxWidth: "640px",
           width: "90%",
-          boxShadow: "0 24px 60px -12px rgba(0, 0, 0, 0.8)",
-          zIndex: 10
+          zIndex: 10,
         }}>
-          <FadeInScroll distance={20} duration={0.8} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "32px", width: "100%" }}>
-            <p style={{
+          <FadeInScroll distance={20} duration={0.8} style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "24px", width: "100%" }}>
+            <h3 className="text-gray-900 dark:text-white" style={{ fontSize: "clamp(28px, 3.5vw, 42px)", fontWeight: 800, letterSpacing: "-0.02em", margin: 0 }}>
+              Ensemble is...
+            </h3>
+            <p className="text-gray-900 dark:text-[#f4f4f5]" style={{
               fontSize: "clamp(18px, 2.2vw, 26px)",
-              color: "#f4f4f5",
-              lineHeight: 1.6,
+              lineHeight: 1.5,
               fontWeight: 500,
               letterSpacing: "-0.01em",
-              textShadow: "0 2px 12px rgba(0,0,0,1)"
+              textShadow: theme === 'dark' ? "0 2px 24px rgba(0,0,0,0.8)" : "0 2px 24px rgba(255,255,255,0.8)",
+              transition: "color 0.3s ease, text-shadow 0.3s ease"
             }}>
               A place where video editors and creators team up easily. Work together in real-time, find jobs, hire talent securely, and use AI to speed up your editing—all in one place without the usual headaches.
             </p>
@@ -174,6 +182,7 @@ const SectionGallery: React.FC<GalleryProps> = ({ isMuted = false }) => {
             </div>
           </FadeInScroll>
         </div>
+      </div>
     </section>
   );
 };
