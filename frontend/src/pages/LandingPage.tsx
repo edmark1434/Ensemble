@@ -17,6 +17,8 @@ const SectionTestimonials = lazy(() => import("../pages/landing/section_Testimon
 const SectionCallForAction = lazy(() => import("../pages/landing/section_CallForAction"));
 const SectionFooter = lazy(() => import("../pages/landing/section_Footer"));
 
+import HorizontalScrollJacker from "@/components/ui/HorizontalScrollJacker";
+
 // ─── Design tokens (Plus Jakarta Sans) ────────────────────────────────────────
 const T = {
   bg:          "#080a12",
@@ -56,28 +58,44 @@ function useGlobalStyle(css: string): void {
 
 
 
+import useGlobalState from "@/lib/global_state";
+
 // ─── Main Landing Page Composition ───────────────────────────────────────────
 const LandingPage: FC = () => {
   useGlobalStyle(GLOBAL_CSS);
   const navigate = useNavigate();
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [isMuted, setIsMuted] = useState<boolean>(false);
-  const targetVolume = 0.25; // Balanced volume mix
+  const [isBgmMuted, setIsBgmMuted] = useState<boolean>(false);
+  const [isSfxMuted, setIsSfxMuted] = useState<boolean>(false);
+  const [bgmVolume, setBgmVolume] = useState<number>(0.02); // 2% default
+  const theme = useGlobalState((state) => state.theme);
+  const targetVolume = bgmVolume;
+  const audioSrc = theme === 'dark' ? '/sounds/dark-bgm.mp3' : '/sounds/light-bgm.mp3';
+  const volumeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Unified smooth volume adjustment routine
+  const smoothlyAdjustVolume = (audio: HTMLAudioElement, target: number) => {
+    if (volumeIntervalRef.current) clearInterval(volumeIntervalRef.current);
+    
+    volumeIntervalRef.current = setInterval(() => {
+      const diff = target - audio.volume;
+      if (Math.abs(diff) < 0.005) {
+        audio.volume = target;
+        if (volumeIntervalRef.current) clearInterval(volumeIntervalRef.current);
+      } else {
+        const step = diff > 0 ? 0.002 : -0.002;
+        audio.volume = Math.min(Math.max(audio.volume + step, 0), 1);
+      }
+    }, 40);
+  };
 
   // Enhanced fading routine to emphasize the gradual build-up
   const fadeInAudio = (audio: HTMLAudioElement) => {
-    audio.volume = 0; // Absolute silence at start
+    if (audio.volume === 1) audio.volume = 0; // Absolute silence at start if not already fading
     audio.play()
       .then(() => {
-        // Steps up volume slower (0.005) every 40ms to create an explicit audible curve
-        const fadeInterval = setInterval(() => {
-          if (audio.volume < targetVolume) {
-            audio.volume = Math.min(audio.volume + 0.005, targetVolume);
-          } else {
-            clearInterval(fadeInterval);
-          }
-        }, 40);
+        smoothlyAdjustVolume(audio, targetVolume);
       })
       .catch(() => {
         console.log("Autoplay blocked at 0.8s. Hooking fallback interaction gesture listener...");
@@ -91,6 +109,28 @@ const LandingPage: FC = () => {
       });
   };
 
+  // Handle track switches and dynamic volume adjustments
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    
+    // We have dedicated tracks now, so ensure playback speed is normal
+    audio.playbackRate = 1.0;
+
+    if (!isBgmMuted) {
+      // Whenever the source changes, we reset volume to 0 to prevent a loud cut,
+      // then seamlessly play and fade it up to the new target volume.
+      if (audio.paused) {
+        audio.volume = 0;
+        audio.play().then(() => {
+          smoothlyAdjustVolume(audio, targetVolume);
+        }).catch(e => console.log("Autoplay prevented on track switch", e));
+      } else {
+        smoothlyAdjustVolume(audio, targetVolume);
+      }
+    }
+  }, [audioSrc, targetVolume, isBgmMuted]);
+
   useEffect(() => {
     // 1. Fire a 0.8-second (800ms) delay timer on page mount
     const timer = setTimeout(() => {
@@ -102,18 +142,21 @@ const LandingPage: FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  const toggleAudio = () => {
+  const toggleBgm = () => {
     if (!audioRef.current) return;
-
-    if (isMuted) {
+    if (isBgmMuted) {
       audioRef.current.volume = targetVolume;
       audioRef.current.play()
-        .then(() => setIsMuted(false))
+        .then(() => setIsBgmMuted(false))
         .catch(err => console.log("Playback interaction error:", err));
     } else {
       audioRef.current.pause();
-      setIsMuted(true);
+      setIsBgmMuted(true);
     }
+  };
+
+  const toggleSfx = () => {
+    setIsSfxMuted(!isSfxMuted);
   };
 
   const handleStartAction = () => {
@@ -123,44 +166,50 @@ const LandingPage: FC = () => {
   return (
     <div style={{ background: T.bg, minHeight: "100vh", overflowX: "clip" }}>
       {/* Background Music Resource Initialization Loop */}
-      <audio ref={audioRef} src="/sounds/bgm_landing.mp3" loop />
+      <audio ref={audioRef} src={audioSrc} loop />
 
       {/* 1. Header Navigation Module */}
       <NavLanding
         onLogin={() => navigate("/login")}
         onSignup={handleStartAction}
-        isMuted={isMuted}
-        onToggleAudio={toggleAudio}
+        isBgmMuted={isBgmMuted}
+        isSfxMuted={isSfxMuted}
+        bgmVolume={bgmVolume}
+        onToggleBgm={toggleBgm}
+        onToggleSfx={toggleSfx}
+        onSetBgmVolume={setBgmVolume}
       />
 
       {/* 2. Full Video Backdrop Hero Module */}
-      <SectionHero onStart={handleStartAction} isMuted={isMuted} />
+      <SectionHero onStart={handleStartAction} isMuted={isSfxMuted} />
 
       {/* Lazy-loaded sections to prevent initial lag */}
       <Suspense fallback={<div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: T.muted }}>Loading...</div>}>
-        {/* 4. Interactive WebGL Curvature Showcase */}
-        <SectionGallery isMuted={isMuted} />
-
         {/* 6.5 Isolated Scrolling Text Module */}
-        <SectionScrollText isMuted={isMuted} />
+        <SectionScrollText isMuted={isSfxMuted} />
 
-        {/* 5. Multi-Intent 3-Way Structural Flow Module */}
-        <SectionHowItWorks isMuted={isMuted} />
+        <HorizontalScrollJacker numPanels={3}>
+          {/* 4. Interactive WebGL Curvature Showcase */}
+          <SectionGallery isMuted={isSfxMuted} />
 
-        {/* 6. Marketplace Value Grid Module */}
-        <SectionFeatures isMuted={isMuted} />
+          {/* 5. Multi-Intent 3-Way Structural Flow Module */}
+          <SectionHowItWorks isMuted={isSfxMuted} />
+
+          {/* 6. Marketplace Value Grid Module */}
+          <SectionFeatures isMuted={isSfxMuted} />
+        </HorizontalScrollJacker>
 
         {/* 6.1 Scroll Expansion Module */}
-        <SectionScrollExpand isMuted={isMuted} />
+        <SectionScrollExpand isMuted={isSfxMuted} />
 
         {/* 6.7 Wall of Love / Testimonials Module */}
         <SectionTestimonials />
 
         {/* 7. Action Acquisition Strip Module */}
-        <SectionCallForAction onStart={handleStartAction} isMuted={isMuted} />
+        <SectionCallForAction onStart={handleStartAction} isMuted={isSfxMuted} />
 
         {/* 8. Directory Tree Architecture Footer Module */}
-        <SectionFooter isMuted={isMuted} />
+        <SectionFooter isMuted={isSfxMuted} />
       </Suspense>
 
       <ScrollToTop />
