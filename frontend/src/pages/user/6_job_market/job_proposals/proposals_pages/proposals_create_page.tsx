@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
+import toast from "react-hot-toast";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
+import { requireVerifiedAccount } from "@/lib/accountVerification";
 
 // Sub-components & Wizard Steps
 import ProposalCreateHeader from "../proposals_components/proposals_creation_components/proposal_create_header";
@@ -150,6 +152,7 @@ const ProposalsCreatePage: React.FC = () => {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
+      await requireVerifiedAccount();
       if (!id) throw new Error("Job ID is missing.");
       
       const payload = {
@@ -172,7 +175,8 @@ const ProposalsCreatePage: React.FC = () => {
       setIsSuccessOpen(true);
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Failed to submit proposal.");
+      const message = err.response?.data?.message || err.message || "Failed to submit proposal.";
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }

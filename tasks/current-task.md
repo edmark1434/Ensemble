@@ -1,3 +1,43 @@
+# Current Task — Require Verification for Marketplace Submissions
+
+Require the authenticated user's existing `verifications.is_verified` value to be true before creating a job, creating a gig, or submitting a job proposal. Enforce the rule on the backend and stop frontend uploads/requests early with a clear path to account verification.
+
+## Acceptance Criteria
+
+* [x] Missing verification records and `is_verified = false` are treated as unverified.
+* [x] Job creation is rejected before its controller for unverified users.
+* [x] Gig creation is rejected before its controller for unverified users.
+* [x] Job proposal submission is rejected before its controller for unverified users.
+* [x] Browsing, editing, saving, and unrelated marketplace actions are unchanged.
+* [x] Frontend submission flows check verification before starting uploads or creation calls.
+* [x] Every Post a Job entry button checks verification before opening the creation screen and reports failures through react-hot-toast.
+* [x] Every active Post/Create a Service entry button checks verification before opening the gig creation screen and reports failures through react-hot-toast.
+* [x] Backend rejection uses HTTP 403 with a stable error code and verification path.
+* [x] Focused backend verification and frontend production build pass.
+
+Status: Completed August 26, 2026.
+
+Implementation notes: Added an authenticated verification middleware backed by an `EXISTS` query on `verifications.is_verified`, applied it only to job creation, gig creation, and job-proposal submission, and added frontend preflight checks before uploads. Every active Post a Job and Post/Create a Service entry point now checks verification before navigation; unverified users stay on the current page and receive a react-hot-toast error. Final submission and backend checks remain as defense in depth. Backend syntax and focused middleware branch checks passed; the frontend production build passed. Focused lint still reports existing legacy errors in the three form components, while the new shared helper passes lint.
+
+---
+# Current Task — Applicant Acceptance Escrow Transfer
+
+When an applicant accepts a pending job offer, atomically transfer the contract's authoritative credit amount from the client's escrow wallet to the applicant's escrow wallet before activating the contract.
+
+## Acceptance Criteria
+
+* [x] Contract ownership and pending status are checked while locking the contract row.
+* [x] Client and applicant escrow wallets are resolved by account ID and locked in deterministic order.
+* [x] The client escrow cannot go negative.
+* [x] The applicant escrow receives the exact contract rate.
+* [x] A contract-referenced Fund Transfer ledger record is written in the same transaction.
+* [x] Contract acceptance rolls back if any wallet operation fails.
+* [x] Expected wallet failures return clear client errors.
+* [x] Backend syntax and diff checks pass.
+
+Status: Completed August 26, 2026.
+
+---
 # Current Task - Marketplace Proposal and Gig Conversations
 
 Create or reuse a dedicated Marketplace inbox conversation from shortlisted proposal and gig-order actions. Participants and links are derived on the backend, creation is idempotent, and proposal/order context stays visible and clickable in chat.

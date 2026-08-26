@@ -36,9 +36,27 @@ async function sendJobOffer(clientId, proposalId, rateCredits, startsAt) {
         const wallet = walletRes.rows[0];
         if (wallet.balance_credits < rateCredits) {
             throw new Error("Insufficient balance for escrow funding");
+        }else{
+            const updateWalletRes = await client.query(`
+                UPDATE wallets
+                SET balance_credits = balance_credits - $1
+                WHERE wallet_id = $2
+            `, [rateCredits, wallet.wallet_id]);
+            const updateEscrowWallet = await client.query(`
+                UPDATE wallets AS w
+                SET balance_credits = w.balance_credits + $1
+                FROM account_wallets AS aw
+                WHERE aw.wallet_id = w.wallet_id
+                  AND aw.account_id = $2
+                  AND w.type = 'escrow wallets'
+                RETURNING w.wallet_id, w.balance_credits
+            `, [rateCredits, clientId]);
+
+            if (updateEscrowWallet.rows.length === 0) {
+                throw new Error("Client escrow wallet not found");
+            }
         }
 
-        // DEV MODE: Skip actual wallet deduction and escrow creation
         // 4. Create Contract
         const contractRes = await client.query(`
             INSERT INTO contracts (contract_type, payment_type, starts_at, rate_credits, revision_price_credits, status)
@@ -90,12 +108,14 @@ async function acceptJobOffer(freelancerId, contractId) {
 
         // 1. Verify contract belongs to a proposal owned by this freelancer
         const contractRes = await client.query(`
-            SELECT c.contract_id, c.starts_at, p.proposal_id, j.job_id, j.no_of_hires, j.title, j.client_account_id
+            SELECT c.contract_id, c.starts_at, c.rate_credits, p.proposal_id,
+                   j.job_id, j.no_of_hires, j.title, j.client_account_id
             FROM contracts c
             JOIN job_contracts jc ON c.contract_id = jc.contract_id
             JOIN proposals p ON jc.proposal_id = p.proposal_id
             JOIN jobs j ON p.job_id = j.job_id
             WHERE c.contract_id = $1 AND p.freelancer_account_id = $2 AND c.status = 'Pending Signature'
+            FOR UPDATE OF c
         `, [contractId, freelancerId]);
 
         if (contractRes.rows.length === 0) {
@@ -103,6 +123,58 @@ async function acceptJobOffer(freelancerId, contractId) {
         }
 
         const { starts_at, proposal_id, job_id, no_of_hires, title, client_account_id } = contractRes.rows[0];
+        const transferAmount = Number(contractRes.rows[0].rate_credits);
+        if (!Number.isSafeInteger(transferAmount) || transferAmount <= 0) {
+            throw new Error("Contract has an invalid rate");
+        }
+
+        const escrowWalletsRes = await client.query(`
+            SELECT aw.account_id, w.wallet_id, w.balance_credits, w.status
+            FROM account_wallets aw
+            JOIN wallets w ON w.wallet_id = aw.wallet_id
+            WHERE aw.account_id = ANY($1::uuid[])
+              AND w.type = 'escrow wallets'
+            ORDER BY w.wallet_id
+            FOR UPDATE OF w
+        `, [[client_account_id, freelancerId]]);
+
+        const clientEscrow = escrowWalletsRes.rows.find(
+            (row) => String(row.account_id) === String(client_account_id)
+        );
+        const freelancerEscrow = escrowWalletsRes.rows.find(
+            (row) => String(row.account_id) === String(freelancerId)
+        );
+
+        if (!clientEscrow) throw new Error("Client escrow wallet not found");
+        if (!freelancerEscrow) throw new Error("Freelancer escrow wallet not found");
+        if (clientEscrow.status !== 'active' || freelancerEscrow.status !== 'active') {
+            throw new Error("Escrow wallet is not active");
+        }
+
+        const debitClientEscrowRes = await client.query(`
+            UPDATE wallets
+            SET balance_credits = balance_credits - $1
+            WHERE wallet_id = $2 AND balance_credits >= $1
+            RETURNING balance_credits
+        `, [transferAmount, clientEscrow.wallet_id]);
+
+        if (debitClientEscrowRes.rows.length === 0) {
+            throw new Error("Client escrow balance is insufficient");
+        }
+
+        const creditFreelancerEscrowRes = await client.query(`
+            UPDATE wallets
+            SET balance_credits = balance_credits + $1
+            WHERE wallet_id = $2
+            RETURNING balance_credits
+        `, [transferAmount, freelancerEscrow.wallet_id]);
+
+        await client.query(`
+            INSERT INTO credit_transactions (
+                type, amount_credits, status, source_wallet_id,
+                destination_wallet_id, reference_table, reference_id
+            ) VALUES ('Fund Transfer', $1, 'completed', $2, $3, 'contracts', $4)
+        `, [transferAmount, clientEscrow.wallet_id, freelancerEscrow.wallet_id, contractId]);
 
         // 2. Determine new contract status based on starts_at
         const now = new Date();
@@ -200,7 +272,15 @@ async function acceptJobOffer(freelancerId, contractId) {
         }
 
         await client.query('COMMIT');
-        return { contract_id: contractId, status: contractStatus, hired_count: hiredCount, job_closed: hiredCount >= no_of_hires };
+        return {
+            contract_id: contractId,
+            status: contractStatus,
+            hired_count: hiredCount,
+            job_closed: hiredCount >= no_of_hires,
+            amount_credits: transferAmount,
+            client_escrow_balance: Number(debitClientEscrowRes.rows[0].balance_credits),
+            freelancer_escrow_balance: Number(creditFreelancerEscrowRes.rows[0].balance_credits),
+        };
 
     } catch (error) {
         await client.query('ROLLBACK');
@@ -224,6 +304,7 @@ async function rejectJobOffer(freelancerId, contractId, reason) {
             JOIN proposals p ON jc.proposal_id = p.proposal_id
             JOIN jobs j ON p.job_id = j.job_id
             WHERE c.contract_id = $1 AND p.freelancer_account_id = $2 AND c.status = 'Pending Signature'
+            FOR UPDATE OF c
         `, [contractId, freelancerId]);
 
         if (contractRes.rows.length === 0) {

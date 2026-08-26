@@ -99,7 +99,15 @@ async function acceptJobOfferController(req, res) {
     } catch (error) {
         console.error("Error in acceptJobOfferController:", error);
         
-        if (error.message === "Contract not found or not pending signature for this user") {
+        const businessErrors = new Set([
+            "Contract not found or not pending signature for this user",
+            "Contract has an invalid rate",
+            "Client escrow wallet not found",
+            "Freelancer escrow wallet not found",
+            "Escrow wallet is not active",
+            "Client escrow balance is insufficient",
+        ]);
+        if (businessErrors.has(error.message)) {
             return res.status(400).json({ success: false, message: error.message });
         }
 
@@ -138,7 +146,15 @@ async function rejectJobOfferController(req, res) {
     } catch (error) {
         console.error("Error in rejectJobOfferController:", error);
         
-        if (error.message === "Contract not found or not pending signature for this user") {
+        const businessErrors = new Set([
+            "Contract not found or not pending signature for this user",
+            "Contract has an invalid rate",
+            "Client escrow wallet not found",
+            "Freelancer escrow wallet not found",
+            "Escrow wallet is not active",
+            "Client escrow balance is insufficient",
+        ]);
+        if (businessErrors.has(error.message)) {
             return res.status(400).json({ success: false, message: error.message });
         }
 

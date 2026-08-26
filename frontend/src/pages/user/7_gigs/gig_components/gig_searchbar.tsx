@@ -1,6 +1,7 @@
 import React from "react";
 import { Search, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { continueIfAccountVerified } from "@/lib/accountVerification";
 
 interface GigSearchBarProps {
   searchQuery: string;
@@ -13,7 +14,7 @@ const GigSearchBar: React.FC<GigSearchBarProps> = ({ searchQuery, setSearchQuery
   return (
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center w-full">
       <button
-        onClick={() => navigate("/gigs/create")}
+        onClick={() => continueIfAccountVerified(() => navigate("/gigs/create"))}
         className="shrink-0 flex items-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm font-bold text-white dark:text-black transition hover:scale-105"
       >
         <Plus className="h-4 w-4" /> <span>Post a Service</span>

@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import type { OrdersMainContext } from "./orders_main";
 import { SelectJobCardSkeleton } from "../../6_job_market/job_proposals/proposals_pages/proposals_select_job_page";
+import { continueIfAccountVerified } from "@/lib/accountVerification";
 
 export const OrdersSelectGigPage: React.FC = () => {
   const navigate = useNavigate();
@@ -74,7 +75,7 @@ export const OrdersSelectGigPage: React.FC = () => {
               You haven't posted any services yet. Post a service to start receiving orders!
             </p>
             <button
-              onClick={() => navigate('/gigs/create')}
+              onClick={() => continueIfAccountVerified(() => navigate('/gigs/create'))}
               className="mt-4 px-6 py-2.5 rounded-xl bg-blue-500 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
             >
               <Plus className="h-4 w-4" /> Post a Service

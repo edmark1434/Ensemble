@@ -20,6 +20,7 @@ const {
 } = require('../controllers/GigControllers');
 const requireAuth = require('../middleware/RequireAuth');
 const requireCompletedOnboarding = require('../middleware/RequireCompletedOnboarding');
+const requireVerifiedAccount = require('../middleware/RequireVerifiedAccount');
 
 router.use(requireAuth);
 router.use(requireCompletedOnboarding);
@@ -67,6 +68,6 @@ router.post('/orders/:orderId/reject', rejectGigOrderController);
 router.get('/', getAllGigsController);
 
 // POST /api/gigs
-router.post('/', createGigController);
+router.post('/', requireVerifiedAccount, createGigController);
 
 module.exports = router;
