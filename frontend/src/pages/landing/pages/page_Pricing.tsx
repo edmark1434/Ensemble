@@ -1,75 +1,79 @@
+import useGlobalState from "@/lib/global_state";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Check, Crown, X } from "lucide-react";
 
-const PLANS = [
-  {
-    name: "Default",
-    price: "FREE",
-    originalPrice: null,
-    color: "#ffffff",
-    badgeColor: "rgba(255, 255, 255, 0.05)",
-    icon: null,
-    features: [
-      "720p Export",
-      "Standard Export Speed",
-      "Low Render Queue",
-      "Watermarked Export",
-      "Basic Tools",
-      "3 Collaborators",
-      "3 Collaborative Projects",
-      "1 Asset Post"
-    ],
-    buttonText: "Get Started",
-    isPrimary: false
-  },
-  {
-    name: "PREMIUM",
-    price: "599",
-    originalPrice: "899",
-    color: "#eab308", // Gold accent matching image_ed9fca.jpg
-    badgeColor: "rgba(234, 179, 8, 0.1)",
-    icon: <Crown size={16} fill="#eab308" color="#eab308" />,
-    features: [
-      "1080p Export",
-      "Accelerated Export Speed",
-      "Priority Render Queue",
-      "No Watermark",
-      "Premium Tools + AI",
-      "10 Collaborators",
-      "10 Collaborative Projects",
-      "20 Asset Posts",
-      "Profile Visibility +30%",
-      "Badge Display"
-    ],
-    buttonText: "Upgrade to Premium",
-    isPrimary: true
-  },
-  {
-    name: "BUSINESS",
-    price: "3,500",
-    originalPrice: "3,999",
-    color: "#2dd4bf", // Teal accent matching image_ed9fca.jpg
-    badgeColor: "rgba(45, 212, 191, 0.1)",
-    icon: <Crown size={16} fill="#2dd4bf" color="#2dd4bf" />,
-    features: [
-      "2K - 4K Export",
-      "Maximum Export Speed",
-      "Absolute Render Queue",
-      "No Watermark",
-      "Premium Tools + AI",
-      "20 Collaborators",
-      "20 Collaborative Projects",
-      "Unlimited Asset Posts",
-      "Profile Visibility +90%",
-      "Badge Display and More"
-    ],
-    buttonText: "Upgrade to Business",
-    isPrimary: true
-  }
-];
+
 
 const PagePricing: React.FC = () => {
+  const theme = useGlobalState((state) => state.theme);
+
+  const PLANS = [
+    {
+      name: "Default",
+      price: "FREE",
+      originalPrice: null,
+      color: theme === 'dark' ? "#ffffff" : "#111827",
+      badgeColor: "rgba(255, 255, 255, 0.05)",
+      icon: null,
+      features: [
+        "720p Export",
+        "Standard Export Speed",
+        "Low Render Queue",
+        "Watermarked Export",
+        "Basic Tools",
+        "3 Collaborators",
+        "3 Collaborative Projects",
+        "1 Asset Post"
+      ],
+      buttonText: "Get Started",
+      isPrimary: false
+    },
+    {
+      name: "PREMIUM",
+      price: "599",
+      originalPrice: "899",
+      color: "#eab308",
+      badgeColor: "rgba(234, 179, 8, 0.1)",
+      icon: <Crown size={16} fill="#eab308" color="#eab308" />,
+      features: [
+        "1080p Export",
+        "Accelerated Export Speed",
+        "Priority Render Queue",
+        "No Watermark",
+        "Premium Tools + AI",
+        "10 Collaborators",
+        "10 Collaborative Projects",
+        "20 Asset Posts",
+        "Profile Visibility +30%",
+        "Badge Display"
+      ],
+      buttonText: "Upgrade to Premium",
+      isPrimary: true
+    },
+    {
+      name: "BUSINESS",
+      price: "3,500",
+      originalPrice: "3,999",
+      color: "#2dd4bf",
+      badgeColor: "rgba(45, 212, 191, 0.1)",
+      icon: <Crown size={16} fill="#2dd4bf" color="#2dd4bf" />,
+      features: [
+        "2K - 4K Export",
+        "Maximum Export Speed",
+        "Absolute Render Queue",
+        "No Watermark",
+        "Premium Tools + AI",
+        "20 Collaborators",
+        "20 Collaborative Projects",
+        "Unlimited Asset Posts",
+        "Profile Visibility +90%",
+        "Badge Display and More"
+      ],
+      buttonText: "Upgrade to Business",
+      isPrimary: true
+    }
+  ];
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
@@ -84,14 +88,14 @@ const PagePricing: React.FC = () => {
   };
 
   return (
-    <div style={{ background: "#080a12", minHeight: "100vh", color: "#fff", padding: "80px 24px", position: "relative", overflowX: "hidden" }}>
+    <div style={{ background: theme === 'dark' ? "#121214" : "#f9fafb", minHeight: "100vh", color: theme === 'dark' ? '#ffffff' : '#111827', padding: "80px 24px", position: "relative", overflowX: "hidden" }}>
 
       {/* Visual Component Micro-styles */}
       <style>{`
         .pricing-card {
           background: rgba(13, 15, 26, 0.45);
           backdrop-filter: blur(16px);
-          border: 1px solid #1e2130;
+          border: 1px solid ${theme === 'dark' ? "#27272a" : "#e5e7eb"};
           border-radius: 24px;
           padding: 40px 32px;
           display: flex;
@@ -145,9 +149,9 @@ const PagePricing: React.FC = () => {
         {/* Back Home Button */}
         <button
           onClick={() => navigate("/")}
-          style={{ background: "none", border: "none", color: "#7a8499", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 32, fontSize: 14, fontWeight: 600, transition: "color 0.2s" }}
-          onMouseEnter={(e) => e.currentTarget.style.color = "#fff"}
-          onMouseLeave={(e) => e.currentTarget.style.color = "#7a8499"}
+          style={{ background: "none", border: "none", color: theme === 'dark' ? "#7a8499" : "#6b7280", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 32, fontSize: 14, fontWeight: 600, transition: "color 0.2s" }}
+          onMouseEnter={(e) => e.currentTarget.style.color = theme === 'dark' ? '#ffffff' : '#111827'}
+          onMouseLeave={(e) => e.currentTarget.style.color = theme === 'dark' ? "#7a8499" : "#6b7280"}
         >
           <ArrowLeft size={16} /> Back to dashboard
         </button>
@@ -157,7 +161,7 @@ const PagePricing: React.FC = () => {
           <h1 style={{ fontSize: "clamp(32px, 5vw, 46px)", fontWeight: 800, letterSpacing: "-0.03em", marginBottom: 16 }}>
             Plans & Pricing Tiers
           </h1>
-          <p style={{ color: "#7a8499", fontSize: 16, maxWidth: 540, margin: "0 auto", lineHeight: 1.5 }}>
+          <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 16, maxWidth: 540, margin: "0 auto", lineHeight: 1.5 }}>
             Transparent scales tailored for freelancers and enterprise film production squads alike.
           </p>
         </div>
@@ -169,10 +173,10 @@ const PagePricing: React.FC = () => {
               key={idx}
               className="pricing-card"
               style={{
-                borderColor: tier.isPrimary ? "rgba(255, 255, 255, 0.08)" : "#1e2130"
+                borderColor: tier.isPrimary ? "rgba(255, 255, 255, 0.08)" : theme === 'dark' ? "#27272a" : "#e5e7eb"
               }}
               onMouseEnter={(e) => e.currentTarget.style.borderColor = tier.color}
-              onMouseLeave={(e) => e.currentTarget.style.borderColor = tier.isPrimary ? "rgba(255, 255, 255, 0.08)" : "#1e2130"}
+              onMouseLeave={(e) => e.currentTarget.style.borderColor = tier.isPrimary ? "rgba(255, 255, 255, 0.08)" : theme === 'dark' ? "#27272a" : "#e5e7eb"}
             >
               {/* Card Content Area */}
               <div>
@@ -195,7 +199,7 @@ const PagePricing: React.FC = () => {
 
                 {/* Pricing Block */}
                 <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 32 }}>
-                  <h2 style={{ fontSize: tier.price.includes("") ? 40 : 44, fontWeight: 800, margin: 0, color: "#fff", letterSpacing: "-0.02em" }}>
+                  <h2 style={{ fontSize: tier.price.includes("") ? 40 : 44, fontWeight: 800, margin: 0, color: theme === 'dark' ? '#ffffff' : '#111827', letterSpacing: "-0.02em" }}>
                     {tier.price}
                   </h2>
                   {tier.originalPrice && (
@@ -235,13 +239,13 @@ const PagePricing: React.FC = () => {
                 className="pricing-btn"
                 onClick={() => handlePlanClick(tier.name)}
                 style={{
-                  background: tier.isPrimary ? "#ffffff" : "transparent",
-                  color: tier.isPrimary ? "#080a12" : "#ffffff",
+                  background: tier.isPrimary ? theme === 'dark' ? "#ffffff" : "#111827" : "transparent",
+                  color: tier.isPrimary ? theme === 'dark' ? "#121214" : "#f9fafb" : theme === 'dark' ? "#ffffff" : "#111827",
                   border: tier.isPrimary ? "none" : "1px solid #1e2130"
                 }}
                 onMouseEnter={(e) => {
                   if (!tier.isPrimary) {
-                    e.currentTarget.style.borderColor = "#ffffff";
+                    e.currentTarget.style.borderColor = theme === 'dark' ? "#ffffff" : "#111827";
                     e.currentTarget.style.background = "rgba(255, 255, 255, 0.03)";
                   } else {
                     e.currentTarget.style.background = "#dde3ed";
@@ -249,10 +253,10 @@ const PagePricing: React.FC = () => {
                 }}
                 onMouseLeave={(e) => {
                   if (!tier.isPrimary) {
-                    e.currentTarget.style.borderColor = "#1e2130";
+                    e.currentTarget.style.borderColor = theme === 'dark' ? "#27272a" : "#e5e7eb";
                     e.currentTarget.style.background = "transparent";
                   } else {
-                    e.currentTarget.style.background = "#ffffff";
+                    e.currentTarget.style.background = theme === 'dark' ? "#ffffff" : "#111827";
                   }
                 }}
               >
@@ -262,8 +266,8 @@ const PagePricing: React.FC = () => {
                     width: 18,
                     height: 18,
                     borderRadius: "50%",
-                    background: "#080a12",
-                    color: "#fff",
+                    background: theme === 'dark' ? "#121214" : "#f9fafb",
+                    color: theme === 'dark' ? '#ffffff' : '#111827',
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center"
@@ -301,7 +305,7 @@ const PagePricing: React.FC = () => {
         >
           <div
             style={{
-              background: "#0d0f1a",
+              background: theme === 'dark' ? "#18181b" : theme === 'dark' ? "#ffffff" : "#111827",
               border: "1px solid #1e2130",
               borderRadius: "20px",
               padding: "32px",
@@ -316,7 +320,7 @@ const PagePricing: React.FC = () => {
             <button
               onClick={() => setIsModalOpen(false)}
               style={{ position: "absolute", top: 20, right: 20, background: "none", border: "none", color: "#525c73", cursor: "pointer", transition: "color 0.2s" }}
-              onMouseEnter={(e) => e.currentTarget.style.color = "#fff"}
+              onMouseEnter={(e) => e.currentTarget.style.color = theme === 'dark' ? '#ffffff' : '#111827'}
               onMouseLeave={(e) => e.currentTarget.style.color = "#525c73"}
             >
               <X size={20} />
@@ -328,7 +332,7 @@ const PagePricing: React.FC = () => {
                 <Crown size={28} color={selectedPlan === "BUSINESS" ? "#2dd4bf" : "#eab308"} />
               </div>
               <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Account Required</h3>
-              <p style={{ color: "#7a8499", fontSize: 14, lineHeight: 1.4 }}>
+              <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 14, lineHeight: 1.4 }}>
                 To subscribe to the <span style={{ color: selectedPlan === "BUSINESS" ? "#2dd4bf" : "#eab308", fontWeight: 600 }}>{selectedPlan}</span> plan, please sign in or create a new account.
               </p>
             </div>
@@ -338,7 +342,7 @@ const PagePricing: React.FC = () => {
               <button
                 className="modal-action-btn"
                 onClick={() => navigate("/login")}
-                style={{ background: "transparent", border: "1px solid #1e2130", color: "#fff" }}
+                style={{ background: "transparent", border: "1px solid #1e2130", color: theme === 'dark' ? '#ffffff' : '#111827' }}
                 onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.02)"}
                 onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
               >
@@ -347,9 +351,9 @@ const PagePricing: React.FC = () => {
               <button
                 className="modal-action-btn"
                 onClick={() => navigate("/signup")}
-                style={{ background: "#fff", border: "none", color: "#080a12" }}
+                style={{ background: theme === 'dark' ? '#ffffff' : '#111827', border: "none", color: theme === 'dark' ? "#121214" : "#f9fafb" }}
                 onMouseEnter={(e) => e.currentTarget.style.background = "#dde3ed"}
-                onMouseLeave={(e) => e.currentTarget.style.background = "#fff"}
+                onMouseLeave={(e) => e.currentTarget.style.background = theme === 'dark' ? '#ffffff' : '#111827'}
               >
                 Sign Up Free
               </button>

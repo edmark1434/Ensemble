@@ -1,3 +1,4 @@
+import useGlobalState from "@/lib/global_state";
 import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -43,6 +44,8 @@ const QUICK_QUESTIONS = [
 ];
 
 const PageAskOurChatbot: React.FC = () => {
+  const theme = useGlobalState((state) => state.theme);
+
   const navigate = useNavigate();
   const [messages, setMessages] = useState<Msg[]>([INITIAL_MESSAGE]);
   const [input, setInput] = useState("");
@@ -202,16 +205,16 @@ const PageAskOurChatbot: React.FC = () => {
         </div>
       </div>
       <style>{`
-        .ensemble-chat-page { position: relative; min-height: 100vh; overflow: hidden; background: #080a12; color: #f8fafc; padding: 36px 32px 48px; font-family: "Plus Jakarta Sans", sans-serif; }
+        .ensemble-chat-page { position: relative; min-height: 100vh; overflow: hidden; background: ${theme === 'dark' ? "#121214" : "#f9fafb"}; color: #f8fafc; padding: 36px 32px 48px; font-family: "Plus Jakarta Sans", sans-serif; }
         .ensemble-chat-glow { position: absolute; top: -180px; left: 50%; width: 620px; height: 360px; transform: translateX(-50%); border-radius: 50%; background: rgba(37, 99, 235, .12); filter: blur(100px); pointer-events: none; }
         .ensemble-chat-shell { position: relative; z-index: 1; width: min(1160px, 100%); margin: 0 auto; }
-        .ensemble-back-button { display: inline-flex; align-items: center; gap: 8px; padding: 8px 0; border: 0; background: transparent; color: #7a8499; font: inherit; font-size: 13px; cursor: pointer; transition: color .2s ease; }
-        .ensemble-back-button:hover { color: #fff; }
+        .ensemble-back-button { display: inline-flex; align-items: center; gap: 8px; padding: 8px 0; border: 0; background: transparent; color: ${theme === 'dark' ? "#7a8499" : "#6b7280"}; font: inherit; font-size: 13px; cursor: pointer; transition: color .2s ease; }
+        .ensemble-back-button:hover { color: ${theme === 'dark' ? "#ffffff" : "#111827"}; }
         .ensemble-chat-intro { margin: 30px 0 26px; text-align: center; }
         .ensemble-eyebrow { display: inline-flex; align-items: center; gap: 7px; color: #60a5fa; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
         .ensemble-chat-intro h1 { margin: 10px 0 8px; font-size: clamp(30px, 4vw, 46px); line-height: 1.1; letter-spacing: -.04em; }
         .ensemble-chat-intro p { margin: 0; color: #8b95a7; font-size: 15px; }
-        .ensemble-chat-workspace { display: grid; grid-template-columns: 290px minmax(0, 1fr); min-height: min(690px, calc(100vh - 240px)); overflow: hidden; border: 1px solid #1e2130; border-radius: 18px; background: #0d0f1a; box-shadow: 0 24px 70px rgba(0,0,0,.28); }
+        .ensemble-chat-workspace { display: grid; grid-template-columns: 290px minmax(0, 1fr); min-height: min(690px, calc(100vh - 240px)); overflow: hidden; border: 1px solid ${theme === 'dark' ? "#27272a" : "#e5e7eb"}; border-radius: 18px; background: ${theme === 'dark' ? "#18181b" : "#ffffff"}; box-shadow: 0 24px 70px rgba(0,0,0,.28); }
         .ensemble-chat-sidebar { display: flex; flex-direction: column; gap: 24px; padding: 24px; border-right: 1px solid #1e2130; background: #0a0c15; }
         .ensemble-assistant-card { display: flex; align-items: center; gap: 12px; }
         .ensemble-assistant-icon { display: grid; place-items: center; width: 46px; height: 46px; flex: 0 0 46px; border: 1px solid rgba(59,130,246,.25); border-radius: 13px; background: rgba(59,130,246,.1); }
@@ -222,11 +225,11 @@ const PageAskOurChatbot: React.FC = () => {
         .ensemble-assistant-card span { margin-top: 5px; color: #8b95a7; font-size: 11px; }
         .ensemble-assistant-card i { display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 3px rgba(52,211,153,.1); }
         .ensemble-sidebar-section { flex: 1; }
-        .ensemble-sidebar-section h2 { display: flex; align-items: center; gap: 7px; margin: 0 0 10px; color: #7a8499; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+        .ensemble-sidebar-section h2 { display: flex; align-items: center; gap: 7px; margin: 0 0 10px; color: ${theme === 'dark' ? "#7a8499" : "#6b7280"}; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
         .ensemble-quick-list { display: grid; gap: 7px; }
         .ensemble-quick-list button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 11px 12px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: #aab3c2; font: inherit; font-size: 12px; line-height: 1.4; text-align: left; cursor: pointer; transition: .2s ease; }
         .ensemble-quick-list button svg { flex: 0 0 auto; transform: rotate(180deg); color: #4b5568; }
-        .ensemble-quick-list button:hover:not(:disabled) { border-color: #262a3b; background: #111522; color: #fff; }
+        .ensemble-quick-list button:hover:not(:disabled) { border-color: #262a3b; background: #111522; color: ${theme === 'dark' ? "#ffffff" : "#111827"}; }
         .ensemble-quick-list button:hover svg { color: #60a5fa; }
         .ensemble-sidebar-note { display: flex; gap: 10px; color: #64748b; }
         .ensemble-sidebar-note svg { flex: 0 0 auto; margin-top: 1px; color: #3b82f6; }
@@ -239,24 +242,24 @@ const PageAskOurChatbot: React.FC = () => {
         .ensemble-conversation-header strong { font-size: 14px; }
         .ensemble-conversation-header span { margin-top: 3px; color: #667085; font-size: 11px; }
         .ensemble-conversation-header button { display: inline-flex; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid #25293a; border-radius: 8px; background: transparent; color: #8b95a7; font: inherit; font-size: 11px; cursor: pointer; }
-        .ensemble-conversation-header button:hover:not(:disabled) { border-color: #3b82f6; color: #fff; }
+        .ensemble-conversation-header button:hover:not(:disabled) { border-color: #3b82f6; color: ${theme === 'dark' ? "#ffffff" : "#111827"}; }
         .ensemble-conversation-header button:disabled, .ensemble-quick-list button:disabled { opacity: .45; cursor: not-allowed; }
         .ensemble-message-log { display: flex; flex-direction: column; gap: 20px; min-height: 0; padding: 28px; overflow-y: auto; scrollbar-color: #262a3b transparent; }
         .ensemble-message-row { display: flex; align-items: flex-start; gap: 10px; }
         .ensemble-message-row.is-user { flex-direction: row-reverse; }
         .ensemble-message-avatar { position: relative; display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 32px; border: 1px solid #25293a; border-radius: 9px; background: #111522; color: #60a5fa; }
         .ensemble-message-avatar img { width: 20px; height: 20px; object-fit: contain; }
-        .ensemble-message-row.is-user .ensemble-message-avatar { color: #fff; }
+        .ensemble-message-row.is-user .ensemble-message-avatar { color: ${theme === 'dark' ? "#ffffff" : "#111827"}; }
         .ensemble-message-avatar.is-thinking img { animation: ensemble-logo-pulse 1.4s ease-in-out infinite; }
         .ensemble-message-avatar.is-thinking::after { position: absolute; inset: -4px; border: 1px solid transparent; border-top-color: #60a5fa; border-right-color: rgba(96,165,250,.25); border-radius: 11px; content: ""; animation: ensemble-logo-orbit 1.2s linear infinite; }
         .ensemble-message-bubble { max-width: min(74%, 650px); padding: 12px 15px; border: 1px solid #25293a; border-radius: 4px 13px 13px; background: #151925; color: #d8dee9; font-size: 13px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
-        .ensemble-message-row.is-user .ensemble-message-bubble { border-color: #2563eb; border-radius: 13px 4px 13px 13px; background: #2563eb; color: #fff; }
+        .ensemble-message-row.is-user .ensemble-message-bubble { border-color: #2563eb; border-radius: 13px 4px 13px 13px; background: #2563eb; color: ${theme === 'dark' ? "#ffffff" : "#111827"}; }
         .ensemble-message-bubble.is-error { border-color: rgba(248,113,113,.3); background: rgba(127,29,29,.25); color: #fecaca; }
         .ensemble-typing { display: flex; align-items: center; gap: 4px; color: #8b95a7; }
         .ensemble-typing span { width: 5px; height: 5px; border-radius: 50%; background: #60a5fa; animation: ensemble-bounce 1.15s infinite ease-in-out; }
         .ensemble-typing span:nth-child(2) { animation-delay: .12s; } .ensemble-typing span:nth-child(3) { animation-delay: .24s; }
         .ensemble-typing em { margin-left: 7px; font-style: normal; font-size: 11px; }
-        .ensemble-composer { display: flex; align-items: flex-end; gap: 10px; margin: 0 24px; padding: 10px; border: 1px solid #262a3b; border-radius: 13px; background: #080a12; transition: border-color .2s ease; }
+        .ensemble-composer { display: flex; align-items: flex-end; gap: 10px; margin: 0 24px; padding: 10px; border: 1px solid #262a3b; border-radius: 13px; background: ${theme === 'dark' ? "#121214" : "#f9fafb"}; transition: border-color .2s ease; }
         .ensemble-composer:focus-within { border-color: #3b82f6; }
         .ensemble-input-wrap { min-width: 0; flex: 1; }
         .ensemble-input-wrap textarea { display: block; width: 100%; max-height: 120px; resize: vertical; border: 0; outline: 0; background: transparent; color: #f8fafc; font: inherit; font-size: 13px; line-height: 1.5; }
