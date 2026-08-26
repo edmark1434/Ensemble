@@ -24,7 +24,7 @@ import {
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
 import { JobRichText } from "../../job_components/JobRichText";
-
+import { toast } from "react-hot-toast";
 import { sampleIncomingProposals, sampleSentProposals } from "../proposals_datasets";
 import { sampleJobs } from "../../job_datasets";
 import type { ProposalItemData, ProposalStatus } from "../proposals_components/proposals_list";
@@ -206,7 +206,10 @@ export const ProposalsViewDetailsAsAuthor: React.FC = () => {
 
   const handleConfirmAccept = async () => {
     if (!proposal) return;
-
+    if(walletBalance < proposal.bidAmount) {
+      toast.error("Insufficient wallet balance to accept this proposal. Please top up your wallet.");
+      return;
+    }
     try {
       await sendJobOffer(
         proposal.id, 

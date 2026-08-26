@@ -26,7 +26,7 @@ import ShapeGrid from "@/components/ui/ShapeGrid";
 import { useJobs } from "@/hooks/useJobs";
 import useGlobalState from "@/lib/global_state";
 import { JobRichText } from "../../job_components/JobRichText";
-
+import { toast } from "react-hot-toast";
 import { sampleIncomingProposals, sampleSentProposals } from "../proposals_datasets";
 import { sampleJobs } from "../../job_datasets";
 import type { ProposalItemData, ProposalStatus } from "../proposals_components/proposals_list";
@@ -210,6 +210,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             }
           : null
       );
+      toast.success("You have successfully accepted the job offer!");
       setIsAcceptConfirmOpen(false);
       navigate("/jobs/proposals");
     } catch (error: any) {
@@ -818,7 +819,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                   <FileText className="h-5 w-5 text-emerald-400" /> Formal Contract Details
                 </h3>
                 <button
-                  onClick={() => setIsAcceptConfirmOpen(false)}
+                  onClick={() => navigate(-1)}
                   className="text-gray-500 dark:text-zinc-500 hover:text-gray-900 dark:text-white transition-colors"
                 >
                   <XCircle className="h-5 w-5" />

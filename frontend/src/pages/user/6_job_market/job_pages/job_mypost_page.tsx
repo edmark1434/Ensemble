@@ -4,6 +4,7 @@ import JobList from "../job_components/job_lists";
 import type { JobMainContext } from "../job_main";
 import { Plus } from "lucide-react";
 import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import { continueIfAccountVerified } from "@/lib/accountVerification";
 
 const JobMyPostPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<"All" | "Open" | "Closed">("All");
@@ -48,7 +49,7 @@ const JobMyPostPage: React.FC = () => {
             You haven't posted any jobs yet. Post a job to start receiving proposals from talented freelancers!
           </p>
           <button
-            onClick={() => navigate("/jobs/create")}
+            onClick={() => continueIfAccountVerified(() => navigate("/jobs/create"))}
             className="flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700"
           >
             <Plus className="h-4 w-4" />
