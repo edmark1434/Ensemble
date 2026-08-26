@@ -8,6 +8,7 @@ import { showErrorToast, showSuccessToast } from "@/components/utility/toast";
 import AssetEditorModal from "./AssetEditorModal";
 import AssetMedia from "./AssetMedia";
 import type { AssetPagination, AssetRecord, AssetType } from "./assetTypes";
+import { getAssetPostingEligibility } from "./assetPostingEligibility";
 
 type FilterType = "all" | AssetType;
 type AssetView = "discover" | "mine" | "purchased" | "saved";
@@ -56,6 +57,7 @@ export default function AssetsLibrary() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);
+  const [checkingPostEligibility, setCheckingPostEligibility] = useState(false);
   const [editingAsset, setEditingAsset] = useState<AssetRecord | null>(null);
   const [deletingAsset, setDeletingAsset] = useState<AssetRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -93,9 +95,22 @@ export default function AssetsLibrary() {
     return () => controller.abort();
   }, [loadAssets]);
 
-  const openCreate = () => {
-    setEditingAsset(null);
-    setEditorOpen(true);
+  const openCreate = async () => {
+    if (checkingPostEligibility) return;
+    setCheckingPostEligibility(true);
+    try {
+      const eligibility = await getAssetPostingEligibility();
+      if (!eligibility.allowed) {
+        showErrorToast(eligibility.message || "Asset posting is unavailable for this account.");
+        return;
+      }
+      setEditingAsset(null);
+      setEditorOpen(true);
+    } catch (error) {
+      showErrorToast(requestError(error));
+    } finally {
+      setCheckingPostEligibility(false);
+    }
   };
 
   const openEdit = (asset: AssetRecord) => {
@@ -172,8 +187,9 @@ export default function AssetsLibrary() {
             <h1 className="text-2xl font-bold">Assets Library</h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-zinc-400">Discover images, videos, and audio shared by the community.</p>
           </div>
-          <button type="button" onClick={openCreate} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
-            <Plus className="h-4 w-4" /> Upload Asset
+          <button type="button" onClick={() => void openCreate()} disabled={checkingPostEligibility} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-not-allowed disabled:opacity-60">
+            {checkingPostEligibility ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            {checkingPostEligibility ? "Checking..." : "Upload Asset"}
           </button>
         </div>
 
@@ -218,7 +234,7 @@ export default function AssetsLibrary() {
             <AudioLines className="mx-auto h-10 w-10 text-gray-400 dark:text-zinc-600" />
             <h2 className="mt-4 font-semibold">{view === "mine" ? "You haven't uploaded any assets yet." : view === "purchased" ? "You haven't purchased any assets yet." : view === "saved" ? "You haven't saved any assets yet." : "No assets found."}</h2>
             <p className="mt-1 text-sm text-gray-500 dark:text-zinc-500">{search ? "Try a different search or filter." : view === "purchased" ? "Assets you purchase will appear here." : view === "saved" ? "Save assets to find them here later." : "Uploaded media will appear here."}</p>
-            {view === "mine" && <button type="button" onClick={openCreate} className="mt-5 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500">Upload your first asset</button>}
+            {view === "mine" && <button type="button" onClick={() => void openCreate()} disabled={checkingPostEligibility} className="mt-5 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">{checkingPostEligibility ? "Checking..." : "Upload your first asset"}</button>}
           </div>
         ) : (
           <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

@@ -1,4 +1,5 @@
 const {
+  getAssetPostingEligibilityRepository,
   listAssetsRepository,
   getAssetRepository,
   createAssetRepository,
@@ -186,6 +187,37 @@ function publicAsset(asset) {
   };
 }
 
+function assetPostingError(code, eligibility = {}) {
+  if (code === 'ASSET_VERIFICATION_REQUIRED') {
+    return new AssetError(
+      'Verify your account before posting marketplace assets.',
+      403,
+      code
+    );
+  }
+  if (code === 'ASSET_POST_LIMIT_REACHED') {
+    const limit = Number(eligibility.limit);
+    const limitMessage = Number.isSafeInteger(limit)
+      ? `Your subscription allows ${limit} asset posting${limit === 1 ? '' : 's'}. You have reached this limit.`
+      : 'Your subscription asset posting limit has been reached.';
+    return new AssetError(
+      limitMessage,
+      409,
+      code
+    );
+  }
+  return new AssetError(
+    'Asset posting is not available for your current subscription.',
+    403,
+    'ASSET_POSTING_UNAVAILABLE'
+  );
+}
+
+async function getAssetPostingEligibilityServices(accountId) {
+  const eligibility = await getAssetPostingEligibilityRepository(accountId);
+  const message = eligibility.allowed ? null : assetPostingError(eligibility.code, eligibility).message;
+  return { ...eligibility, message };
+}
 async function listAssetsServices(accountId, query = {}) {
   const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
   const pageSize = Math.min(48, Math.max(1, Number.parseInt(query.pageSize, 10) || 12));
@@ -230,6 +262,9 @@ async function createAssetServices(accountId, payload) {
     const assetId = await createAssetRepository(accountId, data);
     return getAssetServices(assetId, accountId);
   } catch (error) {
+    if (['ASSET_VERIFICATION_REQUIRED', 'ASSET_POST_LIMIT_REACHED', 'ASSET_POSTING_UNAVAILABLE'].includes(error.code)) {
+      throw assetPostingError(error.code, error.eligibility);
+    }
     if (error.code === 'ASSET_FILE_NOT_OWNED') {
       throw new AssetError('The uploaded file is unavailable or is not owned by this account.', 400, error.code);
     }
@@ -495,6 +530,7 @@ async function deleteAssetReviewServices(assetId, reviewId, accountId) {
 
 module.exports = {
   AssetError,
+  getAssetPostingEligibilityServices,
   listAssetsServices,
   getAssetServices,
   createAssetServices,

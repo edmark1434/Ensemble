@@ -1,4 +1,5 @@
 const {
+  getAssetPostingEligibilityServices,
   listAssetsServices,
   getAssetServices,
   createAssetServices,
@@ -32,6 +33,14 @@ function handleAssetError(res, error) {
   });
 }
 
+async function getAssetPostingEligibilityController(req, res) {
+  try {
+    return res.json({
+      success: true,
+      eligibility: await getAssetPostingEligibilityServices(req.user.account_id),
+    });
+  } catch (error) { return handleAssetError(res, error); }
+}
 async function listAssetsController(req, res) {
   try {
     return res.json({ success: true, ...(await listAssetsServices(req.user.account_id, req.query)) });
@@ -234,6 +243,7 @@ async function deleteAssetReviewController(req, res) {
 }
 
 module.exports = {
+  getAssetPostingEligibilityController,
   listAssetsController,
   getAssetController,
   createAssetController,
