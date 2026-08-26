@@ -1,3 +1,27 @@
+# Current Task — Verified, Subscription-limited Marketplace Asset Posting
+
+Require marketplace asset creators to be verified and enforce the active subscription's `asset_post`/`asset_posts` plan-feature value. Numeric values are the maximum number of non-deleted asset listings; `Unlimited` has no numeric ceiling. Validate before opening/uploading in the frontend and atomically revalidate during backend creation.
+
+## Acceptance Criteria
+
+* [x] Missing verification records and `is_verified = false` prevent asset creation.
+* [x] The newest active subscription resolves its asset-post feature through `plan_features` and `features`.
+* [x] Both `asset_post` and the existing seeded `asset_posts` feature keys are supported.
+* [x] Numeric feature values cap the account's non-deleted asset listings, including drafts.
+* [x] `Unlimited` permits asset creation without a numeric cap.
+* [x] Missing or invalid feature values deny asset posting safely.
+* [x] An account-scoped transaction lock makes the limit check and asset insert concurrency-safe.
+* [x] The Upload Asset entry points check eligibility before opening the modal and use the existing toast UI.
+* [x] The create modal rechecks eligibility before generating derivatives or uploading files.
+* [x] Direct asset-create API requests remain protected by authoritative backend checks.
+* [x] Limit-reached feedback includes the configured numeric allowance and uses asset posting without a dash.
+* [x] Focused backend checks, frontend lint/build, and read-only database verification pass.
+
+Status: Completed August 27, 2026.
+
+Implementation notes: Added an authenticated posting-eligibility endpoint and a backend repository check that resolves verification, the newest active subscription, the `asset_post`/seeded `asset_posts` entitlement, and current non-deleted listing usage. Asset creation repeats the check inside its existing transaction under an account-scoped PostgreSQL advisory lock, preventing concurrent requests from exceeding numeric limits. The Assets Library checks before opening the create modal, and the modal checks again before derivative generation or uploads. Backend syntax/module loading, focused frontend ESLint, and the frontend production build passed. A read-only database verification evaluated all 16 current user accounts successfully: 14 were denied as unverified, one was denied at its numeric limit, and one was eligible. No migration or schema change was required.
+
+---
 # Current Task — Require Verification for Marketplace Submissions
 
 Require the authenticated user's existing `verifications.is_verified` value to be true before creating a job, creating a gig, or submitting a job proposal. Enforce the rule on the backend and stop frontend uploads/requests early with a clear path to account verification.

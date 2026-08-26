@@ -16,6 +16,83 @@ function mediaTypeFromMime(mimeType) {
   if (mimeType?.startsWith('audio/')) return 'audio';
   return null;
 }
+function normalizeAssetPostingEligibility(row) {
+  const used = Number(row?.posted_count || 0);
+  const rawValue = typeof row?.feature_value === 'string' ? row.feature_value.trim() : '';
+  const unlimited = rawValue.toLowerCase() === 'unlimited';
+  const numericLimit = /^\d+$/.test(rawValue) ? Number(rawValue) : null;
+  const validLimit = unlimited || (Number.isSafeInteger(numericLimit) && numericLimit >= 0);
+  const limit = unlimited ? null : validLimit ? numericLimit : null;
+
+  let code = null;
+  if (!row?.user_id) code = 'ASSET_POSTING_UNAVAILABLE';
+  else if (row.is_verified !== true) code = 'ASSET_VERIFICATION_REQUIRED';
+  else if (!validLimit) code = 'ASSET_POSTING_UNAVAILABLE';
+  else if (!unlimited && used >= limit) code = 'ASSET_POST_LIMIT_REACHED';
+
+  return {
+    allowed: code === null,
+    code,
+    isVerified: row?.is_verified === true,
+    unlimited,
+    limit,
+    used,
+    remaining: unlimited ? null : Math.max(0, (limit || 0) - used),
+  };
+}
+
+async function readAssetPostingEligibility(db, accountId, { lock = false } = {}) {
+  if (lock) {
+    await db.query(
+      'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))',
+      ['asset-post-limit', accountId]
+    );
+  }
+  const { rows } = await db.query(
+    `WITH identity AS (
+       SELECT u.user_id, COALESCE(v.is_verified, FALSE) AS is_verified
+       FROM users u
+       LEFT JOIN verifications v ON v.account_id = u.account_id
+       WHERE u.account_id = $1
+       LIMIT 1
+     ), active_subscription AS (
+       SELECT s.plan_id
+       FROM subscriptions s
+       JOIN identity ON identity.user_id = s.user_id
+       WHERE UPPER(s.status) = 'ACTIVE'
+       ORDER BY s.updated_at DESC, s.created_at DESC, s.subscription_id DESC
+       LIMIT 1
+     ), entitlement AS (
+       SELECT pf.value
+       FROM active_subscription subscription
+       JOIN plan_features pf ON pf.plan_id = subscription.plan_id
+       JOIN features feature ON feature.feature_id = pf.feature_id
+       WHERE feature.feature_key IN ('asset_post', 'asset_posts')
+       ORDER BY CASE WHEN feature.feature_key = 'asset_post' THEN 0 ELSE 1 END
+       LIMIT 1
+     ), usage AS (
+       SELECT COUNT(DISTINCT ma.market_asset_id)::int AS posted_count
+       FROM market_assets ma
+       JOIN market_media_assets mma ON mma.market_asset_id = ma.market_asset_id
+       JOIN media_assets media ON media.media_asset_id = mma.media_asset_id
+       JOIN users owner_user ON owner_user.user_id = media.owner_user_id
+       WHERE owner_user.account_id = $1
+         AND ma.deleted_at IS NULL
+         AND media.deleted_at IS NULL
+     )
+     SELECT identity.user_id, identity.is_verified,
+            entitlement.value AS feature_value, usage.posted_count
+     FROM identity
+     CROSS JOIN usage
+     LEFT JOIN entitlement ON TRUE`,
+    [accountId]
+  );
+  return normalizeAssetPostingEligibility(rows[0]);
+}
+
+async function getAssetPostingEligibilityRepository(accountId) {
+  return readAssetPostingEligibility(pool, accountId);
+}
 
 const ASSET_SELECT = `
   SELECT ma.market_asset_id, ma.name, ma.description, ma.price_credits, ma.status,
@@ -242,6 +319,13 @@ async function createAssetRepository(accountId, data) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const eligibility = await readAssetPostingEligibility(client, accountId, { lock: true });
+    if (!eligibility.allowed) {
+      const error = new Error(eligibility.code);
+      error.code = eligibility.code;
+      error.eligibility = eligibility;
+      throw error;
+    }
     const fileIds = [...data.originalFileIds, ...data.previewFileIds, data.thumbnailFileId];
     const ownedFiles = await client.query(
       `SELECT f.file_id, f.name, f.path, f.mime_type, f.size_bytes, u.user_id
@@ -1047,6 +1131,7 @@ async function deleteAssetReviewRepository(assetId, reviewId, accountId) {
 }
 
 module.exports = {
+  getAssetPostingEligibilityRepository,
   listAssetsRepository,
   getAssetRepository,
   createAssetRepository,

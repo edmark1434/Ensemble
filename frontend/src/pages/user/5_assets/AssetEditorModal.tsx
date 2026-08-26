@@ -4,6 +4,7 @@ import api from "@/lib/axios";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import type { AssetRecord, AssetStatus, AssetType } from "./assetTypes";
 import { createAssetProxy, prepareAssetThumbnail } from "./assetDerivatives";
+import { getAssetPostingEligibility } from "./assetPostingEligibility";
 
 const MIME_TO_TYPE: Record<string, AssetType> = {
   "image/jpeg": "image",
@@ -252,6 +253,10 @@ export default function AssetEditorModal({ open, asset, onClose, onSaved }: Asse
         });
         onSaved(response.data.asset);
       } else if (primaryFile && type && thumbnailFile) {
+        const eligibility = await getAssetPostingEligibility();
+        if (!eligibility.allowed) {
+          throw new Error(eligibility.message || "Asset posting is unavailable for this account.");
+        }
         const metadata = await inspectMedia(primaryFile, type);
         const [previewFiles, preparedThumbnail] = await Promise.all([
           Promise.all(files.map((originalFile) =>
