@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import ScrollVelocity from "@/components/ui/ScrollVelocity";
+import useGlobalState from "@/lib/global_state";
 
 interface ScrollTextProps {
   isMuted?: boolean;
@@ -11,6 +12,7 @@ const T = {
 
 const SectionScrollText: React.FC<ScrollTextProps> = ({ isMuted = false }) => {
   const blissHoverAudioRef = useRef<HTMLAudioElement | null>(null);
+  const theme = useGlobalState((state) => state.theme);
 
   useEffect(() => {
     // Initialize the blisshover sound asset
@@ -28,10 +30,10 @@ const SectionScrollText: React.FC<ScrollTextProps> = ({ isMuted = false }) => {
     <div
       style={{
         padding: "60px 0",
-        background: "linear-gradient(180deg, #080a12 0%, #0d0f1a 100%)",
+        background: theme === 'dark' ? "#121214" : "#ffffff",
         overflow: "hidden",
         width: "100%",
-        borderBottom: "1px solid #1e2130"
+        transition: "background 0.3s ease"
       }}
     >
       <style>{`
@@ -55,8 +57,8 @@ const SectionScrollText: React.FC<ScrollTextProps> = ({ isMuted = false }) => {
         }
 
         .hover-marquee .row-wrapper .parallax span {
-          color: #5e5e5e;
-          opacity: 0.4;
+          color: ${theme === 'dark' ? '#3f3f46' : '#cbd5e1'};
+          opacity: 0.8;
           filter: blur(0.5px);
           transition: 
             opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1), 

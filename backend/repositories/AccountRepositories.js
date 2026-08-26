@@ -305,7 +305,10 @@ async function getRecentUserAvatarsRepositories(limit = 5) {
     try {
         const query = `
             SELECT 
-                f.path AS avatar_path
+                f.path AS avatar_path,
+                a.handle,
+                a.display_name,
+                u.first_name
             FROM accounts a
             INNER JOIN users u ON a.account_id = u.account_id
             LEFT JOIN files f ON a.avatar_file_id = f.file_id

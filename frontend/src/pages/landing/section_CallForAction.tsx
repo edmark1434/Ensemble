@@ -3,21 +3,18 @@ import type { FC } from "react";
 import { motion, useInView } from "framer-motion";
 import ColorBends from "@/components/ui/ColorBends"; // Update path if needed
 import FadeInScroll from "@/components/ui/FadeInScroll";
+import useGlobalState from "@/lib/global_state";
 
 interface CtaStripProps {
   onStart: () => void;
   isMuted?: boolean; // Support global audio toggle system
 }
 
-const T_CTA = {
-  bgCard:      "#0d0f1a",
-  border:      "#1e2130",
-  muted:       "#7a8499",
-  fontDisplay: "'Plus Jakarta Sans', sans-serif",
-  fontBody:    "'Plus Jakarta Sans', sans-serif",
-} as const;
+const fontDisplay = "'Plus Jakarta Sans', sans-serif";
+const fontBody = "'Plus Jakarta Sans', sans-serif";
 
 const SectionCallForAction: FC<CtaStripProps> = ({ onStart, isMuted = false }) => {
+  const theme = useGlobalState((state) => state.theme);
   const hoverAudioRef = useRef<HTMLAudioElement | null>(null);
   const clickAudioRef = useRef<HTMLAudioElement | null>(null);
   const textRef = useRef(null);
@@ -54,8 +51,9 @@ const SectionCallForAction: FC<CtaStripProps> = ({ onStart, isMuted = false }) =
         overflow: "hidden",
         padding: "100px 40px",
         textAlign: "center",
-        background: T_CTA.bgCard,
-        borderTop: `1px solid ${T_CTA.border}`
+        background: theme === 'dark' ? "#121214" : "#ffffff",
+        borderTop: theme === 'dark' ? "1px solid rgba(255,255,255,0.05)" : "1px solid rgba(0,0,0,0.05)",
+        transition: "background 0.3s ease, border-color 0.3s ease"
       }}
     >
       {/* ─── WebGL Ambient Fluid Background Layer ─── */}
@@ -71,7 +69,7 @@ const SectionCallForAction: FC<CtaStripProps> = ({ onStart, isMuted = false }) =
         }}
       >
         <ColorBends
-          colors={["#4f46e5", "#7c3aed", "#06b6d4", "#0d0f1a"]}
+          colors={theme === 'dark' ? ["#4f46e5", "#7c3aed", "#06b6d4", "#121214"] : ["#a5b4fc", "#d8b4fe", "#7dd3fc", "#ffffff"]}
           speed={0.12}
           rotation={35}
           scale={1.2}
@@ -86,7 +84,7 @@ const SectionCallForAction: FC<CtaStripProps> = ({ onStart, isMuted = false }) =
 
       {/* ─── High-Priority Interactive Layout Content Layer ─── */}
       <FadeInScroll distance={40} duration={0.8} style={{ position: "relative", zIndex: 1 }}>
-        <h2 ref={textRef} style={{ fontFamily: T_CTA.fontDisplay, fontWeight: 800, fontSize: "clamp(26px,4vw,40px)", marginBottom: 14, color: "#fff" }}>
+        <h2 ref={textRef} style={{ fontFamily: fontDisplay, fontWeight: 800, fontSize: "clamp(26px,4vw,40px)", marginBottom: 14, color: theme === 'dark' ? "#fff" : "#111827", transition: "color 0.3s ease" }}>
           {text.split("").map((char, index) => (
             <motion.span
               key={index}
@@ -98,7 +96,7 @@ const SectionCallForAction: FC<CtaStripProps> = ({ onStart, isMuted = false }) =
             </motion.span>
           ))}
         </h2>
-        <p style={{ color: T_CTA.muted, fontSize: 15, maxWidth: 440, margin: "0 auto 32px", lineHeight: 1.5 }}>
+        <p style={{ color: theme === 'dark' ? "#a1a1aa" : "#6b7280", fontSize: 15, maxWidth: 440, margin: "0 auto 32px", lineHeight: 1.5, transition: "color 0.3s ease" }}>
           Join thousands of filmmakers already using Ensemble to ship better stories, faster.
         </p>
         <button
@@ -107,22 +105,24 @@ const SectionCallForAction: FC<CtaStripProps> = ({ onStart, isMuted = false }) =
             onStart();
           }}
           style={{
-            background: "#fff",
-            color: "#080a12",
+            background: theme === 'dark' ? "#fff" : "#111827",
+            color: theme === 'dark' ? "#080a12" : "#ffffff",
             border: "none",
             padding: "14px 34px",
             borderRadius: 28,
             fontWeight: 700,
             cursor: "pointer",
-            fontFamily: T_CTA.fontBody,
-            transition: "all 0.2s ease"
+            fontFamily: fontBody,
+            transition: "all 0.3s ease"
           }}
           onMouseEnter={(e) => {
             playHoverSound(); // Clean audio link trigger
             e.currentTarget.style.transform = "scale(1.03)";
+            e.currentTarget.style.boxShadow = theme === 'dark' ? "0 4px 20px rgba(255,255,255,0.2)" : "0 4px 20px rgba(0,0,0,0.2)";
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.transform = "scale(1)";
+            e.currentTarget.style.boxShadow = "none";
           }}
         >
           Start for free →

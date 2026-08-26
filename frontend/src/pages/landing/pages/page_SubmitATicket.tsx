@@ -27,6 +27,8 @@ function groupTicketTypes(details: TicketTypeDetail[]): TicketTypeGroup[] {
 }
 
 const PageSubmitATicket: React.FC = () => {
+  const theme = useGlobalState((state) => state.theme);
+
   const navigate = useNavigate();
   const user = useGlobalState((state) => state.user);
   const accountId = user?.account_id || user?.accountId || null;
@@ -108,7 +110,7 @@ const PageSubmitATicket: React.FC = () => {
   };
 
   return (
-    <div style={{ background: "#080a12", minHeight: "100vh", color: "#fff", padding: "80px 40px" }}>
+    <div style={{ background: theme === 'dark' ? "#121214" : "#f9fafb", minHeight: "100vh", color: theme === 'dark' ? '#ffffff' : '#111827', padding: "80px 40px" }}>
       <div style={{ maxWidth: 600, margin: "0 auto" }}>
         <button
           type="button"
@@ -116,7 +118,7 @@ const PageSubmitATicket: React.FC = () => {
           style={{
             background: "none",
             border: "none",
-            color: "#7a8499",
+            color: theme === 'dark' ? "#7a8499" : "#6b7280",
             display: "flex",
             alignItems: "center",
             gap: 8,
@@ -128,7 +130,7 @@ const PageSubmitATicket: React.FC = () => {
           <ArrowLeft size={16} /> Back
         </button>
         <h1 style={{ fontSize: 42, fontWeight: 800, marginBottom: 16 }}>Submit a Ticket</h1>
-        <p style={{ color: "#7a8499", fontSize: 15, marginBottom: 36 }}>
+        <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 15, marginBottom: 36 }}>
           Encountered a bug or an escrow processing issue? File a support ticket and our team will look into it.
         </p>
 
@@ -142,10 +144,10 @@ const PageSubmitATicket: React.FC = () => {
             }}
           >
             <h4 style={{ color: "#2dd4bf", fontSize: 18, marginBottom: 8 }}>Ticket submitted successfully</h4>
-            <p style={{ color: "#7a8499", fontSize: 14 }}>
+            <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 14 }}>
               {ticketNumber ? (
                 <>
-                  Your ticket number is <strong style={{ color: "#fff" }}>{ticketNumber}</strong>. Our team will follow
+                  Your ticket number is <strong style={{ color: theme === 'dark' ? '#ffffff' : '#111827' }}>{ticketNumber}</strong>. Our team will follow
                   up within 24 hours.
                 </>
               ) : (
@@ -156,7 +158,7 @@ const PageSubmitATicket: React.FC = () => {
         ) : (
           <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#7a8499", marginBottom: 8 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: theme === 'dark' ? "#7a8499" : "#6b7280", marginBottom: 8 }}>
                 Ticket Type
               </label>
               <select
@@ -165,11 +167,11 @@ const PageSubmitATicket: React.FC = () => {
                 disabled={loadingTypes || submitting}
                 style={{
                   width: "100%",
-                  background: "#0d0f1a",
+                  background: theme === 'dark' ? "#18181b" : theme === 'dark' ? "#ffffff" : "#111827",
                   border: "1px solid #1e2130",
                   borderRadius: 10,
                   padding: "14px",
-                  color: "#fff",
+                  color: theme === 'dark' ? '#ffffff' : '#111827',
                   outline: "none",
                 }}
               >
@@ -185,7 +187,7 @@ const PageSubmitATicket: React.FC = () => {
               </select>
             </div>
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#7a8499", marginBottom: 8 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: theme === 'dark' ? "#7a8499" : "#6b7280", marginBottom: 8 }}>
                 Issue Subject
               </label>
               <input
@@ -195,17 +197,17 @@ const PageSubmitATicket: React.FC = () => {
                 onChange={(e) => setSubject(e.target.value)}
                 style={{
                   width: "100%",
-                  background: "#0d0f1a",
+                  background: theme === 'dark' ? "#18181b" : theme === 'dark' ? "#ffffff" : "#111827",
                   border: "1px solid #1e2130",
                   borderRadius: 10,
                   padding: "14px",
-                  color: "#fff",
+                  color: theme === 'dark' ? '#ffffff' : '#111827',
                   outline: "none",
                 }}
               />
             </div>
             <div>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#7a8499", marginBottom: 8 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: theme === 'dark' ? "#7a8499" : "#6b7280", marginBottom: 8 }}>
                 Detailed Description
               </label>
               <textarea
@@ -215,11 +217,11 @@ const PageSubmitATicket: React.FC = () => {
                 onChange={(e) => setDescription(e.target.value)}
                 style={{
                   width: "100%",
-                  background: "#0d0f1a",
+                  background: theme === 'dark' ? "#18181b" : theme === 'dark' ? "#ffffff" : "#111827",
                   border: "1px solid #1e2130",
                   borderRadius: 10,
                   padding: "14px",
-                  color: "#fff",
+                  color: theme === 'dark' ? '#ffffff' : '#111827',
                   outline: "none",
                   resize: "none",
                 }}
@@ -230,7 +232,7 @@ const PageSubmitATicket: React.FC = () => {
               type="submit"
               disabled={submitting}
               style={{
-                background: "#fff",
+                background: theme === 'dark' ? '#ffffff' : '#111827',
                 color: "#000",
                 border: "none",
                 borderRadius: 10,

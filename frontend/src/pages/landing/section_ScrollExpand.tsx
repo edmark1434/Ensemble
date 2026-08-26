@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from "react";
 import ScrollExpand from "@/components/ui/ScrollExpand";
 import MaskedHeading from "@/components/ui/MaskedHeading";
+import FaultyTerminal from "@/components/ui/FaultyTerminal";
+import useGlobalState from "@/lib/global_state";
 import { 
   Megaphone, Play, Smartphone, PenTool, 
   Briefcase, Gamepad2, Plane, Music, 
@@ -46,26 +48,31 @@ const ROW_1 = CATEGORIES.slice(0, 8);
 const ROW_2 = CATEGORIES.slice(8, 17);
 const ROW_3 = CATEGORIES.slice(17, 25);
 
-const TickerRow = ({ items, direction = "left" }: { items: typeof CATEGORIES, direction?: "left" | "right" }) => {
+const TickerRow = ({ items, direction = "left", theme = "dark" }: { items: typeof CATEGORIES, direction?: "left" | "right", theme?: "light" | "dark" }) => {
   const duplicatedItems = [...items, ...items, ...items, ...items];
   const animationClass = direction === "left" ? "marquee-content-left" : "marquee-content-right";
 
+  const bg = theme === 'dark' ? "rgba(0, 0, 0, 0.7)" : "rgba(255, 255, 255, 0.8)";
+  const border = theme === 'dark' ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid rgba(0, 0, 0, 0.1)";
+  const color = theme === 'dark' ? "#fff" : "#111827";
+  const hoverBg = theme === 'dark' ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)";
+
   return (
     <div className="marquee-container" style={{ margin: "6px 0" }}>
-      <div className={animationClass} style={{ paddingLeft: "12px" }}>
+      <div className={animationClass} style={{ paddingLeft: "16px" }}>
         {duplicatedItems.map(({ label, icon: Icon }, i) => (
           <button
             key={`${label}-${i}`}
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "8px",
-              background: "rgba(0, 0, 0, 0.7)",
-              border: "1px solid rgba(255, 255, 255, 0.15)",
-              color: "#fff",
-              fontSize: 13,
+              gap: "10px",
+              background: bg,
+              border: border,
+              color: color,
+              fontSize: 15,
               fontWeight: 600,
-              padding: "10px 18px",
+              padding: "14px 22px",
               borderRadius: "100px",
               cursor: "pointer",
               transition: "all 0.2s",
@@ -73,16 +80,16 @@ const TickerRow = ({ items, direction = "left" }: { items: typeof CATEGORIES, di
               flexShrink: 0
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.1)";
+              (e.currentTarget as HTMLButtonElement).style.background = hoverBg;
               const audio = new Audio("/sounds/minimalhover.mp3");
               audio.volume = 0.2;
               audio.play().catch(() => {});
             }}
             onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = "rgba(0, 0, 0, 0.7)";
+              (e.currentTarget as HTMLButtonElement).style.background = bg;
             }}
           >
-            <Icon size={14} />
+            <Icon size={16} />
             {label}
           </button>
         ))}
@@ -92,19 +99,26 @@ const TickerRow = ({ items, direction = "left" }: { items: typeof CATEGORIES, di
 };
 
 const SectionScrollExpand: React.FC<ScrollExpandSectionProps> = ({ isMuted = false }) => {
+  const theme = useGlobalState((state) => state.theme);
   const containerRef = useRef<HTMLDivElement>(null);
   const textMaskRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
 
+  const bgColor = theme === 'dark' ? "#121214" : "#ffffff";
+  const scrimBg = theme === 'dark' 
+    ? "radial-gradient(circle at center, rgba(18,18,20,0.3) 0%, rgba(18,18,20,1) 100%)"
+    : "radial-gradient(circle at center, rgba(255,255,255,0.1) 0%, rgba(255,255,255,1) 100%)";
+
   useEffect(() => {
     const container = containerRef.current;
     const textMask = textMaskRef.current;
-    const video = videoRef.current;
     const content = contentRef.current;
     const scrim = scrimRef.current;
-    if (!container || !textMask || !video || !content || !scrim) return;
+    const video = videoRef.current; // Might be null in light mode if terminal is active
+
+    if (!container || !textMask || !content || !scrim) return;
 
     let raf = 0;
     
@@ -132,8 +146,10 @@ const SectionScrollExpand: React.FC<ScrollExpandSectionProps> = ({ isMuted = fal
       textMask.style.pointerEvents = p1 > 0.95 ? "none" : "auto";
 
       // Video slight zoom out for scroll parallax effect
-      const vidScale = 1.2 - (p1 * 0.2);
-      video.style.transform = `scale(${vidScale})`;
+      if (video) {
+        const vidScale = 1.2 - (p1 * 0.2);
+        video.style.transform = `scale(${vidScale})`;
+      }
 
       // PHASE 2: Content Fade In (0.6 to 1.0)
       const p2 = Math.max(0, (p - 0.6) / 0.4);
@@ -155,7 +171,7 @@ const SectionScrollExpand: React.FC<ScrollExpandSectionProps> = ({ isMuted = fal
   }, []);
 
   return (
-    <section id="scroll-expand-showcase" ref={containerRef} style={{ position: "relative", zIndex: 5001, height: "400vh", background: "#080a12" }}>
+    <section id="scroll-expand-showcase" ref={containerRef} style={{ position: "relative", zIndex: 5001, height: "400vh", background: bgColor, transition: "background 0.3s ease" }}>
       <style>{`
         @keyframes marquee-left {
           0% { transform: translateX(0); }
@@ -175,13 +191,13 @@ const SectionScrollExpand: React.FC<ScrollExpandSectionProps> = ({ isMuted = fal
         }
         .marquee-content-left {
           display: flex;
-          gap: 12px;
+          gap: 16px;
           min-width: 200%;
           animation: marquee-left 45s linear infinite;
         }
         .marquee-content-right {
           display: flex;
-          gap: 12px;
+          gap: 16px;
           min-width: 200%;
           animation: marquee-right 45s linear infinite;
         }
@@ -192,18 +208,38 @@ const SectionScrollExpand: React.FC<ScrollExpandSectionProps> = ({ isMuted = fal
 
       <div style={{ position: "sticky", top: 0, height: "100vh", overflow: "hidden", width: "100%" }}>
         
-        {/* Layer 1: Background Video */}
-        <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: "#080a12" }}>
-          <video 
-            ref={videoRef}
-            src="/landing/clip-1.mp4" 
-            autoPlay 
-            muted 
-            loop 
-            playsInline
-            preload="none"
-            style={{ width: "100%", height: "100%", objectFit: "cover", transformOrigin: "center", willChange: "transform" }}
-          />
+        {/* Layer 1: Background Layer */}
+        <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: bgColor, transition: "background 0.3s ease" }}>
+          {theme === 'dark' ? (
+            <video 
+              ref={videoRef}
+              src="/landing/clip-1.mp4" 
+              autoPlay 
+              muted 
+              loop 
+              playsInline
+              preload="none"
+              style={{ width: "100%", height: "100%", objectFit: "cover", transformOrigin: "center", willChange: "transform" }}
+            />
+          ) : (
+            <FaultyTerminal 
+              theme="light" 
+              mouseReact={false} 
+              scale={1.5}
+              gridMul={[2, 1]}
+              digitSize={1.2}
+              timeScale={1}
+              scanlineIntensity={1}
+              glitchAmount={1}
+              flickerAmount={1}
+              noiseAmp={1}
+              chromaticAberration={0}
+              dither={0}
+              curvature={0}
+              pageLoadAnimation={false}
+              brightness={0.2}
+            />
+          )}
         </div>
 
         {/* Layer 2: Masked Heading Text Layer */}
@@ -212,13 +248,14 @@ const SectionScrollExpand: React.FC<ScrollExpandSectionProps> = ({ isMuted = fal
           style={{ 
             position: "absolute", 
             inset: -50, // Bleed to prevent edge tearing during scale
-            backgroundColor: "#080a12", // Exact background color requested
+            backgroundColor: bgColor, // Dynamic background color for text mask
             display: "flex", 
             alignItems: "center", 
             justifyContent: "center",
             transformOrigin: "center",
             willChange: "transform, opacity",
-            pointerEvents: "none" // Let users interact with potential underlying elements later
+            pointerEvents: "none", // Let users interact with potential underlying elements later
+            transition: "background-color 0.3s ease"
           }}
         >
           <MaskedHeading 
@@ -237,18 +274,30 @@ const SectionScrollExpand: React.FC<ScrollExpandSectionProps> = ({ isMuted = fal
           />
         </div>
 
-        {/* Layer 3: Video Darkening Scrim (Fades in later) */}
+        {/* Layer 3: Darkening Scrim (Fades in later) */}
         <div 
           ref={scrimRef}
           style={{ 
             position: "absolute", 
             inset: 0, 
-            background: "radial-gradient(circle at center, rgba(8,10,18,0.3) 0%, rgba(8,10,18,0.95) 80%)", 
+            background: theme === 'dark'
+              ? "radial-gradient(circle at center, rgba(18,18,20,0.3) 0%, rgba(18,18,20,1) 100%)"
+              : "radial-gradient(circle at center, rgba(255,255,255,0.1) 0%, rgba(255,255,255,1) 100%)", 
             opacity: 0, 
             pointerEvents: "none", 
-            willChange: "opacity" 
+            willChange: "opacity",
+            transition: "background 0.3s ease"
           }}
         />
+
+        {/* Bottom Fade Mask to smoothly blend into the next section */}
+        <div style={{
+          position: "absolute",
+          bottom: 0, left: 0, right: 0, height: "15vh",
+          background: theme === 'dark' ? "linear-gradient(to top, #121214 0%, transparent 100%)" : "linear-gradient(to top, #f9fafb 0%, transparent 100%)",
+          zIndex: 5,
+          pointerEvents: "none"
+        }} />
 
         {/* Layer 4: Expanded Marquee Content (Fades in last) */}
         <div 
@@ -267,23 +316,24 @@ const SectionScrollExpand: React.FC<ScrollExpandSectionProps> = ({ isMuted = fal
         >
           <div style={{ position: "relative", zIndex: 1, textAlign: "center", width: "100%", padding: "40px 0", display: "flex", flexDirection: "column", alignItems: "center", overflow: "hidden" }}>
             <p style={{ 
-              fontSize: "clamp(15px, 2vw, 18px)", 
+              fontSize: "clamp(16px, 2.2vw, 20px)", // Slightly larger
               fontWeight: 600, 
-              color: "#fff", 
+              color: theme === 'dark' ? "#fff" : "#111827", 
               lineHeight: 1.6, 
               letterSpacing: 0.5, 
               marginBottom: "40px", 
               maxWidth: "600px",
               padding: "0 20px",
-              textShadow: "0 2px 12px rgba(0,0,0,1), 0 0 24px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,1)" 
+              textShadow: theme === 'dark' ? "0 2px 12px rgba(0,0,0,1), 0 0 24px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,1)" : "none",
+              transition: "all 0.3s ease"
             }}>
               Discover the perfect creative partner for your next masterpiece. Select a category below to explore top-tier talent and specialized workflows.
             </p>
             
             <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "2px" }}>
-              <TickerRow items={ROW_1} direction="left" />
-              <TickerRow items={ROW_2} direction="right" />
-              <TickerRow items={ROW_3} direction="left" />
+              <TickerRow items={ROW_1} direction="left" theme={theme} />
+              <TickerRow items={ROW_2} direction="right" theme={theme} />
+              <TickerRow items={ROW_3} direction="left" theme={theme} />
             </div>
           </div>
         </div>

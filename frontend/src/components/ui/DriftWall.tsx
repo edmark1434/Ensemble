@@ -144,17 +144,6 @@ const DriftWall = ({
     velocitiesRef.current = columnItems.map(() => 0);
   }, [columnMeta, columnItems]);
 
-  const inViewRef = useRef(true);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      inViewRef.current = entry.isIntersecting;
-    }, { rootMargin: "200px" });
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, []);
-
   const applyPlaneTransform = useCallback(
     (px: number, py: number) => {
       const plane = planeRef.current;
@@ -172,12 +161,6 @@ const DriftWall = ({
       if (lastTsRef.current === null) lastTsRef.current = ts;
       const dt = Math.min(0.05, Math.max(0, ts - lastTsRef.current) / 1000);
       lastTsRef.current = ts;
-
-      // Skip expensive DOM updates when out of view
-      if (!inViewRef.current) {
-        rafRef.current = requestAnimationFrame(animate);
-        return;
-      }
 
       const maxTilt = parallax * 8;
       const targetX = pointerRef.current.x * maxTilt;
@@ -294,7 +277,7 @@ const DriftWall = ({
     'w-full h-[calc(var(--dw-tile-h)+var(--dw-gap))] [transform-style:preserve-3d]'
   );
   const innerClass = cx(
-    'pointer-events-none absolute inset-[calc(var(--dw-gap)/2)] block overflow-hidden bg-[#0b0b12]',
+    'pointer-events-none absolute inset-[calc(var(--dw-gap)/2)] block overflow-hidden bg-gray-100 dark:bg-[#121214]',
     'rounded-[var(--dw-radius)] opacity-[var(--dw-dim)] [transform:translateZ(0)]',
     'transition-[transform,opacity,box-shadow] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)]',
     'group-[.is-active]/tile:opacity-100 group-[.is-active]/tile:[transform:translateZ(var(--dw-lift))]',

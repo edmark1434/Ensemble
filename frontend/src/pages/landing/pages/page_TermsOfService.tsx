@@ -1,8 +1,11 @@
+import useGlobalState from "@/lib/global_state";
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Scale, ShieldCheck } from "lucide-react";
 
 const PageTermsOfService: React.FC = () => {
+  const theme = useGlobalState((state) => state.theme);
+
   const navigate = useNavigate();
 
   const sections = [
@@ -23,14 +26,14 @@ const PageTermsOfService: React.FC = () => {
   };
 
   return (
-    <div style={{ background: "#080a12", minHeight: "100vh", color: "#fff", padding: "80px 24px", position: "relative" }}>
+    <div style={{ background: theme === 'dark' ? "#121214" : "#f9fafb", minHeight: "100vh", color: theme === 'dark' ? '#ffffff' : '#111827', padding: "80px 24px", position: "relative" }}>
       
       <style>{`
         .tos-section { margin-bottom: 48px; scroll-margin-top: 100px; }
-        .tos-section h2 { color: #fff; font-size: 22px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; }
+        .tos-section h2 { color: ${theme === 'dark' ? "#ffffff" : "#111827"}; font-size: 22px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; }
         .tos-section p { color: #94a3b8; line-height: 1.8; font-size: 15px; margin-bottom: 12px; }
         .tos-list { list-style: none; padding: 0; margin: 16px 0; }
-        .tos-list li { color: #cbd5e1; padding: 8px 0; display: flex; gap: 12px; font-size: 14.5px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .tos-list li { color: ${theme === 'dark' ? "#cbd5e1" : "#4b5563"}; padding: 8px 0; display: flex; gap: 12px; font-size: 14.5px; border-bottom: 1px solid rgba(255,255,255,0.03); }
         .nav-link { color: #64748b; font-size: 13px; cursor: pointer; transition: color 0.2s; padding: 6px 0; display: block; text-decoration: none; }
         .nav-link:hover { color: #3b82f6; }
         @media (max-width: 1024px) { .side-nav { display: none; } .content-area { margin-left: 0 !important; } }
@@ -42,9 +45,9 @@ const PageTermsOfService: React.FC = () => {
         <div style={{ marginBottom: 60 }}>
           <button 
             onClick={() => navigate(-1)} 
-            style={{ background: "none", border: "none", color: "#7a8499", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 32, fontSize: 14, fontWeight: 600 }}
-            onMouseEnter={(e: any) => e.currentTarget.style.color = "#fff"}
-            onMouseLeave={(e: any) => e.currentTarget.style.color = "#7a8499"}
+            style={{ background: "none", border: "none", color: theme === 'dark' ? "#7a8499" : "#6b7280", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 32, fontSize: 14, fontWeight: 600 }}
+            onMouseEnter={(e: any) => e.currentTarget.style.color = theme === 'dark' ? '#ffffff' : '#111827'}
+            onMouseLeave={(e: any) => e.currentTarget.style.color = theme === 'dark' ? "#7a8499" : "#6b7280"}
           >
             <ArrowLeft size={16} /> Back
           </button>

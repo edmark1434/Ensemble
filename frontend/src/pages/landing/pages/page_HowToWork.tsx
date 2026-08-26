@@ -1,3 +1,4 @@
+import useGlobalState from "@/lib/global_state";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -18,6 +19,8 @@ import {
 type WorkTrack = "gigs" | "jobs" | "assets";
 
 const PageHowToWork: React.FC = () => {
+  const theme = useGlobalState((state) => state.theme);
+
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<WorkTrack>("gigs");
 
@@ -60,7 +63,7 @@ const PageHowToWork: React.FC = () => {
   const { steps, accent, bg } = getTrackDetails();
 
   return (
-    <div style={{ background: "#080a12", minHeight: "100vh", color: "#fff", padding: "80px 24px", position: "relative", overflowX: "hidden" }}>
+    <div style={{ background: theme === 'dark' ? "#121214" : "#f9fafb", minHeight: "100vh", color: theme === 'dark' ? '#ffffff' : '#111827', padding: "80px 24px", position: "relative", overflowX: "hidden" }}>
 
       {/* Optimized Micro-Styles */}
       <style>{`
@@ -68,7 +71,7 @@ const PageHowToWork: React.FC = () => {
           flex: 1; padding: 14px; border: none; font-size: 14px; font-weight: 700; cursor: pointer; border-radius: 12px; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
         .step-card {
-          background: #0d0f1a; border: 1px solid #1e2130; padding: 28px; border-radius: 18px; display: flex; gap: 24px; align-items: start; position: relative; transition: all 0.25s ease;
+          background: ${theme === 'dark' ? "#18181b" : "#ffffff"}; border: 1px solid ${theme === 'dark' ? "#27272a" : "#e5e7eb"}; padding: 28px; border-radius: 18px; display: flex; gap: 24px; align-items: start; position: relative; transition: all 0.25s ease;
         }
         .step-card:hover {
           border-color: var(--dynamic-accent); transform: translateX(4px); background: #111424;
@@ -98,25 +101,25 @@ const PageHowToWork: React.FC = () => {
         {/* Navigation Head */}
         <button
           onClick={() => navigate(-1)}
-          style={{ background: "none", border: "none", color: "#7a8499", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 36, fontSize: 14, fontWeight: 600, transition: "color 0.2s" }}
-          onMouseEnter={(e) => e.currentTarget.style.color = "#fff"}
-          onMouseLeave={(e) => e.currentTarget.style.color = "#7a8499"}
+          style={{ background: "none", border: "none", color: theme === 'dark' ? "#7a8499" : "#6b7280", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 36, fontSize: 14, fontWeight: 600, transition: "color 0.2s" }}
+          onMouseEnter={(e) => e.currentTarget.style.color = theme === 'dark' ? '#ffffff' : '#111827'}
+          onMouseLeave={(e) => e.currentTarget.style.color = theme === 'dark' ? "#7a8499" : "#6b7280"}
         >
           <ArrowLeft size={16} /> Back
         </button>
 
         <h1 style={{ fontSize: "clamp(32px, 5vw, 42px)", fontWeight: 800, marginBottom: 16, letterSpacing: "-0.02em" }}>How to Work on Ensemble</h1>
-        <p style={{ color: "#7a8499", fontSize: 17, marginBottom: 44, lineHeight: 1.6 }}>Grow your production career, secure premium contracts, and monetize creative assets on your own terms.</p>
+        <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 17, marginBottom: 44, lineHeight: 1.6 }}>Grow your production career, secure premium contracts, and monetize creative assets on your own terms.</p>
 
         {/* Premium 3-Way Structural Switcher Bar */}
         <div className="segment-bar" style={{ display: "flex", background: "rgba(255,255,255,0.02)", border: "1px solid #1e2130", padding: 6, borderRadius: 16, marginBottom: 48, gap: 4 }}>
-          <button className="segment-btn" style={{ background: activeTab === "gigs" ? "#2dd4bf" : "transparent", color: activeTab === "gigs" ? "#080a12" : "#7a8499" }} onClick={() => setActiveTab("gigs")}>
+          <button className="segment-btn" style={{ background: activeTab === "gigs" ? "#2dd4bf" : "transparent", color: activeTab === "gigs" ? theme === 'dark' ? "#121214" : "#f9fafb" : theme === 'dark' ? "#7a8499" : "#6b7280" }} onClick={() => setActiveTab("gigs")}>
             A. GIGS (Sell Services)
           </button>
-          <button className="segment-btn" style={{ background: activeTab === "jobs" ? "#a855f7" : "transparent", color: activeTab === "jobs" ? "#fff" : "#7a8499" }} onClick={() => setActiveTab("jobs")}>
+          <button className="segment-btn" style={{ background: activeTab === "jobs" ? "#a855f7" : "transparent", color: activeTab === "jobs" ? theme === 'dark' ? '#ffffff' : '#111827' : theme === 'dark' ? "#7a8499" : "#6b7280" }} onClick={() => setActiveTab("jobs")}>
             B. JOBS (Send Bids)
           </button>
-          <button className="segment-btn" style={{ background: activeTab === "assets" ? "#10b981" : "transparent", color: activeTab === "assets" ? "#080a12" : "#7a8499" }} onClick={() => setActiveTab("assets")}>
+          <button className="segment-btn" style={{ background: activeTab === "assets" ? "#10b981" : "transparent", color: activeTab === "assets" ? theme === 'dark' ? "#121214" : "#f9fafb" : theme === 'dark' ? "#7a8499" : "#6b7280" }} onClick={() => setActiveTab("assets")}>
             C. ASSET CREATION
           </button>
         </div>
@@ -129,8 +132,8 @@ const PageHowToWork: React.FC = () => {
                 {step.icon}
               </div>
               <div>
-                <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: "#fff" }}>{step.title}</h3>
-                <p style={{ color: "#7a8499", lineHeight: 1.6, fontSize: 14.5, margin: 0 }}>{step.desc}</p>
+                <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8, color: theme === 'dark' ? '#ffffff' : '#111827' }}>{step.title}</h3>
+                <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", lineHeight: 1.6, fontSize: 14.5, margin: 0 }}>{step.desc}</p>
               </div>
             </div>
           ))}
