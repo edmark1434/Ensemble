@@ -288,7 +288,7 @@ const AccordionGallery = ({
                     ref={(el: HTMLElement | null) => {
                       textRefs.current[i] = el;
                     }}
-                    className="overflow-hidden text-ellipsis whitespace-nowrap text-[clamp(1rem,1.4vw,1.4rem)] font-semibold tracking-[0.01em] opacity-0 [text-shadow:0_2px_14px_rgba(0,0,0,0.55)]"
+                    className="overflow-hidden text-ellipsis whitespace-nowrap text-[clamp(1rem,1.4vw,1.4rem)] font-semibold tracking-[0.01em] opacity-0"
                     style={{ color: textColor }}
                   >
                     {item.label}
@@ -298,8 +298,8 @@ const AccordionGallery = ({
                       ref={(el: HTMLElement | null) => {
                         descRefs.current[i] = el;
                       }}
-                      className="overflow-hidden text-ellipsis text-[clamp(0.85rem,1vw,1rem)] tracking-[0.01em] opacity-0 mt-1 [text-shadow:0_2px_14px_rgba(0,0,0,0.8)]"
-                      style={{ color: 'rgba(255, 255, 255, 0.8)', whiteSpace: 'normal', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
+                      className="overflow-hidden text-ellipsis text-[clamp(0.85rem,1vw,1rem)] tracking-[0.01em] opacity-0 mt-1 font-medium"
+                      style={{ color: textColor, opacity: 0.85, whiteSpace: 'normal', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
                     >
                       {item.description}
                     </span>
