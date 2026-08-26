@@ -1,56 +1,54 @@
 import React, { useState, useEffect, useRef } from "react";
-import ShapeGrid from "@/components/ui/ShapeGrid"; // Adjust this path to match your folder structure
+import ShapeGrid from "@/components/ui/ShapeGrid";
 import FadeInScroll from "@/components/ui/FadeInScroll";
+import useGlobalState from "@/lib/global_state";
 
 interface HowItWorksProps {
   isMuted?: boolean;
 }
 
 const HIW_DATA = {
-  hire: [
-    { title: "Posting jobs is always free", img: "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&w=800&q=80" },
-    { title: "Get proposals and hire", img: "https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&w=800&q=80" },
-    { title: "Pay when work is done", img: "https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=800&q=80" },
+  casual: [
+    { title: "Setup Account & Verify with KYC", img: "https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?auto=format&fit=crop&w=800&q=80" },
+    { title: "Browse Marketplace & Subscriptions", img: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=800&q=80" },
+    { title: "Edit and Collaborate", img: "https://tse2.mm.bing.net/th/id/OIP.5igK9JhLACAy9F8tB8XQ6AHaEK?r=0&rs=1&pid=ImgDetMain&o=7&rm=3" },
   ],
-  work: [
-    { title: "Create your profile", img: "https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?auto=format&fit=crop&w=800&q=80" },
-    { title: "Apply for jobs and gigs", img: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=800&q=80" },
-    { title: "Get paid securely", img: "https://images.unsplash.com/photo-1556742044-3c52d6e88c62?auto=format&fit=crop&w=800&q=80" },
+  freelancer: [
+    { title: "Find Jobs or Post a Service", img: "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&w=800&q=80" },
+    { title: "Propose to a Job or Receive Orders", img: "https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&w=800&q=80" },
+    { title: "Get Paid with Credits", img: "https://images.unsplash.com/photo-1556742044-3c52d6e88c62?auto=format&fit=crop&w=800&q=80" },
   ],
-  edit: [
-    { title: "Import your footage", img: "https://www.cyberlink.com/prog/learning-center/html/4137/PDR19-YouTube-85_Record_Gameplay_Videos/img/import-footage.png" },
-    { title: "Edit with AI tools & Collaborate", img: "https://tse2.mm.bing.net/th/id/OIP.5igK9JhLACAy9F8tB8XQ6AHaEK?r=0&rs=1&pid=ImgDetMain&o=7&rm=3" },
-    { title: "Export Video & Share", img: "https://pbblogassets.s3.amazonaws.com/uploads/2019/08/07150355/exportwindow.jpg" },
+  client: [
+    { title: "Post a Job or Find Services", img: "https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=800&q=80" },
+    { title: "Manage Proposals or Order a Service", img: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=800&q=80" },
+    { title: "Pay the Service / Job", img: "https://images.unsplash.com/photo-1556742044-3c52d6e88c62?auto=format&fit=crop&w=800&q=80" },
   ]
 };
 
 const SectionHowItWorks: React.FC<HowItWorksProps> = ({ isMuted = false }) => {
-  const [tab, setTab] = useState<"hire" | "work" | "edit">("hire");
-  const [hoveredTab, setHoveredTab] = useState<"hire" | "work" | "edit" | null>(null);
+  const [tab, setTab] = useState<"casual" | "freelancer" | "client">("casual");
+  const [hoveredTab, setHoveredTab] = useState<"casual" | "freelancer" | "client" | null>(null);
+  const theme = useGlobalState((state) => state.theme);
 
   // Audio references
   const hoverAudioRef = useRef<HTMLAudioElement | null>(null);
   const clickAudioRef = useRef<HTMLAudioElement | null>(null);
   const popAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Track active timeouts to clear them out cleanly if tabs are switched mid-progression
   const timeoutsRef = useRef<number[]>([]);
 
   useEffect(() => {
-    // Initialize required audio clips
     hoverAudioRef.current = new Audio("/sounds/hover.mp3");
     clickAudioRef.current = new Audio("/sounds/softclick.mp3");
     popAudioRef.current = new Audio("/sounds/pop.mp3");
 
     hoverAudioRef.current.volume = 0.25;
     clickAudioRef.current.volume = 0.4;
-    popAudioRef.current.volume = 0.35; // Snappy pop presence mix
+    popAudioRef.current.volume = 0.35; 
 
-    // Play initial structural reveal pop effects for the default tab state on mounting
     triggerCardStaggerPops();
 
     return () => {
-      // Clean up timeouts on unmount
       timeoutsRef.current.forEach(id => clearTimeout(id));
     };
   }, []);
@@ -67,19 +65,15 @@ const SectionHowItWorks: React.FC<HowItWorksProps> = ({ isMuted = false }) => {
     clickAudioRef.current.play().catch(() => {});
   };
 
-  // Dedicated audio queue builder to sync pops seamlessly with your layout fade-ins
   const triggerCardStaggerPops = () => {
     if (isMuted) return;
 
-    // Clear previous pending timeouts if tabs are switched quickly
     timeoutsRef.current.forEach(id => clearTimeout(id));
     timeoutsRef.current = [];
 
     HIW_DATA[tab].forEach((_, i) => {
-      // Match the 0.1s stagger threshold (0ms, 100ms, 200ms)
       const timeoutId = window.setTimeout(() => {
         if (popAudioRef.current) {
-          // Clone or reuse the instance cleanly for instant overlaps
           const sequentialPop = popAudioRef.current.cloneNode(true) as HTMLAudioElement;
           sequentialPop.volume = 0.35;
           sequentialPop.play().catch(() => {});
@@ -90,13 +84,11 @@ const SectionHowItWorks: React.FC<HowItWorksProps> = ({ isMuted = false }) => {
     });
   };
 
-  const handleTabChange = (targetTab: "hire" | "work" | "edit") => {
+  const handleTabChange = (targetTab: "casual" | "freelancer" | "client") => {
     if (tab === targetTab) return;
     playClickSound();
     setTab(targetTab);
 
-    // Schedule the pops for the newly revealed cluster cards
-    // Use a slight timeout to align with the React DOM node swap
     setTimeout(() => {
       triggerCardStaggerPops();
     }, 20);
@@ -108,9 +100,13 @@ const SectionHowItWorks: React.FC<HowItWorksProps> = ({ isMuted = false }) => {
       style={{
         position: "relative",
         overflow: "hidden",
-        background: "#080a12",
+        background: theme === 'dark' ? "#121214" : "#ffffff",
         padding: "100px 60px",
-        borderBottom: "1px solid #1e2130"
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        transition: "background 0.3s ease"
       }}
     >
       {/* ─── ShapeGrid Background Layer ─── */}
@@ -129,12 +125,34 @@ const SectionHowItWorks: React.FC<HowItWorksProps> = ({ isMuted = false }) => {
           speed={0.4}
           squareSize={48}
           direction="diagonal"
-          borderColor="#1e2130"
-          hoverFillColor="#13162b"
+          borderColor={theme === 'dark' ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)"}
+          hoverFillColor={theme === 'dark' ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"}
           shape="square"
           hoverTrailAmount={5}
         />
       </div>
+
+      {/* Left Side Gradient Overlay (To blend seamlessly out of the horizontal adjacent section) */}
+      <div style={{
+        position: "absolute",
+        top: 0, left: 0, bottom: 0,
+        width: "15%",
+        background: theme === 'dark' ? "linear-gradient(to right, #121214 0%, transparent 100%)" : "linear-gradient(to right, #ffffff 0%, transparent 100%)",
+        zIndex: 0,
+        transition: "background 0.3s ease",
+        pointerEvents: "none"
+      }} />
+
+      {/* Right Side Gradient Overlay (To blend seamlessly into the horizontal adjacent section) */}
+      <div style={{
+        position: "absolute",
+        top: 0, right: 0, bottom: 0,
+        width: "15%",
+        background: theme === 'dark' ? "linear-gradient(to left, #121214 0%, transparent 100%)" : "linear-gradient(to left, #ffffff 0%, transparent 100%)",
+        zIndex: 0,
+        transition: "background 0.3s ease",
+        pointerEvents: "none"
+      }} />
 
       {/* ─── Main Content Foreground Layer ─── */}
       <FadeInScroll distance={40} duration={0.8} style={{ width: "100%", position: "relative", zIndex: 1 }}>
@@ -142,13 +160,13 @@ const SectionHowItWorks: React.FC<HowItWorksProps> = ({ isMuted = false }) => {
 
           {/* Header with 3-Way Switcher */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 48 }}>
-            <h2 style={{ fontSize: 42, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>How it works</h2>
+            <h2 style={{ fontSize: 42, fontWeight: 800, color: theme === 'dark' ? "#fff" : "#111827", letterSpacing: "-0.02em" }}>How it works</h2>
 
-            <div style={{ display: "flex", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 100, padding: 4 }}>
-              {(["hire", "work", "edit"] as const).map((mode) => {
+            <div style={{ display: "flex", background: theme === 'dark' ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)", border: theme === 'dark' ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.1)", borderRadius: 100, padding: 4 }}>
+              {(["casual", "freelancer", "client"] as const).map((mode) => {
                 const isActive = tab === mode;
                 const isCurrentlyHovered = hoveredTab === mode;
-                const labels = { hire: "For hiring", work: "For finding work", edit: "For editing" };
+                const labels = { casual: "For Casuals", freelancer: "For Freelancers", client: "For Clients" };
 
                 return (
                   <button
@@ -168,11 +186,11 @@ const SectionHowItWorks: React.FC<HowItWorksProps> = ({ isMuted = false }) => {
                       cursor: "pointer",
                       transition: "all 0.25s ease",
                       background: isActive
-                        ? "#fff"
-                        : (isCurrentlyHovered ? "rgba(255,255,255,0.06)" : "transparent"),
+                        ? (theme === 'dark' ? "#fff" : "#111827")
+                        : (isCurrentlyHovered ? (theme === 'dark' ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)") : "transparent"),
                       color: isActive
-                        ? "#000"
-                        : (isCurrentlyHovered ? "#fff" : "#7a8499")
+                        ? (theme === 'dark' ? "#000" : "#fff")
+                        : (isCurrentlyHovered ? (theme === 'dark' ? "#fff" : "#111827") : "#7a8499")
                     }}
                   >
                     {labels[mode]}
@@ -186,12 +204,38 @@ const SectionHowItWorks: React.FC<HowItWorksProps> = ({ isMuted = false }) => {
           <div key={tab} style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 32 }}>
             {HIW_DATA[tab].map((step, i) => (
               <div key={i} className="animate-swap" style={{ animationDelay: `${i * 0.1}s` }}>
-                <div style={{ width: "100%", aspectRatio: "16/10", borderRadius: 24, overflow: "hidden", marginBottom: 20, background: "#111827", border: "1px solid rgba(255,255,255,0.05)" }}>
+                <div style={{ width: "100%", aspectRatio: "16/10", borderRadius: 24, overflow: "hidden", marginBottom: 20, background: theme === 'dark' ? "#18181b" : "#f4f4f5", border: theme === 'dark' ? "1px solid rgba(255,255,255,0.05)" : "1px solid rgba(0,0,0,0.05)" }}>
                   <img src={step.img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.8 }} />
                 </div>
-                <h4 style={{ fontSize: 20, fontWeight: 700, color: "#fff" }}>{step.title}</h4>
+                <h4 style={{ fontSize: 20, fontWeight: 700, color: theme === 'dark' ? "#fff" : "#111827" }}>{step.title}</h4>
               </div>
             ))}
+          </div>
+
+          {/* Action Button Below Grid */}
+          <div style={{ display: "flex", justifyContent: "center", marginTop: 64 }}>
+            <button
+              onClick={() => { /* Navigation goes here */ }}
+              className="group"
+              style={{
+                display: "flex", alignItems: "center", gap: "8px",
+                padding: "16px 32px",
+                borderRadius: 100,
+                background: theme === 'dark' ? "#fff" : "#111827",
+                color: theme === 'dark' ? "#000" : "#fff",
+                fontWeight: 700,
+                fontSize: 16,
+                border: "none",
+                cursor: "pointer",
+                transition: "all 0.3s ease"
+              }}
+            >
+              {tab === "freelancer" ? "View Job Marketplace" : tab === "client" ? "View Gig Marketplace" : "Browse Website"}
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transition: "transform 0.3s ease" }} className="group-hover:translate-x-1">
+                <path d="M5 12h14" />
+                <path d="m12 5 7 7-7 7" />
+              </svg>
+            </button>
           </div>
         </div>
       </FadeInScroll>
