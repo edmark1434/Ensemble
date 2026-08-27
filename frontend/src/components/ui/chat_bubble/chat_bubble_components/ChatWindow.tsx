@@ -27,6 +27,7 @@ import useChatState, { formatCallCardText, type ChatTarget } from "../chat_state
 import { InboxEmojiPicker } from "@/components/ui/inbox/inbox_functions/inbox_emoji_picker";
 import { ChatImagePreview } from "@/components/ui/inbox/inbox_functions/chat_image_preview";
 import LiveGoogleMeetingBanner from "./LiveGoogleMeetingBanner";
+import { MarketplaceContextCard } from "@/components/ui/inbox/inbox_components/marketplace_context_card";
 
 interface ChatWindowProps {
   onMinimize: () => void;
@@ -358,6 +359,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       </div>
 
       {liveGoogleMeeting && <LiveGoogleMeetingBanner call={liveGoogleMeeting} compact />}
+
+      {conversation?.conversation_type === "revision" && (
+        <MarketplaceContextCard
+          conversation={conversation}
+          currentUserId={currentUserId}
+        />
+      )}
 
       {conversation?.conversation_type === "group" && groupCall && (
         <div className="flex items-center justify-between gap-2 border-b border-green-500/20 bg-green-500/10 px-3 py-2">

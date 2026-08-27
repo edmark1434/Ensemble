@@ -51,6 +51,7 @@ export interface Inbox {
   freelancer_context_path?: string;
   marketplace_status?: string;
   marketplace_amount_credits?: number;
+  revision_price_credits?: number;
   ticket_details?: {
     ticket_number?: string | null;
     subject?: string | null;

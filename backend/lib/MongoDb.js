@@ -62,6 +62,18 @@ async function ensureChatIndexes(database) {
         },
       }
     ),
+    database.collection('inbox').createIndex(
+      { conversation_type: 1, contract_id: 1 },
+      {
+        name: 'chat_inbox_revision_contract_context',
+        unique: true,
+        partialFilterExpression: {
+          conversation_type: 'revision',
+          contract_id: { $type: 'string' },
+          deleted_at: null,
+        },
+      }
+    ),
     database.collection('google_meet_connections').createIndex(
       { account_id: 1 },
       { name: 'google_meet_connections_account', unique: true }

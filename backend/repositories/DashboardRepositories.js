@@ -294,6 +294,97 @@ async function unlockNextMilestone(contractId, currentMilestoneId) {
     await pool.query(query, [contractId]);
 }
 
+async function recordMilestoneAction({
+    contractId,
+    milestoneId,
+    message,
+    attachments,
+    submissionStatus,
+    milestoneStatus,
+    unlockNext = false,
+    allowedCurrentStatuses = [],
+}) {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const milestoneResult = await client.query(
+            `SELECT contract_milestone_id, name, status
+             FROM contract_milestones
+             WHERE contract_milestone_id = $1 AND contract_id = $2
+             FOR UPDATE`,
+            [milestoneId, contractId]
+        );
+        const milestone = milestoneResult.rows[0];
+        if (!milestone) {
+            const error = new Error('Milestone not found for this contract');
+            error.statusCode = 404;
+            throw error;
+        }
+        if (
+            allowedCurrentStatuses.length > 0 &&
+            !allowedCurrentStatuses.includes(String(milestone.status).toLowerCase())
+        ) {
+            const error = new Error('Milestone is not in a valid state for this action');
+            error.statusCode = 409;
+            throw error;
+        }
+
+        const submissionResult = await client.query(
+            `INSERT INTO milestone_submits (
+                contract_milestone_id, index, message, attachments, status
+             )
+             VALUES (
+                $1,
+                COALESCE((
+                    SELECT MAX(index) + 1
+                    FROM milestone_submits
+                    WHERE contract_milestone_id = $1
+                ), 1),
+                $2,
+                $3,
+                $4
+             )
+             RETURNING *`,
+            [milestoneId, message, JSON.stringify(attachments || []), submissionStatus]
+        );
+
+        if (milestoneStatus) {
+            await client.query(
+                `UPDATE contract_milestones
+                 SET status = $2
+                 WHERE contract_milestone_id = $1`,
+                [milestoneId, milestoneStatus]
+            );
+        }
+
+        if (unlockNext) {
+            await client.query(
+                `UPDATE contract_milestones
+                 SET status = 'active'
+                 WHERE contract_milestone_id = (
+                    SELECT contract_milestone_id
+                    FROM contract_milestones
+                    WHERE contract_id = $1 AND status = 'locked'
+                    ORDER BY index ASC
+                    LIMIT 1
+                 )`,
+                [contractId]
+            );
+        }
+
+        await client.query('COMMIT');
+        return {
+            submission: submissionResult.rows[0],
+            milestone,
+        };
+    } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
+    }
+}
+
 async function submitContractReview(contractId, accountId, stars, feedback) {
     const query = `
         INSERT INTO ratings (contract_id, account_id, stars_out_of_five, feedback)
@@ -342,6 +433,7 @@ module.exports = {
     verifyFreelancer,
     verifyClient,
     addMilestoneSubmission,
+    recordMilestoneAction,
     updateMilestoneStatus,
     unlockNextMilestone,
     submitContractReview,

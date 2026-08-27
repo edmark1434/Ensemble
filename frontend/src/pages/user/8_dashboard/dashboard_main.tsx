@@ -8,6 +8,7 @@ import UserHeader from "@/components/nav/user_header";
 import { DashboardTaskList } from './dashboard_components/DashboardTaskList';
 import { RateReviewModal } from './dashboard_components/RateReviewModal';
 import { ClaimCreditsModal } from './dashboard_components/ClaimCreditsModal';
+import socket from '@/lib/socket';
 
 // ============================================================================
 // SKELETON COMPONENT FOR LOADING STATE
@@ -78,6 +79,34 @@ const DashboardMain = () => {
 
     useEffect(() => {
         fetchTasks();
+    }, []);
+
+    useEffect(() => {
+        const handleTaskUpdated = (event: { contract_id?: string; task?: DashboardTask }) => {
+            if (!event?.task || !event.contract_id) return;
+            setTasks((current) => {
+                const exists = current.some(
+                    (task) => String(task.contract_id) === String(event.contract_id)
+                );
+                return exists
+                    ? current.map((task) =>
+                        String(task.contract_id) === String(event.contract_id)
+                            ? event.task!
+                            : task
+                    )
+                    : [event.task!, ...current];
+            });
+        };
+        const handleReconnect = () => {
+            void fetchTasks();
+        };
+
+        socket.on('dashboardTaskUpdated', handleTaskUpdated);
+        socket.io.on('reconnect', handleReconnect);
+        return () => {
+            socket.off('dashboardTaskUpdated', handleTaskUpdated);
+            socket.io.off('reconnect', handleReconnect);
+        };
     }, []);
 
     const fetchTasks = async () => {

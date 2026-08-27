@@ -8,7 +8,7 @@ interface Props {
     contractId: string;
     milestoneId: string;
     isSubmittedForReview: boolean;
-    onSuccess: () => void;
+    onSuccess: (task?: unknown) => void;
 }
 
 export const MilestoneSubmissionForm: React.FC<Props> = ({ contractId, milestoneId, isSubmittedForReview, onSuccess }) => {
@@ -40,10 +40,11 @@ export const MilestoneSubmissionForm: React.FC<Props> = ({ contractId, milestone
                 status: markAsDone ? 'submitted_for_review' : 'progress'
             };
 
-            await api.post(`/api/dashboard/tasks/${contractId}/milestones/${milestoneId}/submit`, payload);
+            const response = await api.post(`/api/dashboard/tasks/${contractId}/milestones/${milestoneId}/submit`, payload);
             
             setMessage('');
-            onSuccess();
+            mediaList.forEach((media) => URL.revokeObjectURL(media.previewUrl)); // Clean up object URLs
+            onSuccess(response.data.task);
         } catch (error) {
             console.error("Failed to submit milestone update", error);
             alert("Failed to submit update. Please try again.");

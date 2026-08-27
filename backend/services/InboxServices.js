@@ -29,12 +29,14 @@ const { createNotificationServices } = require('./NotificationServices');
 const { getAccountById } = require('../repositories/AccountRepositories');
 const { pool } = require('../lib/Database');
 const { createReport } = require('../repositories/ModeratorSharedRepositories');
+const { getTaskById } = require('../repositories/DashboardRepositories');
 
 const CONVERSATION_TYPES = [
     'direct',
     'engagement',
     'marketplace_job',
     'marketplace_gig',
+    'revision',
     'group',
     'ticket',
     'dispute',
@@ -459,9 +461,10 @@ async function resolveMarketplaceContext(contextType, contextId, accountId) {
         if (!proposal) {
             throw new ChatServiceError('Proposal not found', 404);
         }
-        if (String(proposal.status || '').toLowerCase() !== 'shortlisted') {
+        const proposalStatus = String(proposal.status || '').toLowerCase();
+        if (!['shortlisted', 'accepted'].includes(proposalStatus)) {
             throw new ChatServiceError(
-                'A proposal discussion is available after the proposal is shortlisted',
+                'A proposal discussion is available after the proposal is shortlisted or accepted',
                 409
             );
         }
@@ -573,6 +576,92 @@ async function createMarketplaceChatServices(payload, accountId, callbacks = {})
             actorId,
             message: resolved.notificationMessage,
             prefix: 'CHAT_MARKETPLACE_CREATED',
+            referencePath: `/inbox/marketplace?conversation=${inbox._id}`,
+            onNotification: callbacks.onNotification,
+        });
+
+        if (callbacks.onConversationCreated) {
+            await Promise.allSettled(
+                inbox.members.map((member) =>
+                    callbacks.onConversationCreated(String(member.account_id), inbox)
+                )
+            );
+        }
+    }
+
+    return { inbox, created };
+}
+
+async function createRevisionChatServices(payload, accountId, callbacks = {}) {
+    const actorId = await requireAccount(accountId);
+    const contractId = requireUuid(
+        payload?.contract_id,
+        'A valid contract ID is required'
+    );
+    const task = await getTaskById(contractId, actorId);
+
+    if (!task) {
+        throw new ChatServiceError('Contract task not found', 404);
+    }
+
+    const members = marketplaceMembers(
+        task.client_account_id,
+        task.freelancer_account_id
+    );
+    await validateMemberAccounts(members);
+
+    const isGig = String(task.contract_type || '').toLowerCase() === 'gig';
+    const listingId = String(task.job_id || '');
+    const listingTitle = String(
+        task.job_title || (isGig ? 'Gig contract' : 'Job contract')
+    );
+    const now = new Date();
+    const { inbox, created } = await createOrGetInboxByContextRepositories(
+        'revision',
+        { contract_id: contractId },
+        {
+            conversation_name: `${listingTitle} revisions`,
+            conversation_type: 'revision',
+            contract_id: contractId,
+            ...(isGig ? { gig_id: listingId } : { job_id: listingId }),
+            client_account_id: String(task.client_account_id),
+            freelancer_account_id: String(task.freelancer_account_id),
+            listing_type: isGig ? 'gig' : 'job',
+            listing_title: listingTitle,
+            listing_preview:
+                'Discuss milestone submissions, review feedback, and revisions for this contract.',
+            listing_path: isGig
+                ? `/gigs/services/${listingId}/page`
+                : `/jobs/postings/${listingId}`,
+            client_context_path: `/dashboard/review/${contractId}`,
+            freelancer_context_path: `/dashboard/tasks/${contractId}`,
+            marketplace_status: task.contract_status || null,
+            marketplace_amount_credits: Number(task.contract_value) || 0,
+            revision_price_credits: Number(task.revision_price_credits) || 0,
+            members,
+            pinned_messages: [],
+            created_at: now,
+            updated_at: now,
+            deleted_at: null,
+        }
+    );
+
+    if (!inbox) {
+        throw new ChatServiceError('Unable to create revision conversation', 500);
+    }
+    if (!activeMember(inbox, actorId)) {
+        throw new ChatServiceError(
+            'You are not a member of this revision conversation',
+            403
+        );
+    }
+
+    if (created) {
+        await persistChatNotifications({
+            inbox,
+            actorId,
+            message: `opened a revision discussion for "${listingTitle}".`,
+            prefix: 'CHAT_REVISION_CREATED',
             referencePath: `/inbox/marketplace?conversation=${inbox._id}`,
             onNotification: callbacks.onNotification,
         });
@@ -1431,6 +1520,7 @@ module.exports = {
     createGroupServices,
     createEngagementChatServices,
     createMarketplaceChatServices,
+    createRevisionChatServices,
     createOrReuseDirectChatServices,
     createMessageServices,
     replyMessageServices,
