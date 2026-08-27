@@ -159,6 +159,7 @@ interface ChatState {
     context_type: "job_proposal" | "gig_order";
     context_id: string;
   }) => Promise<Inbox>;
+  createRevision: (payload: { contract_id: string }) => Promise<Inbox>;
   updateGroupMember: (
     conversationId: string,
     accountId: string,
@@ -1661,6 +1662,20 @@ const useChatState = create<ChatState>((set, get) => ({
   createMarketplace: async (payload) => {
     const response = await api.post<{ inbox: Inbox; created: boolean }>(
       "/api/inbox/marketplace",
+      payload
+    );
+    const inbox = response.data.inbox;
+    set((state) => ({
+      conversations: upsertConversation(state.conversations, inbox),
+    }));
+    socket.emit("joinRoom", {
+      conversation_id: String(inbox._id),
+    });
+    return inbox;
+  },
+  createRevision: async (payload) => {
+    const response = await api.post<{ inbox: Inbox; created: boolean }>(
+      "/api/inbox/revision",
       payload
     );
     const inbox = response.data.inbox;

@@ -57,6 +57,7 @@ const MARKETPLACE_CONVERSATION_TYPES = new Set([
   "engagement",
   "marketplace_job",
   "marketplace_gig",
+  "revision",
 ]);
 
 interface ProfileIdentity {

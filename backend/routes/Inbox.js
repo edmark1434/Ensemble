@@ -3,6 +3,7 @@ const {
     createGroupController,
     createEngagementChatController,
     createMarketplaceChatController,
+    createRevisionChatController,
     createMessageController,
     replyMessageController,
     reactMessageController,
@@ -32,6 +33,7 @@ router.post('/', createInboxController);
 router.post('/group', createGroupController);
 router.post('/engagement', createEngagementChatController);
 router.post('/marketplace', createMarketplaceChatController);
+router.post('/revision', createRevisionChatController);
 router.post('/two-accounts', checkInboxByTwoAccountIdsController);
 
 router.post('/message', createMessageController);

@@ -8,7 +8,7 @@ interface Props {
     contractId: string;
     milestoneId: string;
     canReview: boolean;
-    onSuccess: () => void;
+    onSuccess: (task?: unknown) => void;
     activeMilestone?: any;
     task?: any;
 }
@@ -40,11 +40,11 @@ export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, ca
                 status: action === 'approve' ? 'approval' : 'revision_request'
             };
 
-            await api.post(`/api/dashboard/tasks/${contractId}/milestones/${milestoneId}/review`, payload);
+            const response = await api.post(`/api/dashboard/tasks/${contractId}/milestones/${milestoneId}/review`, payload);
             
             setMessage('');
             setAction(null);
-            onSuccess();
+            onSuccess(response.data.task);
         } catch (error) {
             console.error("Failed to submit review", error);
             alert("Failed to submit review. Please try again.");

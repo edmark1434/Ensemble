@@ -3,6 +3,7 @@ const {
     createGroupServices,
     createEngagementChatServices,
     createMarketplaceChatServices,
+    createRevisionChatServices,
     createMessageServices,
     replyMessageServices,
     reactMessageServices,
@@ -62,6 +63,25 @@ async function createMarketplaceChatController(req, res) {
     try {
         const io = getIo();
         const result = await createMarketplaceChatServices(
+            req.body,
+            accountId(req),
+            {
+                onNotification: (recipientId, notification) =>
+                    io.to(String(recipientId)).emit('notification', notification),
+                onConversationCreated: (recipientId, inbox) =>
+                    io.to(String(recipientId)).emit('conversationCreated', inbox),
+            }
+        );
+        return res.status(result.created ? 201 : 200).json(result);
+    } catch (error) {
+        return sendError(res, error);
+    }
+}
+
+async function createRevisionChatController(req, res) {
+    try {
+        const io = getIo();
+        const result = await createRevisionChatServices(
             req.body,
             accountId(req),
             {
@@ -292,6 +312,7 @@ module.exports = {
     createEngagementChatController,
     createMessageController,
     createMarketplaceChatController,
+    createRevisionChatController,
     replyMessageController,
     reactMessageController,
     removeMessageReactionController,

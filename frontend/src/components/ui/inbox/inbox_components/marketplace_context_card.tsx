@@ -15,8 +15,13 @@ export function MarketplaceContextCard({
   variant = "banner",
 }: MarketplaceContextCardProps) {
   const navigate = useNavigate();
-  const isJob = conversation.conversation_type === "marketplace_job";
-  const isGig = conversation.conversation_type === "marketplace_gig";
+  const isRevision = conversation.conversation_type === "revision";
+  const isJob =
+    conversation.conversation_type === "marketplace_job" ||
+    (isRevision && conversation.listing_type === "job");
+  const isGig =
+    conversation.conversation_type === "marketplace_gig" ||
+    (isRevision && conversation.listing_type === "gig");
   if (!isJob && !isGig) return null;
 
   const isClient =
@@ -24,9 +29,13 @@ export function MarketplaceContextCard({
   const contextPath = isClient
     ? conversation.client_context_path
     : conversation.freelancer_context_path;
-  const contextLabel = isJob ? "View proposal" : "View order";
+  const contextLabel = isRevision ? "View task" : isJob ? "View proposal" : "View order";
   const listingLabel = isJob ? "View job" : "View gig";
-  const typeLabel = isJob ? "Job proposal discussion" : "Gig order discussion";
+  const typeLabel = isRevision
+    ? `${isJob ? "Job" : "Gig"} revision discussion`
+    : isJob
+    ? "Job proposal discussion"
+    : "Gig order discussion";
   const amount = Number(conversation.marketplace_amount_credits || 0);
 
   return (
@@ -80,6 +89,12 @@ export function MarketplaceContextCard({
               <CreditIcon className="h-3.5 w-3.5" />
               <span>{amount.toLocaleString()} credits</span>
             </div>
+          )}
+
+          {isRevision && Number(conversation.revision_price_credits || 0) > 0 && (
+            <p className="mt-1 text-[11px] text-gray-500 dark:text-zinc-400">
+              Revision rate: {Number(conversation.revision_price_credits).toLocaleString()} credits
+            </p>
           )}
 
           <div className="mt-3 flex flex-wrap gap-2">

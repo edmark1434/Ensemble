@@ -1,3 +1,80 @@
+# Current Task — Realtime Milestone Updates and Review Notifications
+
+Make freelancer milestone updates/review requests and client approval/revision responses update both participants in realtime and create durable recipient notifications.
+
+## Acceptance Criteria
+
+* [x] Freelancer progress updates notify the client and broadcast the committed task state.
+* [x] Freelancer review requests notify the client and broadcast the committed task state.
+* [x] Client revision requests and approvals notify the freelancer and broadcast the committed task state.
+* [x] Milestone submission and status transition commit atomically before any realtime event is emitted.
+* [x] Milestone IDs are validated as belonging to the authorized contract.
+* [x] Allowed actor roles, action statuses, milestone states, messages, and attachments are backend validated.
+* [x] Dashboard list and task-detail pages merge `dashboardTaskUpdated` events by contract ID without reloading the page.
+* [x] Initial HTTP reads and reconnect refetches restore authoritative state after missed events.
+* [x] Backend syntax, focused validation checks, focused frontend lint, and the frontend production build pass.
+
+Status: Completed August 28, 2026.
+
+Implementation notes: Introduced a dashboard service layer for milestone actions and a transaction-backed repository operation that locks and verifies the milestone within its contract, records the activity, applies its status transition, and unlocks the next milestone when appropriate. After commit, the service persists a role-specific notification and emits it to the recipient account room, then emits one authoritative `dashboardTaskUpdated` payload to both contract participants. The task-detail and dashboard-list screens subscribe once, clean up their listeners, merge updates by `contract_id`, and refetch on Socket.IO reconnect. Action responses also carry the updated task so the initiating user updates immediately without a page reload. Backend syntax and invalid-input checks passed, focused lint for the clean feature files passed, and the production build passed. Broader dashboard lint continues to report pre-existing explicit-any and unused-import findings.
+
+---
+# Current Task — Dedicated Contract Revision Chat
+
+Create a separate, contract-scoped inbox conversation for milestone revision communication instead of reusing job-proposal or gig-order discussions.
+
+## Acceptance Criteria
+
+* [x] The milestone chat action creates or reuses an inbox record with `conversation_type: revision`.
+* [x] Only the contract's client or freelancer can create and access the revision conversation.
+* [x] Exactly one active revision conversation exists per contract through an idempotent create-or-get operation and a unique partial MongoDB index.
+* [x] The conversation stores contract, job/gig, participant, amount, status, listing, and role-specific dashboard context details.
+* [x] Client context links to `/dashboard/review/:contractId`; freelancer context links to `/dashboard/tasks/:contractId`.
+* [x] Clicking the milestone chat icon opens the floating chat overlay without navigating away.
+* [x] Revision details appear below the floating chat header and are available in the Marketplace inbox tab.
+* [x] Existing authenticated Socket.IO room authorization, message delivery, typing, read state, and conversation-created events support revision chats in realtime.
+* [x] Backend syntax checks, focused frontend lint, read-only contract data verification, and the frontend production build pass.
+
+Status: Completed August 28, 2026.
+
+Implementation notes: Added an authenticated `POST /api/inbox/revision` create-or-get flow backed by the authorized dashboard contract query and a contract-scoped unique MongoDB index. Revision inbox records contain the job/gig title and identifier, both participant IDs, contract amount/status, revision rate, listing link, and role-specific dashboard links. The milestone icon now creates or reuses that record and opens the existing floating overlay. A reusable context card renders beneath the chat header with a role-aware View task action, while revision records remain discoverable in the Marketplace inbox. The existing generic Socket.IO authorization and messaging flow is reused; both participants join newly created rooms through the existing `conversationCreated` event. Backend syntax checks passed, focused lint for the directly changed feature components passed, a read-only database check confirmed the authorized contract data shape, and the frontend production build passed. The broader chat-state lint still reports five pre-existing findings unrelated to this task.
+
+---
+# Current Task — Milestone Attachment CloudFront Display
+
+Display milestone attachment previews through CloudFront instead of rendering stored S3-origin URLs directly.
+
+## Acceptance Criteria
+
+* [x] Path-style S3 attachment URLs remove the bucket segment and retain the full object key.
+* [x] Virtual-hosted S3 URLs and stored relative object keys resolve through the configured CloudFront base URL.
+* [x] Already external non-S3 URLs remain unchanged.
+* [x] Both the image preview and its open-in-new-tab link use the resolved URL.
+* [x] Image attachments retain their natural aspect ratio without aspect-video cropping or object-cover scaling.
+* [x] The production build passes; focused lint reports only the component's two pre-existing task and activeMilestone any props.
+
+Status: Completed August 28, 2026.
+
+
+Implementation notes: Added a local attachment URL resolver that maps path-style and virtual-hosted S3 URLs, plus stored object keys, to the configured CloudFront distribution. The resolved URL now drives both image previews and attachment links, while non-S3 external URLs remain unchanged. Image detection now reads the URL pathname and supports AVIF, GIF, JPEG, PNG, SVG, and WebP. Attachment images now retain their natural aspect ratio and use bounded auto dimensions instead of a forced 16:9 object-cover frame. The frontend production build passed; focused lint retains only two pre-existing explicit-any errors in the component props.
+---
+# Current Task — Responsive Dashboard Task Interaction Panel
+
+Keep the Submit Work / Review Work interaction panel visible and usable when the dashboard task-detail page changes from its desktop two-column layout to a narrow, stacked layout.
+
+## Acceptance Criteria
+
+* [x] Small screens use normal document flow instead of clipping the stacked interaction column inside a desktop viewport height.
+* [x] The milestone list has a bounded mobile height and remains independently scrollable.
+* [x] The interaction panel receives a usable mobile viewport height, with its existing activity feed scrolling internally and its action controls remaining available.
+* [x] The existing large-screen two-column fixed-height layout is preserved.
+* [x] The frontend production build passes; focused lint introduces no layout-specific finding and continues to report the component's pre-existing typing/import/effect issues.
+
+Status: Completed August 28, 2026.
+
+Implementation notes: Removed the desktop viewport-height constraint from the narrow layout, bounded the mobile milestone list to an independently scrollable half-viewport region, and gave the interaction panel a dedicated dynamic-viewport height so its existing feed scroll and Submit Work / Review Work controls remain usable. The lg desktop two-column sizing remains unchanged. The production build passed. Focused ESLint still reports nine existing errors and one existing warning in this component (explicit any types, unused icons, and the effect dependency); the responsive class changes add no lint finding.
+
+---
 # Current Task — Verified, Subscription-limited Marketplace Asset Posting
 
 Require marketplace asset creators to be verified and enforce the active subscription's `asset_post`/`asset_posts` plan-feature value. Numeric values are the maximum number of non-deleted asset listings; `Unlimited` has no numeric ceiling. Validate before opening/uploading in the frontend and atomically revalidate during backend creation.
