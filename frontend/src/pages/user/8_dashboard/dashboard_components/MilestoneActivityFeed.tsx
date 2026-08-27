@@ -211,10 +211,13 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                 ) : (
                     feed.map((item) => {
                         const isFreelancerMsg = item.status === 'progress' || item.status === 'submitted_for_review';
+                        const isOwnMessage = isFreelancer
+                            ? isFreelancerMsg
+                            : !isFreelancerMsg;
                         
                         return (
-                            <div key={item.id} className={`flex w-full ${isFreelancerMsg ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`flex gap-3 max-w-[90%] ${isFreelancerMsg ? 'flex-row-reverse' : 'flex-row'}`}>
+                            <div key={item.id} className={`flex w-full ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`flex gap-3 max-w-[90%] ${isOwnMessage ? 'flex-row-reverse' : 'flex-row'}`}>
                                     <div className="shrink-0 mt-5">
                                         <img 
                                             src={isFreelancerMsg
@@ -225,7 +228,7 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                                             className="w-8 h-8 rounded-full object-cover border border-zinc-700"
                                         />
                                     </div>
-                                    <div className={`flex flex-col ${isFreelancerMsg ? 'items-end' : 'items-start'}`}>
+                                    <div className={`flex flex-col ${isOwnMessage ? 'items-end' : 'items-start'}`}>
                                         <div className="text-[10px] font-bold text-gray-500 dark:text-zinc-500 uppercase tracking-wider mb-1 px-1 flex gap-2">
                                             <span>{isFreelancerMsg ? task.freelancer_name : task.client_name}</span>
                                             <span>•</span>
@@ -237,11 +240,11 @@ export const MilestoneActivityFeed: React.FC<Props> = ({ task, activeMilestone, 
                                             </span>
                                         </div>
                                         <div className={`rounded-2xl p-4 ${
-                                            item.status === 'submitted_for_review' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 rounded-tr-none' :
-                                            item.status === 'approval' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 rounded-tl-none' :
-                                            item.status === 'revision_request' ? 'bg-red-500/20 border border-red-500/30 text-red-600 dark:text-white rounded-tl-none' :
-                                            'bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white rounded-tr-none'
-                                        }`}>
+                                            item.status === 'submitted_for_review' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' :
+                                            item.status === 'approval' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' :
+                                            item.status === 'revision_request' ? 'bg-red-500/20 border border-red-500/30 text-red-600 dark:text-white' :
+                                            'bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white'
+                                        } ${isOwnMessage ? 'rounded-tr-none' : 'rounded-tl-none'}`}>
                                     
                                     {item.status === 'submitted_for_review' && (
                                         <div className="mb-2 font-bold text-xs uppercase tracking-wider text-blue-100 dark:text-blue-200 border-b border-blue-400/30 pb-2 flex items-center gap-2">
