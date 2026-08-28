@@ -182,9 +182,9 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
                   return firstMid;
                 })()}
               </span>
-              <span className={`flex items-center gap-1 text-sm font-bold px-2.5 py-0.5 rounded-lg ml-1 ${subscriptionType === 'Business' ? 'animate-rainbow' : subscriptionType === 'Premium' ? 'animate-gold-solid' : 'silver-solid'}`}>
+              <span className={`flex items-center gap-1 text-sm font-bold px-2.5 py-0.5 rounded-lg ml-1 ${!tagline ? 'opacity-60' : ''} ${subscriptionType === 'Business' ? 'animate-rainbow' : subscriptionType === 'Premium' ? 'animate-gold-solid' : 'silver-solid'}`}>
                 <Tag className="w-3.5 h-3.5" />
-                {tagline || "Add Tagline"}
+                {tagline || (isOwner ? "Add Tagline" : "N/A")}
               </span>
             </h1>
 
