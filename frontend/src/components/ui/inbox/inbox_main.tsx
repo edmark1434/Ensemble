@@ -791,8 +791,8 @@ const InboxMain = () => {
                   hasText ? "px-4 py-2.5" : "p-1.5"
                 } ${
                   isSender
-                    ? "bg-gradient-to-r from-blue-600 to-blue-500 text-gray-900 dark:text-white rounded-br-none"
-                    : "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white rounded-bl-none border border-gray-100 dark:border-white/5"
+                    ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-br-none"
+                    : "bg-gray-100 dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 rounded-bl-none border border-gray-100 dark:border-zinc-700/50"
                 } ${pinned ? "ring-1 ring-yellow-400/40" : ""}`}
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
