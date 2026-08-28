@@ -311,23 +311,40 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   return (
-    <div ref={windowRef} className="flex h-[480px] w-[330px] flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-[#0c0f1d] text-zinc-100 shadow-2xl sm:w-[360px]">
-      <div className="flex items-center justify-between border-b border-white/10 bg-[#080a12] p-3 px-4">
+    <div ref={windowRef} className="flex h-[480px] w-[330px] flex-col overflow-hidden rounded-t-2xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 shadow-2xl sm:w-[360px]">
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 2px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+      `}</style>
+      <div className="flex items-center justify-between border-b border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-zinc-900 p-3 px-4">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="relative flex-shrink-0">
-            <img
-              src={
-                activeUser?.avatarUrl ||
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=6366f1&color=fff`
-              }
-              alt={displayName}
-              className="h-8 w-8 rounded-full object-cover"
-            />
-            <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-[#080a12] ${isOnline ? "bg-green-500" : "bg-zinc-600"}`} />
+            {displayName === "User" || (displayName.startsWith("User ") && displayName.length === 13) ? (
+              <div className="h-8 w-8 rounded-full bg-zinc-200 dark:bg-zinc-700 animate-pulse" />
+            ) : (
+              <img
+                src={
+                  activeUser?.avatarUrl
+                    ? chatAttachmentUrl(activeUser.avatarUrl)
+                    : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=6366f1&color=fff`
+                }
+                alt={displayName}
+                className="h-8 w-8 rounded-full object-cover"
+              />
+            )}
+            <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-zinc-900 ${isOnline ? "bg-green-500" : "bg-zinc-400 dark:bg-zinc-600"}`} />
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-bold">{displayName}</p>
-            <p className="text-[10px] text-zinc-400">
+          <div className="min-w-0 flex-1">
+            {displayName === "User" || (displayName.startsWith("User ") && displayName.length === 13) ? (
+              <div className="h-3 w-20 bg-zinc-200 dark:bg-zinc-700 animate-pulse rounded mb-1" />
+            ) : (
+              <p className="truncate text-sm font-bold text-zinc-900 dark:text-zinc-100">{displayName}</p>
+            )}
+            <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
               {typingCount ? "Typing..." : isOnline ? "Active now" : "Offline"}
             </p>
           </div>
@@ -336,24 +353,26 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           {!hasRestrictedMessageTools && callTargetAccountId &&
             String(callTargetAccountId) !== currentUserId && (
             <button
-              onClick={() =>
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 void startCall(conversationId, String(callTargetAccountId), {
                   name: displayName,
-                  avatar: activeUser.avatarUrl,
-                })
-              }
+                  avatar: activeUser?.avatarUrl || "",
+                });
+              }}
               disabled={Boolean(activeCall)}
               title="Request a meeting"
-              className="p-1.5 text-blue-400 hover:text-blue-300 disabled:opacity-40"
+              className="p-1.5 text-blue-500 transition-colors hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-40"
             >
-              <Video size={15} />
+              <Video size={16} />
             </button>
           )}
-          <button onClick={() => { closeMessageMenu(); onMinimize(); }} className="p-1.5 text-zinc-400 hover:text-white">
-            <Minus size={15} />
+          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onMinimize(); }} className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white relative z-10 cursor-pointer">
+            <Minus size={16} />
           </button>
-          <button onClick={() => { closeMessageMenu(); onClose(); }} className="p-1.5 text-zinc-400 hover:text-white">
-            <X size={15} />
+          <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClose(); }} className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white relative z-10 cursor-pointer">
+            <X size={16} />
           </button>
         </div>
       </div>
@@ -402,7 +421,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </button>
             )}
           </div>
-          <p className="mt-1 truncate text-xs font-medium text-zinc-200">
+          <p className="mt-1 truncate text-xs font-medium text-zinc-700 dark:text-zinc-200">
             {conversation?.listing_title || displayName}
           </p>
           {conversation?.listing_preview && (
@@ -415,7 +434,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       <div
         onScroll={closeMessageMenu}
-        className="flex-1 space-y-2 overflow-y-auto bg-[#080a12]/80 p-3 text-[13px]"
+        className="flex-1 space-y-2 overflow-y-auto custom-scrollbar bg-white dark:bg-zinc-950 p-3 text-[13px]"
       >
         {isLoading ? (
           <div className="flex h-full items-center justify-center text-zinc-500">
@@ -447,10 +466,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 )}
                 <div className={`flex max-w-[90%] items-center gap-1 ${isMe ? "flex-row-reverse" : ""}`}>
                   <div
-                    className={`max-w-[260px] rounded-[18px] px-3.5 py-2 ${
+                    className={`relative max-w-[85%] break-words rounded-2xl px-3 py-2 leading-relaxed shadow-sm ${
                       isMe
                         ? "rounded-br-[4px] bg-blue-600 text-white"
-                        : "rounded-bl-[4px] border border-white/5 bg-[#1f2230] text-zinc-200"
+                        : "rounded-bl-[4px] border border-zinc-200 bg-zinc-100 text-zinc-900 dark:border-white/5 dark:bg-[#1f2230] dark:text-zinc-200"
                     }`}
                   >
                     {parent && (
@@ -551,18 +570,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         onClick={(event) =>
                           toggleMessageMenu(message._id, event.currentTarget)
                         }
-                        className="p-1 text-zinc-500 hover:text-white"
+                        className="p-1 text-zinc-500 hover:text-zinc-800 dark:hover:text-white"
                       >
                         <MoreHorizontal size={14} />
                       </button>
                       {activeMenu === message._id && menuPosition && createPortal(
                         <div
                           ref={messageMenuRef}
-                          className="fixed z-[110] w-36 rounded-lg border border-zinc-200 bg-white p-1 text-zinc-800 shadow-xl"
+                          className="fixed z-[110] w-36 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-1 text-zinc-800 dark:text-zinc-200 shadow-xl"
                           style={menuPosition}
                         >
                           {!hasRestrictedMessageTools && (
-                          <div className="relative border-b border-zinc-200 pb-1">
+                          <div className="relative border-b border-zinc-200 dark:border-zinc-800 pb-1">
                             <button
                               type="button"
                               onClick={() =>
@@ -570,7 +589,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                   current === message._id ? null : message._id
                                 )
                               }
-                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 hover:bg-zinc-100"
+                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                             >
                               <Smile size={13} /> React
                             </button>
@@ -585,23 +604,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                             )}
                           </div>
                           )}
-                          <button onClick={() => { setReplyTo(message); setEditing(null); closeMessageMenu(); }} className="flex w-full gap-2 rounded px-2 py-1.5 hover:bg-zinc-100">
-                            <Reply size={13} /> Reply
-                          </button>
-                          {!hasRestrictedMessageTools && <button onClick={() => { closeMessageMenu(); void pinMessage(conversationId, message._id, pinnedIds.has(String(message._id))); }} className="flex w-full gap-2 rounded px-2 py-1.5 hover:bg-zinc-100">
-                            {pinnedIds.has(String(message._id)) ? <PinOff size={13} /> : <Pin size={13} />}
-                            {pinnedIds.has(String(message._id)) ? "Unpin" : "Pin"}
-                          </button>}
-                          {isMe && (
-                            <>
-                              <button onClick={() => beginEdit(message)} className="flex w-full gap-2 rounded px-2 py-1.5 hover:bg-zinc-100">
-                                <Pencil size={13} /> Edit
-                              </button>
-                              <button onClick={() => { closeMessageMenu(); void deleteMessage(message._id); }} className="flex w-full gap-2 rounded px-2 py-1.5 text-red-600 hover:bg-red-50">
-                                <Trash2 size={13} /> Delete
-                              </button>
-                            </>
-                          )}
+                          <div className="pt-1">
+                            <button onClick={() => { setReplyTo(message); setEditing(null); closeMessageMenu(); }} className="flex w-full gap-2 rounded px-2 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                              <Reply size={13} /> Reply
+                            </button>
+                            {!hasRestrictedMessageTools && <button onClick={() => { closeMessageMenu(); void pinMessage(conversationId, message._id, pinnedIds.has(String(message._id))); }} className="flex w-full gap-2 rounded px-2 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                              {pinnedIds.has(String(message._id)) ? <PinOff size={13} /> : <Pin size={13} />}
+                              {pinnedIds.has(String(message._id)) ? "Unpin" : "Pin"}
+                            </button>}
+                            {isMe && (
+                              <>
+                                <button onClick={() => beginEdit(message)} className="flex w-full gap-2 rounded px-2 py-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                                  <Pencil size={13} /> Edit
+                                </button>
+                                <button onClick={() => { closeMessageMenu(); void deleteMessage(message._id); }} className="flex w-full gap-2 rounded px-2 py-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">
+                                  <Trash2 size={13} /> Delete
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>,
                         document.body
                       )}
@@ -661,7 +682,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                 avatarKey
                                   ? chatAttachmentUrl(avatarKey)
                                   : conversation?.conversation_type === "direct" && activeUser?.avatarUrl
-                                  ? activeUser.avatarUrl
+                                  ? chatAttachmentUrl(activeUser.avatarUrl)
                                   : `https://ui-avatars.com/api/?name=${encodeURIComponent(
                                       memberName
                                     )}&background=6366f1&color=fff`
@@ -681,22 +702,35 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      {(replyTo || editing) && (
-        <div className="flex items-center justify-between border-t border-white/10 bg-[#111421] px-3 py-1.5 text-[10px] text-zinc-400">
-          <span className="truncate">
-            {editing ? "Editing message" : `Replying to ${replyTo?.message_content || "attachment"}`}
-          </span>
-          <button onClick={() => { setReplyTo(null); setEditing(null); setMessageText(""); }}>
-            <X size={13} />
+      {replyTo && (
+        <div className="flex items-center justify-between border-t border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-[#111421] px-3 py-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+          <div className="flex items-center gap-1.5 truncate">
+            <span className="font-semibold text-blue-400">Replying to:</span>
+            <span className="truncate">{replyTo.message_content}</span>
+          </div>
+          <button onClick={() => setReplyTo(null)} className="ml-2 hover:text-white">
+            <X size={12} />
           </button>
         </div>
       )}
+
+      {editing && (
+        <div className="flex items-center justify-between border-t border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-[#111421] px-3 py-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+          <div className="flex items-center gap-1.5 truncate">
+            <span className="font-semibold text-yellow-400">Editing Message</span>
+          </div>
+          <button onClick={cancelEdit} className="ml-2 hover:text-white">
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
       {mediaList.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto border-t border-white/10 px-3 py-2">
+        <div className="flex gap-2 overflow-x-auto border-t border-zinc-200 dark:border-white/10 px-3 py-2">
           {mediaList.map((media) => (
-            <div key={media.id} className="relative flex h-20 min-w-20 max-w-40 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white/10 text-[9px]">
+            <div key={media.id} className="relative flex h-20 min-w-20 max-w-40 items-center justify-center overflow-hidden rounded-lg border border-zinc-200 dark:border-white/10 bg-zinc-100 dark:bg-white/10 text-[9px]">
               {media.type === "file" ? (
-                <div className="flex w-36 items-center gap-2 px-2 text-zinc-300">
+                <div className="flex w-36 items-center gap-2 px-2 text-zinc-700 dark:text-zinc-300">
                   <FileText size={18} className="flex-shrink-0" />
                   <span className="truncate">{media.file.name}</span>
                 </div>
@@ -721,7 +755,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       {typingCount > 0 && (
         <div className="px-3 pt-1 text-[10px] text-zinc-500">Typing...</div>
       )}
-      <div className="flex items-center gap-2 border-t border-white/10 bg-[#080a12] p-2.5">
+      <div className="flex items-center gap-2 border-t border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-zinc-900 p-2.5">
         <input
           ref={fileInputRef}
           type="file"
@@ -730,10 +764,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           onChange={handleFileChange}
           className="hidden"
         />
-        <button onClick={openFilePicker} disabled={mediaList.length >= 3} className="text-zinc-500 hover:text-white disabled:opacity-40">
+        <button onClick={openFilePicker} disabled={mediaList.length >= 3} className="text-zinc-500 hover:text-zinc-800 dark:hover:text-white disabled:opacity-40">
           <Paperclip size={16} />
         </button>
-        <div className="relative flex flex-1 items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3.5 py-1.5">
+        <div className="relative flex flex-1 items-center gap-2 rounded-full border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/[0.05] px-3.5 py-1.5">
           <input
             ref={messageInputRef}
             value={messageText}
@@ -742,12 +776,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               if (event.key === "Enter") void handleSend();
             }}
             placeholder={editing ? "Edit message" : replyTo ? "Write a reply" : "Aa"}
-            className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
+            className="w-full bg-transparent text-xs text-zinc-900 dark:text-zinc-100 outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
           />
           <button
             type="button"
             onClick={() => setShowComposerEmojiPicker((open) => !open)}
-            className="text-zinc-500 transition hover:text-white"
+            className="text-zinc-500 transition hover:text-zinc-800 dark:hover:text-white"
             aria-label="Choose emoji"
           >
             <Smile size={15} />
