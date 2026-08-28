@@ -146,7 +146,7 @@ export const InboxSideDetails: React.FC<InboxSideDetailsProps> = ({
   const canManageMembers = ["owner", "admin"].includes(currentMember?.role || "");
   useEffect(() => {
     const query = memberSearch.replace(/^@/, "").trim();
-    if (!showMemberSearch || query.length < 2) {
+    if (!showMemberSearch || query.length < 1) {
       setMemberSearchResults([]);
       setIsSearchingMembers(false);
       return;

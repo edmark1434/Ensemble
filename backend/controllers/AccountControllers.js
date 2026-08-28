@@ -51,7 +51,8 @@ async function searchUserAccountsByHandleController(req, res) {
     try {
         const accounts = await searchUserAccountsByHandleService(
             req.query.handle,
-            req.session.account_id
+            req.session.account_id,
+            req.query.role
         );
         return res.status(200).json({ success: true, data: accounts });
     } catch (err) {

@@ -75,7 +75,7 @@ async function getAccountByHandle(handle) {
     }
 }
 
-async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 10) {
+async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 50, role = null) {
     const search = String(handle || '').replace(/^@/, '').trim();
     if (!search) return [];
 
@@ -91,6 +91,7 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 10) 
             COALESCE(v.is_verified, FALSE) AS verification_status,
             p.name AS subscriptiontype,
             a.merit_score,
+            (SELECT COALESCE(AVG(stars_out_of_five), 0) FROM ratings WHERE account_id = a.account_id) AS overall_rating,
             (SELECT COUNT(*) FROM account_followers WHERE followed_id = a.account_id) AS followers_count,
             (SELECT COUNT(*) FROM account_followers WHERE follower_id = a.account_id) AS following_count,
             EXISTS(SELECT 1 FROM account_followers WHERE follower_id = $3::uuid AND followed_id = a.account_id) AS is_following,
@@ -101,7 +102,12 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 10) 
                 (SELECT json_agg(json_build_object('role_id', pp.plpu_id, 'role_name', pp.purpose_name))
                  FROM platform_purpose pp JOIN user_platform_purpose upp ON pp.plpu_id = upp.plpu_id WHERE upp.user_id = u.user_id),
                 '[]'::json
-            ) AS roles
+            ) AS roles,
+            COALESCE(
+                (SELECT json_agg(json_build_object('tag_id', t.tag_id, 'name', t.name, 'proficiency', ut.proficiency, 'years', ut.years))
+                 FROM tags t JOIN user_tags ut ON t.tag_id = ut.tag_id WHERE ut.user_id = u.user_id),
+                '[]'::json
+            ) AS skills
          FROM accounts a
          JOIN users u ON u.account_id = a.account_id
          LEFT JOIN files f ON f.file_id = a.avatar_file_id
@@ -114,7 +120,18 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 10) 
            AND (
                 LOWER(a.handle) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
                 OR LOWER(a.display_name) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
+                OR EXISTS (
+                   SELECT 1 FROM user_tags ut
+                   JOIN tags t ON t.tag_id = ut.tag_id
+                   WHERE ut.user_id = u.user_id 
+                   AND LOWER(t.name) LIKE '%' || LOWER($1) || '%' ESCAPE '\\'
+                )
            )
+           ${role ? `AND EXISTS (
+               SELECT 1 FROM user_platform_purpose upp 
+               JOIN platform_purpose pp ON pp.plpu_id = upp.plpu_id 
+               WHERE upp.user_id = u.user_id AND pp.purpose_name = $5
+           )` : ''}
          ORDER BY
            CASE
              WHEN LOWER(a.handle) = LOWER($2) THEN 0
@@ -125,7 +142,7 @@ async function searchUserAccountsByHandle(handle, excludeAccountId, limit = 10) 
            END,
            a.display_name
          LIMIT $4`,
-        [escapedSearch, search, excludeAccountId || null, limit]
+        role ? [escapedSearch, search, excludeAccountId || null, limit, role] : [escapedSearch, search, excludeAccountId || null, limit]
     );
 
     return result.rows;

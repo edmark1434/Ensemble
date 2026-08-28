@@ -240,7 +240,7 @@ useEffect(() => {
 
   useEffect(() => {
     const query = headerSearchInput.replace(/^@/, "").trim();
-    if (query.length < 2) {
+    if (query.length < 1) {
       setCreatorSearchResults([]);
       setIsSearchingCreators(false);
       return;
