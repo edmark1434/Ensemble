@@ -318,15 +318,18 @@ async function persistChatNotifications({
     const actorName = await actorDisplayName(actorId);
     return (await Promise.all([...recipients].map(async (accountId) => {
         try {
-            const notification = await createNotificationServices({
-                account_id: accountId,
-                message: `${actorName} ${message}`,
-                is_read: false,
-                reference_table: 'inbox',
-                reference_prefix: prefix,
-                reference_path: referencePath || `/inbox/direct?conversation=${inbox._id}`,
-                reference_id: randomUUID(),
-            });
+            let notification = null;
+            if (prefix !== 'CHAT_MESSAGE') {
+                notification = await createNotificationServices({
+                    account_id: accountId,
+                    message: `${actorName} ${message}`,
+                    is_read: false,
+                    reference_table: 'inbox',
+                    reference_prefix: prefix,
+                    reference_path: referencePath || `/inbox/direct?conversation=${inbox._id}`,
+                    reference_id: randomUUID(),
+                });
+            }
             if (onNotification) await onNotification(accountId, notification);
             return notification;
         } catch (error) {

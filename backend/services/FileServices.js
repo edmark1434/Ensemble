@@ -199,7 +199,7 @@ async function generateStandaloneUploadUrl(folder, filename, contentType, cacheC
 
 async function generateUploadUrl(accountId, folder, filename, contentType) {
     const safeAccountId = String(accountId || '').trim();
-    if (!/^[0-9a-f-]{36}$/i.test(safeAccountId)) throw new Error('Invalid upload owner');
+    if (!/^[0-9a-f-]{24,36}$/i.test(safeAccountId)) throw new Error('Invalid upload owner');
     // Reuse the common validation/key preparation without signing an unused URL.
     const prepared = await generateStandaloneUploadUrl(folder, filename, contentType, 'private, no-store', false);
     const basename = prepared.key.slice(`${folder}/`.length);

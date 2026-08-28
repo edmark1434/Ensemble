@@ -63,13 +63,15 @@ async function generateUploadUrlController(req, res) {
         ];
 
         if (validationErrors.some(msg => err.message.includes(msg))) {
+            console.error("Upload URL Validation Error:", err.message, "folder:", req.body.folder, "filename:", req.body.filename, "contentType:", req.body.contentType);
             return res.status(400).json({
                 success: false,
                 message: err.message
             });
         }
-
-        res.status(500).json({
+        
+        console.error("Upload URL Fallback Error:", err.message);
+        return res.status(400).json({
             success: false,
             message: 'Failed to generate upload URL'
         });

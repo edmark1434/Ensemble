@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { Search, User, MapPin, ArrowRight, Sparkles, Tag, Star, ChevronLeft, ChevronRight } from "lucide-react";
+import { useParams, useNavigate, useOutletContext } from "react-router-dom";
+import { Search, User, MapPin, ArrowRight, Sparkles, Tag, Star, ChevronLeft, ChevronRight, MessageCircle } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import useGlobalState from "@/lib/global_state";
 
@@ -33,6 +33,9 @@ export const UserProfilesList: React.FC = () => {
   const { query } = useParams<{ query: string }>();
   const navigate = useNavigate();
   const userInfo = useGlobalState((state) => state.user);
+  const { openChatWithUser } = useOutletContext<{
+    openChatWithUser: (target?: { name: string; avatarUrl?: string; account_id: string }) => void;
+  }>();
 
   const decodedQuery = query ? decodeURIComponent(query) : "";
   const [searchInput, setSearchInput] = useState(decodedQuery);
@@ -395,16 +398,34 @@ export const UserProfilesList: React.FC = () => {
                 {/* Right Side: Actions */}
                 <div className="flex items-center gap-3 w-full sm:w-auto justify-end mt-4 sm:mt-0">
                   {userInfo?.account_id !== profile.id && (
-                    <button
-                      onClick={(e) => handleFollowToggle(e, profile.id, profile.isFollowing)}
-                      className={`px-5 py-2 text-xs font-bold rounded-full transition-all flex-shrink-0 border shadow-sm ${
-                        profile.isFollowing
-                          ? "bg-zinc-100 dark:bg-white/5 border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-white hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:hover:bg-red-500/10 dark:hover:text-red-400 dark:hover:border-red-500/30"
-                          : "bg-blue-600 border-blue-600 text-white hover:bg-blue-700 shadow-[0_0_15px_rgba(37,99,235,0.3)] hover:shadow-[0_0_20px_rgba(37,99,235,0.5)]"
-                      }`}
-                    >
-                      {profile.isFollowing ? "Following" : profile.isFollowedBy ? "Follow Back" : "Follow"}
-                    </button>
+                    <>
+                      {profile.isFollowing && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openChatWithUser({
+                              name: profile.name,
+                              avatarUrl: profile.avatar,
+                              account_id: profile.id
+                            });
+                          }}
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5 text-zinc-400 dark:text-zinc-500 transition-all hover:border-blue-500/30 hover:bg-blue-50 dark:hover:bg-blue-500/10 hover:text-blue-500 dark:hover:text-blue-400 outline-none"
+                          title="Message User"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => handleFollowToggle(e, profile.id, profile.isFollowing)}
+                        className={`px-5 py-2 text-xs font-bold rounded-full transition-all flex-shrink-0 border shadow-sm ${
+                          profile.isFollowing
+                            ? "bg-zinc-100 dark:bg-white/5 border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-white hover:bg-red-50 hover:text-red-600 hover:border-red-200 dark:hover:bg-red-500/10 dark:hover:text-red-400 dark:hover:border-red-500/30"
+                            : "bg-blue-600 border-blue-600 text-white hover:bg-blue-700 shadow-[0_0_15px_rgba(37,99,235,0.3)] hover:shadow-[0_0_20px_rgba(37,99,235,0.5)]"
+                        }`}
+                      >
+                        {profile.isFollowing ? "Following" : profile.isFollowedBy ? "Follow Back" : "Follow"}
+                      </button>
+                    </>
                   )}
 
                   <button

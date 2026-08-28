@@ -204,7 +204,9 @@ async function initSocket(httpServer) {
       try {
         const message = await createMessageServices(messagePayload, accountId, {
           onNotification: (recipientId, notification) => {
-            io.to(String(recipientId)).emit('notification', notification);
+            if (notification) {
+              io.to(String(recipientId)).emit('notification', notification);
+            }
             io.to(String(recipientId)).emit('conversationMessageNotification', messagePayload);
           },
         });
@@ -222,7 +224,9 @@ async function initSocket(httpServer) {
         const parentMessageId = payload.parent_message_id || payload.message_id_reply;
         const reply = await replyMessageServices(parentMessageId, payload, accountId, {
           onNotification: (recipientId, notification) => {
-            io.to(String(recipientId)).emit('notification', notification);
+            if (notification) {
+              io.to(String(recipientId)).emit('notification', notification);
+            }
             io.to(String(recipientId)).emit('conversationMessageNotification', reply);
           },
         });
