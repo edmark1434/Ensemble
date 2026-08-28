@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Search, User, MapPin, ArrowRight, Sparkles, Tag } from "lucide-react";
+import { Search, User, MapPin, ArrowRight, Sparkles, Tag, Star, ChevronLeft, ChevronRight } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import useGlobalState from "@/lib/global_state";
 
@@ -38,11 +38,37 @@ export const UserProfilesList: React.FC = () => {
   const [searchInput, setSearchInput] = useState(decodedQuery);
   const [loading, setLoading] = useState(false);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
+  const [roleFilter, setRoleFilter] = useState("All");
+  const [sortOption, setSortOption] = useState("default");
+
+  const displayedProfiles = useMemo(() => {
+    let result = [...profiles];
+    if (sortOption === "following") {
+      result = result.filter(p => p.isFollowing);
+    } else if (sortOption === "top_rated") {
+      result.sort((a, b) => parseFloat(String(b.meritScore)) - parseFloat(String(a.meritScore)));
+    }
+    return result;
+  }, [profiles, sortOption]);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 5;
+  const totalPages = Math.ceil(displayedProfiles.length / ITEMS_PER_PAGE);
+
+  const paginatedProfiles = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return displayedProfiles.slice(start, start + ITEMS_PER_PAGE);
+  }, [displayedProfiles, currentPage]);
 
   // Sync state if routing query parameters change upstream
   useEffect(() => {
     setSearchInput(decodedQuery);
+    setCurrentPage(1);
   }, [decodedQuery]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [roleFilter, sortOption]);
 
   useEffect(() => {
     const fetchProfiles = async () => {
@@ -53,8 +79,11 @@ export const UserProfilesList: React.FC = () => {
       
       setLoading(true);
       try {
+        const params: any = { handle: decodedQuery.replace(/^@/, "").trim() };
+        if (roleFilter !== "All") params.role = roleFilter;
+        
         const response = await api.get("/api/accounts/search-users", {
-          params: { handle: decodedQuery.replace(/^@/, "").trim() },
+          params,
         });
         const cloudfront = String(import.meta.env.VITE_CLOUDFRONT_URL || "").replace(/\/$/, "");
         const accounts = response.data?.data || [];
@@ -73,13 +102,13 @@ export const UserProfilesList: React.FC = () => {
               : `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6366f1&color=fff`,
             location: "Global",
             bio: account.bio || "",
-            tagline: account.tagline || "Editor",
-            skills: [],
+            tagline: account.tagline || "",
+            skills: (account.skills || []).map((s: any) => s.name),
             isPremium: account.subscriptiontype?.toLowerCase() === "premium" || account.subscriptiontype?.toLowerCase() === "business",
             verified: !!account.verification_status,
             subscriptionType: account.subscriptiontype || "Free",
             roles: Array.isArray(account.roles) ? account.roles : [],
-            meritScore: parseFloat(account.merit_score) > 0 ? parseFloat(account.merit_score).toFixed(1) : "5.0",
+            meritScore: account.overall_rating !== null && parseFloat(account.overall_rating) > 0 ? parseFloat(account.overall_rating).toFixed(1) : "No Rating",
             followersCount: parseInt(account.followers_count || "0", 10),
             followingCount: parseInt(account.following_count || "0", 10),
             isFollowing: !!account.is_following,
@@ -95,7 +124,7 @@ export const UserProfilesList: React.FC = () => {
       }
     };
     fetchProfiles();
-  }, [decodedQuery, userInfo?.account_id]);
+  }, [decodedQuery, userInfo?.account_id, roleFilter]);
 
   // Synchronize global testing membership updates (Alt+O) immediately on the matching profile
   useEffect(() => {
@@ -160,38 +189,103 @@ export const UserProfilesList: React.FC = () => {
   };
 
   return (
-    <div className="w-full min-h-screen bg-zinc-50 dark:bg-dark-base text-zinc-900 dark:text-white overflow-x-hidden">
+    <div className="w-full h-screen flex flex-col bg-zinc-50 dark:bg-dark-base text-zinc-900 dark:text-white overflow-hidden">
       <UserHeader pageTitle="User List" credits={1250} />
 
-      <div className="mx-auto max-w-5xl p-6 md:p-8 w-full">
+      <div className="mx-auto max-w-5xl p-6 md:p-8 w-full flex flex-col flex-1 min-h-0">
 
         {/* Search Input Control Wrapper Section */}
-        <div className="mb-8 max-w-2xl">
-          <form onSubmit={handleSearchSubmit} className="relative w-full group">
-            <Search
-              onClick={handleSearchSubmit}
-              className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors cursor-pointer"
-            />
-            <input
-              type="text"
-              placeholder="Search platform creators by name, username, or skills..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full rounded-full border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 pl-11 pr-4 py-3.5 text-sm text-zinc-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all shadow-sm dark:shadow-none"
-            />
-          </form>
-          {decodedQuery && !loading && (
-            <p className="text-xs text-zinc-500 mt-3 pl-1">
-              Showing results for: <span className="text-blue-500 dark:text-blue-400 font-medium">"{decodedQuery}"</span> ({profiles.length} creators found)
-            </p>
-          )}
+        <div className="mb-4 flex-shrink-0 w-full flex flex-col gap-4">
+          <div className="flex items-center gap-4">
+            <form onSubmit={handleSearchSubmit} className="relative flex-1 group">
+              <Search
+                onClick={handleSearchSubmit}
+                className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors cursor-pointer"
+              />
+              <input
+                type="text"
+                placeholder="Search platform creators by name, username, or skills..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="w-full rounded-full border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 pl-11 pr-4 py-3.5 text-sm text-zinc-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all shadow-sm dark:shadow-none"
+              />
+            </form>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <button 
+              type="button"
+              onClick={() => setSortOption(sortOption === 'following' ? 'default' : 'following')}
+              className={`px-3 py-1.5 rounded-full border transition-colors ${sortOption === 'following' ? 'bg-blue-500 border-blue-500 text-white' : 'bg-transparent border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
+            >
+              Following
+            </button>
+            <button 
+              type="button"
+              onClick={() => setSortOption(sortOption === 'top_rated' ? 'default' : 'top_rated')}
+              className={`px-3 py-1.5 rounded-full border transition-colors ${sortOption === 'top_rated' ? 'bg-blue-500 border-blue-500 text-white' : 'bg-transparent border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
+            >
+              Top Rated
+            </button>
+            
+            <div className="h-4 w-px bg-zinc-300 dark:bg-white/10 mx-1"></div>
+            
+            <button 
+              type="button"
+              onClick={() => setRoleFilter(roleFilter === 'Casual' ? 'All' : 'Casual')}
+              className={`px-3 py-1.5 rounded-full border transition-colors ${roleFilter === 'Casual' ? 'bg-blue-500 border-blue-500 text-white' : 'bg-transparent border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
+            >
+              Casual
+            </button>
+            <button 
+              type="button"
+              onClick={() => setRoleFilter(roleFilter === 'Freelancer' ? 'All' : 'Freelancer')}
+              className={`px-3 py-1.5 rounded-full border transition-colors ${roleFilter === 'Freelancer' ? 'bg-blue-500 border-blue-500 text-white' : 'bg-transparent border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
+            >
+              Freelancer
+            </button>
+            <button 
+              type="button"
+              onClick={() => setRoleFilter(roleFilter === 'Client' ? 'All' : 'Client')}
+              className={`px-3 py-1.5 rounded-full border transition-colors ${roleFilter === 'Client' ? 'bg-blue-500 border-blue-500 text-white' : 'bg-transparent border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5'}`}
+            >
+              Client
+            </button>
+
+            <div className="h-4 w-px bg-zinc-300 dark:bg-white/10 mx-1"></div>
+            
+            <span className="text-zinc-500">Popular:</span>
+            {['3D Animation', 'Video Editing', 'React', 'Design'].map(skill => (
+              <button
+                key={skill}
+                type="button"
+                onClick={() => {
+                  setSearchInput(skill);
+                  navigate(`/search/user/${encodeURIComponent(skill)}`);
+                }}
+                className="px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors border border-transparent"
+              >
+                {skill}
+              </button>
+            ))}
+          </div>
         </div>
+        
+        {decodedQuery && !loading && (
+          <div className="mb-4 flex-shrink-0">
+            <p className="text-xs text-zinc-500 pl-1">
+              Showing results for: <span className="text-blue-500 dark:text-blue-400 font-medium">"{decodedQuery}"</span> 
+              {roleFilter !== 'All' && <span> in role <span className="text-blue-500 dark:text-blue-400 font-medium">{roleFilter}</span></span>}
+              {' '}({displayedProfiles.length} creators found)
+            </p>
+          </div>
+        )}
 
         {/* Profiles Feed List Stack */}
-        <div className="space-y-4">
+        <div className="space-y-4 flex-1 overflow-y-auto pr-2 custom-scrollbar">
           {loading ? (
             <div className="text-center text-zinc-500 py-12">Searching for creators...</div>
-          ) : profiles.length === 0 ? (
+          ) : displayedProfiles.length === 0 ? (
             /* Elegant Empty State Block */
             <div className="rounded-3xl border border-dashed border-zinc-200 dark:border-white/10 bg-white/50 dark:bg-dark-surface/40 p-12 text-center max-w-md mx-auto space-y-3 mt-12">
               <User className="h-8 w-8 mx-auto text-zinc-400 dark:text-zinc-600" />
@@ -201,7 +295,7 @@ export const UserProfilesList: React.FC = () => {
               </div>
             </div>
           ) : (
-            profiles.map((profile) => (
+            paginatedProfiles.map((profile) => (
               <div
                 key={profile.id}
                 onClick={() => navigate(`/profile/${profile.id}`)}
@@ -232,8 +326,14 @@ export const UserProfilesList: React.FC = () => {
                     {/* Stats Row */}
                     <div className="flex items-center gap-4 text-xs text-zinc-500 dark:text-zinc-400">
                       <div className="flex items-center gap-1">
-                        <span className="font-bold text-zinc-900 dark:text-white">{profile.meritScore}</span>
-                        <span>Rating</span>
+                        {profile.meritScore === "No Rating" ? (
+                          <span className="text-zinc-500 dark:text-zinc-400 font-medium">No Rating</span>
+                        ) : (
+                          <>
+                            <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 mb-0.5" />
+                            <span className="font-bold text-zinc-900 dark:text-white">{profile.meritScore}</span>
+                          </>
+                        )}
                       </div>
                       <div className="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700"></div>
                       <div className="flex items-center gap-1">
@@ -247,9 +347,37 @@ export const UserProfilesList: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-lg w-fit ${profile.subscriptionType === 'Business' ? 'animate-rainbow' : profile.subscriptionType === 'Premium' ? 'animate-gold-solid' : 'silver-solid'}`}>
-                      <Tag className="w-3 h-3" />
-                      {profile.tagline || "Add Tagline"}
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      <div className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-lg w-fit ${!profile.tagline ? 'opacity-60' : ''} ${profile.subscriptionType === 'Business' ? 'animate-rainbow' : profile.subscriptionType === 'Premium' ? 'animate-gold-solid' : 'silver-solid'}`}>
+                        <Tag className="w-3 h-3" />
+                        {profile.tagline || (userInfo?.account_id === profile.id ? "Add Tagline" : "N/A")}
+                      </div>
+
+                      {profile.skills && profile.skills.length > 0 && (
+                        <>
+                          <div className="h-3 w-px bg-zinc-300 dark:bg-zinc-700"></div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {profile.skills.slice(0, 5).map((skill, idx) => (
+                              <span
+                                key={idx}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSearchInput(skill);
+                                  navigate(`/search/user/${encodeURIComponent(skill)}`);
+                                }}
+                                className="text-[10px] px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-white/10 cursor-pointer transition-colors"
+                              >
+                                {skill}
+                              </span>
+                            ))}
+                            {profile.skills.length > 5 && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-md bg-transparent text-zinc-500">
+                                +{profile.skills.length - 5}
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     <p className="text-xs text-zinc-500 dark:text-zinc-400 pt-1 max-w-xl leading-relaxed">
@@ -292,6 +420,29 @@ export const UserProfilesList: React.FC = () => {
           )}
         </div>
 
+        {/* Pagination Controls */}
+        {!loading && totalPages > 1 && (
+          <div className="mt-4 flex-shrink-0 flex items-center justify-center gap-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 text-sm text-zinc-600 dark:text-zinc-300 transition-colors hover:bg-zinc-100 dark:hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="w-4 h-4" /> Previous
+            </button>
+            <div className="text-sm text-zinc-500 font-medium px-4">
+              Page {currentPage} of {totalPages}
+            </div>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-zinc-200 dark:border-white/10 bg-white dark:bg-white/5 text-sm text-zinc-600 dark:text-zinc-300 transition-colors hover:bg-zinc-100 dark:hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
       </div>
 
       <style>{`
@@ -301,6 +452,19 @@ export const UserProfilesList: React.FC = () => {
         }
         .animate-fade-in {
           animation: fadeIn 0.2s ease-out forwards;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: rgba(161, 161, 170, 0.3);
+          border-radius: 20px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(161, 161, 170, 0.5);
         }
       `}</style>
     </div>
