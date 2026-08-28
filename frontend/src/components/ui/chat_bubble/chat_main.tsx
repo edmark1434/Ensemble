@@ -3,6 +3,7 @@ import { SquarePen, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChatWindow } from "./chat_bubble_components/ChatWindow";
 import useChatState, { type ChatTarget } from "./chat_state";
+import { chatAttachmentUrl } from "@/components/ui/inbox/inbox_functions/inbox_upload_image";
 
 interface ChatMainProps {
   activeUser: ChatTarget | null;
@@ -18,60 +19,87 @@ export const ChatMain: React.FC<ChatMainProps> = ({
   onRemoveChat,
 }) => {
   const [isStackExpanded, setIsStackExpanded] = useState(false);
-  const [minimizedIds, setMinimizedIds] = useState<Set<string>>(new Set());
+  const [openIds, setOpenIds] = useState<Set<string>>(() => {
+    try {
+      const data = sessionStorage.getItem("chat_open_ids");
+      if (data) return new Set(JSON.parse(data));
+    } catch(e) {}
+    return new Set();
+  });
+
+  useEffect(() => {
+    sessionStorage.setItem("chat_open_ids", JSON.stringify(Array.from(openIds)));
+  }, [openIds]);
+
   const messagesByConversation = useChatState(
     (state) => state.messagesByConversation
   );
   const loadingMessages = useChatState((state) => state.loadingMessages);
+  const unreadCounts = useChatState((state) => state.unreadCounts);
 
   useEffect(() => {
     if (!activeUser) return;
     const timer = window.setTimeout(() => {
-      setMinimizedIds((current) => {
-        if (!current.has(String(activeUser.id))) return current;
+      setOpenIds((current) => {
+        if (current.has(String(activeUser.id))) return current;
         const next = new Set(current);
-        next.delete(String(activeUser.id));
+        next.add(String(activeUser.id));
         return next;
       });
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [activeUser]);
+  }, [activeUser?.id]);
 
   const openWindows = useMemo(
     () =>
-      recentChats.filter((chat) => !minimizedIds.has(String(chat.id))),
-    [minimizedIds, recentChats]
+      recentChats.filter((chat) => openIds.has(String(chat.id))),
+    [openIds, recentChats]
   );
   const minimizedWindows = useMemo(
     () =>
-      recentChats.filter((chat) => minimizedIds.has(String(chat.id))),
-    [minimizedIds, recentChats]
+      recentChats.filter((chat) => !openIds.has(String(chat.id)) && (!chat.inbox_id || !openIds.has(String(chat.inbox_id)))),
+    [openIds, recentChats]
   );
 
-  const minimizeWindow = (chatId: string) => {
-    setMinimizedIds((current) => new Set(current).add(String(chatId)));
+  const minimizeWindow = (chat: ChatTarget) => {
+    setOpenIds((current) => {
+      const next = new Set(current);
+      next.delete(String(chat.id));
+      if (chat.inbox_id) next.delete(String(chat.inbox_id));
+      return next;
+    });
   };
 
   const restoreWindow = (chat: ChatTarget) => {
-    setMinimizedIds((current) => {
+    setOpenIds((current) => {
       const next = new Set(current);
-      next.delete(String(chat.id));
+      next.add(String(chat.id));
       return next;
     });
     onSelectChat(chat);
   };
 
-  const closeWindow = (chatId: string) => {
-    setMinimizedIds((current) => {
+  const closeWindow = (chat: ChatTarget) => {
+    setOpenIds((current) => {
       const next = new Set(current);
-      next.delete(String(chatId));
+      next.delete(String(chat.id));
+      if (chat.inbox_id) next.delete(String(chat.inbox_id));
       return next;
     });
-    onRemoveChat?.(chatId);
+    onRemoveChat?.(chat.id);
   };
 
   return (
-    <div className="fixed bottom-5 right-6 z-50 flex max-w-[calc(100vw-3rem)] items-end gap-4 overflow-x-auto font-['Plus_Jakarta_Sans',sans-serif]">
+    <div className="fixed bottom-5 right-6 z-50 flex max-w-[calc(100vw-3rem)] items-end gap-4 overflow-x-auto font-['Plus_Jakarta_Sans',sans-serif] hide-scrollbar">
+      <style>{`
+        .hide-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
       <AnimatePresence>
         {openWindows.map((chat) => {
           const conversationId = String(chat.inbox_id || chat.id);
@@ -85,8 +113,8 @@ export const ChatMain: React.FC<ChatMainProps> = ({
               className="flex-shrink-0"
             >
               <ChatWindow
-                onMinimize={() => minimizeWindow(conversationId)}
-                onClose={() => closeWindow(conversationId)}
+                onMinimize={() => minimizeWindow(chat)}
+                onClose={() => closeWindow(chat)}
                 activeUser={chat}
                 messages={messagesByConversation[conversationId] || []}
                 isLoading={Boolean(loadingMessages[conversationId])}
@@ -125,7 +153,7 @@ export const ChatMain: React.FC<ChatMainProps> = ({
                       <div className="w-full h-full rounded-full bg-[#080a12] flex items-center justify-center font-bold text-white text-xs overflow-hidden border border-white/10">
                         {chat.avatarUrl ? (
                           <img
-                            src={chat.avatarUrl}
+                            src={chatAttachmentUrl(chat.avatarUrl)}
                             alt={chat.name}
                             className="w-full h-full object-cover"
                           />
@@ -135,9 +163,9 @@ export const ChatMain: React.FC<ChatMainProps> = ({
                       </div>
                     </div>
                     <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-[#080a12]" />
-                    {!!chat.unreadCount && (
-                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center border-2 border-[#080a12] font-medium">
-                        {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
+                    {!!(unreadCounts[String(chat.inbox_id || chat.id)] || chat.unreadCount) && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center border-2 border-[#080a12] font-medium z-10 pointer-events-none">
+                        {(unreadCounts[String(chat.inbox_id || chat.id)] || chat.unreadCount || 0) > 99 ? "99+" : (unreadCounts[String(chat.inbox_id || chat.id)] || chat.unreadCount)}
                       </span>
                     )}
                   </button>
@@ -157,13 +185,20 @@ export const ChatMain: React.FC<ChatMainProps> = ({
             })}
         </AnimatePresence>
 
-        <button
-          onClick={() => setIsStackExpanded((current) => !current)}
-          className="w-12 h-12 rounded-full bg-[#2a2d37] hover:bg-[#343846] text-zinc-200 flex items-center justify-center shadow-2xl border border-white/10 transition-all duration-200 active:scale-90 focus:outline-none"
-          aria-label="Toggle minimized chats"
-        >
-          {isStackExpanded ? <X size={20} /> : <SquarePen size={20} />}
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setIsStackExpanded((current) => !current)}
+            className="w-12 h-12 rounded-full bg-white dark:bg-[#2a2d37] hover:bg-zinc-100 dark:hover:bg-[#343846] text-zinc-900 dark:text-zinc-200 flex items-center justify-center shadow-2xl border border-zinc-200 dark:border-white/10 transition-all duration-200 active:scale-90 focus:outline-none"
+            aria-label="Toggle minimized chats"
+          >
+            {isStackExpanded ? <X size={20} /> : <SquarePen size={20} />}
+          </button>
+          {!isStackExpanded && minimizedWindows.reduce((sum, chat) => sum + (unreadCounts[String(chat.inbox_id || chat.id)] || chat.unreadCount || 0), 0) > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center border-2 border-white dark:border-[#2a2d37] font-medium z-10 pointer-events-none shadow-sm">
+              {minimizedWindows.reduce((sum, chat) => sum + (unreadCounts[String(chat.inbox_id || chat.id)] || chat.unreadCount || 0), 0) > 99 ? "99+" : minimizedWindows.reduce((sum, chat) => sum + (unreadCounts[String(chat.inbox_id || chat.id)] || chat.unreadCount || 0), 0)}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
