@@ -1,6 +1,7 @@
 // src/pages/user/1_home/home_components/home_banner.tsx
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Search, X, ChevronUp, ChevronDown, HelpCircle } from "lucide-react";
+import { Search, X, ChevronUp, ChevronDown, HelpCircle, Briefcase, FileText, Users, Box } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { HomeQuickActButtons } from "./home_quickact_buttons";
 import { HomeBannerVersion } from "./home_banner_version";
 import { HomeBannerInfo } from "./home_banner_info";
@@ -33,9 +34,16 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
   searchQuery,
   setSearchQuery,
 }) => {
+  const navigate = useNavigate();
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isFirstVisit, setIsFirstVisit] = useState(false);
+  
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [searchQuery]);
   const [greeting, setGreeting] = useState("Welcome back");
   const [displayedText, setDisplayedText] = useState("");
   const [isTyping, setIsTyping] = useState(true);
@@ -143,35 +151,46 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
     return () => clearInterval(interval);
   }, [activeClipIndex]);
 
+  const searchOptions = [
+    { id: "services", label: "in Services", icon: Briefcase, path: "/gigs/services", state: { searchQuery: searchQuery.trim() } },
+    { id: "posts", label: "in Posts", icon: FileText, path: "/jobs/postings", state: { searchQuery: searchQuery.trim() } },
+    { id: "freelancers", label: "in Freelancers", icon: Users, path: `/search/user/${encodeURIComponent(searchQuery.trim())}`, state: { roleFilter: "Freelancer" } },
+    { id: "assets", label: "in Assets", icon: Box, path: "/assets", state: { searchQuery: searchQuery.trim() } },
+  ];
+
   return (
-    <div className="relative mb-8 overflow-hidden rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-zinc-950 p-6 shadow-2xl transition-all duration-500 md:p-10">
-      {/* BASE VIDEO LAYER (Currently Active) */}
-      <video
-        ref={activeVideoRef}
-        src={BANNER_CLIPS[activeClipIndex]}
-        autoPlay
-        loop
-        muted
-        playsInline
-        className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover opacity-50 md:opacity-70"
-      />
+    <div className="relative z-20 mb-8 rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-zinc-950 p-6 shadow-2xl transition-all duration-500 md:p-10">
+      
+      {/* Background Wrapper to contain rounded corners of videos */}
+      <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none z-0">
+        {/* BASE VIDEO LAYER (Currently Active) */}
+        <video
+          ref={activeVideoRef}
+          src={BANNER_CLIPS[activeClipIndex]}
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover opacity-50 md:opacity-70"
+        />
 
-      {/* OVERLAY VIDEO LAYER (Cross-fades in during transitions) */}
-      <video
-        ref={nextVideoRef}
-        src={BANNER_CLIPS[nextClipIndex]}
-        autoPlay
-        loop
-        muted
-        playsInline
-        className={`pointer-events-none absolute inset-0 h-full w-full select-none object-cover transition-opacity duration-1000 ease-in-out ${
-          isCrossFading ? "opacity-50 md:opacity-70" : "opacity-0"
-        }`}
-      />
+        {/* OVERLAY VIDEO LAYER (Cross-fades in during transitions) */}
+        <video
+          ref={nextVideoRef}
+          src={BANNER_CLIPS[nextClipIndex]}
+          autoPlay
+          loop
+          muted
+          playsInline
+          className={`pointer-events-none absolute inset-0 h-full w-full select-none object-cover transition-opacity duration-1000 ease-in-out ${
+            isCrossFading ? "opacity-50 md:opacity-70" : "opacity-0"
+          }`}
+        />
 
-      {/* Gradients tailored to reveal video on the right & protect text on the left */}
-      <div className="absolute inset-0 bg-gradient-to-r from-white dark:from-zinc-950 via-white/70 dark:via-zinc-950/70 to-transparent/10 backdrop-blur-[1px]" />
-      <div className="absolute inset-0 bg-gradient-to-t from-white/80 dark:from-zinc-950/80 via-transparent to-white/20 dark:to-zinc-950/20" />
+        {/* Gradients tailored to reveal video on the right & protect text on the left */}
+        <div className="absolute inset-0 bg-gradient-to-r from-white dark:from-zinc-950 via-white/70 dark:via-zinc-950/70 to-transparent/10 backdrop-blur-[1px]" />
+        <div className="absolute inset-0 bg-gradient-to-t from-white/80 dark:from-zinc-950/80 via-transparent to-white/20 dark:to-zinc-950/20" />
+      </div>
 
       {/* Controls Container - Upper Right Corner */}
       <div className="absolute top-6 right-6 z-20 flex items-center gap-2">
@@ -224,13 +243,13 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
 
         {/* Smooth CSS Grid Transition for Collapsible Paragraphs & Search Bar */}
         <div
-          className={`grid transition-all duration-500 ease-in-out ${
+          className={`grid overflow-visible transition-all duration-500 ease-in-out ${
             isCollapsed
               ? "grid-rows-[0fr] opacity-0"
               : "grid-rows-[1fr] opacity-100"
           }`}
         >
-          <div className="overflow-hidden">
+          <div className={isCollapsed ? "overflow-hidden" : "overflow-visible"}>
             <p
               className="mt-3 text-base font-medium leading-relaxed text-gray-800 dark:text-zinc-200 md:text-lg"
               style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
@@ -246,8 +265,8 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
             </p>
 
             {/* Embedded Search Bar */}
-            <div className="mt-6 mb-2">
-              <div className="relative flex items-center rounded-xl border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/10 p-1.5 shadow-xl dark:shadow-2xl backdrop-blur-xl transition duration-300 focus-within:border-blue-500/50 dark:focus-within:border-cyan-500/50 focus-within:bg-gray-100 dark:focus-within:bg-white/15 focus-within:shadow-blue-500/10 dark:focus-within:shadow-cyan-500/10">
+            <div className="mt-6 mb-2 relative z-40">
+              <div className="relative flex items-center rounded-xl border border-gray-200 dark:border-white/15 bg-gray-50 dark:bg-white/10 p-1.5 shadow-xl dark:shadow-2xl backdrop-blur-xl transition duration-300 focus-within:border-blue-500/50 dark:focus-within:border-cyan-500/50 focus-within:bg-gray-100 dark:focus-within:bg-white/15 focus-within:shadow-blue-500/10 dark:focus-within:shadow-cyan-500/10 z-30">
                 <div className="flex items-center justify-center pl-3 pr-2 text-gray-400 dark:text-zinc-400">
                   <Search className="h-5 w-5" />
                 </div>
@@ -255,6 +274,22 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => setTimeout(() => setIsSearchFocused(false), 250)}
+                  onKeyDown={(e) => {
+                    if (searchQuery.trim()) {
+                      if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setSelectedIndex((prev) => (prev + 1) % searchOptions.length);
+                      } else if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setSelectedIndex((prev) => (prev - 1 + searchOptions.length) % searchOptions.length);
+                      } else if (e.key === "Enter") {
+                        const selectedOption = searchOptions[selectedIndex];
+                        navigate(selectedOption.path, { state: selectedOption.state });
+                      }
+                    }
+                  }}
                   placeholder="Search assets, libraries, effects, or templates across the ecosystem..."
                   className="w-full bg-transparent px-2 py-2 text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-400 focus:outline-none"
                   style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
@@ -268,6 +303,32 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
                   </button>
                 )}
               </div>
+
+              {/* Global Search Dropdown */}
+              {searchQuery.trim() && (
+                <div className="absolute top-full left-0 right-0 mt-2 rounded-xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10 shadow-2xl overflow-hidden z-50 py-2">
+                  {searchOptions.map((option, index) => {
+                    const Icon = option.icon;
+                    return (
+                      <button
+                        key={option.id}
+                        onMouseEnter={() => setSelectedIndex(index)}
+                        onClick={() => navigate(option.path, { state: option.state })}
+                        className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${
+                          index === selectedIndex
+                            ? "bg-gray-100 dark:bg-white/10"
+                            : "hover:bg-gray-50 dark:hover:bg-white/5"
+                        }`}
+                      >
+                        <Icon className={`w-4 h-4 ${index === selectedIndex ? "text-blue-500 dark:text-cyan-400" : "text-gray-400"}`} />
+                        <span className="text-gray-900 dark:text-white font-medium truncate">
+                          {searchQuery} <span className="text-gray-500 font-normal">{option.label}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { AudioLines, Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Heart, Image, Loader2, Pencil, Plus, Search, Star, Trash2, Video } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import api from "@/lib/axios";
 import UserHeader from "@/components/nav/user_header";
 import ConfirmationModal from "@/components/ui/ConfirmationModal";
@@ -47,13 +47,14 @@ function AssetSkeleton() {
 
 export default function AssetsLibrary() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [assets, setAssets] = useState<AssetRecord[]>([]);
   const [pagination, setPagination] = useState<AssetPagination>({ page: 1, pageSize: 12, total: 0, totalPages: 1 });
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState<FilterType>("all");
   const [view, setView] = useState<AssetView>("discover");
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [search, setSearch] = useState(location.state?.searchQuery || "");
+  const [debouncedSearch, setDebouncedSearch] = useState(location.state?.searchQuery || "");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [editorOpen, setEditorOpen] = useState(false);

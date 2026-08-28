@@ -64,7 +64,7 @@ const GigMain: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [viewType, setViewType] = useState<ViewType>("grid");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(location.state?.searchQuery || "");
   const [activeCategoryFilter, setActiveCategoryFilter] = useState("All");
   const [gigsList, setGigsList] = useState<Gig[]>([]);
   const [showFilters, setShowFilters] = useState(true);

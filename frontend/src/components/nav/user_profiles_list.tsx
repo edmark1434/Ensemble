@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useParams, useNavigate, useOutletContext } from "react-router-dom";
+import { useParams, useNavigate, useOutletContext, useLocation } from "react-router-dom";
 import { Search, User, MapPin, ArrowRight, Sparkles, Tag, Star, ChevronLeft, ChevronRight, MessageCircle } from "lucide-react";
 import UserHeader from "@/components/nav/user_header";
 import useGlobalState from "@/lib/global_state";
@@ -32,6 +32,7 @@ interface UserProfile {
 export const UserProfilesList: React.FC = () => {
   const { query } = useParams<{ query: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const userInfo = useGlobalState((state) => state.user);
   const { openChatWithUser } = useOutletContext<{
     openChatWithUser: (target?: { name: string; avatarUrl?: string; account_id: string }) => void;
@@ -41,7 +42,7 @@ export const UserProfilesList: React.FC = () => {
   const [searchInput, setSearchInput] = useState(decodedQuery);
   const [loading, setLoading] = useState(false);
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
-  const [roleFilter, setRoleFilter] = useState("All");
+  const [roleFilter, setRoleFilter] = useState(location.state?.roleFilter || "All");
   const [sortOption, setSortOption] = useState("default");
 
   const displayedProfiles = useMemo(() => {
