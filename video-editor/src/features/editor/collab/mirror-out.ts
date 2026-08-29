@@ -11,20 +11,22 @@ function arraysEqual(a: string[], b: string[]): boolean {
   return true;
 }
 
-function syncOrderArray(yArr: Y.Array<string>, next: string[]) {
+function syncOrderArray(yArr: Y.Array<string>, rawNext: string[]) {
+  // rawNext comes straight off the third-party StateManager's snapshot,
+  // which isn't guaranteed atomic across fields — a timeline drag that
+  // reassigns a track updates the global id order and that track's items
+  // array as separate writes. An unrelated emission (e.g. a selection
+  // eviction) can land in the gap and hand us a snapshot with a hole in
+  // it. Never let a non-string slip through into a Yjs insert.
+  const next = rawNext.filter((id): id is string => typeof id === "string");
+
   const current = yArr.toArray();
   if (arraysEqual(current, next)) return;
 
-  // Remove entries no longer present first, back-to-front so earlier
-  // indices don't shift under us.
   for (let i = current.length - 1; i >= 0; i--) {
     if (!next.includes(current[i])) yArr.delete(i, 1);
   }
 
-  // Then walk forward and fix up positions one at a time. Each mismatch
-  // becomes a single delete+insert of just that entry, not a wipe of the
-  // whole array — concurrent writers' ops interleave safely instead of
-  // colliding.
   let working = yArr.toArray();
   for (let i = 0; i < next.length; i++) {
     if (working[i] !== next[i]) {
@@ -103,26 +105,40 @@ export function setupMirrorOutFromStateManager(
   localOrigin: string,
   syncGuard: SyncGuard,
 ): () => void {
-  // stateManager.subscribe is backed by an RxJS BehaviorSubject, which
-  // replays the CURRENT value synchronously to a new subscriber before any
-  // real change has happened. At the point use-collab-doc.ts wires this up,
-  // stateManager still holds its pre-hydration default (empty) state — the
-  // real snapshot hasn't been written into it yet, that happens later in
-  // the same effect. Without this guard, that synchronous replay fires
-  // sync() unguarded (isApplyingRemote is still false here too) and
-  // reconciles the doc down to stateManager's stale empty state, wiping
-  // whatever was just applied from the backend snapshot before isBlank is
-  // even computed. Skip exactly one emission — the replay — then behave
-  // normally for every real change after it.
   let skippedInitialReplay = false;
+  let prevState: ReturnType<StateManager["getState"]> | null = null;
 
   const sync = () => {
     if (!skippedInitialReplay) {
       skippedInitialReplay = true;
+      prevState = stateManager.getState();
       return;
     }
     if (syncGuard.isApplyingRemote) return;
+
     const state = stateManager.getState();
+
+    // stateManager.subscribe fires on every state change, selection
+    // included. Selection isn't persisted to the doc at all, so reconciling
+    // the whole doc for a selection-only change is wasted work and, worse,
+    // a correctness risk: it lets an incidental event (a remote eviction of
+    // the local selection) trigger a full reconcile while some unrelated
+    // gesture is only half-committed. Skip unless something we actually
+    // persist changed.
+    const relevantChanged =
+      !prevState ||
+      state.trackItemsMap !== prevState.trackItemsMap ||
+      state.trackItemIds !== prevState.trackItemIds ||
+      state.transitionsMap !== prevState.transitionsMap ||
+      state.transitionIds !== prevState.transitionIds ||
+      state.tracks !== prevState.tracks ||
+      state.duration !== prevState.duration ||
+      state.size !== prevState.size ||
+      state.fps !== prevState.fps;
+
+    prevState = state;
+    if (!relevantChanged) return;
+
     schema.doc.transact(() => {
       reconcileContentMap<ITrackItem>(schema.trackItems, state.trackItemsMap, itemToY);
       syncOrderArray(schema.trackItemIds, state.trackItemIds);

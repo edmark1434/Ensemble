@@ -231,12 +231,23 @@ const Composition = () => {
             });
           }
           const firstItem = trackItemsMap[group[0].id];
-          const from = (firstItem.display.from / 1000) * fps;
+          const rawFrom = (firstItem.display.from / 1000) * fps;
+          const from = Number.isFinite(rawFrom) ? rawFrom : 0;
           return (
             <TransitionSeries from={from} key={index}>
               {group.map((item) => {
                 if (item.type === "transition") {
-                  const durationInFrames = (item.duration / 1000) * fps;
+                  const rawDuration = (item.duration / 1000) * fps;
+                  const isBad = !Number.isFinite(rawDuration) || rawDuration <= 0;
+                  if (isBad) {
+                    console.warn("[transition-nan-guard] bad transition duration, clamped", {
+                      transitionId: item.id,
+                      rawDuration: item.duration,
+                      fromId: (item as any).fromId,
+                      toId: (item as any).toId
+                    });
+                  }
+                  const durationInFrames = isBad ? 1 : Math.round(rawDuration);
                   return Transitions[item.kind]({
                     durationInFrames,
                     ...size,

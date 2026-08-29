@@ -26,41 +26,63 @@ export function setupMirrorIn(
     if (transaction.origin === localOrigin) return;
     if (syncGuard.isApplyingRemote) return;
 
-    // Simplification for now: reconcile everything on any change, rather
-    // than inspecting transaction.changed to scope the patch to exactly
-    // what moved. Fine at collab-edit frequency; revisit if profiling says
-    // otherwise once concurrent editing volume is real.
-    const snapshot = readStateFromDoc(schema);
-
-    const statePatch: Partial<State> = {
-      trackItemsMap: snapshot.trackItemsMap,
-      trackItemIds: snapshot.trackItemIds,
-      transitionsMap: snapshot.transitionsMap,
-      transitionIds: snapshot.transitionIds,
-      tracks: snapshot.tracks,
-    };
-    if (snapshot.size) statePatch.size = snapshot.size;
-    if (snapshot.fps !== undefined) statePatch.fps = snapshot.fps;
-    if (snapshot.duration !== undefined) statePatch.duration = snapshot.duration;
-
-    // Guard so a future mirror-out (watching these same stateManager
-    // subscriptions) knows not to write this right back into the doc.
-    syncGuard.isApplyingRemote = true;
     try {
-      stateManager.updateState(statePatch, { updateHistory: false });
+      const snapshot = readStateFromDoc(schema);
 
-      // must stay inside the guard — setupMirrorOutFromStore listens for
-      // this exact zustand write and needs isApplyingRemote still true,
-      // or it treats this remote update as a local edit and echoes it back
-      useStore.setState({
-        markers: snapshot.markers,
-        ...(snapshot.projectName !== undefined ? { projectName: snapshot.projectName } : {}),
-        ...(snapshot.size ? { size: snapshot.size } : {}),
-        ...(snapshot.fps !== undefined ? { fps: snapshot.fps } : {}),
-        ...(snapshot.background ? { background: snapshot.background } : {}),
-      });
-    } finally {
-      syncGuard.isApplyingRemote = false;
+      const statePatch: Partial<State> = {
+        trackItemsMap: snapshot.trackItemsMap,
+        trackItemIds: snapshot.trackItemIds,
+        transitionsMap: snapshot.transitionsMap,
+        transitionIds: snapshot.transitionIds,
+        tracks: snapshot.tracks,
+      };
+      if (snapshot.size) statePatch.size = snapshot.size;
+      if (snapshot.fps !== undefined) statePatch.fps = snapshot.fps;
+      if (snapshot.duration !== undefined) statePatch.duration = snapshot.duration;
+
+      syncGuard.isApplyingRemote = true;
+      try {
+        stateManager.updateState(statePatch, { updateHistory: false });
+
+        useStore.setState({
+          markers: snapshot.markers,
+          ...(snapshot.projectName !== undefined ? { projectName: snapshot.projectName } : {}),
+          ...(snapshot.size ? { size: snapshot.size } : {}),
+          ...(snapshot.fps !== undefined ? { fps: snapshot.fps } : {}),
+          ...(snapshot.background ? { background: snapshot.background } : {}),
+        });
+
+        const canvas = useStore.getState().timeline;
+        const transitionsChanged =
+          JSON.stringify(canvas?.transitionsMap ?? {}) !== JSON.stringify(snapshot.transitionsMap);
+        if (canvas && transitionsChanged) {
+          canvas.transitionsMap = snapshot.transitionsMap;
+
+          // Strip any stale transitionInfo left on fabric items (split leaves
+          // half-built transition refs) — renderTransitions() dereferences
+          // transitionInfo.transition.fromId per item, not just transitionsMap.
+          canvas.getTrackItems().forEach((item: any) => {
+            const info = item.transitionInfo;
+            const t = info?.transition;
+            if (info && (!t || !t.id || !t.fromId || !t.toId)) {
+              item.transitionInfo = undefined;
+            }
+          });
+
+          if (Object.keys(snapshot.transitionsMap).length > 0) {
+            try {
+              canvas.renderTransitions();
+            } catch (renderErr) {
+              console.error("mirror-in: renderTransitions failed, skipping this pass", renderErr);
+            }
+          }
+          canvas.requestRenderAll();
+        }
+      } finally {
+        syncGuard.isApplyingRemote = false;
+      }
+    } catch (err) {
+      console.error("mirror-in: failed to apply remote transaction", err);
     }
   };
 
