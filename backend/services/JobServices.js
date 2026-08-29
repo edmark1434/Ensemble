@@ -8,20 +8,20 @@ async function createJobServices(jobData) {
     return await JobRepositories.createJobRepositories(jobData);
 }
 
-async function getAllJobsServices(filters, accountId = null) {
-    return await JobRepositories.getAllJobsRepositories(filters, accountId);
+async function getAllJobsServices(filters, accountId = null, actorIds = []) {
+    return await JobRepositories.getAllJobsRepositories(filters, accountId, actorIds);
 }
 
-async function updateJobServices(jobId, accountId, jobData) {
-    const updated = await JobRepositories.updateJobRepositories(jobId, accountId, jobData);
+async function updateJobServices(jobId, accountIds, jobData) {
+    const updated = await JobRepositories.updateJobRepositories(jobId, accountIds, jobData);
     if (!updated) {
         throw new Error('Job not found or you do not have permission to edit it.');
     }
     return updated;
 }
 
-async function deleteJobServices(jobId, accountId) {
-    const deleted = await JobRepositories.deleteJobRepositories(jobId, accountId);
+async function deleteJobServices(jobId, accountIds) {
+    const deleted = await JobRepositories.deleteJobRepositories(jobId, accountIds);
     if (!deleted) {
         throw new Error('Job not found or you do not have permission to delete it.');
     }
@@ -35,9 +35,9 @@ async function createProposalServices(proposalData) {
     return await JobRepositories.createProposalRepositories(proposalData);
 }
 
-async function withdrawProposalServices(proposalId, accountId) {
+async function withdrawProposalServices(proposalId, accountIds) {
     try {
-        const result = await JobRepositories.withdrawProposalRepositories(proposalId, accountId);
+        const result = await JobRepositories.withdrawProposalRepositories(proposalId, accountIds);
         if (!result) throw new Error('Proposal not found or unauthorized');
         return result;
     } catch (err) {
@@ -45,24 +45,24 @@ async function withdrawProposalServices(proposalId, accountId) {
     }
 }
 
-async function getProposalsByJobIdServices(jobId) {
-    return await JobRepositories.getProposalsByJobIdRepositories(jobId);
+async function getProposalsByJobIdServices(jobId, accountIds) {
+    return await JobRepositories.getProposalsByJobIdRepositories(jobId, accountIds);
 }
 
-async function getProposalsByFreelancerServices(accountId) {
-    return await JobRepositories.getProposalsByFreelancerRepositories(accountId);
+async function getProposalsByFreelancerServices(accountIds) {
+    return await JobRepositories.getProposalsByFreelancerRepositories(accountIds);
 }
 
-async function getProposalByIdServices(proposalId, accountId) {
-    return await JobRepositories.getProposalByIdRepositories(proposalId, accountId);
+async function getProposalByIdServices(proposalId, accountIds) {
+    return await JobRepositories.getProposalByIdRepositories(proposalId, accountIds);
 }
 
-async function updateProposalStatusServices(proposalId, accountId, status, rejectReason) {
+async function updateProposalStatusServices(proposalId, accountIds, status, rejectReason) {
     const allowedStatuses = ['Pending', 'Shortlisted', 'Rejected', 'Accepted'];
     if (!allowedStatuses.includes(status)) {
         throw new Error('Invalid status.');
     }
-    const updated = await JobRepositories.updateProposalStatusRepositories(proposalId, accountId, status, rejectReason);
+    const updated = await JobRepositories.updateProposalStatusRepositories(proposalId, accountIds, status, rejectReason);
     if (!updated) {
         throw new Error('Proposal not found or you do not have permission.');
     }

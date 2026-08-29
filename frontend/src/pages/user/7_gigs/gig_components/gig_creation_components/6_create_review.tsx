@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ArrowLeft, CheckCircle2, Rocket, Calendar, MapPin, Tag, Box, Layers, DollarSign, Edit2 } from "lucide-react";
 import { motion } from "framer-motion";
 import type { GigTier, Milestone, Questionnaire } from "../../gig_datasets";
+import MarketplaceIdentitySelector from "@/components/marketplace/MarketplaceIdentitySelector";
 
 interface CreateReviewProps {
   title: string;
@@ -17,6 +18,8 @@ interface CreateReviewProps {
   milestones: Milestone[];
   additionalWorkRate: number;
   questionnaires: Questionnaire[];
+  actingTeamId: string;
+  setActingTeamId: (teamId: string) => void;
   onBack: () => void;
   onSubmit: () => Promise<void> | void;
   onEdit?: (step: number) => void;
@@ -36,6 +39,8 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
   milestones,
   additionalWorkRate,
   questionnaires,
+  actingTeamId,
+  setActingTeamId,
   onBack,
   onSubmit,
   onEdit,
@@ -162,6 +167,14 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
         </div>
       </div>
 
+      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5 dark:border-white/10 dark:bg-white/[0.02]">
+        <MarketplaceIdentitySelector
+          teamId={actingTeamId}
+          onChange={setActingTeamId}
+          label="Publish this service as"
+        />
+      </div>
+
       {/* Actions */}
       <div className="pt-4 border-t border-gray-100 dark:border-white/5 flex gap-2.5">
         <button
@@ -176,7 +189,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
           type="button"
           onClick={handlePublish}
           disabled={isSubmitting}
-          className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-2.5 text-xs font-bold text-white hover:from-blue-700 hover:to-indigo-700 transition focus:outline-none shadow-lg shadow-blue-500/20 disabled:opacity-50"
+          className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white hover:bg-blue-700 transition focus:outline-none shadow-lg shadow-blue-500/20 disabled:opacity-50"
         >
           {isSubmitting ? (
             <span className="flex items-center gap-2">

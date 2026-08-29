@@ -4,10 +4,12 @@ const {
     markNotificationAsRead,
     markAllNotificationsAsRead
 } = require("../repositories/NotificationRepositories");
+const { getAuthorizedActorAccountIds } = require("./MarketplaceActorServices");
 
 
 async function getNotificationsByAccountIdServices(accountId) {
-    return await getNotificationsByAccountId(accountId);
+    const accountIds = await getAuthorizedActorAccountIds(accountId);
+    return await getNotificationsByAccountId(accountIds);
 }
 
 async function createNotificationServices(notificationData) {
@@ -18,7 +20,8 @@ async function markNotificationAsReadServices(notificationId, accountId) {
     if (!notificationId || !accountId) {
         throw new Error('Notification ID and account ID are required');
     }
-    const notification = await markNotificationAsRead(notificationId, accountId);
+    const accountIds = await getAuthorizedActorAccountIds(accountId);
+    const notification = await markNotificationAsRead(notificationId, accountIds);
     if (!notification) {
         const error = new Error('Notification not found');
         error.statusCode = 404;
@@ -28,7 +31,8 @@ async function markNotificationAsReadServices(notificationId, accountId) {
 }
 
 async function markAllNotificationsAsReadServices(accountId) {
-    return await markAllNotificationsAsRead(accountId);
+    const accountIds = await getAuthorizedActorAccountIds(accountId);
+    return await markAllNotificationsAsRead(accountIds);
 }
 
 module.exports = {

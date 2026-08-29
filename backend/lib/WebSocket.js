@@ -75,6 +75,7 @@ async function initSocket(httpServer) {
     markAllNotificationsAsReadServices,
     getNotificationsByAccountIdServices,
   } = require('../services/NotificationServices');
+  const { getAuthorizedActorAccountIds } = require('../services/MarketplaceActorServices');
 
   console.log('Socket.IO WebSocket server initialized');
   if (io) return io;
@@ -117,12 +118,18 @@ async function initSocket(httpServer) {
     }
   });
 
-  io.on('connection', (socket) => {
+  io.on('connection', async (socket) => {
     const accountId = String(socket.user.account_id);
     const becameOnline = addOnlineSocket(accountId, socket.id);
 
-    // Account rooms are retained for the existing notification flow.
-    socket.join(accountId);
+    // Join the personal account room and every team account this user may actively manage.
+    try {
+      const actorRooms = await getAuthorizedActorAccountIds(accountId);
+      await socket.join(actorRooms.map(String));
+    } catch (error) {
+      console.error('Failed to join marketplace actor rooms:', error.message);
+      await socket.join(accountId);
+    }
 
     socket.on('joinRoom', async (roomPayload, callback) => {
       const roomId =

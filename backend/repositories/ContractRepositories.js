@@ -1,24 +1,24 @@
 const { pool } = require('../lib/Database');
 const NotificationRepositories = require('./NotificationRepositories');
 
-async function sendJobOffer(clientId, proposalId, rateCredits, startsAt) {
+async function sendJobOffer(clientIds, proposalId, rateCredits, startsAt) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
         // 1. Verify proposal exists and belongs to a job owned by this client
         const proposalRes = await client.query(`
-            SELECT p.freelancer_account_id, COALESCE(p.revision_price_credits, 0) AS revision_price_credits, j.job_id, j.title
+            SELECT p.freelancer_account_id, COALESCE(p.revision_price_credits, 0) AS revision_price_credits, j.job_id, j.title, j.client_account_id
             FROM proposals p
             JOIN jobs j ON p.job_id = j.job_id
-            WHERE p.proposal_id = $1 AND j.client_account_id = $2 AND p.deleted_at IS NULL
-        `, [proposalId, clientId]);
+            WHERE p.proposal_id = $1 AND j.client_account_id = ANY($2::uuid[]) AND p.deleted_at IS NULL
+        `, [proposalId, clientIds]);
 
         if (proposalRes.rows.length === 0) {
             throw new Error("Proposal not found or unauthorized");
         }
 
-        const { freelancer_account_id, revision_price_credits, job_id, title } = proposalRes.rows[0];
+        const { freelancer_account_id, revision_price_credits, job_id, title, client_account_id: clientId } = proposalRes.rows[0];
 
         // 2. Check client's wallet balance
         const walletRes = await client.query(`
@@ -107,7 +107,7 @@ async function sendJobOffer(clientId, proposalId, rateCredits, startsAt) {
         });
 
         await client.query('COMMIT');
-        return { contract_id: contractId };
+        return { contract_id: contractId, client_account_id: clientId, freelancer_account_id };
 
     } catch (error) {
         await client.query('ROLLBACK');
@@ -118,28 +118,28 @@ async function sendJobOffer(clientId, proposalId, rateCredits, startsAt) {
     }
 }
 
-async function acceptJobOffer(freelancerId, contractId) {
+async function acceptJobOffer(freelancerIds, contractId) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
         // 1. Verify contract belongs to a proposal owned by this freelancer
         const contractRes = await client.query(`
-            SELECT c.contract_id, c.starts_at, c.rate_credits, p.proposal_id,
+            SELECT c.contract_id, c.starts_at, c.rate_credits, p.proposal_id, p.freelancer_account_id,
                    j.job_id, j.no_of_hires, j.title, j.client_account_id
             FROM contracts c
             JOIN job_contracts jc ON c.contract_id = jc.contract_id
             JOIN proposals p ON jc.proposal_id = p.proposal_id
             JOIN jobs j ON p.job_id = j.job_id
-            WHERE c.contract_id = $1 AND p.freelancer_account_id = $2 AND c.status = 'Pending Signature'
+            WHERE c.contract_id = $1 AND p.freelancer_account_id = ANY($2::uuid[]) AND c.status = 'Pending Signature'
             FOR UPDATE OF c
-        `, [contractId, freelancerId]);
+        `, [contractId, freelancerIds]);
 
         if (contractRes.rows.length === 0) {
             throw new Error("Contract not found or not pending signature for this user");
         }
 
-        const { starts_at, proposal_id, job_id, no_of_hires, title, client_account_id } = contractRes.rows[0];
+        const { starts_at, proposal_id, job_id, no_of_hires, title, client_account_id, freelancer_account_id: freelancerId } = contractRes.rows[0];
         const transferAmount = Number(contractRes.rows[0].rate_credits);
         if (!Number.isSafeInteger(transferAmount) || transferAmount <= 0) {
             throw new Error("Contract has an invalid rate");
@@ -308,21 +308,21 @@ async function acceptJobOffer(freelancerId, contractId) {
     }
 }
 
-async function rejectJobOffer(freelancerId, contractId, reason) {
+async function rejectJobOffer(freelancerIds, contractId, reason) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
         // 1. Verify contract belongs to a proposal owned by this freelancer
         const contractRes = await client.query(`
-            SELECT c.contract_id, p.proposal_id, j.title, j.client_account_id
+            SELECT c.contract_id, p.proposal_id, p.freelancer_account_id, j.title, j.client_account_id
             FROM contracts c
             JOIN job_contracts jc ON c.contract_id = jc.contract_id
             JOIN proposals p ON jc.proposal_id = p.proposal_id
             JOIN jobs j ON p.job_id = j.job_id
-            WHERE c.contract_id = $1 AND p.freelancer_account_id = $2 AND c.status = 'Pending Signature'
+            WHERE c.contract_id = $1 AND p.freelancer_account_id = ANY($2::uuid[]) AND c.status = 'Pending Signature'
             FOR UPDATE OF c
-        `, [contractId, freelancerId]);
+        `, [contractId, freelancerIds]);
 
         if (contractRes.rows.length === 0) {
             throw new Error("Contract not found or not pending signature for this user");
@@ -365,7 +365,7 @@ async function rejectJobOffer(freelancerId, contractId, reason) {
     }
 }
 
-async function getContractsByUserId(accountId) {
+async function getContractsByUserId(accountIds) {
     const query = `
         SELECT 
             c.contract_id,
@@ -405,7 +405,7 @@ async function getContractsByUserId(accountId) {
         JOIN accounts free_acc ON p.freelancer_account_id = free_acc.account_id
         LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
         LEFT JOIN terms_of_service t ON p.terms_id = t.terms_id
-        WHERE j.client_account_id = $1 OR p.freelancer_account_id = $1
+        WHERE j.client_account_id = ANY($1::uuid[]) OR p.freelancer_account_id = ANY($1::uuid[])
 
         UNION ALL
 
@@ -447,10 +447,10 @@ async function getContractsByUserId(accountId) {
         LEFT JOIN files client_f ON client_acc.avatar_file_id = client_f.file_id
         JOIN accounts free_acc ON g.freelancer_account_id = free_acc.account_id
         LEFT JOIN files free_f ON free_acc.avatar_file_id = free_f.file_id
-        WHERE gr.client_account_id = $1 OR g.freelancer_account_id = $1
+        WHERE gr.client_account_id = ANY($1::uuid[]) OR g.freelancer_account_id = ANY($1::uuid[])
         ORDER BY created_at DESC
     `;
-    const res = await pool.query(query, [accountId]);
+    const res = await pool.query(query, [accountIds]);
     return res.rows;
 }
 
