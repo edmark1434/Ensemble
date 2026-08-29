@@ -175,6 +175,7 @@ async function reviewMilestoneServices({ accountId, contractId, milestoneId, pay
         submissionStatus: input.status,
         milestoneStatus: input.status === 'approval' ? 'completed' : 'active',
         unlockNext: input.status === 'approval',
+        releaseOnContractCompletion: input.status === 'approval',
         allowedCurrentStatuses: ['submitted_for_review'],
     });
     const updatedTask = await DashboardRepositories.getTaskById(
@@ -191,11 +192,106 @@ async function reviewMilestoneServices({ accountId, contractId, milestoneId, pay
         action: input.status,
     });
 
-    return { submission: result.submission, task: updatedTask };
+    if (result.contractCompletion) {
+        const completion = result.contractCompletion;
+        const io = safeIo();
+        if (io) {
+            io.to(String(completion.freelancerAccountId)).emit(
+                'notification',
+                completion.notification
+            );
+            io.to(String(completion.freelancerAccountId)).emit(
+                'walletBalanceUpdated',
+                {
+                    balance_credits: completion.accountBalanceCredits,
+                    wallet_type: 'account wallets',
+                    transaction_id: completion.transaction.credit_transaction_id,
+                }
+            );
+            io.to(String(completion.freelancerAccountId)).emit(
+                'escrowBalanceUpdated',
+                {
+                    balance_credits: completion.escrowBalanceCredits,
+                    wallet_type: 'escrow wallets',
+                    transaction_id: completion.transaction.credit_transaction_id,
+                }
+            );
+        }
+    }
+
+    return {
+        submission: result.submission,
+        task: updatedTask,
+        contract_completion: result.contractCompletion
+            ? {
+                released_credits: result.contractCompletion.releasedCredits,
+                transaction_id: result.contractCompletion.transaction.credit_transaction_id,
+            }
+            : null,
+    };
+}
+
+async function buyRevisionServices({ accountId, contractId, milestoneId, payload }) {
+    const actorId = requireUuid(accountId, 'account ID');
+    const normalizedContractId = requireUuid(contractId, 'contract ID');
+    const normalizedMilestoneId = requireUuid(milestoneId, 'milestone ID');
+    const idempotencyKey = requireUuid(payload?.idempotency_key, 'idempotency key');
+
+    const purchase = await DashboardRepositories.buyRevision({
+        clientAccountId: actorId,
+        contractId: normalizedContractId,
+        milestoneId: normalizedMilestoneId,
+        idempotencyKey,
+    });
+    const task = await DashboardRepositories.getTaskById(normalizedContractId, actorId);
+    if (!task) {
+        throw new DashboardActionError('Task not found after revision purchase', 404);
+    }
+
+    if (!purchase.alreadyProcessed) {
+        const io = safeIo();
+        if (io) {
+            io.to(String(purchase.freelancerAccountId)).emit(
+                'notification',
+                purchase.notification
+            );
+            io.to(String(purchase.clientAccountId)).emit('walletBalanceUpdated', {
+                balance_credits: purchase.clientBalanceCredits,
+                wallet_type: 'account wallets',
+                transaction_id: purchase.transactionId,
+            });
+            io.to(String(purchase.freelancerAccountId)).emit('escrowBalanceUpdated', {
+                balance_credits: purchase.freelancerEscrowBalanceCredits,
+                wallet_type: 'escrow wallets',
+                transaction_id: purchase.transactionId,
+            });
+            io.to([
+                String(purchase.clientAccountId),
+                String(purchase.freelancerAccountId),
+            ]).emit('dashboardTaskUpdated', {
+                contract_id: normalizedContractId,
+                task,
+                action: 'revision_purchased',
+                actor_account_id: actorId,
+                transaction_id: purchase.transactionId,
+                emitted_at: new Date().toISOString(),
+            });
+        }
+    }
+
+    return {
+        task,
+        transaction: {
+            id: purchase.transactionId,
+            amount_credits: purchase.priceCredits,
+            already_processed: purchase.alreadyProcessed,
+        },
+    };
 }
 
 module.exports = {
     DashboardActionError,
     submitMilestoneServices,
     reviewMilestoneServices,
+    buyRevisionServices,
 };

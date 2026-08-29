@@ -1,3 +1,55 @@
+# Current Task - Final Contract Escrow Release
+
+Release a completed job or gig contract's exact held amount from the freelancer's escrow wallet into the same freelancer's account wallet only after the client approves the final remaining milestone.
+
+## Acceptance Criteria
+
+* [x] Freelancer submission alone never releases credits.
+* [x] Client approval completes the contract only when every contract milestone is completed.
+* [x] The release amount is the server-side contract value, including purchased revisions, never the whole escrow balance.
+* [x] Freelancer escrow and account wallets are active, deterministically locked, and updated atomically.
+* [x] Insufficient escrow rolls back milestone approval and contract completion.
+* [x] Exactly one contract-referenced Escrow Release ledger entry can exist.
+* [x] Contract completion, wallet movement, ledger entry, and durable notification commit together.
+* [x] After commit, both participants receive the authoritative task update and the freelancer receives wallet and notification events.
+* [x] New gig acceptances fund the freelancer escrow from the client's account wallet before starting the contract.
+* [x] Job behavior remains intact and both job and gig completion use the same release workflow.
+* [x] Focused backend checks, migration verification, frontend lint/build, and diff checks pass.
+
+Status: Completed August 29, 2026.
+
+Implementation notes: Client approval now checks for the final remaining milestone inside the existing PostgreSQL milestone transaction. Only final completion locks the contract and the active freelancer escrow and account wallets, verifies contract-specific escrow funding, debits the exact server-side contract value from escrow, credits the freelancer account wallet, creates one contract-referenced Escrow Release ledger row and durable notification, and marks the contract Completed. Any missing funding or balance rolls back the entire approval. A partial unique index provides database-level release idempotency. After commit, the existing authoritative dashboard update is emitted to both participants and the freelancer receives notification, account-wallet, and escrow-wallet events. New gig acceptances now fund freelancer escrow and write the corresponding Escrow Hold before the contract starts, matching the job completion path. One pre-existing active gig contract has no historical contract hold; it is intentionally rejected as incompletely funded rather than charging the client retroactively or consuming escrow from another contract, and requires explicit reconciliation.
+
+Verification: Node syntax checks passed for DashboardRepositories, DashboardServices, GigRepositories, and the new migration. A rollback-only PostgreSQL check found zero duplicate contract release groups and successfully created then rolled back the partial unique index. Focused ESLint passed for ClientReviewPanel, the frontend production build passed, and git diff whitespace validation passed. The build reported only existing chunk-size and mixed static/dynamic-import warnings.
+
+---
+
+# Current Task - Transactional Revision Payments and Escrow Ledger Semantics
+
+Charge an additional revision atomically from the contract client's account wallet into the freelancer's escrow wallet, and make contract escrow movements appear as fund transfers for the sender and credits on hold for the escrow recipient.
+
+## Acceptance Criteria
+
+* [x] The backend derives the revision price and both participant IDs from the authorized contract; it does not trust a browser-supplied price or recipient.
+* [x] The milestone belongs to the contract and the contract/milestone states permit an additional revision purchase.
+* [x] The client's active account wallet is locked and cannot be overdrawn.
+* [x] The freelancer's active escrow wallet receives the exact revision price.
+* [x] Wallet movement, ledger insertion, milestone revision allowance, milestone credits, and contract value update atomically.
+* [x] A client-generated UUID makes revision purchases idempotent and conflicting reuse returns HTTP 409.
+* [x] Initial job-offer escrow funding and acceptance write escrow-hold ledger entries.
+* [x] Transaction history presents escrow-hold movements as Fund Transfer to an external sender and Credits On Hold to the escrow recipient.
+* [x] Committed revision purchases update both participants in realtime and notify the freelancer.
+* [x] Existing identifiable contract escrow transfers are reclassified by an append-only reversible migration.
+* [x] Focused backend checks and the frontend production build pass.
+
+Status: Completed August 29, 2026.
+
+Implementation notes: Additional revision purchases now resolve the contract price and participants server-side, validate the active contract and review-ready milestone, serialize retries with an advisory lock, lock the client's account wallet and freelancer's escrow wallet, prevent overdrafts, and commit both balance updates, the Escrow Hold ledger entry, the durable freelancer notification, and revision/contract totals in one PostgreSQL transaction. The frontend retains a UUID idempotency key across request retries and consumes the authoritative returned task. Job offers now carry the proposal's revision rate into the contract and record both initial escrow funding and client-to-freelancer acceptance transfers as Escrow Hold. Transaction history maps such a row to Fund Transfer for an external sender and Credits On Hold for its escrow recipient. A reversible migration reclassifies existing identifiable contract escrow-to-escrow ledger rows.
+
+Verification: Backend syntax/module checks, invalid-identifier validation, transaction-perspective mapping, transaction invariant checks, focused frontend ESLint, git diff whitespace checks, and the frontend production build passed. The migration SQL parsed successfully against the configured database inside an explicit transaction and was rolled back; one existing row matched. The normal node-pg-migrate dry run remains blocked by the repository's pre-existing out-of-order migration 1787030362944_add-category-to-gigs, which precedes an already-applied migration.
+
+---
+
 # Current Task — Realtime Milestone Updates and Review Notifications
 
 Make freelancer milestone updates/review requests and client approval/revision responses update both participants in realtime and create durable recipient notifications.

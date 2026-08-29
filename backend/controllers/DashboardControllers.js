@@ -2,6 +2,7 @@ const DashboardRepositories = require('../repositories/DashboardRepositories');
 const {
     submitMilestoneServices,
     reviewMilestoneServices,
+    buyRevisionServices,
 } = require('../services/DashboardServices');
 
 async function getTasks(req, res) {
@@ -116,30 +117,25 @@ async function reviewContract(req, res) {
 
 async function buyRevision(req, res) {
     try {
-        const accountId = req.user?.account_id || req.user?.accountId;
-        const { contractId, milestoneId } = req.params;
-        const { priceCredits } = req.body;
-
-        if (!accountId) {
-            return res.status(401).json({ success: false, message: 'Unauthorized' });
-        }
-
-        if (priceCredits === undefined || priceCredits === null || priceCredits < 0) {
-            return res.status(400).json({ success: false, message: 'Invalid price.' });
-        }
-
-        // Verify the user is the client for this contract
-        const isAuthorized = await DashboardRepositories.verifyClient(contractId, accountId);
-        if (!isAuthorized) {
-            return res.status(403).json({ success: false, message: 'Forbidden' });
-        }
-
-        await DashboardRepositories.buyRevision(contractId, milestoneId, priceCredits);
-
-        return res.status(200).json({ success: true, message: 'Revision purchased successfully.' });
+        const result = await buyRevisionServices({
+            accountId: req.user?.account_id || req.user?.accountId,
+            contractId: req.params.contractId,
+            milestoneId: req.params.milestoneId,
+            payload: req.body,
+        });
+        return res.status(200).json({
+            success: true,
+            message: result.transaction.already_processed
+                ? 'Revision purchase already processed.'
+                : 'Revision purchased successfully.',
+            ...result,
+        });
     } catch (error) {
-        console.error("Error in buyRevision:", error);
-        res.status(500).json({ success: false, message: "Internal server error" });
+        console.error('Error in buyRevision:', error);
+        return res.status(error.statusCode || 500).json({
+            success: false,
+            message: error.statusCode ? error.message : 'Internal server error',
+        });
     }
 }
 
