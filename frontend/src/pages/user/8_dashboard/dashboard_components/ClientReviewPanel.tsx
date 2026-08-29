@@ -1,22 +1,38 @@
 import React, { useState } from 'react';
+import type { AxiosError } from 'axios';
 import { useInboxUploadMedia, InboxUploadMediaButton, InboxUploadMediaPreview } from '@/components/ui/inbox/inbox_functions/inbox_upload_image';
 import api from '@/lib/axios';
 import { uploadFileWithIntent } from '@/lib/uploadFile';
 import { AlertCircle, CheckCircle } from 'lucide-react';
+
+interface MilestoneSubmission {
+    status?: string;
+}
+
+interface ActiveMilestone {
+    submissions?: MilestoneSubmission[];
+    revisions_max?: number;
+    credits?: number;
+}
+
+interface DashboardTask {
+    revision_price_credits?: number;
+}
 
 interface Props {
     contractId: string;
     milestoneId: string;
     canReview: boolean;
     onSuccess: (task?: unknown) => void;
-    activeMilestone?: any;
-    task?: any;
+    activeMilestone?: ActiveMilestone;
+    task?: DashboardTask;
 }
 
 export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, canReview, onSuccess, activeMilestone, task }) => {
     const [action, setAction] = useState<'approve' | 'revise' | 'buy_revision' | null>(null);
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [revisionPurchaseKey, setRevisionPurchaseKey] = useState<string | null>(null);
     const { mediaList, removeMedia, openFilePicker, handleFileChange, fileInputRef } = useInboxUploadMedia(5);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -55,18 +71,21 @@ export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, ca
 
     const handleBuyRevision = async () => {
         if (!task) return;
+        const idempotencyKey = revisionPurchaseKey || crypto.randomUUID();
+        if (!revisionPurchaseKey) setRevisionPurchaseKey(idempotencyKey);
         setIsSubmitting(true);
         try {
-            await api.post(`/api/dashboard/tasks/${contractId}/milestones/${milestoneId}/buy-revision`, {
-                priceCredits: task.revision_price_credits
-            });
-            // After successfully buying, we just refresh the task and clear the action
-            // The user will now have +1 max revisions and can ask to revise normally
+            const response = await api.post(
+                `/api/dashboard/tasks/${contractId}/milestones/${milestoneId}/buy-revision`,
+                { idempotency_key: idempotencyKey }
+            );
+            setRevisionPurchaseKey(null);
             setAction(null);
-            onSuccess();
-        } catch (error: any) {
+            onSuccess(response.data.task);
+        } catch (error: unknown) {
             console.error("Failed to buy revision", error);
-            alert(error.response?.data?.message || "Failed to buy revision.");
+            const apiError = error as AxiosError<{ message?: string }>;
+            alert(apiError.response?.data?.message || "Failed to buy revision.");
         } finally {
             setIsSubmitting(false);
         }
@@ -80,7 +99,7 @@ export const ClientReviewPanel: React.FC<Props> = ({ contractId, milestoneId, ca
         );
     }
 
-    const usedRevisions = activeMilestone?.submissions?.filter((s: any) => s.status === 'revision_request').length || 0;
+    const usedRevisions = activeMilestone?.submissions?.filter((submission) => submission.status === 'revision_request').length || 0;
     const maxRevisions = activeMilestone?.revisions_max || 0;
     const isOutOfRevisions = usedRevisions >= maxRevisions;
 

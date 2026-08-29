@@ -8,7 +8,7 @@ async function sendJobOffer(clientId, proposalId, rateCredits, startsAt) {
 
         // 1. Verify proposal exists and belongs to a job owned by this client
         const proposalRes = await client.query(`
-            SELECT p.freelancer_account_id, j.job_id, j.title
+            SELECT p.freelancer_account_id, COALESCE(p.revision_price_credits, 0) AS revision_price_credits, j.job_id, j.title
             FROM proposals p
             JOIN jobs j ON p.job_id = j.job_id
             WHERE p.proposal_id = $1 AND j.client_account_id = $2 AND p.deleted_at IS NULL
@@ -18,11 +18,11 @@ async function sendJobOffer(clientId, proposalId, rateCredits, startsAt) {
             throw new Error("Proposal not found or unauthorized");
         }
 
-        const { freelancer_account_id, job_id, title } = proposalRes.rows[0];
+        const { freelancer_account_id, revision_price_credits, job_id, title } = proposalRes.rows[0];
 
         // 2. Check client's wallet balance
         const walletRes = await client.query(`
-            SELECT w.wallet_id, w.balance_credits 
+            SELECT w.wallet_id, w.balance_credits, w.status
             FROM wallets w
             JOIN account_wallets aw ON w.wallet_id = aw.wallet_id
             WHERE aw.account_id = $1 AND w.type = 'account wallets'
@@ -34,14 +34,22 @@ async function sendJobOffer(clientId, proposalId, rateCredits, startsAt) {
         }
 
         const wallet = walletRes.rows[0];
+        if (wallet.status !== 'active') {
+            throw new Error("Client wallet is not active");
+        }
+        let clientEscrowWallet;
         if (wallet.balance_credits < rateCredits) {
             throw new Error("Insufficient balance for escrow funding");
         }else{
             const updateWalletRes = await client.query(`
                 UPDATE wallets
                 SET balance_credits = balance_credits - $1
-                WHERE wallet_id = $2
+                WHERE wallet_id = $2 AND balance_credits >= $1
+                RETURNING balance_credits
             `, [rateCredits, wallet.wallet_id]);
+            if (updateWalletRes.rows.length === 0) {
+                throw new Error("Insufficient balance for escrow funding");
+            }
             const updateEscrowWallet = await client.query(`
                 UPDATE wallets AS w
                 SET balance_credits = w.balance_credits + $1
@@ -49,22 +57,31 @@ async function sendJobOffer(clientId, proposalId, rateCredits, startsAt) {
                 WHERE aw.wallet_id = w.wallet_id
                   AND aw.account_id = $2
                   AND w.type = 'escrow wallets'
+                  AND w.status = 'active'
                 RETURNING w.wallet_id, w.balance_credits
             `, [rateCredits, clientId]);
 
             if (updateEscrowWallet.rows.length === 0) {
                 throw new Error("Client escrow wallet not found");
             }
+            clientEscrowWallet = updateEscrowWallet.rows[0];
         }
 
         // 4. Create Contract
         const contractRes = await client.query(`
             INSERT INTO contracts (contract_type, payment_type, starts_at, rate_credits, revision_price_credits, status)
-            VALUES ('job', 'fixed', $1, $2, 0, 'Pending Signature')
+            VALUES ('job', 'fixed', $1, $2, $3, 'Pending Signature')
             RETURNING contract_id
-        `, [startsAt || new Date(), rateCredits]);
+        `, [startsAt || new Date(), rateCredits, revision_price_credits]);
 
         const contractId = contractRes.rows[0].contract_id;
+
+        await client.query(`
+            INSERT INTO credit_transactions (
+                type, amount_credits, status, source_wallet_id,
+                destination_wallet_id, reference_table, reference_id
+            ) VALUES ('Escrow Hold', $1, 'completed', $2, $3, 'contracts', $4)
+        `, [rateCredits, wallet.wallet_id, clientEscrowWallet.wallet_id, contractId]);
 
         // 5. Link Contract to Proposal
         await client.query(`
@@ -173,7 +190,7 @@ async function acceptJobOffer(freelancerId, contractId) {
             INSERT INTO credit_transactions (
                 type, amount_credits, status, source_wallet_id,
                 destination_wallet_id, reference_table, reference_id
-            ) VALUES ('Fund Transfer', $1, 'completed', $2, $3, 'contracts', $4)
+            ) VALUES ('Escrow Hold', $1, 'completed', $2, $3, 'contracts', $4)
         `, [transferAmount, clientEscrow.wallet_id, freelancerEscrow.wallet_id, contractId]);
 
         // 2. Determine new contract status based on starts_at

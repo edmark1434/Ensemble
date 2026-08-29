@@ -29,7 +29,10 @@ function normalizeType(type) {
 }
 
 function mapTransaction(row) {
-    const type = normalizeType(row.type);
+    const normalizedType = normalizeType(row.type);
+    const type = normalizedType === 'Escrow Hold' && row.source_owned && !row.destination_owned
+        ? 'Fund Transfer'
+        : normalizedType;
     const sourceIsPlatform = String(row.source_wallet_type).toLowerCase() === 'platform wallets';
     const destinationIsPlatform = String(row.destination_wallet_type).toLowerCase() === 'platform wallets';
     return {

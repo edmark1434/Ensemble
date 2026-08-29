@@ -727,6 +727,7 @@ async function acceptGigOrderRepository(orderId, freelancerAccountId) {
             JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
             JOIN gigs g ON gt.gig_id = g.gig_id
             WHERE gr.gig_request_id = $1 AND g.freelancer_account_id = $2
+            FOR UPDATE OF gr
         `;
         const reqCheck = await client.query(reqCheckQuery, [orderId, freelancerAccountId]);
         if (reqCheck.rows.length === 0) {
@@ -737,6 +738,59 @@ async function acceptGigOrderRepository(orderId, freelancerAccountId) {
         }
 
         const { rate_credits, no_of_revisions_max, gig_id, additional_work_rate, client_account_id, gig_title } = reqCheck.rows[0];
+
+        const orderCredits = Number(rate_credits);
+        if (!Number.isSafeInteger(orderCredits) || orderCredits <= 0) {
+            throw new Error('Gig order has an invalid rate');
+        }
+
+        const walletsResult = await client.query(
+            `SELECT aw.account_id, w.wallet_id, w.type, w.status, w.balance_credits
+             FROM account_wallets aw
+             JOIN wallets w ON w.wallet_id = aw.wallet_id
+             WHERE (
+                 aw.account_id = $1 AND w.type = 'account wallets'
+             ) OR (
+                 aw.account_id = $2 AND w.type = 'escrow wallets'
+             )
+             ORDER BY w.wallet_id
+             FOR UPDATE OF w`,
+            [client_account_id, freelancerAccountId]
+        );
+        const clientWallet = walletsResult.rows.find(
+            (wallet) =>
+                String(wallet.account_id) === String(client_account_id) &&
+                wallet.type === 'account wallets'
+        );
+        const freelancerEscrow = walletsResult.rows.find(
+            (wallet) =>
+                String(wallet.account_id) === String(freelancerAccountId) &&
+                wallet.type === 'escrow wallets'
+        );
+        if (!clientWallet || !freelancerEscrow) {
+            throw new Error('A required gig order wallet was not found');
+        }
+        if (clientWallet.status !== 'active' || freelancerEscrow.status !== 'active') {
+            throw new Error('A required gig order wallet is not active');
+        }
+
+        const debitResult = await client.query(
+            `UPDATE wallets
+             SET balance_credits = balance_credits - $1
+             WHERE wallet_id = $2
+               AND balance_credits >= $1
+             RETURNING balance_credits`,
+            [orderCredits, clientWallet.wallet_id]
+        );
+        if (debitResult.rows.length === 0) {
+            throw new Error('Client wallet balance is insufficient for this gig order');
+        }
+        await client.query(
+            `UPDATE wallets
+             SET balance_credits = balance_credits + $1
+             WHERE wallet_id = $2`,
+            [orderCredits, freelancerEscrow.wallet_id]
+        );
 
         // 2. Update gig request status
         await client.query(
@@ -751,6 +805,24 @@ async function acceptGigOrderRepository(orderId, freelancerAccountId) {
             ['gig', 'milestone', rate_credits, additional_work_rate || 50, 'Active']
         );
         const contractId = contractRes.rows[0].contract_id;
+
+        await client.query(
+            `INSERT INTO credit_transactions (
+                type, amount_credits, status,
+                source_wallet_id, destination_wallet_id,
+                reference_table, reference_id
+             )
+             VALUES (
+                'Escrow Hold', $1, 'completed',
+                $2, $3, 'contracts', $4
+             )`,
+            [
+                orderCredits,
+                clientWallet.wallet_id,
+                freelancerEscrow.wallet_id,
+                contractId,
+            ]
+        );
 
         // 4. Link contract to gig_request
         await client.query(
