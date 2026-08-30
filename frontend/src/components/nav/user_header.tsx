@@ -356,11 +356,9 @@ useEffect(() => {
   if (isCheckingAccess) {
     return (
       <header
-        className={`sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/95 backdrop-blur-md transition-all duration-300 ${
-            (!isCollapsed ? "md:p-0" : "md:pl-20")
-        }`}
+        className="sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/95 backdrop-blur-md transition-all duration-300"
       >
-        <div className="flex items-center justify-between px-5 py-5 md:px-5 gap-4">
+        <div className={`flex items-center justify-between px-5 md:px-5 gap-4 ${isGuestMode ? 'py-5' : 'py-4'}`}>
           <div className="flex items-center gap-8 flex-1 min-w-0">
             <div className="h-7 w-32 bg-gray-200 dark:bg-white/10 rounded animate-pulse shrink-0 hidden sm:block"></div>
             <div className="w-full max-w-xs h-9 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse"></div>
@@ -384,74 +382,68 @@ useEffect(() => {
   return showHeader ? (
     <>
       <header
-        className={`sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/95 backdrop-blur-md transition-all duration-300 ${
-            (!isCollapsed ? "md:p-0" : "md:pl-20")
-        }`}
+        className="sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/95 backdrop-blur-md transition-all duration-300"
       >
-        <div className="flex items-center justify-between px-5 py-5 md:px-5 gap-4">
-
+        <div className={`flex items-center justify-between px-5 md:px-5 gap-4 ${isGuestMode ? 'py-5' : 'py-4'}`}>
           <div className="flex items-center gap-8 flex-1 min-w-0">
             <h1 className="text-xl font-semibold text-gray-900 dark:text-white shrink-0 hidden sm:block" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
               {pageTitle}
             </h1>
 
-            <form ref={creatorSearchRef} onSubmit={handleHeaderSearchSubmit} className="relative w-full max-w-xs group">
-              <Search
-                onClick={handleHeaderSearchSubmit}
-                className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500 dark:text-zinc-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors cursor-pointer"
-              />
-              <input
-                ref={searchInputRef}
-                type="text"
-                placeholder="Search creators..."
-                value={headerSearchInput}
-                onFocus={() => setIsCreatorSearchOpen(true)}
-                onChange={(e) => {
-                  setHeaderSearchInput(e.target.value);
-                  setIsCreatorSearchOpen(true);
-                }}
-                className="w-full rounded-full border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 pl-9 pr-14 py-1.5 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder-gray-400 dark:placeholder-zinc-500"
-              />
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
-                <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400 bg-gray-200 dark:bg-white/10 border border-gray-300 dark:border-white/20 rounded">
-                  Alt+K
-                </kbd>
-              </div>
-
-              {isCreatorSearchOpen && headerSearchInput.replace(/^@/, "").trim().length >= 2 && (
-                <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-xl dark:shadow-2xl">
-                  {isSearchingCreators ? (
-                    <p className="px-4 py-3 text-center text-xs text-gray-500 dark:text-zinc-400">Searching creators...</p>
-                  ) : creatorSearchResults.length > 0 ? (
-                    <div className="max-h-72 overflow-y-auto p-1.5">
-                      {creatorSearchResults.map((creator) => (
-                        <button
-                          key={creator.accountId}
-                          type="button"
-                          onClick={() => handleCreatorSelect(creator)}
-                          className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition hover:bg-gray-100 dark:hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                        >
-                          <img src={creator.avatar} alt="" className="h-9 w-9 shrink-0 rounded-full bg-gray-200 dark:bg-zinc-800 object-cover" />
-                          <span className="min-w-0">
-                            <span className="flex items-center gap-1.5 truncate text-xs font-semibold text-gray-900 dark:text-white">
-                              {creator.name}
-                              {creator.accountId === userInfo?.account_id && (
-                                <span className="rounded bg-blue-100 dark:bg-blue-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                                  You
-                                </span>
-                              )}
-                            </span>
-                            <span className="block truncate text-[10px] text-gray-500 dark:text-zinc-400">{creator.username}</span>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="px-4 py-3 text-center text-xs text-gray-500 dark:text-zinc-500">No creators found.</p>
-                  )}
+            {!isGuestMode && (
+              <form ref={creatorSearchRef} onSubmit={handleHeaderSearchSubmit} className="relative w-full max-w-xs group">
+                <Search
+                  onClick={handleHeaderSearchSubmit}
+                  className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500 dark:text-zinc-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors cursor-pointer"
+                />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Search creators..."
+                  value={headerSearchInput}
+                  onFocus={() => setIsCreatorSearchOpen(true)}
+                  onChange={(e) => {
+                    setHeaderSearchInput(e.target.value);
+                    setIsCreatorSearchOpen(true);
+                  }}
+                  className="w-full rounded-full border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 pl-9 pr-14 py-1.5 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder-gray-400 dark:placeholder-zinc-500"
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
+                  <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400 bg-gray-200 dark:bg-white/10 border border-gray-300 dark:border-white/20 rounded">
+                    Alt+K
+                  </kbd>
                 </div>
-              )}
-            </form>
+
+                {isCreatorSearchOpen && headerSearchInput.replace(/^@/, "").trim().length > 0 && (
+                  <div className="absolute top-full mt-2 w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-xl z-50 overflow-hidden">
+                    {isSearchingCreators ? (
+                      <div className="p-4 text-center text-xs text-gray-500 dark:text-zinc-400">Searching...</div>
+                    ) : creatorSearchResults.length > 0 ? (
+                      <div className="max-h-64 overflow-y-auto custom-scrollbar">
+                        {creatorSearchResults.map((creator) => (
+                          <div
+                            key={creator.accountId}
+                            onClick={() => {
+                              navigate(`/search/user/${creator.username}`);
+                              setIsCreatorSearchOpen(false);
+                            }}
+                            className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition-colors border-b border-gray-100 dark:border-white/5 last:border-none"
+                          >
+                            <img src={creator.avatar} alt={creator.name} className="h-8 w-8 rounded-full object-cover border border-gray-200 dark:border-white/10" />
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{creator.name}</p>
+                              <p className="text-[10px] text-gray-500 dark:text-zinc-400 truncate">@{creator.username}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-4 text-center text-xs text-gray-500 dark:text-zinc-400">No creators found</div>
+                    )}
+                  </div>
+                )}
+              </form>
+            )}
           </div>
 
           <div className="flex items-center gap-4 shrink-0">
