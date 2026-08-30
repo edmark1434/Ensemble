@@ -46,7 +46,7 @@ export const HomeQuickActButtons: React.FC = () => {
     {
       label: "Find Services",
       icon: Search,
-      path: "/services",
+      path: "/gigs/services",
       color: "emerald",
     },
     {
