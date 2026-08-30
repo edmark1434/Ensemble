@@ -622,9 +622,11 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
               <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400">
                 <Share2 className="h-4 w-4" />
               </button>
-              <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400">
-                <Bookmark className={`h-4 w-4 ${gig.isSaved ? "fill-blue-500 text-blue-500" : ""}`} />
-              </button>
+              {!isGuestMode && (
+                <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400">
+                  <Bookmark className={`h-4 w-4 ${gig.isSaved ? "fill-blue-500 text-blue-500" : ""}`} />
+                </button>
+              )}
               <button onClick={onClose} className="hidden lg:block p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400">
                 <X className="h-5 w-5" />
               </button>
@@ -678,15 +680,17 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                       Edit Service
                     </button>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={handleOpenReport}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-400 font-bold text-xs hover:bg-gray-50 dark:hover:bg-white/10 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                      title="Report Service"
-                    >
-                      <Flag className="h-3.5 w-3.5" />
-                      Report Gig
-                    </button>
+                    !isGuestMode && (
+                      <button
+                        type="button"
+                        onClick={handleOpenReport}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-400 font-bold text-xs hover:bg-gray-50 dark:hover:bg-white/10 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                        title="Report Service"
+                      >
+                        <Flag className="h-3.5 w-3.5" />
+                        Report Gig
+                      </button>
+                    )
                   )}
                 </div>
               </div>

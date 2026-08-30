@@ -190,7 +190,7 @@ async function getProfileAttachmentsController(req, res) {
     try {
         const attachments = await getProfileAttachmentsService(
             req.params.accountId,
-            req.session.account_id
+            req.session?.account_id
         );
         return res.status(200).json({ success: true, attachments });
     } catch (err) {

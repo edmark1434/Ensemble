@@ -98,7 +98,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
               />
               <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dark-surface via-transparent to-transparent" />
 
-              {onToggleSave && (
+              {onToggleSave && !isGuestMode && (
                 <button
                   title="Save Gig"
                   onClick={(e) => {
@@ -108,7 +108,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                   className={`absolute top-4 right-4 rounded-full p-2 backdrop-blur-sm transition z-10 ${
                     selectedGig.isSaved
                       ? "bg-black/50 text-yellow-500 hover:bg-black/70"
-                      : "bg-black/50 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-black/70"
+                      : "bg-black/50 text-gray-500 dark:text-zinc-400 hover:text-gray-900 hover:bg-black/70"
                   }`}
                 >
                   <Bookmark className={`h-4 w-4 ${selectedGig.isSaved ? "fill-current" : ""}`} />
@@ -142,7 +142,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                     )}
                   </div>
 
-                  {!selectedGig.isOwnGig && (
+                  {!selectedGig.isOwnGig && !isGuestMode && (
                     <button
                       type="button"
                       title="Report Gig"

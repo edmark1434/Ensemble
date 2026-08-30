@@ -319,7 +319,7 @@ async function getFollowingController(req, res) {
 }
 
 async function checkIsFollowingController(req, res) {
-    const followerId = req.session.account_id;
+    const followerId = req.session?.account_id;
     const { accountId: followedId } = req.params;
     if (!followerId) return res.status(200).json({ success: true, isFollowing: false, isFollowedBy: false });
     try {

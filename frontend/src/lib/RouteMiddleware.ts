@@ -80,7 +80,7 @@ export default function RouteMiddleware() {
         location.pathname.startsWith('/landing/');
     const isOnboardingRoute = location.pathname.startsWith('/setup/');
 
-    const guestAllowedRoutes = ['/home', '/jobs/postings', '/gigs/services'];
+    const guestAllowedRoutes = ['/home', '/jobs/postings', '/gigs/services', '/search/user'];
     const isGuestAllowedRoute = guestAllowedRoutes.some(route => location.pathname.startsWith(route));
 
     useEffect(() => {

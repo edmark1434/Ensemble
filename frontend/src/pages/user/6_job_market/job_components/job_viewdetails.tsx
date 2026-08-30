@@ -58,7 +58,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
               />
               <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dark-surface via-transparent to-transparent" />
               
-              {onToggleSave && (
+              {onToggleSave && !isGuestMode && (
                 <button
                   title="Save Job Post"
                   onClick={(e) => {
@@ -68,7 +68,7 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   className={`absolute top-4 right-4 rounded-full p-2 backdrop-blur-sm transition z-10 ${
                     selectedJob.isSaved
                       ? "bg-black/50 text-yellow-500 hover:bg-black/70"
-                      : "bg-black/50 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-black/70"
+                      : "bg-black/50 text-gray-500 dark:text-zinc-400 hover:text-gray-900 hover:bg-black/70"
                   }`}
                 >
                   <Bookmark className={`h-4 w-4 ${selectedJob.isSaved ? "fill-current" : ""}`} />
@@ -97,11 +97,11 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                     </span>
                   </div>
 
-                  {!selectedJob.isOwnPost && (
+                  {!selectedJob.isOwnPost && !isGuestMode && (
                     <button
                       title="Report Job Post"
                       onClick={() => onReportJob && onReportJob(selectedJob)}
-                      className="p-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-red-400 transition border border-gray-200 dark:border-white/10 flex items-center gap-1 text-xs"
+                      className="p-1.5 rounded-lg bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 dark:text-zinc-400 hover:text-red-400 transition border border-gray-200 dark:border-white/10 flex items-center gap-1 text-xs"
                     >
                       <Flag className="h-3.5 w-3.5" />
                       <span className="text-[10px] font-medium">Report</span>

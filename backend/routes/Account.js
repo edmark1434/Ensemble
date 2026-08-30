@@ -1,6 +1,8 @@
 const router = require('express').Router();
 const checkSession = require('../middleware/CheckSession');
 const requireAuth = require('../middleware/RequireAuth');
+const optionalSession = require('../middleware/OptionalSession');
+const optionalAuth = require('../middleware/OptionalAuth');
 const {
     getAccountWalletController,
     getProfileController,
@@ -50,21 +52,21 @@ router.get('/personal-details', [checkSession, requireAuth], getPersonalDetailsC
 router.get('/profile/current-avatar', [checkSession, requireAuth], getProfileCurrentAvatarByAccountIdController);
 router.post('/:accountId/follow', [checkSession, requireAuth], followUserController);
 router.delete('/:accountId/follow', [checkSession, requireAuth], unfollowUserController);
-router.get('/:accountId/followers', [checkSession], getFollowersController);
-router.get('/:accountId/following', [checkSession], getFollowingController);
-router.get('/:accountId/follow-status', [checkSession], checkIsFollowingController);
-router.get('/profile/:accountId/attachments', [checkSession, requireAuth], getProfileAttachmentsController);
+router.get('/:accountId/followers', [optionalSession, optionalAuth], getFollowersController);
+router.get('/:accountId/following', [optionalSession, optionalAuth], getFollowingController);
+router.get('/:accountId/follow-status', [optionalSession, optionalAuth], checkIsFollowingController);
+router.get('/profile/:accountId/attachments', [optionalSession, optionalAuth], getProfileAttachmentsController);
 router.post('/profile/attachments', [checkSession, requireAuth], createProfileAttachmentController);
 router.delete('/profile/attachments/:attachmentId', [checkSession, requireAuth], deleteProfileAttachmentController);
-router.get('/:accountId/galleries', [checkSession, requireAuth], getUserGalleries);
+router.get('/:accountId/galleries', [optionalSession, optionalAuth], getUserGalleries);
 router.post('/galleries', [checkSession, requireAuth], createGalleryItem);
 router.delete('/galleries/:galleryId', [checkSession, requireAuth], deleteGalleryItem);
 router.put('/galleries/:galleryId', [checkSession, requireAuth], updateGalleryItem);
-router.get('/profile/:accountId', [checkSession, requireAuth], getProfileByAccountIdController);
-router.get('/profile/:accountId/reviews', [checkSession, requireAuth], getProfileReviewsController);
-router.get('/links/:accountId', [checkSession, requireAuth], getAccountLinkByAccountIdController);
-router.get('/profile/avatars/:accountId', [checkSession, requireAuth], getProfileAvatarsByAccountIdController);
-router.get('/check-user/:accountId', [checkSession, requireAuth], checkUserAccountIdController);
+router.get('/profile/:accountId', [optionalSession, optionalAuth], getProfileByAccountIdController);
+router.get('/profile/:accountId/reviews', [optionalSession, optionalAuth], getProfileReviewsController);
+router.get('/links/:accountId', [optionalSession, optionalAuth], getAccountLinkByAccountIdController);
+router.get('/profile/avatars/:accountId', [optionalSession, optionalAuth], getProfileAvatarsByAccountIdController);
+router.get('/check-user/:accountId', [optionalSession, optionalAuth], checkUserAccountIdController);
 router.post('/display-names', [checkSession, requireAuth], getDisplayNameByAccountIdController);
 router.post('/update-profile', [checkSession, requireAuth], updateAndInsertAccountProfileController);
 router.put('/update-profile-id', [checkSession, requireAuth], updateAccountProfileIdController);
