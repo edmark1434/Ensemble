@@ -77,7 +77,7 @@ const JobMain: React.FC = () => {
   const [viewType, setViewType] = useState<ViewType>("grid");
   const [searchQuery, setSearchQuery] = useState(location.state?.searchQuery || "");
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
-  const [activeCategoryFilter, setActiveCategoryFilter] = useState("All");
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState(location.state?.category || "All");
   const [jobsList, setJobsList] = useState<Job[]>([]);
   const [showFilters, setShowFilters] = useState(true);
 
