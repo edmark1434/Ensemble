@@ -12,12 +12,28 @@ import {
   MessageSquare,
 } from "lucide-react";
 
+import { useState } from "react";
+import useGlobalState from "@/lib/global_state";
+import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
+
 export const ActionButtonSkeleton: React.FC = () => (
   <div className="h-10 w-10 animate-pulse rounded-xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/[0.03]" />
 );
 
 export const HomeQuickActButtons: React.FC = () => {
   const navigate = useNavigate();
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const restrictedLabels = ["Start Project", "Post a Job", "Create Service", "Upload Asset", "Join a Team"];
+
+  const handleActionClick = (label: string, path: string) => {
+    if (isGuestMode && restrictedLabels.includes(label)) {
+      setIsModalOpen(true);
+    } else {
+      navigate(path);
+    }
+  };
 
   const actions = [
     {
@@ -140,16 +156,17 @@ export const HomeQuickActButtons: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-2 pt-1">
-      {actions.map((act) => {
-        const Icon = act.icon;
-        const style = styleMap[act.color];
+    <>
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        {actions.map((act) => {
+          const Icon = act.icon;
+          const style = styleMap[act.color];
 
-        return (
-          <button
-            key={act.label}
-            onClick={() => navigate(act.path)}
-            title={act.label}
+          return (
+            <button
+              key={act.label}
+              onClick={() => handleActionClick(act.label, act.path)}
+              title={act.label}
             className={`group flex h-10 items-center rounded-xl border border-gray-300 shadow-sm dark:shadow-none dark:border-white/10 bg-white dark:bg-white/[0.04] p-2 transition-all duration-300 ease-out hover:-translate-y-0.5 active:translate-y-0 active:scale-95 ${style.borderHover} ${style.bgHover} ${style.glow}`}
           >
             {/* Icon Container */}
@@ -169,6 +186,8 @@ export const HomeQuickActButtons: React.FC = () => {
           </button>
         );
       })}
-    </div>
+      </div>
+      <GuestLoginModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+    </>
   );
 };

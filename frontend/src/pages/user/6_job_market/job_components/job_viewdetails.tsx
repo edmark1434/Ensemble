@@ -4,6 +4,7 @@ import { JobRichText } from "./JobRichText";
 import { useNavigate } from "react-router-dom";
 import type { Job } from "./job_lists";
 import { CreditIcon } from "@/components/ui/credit-icon";
+import useGlobalState from "@/lib/global_state";
 
 interface JobViewDetailsProps {
   selectedJob: Job | null;
@@ -14,6 +15,7 @@ interface JobViewDetailsProps {
 
 const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, onReportJob, onToggleSave }) => {
   const navigate = useNavigate();
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
 
   const handleViewProfile = () => {
     if (!selectedJob) return;
@@ -241,10 +243,16 @@ const JobViewDetails: React.FC<JobViewDetailsProps> = ({ selectedJob, onClose, o
                   </button>
                 ) : (
                   <button
-                    onClick={() => navigate(`/jobs/${selectedJob.id}/make-proposal`)}
-                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 active:scale-[0.98]"
+                    onClick={() => !isGuestMode && navigate(`/jobs/${selectedJob.id}/make-proposal`)}
+                    disabled={isGuestMode}
+                    className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg ${
+                      isGuestMode 
+                        ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' 
+                        : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]'
+                    }`}
                   >
-                    <Send className="h-3.5 w-3.5" /> Send Proposal
+                    <Send className="h-3.5 w-3.5" /> 
+                    {isGuestMode ? "Login to Apply" : "Send Proposal"}
                   </button>
                 )
               ) : (

@@ -31,6 +31,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
   const isPage = layout === "page";
   const navigate = useNavigate();
   const user = useGlobalState(state => state.user);
+  const isGuestMode = useGlobalState(state => state.isGuestMode);
   const [activeTierIdx, setActiveTierIdx] = useState(0);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
@@ -830,11 +831,15 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                           </div>
 
                           <button
-                            onClick={() => !isOwner && navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
-                            disabled={isOwner}
-                            className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:shadow-none"
+                            onClick={() => !isOwner && !isGuestMode && navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
+                            disabled={isOwner || isGuestMode}
+                            className={`w-full py-3.5 rounded-xl font-bold text-sm transition-colors shadow-lg ${
+                              isOwner ? 'bg-gray-400 dark:bg-zinc-700 cursor-not-allowed text-white shadow-none' :
+                              isGuestMode ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' :
+                              'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]'
+                            }`}
                           >
-                            {isOwner ? "You own this service" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
+                            {isOwner ? "You own this service" : isGuestMode ? "Login to Continue" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
                           </button>
                         </div>
                       </div>
@@ -899,17 +904,21 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
 
                         <button
                           onClick={() => {
-                            if (isOwner) return;
+                            if (isOwner || isGuestMode) return;
                             if (gig.hasPendingOrder && gig.pendingOrderId) {
                               navigate(`/gigs/orders/sent/${gig.pendingOrderId}`);
                             } else {
                               navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } });
                             }
                           }}
-                          disabled={isOwner}
-                          className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:shadow-none"
+                          disabled={isOwner || isGuestMode}
+                          className={`w-full py-3.5 rounded-xl font-bold text-sm transition-colors shadow-lg ${
+                            isOwner ? 'bg-gray-400 dark:bg-zinc-700 cursor-not-allowed text-white shadow-none' :
+                            isGuestMode ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' :
+                            'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]'
+                          }`}
                         >
-                          {isOwner ? "You own this service" : gig.hasPendingOrder ? "View My Order" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
+                          {isOwner ? "You own this service" : isGuestMode ? "Login to Continue" : gig.hasPendingOrder ? "View My Order" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
                         </button>
                       </motion.div>
                     </AnimatePresence>

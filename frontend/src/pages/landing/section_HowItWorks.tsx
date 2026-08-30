@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import ShapeGrid from "@/components/ui/ShapeGrid";
 import FadeInScroll from "@/components/ui/FadeInScroll";
 import useGlobalState from "@/lib/global_state";
@@ -26,6 +27,8 @@ const HIW_DATA = {
 };
 
 const SectionHowItWorks: React.FC<HowItWorksProps> = ({ isMuted = false }) => {
+  const navigate = useNavigate();
+  const setIsGuestMode = useGlobalState((state) => state.setIsGuestMode);
   const [tab, setTab] = useState<"casual" | "freelancer" | "client">("casual");
   const [hoveredTab, setHoveredTab] = useState<"casual" | "freelancer" | "client" | null>(null);
   const theme = useGlobalState((state) => state.theme);
@@ -213,10 +216,15 @@ const SectionHowItWorks: React.FC<HowItWorksProps> = ({ isMuted = false }) => {
           </div>
 
           {/* Action Button Below Grid */}
-          <div style={{ display: "flex", justifyContent: "center", marginTop: 64 }}>
-            <button
-              onClick={() => { /* Navigation goes here */ }}
-              className="group"
+            <div style={{ marginTop: 40, display: "flex", justifyContent: "center" }}>
+              <button
+                onClick={() => {
+                  setIsGuestMode(true);
+                  if (tab === "casual") navigate("/home");
+                  else if (tab === "freelancer") navigate("/jobs/postings");
+                  else if (tab === "client") navigate("/gigs/services");
+                }}
+                className="group"
               style={{
                 display: "flex", alignItems: "center", gap: "8px",
                 padding: "16px 32px",
