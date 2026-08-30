@@ -361,17 +361,17 @@ useEffect(() => {
         <div className={`flex items-center justify-between px-5 md:px-5 gap-4 ${isGuestMode ? 'py-5' : 'py-4'}`}>
           <div className="flex items-center gap-8 flex-1 min-w-0">
             <div className="h-7 w-32 bg-gray-200 dark:bg-white/10 rounded animate-pulse shrink-0 hidden sm:block"></div>
-            <div className="w-full max-w-xs h-9 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse"></div>
+            <div className="w-full max-w-xs h-[30px] bg-gray-200 dark:bg-white/10 rounded-full animate-pulse"></div>
           </div>
           <div className="flex items-center gap-4 shrink-0">
-            <div className="h-8 w-24 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse"></div>
+            <div className="h-[34px] w-24 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse"></div>
             <div className="h-9 w-9 bg-gray-200 dark:bg-white/10 rounded-lg animate-pulse"></div>
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-white/10 animate-pulse"></div>
+            <div className="flex items-center gap-2 h-[44px] p-1 pl-3">
               <div className="hidden md:block space-y-2">
                 <div className="h-3 w-20 bg-gray-200 dark:bg-white/10 rounded animate-pulse"></div>
                 <div className="h-2 w-16 bg-gray-200 dark:bg-white/10 rounded animate-pulse"></div>
               </div>
+              <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-white/10 animate-pulse"></div>
             </div>
           </div>
         </div>
