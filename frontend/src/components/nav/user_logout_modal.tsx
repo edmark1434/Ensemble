@@ -1,5 +1,6 @@
-import React from "react";
-import { LogOut } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { DotLottieReact } from "@lottiefiles/dotlottie-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface UserLogoutModalProps {
   isOpen: boolean;
@@ -8,51 +9,83 @@ interface UserLogoutModalProps {
 }
 
 const UserLogoutModal: React.FC<UserLogoutModalProps> = ({ isOpen, onClose, onConfirm }) => {
-  if (!isOpen) return null;
+  const [countdown, setCountdown] = useState(3);
+
+  useEffect(() => {
+    if (isOpen) {
+      setCountdown(3);
+      const timer = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [isOpen]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/80 backdrop-blur-md transition-opacity duration-300"
-      onClick={onClose}
-    >
-      <div
-        className="relative w-full max-w-[400px] rounded-3xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#0d0f1a] p-8 shadow-2xl dark:shadow-[0_0_50px_-12px_rgba(0,0,0,0.8)] animate-in zoom-in-95 duration-200"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-6 flex justify-center">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-red-500/10 text-red-500 ring-8 ring-red-500/5">
-            <LogOut className="h-10 w-10" />
-          </div>
-        </div>
-
-        <div className="text-center">
-          <h2 className="mb-3 text-2xl font-bold text-gray-900 dark:text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-            Confirm Logout
-          </h2>
-          <p className="px-4 text-sm leading-relaxed text-gray-500 dark:text-zinc-400">
-            Are you sure you want to log out? You will need to re-authenticate to access your workspace.
-          </p>
-        </div>
-
-        <div className="mt-8 flex flex-col gap-3">
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="flex w-full items-center justify-center gap-3 rounded-2xl bg-red-500 py-4 text-sm font-bold text-white shadow-xl shadow-red-500/20 transition-all duration-300 hover:bg-red-600 active:scale-[0.97]"
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/80 backdrop-blur-md"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 10 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.95, opacity: 0, y: 10 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="relative w-full max-w-[400px] rounded-3xl border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-8 shadow-2xl dark:shadow-black/50"
+            onClick={(e) => e.stopPropagation()}
           >
-            Sign Out Now
-          </button>
+            <div className="mb-6 flex justify-center">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-red-500/10 ring-8 ring-red-500/5">
+                <DotLottieReact src="/icons/lottie/logout.lottie" loop autoplay style={{ width: 64, height: 64 }} />
+              </div>
+            </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full rounded-2xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/5 py-4 text-sm font-semibold text-gray-700 dark:text-zinc-400 transition hover:bg-gray-200 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
-          >
-            Stay Logged In
-          </button>
-        </div>
-      </div>
-    </div>
+            <div className="text-center">
+              <h2 className="mb-3 text-2xl font-bold text-gray-900 dark:text-white" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                Confirm Logout
+              </h2>
+              <p className="px-4 text-sm leading-relaxed text-gray-500 dark:text-zinc-400">
+                Are you sure you want to log out? You will need to re-authenticate to access your workspace.
+              </p>
+            </div>
+
+            <div className="mt-8 flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={onConfirm}
+                disabled={countdown > 0}
+                className={`flex w-full items-center justify-center gap-3 rounded-2xl py-4 text-sm font-bold text-white shadow-xl transition-all duration-300 ${
+                  countdown > 0
+                    ? "bg-red-400 cursor-not-allowed opacity-70"
+                    : "bg-red-500 shadow-red-500/20 hover:bg-red-600 active:scale-[0.97]"
+                }`}
+              >
+                {countdown > 0 ? `Sign Out Now (${countdown}s)` : "Sign Out Now"}
+              </button>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full rounded-2xl border border-gray-200 dark:border-white/5 bg-gray-100 dark:bg-white/5 py-4 text-sm font-semibold text-gray-700 dark:text-zinc-400 transition hover:bg-gray-200 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
+              >
+                Stay Logged In
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
 
