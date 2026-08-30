@@ -72,7 +72,7 @@ const UserNav: React.FC<UserNavProps> = () => {
     const [isJobsOpen, setIsJobsOpen] = useState(false);
     const [isGigsOpen, setIsGigsOpen] = useState(false);
 
-    const primaryNavState = isGuestMode ? primaryNavInitial.filter(item => item.label !== "Teams") : primaryNavInitial;
+    const primaryNavState = isGuestMode ? primaryNavInitial.filter(item => item.label !== "Teams" && item.label !== "Projects") : primaryNavInitial;
     const jobsState = isGuestMode ? jobsItemsInitial.filter(item => item.label !== "Proposals") : jobsItemsInitial;
     const gigsState = isGuestMode ? gigsItemsInitial.filter(item => item.label !== "Orders") : gigsItemsInitial;
     const activityState = isGuestMode ? [] : activityRecordsInitial;
