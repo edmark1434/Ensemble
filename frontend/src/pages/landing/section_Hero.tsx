@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import type { CSSProperties, FC } from "react";
 import { Search } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 interface HeroProps {
   onStart: () => void;
@@ -9,10 +10,14 @@ interface HeroProps {
 
 import TrueFocus from "@/components/ui/TrueFocus";
 import GradientBlinds from "@/components/ui/GradientBlinds";
+import useGlobalState from "@/lib/global_state";
 
 const INTENT_INDEX = { hire: 0, work: 1, edit: 2 } as const;
 
 const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
+  const navigate = useNavigate();
+  const setIsGuestMode = useGlobalState((state) => state.setIsGuestMode);
+
   const [mounted, setMounted] = useState<boolean>(false);
   const [intent, setIntent] = useState<"hire" | "work" | "edit">("hire");
   const [isSwitching, setIsSwitching] = useState<boolean>(false);
@@ -114,6 +119,19 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
       setIntent(targetMode);
       setIsSwitching(false);
     }, 40);
+  };
+
+  const handleSearchAction = () => {
+    playClickSound();
+    if (intent === "edit") {
+      navigate("/signup");
+    } else if (intent === "work") {
+      setIsGuestMode(true);
+      navigate("/jobs/postings", { state: { searchQuery: searchVal.trim() } });
+    } else if (intent === "hire") {
+      setIsGuestMode(true);
+      navigate("/gigs/services", { state: { searchQuery: searchVal.trim() } });
+    }
   };
 
   const dynamicTags = useMemo(() => {
@@ -249,14 +267,14 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
                   placeholder={intent === "hire" ? "Describe what you need to hire for..." : "Search for available asset listings or jobs..."}
                   value={searchVal}
                   onChange={(e) => setSearchVal(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSearchAction();
+                  }}
                   className="text-gray-900 placeholder-gray-500 dark:text-white dark:placeholder-gray-400"
                   style={{ width: "100%", background: "transparent", border: "none", outline: "none", fontSize: 14, paddingRight: 12 }}
                 />
                 <button
-                  onClick={() => {
-                    playClickSound();
-                    onStart();
-                  }}
+                  onClick={handleSearchAction}
                   onMouseEnter={playHoverSound}
                   className="hero-search-btn"
                   style={{ border: "none", fontWeight: 700, fontSize: 13, padding: "10px 24px", borderRadius: "100px", cursor: "pointer", transition: "all 0.2s" }}
@@ -266,10 +284,7 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
               </div>
             ) : (
               <button
-                onClick={() => {
-                  playClickSound();
-                  onStart();
-                }}
+                onClick={handleSearchAction}
                 onMouseEnter={playHoverSound}
                 className="hero-action-btn"
                 style={{
