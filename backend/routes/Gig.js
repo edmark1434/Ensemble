@@ -21,6 +21,11 @@ const {
 const requireAuth = require('../middleware/RequireAuth');
 const requireCompletedOnboarding = require('../middleware/RequireCompletedOnboarding');
 const requireVerifiedAccount = require('../middleware/RequireVerifiedAccount');
+const optionalAuth = require('../middleware/OptionalAuth');
+
+// Publicly readable endpoints (optional auth for personalization like "saved" status)
+router.get('/', optionalAuth, getAllGigsController);
+router.get('/:id', optionalAuth, getGigByIdController);
 
 router.use(requireAuth);
 router.use(requireCompletedOnboarding);
@@ -36,9 +41,6 @@ router.get('/orders/sent', getMyOrdersController);
 
 // GET /api/gigs/orders/:orderId
 router.get('/orders/:orderId', getOrderByIdController);
-
-// GET /api/gigs/:id
-router.get('/:id', getGigByIdController);
 
 // PUT /api/gigs/:id
 router.put('/:id', updateGigController);
@@ -63,9 +65,6 @@ router.post('/orders/:orderId/accept', acceptGigOrderController);
 
 // POST /api/gigs/orders/:orderId/reject
 router.post('/orders/:orderId/reject', rejectGigOrderController);
-
-// GET /api/gigs
-router.get('/', getAllGigsController);
 
 // POST /api/gigs
 router.post('/', requireVerifiedAccount, createGigController);

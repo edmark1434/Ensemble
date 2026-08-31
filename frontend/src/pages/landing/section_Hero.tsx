@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import type { CSSProperties, FC } from "react";
 import { Search } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 interface HeroProps {
   onStart: () => void;
@@ -9,15 +10,54 @@ interface HeroProps {
 
 import TrueFocus from "@/components/ui/TrueFocus";
 import GradientBlinds from "@/components/ui/GradientBlinds";
+import useGlobalState from "@/lib/global_state";
+import api from "@/lib/axios";
 
 const INTENT_INDEX = { hire: 0, work: 1, edit: 2 } as const;
 
 const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
+  const navigate = useNavigate();
+  const setIsGuestMode = useGlobalState((state) => state.setIsGuestMode);
+
   const [mounted, setMounted] = useState<boolean>(false);
   const [intent, setIntent] = useState<"hire" | "work" | "edit">("hire");
   const [isSwitching, setIsSwitching] = useState<boolean>(false);
   const [slideDirection, setSlideDirection] = useState<"left" | "right">("right");
   const [searchVal, setSearchVal] = useState("");
+  const [topJobCategories, setTopJobCategories] = useState<string[]>([]);
+  const [topGigCategories, setTopGigCategories] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchTopCategories = async () => {
+      try {
+        const [jobsRes, gigsRes] = await Promise.all([
+          api.get('/api/jobs'),
+          api.get('/api/gigs')
+        ]);
+        
+        const jobCounts: Record<string, number> = {};
+        jobsRes.data?.data?.forEach((job: any) => {
+          if (job.category) jobCounts[job.category] = (jobCounts[job.category] || 0) + 1;
+        });
+        const sortedJobs = Object.entries(jobCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(e => e[0]);
+        
+        const gigCounts: Record<string, number> = {};
+        gigsRes.data?.data?.forEach((gig: any) => {
+          if (gig.category) gigCounts[gig.category] = (gigCounts[gig.category] || 0) + 1;
+        });
+        const sortedGigs = Object.entries(gigCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(e => e[0]);
+
+        // Fallback to defaults if no data
+        setTopJobCategories(sortedJobs.length > 0 ? sortedJobs : ["Short Form Reels", "Logo Animation", "Cinematic Grading", "Vlog Editing"]);
+        setTopGigCategories(sortedGigs.length > 0 ? sortedGigs : ["Wedding Video", "AI Development", "YouTube Intro", "Color Grading"]);
+      } catch (err) {
+        console.error("Failed to fetch top categories", err);
+        setTopJobCategories(["Short Form Reels", "Logo Animation", "Cinematic Grading", "Vlog Editing"]);
+        setTopGigCategories(["Wedding Video", "AI Development", "YouTube Intro", "Color Grading"]);
+      }
+    };
+    fetchTopCategories();
+  }, []);
 
   // Sound references
   const hoverAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -116,11 +156,24 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
     }, 40);
   };
 
+  const handleSearchAction = () => {
+    playClickSound();
+    if (intent === "edit") {
+      navigate("/signup");
+    } else if (intent === "work") {
+      setIsGuestMode(true);
+      navigate("/jobs/postings", { state: { searchQuery: searchVal.trim() } });
+    } else if (intent === "hire") {
+      setIsGuestMode(true);
+      navigate("/gigs/services", { state: { searchQuery: searchVal.trim() } });
+    }
+  };
+
   const dynamicTags = useMemo(() => {
-    if (intent === "hire") return { title: "Popular:", items: ["Wedding Video", "AI Development", "YouTube Intro", "Color Grading"] };
-    if (intent === "work") return { title: "Popular Jobs:", items: ["Short Form Reels", "Logo Animation", "Cinematic Grading", "Vlog Editing"] };
+    if (intent === "hire") return { title: "Popular Services:", items: topGigCategories };
+    if (intent === "work") return { title: "Popular Jobs:", items: topJobCategories };
     return { title: "Video Editing Features:", items: ["Real-time Sync", "Auto Dead-Air Clean", "AI Caption Nav", "Multi-cam Edit"] };
-  }, [intent]);
+  }, [intent, topJobCategories, topGigCategories]);
 
   const animLoad = (delay = 0): CSSProperties => ({
     opacity: mounted ? 1 : 0,
@@ -249,14 +302,14 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
                   placeholder={intent === "hire" ? "Describe what you need to hire for..." : "Search for available asset listings or jobs..."}
                   value={searchVal}
                   onChange={(e) => setSearchVal(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSearchAction();
+                  }}
                   className="text-gray-900 placeholder-gray-500 dark:text-white dark:placeholder-gray-400"
                   style={{ width: "100%", background: "transparent", border: "none", outline: "none", fontSize: 14, paddingRight: 12 }}
                 />
                 <button
-                  onClick={() => {
-                    playClickSound();
-                    onStart();
-                  }}
+                  onClick={handleSearchAction}
                   onMouseEnter={playHoverSound}
                   className="hero-search-btn"
                   style={{ border: "none", fontWeight: 700, fontSize: 13, padding: "10px 24px", borderRadius: "100px", cursor: "pointer", transition: "all 0.2s" }}
@@ -266,10 +319,7 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
               </div>
             ) : (
               <button
-                onClick={() => {
-                  playClickSound();
-                  onStart();
-                }}
+                onClick={handleSearchAction}
                 onMouseEnter={playHoverSound}
                 className="hero-action-btn"
                 style={{
@@ -298,9 +348,14 @@ const SectionHero: FC<HeroProps> = ({ onStart, isMuted = false }) => {
               <button
                 key={tag}
                 onClick={() => {
-                  if (intent !== "edit") {
+                  if (intent === "work") {
                     playClickSound();
-                    setSearchVal(tag);
+                    setIsGuestMode(true);
+                    navigate("/jobs/postings", { state: { category: tag } });
+                  } else if (intent === "hire") {
+                    playClickSound();
+                    setIsGuestMode(true);
+                    navigate("/gigs/services", { state: { category: tag } });
                   }
                 }}
                 disabled={intent === "edit"}

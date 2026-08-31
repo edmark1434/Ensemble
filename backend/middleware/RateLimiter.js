@@ -1,7 +1,7 @@
 const redisClient = require('../lib/Redis');
 
 const POLICIES = {
-  authentication: { windowMs: 15 * 60 * 1000, limit: 20 },
+  authentication: { windowMs: 15 * 60 * 1000, limit: 100 },
   verification: { windowMs: 10 * 60 * 1000, limit: 8 },
   transaction: { windowMs: 10 * 60 * 1000, limit: 30 },
   upload: { windowMs: 10 * 60 * 1000, limit: 40 },

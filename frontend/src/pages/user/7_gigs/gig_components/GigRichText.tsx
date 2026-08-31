@@ -31,6 +31,7 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
   const isPage = layout === "page";
   const navigate = useNavigate();
   const user = useGlobalState(state => state.user);
+  const isGuestMode = useGlobalState(state => state.isGuestMode);
   const [activeTierIdx, setActiveTierIdx] = useState(0);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
@@ -621,9 +622,11 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
               <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400">
                 <Share2 className="h-4 w-4" />
               </button>
-              <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400">
-                <Bookmark className={`h-4 w-4 ${gig.isSaved ? "fill-blue-500 text-blue-500" : ""}`} />
-              </button>
+              {!isGuestMode && (
+                <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400">
+                  <Bookmark className={`h-4 w-4 ${gig.isSaved ? "fill-blue-500 text-blue-500" : ""}`} />
+                </button>
+              )}
               <button onClick={onClose} className="hidden lg:block p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors text-gray-500 dark:text-gray-400">
                 <X className="h-5 w-5" />
               </button>
@@ -679,15 +682,17 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                   ) : gig.isOwnGig ? (
                     <span className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-bold text-blue-400">Your Team service</span>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={handleOpenReport}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-400 font-bold text-xs hover:bg-gray-50 dark:hover:bg-white/10 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                      title="Report Service"
-                    >
-                      <Flag className="h-3.5 w-3.5" />
-                      Report Gig
-                    </button>
+                    !isGuestMode && (
+                      <button
+                        type="button"
+                        onClick={handleOpenReport}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 text-gray-600 dark:text-zinc-400 font-bold text-xs hover:bg-gray-50 dark:hover:bg-white/10 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                        title="Report Service"
+                      >
+                        <Flag className="h-3.5 w-3.5" />
+                        Report Gig
+                      </button>
+                    )
                   )}
                 </div>
               </div>
@@ -832,11 +837,15 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
                           </div>
 
                           <button
-                            onClick={() => !isOwner && navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
-                            disabled={isOwner}
-                            className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:shadow-none"
+                            onClick={() => !isOwner && !isGuestMode && navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } })}
+                            disabled={isOwner || isGuestMode}
+                            className={`w-full py-3.5 rounded-xl font-bold text-sm transition-colors shadow-lg ${
+                              isOwner ? 'bg-gray-400 dark:bg-zinc-700 cursor-not-allowed text-white shadow-none' :
+                              isGuestMode ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' :
+                              'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]'
+                            }`}
                           >
-                            {isOwner ? "You own this service" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
+                            {isOwner ? "You own this service" : isGuestMode ? "Login to Continue" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
                           </button>
                         </div>
                       </div>
@@ -901,17 +910,21 @@ export const GigRichText: React.FC<GigRichTextProps> = ({
 
                         <button
                           onClick={() => {
-                            if (isOwner) return;
+                            if (isOwner || isGuestMode) return;
                             if (gig.hasPendingOrder && gig.pendingOrderId) {
                               navigate(`/gigs/orders/sent/${gig.pendingOrderId}`);
                             } else {
                               navigate(`/gigs/services/${gig.id}/order`, { state: { tierIndex: activeTierIdx } });
                             }
                           }}
-                          disabled={isOwner}
-                          className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed text-white font-bold text-sm transition-colors shadow-lg shadow-blue-500/20 disabled:shadow-none"
+                          disabled={isOwner || isGuestMode}
+                          className={`w-full py-3.5 rounded-xl font-bold text-sm transition-colors shadow-lg ${
+                            isOwner ? 'bg-gray-400 dark:bg-zinc-700 cursor-not-allowed text-white shadow-none' :
+                            isGuestMode ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' :
+                            'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20 active:scale-[0.98]'
+                          }`}
                         >
-                          {isOwner ? "You own this service" : gig.hasPendingOrder ? "View My Order" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
+                          {isOwner ? "You own this service" : isGuestMode ? "Login to Continue" : gig.hasPendingOrder ? "View My Order" : `Continue (${activeTier?.price?.toLocaleString()} Credits)`}
                         </button>
                       </motion.div>
                     </AnimatePresence>

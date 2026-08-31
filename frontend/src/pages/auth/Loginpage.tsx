@@ -12,16 +12,23 @@ import { Eye, EyeOff } from "lucide-react";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
-  bg:        "#121214",
-  bgPanel:   "#1e1f22",
-  bgInput:   "#27282b",
-  border:    "rgba(255, 255, 255, 0.1)",
-  borderFoc: "#4a6fa5",
-  accent:    "#4a6fa5",
-  text:      "#ffffff",
-  muted:       "#888",
-  dim:       "#555",
-  error:     "#e05252",
+  bg:        "var(--auth-bg, #09090b)",
+  bgPanel:   "var(--auth-bgPanel, #18181b)",
+  bgInput:   "var(--auth-bgInput, #27272a)",
+  border:    "var(--auth-border, rgba(255, 255, 255, 0.1))",
+  borderFoc: "var(--auth-borderFoc, #4a6fa5)",
+  accent:    "var(--auth-accent, #4a6fa5)",
+  text:      "var(--auth-text, #ffffff)",
+  muted:     "var(--auth-muted, #888)",
+  dim:       "var(--auth-dim, #555)",
+  error:     "var(--auth-error, #e05252)",
+  primaryBg: "var(--auth-primaryBg, #fff)",
+  primaryText: "var(--auth-primaryText, #080a12)",
+  primaryHover: "var(--auth-primaryHover, #e8e8e8)",
+  googleHover: "var(--auth-googleHover, #1a1d2e)",
+  overlay:   "var(--auth-overlay, rgba(18, 18, 20, 0.6))",
+  overlayOpacity: "var(--auth-overlayOpacity, 1)",
+  logoInvert: "var(--auth-logoInvert, invert(0))",
   fontDisplay: "'Plus Jakarta Sans', sans-serif",
   fontBody:    "'Plus Jakarta Sans', sans-serif",
 };
@@ -33,7 +40,7 @@ function Logo({ size = 28 }) {
       <img
         src="/ensemble_lg.svg"
         alt="Ensemble Logo"
-        style={{ width: size, height: size }}
+        style={{ width: size, height: size, filter: T.logoInvert }}
       />
       <span style={{ fontSize: size - 6, fontWeight: 700, fontFamily: T.fontDisplay, letterSpacing: .5, color: T.text }}>
         Ensemble
@@ -42,10 +49,10 @@ function Logo({ size = 28 }) {
   );
 }
 
-// ─── Cinematic Video Background (right panel) ─────────────────────────────────
+// ─── Cinematic Video Background (right panel) ───────────────────────────────────────────────────
 function VideoBg() {
   return (
-    <div className="absolute inset-0 overflow-hidden">
+    <div className="absolute inset-0 overflow-hidden" style={{ background: T.bg }}>
       {/* Native HTML5 Video Element pointing to public workspace folder */}
       <video
         autoPlay
@@ -53,7 +60,7 @@ function VideoBg() {
         loop
         playsInline
         className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none"
-        style={{ filter: "brightness(0.35) contrast(1.05)" }}
+        style={{ filter: "brightness(0.35) contrast(1.05)", opacity: "var(--auth-overlayOpacity, 1)" }}
       >
         <source src="/clip/login_bg_vid.mp4" type="video/mp4" /> {/* Referenced from public asset library */}
       </video>
@@ -62,7 +69,7 @@ function VideoBg() {
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: "radial-gradient(circle, rgba(18,18,20,0.2) 0%, rgba(18,18,20,0.85) 100%)"
+          background: T.overlay
         }}
       />
 
@@ -177,7 +184,7 @@ function Input({
             background: T.bgInput,
             border: `1px solid ${error ? T.error : focused ? T.borderFoc : T.border}`,
             borderRadius: 12,
-            color: "#e2e8f0",
+            color: T.text,
             fontSize: 14,
             outline: "none",
             fontFamily: T.fontBody,
@@ -226,8 +233,8 @@ function PrimaryBtn({ children, onClick, loading = false, fullWidth = false }: {
       onClick={onClick}
       disabled={loading}
       style={{
-        background: loading ? "#555" : "#fff",
-        color: "#080a12",
+        background: loading ? T.dim : T.primaryBg,
+        color: T.primaryText,
         border: "none",
         padding: "14px 24px",
         borderRadius: 30,
@@ -242,14 +249,14 @@ function PrimaryBtn({ children, onClick, loading = false, fullWidth = false }: {
         justifyContent: "center",
         gap: 8,
       }}
-      onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = "#e8e8e8"; }}
-      onMouseLeave={(e) => { if (!loading) e.currentTarget.style.background = "#fff"; }}
+      onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = T.primaryHover; }}
+      onMouseLeave={(e) => { if (!loading) e.currentTarget.style.background = T.primaryBg; }}
     >
       {loading ? (
         <>
           <span style={{
             width: 16, height: 16,
-            border: "2px solid #080a12",
+            border: `2px solid ${T.primaryText}`,
             borderTopColor: "transparent",
             borderRadius: "50%",
             display: "inline-block",
@@ -274,7 +281,7 @@ function GoogleBtn() {
         background: T.bgInput,
         border: `1px solid ${T.border}`,
         borderRadius: 30,
-        color: "#e2e8f0",
+        color: T.text,
         fontSize: 13,
         cursor: "pointer",
         display: "flex",
@@ -286,7 +293,7 @@ function GoogleBtn() {
         transition: "all .2s",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.background = "#1a1d2e";
+        e.currentTarget.style.background = T.googleHover;
         e.currentTarget.style.borderColor = T.accent;
       }}
       onMouseLeave={(e) => {
@@ -335,8 +342,54 @@ export default function LoginPage({
   const [loading, setLoading]   = useState(false);
   const [errors, setErrors]     = useState<LoginErrors>({});
   const [pageLoaded, setPageLoaded] = useState(false);
-  const { setUser, setIsAuthenticated,setSignUpData } = useGlobalState()
+  const { setUser, setIsAuthenticated, setSignUpData, theme } = useGlobalState();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const styleEl = document.createElement("style");
+    styleEl.innerHTML = `
+      :root {
+        --auth-bg: #f4f4f5;
+        --auth-bgPanel: #ffffff;
+        --auth-bgInput: #f4f4f5;
+        --auth-border: #e4e4e7;
+        --auth-borderFoc: #2563eb;
+        --auth-accent: #2563eb;
+        --auth-text: #18181b;
+        --auth-muted: #71717a;
+        --auth-dim: #a1a1aa;
+        --auth-error: #ef4444;
+        --auth-primaryBg: #18181b;
+        --auth-primaryText: #ffffff;
+        --auth-primaryHover: #27272a;
+        --auth-googleHover: #e4e4e7;
+        --auth-overlay: radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(244,244,245,0.5) 100%);
+        --auth-overlayOpacity: 1;
+        --auth-logoInvert: invert(1);
+      }
+      .dark {
+        --auth-bg: #121214;
+        --auth-bgPanel: #1e1f22;
+        --auth-bgInput: #27282b;
+        --auth-border: rgba(255, 255, 255, 0.1);
+        --auth-borderFoc: #4a6fa5;
+        --auth-accent: #4a6fa5;
+        --auth-text: #ffffff;
+        --auth-muted: #888;
+        --auth-dim: #555;
+        --auth-error: #e05252;
+        --auth-primaryBg: #ffffff;
+        --auth-primaryText: #080a12;
+        --auth-primaryHover: #e8e8e8;
+        --auth-googleHover: #1a1d2e;
+        --auth-overlay: radial-gradient(circle, rgba(18,18,20,0.2) 0%, rgba(18,18,20,0.85) 100%);
+        --auth-overlayOpacity: 1;
+        --auth-logoInvert: invert(0);
+      }
+    `;
+    document.head.appendChild(styleEl);
+    return () => styleEl.remove();
+  }, []);
 
   // Trigger page load animation
   useEffect(() => {

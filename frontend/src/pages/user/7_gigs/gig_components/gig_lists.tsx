@@ -6,6 +6,7 @@ import { CreditIcon } from "@/components/ui/credit-icon";
 import { formatDistanceToNow } from "date-fns";
 import type { Gig } from "../gig_datasets";
 import PopupReportGig from "./PopupReportGig";
+import useGlobalState from "@/lib/global_state";
 
 export type ViewType = "grid" | "list";
 
@@ -73,6 +74,7 @@ export const GigList: React.FC<GigListProps> = ({
   baseRoute,
 }) => {
   const navigate = useNavigate();
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const [reportingGig, setReportingGig] = useState<Gig | null>(null);
 
   const formatTimeAgo = (dateStr: string | undefined) => {
@@ -173,7 +175,7 @@ export const GigList: React.FC<GigListProps> = ({
                       </div>
 
                       <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
-                        {!gig.isOwnGig && (
+                        {!gig.isOwnGig && !isGuestMode && (
                           <button
                             type="button"
                             title="Report Post"
@@ -199,15 +201,17 @@ export const GigList: React.FC<GigListProps> = ({
                             <Edit2 className="h-3.5 w-3.5" />
                           </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={(e) => onToggleSave(e, gig.id)}
-                          className={`p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm transition-colors flex items-center gap-1 ${
-                            gig.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
-                          }`}
-                        >
-                          <Bookmark className={`h-4 w-4 ${gig.isSaved ? "fill-current" : ""}`} />
-                        </button>
+                        {!isGuestMode && (
+                          <button
+                            type="button"
+                            onClick={(e) => onToggleSave(e, gig.id)}
+                            className={`p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm transition-colors flex items-center gap-1 ${
+                              gig.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                            }`}
+                          >
+                            <Bookmark className={`h-4 w-4 ${gig.isSaved ? "fill-current" : ""}`} />
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -329,7 +333,7 @@ export const GigList: React.FC<GigListProps> = ({
                   </div>
 
                   <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
-                    {!gig.isOwnGig && (
+                    {!gig.isOwnGig && !isGuestMode && (
                       <button
                         type="button"
                         title="Report Post"
@@ -355,15 +359,17 @@ export const GigList: React.FC<GigListProps> = ({
                         <Edit2 className="h-3.5 w-3.5" />
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={(e) => onToggleSave(e, gig.id)}
-                      className={`p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm transition-colors flex items-center gap-1 ${
-                        gig.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
-                      }`}
-                    >
-                      <Bookmark className={`h-4 w-4 ${gig.isSaved ? "fill-current" : ""}`} />
-                    </button>
+                    {!isGuestMode && (
+                      <button
+                        type="button"
+                        onClick={(e) => onToggleSave(e, gig.id)}
+                        className={`p-1.5 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-sm transition-colors flex items-center gap-1 ${
+                          gig.isSaved ? "text-yellow-500" : "text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-white"
+                        }`}
+                      >
+                        <Bookmark className={`h-4 w-4 ${gig.isSaved ? "fill-current" : ""}`} />
+                      </button>
+                    )}
                   </div>
                 </div>
 

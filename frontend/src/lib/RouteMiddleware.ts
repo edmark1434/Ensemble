@@ -64,7 +64,7 @@ function getRedirectPath(user: { type?: string; role?: string | null } | null) {
 }
 
 export default function RouteMiddleware() {
-    const { user } = useGlobalState();
+    const { user, isGuestMode } = useGlobalState();
     const navigate = useNavigate();
     const location = useLocation();
     const [resolvedUser, setResolvedUser] = useState(user);
@@ -79,6 +79,16 @@ export default function RouteMiddleware() {
         basePublicRoutes.includes(location.pathname) ||
         location.pathname.startsWith('/landing/');
     const isOnboardingRoute = location.pathname.startsWith('/setup/');
+
+    const guestAllowedRoutes = ['/home', '/jobs/postings', '/gigs/services', '/search/user'];
+    const isGuestAllowedRoute = guestAllowedRoutes.some(route => location.pathname.startsWith(route));
+
+    useEffect(() => {
+        if (!isCheckingSession && !resolvedUser && !isGuestMode && isGuestAllowedRoute) {
+            useGlobalState.getState().setIsGuestMode(true);
+        }
+    }, [isCheckingSession, resolvedUser, isGuestMode, isGuestAllowedRoute]);
+
     useEffect(() => {
         let cancelled = false;
 
@@ -225,22 +235,22 @@ export default function RouteMiddleware() {
     }, [isCheckingSession, onboardingPath, resolvedUser, isOnboardingRoute, navigate]);
 
     useEffect(() => {
-        if (isCheckingSession || resolvedUser || isPublicRoute) {
+        if (isCheckingSession || resolvedUser || isGuestMode || isPublicRoute || isGuestAllowedRoute) {
             return;
         }
 
         navigate('/', { replace: true });
-    }, [isCheckingSession, resolvedUser, isPublicRoute, navigate]);
+    }, [isCheckingSession, resolvedUser, isGuestMode, isPublicRoute, isGuestAllowedRoute, navigate]);
 
     if (onboardingVerificationFailed) {
         return createElement(RouteLoadingShell);
     }
 
-    if ((isCheckingSession || (resolvedUser?.type === 'User' && onboardingPath === undefined)) && !isPublicRoute && !isOnboardingRoute) {
+    if ((isCheckingSession || (resolvedUser?.type === 'User' && onboardingPath === undefined)) && !isGuestMode && !isPublicRoute && !isOnboardingRoute && !isGuestAllowedRoute) {
         return createElement(RouteLoadingShell);
     }
 
-    if (!resolvedUser && !isPublicRoute) {
+    if (!resolvedUser && !isGuestMode && !isPublicRoute && !isGuestAllowedRoute) {
         return createElement(RouteLoadingShell);
     }
 

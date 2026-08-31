@@ -14,6 +14,7 @@ interface GlobalState {
   // State
   isSidebarCollapsed: boolean
   user:            any | null
+  isGuestMode:     boolean
   isAuthenticated: boolean
   isLoading:       boolean
   accessToken:     string | null
@@ -23,6 +24,7 @@ interface GlobalState {
   // Actions
   setIsSidebarCollapsed: (isCollapsed: boolean) => void
   setUser:            (user: any) => void
+  setIsGuestMode:     (isGuestMode: boolean) => void
   setIsAuthenticated: (isAuthenticated: boolean) => void
   setIsLoading:       (isLoading: boolean) => void
   clearUser:          () => void
@@ -36,6 +38,7 @@ const useGlobalState = create<GlobalState>((set) => ({
   // Initial state
   isSidebarCollapsed: false,
   user:            null,
+  isGuestMode:     localStorage.getItem('isGuestMode') === 'true',
   isAuthenticated: false,
   isLoading:       false,
   accessToken: null,
@@ -44,15 +47,26 @@ const useGlobalState = create<GlobalState>((set) => ({
 
   // Actions
   setIsSidebarCollapsed: (isCollapsed) => set({ isSidebarCollapsed: isCollapsed }),
-  setUser:            (user) => set({ user, isAuthenticated: true }),
+  setUser:            (user) => {
+    localStorage.setItem('isGuestMode', 'false');
+    set({ user, isAuthenticated: true, isGuestMode: false });
+  },
+  setIsGuestMode:     (isGuestMode) => {
+    localStorage.setItem('isGuestMode', String(isGuestMode));
+    set({ isGuestMode });
+  },
   setIsAuthenticated: (isAuthenticated) => set({ isAuthenticated }),
   setIsLoading:       (isLoading) => set({ isLoading }),
-  clearUser:          () => set({
-    user: null,
-    isAuthenticated: false,
-    accessToken: null,
-    signUpData: null,
-  }),
+  clearUser:          () => {
+    localStorage.setItem('isGuestMode', 'false');
+    set({
+      user: null,
+      isAuthenticated: false,
+      isGuestMode: false,
+      accessToken: null,
+      signUpData: null,
+    });
+  },
   setAccessToken: (accessToken) => set({ accessToken }),
   setSignUpData: (data) => set({ signUpData: data }),
   setTheme: (theme) => {

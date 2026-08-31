@@ -81,6 +81,7 @@ const UserHeader: React.FC<UserHeaderProps> = ({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const userInfo = useGlobalState((state) => state.user);
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const [showHeader, setShowHeader] = useState(false);
   const [isCheckingAccess, setIsCheckingAccess] = useState(true);
   const [userCredits, setCredits] = useState(0);
@@ -196,6 +197,11 @@ useEffect(() => {
 }, []);
 
   useEffect(() => {
+    if (isGuestMode) {
+      setShowHeader(true);
+      setIsCheckingAccess(false);
+      return;
+    }
     const checkRole = async () => {
       try {
         const [, getWalletResponse, getAvatarResponse, getSubscriptionPlanResponse] = await Promise.all([
@@ -350,24 +356,22 @@ useEffect(() => {
   if (isCheckingAccess) {
     return (
       <header
-        className={`sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/95 backdrop-blur-md transition-all duration-300 ${
-            (!isCollapsed ? "md:p-0" : "md:pl-20")
-        }`}
+        className="sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/95 backdrop-blur-md transition-all duration-300"
       >
-        <div className="flex items-center justify-between px-6 py-5 md:px-8 gap-4">
+        <div className={`flex items-center justify-between px-5 md:px-5 gap-4 ${isGuestMode ? 'py-5' : 'py-4'}`}>
           <div className="flex items-center gap-8 flex-1 min-w-0">
             <div className="h-7 w-32 bg-gray-200 dark:bg-white/10 rounded animate-pulse shrink-0 hidden sm:block"></div>
-            <div className="w-full max-w-xs h-9 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse"></div>
+            <div className="w-full max-w-xs h-[30px] bg-gray-200 dark:bg-white/10 rounded-full animate-pulse"></div>
           </div>
           <div className="flex items-center gap-4 shrink-0">
-            <div className="h-8 w-24 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse"></div>
+            <div className="h-[34px] w-24 bg-gray-200 dark:bg-white/10 rounded-full animate-pulse"></div>
             <div className="h-9 w-9 bg-gray-200 dark:bg-white/10 rounded-lg animate-pulse"></div>
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-white/10 animate-pulse"></div>
+            <div className="flex items-center gap-2 h-[44px] p-1 pl-3">
               <div className="hidden md:block space-y-2">
                 <div className="h-3 w-20 bg-gray-200 dark:bg-white/10 rounded animate-pulse"></div>
                 <div className="h-2 w-16 bg-gray-200 dark:bg-white/10 rounded animate-pulse"></div>
               </div>
+              <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-white/10 animate-pulse"></div>
             </div>
           </div>
         </div>
@@ -378,174 +382,195 @@ useEffect(() => {
   return showHeader ? (
     <>
       <header
-        className={`sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/95 backdrop-blur-md transition-all duration-300 ${
-            (!isCollapsed ? "md:p-0" : "md:pl-20")
-        }`}
+        className="sticky top-0 z-50 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base/95 backdrop-blur-md transition-all duration-300"
       >
-        <div className="flex items-center justify-between px-6 py-4 md:px-8 gap-4">
-
+        <div className={`flex items-center justify-between px-5 md:px-5 gap-4 ${isGuestMode ? 'py-5' : 'py-4'}`}>
           <div className="flex items-center gap-8 flex-1 min-w-0">
             <h1 className="text-xl font-semibold text-gray-900 dark:text-white shrink-0 hidden sm:block" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
               {pageTitle}
             </h1>
 
-            <form ref={creatorSearchRef} onSubmit={handleHeaderSearchSubmit} className="relative w-full max-w-xs group">
-              <Search
-                onClick={handleHeaderSearchSubmit}
-                className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500 dark:text-zinc-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors cursor-pointer"
-              />
-              <input
-                ref={searchInputRef}
-                type="text"
-                placeholder="Search creators..."
-                value={headerSearchInput}
-                onFocus={() => setIsCreatorSearchOpen(true)}
-                onChange={(e) => {
-                  setHeaderSearchInput(e.target.value);
-                  setIsCreatorSearchOpen(true);
-                }}
-                className="w-full rounded-full border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 pl-9 pr-14 py-1.5 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder-gray-400 dark:placeholder-zinc-500"
-              />
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
-                <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400 bg-gray-200 dark:bg-white/10 border border-gray-300 dark:border-white/20 rounded">
-                  Alt+K
-                </kbd>
-              </div>
-
-              {isCreatorSearchOpen && headerSearchInput.replace(/^@/, "").trim().length >= 2 && (
-                <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-xl dark:shadow-2xl">
-                  {isSearchingCreators ? (
-                    <p className="px-4 py-3 text-center text-xs text-gray-500 dark:text-zinc-400">Searching creators...</p>
-                  ) : creatorSearchResults.length > 0 ? (
-                    <div className="max-h-72 overflow-y-auto p-1.5">
-                      {creatorSearchResults.map((creator) => (
-                        <button
-                          key={creator.accountId}
-                          type="button"
-                          onClick={() => handleCreatorSelect(creator)}
-                          className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition hover:bg-gray-100 dark:hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                        >
-                          <img src={creator.avatar} alt="" className="h-9 w-9 shrink-0 rounded-full bg-gray-200 dark:bg-zinc-800 object-cover" />
-                          <span className="min-w-0">
-                            <span className="flex items-center gap-1.5 truncate text-xs font-semibold text-gray-900 dark:text-white">
-                              {creator.name}
-                              {creator.accountId === userInfo?.account_id && (
-                                <span className="rounded bg-blue-100 dark:bg-blue-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                                  You
-                                </span>
-                              )}
-                            </span>
-                            <span className="block truncate text-[10px] text-gray-500 dark:text-zinc-400">{creator.username}</span>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="px-4 py-3 text-center text-xs text-gray-500 dark:text-zinc-500">No creators found.</p>
-                  )}
+            {!isGuestMode && (
+              <form ref={creatorSearchRef} onSubmit={handleHeaderSearchSubmit} className="relative w-full max-w-xs group">
+                <Search
+                  onClick={handleHeaderSearchSubmit}
+                  className="absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-500 dark:text-zinc-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors cursor-pointer"
+                />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Search creators..."
+                  value={headerSearchInput}
+                  onFocus={() => setIsCreatorSearchOpen(true)}
+                  onChange={(e) => {
+                    setHeaderSearchInput(e.target.value);
+                    setIsCreatorSearchOpen(true);
+                  }}
+                  className="w-full rounded-full border border-gray-200 dark:border-white/10 bg-gray-100 dark:bg-white/5 pl-9 pr-14 py-1.5 text-xs text-gray-900 dark:text-white focus:outline-none focus:border-blue-500/50 transition-all placeholder-gray-400 dark:placeholder-zinc-500"
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
+                  <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:text-zinc-400 bg-gray-200 dark:bg-white/10 border border-gray-300 dark:border-white/20 rounded">
+                    Alt+K
+                  </kbd>
                 </div>
-              )}
-            </form>
+
+                {isCreatorSearchOpen && headerSearchInput.replace(/^@/, "").trim().length > 0 && (
+                  <div className="absolute top-full mt-2 w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-base shadow-xl z-50 overflow-hidden">
+                    {isSearchingCreators ? (
+                      <div className="p-4 text-center text-xs text-gray-500 dark:text-zinc-400">Searching...</div>
+                    ) : creatorSearchResults.length > 0 ? (
+                      <div className="max-h-64 overflow-y-auto custom-scrollbar">
+                        {creatorSearchResults.map((creator) => (
+                          <div
+                            key={creator.accountId}
+                            onClick={() => {
+                              navigate(`/search/user/${creator.username}`);
+                              setIsCreatorSearchOpen(false);
+                            }}
+                            className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition-colors border-b border-gray-100 dark:border-white/5 last:border-none"
+                          >
+                            <img src={creator.avatar} alt={creator.name} className="h-8 w-8 rounded-full object-cover border border-gray-200 dark:border-white/10" />
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{creator.name}</p>
+                              <p className="text-[10px] text-gray-500 dark:text-zinc-400 truncate">@{creator.username}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-4 text-center text-xs text-gray-500 dark:text-zinc-400">No creators found</div>
+                    )}
+                  </div>
+                )}
+              </form>
+            )}
           </div>
 
           <div className="flex items-center gap-4 shrink-0">
-            {/* Credits */}
-            <div className="relative">
-              <button
-                onClick={handleTopUp}
-                onMouseEnter={() => setIsHovered(true)}
-                onMouseLeave={() => setIsHovered(false)}
-                className="group relative flex items-center gap-2 overflow-hidden rounded-full border border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 via-amber-500/10 to-orange-500/10 px-3 py-1.5 transition-all duration-300 hover:scale-105"
-              >
-                <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
-                <CreditIcon className="h-4 w-4 text-yellow-500" />
-                <span className="text-sm font-bold text-gray-900 dark:text-yellow-200">{userCredits.toLocaleString()}</span>
-                {isHovered && (
-                  <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] text-white shadow-lg animate-fade-in">
-                    Go to Credit Shop
-                  </span>
-                )}
-              </button>
-            </div>
-
-            {/* Notifications */}
-            <div className="relative" ref={notificationRef}>
-              <button
-                onClick={() => {
-                  setIsNotificationsOpen(!isNotificationsOpen);
-                  setIsProfileOpen(false);
-                }}
-                className={`relative rounded-lg p-2 transition duration-200 ${
-                  isNotificationsOpen ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white" : "text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
-                }`}
-              >
-                <Bell className="h-5 w-5" />
-                {hasUnreadNotifications && (
-                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#080a12]" />
-                )}
-              </button>
-              <UserNotificationModal isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} notificationsData={notifications} 
-                setNotifications={setNotifications}
-              />
-            </div>
-
-            {/* Profile */}
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => {
-                  setIsProfileOpen(!isProfileOpen);
-                  setIsNotificationsOpen(false);
-                }}
-                className="flex items-center gap-2 rounded-lg p-1 transition hover:bg-gray-100 dark:hover:bg-white/10"
-              >
-                <img 
-                  src={userAvatarState || userAvatar} 
-                  alt={userInfo?.username || "User"} 
-                  className="h-8 w-8 rounded-full object-cover ring-2 ring-gray-200 dark:ring-white/20"
-                  onError={(e) => {
-                    // ✅ Fallback if image fails to load
-                    (e.target as HTMLImageElement).src = userAvatar;
-                  }}
-                />
-                <div className="text-left hidden md:block">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{userInfo?.display_name || userInfo?.displayName || userInfo?.username || "User"}</p>
-                  <p className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500">
-                    <img src={getSubscriptionIcon(userSubscriptionPlan || "Free")} alt={`${userSubscriptionPlan || "Free"} Tier`} className="h-4 w-4 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" />
-                    {userSubscriptionPlan} Member
-                  </p>
+            {isGuestMode ? (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => navigate("/login")}
+                  className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-900 dark:text-white transition-colors hover:bg-gray-100 dark:hover:bg-white/5"
+                >
+                  Log in
+                </button>
+                <button
+                  onClick={() => navigate("/signup")}
+                  className="rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700"
+                >
+                  Sign up
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Credits */}
+                <div className="relative">
+                  <button
+                    onClick={handleTopUp}
+                    onMouseEnter={() => setIsHovered(true)}
+                    onMouseLeave={() => setIsHovered(false)}
+                    className="group relative flex items-center gap-2 overflow-hidden rounded-full border border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 via-amber-500/10 to-orange-500/10 px-3 py-1.5 transition-all duration-300 hover:scale-105"
+                  >
+                    <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                    <CreditIcon className="h-4 w-4 text-yellow-500" />
+                    <span className="text-sm font-bold text-gray-900 dark:text-yellow-200">{userCredits.toLocaleString()}</span>
+                    {isHovered && (
+                      <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-[10px] text-white shadow-lg animate-fade-in">
+                        Go to Credit Shop
+                      </span>
+                    )}
+                  </button>
                 </div>
-                <ChevronDown className={`h-4 w-4 text-gray-400 dark:text-zinc-400 transition-transform duration-200 ${isProfileOpen ? "rotate-180" : ""}`} />
-              </button>
 
-              {isProfileOpen && (
-                <div className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-xl dark:shadow-2xl backdrop-blur-xl animate-fade-in">
-                  <div className="border-b border-gray-200 dark:border-white/10 p-3">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">{userInfo?.username || "User"}</p>
-                    <p className="text-xs text-gray-500 dark:text-zinc-500">{userInfo?.email || "user@ensemble.com"}</p>
-                  </div>
-                  <div className="p-2">
-                    <button onClick={() => { navigate("/profile"); setIsProfileOpen(false); }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/10">
-                      <User className="h-4 w-4" /> Profile
-                    </button>
-                    <button
-                      onClick={() => { navigate("/settings"); setIsProfileOpen(false); }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/10"
-                    >
-                      <Settings className="h-4 w-4" /> Settings
-                    </button>
-                  </div>
-                  <div className="border-t border-gray-200 dark:border-white/10 p-2">
-                    <button
-                      onClick={(e) => { e.preventDefault(); setIsLogoutModalOpen(true); setIsProfileOpen(false); }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-500 dark:text-red-400 transition hover:bg-red-50 dark:hover:bg-red-500/10"
-                    >
-                      <LogOut className="h-4 w-4" /> Logout
-                    </button>
-                  </div>
+                {/* Notifications */}
+                <div className="relative" ref={notificationRef}>
+                  <button
+                    onClick={() => {
+                      setIsNotificationsOpen(!isNotificationsOpen);
+                      setIsProfileOpen(false);
+                    }}
+                    className={`relative rounded-lg p-2 transition duration-200 ${
+                      isNotificationsOpen ? "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white" : "text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white"
+                    }`}
+                  >
+                    <Bell className="h-5 w-5" />
+                    {hasUnreadNotifications && (
+                      <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-[#080a12]" />
+                    )}
+                  </button>
+                  <UserNotificationModal isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} notificationsData={notifications} 
+                    setNotifications={setNotifications}
+                  />
                 </div>
-              )}
-            </div>
+
+                {/* Profile */}
+                <div className="relative" ref={dropdownRef}>
+                  <button
+                    onClick={() => {
+                      setIsProfileOpen(!isProfileOpen);
+                      setIsNotificationsOpen(false);
+                    }}
+                    className="flex items-center gap-2 rounded-lg p-1 transition hover:bg-gray-100 dark:hover:bg-white/10"
+                  >
+                    <img 
+                      src={userAvatarState || userAvatar} 
+                      alt={userInfo?.username || "User"} 
+                      className="h-8 w-8 rounded-full object-cover ring-2 ring-gray-200 dark:ring-white/20"
+                      onError={(e) => {
+                        // o. Fallback if image fails to load
+                        (e.target as HTMLImageElement).src = userAvatar;
+                      }}
+                    />
+                    <div className="text-left hidden md:block">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{userInfo?.display_name || userInfo?.displayName || userInfo?.username || "User"}</p>
+                      <p className="flex items-center gap-1 text-xs text-gray-500 dark:text-zinc-500">
+                        <img src={getSubscriptionIcon(userSubscriptionPlan || "Free")} alt={`${userSubscriptionPlan || "Free"} Tier`} className="h-4 w-4 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" />
+                        {userSubscriptionPlan || "Free"}
+                      </p>
+                    </div>
+                    <ChevronDown className="h-4 w-4 text-gray-500 dark:text-zinc-400" />
+                  </button>
+                  
+                  {isProfileOpen && (
+                    <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#1a1b23] shadow-xl dark:shadow-2xl">
+                      <div className="p-2 space-y-1">
+                        <button
+                          onClick={() => {
+                            setIsProfileOpen(false);
+                            navigate("/profile");
+                          }}
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
+                        >
+                          <User className="h-4 w-4" />
+                          Profile
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsProfileOpen(false);
+                            navigate("/settings");
+                          }}
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 transition hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white"
+                        >
+                          <Settings className="h-4 w-4" />
+                          Settings
+                        </button>
+                        
+                        <div className="my-2 border-t border-gray-200 dark:border-white/10" />
+                        
+                        <button
+                          onClick={() => setIsLogoutModalOpen(true)}
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-red-600 dark:text-red-400 transition hover:bg-red-50 dark:hover:bg-red-500/10"
+                        >
+                          <LogOut className="h-4 w-4" />
+                          Sign out
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
 

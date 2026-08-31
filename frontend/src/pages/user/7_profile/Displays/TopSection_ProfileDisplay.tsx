@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { MapPin, Mail, Calendar, ChevronDown, Edit2, MessageCircle, Share2, Cake, HelpCircle, ShieldCheck, X, Tag } from "lucide-react";
 import { ProfileTags } from "../Utilities/ProfileTags.tsx";
+import useGlobalState from "@/lib/global_state";
 
 interface TopSectionProps {
   loading?: boolean;
@@ -72,6 +73,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
   onFollowersClick,
   onFollowingClick
 }) => {
+  const isGuestMode = useGlobalState(state => state.isGuestMode);
   const [isMetadataOpen, setIsMetadataOpen] = useState(false);
   const [isAvatarExpanded, setIsAvatarExpanded] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -284,7 +286,7 @@ export const TopSection_ProfileDisplay: React.FC<TopSectionProps> = ({
             <MessageCircle className="h-4 w-4" />
           </button>
           
-          {!isOwner && (
+          {!isOwner && !isGuestMode && (
             <button
               onClick={isFollowing ? onUnfollow : onFollow}
               className={`px-4 py-2 text-sm font-bold rounded-xl border transition shadow-sm ${

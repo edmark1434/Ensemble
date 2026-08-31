@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import type { Gig } from "../gig_datasets";
 import { CreditIcon } from "@/components/ui/credit-icon";
 import PopupReportGig from "./PopupReportGig";
+import useGlobalState from "@/lib/global_state";
 
 interface GigViewDetailsProps {
   selectedGig: Gig | null;
@@ -15,6 +16,7 @@ interface GigViewDetailsProps {
 
 const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, onReportGig, onToggleSave }) => {
   const navigate = useNavigate();
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
   const [activeTierIdx, setActiveTierIdx] = useState(0);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
@@ -96,7 +98,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
               />
               <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-dark-surface via-transparent to-transparent" />
 
-              {onToggleSave && (
+              {onToggleSave && !isGuestMode && (
                 <button
                   title="Save Gig"
                   onClick={(e) => {
@@ -106,7 +108,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                   className={`absolute top-4 right-4 rounded-full p-2 backdrop-blur-sm transition z-10 ${
                     selectedGig.isSaved
                       ? "bg-black/50 text-yellow-500 hover:bg-black/70"
-                      : "bg-black/50 text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:text-white hover:bg-black/70"
+                      : "bg-black/50 text-gray-500 dark:text-zinc-400 hover:text-gray-900 hover:bg-black/70"
                   }`}
                 >
                   <Bookmark className={`h-4 w-4 ${selectedGig.isSaved ? "fill-current" : ""}`} />
@@ -140,7 +142,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                     )}
                   </div>
 
-                  {!selectedGig.isOwnGig && (
+                  {!selectedGig.isOwnGig && !isGuestMode && (
                     <button
                       type="button"
                       title="Report Gig"
@@ -431,15 +433,20 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                       onClick={() => {
                         navigate(`/gigs/services/${selectedGig.id}/page`);
                       }}
-                      className="px-4 flex items-center justify-center rounded-xl bg-gray-100 dark:bg-white/5 py-3 text-xs font-bold text-gray-700 dark:text-zinc-300 hover:bg-gray-200 dark:hover:bg-white/10 transition active:scale-[0.98] shrink-0 border border-gray-200 dark:border-white/10"
+                      className="flex items-center gap-1.5 px-4 py-3 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-bold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
                     >
                       View Full
                     </button>
                     <button
-                      onClick={handleOpenCheckout}
-                      className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-500 py-3 text-xs font-bold text-white hover:bg-blue-600 transition shadow-lg shadow-blue-500/20 active:scale-[0.98]"
+                      onClick={() => !isGuestMode && handleOpenCheckout()}
+                      disabled={isGuestMode}
+                      className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition shadow-lg ${
+                        isGuestMode 
+                          ? 'bg-blue-500/20 text-white/50 cursor-not-allowed shadow-none' 
+                          : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-500/20 active:scale-[0.98]'
+                      }`}
                     >
-                      {selectedGig.hasPendingOrder ? "View My Order" : `Order ${activeTier?.tierName || "Package"}`}
+                      {isGuestMode ? "Login to Order" : (selectedGig.hasPendingOrder ? "View My Order" : `Order ${activeTier?.tierName || "Package"}`)}
                     </button>
                   </div>
                 </>

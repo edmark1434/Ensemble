@@ -49,6 +49,7 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
   const [isTyping, setIsTyping] = useState(true);
 
   const user = useGlobalState((state) => state.user);
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
 
   useEffect(() => {
     const hasVisited = sessionStorage.getItem("hasVisitedHome");
@@ -59,6 +60,19 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
   }, []);
 
   const getRandomGreeting = useCallback(() => {
+    if (isGuestMode) {
+      const guestGreetings = [
+        `Welcome, Guest! Log in to get started.`,
+        `Ready to collaborate? Log in today.`,
+        `Explore the marketplace, log in to connect.`,
+        `Hey Guest! Log in to access all features.`,
+        `Sign in to save your favorite assets.`,
+        `Join the community, log in now!`,
+        `Discover top talent, log in to connect.`
+      ];
+      return guestGreetings[Math.floor(Math.random() * guestGreetings.length)];
+    }
+
     const fullUserName = user?.display_name || user?.name || user?.username || "Editor";
     const firstName = fullUserName.split(' ')[0];
     const hour = new Date().getHours();
@@ -86,7 +100,7 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
     else if (hour >= 12 && hour < 18) greetings.push(`Good afternoon, ${firstName}.`);
 
     return greetings[Math.floor(Math.random() * greetings.length)];
-  }, [user]);
+  }, [user, isGuestMode]);
 
   // Initial greeting
   useEffect(() => {
@@ -156,7 +170,7 @@ export const HomeBanner: React.FC<HomeBannerProps> = ({
     { id: "posts", label: "in Posts", icon: FileText, path: "/jobs/postings", state: { searchQuery: searchQuery.trim() } },
     { id: "freelancers", label: "in Freelancers", icon: Users, path: `/search/user/${encodeURIComponent(searchQuery.trim())}`, state: { roleFilter: "Freelancer" } },
     { id: "assets", label: "in Assets", icon: Box, path: "/assets", state: { searchQuery: searchQuery.trim() } },
-  ];
+  ].filter(option => !(isGuestMode && option.id === "freelancers"));
 
   return (
     <div className="relative z-20 mb-8 rounded-2xl border border-gray-200 dark:border-white/15 bg-white dark:bg-zinc-950 p-6 shadow-2xl transition-all duration-500 md:p-10">

@@ -58,13 +58,13 @@ const modalOverlayStyle: React.CSSProperties = {
 };
 
 const modalContentStyle: React.CSSProperties = {
-  background: "#0d0f1a", border: "1px solid #2a2d3e", borderRadius: "20px",
+  background: "var(--auth-bgPanel, #1e1f22)", border: "1px solid var(--auth-border, #2a2d3e)", borderRadius: "20px",
   width: "90%", maxWidth: "500px", maxHeight: "80vh", display: "flex", flexDirection: "column",
-  color: "#fff", fontFamily: "'Plus Jakarta Sans', sans-serif",
+  color: "var(--auth-text, #fff)", fontFamily: "'Plus Jakarta Sans', sans-serif",
 };
 
 const modalHeaderStyle: React.CSSProperties = {
-  padding: "20px 24px", borderBottom: "1px solid #2a2d3e", display: "flex",
+  padding: "20px 24px", borderBottom: "1px solid var(--auth-border, #2a2d3e)", display: "flex",
   justifyContent: "space-between", alignItems: "center",
 };
 
@@ -73,13 +73,13 @@ const modalBodyStyle: React.CSSProperties = {
 };
 
 const modalFooterStyle: React.CSSProperties = {
-  padding: "20px 24px", borderTop: "1px solid #2a2d3e", display: "flex",
+  padding: "20px 24px", borderTop: "1px solid var(--auth-border, #2a2d3e)", display: "flex",
   justifyContent: "flex-end", gap: "12px",
 };
 
-const textStyle = { color: "#888", fontSize: "14px", lineHeight: "1.6", marginBottom: "16px" };
-const closeBtnStyle = { background: "none", border: "none", color: "#888", cursor: "pointer" };
-const primaryBtnStyle = { background: "#fff", color: "#080a12", border: "none", padding: "10px 20px", borderRadius: "30px", fontWeight: 600, cursor: "pointer" };
-const secondaryBtnStyle = { background: "transparent", color: "#888", border: "1px solid #2a2d3e", padding: "10px 20px", borderRadius: "30px", fontWeight: 600, cursor: "pointer" };
+const textStyle = { color: "var(--auth-muted, #888)", fontSize: "14px", lineHeight: "1.6", marginBottom: "16px" };
+const closeBtnStyle = { background: "none", border: "none", color: "var(--auth-muted, #888)", cursor: "pointer" };
+const primaryBtnStyle = { background: "var(--auth-text, #fff)", color: "var(--auth-bg, #080a12)", border: "none", padding: "10px 20px", borderRadius: "30px", fontWeight: 600, cursor: "pointer" };
+const secondaryBtnStyle = { background: "transparent", color: "var(--auth-muted, #888)", border: "1px solid var(--auth-border, #2a2d3e)", padding: "10px 20px", borderRadius: "30px", fontWeight: 600, cursor: "pointer" };
 
 export default TermsModal;

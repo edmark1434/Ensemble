@@ -46,12 +46,12 @@ const primaryBtnColor = { background: "#2dd4bf", color: "#080a12", border: "none
 // (Assumes other styles are identical to the ones defined in TermsModal)
 
 const modalOverlayStyle: React.CSSProperties = { position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0, 0, 0, 0.8)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 };
-const modalContentStyle: React.CSSProperties = { background: "#0d0f1a", border: "1px solid #2a2d3e", borderRadius: "20px", width: "90%", maxWidth: "500px", maxHeight: "80vh", display: "flex", flexDirection: "column", color: "#fff", fontFamily: "'Plus Jakarta Sans', sans-serif" };
-const modalHeaderStyle: React.CSSProperties = { padding: "20px 24px", borderBottom: "1px solid #2a2d3e", display: "flex", justifyContent: "space-between", alignItems: "center" };
+const modalContentStyle: React.CSSProperties = { background: "var(--auth-bgPanel, #1e1f22)", border: "1px solid var(--auth-border, #2a2d3e)", borderRadius: "20px", width: "90%", maxWidth: "500px", maxHeight: "80vh", display: "flex", flexDirection: "column", color: "var(--auth-text, #fff)", fontFamily: "'Plus Jakarta Sans', sans-serif" };
+const modalHeaderStyle: React.CSSProperties = { padding: "20px 24px", borderBottom: "1px solid var(--auth-border, #2a2d3e)", display: "flex", justifyContent: "space-between", alignItems: "center" };
 const modalBodyStyle: React.CSSProperties = { padding: "24px", overflowY: "auto", flex: 1 };
-const modalFooterStyle: React.CSSProperties = { padding: "20px 24px", borderTop: "1px solid #2a2d3e", display: "flex", justifyContent: "flex-end", gap: "12px" };
-const textStyle = { color: "#888", fontSize: "14px", lineHeight: "1.6", marginBottom: "16px" };
-const closeBtnStyle = { background: "none", border: "none", color: "#888", cursor: "pointer" };
-const secondaryBtnStyle = { background: "transparent", color: "#888", border: "1px solid #2a2d3e", padding: "10px 20px", borderRadius: "30px", fontWeight: 600, cursor: "pointer" };
+const modalFooterStyle: React.CSSProperties = { padding: "20px 24px", borderTop: "1px solid var(--auth-border, #2a2d3e)", display: "flex", justifyContent: "flex-end", gap: "12px" };
+const textStyle = { color: "var(--auth-muted, #888)", fontSize: "14px", lineHeight: "1.6", marginBottom: "16px" };
+const closeBtnStyle = { background: "none", border: "none", color: "var(--auth-muted, #888)", cursor: "pointer" };
+const secondaryBtnStyle = { background: "transparent", color: "var(--auth-muted, #888)", border: "1px solid var(--auth-border, #2a2d3e)", padding: "10px 20px", borderRadius: "30px", fontWeight: 600, cursor: "pointer" };
 
 export default PrivacyModal;
