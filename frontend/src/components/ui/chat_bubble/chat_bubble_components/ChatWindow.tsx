@@ -55,6 +55,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       (item) => String(item._id) === conversationId
     )
   );
+  const currentActorId = String(
+    conversation?.viewer_account_id || currentUserId
+  );
   const typingCount = useChatState(
     (state) => state.typingByConversation[conversationId]?.length || 0
   );
@@ -108,7 +111,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     activeUser?.account_id ||
     conversation?.members?.find(
       (member) =>
-        String(member.account_id) !== currentUserId &&
+        String(member.account_id) !== currentActorId &&
         !["left", "removed"].includes(member.status || "active")
     )?.account_id;
   const isEngagement = conversation?.conversation_type === "engagement";
@@ -140,12 +143,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         .reverse()
         .find(
           (message) =>
-            String(message.sender_id) === currentUserId &&
+            String(message.sender_id) === currentActorId &&
             (message.read_by || []).some(
-              (reader) => String(reader.account_id) !== currentUserId
+              (reader) => String(reader.account_id) !== currentActorId
             )
         )?._id,
-    [currentUserId, messages]
+    [currentActorId, messages]
   );
 
   useEffect(() => {
@@ -245,7 +248,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const toggleReaction = async (message: Message, emoji: string) => {
     const remove = (message.message_react || []).some(
       (reaction) =>
-        String(reaction.account_id) === currentUserId &&
+        String(reaction.account_id) === currentActorId &&
         reaction.react_type === emoji
     );
     closeMessageMenu();
@@ -351,7 +354,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
         <div className="flex gap-1">
           {!hasRestrictedMessageTools && callTargetAccountId &&
-            String(callTargetAccountId) !== currentUserId && (
+            String(callTargetAccountId) !== currentActorId && (
             <button
               onClick={(e) => {
                 e.preventDefault();
@@ -382,7 +385,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       {conversation?.conversation_type === "revision" && (
         <MarketplaceContextCard
           conversation={conversation}
-          currentUserId={currentUserId}
+          currentUserId={currentActorId}
         />
       )}
 
@@ -446,7 +449,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         ) : (
           messages.map((message) => {
-            const isMe = String(message.sender_id) === currentUserId;
+            const isMe = String(message.sender_id) === currentActorId;
             const isDeleted =
               message.is_deleted || message.is_unsent || Boolean(message.deleted_at);
             const parent = message.message_id_reply
@@ -658,14 +661,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   {isMe &&
                     String(message._id) === String(latestSeenOwnMessageId) &&
                     (message.read_by || []).some(
-                      (reader) => String(reader.account_id) !== currentUserId
+                      (reader) => String(reader.account_id) !== currentActorId
                     ) && (
                     <span className="flex -space-x-1" title="Seen">
                       {Array.from(
                         new Set(
                           (message.read_by || [])
                             .map((reader) => String(reader.account_id))
-                            .filter((accountId) => accountId !== currentUserId)
+                            .filter((accountId) => accountId !== currentActorId)
                         )
                       )
                         .slice(0, 5)

@@ -452,7 +452,7 @@ async function getIncomingOrdersRepository(accountIds) {
 async function getMyOrdersRepository(accountIds) {
     const query = `
         SELECT 
-            r.gig_request_id as id, r.status, r.created_at, (to_jsonb(r)->>'project_brief') as project_brief,
+            r.gig_request_id as id, r.client_account_id, r.status, r.created_at, (to_jsonb(r)->>'project_brief') as project_brief,
             g.gig_id, g.title as gig_title,
             a.display_name as freelancer_name, a.handle as freelancer_handle,
             (SELECT f.path FROM files f WHERE f.file_id = a.avatar_file_id LIMIT 1) as freelancer_avatar,
