@@ -53,7 +53,7 @@ import {
   uploadForumCommentImage,
 } from "@/pages/user/4_forums/forumCommentUtils";
 import { reconcileForumDiscussions, useForumRealtime } from "@/pages/user/4_forums/forumRealtime";
-import { identityFromDetails, loadCurrentForumAvatar } from "@/pages/user/4_forums/forumIdentity";
+import { DEFAULT_FORUM_AVATAR, identityFromDetails, loadCurrentForumAvatar } from "@/pages/user/4_forums/forumIdentity";
 
 type Tab = "posts" | "members" | "about";
 
@@ -70,6 +70,13 @@ type ImageAttachment = {
 type ForumTag = {
   tag_id: number;
   tag_name?: string;
+};
+
+type PublicForumIdentity = {
+  user_id: string;
+  display_name: string;
+  handle?: string | null;
+  avatar_preset_url?: string | null;
 };
 
 type Comment = {
@@ -89,6 +96,7 @@ type Comment = {
   depth?: number;
   children?: Comment[];
   is_edited?: boolean;
+  author_identity?: PublicForumIdentity | null;
 };
 
 type Post = {
@@ -112,6 +120,7 @@ type Post = {
     user_id: number;
   }[];
   comments: Comment[];
+  author_identity?: PublicForumIdentity | null;
 };
 
 type FeedResponse = {
@@ -133,6 +142,7 @@ type Group = {
     role: string;
     userId: number;
     is_banned?: boolean;
+    identity?: PublicForumIdentity | null;
   }[];
   tags: {
     tag_id: number;
@@ -819,11 +829,29 @@ const SelectedGroup = () => {
   const [participantDetails, setParticipantDetails] = useState<Record<string, { name: string; avatar: string }>>({});
   
   const user = useGlobalState((state) => state.user);
-  const currentUserId = user?.user_id || user?.userId || 1;
-  const [currentUserAvatar, setCurrentUserAvatar] = useState(user?.avatar || "");
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const currentUserId = user?.user_id || user?.userId || 0;
+  const isForumAuthenticated = !isGuestMode && Boolean(user?.account_id && currentUserId);
+  const [currentUserAvatar, setCurrentUserAvatar] = useState(user?.avatar || DEFAULT_FORUM_AVATAR);
+
   useEffect(() => {
-    void loadCurrentForumAvatar(user?.avatar).then(setCurrentUserAvatar);
-  }, [user?.avatar]);
+    if (!isForumAuthenticated) {
+      setCurrentUserAvatar(DEFAULT_FORUM_AVATAR);
+      return;
+    }
+    let cancelled = false;
+    void loadCurrentForumAvatar(user?.avatar).then((avatar) => {
+      if (!cancelled) setCurrentUserAvatar(avatar);
+    });
+    return () => { cancelled = true; };
+  }, [isForumAuthenticated, user?.avatar]);
+
+  const requireForumAuthentication = (message: string) => {
+    if (isForumAuthenticated) return true;
+    showErrorToast(message);
+    navigate("/login");
+    return false;
+  };
   
   const getMemberDetails = (userId: number) => {
     const member = membersWithDetails.find(m => m.userId === userId);
@@ -846,28 +874,19 @@ const SelectedGroup = () => {
   ]).filter(Boolean).map(String))].sort().join(","), [posts]);
 
   useEffect(() => {
-    if (!participantIdsKey) return;
-    let cancelled = false;
-    const loadParticipantDetails = async () => {
-      try {
-        const response = await api.post("api/users/list-of-details", {
-          userIds: participantIdsKey.split(","),
-        });
-        const identities: Record<string, { name: string; avatar: string }> = {};
-        for (const details of response.data?.usersList || []) {
-          identities[String(details.user_id)] = identityFromDetails(details);
-        }
-        if (String(currentUserId) in identities) {
-          identities[String(currentUserId)].avatar = currentUserAvatar;
-        }
-        if (!cancelled) setParticipantDetails((current) => ({ ...current, ...identities }));
-      } catch (error) {
-        console.error("Failed to load forum participant identities:", error);
+    const identities: Record<string, { name: string; avatar: string }> = {};
+    for (const post of posts) {
+      if (post.author_identity) {
+        identities[String(post.user_id)] = identityFromDetails(post.author_identity);
       }
-    };
-    void loadParticipantDetails();
-    return () => { cancelled = true; };
-  }, [participantIdsKey, currentUserAvatar, currentUserId]);
+      for (const comment of post.comments || []) {
+        if (comment.author_identity) {
+          identities[String(comment.user_id)] = identityFromDetails(comment.author_identity);
+        }
+      }
+    }
+    setParticipantDetails(identities);
+  }, [participantIdsKey, posts]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -885,24 +904,18 @@ const SelectedGroup = () => {
           return;
         }
         const mockGroup: Group = result.data;
-        const getMemberDetails = await api.post('api/users/list-of-details', { userIds: mockGroup.members.map(m => m.userId) });
-        let memberDetailsList = getMemberDetails.data.usersList;
-        for(const member of mockGroup.members) { 
-          const details = memberDetailsList.find((details: any) => details.user_id === member.userId);
-          if (details) {
-            const identity = identityFromDetails(details);
-            details.name = identity.name;
-            details.role = member.role;
-            details.avatar = identity.avatar;
-            details.joinedAt = member.joined_at;
-            details.userId = details.user_id;
-            delete details.first_name;
-            delete details.last_name;
-            delete details.user_id;
-            delete details.avatar_file_id;
-          }
-        }
-        console.log("Member details with roles:", memberDetailsList);
+        const memberDetailsList: MemberWithDetails[] = mockGroup.members.map((member) => {
+          const identity = member.identity
+            ? identityFromDetails(member.identity)
+            : { name: "Forum member", avatar: DEFAULT_FORUM_AVATAR };
+          return {
+            userId: member.userId,
+            role: member.role,
+            name: identity.name,
+            avatar: identity.avatar,
+            joinedAt: member.joined_at,
+          };
+        });
         console.log("Group discussion:", result2.data.discussions);
         setGroup(mockGroup);
         setPosts(result2.data.discussions);
@@ -1002,6 +1015,7 @@ const SelectedGroup = () => {
   };
 
   const handleReplyImageUpload = async (postId: string, files: FileList | null) => {
+    if (!requireForumAuthentication("Sign in to reply to discussions")) return;
     if (!files) return;
 
     const newImages: ImageAttachment[] = [];
@@ -1070,6 +1084,7 @@ const SelectedGroup = () => {
   };
 
   const handleReply = async (postId: string) => {
+    if (!requireForumAuthentication("Sign in to reply to discussions")) return;
     const replyContent = replyText[postId]?.trim();
     const replyImageList = replyImages[postId] || [];
 
@@ -1120,6 +1135,7 @@ const SelectedGroup = () => {
   };
 
   const handleCommentReply = async (postId: string, parentCommentId: string) => {
+    if (!requireForumAuthentication("Sign in to reply to comments")) return;
     const replyContent = replyCommentText.trim();
     const replyImageList = commentReplyImages;
 
@@ -1175,6 +1191,7 @@ const SelectedGroup = () => {
   };
 
   const handleCommentReplyImageUpload = async (files: FileList | null) => {
+    if (!requireForumAuthentication("Sign in to reply to comments")) return;
     if (!files) return;
 
     const newImages: ImageAttachment[] = [];
@@ -1233,6 +1250,7 @@ const SelectedGroup = () => {
   };
 
   const handleLikeComment = async (postId: string, commentId: string) => {
+    if (!requireForumAuthentication("Sign in to like comments")) return;
     console.log(`Toggling like for comment ${commentId} in post ${postId}`);
     const currentPost = posts.find((post) => String(post._id) === postId);
     const currentComment = currentPost?.comments?.find(c => c.comment_id === commentId);
@@ -1400,6 +1418,7 @@ const SelectedGroup = () => {
   };
 
   const handleReplyClick = (postId: string, commentId: string, authorName: string, authorId: number) => {
+    if (!requireForumAuthentication("Sign in to reply to comments")) return;
     setReplyingTo({ commentId, authorName, authorId });
     setReplyCommentText("");
     setCommentReplyImages([]);
@@ -1514,6 +1533,7 @@ const SelectedGroup = () => {
   };
 
   const handleLikePost = async (postId: string) => {
+    if (!requireForumAuthentication("Sign in to like discussions")) return;
     const currentPost = displayPosts.find(p => p.id === postId);
     if (!currentPost) return;
     
@@ -1572,6 +1592,7 @@ const SelectedGroup = () => {
   };
 
   const handleSavePost = async (postId: string) => {
+    if (!requireForumAuthentication("Sign in to save discussions")) return;
     const currentPost = displayPosts.find(p => p.id === postId);
     if (!currentPost) return;
     
@@ -1808,7 +1829,7 @@ const SelectedGroup = () => {
               <MoreVertical className="h-5 w-5" />
             </button>
 
-            {showMenu && (
+            {isForumAuthenticated && showMenu && (
               <div className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-dark-surface shadow-2xl backdrop-blur-xl overflow-hidden z-20">
                 <div className="p-2">
                   {canEditGroup && (
@@ -1835,7 +1856,7 @@ const SelectedGroup = () => {
                       Edit Roles
                     </button>
                   )}
-                  {!isOwner && (
+                  {isForumAuthenticated && !isOwner && (
                     <button
                       onClick={() => {
                         setShowReportGroupModal(true);
@@ -1847,7 +1868,7 @@ const SelectedGroup = () => {
                       Report Group
                     </button>
                   )}
-                  {!isOwner && (
+                  {isForumAuthenticated && !isOwner && (
                     <button
                       onClick={() => {
                         setShowLeaveGroupModal(true);
