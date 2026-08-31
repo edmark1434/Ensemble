@@ -798,6 +798,19 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
     };
     drawOverlaysRef.current = drawOverlays;
 
+    const clearOverlays = () => {
+      overlaysByClient.forEach((rect) => canvas.remove(rect));
+      overlaysByClient.clear();
+      labelsByClient.forEach((label) => canvas.remove(label));
+      labelsByClient.clear();
+      labelBgsByClient.forEach((bg) => canvas.remove(bg));
+      labelBgsByClient.clear();
+      itemOverlaysById.forEach((path) => canvas.remove(path));
+      itemOverlaysById.clear();
+      canvas.requestRenderAll();
+    };
+    (canvas as any)._presenceOverlays = { clear: clearOverlays, redraw: drawOverlays };
+
     const unsubTransforms = subscribeToRemoteLiveTransforms(collabSchema.awareness, (statesByClient) => {
       const merged: LiveTransformState = {};
       statesByClient.forEach(({ patches }) => Object.assign(merged, patches));
@@ -836,7 +849,7 @@ const Timeline = ({ stateManager }: { stateManager: StateManager }) => {
 
   useEffect(() => {
     drawOverlaysRef.current();
-  }, [trackItemsMap, transitionsMap]);
+  }, [trackItemsMap, transitionsMap, scale]);
 
   useEffect(() => {
     if (!collabSchema) return;

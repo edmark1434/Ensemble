@@ -531,7 +531,7 @@ const ModalUpload: React.FC<ModalUploadProps> = ({ type = "all" }) => {
       <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
         <DialogContent
           className={cn(
-            "border bg-card px-2 py-8 gap-6 overflow-hidden",
+            "z-[300] border bg-card px-2 py-8 gap-6 overflow-hidden",
             hasItems ? "sm:max-w-6xl" : "sm:max-w-lg"
           )}
         >

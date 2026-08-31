@@ -40,12 +40,19 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
     const playheadPxNew = timeMsToUnits(currentTimeMs, newScale.zoom);
     const newScrollLeft = Math.max(0, playheadPxNew - playheadScreenX);
 
+    // Presence overlays are plain Fabric objects with no trackItemsMap/
+    // transitionsMap entry — the scale-change relayout chokes on them.
+    // Pull them off the canvas before dispatching, put them back once
+    // the new zoom has settled.
+    (timeline as any)?._presenceOverlays?.clear();
+
     dispatch(TIMELINE_SCALE_CHANGED, {
       payload: { scale: newScale }
     });
 
     Promise.resolve().then(() => {
       timeline?.scrollTo({ scrollLeft: newScrollLeft });
+      (timeline as any)?._presenceOverlays?.redraw();
     });
   };
 

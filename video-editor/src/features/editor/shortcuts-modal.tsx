@@ -98,7 +98,7 @@ const SHORTCUTS: ShortcutCategory[] = [
 export function ShortcutsModal({ open, onOpenChange }: ShortcutsModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="md:max-w-6xl w-full max-w-5xl border bg-card px-2 py-8 gap-6 overflow-hidden">
+      <DialogContent className="z-[300] md:max-w-6xl w-full max-w-5xl border bg-card px-2 py-8 gap-6 overflow-hidden">
         <DialogHeader className="px-6 -mt-0.75 flex flex-row gap-4">
           <DialogTitle className="text-md font-semibold">Keyboard shortcuts</DialogTitle>
           <KbdGroup>
