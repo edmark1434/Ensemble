@@ -1,33 +1,28 @@
-# Current Task — Automatic Team Task Deadlines and Notifications
+# Current Task — Add Verification Support Knowledge
 
-Automatically mark Team workspace tasks overdue after their due date and notify involved users about due tasks, new assignments, and status changes made by other people.
+Create a detailed, source-grounded verification guide for the AI support assistant and register it for documentation ingestion.
 
 ## Acceptance Criteria
 
-- [x] A bounded background job checks Team task deadlines every minute.
-- [x] Non-completed tasks with a passed due date automatically move to Overdue.
-- [x] Overdue tasks do not count as completed workspace progress.
-- [x] The Team workspace displays a dedicated Overdue column.
-- [x] Task creators, assignees, and active Team Owners/Admins receive a durable due notification.
-- [x] Due notifications are idempotent across retries and server restarts.
-- [x] Newly assigned users receive a notification naming the person who assigned them.
-- [x] Related users receive a notification when another person changes task status.
-- [x] Notification and workspace updates are emitted through Socket.IO after durable writes.
-- [x] Refresh and reconnect recover authoritative task and notification state from the API/database.
-- [x] Migration, backend syntax, frontend build, and database transition verification pass.
+- [x] The guide distinguishes signup email, personal identity, and Team business verification.
+- [x] Personal and Team requirements, steps, statuses, resubmission, review estimates, and safety guidance are documented.
+- [x] Verified benefits and unverified restrictions match implemented platform behavior without claiming unsupported guarantees.
+- [x] Relevant user navigation routes are included.
+- [x] The source is enabled in the RAG documentation catalog.
+- [x] Documentation ingestion and focused semantic retrieval are verified.
 
 Status: Completed August 31, 2026.
 
 ## Implementation Notes
 
-Added the Overdue task status and an overdue notification checkpoint through an append-only migration. A partial unique notification index prevents duplicate TEAM_TASK_DUE notifications. The existing background scheduler processes at most 100 tasks per run, uses row locking to avoid duplicate state transitions, retries notifications that were not fully persisted, and broadcasts affected workspace updates.
+Added a dedicated verification knowledge source based on the personal verification status flow, Didit status processing, Team business verification validation, marketplace eligibility checks, and current frontend navigation. The guide separates email activation, personal KYC, and Team business review; documents required evidence and file limits; explains statuses, benefits, restrictions, expiration, resubmission, troubleshooting, and privacy; and avoids promising approval, deadlines, credits, subscription upgrades, or escrow effects.
 
-Assignment notifications now identify the assigning person. Manual status-change notifications are sent to task creators, assignees, and active Team managers except the person who performed the change. Notification failures remain best-effort after a committed task mutation so the API does not report a successful task update as failed.
+Registered the guide as an enabled RAG source at `/account-verification-status`.
 
 ## Verification
 
-- Applied migration 1800400000000_143-add-team-task-overdue-state successfully.
-- Backend syntax checks passed for the migration, repository, service, and background scheduler.
-- Frontend TypeScript and Vite production build passed.
-- Rollback-only PostgreSQL test confirmed a passed-due task transitions to overdue; no test data remained.
-- Scoped git diff check passed with only line-ending notices.
+- `sources.json` parsed successfully as JSON.
+- `npm run rag:ingest` completed successfully for 20 sources and ingested 24 guide chunks.
+- The document store contains 131 chunks after ingestion.
+- Focused searches for unverified restrictions, Cooperative documents, and Team Admin eligibility all ranked the new verification guide first.
+- Scoped `git diff --check` passed with only line-ending notices.

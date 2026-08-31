@@ -32,7 +32,7 @@ function feedScoreExpression(type) {
         ],
     };
 
-    if (type === 'trending') return engagement;
+    if (type === 'trending' || type === 'popular') return engagement;
     if (type === 'hot') {
         return {
             $add: [
@@ -81,7 +81,9 @@ async function getPaginatedForumDiscussions({
             { $match: { '_activeGroup.0': { $exists: true } } },
             {
                 $addFields: {
-                    _feedSticky: { $cond: [{ $eq: ['$is_sticky', true] }, 1, 0] },
+                    _feedSticky: type === 'popular'
+                        ? 0
+                        : { $cond: [{ $eq: ['$is_sticky', true] }, 1, 0] },
                     _feedSort: feedScoreExpression(type),
                 },
             },
