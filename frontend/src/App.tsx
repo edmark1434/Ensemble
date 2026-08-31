@@ -243,6 +243,7 @@ function App() {
             <Route index element={<ProposalsSelectJobPage />} />
             <Route path='incoming/:jobPostId' element={<ProposalsIncomingPage />} />
             <Route path='sent' element={<ProposalsSentPage />} />
+            <Route path='team-sent' element={<ProposalsSentPage />} />
           </Route>
 
           {/* Standalone Creation, Edit & View Details Pages */}

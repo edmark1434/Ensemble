@@ -10,13 +10,16 @@ Fix Team-owned job and gig behavior so active Team members cannot apply to or or
 - [x] Backend validation rejects attempts to propose to or order an active Team membership's own listing, including crafted requests.
 - [x] Owner/Admin marketplace-management authority remains separate; ordinary members gain no edit, offer, wallet, or contract authority.
 - [x] The selected Team Job Posts and Gig Posts tabs display posts owned by that Team.
+- [x] Unverified Teams can submit proposals when selected by an active Owner/Admin; personal proposals still require personal verification.
+- [x] My Proposals contains only personal-account proposals and a separate Team Proposals tab contains authorized Team proposals.
+- [x] Proposal client/freelancer profile actions open the Team page for Team identities and the profile page for personal identities.
 - [x] Backend syntax checks and frontend production build pass.
 
 Status: Completed August 31, 2026.
 
 ## Implementation Notes
 
-Added a separate active-Team affiliation lookup for ownership and self-dealing prevention. Existing Owner/Admin actor authorization remains unchanged and continues to govern marketplace mutations. Job and gig list/detail responses now distinguish affiliated ownership from management authority. Repository-level proposal and order creation rejects listings owned by the user's personal account or any Team where the user is an active member.
+Added a separate active-Team affiliation lookup for ownership and self-dealing prevention. Existing Owner/Admin actor authorization remains unchanged and continues to govern marketplace mutations. Job and gig list/detail responses now distinguish affiliated ownership from management authority. Repository-level proposal and order creation rejects listings owned by the user's personal account or any Team where the user is an active member. Team proposal submission allows an unverified Team while retaining active Owner/Admin authorization; personal-account proposals still require verification. Sent-proposal retrieval is scoped server-side to personal or authorized Team actors, and proposal responses include resolved client/freelancer Team IDs for correct navigation.
 
 Added an authenticated Team marketplace-posts endpoint using the existing controller-service-repository architecture. The Team Job Posts and Gig Posts tabs now fetch Team-account listings and render responsive, clickable cards with status, pricing, activity counts, dates, and thumbnails.
 
