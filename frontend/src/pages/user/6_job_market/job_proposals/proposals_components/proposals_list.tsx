@@ -28,6 +28,8 @@ export interface ProposalItemData {
   partyName: string;
   clientAccountId?: string;
   freelancerAccountId?: string;
+  clientTeamId?: string;
+  freelancerTeamId?: string;
   clientName?: string;
   clientAvatar?: string;
   partyAvatar?: string;

@@ -93,7 +93,7 @@ export default function TeamTaskModal({
             <label>
               <span className="mb-1.5 block text-xs font-medium text-gray-700 dark:text-zinc-300">Status</span>
               <select value={status} onChange={(event) => setStatus(event.target.value as TeamWorkspaceTask["status"])} className="w-full cursor-pointer rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none dark:border-white/10 dark:bg-[#11131d] dark:text-white">
-                <option value="todo">To Do</option><option value="in_progress">In Progress</option><option value="in_review">In Review</option><option value="completed">Completed</option>
+                <option value="todo">To Do</option><option value="in_progress">In Progress</option><option value="in_review">In Review</option><option value="overdue">Overdue</option><option value="completed">Completed</option>
               </select>
             </label>
             <label>

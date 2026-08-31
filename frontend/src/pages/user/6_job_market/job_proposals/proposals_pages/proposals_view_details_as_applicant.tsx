@@ -86,6 +86,8 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
             partyName: (isIncoming ? p.freelancer_name || p.freelancer_handle : p.client_name || p.client_handle) || "Unknown",
             clientAccountId: p.client_account_id,
             freelancerAccountId: p.freelancer_account_id,
+            clientTeamId: p.client_team_id || undefined,
+            freelancerTeamId: p.freelancer_team_id || undefined,
             clientName: p.client_name || p.client_handle || "Unknown Client",
             clientAvatar: p.client_avatar_path
               ? `${import.meta.env.VITE_CLOUDFRONT_URL}${p.client_avatar_path.startsWith('/') ? '' : '/'}${p.client_avatar_path}`
@@ -268,9 +270,12 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
     }
   };
 
-  const handleViewProfile = (accountId?: string) => {
-    if (!accountId) return;
-    navigate(`/profile/${encodeURIComponent(accountId)}`);
+  const handleViewProfile = (accountId?: string, teamId?: string) => {
+    if (teamId) {
+      navigate(`/teams/${encodeURIComponent(teamId)}`);
+      return;
+    }
+    if (accountId) navigate(`/profile/${encodeURIComponent(accountId)}`);
   };
 
   const handleViewTargetJob = () => {
@@ -421,7 +426,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                 </div>
 
                 <button
-                  onClick={() => handleViewProfile(proposal.freelancerAccountId)}
+                  onClick={() => handleViewProfile(proposal.freelancerAccountId, proposal.freelancerTeamId)}
                   className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 border border-gray-200 dark:border-white/10 text-xs font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white transition shrink-0"
                 >
                   <User className="h-3.5 w-3.5 text-emerald-400" />
@@ -505,7 +510,7 @@ export const ProposalsViewDetailsAsApplicant: React.FC = () => {
                   </div>
 
                   <button
-                    onClick={() => handleViewProfile(proposal.clientAccountId)}
+                    onClick={() => handleViewProfile(proposal.clientAccountId, proposal.clientTeamId)}
                     className="px-2.5 py-1 text-[10px] font-semibold text-gray-600 dark:text-zinc-300 hover:text-gray-900 dark:text-white bg-white dark:bg-white/5 shadow-sm dark:shadow-none hover:bg-gray-100 dark:bg-white/10 rounded-lg border border-gray-200 dark:border-white/10 transition shrink-0 flex items-center gap-1"
                   >
                     <User className="h-3 w-3 text-blue-400" />

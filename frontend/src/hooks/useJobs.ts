@@ -72,10 +72,10 @@ export const useJobs = () => {
         }
     };
 
-    const fetchSentProposals = async () => {
+    const fetchSentProposals = async (scope: 'personal' | 'teams' | 'all' = 'personal') => {
         setLoading(true);
         try {
-            const res = await api.get('/api/jobs/proposals/sent');
+            const res = await api.get('/api/jobs/proposals/sent', { params: { scope } });
             return res.data.data;
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to fetch sent proposals');

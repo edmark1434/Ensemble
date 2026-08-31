@@ -80,6 +80,9 @@ const InboxMain = () => {
       (conversation) =>
         String(conversation._id) === String(activeConversationId)
     ) || null;
+  const currentActorId = String(
+    selectedConversation?.viewer_account_id || currentUserId
+  );
   const messages = useChatState((state) =>
     activeConversationId
       ? state.messagesByConversation[activeConversationId] || EMPTY_MESSAGES
@@ -485,12 +488,12 @@ const InboxMain = () => {
         .reverse()
         .find(
           (message) =>
-            String(message.sender_id) === currentUserId &&
+            String(message.sender_id) === currentActorId &&
             (message.read_by || []).some(
-              (reader) => String(reader.account_id) !== currentUserId
+              (reader) => String(reader.account_id) !== currentActorId
             )
         )?._id,
-    [currentUserId, visibleMessages]
+    [currentActorId, visibleMessages]
   );
   const hasOlderMessages = visibleMessageCount < messages.length;
 
@@ -591,7 +594,7 @@ const InboxMain = () => {
     const remove = Boolean(
       message?.message_react?.some(
         (reaction) =>
-          String(reaction.account_id) === currentUserId &&
+          String(reaction.account_id) === currentActorId &&
           reaction.react_type === emoji
       )
     );
@@ -650,7 +653,7 @@ const InboxMain = () => {
   };
 
   const renderMessage = (message: ExtendedMessage, index: number) => {
-    const isSender = String(message.sender_id) === currentUserId;
+    const isSender = String(message.sender_id) === currentActorId;
     const isMenuOpen = activeMenuId === message._id;
     const isPickerOpen = activeEmojiPickerId === message._id;
     const pinned = isPinned(message._id);
@@ -672,7 +675,7 @@ const InboxMain = () => {
     );
 
     const isSeen = (message.read_by || []).some(
-      (reader) => String(reader.account_id) !== currentUserId
+      (reader) => String(reader.account_id) !== currentActorId
     );
     const messageStatus: "sent" | "seen" = isSeen ? "seen" : "sent";
     const recipientAvatar = selectedConversation
@@ -688,7 +691,7 @@ const InboxMain = () => {
           new Set(
             (message.read_by || [])
               .map((reader) => String(reader.account_id))
-              .filter((accountId) => accountId !== currentUserId)
+              .filter((accountId) => accountId !== currentActorId)
           )
         ).map((accountId) => {
           const profile = profiles[accountId];
@@ -800,7 +803,7 @@ const InboxMain = () => {
                   <InboxReplyQuote
                     replyToMessageId={message.message_id_reply}
                     messages={messages}
-                    currentUserId={currentUserId}
+                    currentUserId={currentActorId}
                     onJumpToReply={handleJumpToMessage}
                   />
                 )}
@@ -903,7 +906,7 @@ const InboxMain = () => {
                 {!hasRestrictedMessageTools && (
                   <InboxReactionBadges
                     reactions={message.message_react}
-                    currentUserId={currentUserId}
+                    currentUserId={currentActorId}
                     isSender={isSender}
                     onToggleReaction={(emoji) => handleToggleReaction(message._id, emoji)}
                   />
@@ -1191,9 +1194,9 @@ const InboxMain = () => {
             onJumpToPinned={handleJumpToMessage}
             textareaRef={textareaRef}
             onUpdateGroupName={handleUpdateGroupName}
-            currentUserId={currentUserId}
+            currentUserId={currentActorId}
             getMemberName={(accountId: string) =>
-              accountId === currentUserId
+              accountId === currentActorId
                 ? "You"
                 : profiles[accountId]?.name || `User ${accountId.slice(0, 8)}`
             }

@@ -13,6 +13,7 @@ const COLUMNS: Array<{ id: TeamWorkspaceTask["status"]; label: string; color: st
   { id: "todo", label: "To Do", color: "bg-zinc-400" },
   { id: "in_progress", label: "In Progress", color: "bg-blue-500" },
   { id: "in_review", label: "In Review", color: "bg-amber-500" },
+  { id: "overdue", label: "Overdue", color: "bg-red-500" },
   { id: "completed", label: "Completed", color: "bg-emerald-500" },
 ];
 
@@ -171,7 +172,7 @@ export default function TeamTaskWorkspace() {
         </section>
 
         <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-          <section className="grid min-w-0 gap-4 md:grid-cols-2 2xl:grid-cols-4">
+          <section className="grid min-w-0 gap-4 md:grid-cols-2 2xl:grid-cols-5">
             {COLUMNS.map((column) => {
               const tasks = filteredTasks.filter((task) => task.status === column.id);
               return (
@@ -187,7 +188,7 @@ export default function TeamTaskWorkspace() {
                           <h3 className="mt-2 text-sm font-semibold">{task.title}</h3>{task.description && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-zinc-500">{task.description}</p>}
                           {task.due_at && <p className={`mt-3 flex items-center gap-1.5 text-[10px] ${new Date(task.due_at) < new Date() && task.status !== "completed" ? "text-red-400" : "text-zinc-500"}`}><CalendarDays className="h-3 w-3" />Due {new Date(task.due_at).toLocaleString()}</p>}
                           <div className="mt-3 flex -space-x-1.5">{task.assignees.slice(0, 4).map((member) => <div key={member.account_id} title={member.display_name} className="grid h-7 w-7 place-items-center rounded-full border-2 border-white bg-blue-500/20 text-[9px] font-semibold text-blue-300 dark:border-[#12141d]">{member.display_name.slice(0, 2).toUpperCase()}</div>)}{task.assignees.length > 4 && <div className="grid h-7 w-7 place-items-center rounded-full border-2 border-white bg-zinc-700 text-[9px] dark:border-[#12141d]">+{task.assignees.length - 4}</div>}</div>
-                          {canChangeStatus && <select disabled={saving} value={task.status} onChange={(event) => void updateStatus(task, event.target.value as TeamWorkspaceTask["status"])} className="mt-3 w-full cursor-pointer rounded-lg border border-gray-200 bg-transparent px-2 py-1.5 text-xs outline-none disabled:opacity-50 dark:border-white/10 dark:bg-[#12141d]"><option value="todo">To Do</option><option value="in_progress">In Progress</option><option value="in_review">In Review</option><option value="completed">Completed</option></select>}
+                          {canChangeStatus && <select disabled={saving} value={task.status} onChange={(event) => void updateStatus(task, event.target.value as TeamWorkspaceTask["status"])} className="mt-3 w-full cursor-pointer rounded-lg border border-gray-200 bg-transparent px-2 py-1.5 text-xs outline-none disabled:opacity-50 dark:border-white/10 dark:bg-[#12141d]"><option value="todo">To Do</option><option value="in_progress">In Progress</option><option value="in_review">In Review</option><option value="overdue">Overdue</option><option value="completed">Completed</option></select>}
                         </article>
                       );
                     })}
