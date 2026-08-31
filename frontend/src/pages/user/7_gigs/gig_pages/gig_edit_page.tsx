@@ -70,7 +70,7 @@ const GigEditPage: React.FC = () => {
         const res = await api.get(`/api/gigs/${id}`);
         const data = res.data.data;
         if (data) {
-          setIsOwnGig(Boolean(data.isOwnGig));
+          setIsOwnGig(Boolean(data.canManageGig));
 
           const cloudFrontUrl = import.meta.env.VITE_CLOUDFRONT_URL || "";
           const mapUrl = (path: string) => {

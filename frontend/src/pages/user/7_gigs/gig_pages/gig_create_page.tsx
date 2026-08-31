@@ -29,6 +29,7 @@ const GigCreatePage: React.FC = () => {
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
+  const [actingTeamId, setActingTeamId] = useState("");
 
   // --- SLIDE 1: CORE INFO ---
   const [title, setTitle] = useState("");
@@ -201,6 +202,7 @@ const GigCreatePage: React.FC = () => {
         skills,
         thumbnailFileId,
         galleryFileIds,
+        acting_team_id: actingTeamId || null,
       };
 
       await api.post("/api/gigs", gigPayload);
@@ -400,6 +402,8 @@ const GigCreatePage: React.FC = () => {
                       milestones={milestones}
                       additionalWorkRate={additionalWorkRate}
                       questionnaires={questionnaires}
+                      actingTeamId={actingTeamId}
+                      setActingTeamId={setActingTeamId}
                       onBack={() => handleNext(5)}
                       onSubmit={handleSubmit}
                       onEdit={(step) => setCurrentSlide(step)}

@@ -17,6 +17,7 @@ import Projects from '@/pages/user/2_projects/Projects.tsx'
 import Projects_Selection from '@/pages/user/2_projects/Projects_Selection.tsx'
 import Teams from '@/pages/user/3_teams/Teams.tsx'
 import SelectedTeam from '@/pages/user/3_teams/SelectedTeam.tsx'
+import TeamTaskWorkspace from '@/pages/user/3_teams/team_tasks/TeamTaskWorkspace.tsx'
 import Forums from './pages/user/4_forums/Forums.tsx'
 import SelectedGroup from '@/pages/user/4_forums/SelectedGroup.tsx'
 import ExpandDiscussion from '@/pages/user/4_forums/ExpandDiscussion.tsx'
@@ -217,6 +218,7 @@ function App() {
           <Route path='/teams'>
             <Route index element={<Teams />} />
             <Route path=':id/business-verification' element={<BusinessVerification />} />
+            <Route path=':id/tasks/:contractId' element={<TeamTaskWorkspace />} />
             <Route path=':id' element={<SelectedTeam />} />
           </Route>
 

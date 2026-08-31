@@ -131,7 +131,9 @@ const JobMain: React.FC = () => {
              : "/placeholder.svg",
           skills: j.tags || [],
           isSaved: j.is_saved || false,
-          isOwnPost: userInfo?.account_id === j.client_account_id,
+          isOwnPost: Boolean(j.is_own_post),
+          isManageablePost: Boolean(j.is_manageable_post),
+          isPersonalPost: Boolean(j.is_personal_post),
           hasProposed: j.has_proposed || false,
           myProposalId: j.my_proposal_id || null
         }));

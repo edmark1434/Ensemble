@@ -188,7 +188,7 @@ export const GigList: React.FC<GigListProps> = ({
                             <Flag className="h-3.5 w-3.5" />
                           </button>
                         )}
-                        {gig.isOwnGig && (
+                        {gig.canManageGig && (
                           <button
                             type="button"
                             title="Edit Service"
@@ -346,7 +346,7 @@ export const GigList: React.FC<GigListProps> = ({
                         <Flag className="h-3.5 w-3.5" />
                       </button>
                     )}
-                    {gig.isOwnGig && (
+                    {gig.canManageGig && (
                       <button
                         type="button"
                         title="Edit Service"

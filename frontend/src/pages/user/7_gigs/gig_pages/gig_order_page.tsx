@@ -12,6 +12,7 @@ import { DotLottieReact } from "@lottiefiles/dotlottie-react";
 import SuccessModal from "@/components/ui/SuccessModal";
 import { uploadFileWithIntent } from "@/lib/uploadFile";
 import { UploadCloud } from "lucide-react";
+import MarketplaceIdentitySelector from "@/components/marketplace/MarketplaceIdentitySelector";
 
 const ORDER_WIZARD_STEPS = [
   { id: 1, label: "Order Details" },
@@ -94,6 +95,7 @@ const GigOrderPage: React.FC = () => {
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState<{[key: number]: boolean}>({});
   const [isDiscardOpen, setIsDiscardOpen] = useState(false);
+  const [actingTeamId, setActingTeamId] = useState("");
 
   const [projectBrief, setProjectBrief] = useState("");
   const [questionAnswers, setQuestionAnswers] = useState<Record<string, any>>({});
@@ -187,6 +189,7 @@ const GigOrderPage: React.FC = () => {
       const payload = {
         tierId: activeTier?.tierId,
         projectBrief,
+        acting_team_id: actingTeamId || null,
         responses: Object.entries(questionAnswers).map(([idx, response]) => ({
           requirementId: gig.questionnaires[parseInt(idx)]?.id || idx,
           response: Array.isArray(response) ? response.join(', ') : response
@@ -312,7 +315,17 @@ const GigOrderPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="flex gap-3 pt-6 mt-6 border-t border-gray-100 dark:border-white/5">
+                      {!editOrderId && (
+                      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-white/10 dark:bg-white/[0.02]">
+                        <MarketplaceIdentitySelector
+                          teamId={actingTeamId}
+                          onChange={setActingTeamId}
+                          label="Place this order as"
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex gap-3 pt-6 mt-6 border-t border-gray-100 dark:border-white/5">
                         <button onClick={handleReturnTrigger} className="px-6 py-3 rounded-xl bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-zinc-300 font-bold text-sm hover:bg-gray-200 dark:hover:bg-white/10 transition-colors">
                           Discard
                         </button>
