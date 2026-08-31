@@ -19,6 +19,7 @@ const {
 const {
     resolveMarketplaceActor,
     getAuthorizedActorAccountIds,
+    getAffiliatedAccountIds,
     MarketplaceActorError
 } = require('../services/MarketplaceActorServices');
 
@@ -32,7 +33,11 @@ function sendControllerError(res, error, fallbackMessage) {
 async function createGigController(req, res) {
     try {
         const personalAccountId = req.user?.account_id;
-        const actor = await resolveMarketplaceActor(personalAccountId, req.body.acting_team_id);
+        const actor = await resolveMarketplaceActor(
+            personalAccountId,
+            req.body.acting_team_id,
+            { allowUnverifiedTeam: true }
+        );
         const freelancer_account_id = actor.accountId;
         if (!freelancer_account_id) {
             return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -66,7 +71,8 @@ async function getAllGigsController(req, res) {
     try {
         const personalAccountId = req.user?.account_id;
         const actorIds = personalAccountId ? await getAuthorizedActorAccountIds(personalAccountId) : [];
-        const gigs = await getAllGigsRepository(req.query, personalAccountId, actorIds);
+        const affiliatedAccountIds = personalAccountId ? await getAffiliatedAccountIds(personalAccountId) : [];
+        const gigs = await getAllGigsRepository(req.query, personalAccountId, actorIds, affiliatedAccountIds);
         res.status(200).json({ success: true, data: gigs });
     } catch (error) {
         console.error("Error in getAllGigsController:", error);
@@ -110,11 +116,12 @@ async function editGigOrderController(req, res) {
 async function submitGigOrderController(req, res) {
     try {
         const actor = await resolveMarketplaceActor(req.user.account_id, req.body.acting_team_id);
-        const requestId = await submitGigOrderRepository(actor.accountId, req.params.id, req.body);
+        const affiliatedAccountIds = await getAffiliatedAccountIds(req.user.account_id);
+        const requestId = await submitGigOrderRepository(actor.accountId, req.params.id, req.body, affiliatedAccountIds);
         res.status(201).json({ success: true, requestId });
     } catch (error) {
         console.error("Error in submitGigOrderController:", error);
-        res.status(500).json({ success: false, message: 'Internal Server Error' });
+        sendControllerError(res, error, 'Internal Server Error');
     }
 }
 
@@ -156,7 +163,8 @@ async function getGigByIdController(req, res) {
     try {
         const personalAccountId = req.user?.account_id;
         const actorIds = personalAccountId ? await getAuthorizedActorAccountIds(personalAccountId) : [];
-        const gig = await getGigByIdRepository(req.params.id, personalAccountId, actorIds);
+        const affiliatedAccountIds = personalAccountId ? await getAffiliatedAccountIds(personalAccountId) : [];
+        const gig = await getGigByIdRepository(req.params.id, personalAccountId, actorIds, affiliatedAccountIds);
         if (!gig) {
             return res.status(404).json({ success: false, message: 'Gig not found' });
         }

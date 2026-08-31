@@ -8,8 +8,8 @@ async function createJobServices(jobData) {
     return await JobRepositories.createJobRepositories(jobData);
 }
 
-async function getAllJobsServices(filters, accountId = null, actorIds = []) {
-    return await JobRepositories.getAllJobsRepositories(filters, accountId, actorIds);
+async function getAllJobsServices(filters, accountId = null, actorIds = [], affiliatedAccountIds = actorIds) {
+    return await JobRepositories.getAllJobsRepositories(filters, accountId, actorIds, affiliatedAccountIds);
 }
 
 async function updateJobServices(jobId, accountIds, jobData) {

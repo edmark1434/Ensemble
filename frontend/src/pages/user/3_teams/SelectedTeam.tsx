@@ -10,6 +10,7 @@ import {
   Flag,
   Image,
   Info,
+  LayoutDashboard,
   LogOut,
   MessageCircle,
   MoreVertical,
@@ -33,10 +34,12 @@ import LeaveTeamModal from "./team_modals/LeaveTeamModal";
 import RemoveMemberModal from "./team_modals/RemoveMemberModal";
 import ReportTeamModal from "./team_modals/ReportTeamModal";
 import BusinessVerificationEligibilityModal from "./team_modals/BusinessVerificationEligibilityModal";
+import TeamTaskDashboard from "./team_tasks/TeamTaskDashboard";
 
 type PermissionSet = Record<string, boolean>;
 type Membership = { role: string; status: string; permissions: PermissionSet };
 type Team = {
+  team_id: string;
   account_id: string;
   display_name: string;
   handle: string;
@@ -72,6 +75,18 @@ type Review = {
 };
 type Wallet = Record<string, number>;
 type TeamTransaction = { credit_transaction_id: string; type: string; amount_credits: number; status: string; created_at: string; recipient_name: string; recipient_handle: string };
+type TeamMarketplacePost = {
+  id: string;
+  title: string;
+  description?: string;
+  category?: string;
+  status: string;
+  created_at: string;
+  rate_credits_min?: number;
+  rate_credits_max?: number | null;
+  activity_count?: number;
+  thumbnail_path?: string;
+};
 type Tab =
   | "about"
   | "jobs"
@@ -79,6 +94,7 @@ type Tab =
   | "assets"
   | "reviews"
   | "members"
+  | "tasks"
   | "requests"
   | "wallet"
   | "transactions";
@@ -430,7 +446,7 @@ export default function SelectedTeam() {
               className="flex items-center gap-2 rounded-full border border-gray-200 dark:border-white/15 bg-black/60 px-4 py-2 text-sm font-medium text-gray-900 dark:text-white transition hover:border-emerald-400/40 hover:bg-emerald-500/15 hover:text-emerald-200"
             >
               <ShieldCheck className="h-4 w-4" />
-              Verify Business
+              Verify as Business
             </button>
           )}
           {isTeamOwner &&
@@ -617,6 +633,7 @@ export default function SelectedTeam() {
 
         <TeamTabs
           active={activeTab}
+          showTasks={activeMember}
           showWallet={Boolean(permissions.can_view_wallet)}
           showRequests={Boolean(permissions.can_manage_requests)}
           requestCount={pendingRequests.length}
@@ -743,12 +760,14 @@ export default function SelectedTeam() {
 
 function TeamTabs({
   active,
+  showTasks,
   showWallet,
   showRequests,
   requestCount,
   onSelect,
 }: {
   active: Tab;
+  showTasks: boolean;
   showWallet: boolean;
   showRequests: boolean;
   requestCount: number;
@@ -762,6 +781,7 @@ function TeamTabs({
     { id: "reviews", label: "Reviews", icon: Star },
     { id: "members", label: "Members", icon: Users },
   ];
+  if (showTasks) tabs.splice(1, 0, { id: "tasks", label: "Task Dashboard", icon: LayoutDashboard });
   if (showRequests) tabs.push({ id: "requests", label: "Pending Requests", icon: UserPlus });
   if (showWallet) { tabs.push({ id: "wallet", label: "Wallet", icon: Briefcase }); tabs.push({ id: "transactions", label: "Transactions", icon: ArrowRightLeft }); }
   return (
@@ -785,6 +805,53 @@ function TeamTabs({
   );
 }
 
+function TeamMarketplacePosts({ teamId, type }: { teamId: string; type: "jobs" | "gigs" }) {
+  const navigate = useNavigate();
+  const [posts, setPosts] = useState<TeamMarketplacePost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setError("");
+    api.get(`/api/teams/${teamId}/marketplace-posts`, { params: { type }, signal: controller.signal })
+      .then((response) => setPosts(response.data.data || []))
+      .catch((requestError: unknown) => {
+        if (!controller.signal.aborted) setError(axiosMessage(requestError, `Unable to load Team ${type}`));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [teamId, type]);
+
+  if (loading) return <div className="grid gap-3 sm:grid-cols-2"><div className="h-40 animate-pulse rounded-xl bg-white/5" /><div className="h-40 animate-pulse rounded-xl bg-white/5" /></div>;
+  if (error) return <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-6 text-sm text-red-400">{error}</div>;
+  if (!posts.length) return <div className="rounded-xl border border-gray-200 bg-white p-12 text-center text-gray-500 dark:border-white/10 dark:bg-white/5 dark:text-zinc-400">This Team has no {type === "jobs" ? "job" : "gig"} posts yet.</div>;
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {posts.map((post) => {
+        const minimum = Number(post.rate_credits_min || 0);
+        const maximum = post.rate_credits_max == null ? null : Number(post.rate_credits_max);
+        return (
+          <button key={post.id} type="button" onClick={() => navigate(type === "jobs" ? `/jobs/postings/${post.id}` : `/gigs/services/${post.id}`)} className="overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-500/40 hover:shadow-md dark:border-white/10 dark:bg-white/5 dark:shadow-none">
+            <div className="h-28 bg-gray-100 dark:bg-white/5">
+              {post.thumbnail_path ? <img src={imageUrl(post.thumbnail_path)} alt="" className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center"><Briefcase className="h-8 w-8 text-gray-400 dark:text-zinc-600" /></div>}
+            </div>
+            <div className="space-y-2 p-4">
+              <div className="flex items-start justify-between gap-3"><h3 className="line-clamp-2 font-semibold text-gray-900 dark:text-white">{post.title}</h3><span className="shrink-0 rounded-full bg-blue-500/10 px-2 py-1 text-[10px] font-medium text-blue-400">{post.status}</span></div>
+              <p className="line-clamp-2 text-xs text-gray-500 dark:text-zinc-400">{post.description || "No description provided."}</p>
+              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-zinc-500"><span>{post.category || "Uncategorized"}</span><span>{maximum && maximum !== minimum ? `${minimum.toLocaleString()}–${maximum.toLocaleString()}` : minimum.toLocaleString()} credits</span></div>
+              <p className="text-[11px] text-gray-400 dark:text-zinc-500">{Number(post.activity_count || 0)} {type === "jobs" ? "proposals" : "orders"} · {new Date(post.created_at).toLocaleDateString()}</p>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 function TeamTabContent({
   active,
   team,
@@ -840,10 +907,13 @@ function TeamTabContent({
         </p>
       </div>
     );
-  if (["jobs", "gigs", "assets"].includes(active))
+  if (active === "tasks") return <TeamTaskDashboard teamId={team.team_id} />;
+  if (active === "jobs" || active === "gigs")
+    return <TeamMarketplacePosts teamId={team.team_id} type={active} />;
+  if (active === "assets")
     return (
       <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 shadow-sm dark:shadow-none p-12 text-center text-gray-500 dark:text-zinc-400">
-        No {active} posts available from the Teams API.
+        No asset posts available from the Teams API.
       </div>
     );
   if (active === "reviews")

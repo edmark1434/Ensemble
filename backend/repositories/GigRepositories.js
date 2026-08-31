@@ -166,7 +166,7 @@ async function createGigRepository(gigData) {
     }
 }
 
-async function getAllGigsRepository(filters, accountId = null, actorIds = []) {
+async function getAllGigsRepository(filters, accountId = null, actorIds = [], affiliatedAccountIds = actorIds) {
     let query = `
         SELECT 
             g.gig_id as id,
@@ -249,7 +249,9 @@ async function getAllGigsRepository(filters, accountId = null, actorIds = []) {
             clientRating: 5.0,
             ratingCount: 0,
             isSaved: row.isSaved,
-            isOwnGig: actorIds.includes(row.freelancer_account_id),
+            isOwnGig: affiliatedAccountIds.includes(String(row.freelancer_account_id)),
+            canManageGig: actorIds.includes(String(row.freelancer_account_id)),
+            isPersonalGig: String(accountId) === String(row.freelancer_account_id),
             clientRating: parseFloat(row.clientRating || 0),
             ratingCount: parseInt(row.ratingCount || 0, 10),
             savesCount: parseInt(row.savesCount || 0, 10),
@@ -359,27 +361,28 @@ async function getSavedGigsRepository(accountId) {
     });
 }
 
-async function submitGigOrderRepository(accountId, gigId, orderData) {
+async function submitGigOrderRepository(accountId, gigId, orderData, prohibitedSellerAccountIds = []) {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
         const check = await client.query(
-            `SELECT g.freelancer_account_id
+            `SELECT g.freelancer_account_id,
+                    g.freelancer_account_id = ANY($3::uuid[]) AS is_affiliated_listing
              FROM gigs g
              JOIN gig_tiers gt ON gt.gig_id = g.gig_id
              WHERE g.gig_id = $1 AND gt.gig_tier_id = $2
                AND LOWER(g.status) = 'active'
              FOR UPDATE OF g`,
-            [gigId, orderData.tierId]
+            [gigId, orderData.tierId, prohibitedSellerAccountIds]
         );
         if (check.rows.length === 0) {
             const error = new Error('Gig or selected tier is unavailable.');
             error.statusCode = 404;
             throw error;
         }
-        if (check.rows[0].freelancer_account_id === accountId) {
-            const error = new Error('You cannot order your own gig.');
+        if (check.rows[0].is_affiliated_listing) {
+            const error = new Error('You cannot order a gig posted by your account or an active Team.');
             error.statusCode = 409;
             throw error;
         }
@@ -490,7 +493,7 @@ async function getOrderByIdRepository(orderId, accountIds) {
     return res.rows[0] || null;
 }
 
-async function getGigByIdRepository(gigId, accountId = null, actorIds = []) {
+async function getGigByIdRepository(gigId, accountId = null, actorIds = [], affiliatedAccountIds = actorIds) {
     const query = `
         SELECT 
             g.gig_id as id, g.title, g.description, g.category as category,
@@ -561,7 +564,9 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = []) {
                   JOIN gig_tiers gt ON gr.gig_tier_id = gt.gig_tier_id
                   WHERE gt.gig_id = g.gig_id AND r.account_id = gr.client_account_id
               ) as reviews,
-            g.freelancer_account_id = ANY($3::uuid[]) as "isOwnGig",
+            g.freelancer_account_id = ANY($4::uuid[]) as "isOwnGig",
+            g.freelancer_account_id = ANY($3::uuid[]) as "canManageGig",
+            g.freelancer_account_id = $2::uuid as "isPersonalGig",
             (
                 SELECT EXISTS(
                     SELECT 1 FROM gig_requests gr
@@ -577,7 +582,7 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = []) {
         JOIN accounts a ON g.freelancer_account_id = a.account_id
         WHERE g.gig_id = $1 AND LOWER(g.status) != 'archived' AND LOWER(g.status) != 'deleted'
     `;
-    const res = await pool.query(query, [gigId, accountId, actorIds]);
+    const res = await pool.query(query, [gigId, accountId, actorIds, affiliatedAccountIds]);
     if (res.rows.length === 0) return null;
 
     const row = res.rows[0];
@@ -612,6 +617,8 @@ async function getGigByIdRepository(gigId, accountId = null, actorIds = []) {
         clientRating: parseFloat(row.clientRating || 0),
         ratingCount: parseInt(row.ratingCount || 0, 10),
         isOwnGig: row.isOwnGig,
+        canManageGig: row.canManageGig,
+        isPersonalGig: row.isPersonalGig,
         savesCount: parseInt(row.savesCount || 0, 10),
         ordersCount: parseInt(row.ordersCount || 0, 10),
         freelancerAccountId: row.freelancer_account_id

@@ -172,6 +172,7 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
           teamId={actingTeamId}
           onChange={setActingTeamId}
           label="Publish this service as"
+          requireTeamVerification={false}
         />
       </div>
 

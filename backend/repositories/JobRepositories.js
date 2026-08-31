@@ -70,7 +70,7 @@ async function createJobRepositories(jobData) {
     }
 }
 
-async function getAllJobsRepositories(filters = {}, accountId = null, actorIds = []) {
+async function getAllJobsRepositories(filters = {}, accountId = null, actorIds = [], affiliatedAccountIds = actorIds) {
     try {
         let query = `
             SELECT 
@@ -84,6 +84,9 @@ async function getAllJobsRepositories(filters = {}, accountId = null, actorIds =
                 CASE WHEN $1::uuid IS NOT NULL THEN (SELECT EXISTS(SELECT 1 FROM job_saves js WHERE js.job_id = j.job_id AND js.account_id = $1)) ELSE FALSE END as is_saved,
                 CASE WHEN cardinality($2::uuid[]) > 0 THEN (SELECT EXISTS(SELECT 1 FROM proposals p WHERE p.job_id = j.job_id AND p.freelancer_account_id = ANY($2::uuid[]) AND p.deleted_at IS NULL)) ELSE FALSE END as has_proposed,
                 CASE WHEN cardinality($2::uuid[]) > 0 THEN (SELECT p.proposal_id FROM proposals p WHERE p.job_id = j.job_id AND p.freelancer_account_id = ANY($2::uuid[]) AND p.deleted_at IS NULL ORDER BY p.created_at DESC LIMIT 1) ELSE NULL END as my_proposal_id,
+                j.client_account_id = ANY($3::uuid[]) AS is_own_post,
+                j.client_account_id = ANY($2::uuid[]) AS is_manageable_post,
+                j.client_account_id = $1::uuid AS is_personal_post,
                 (SELECT f.path FROM job_attachments ja JOIN files f ON ja.file_id = f.file_id WHERE ja.job_id = j.job_id AND ja.index = 0 LIMIT 1) as thumbnail_path,
                 (SELECT ARRAY_AGG(t.name) FROM job_tags jt JOIN tags t ON jt.tag_id = t.tag_id WHERE jt.job_id = j.job_id) as tags
             FROM jobs j
@@ -91,7 +94,7 @@ async function getAllJobsRepositories(filters = {}, accountId = null, actorIds =
             WHERE j.deleted_at IS NULL
         `;
         
-        const values = [accountId, actorIds];
+        const values = [accountId, actorIds, affiliatedAccountIds];
         // Apply filters if needed (e.g. status)
         if (filters.status) {
             values.push(filters.status);
@@ -224,19 +227,20 @@ async function createProposalRepositories(proposalData) {
         await client.query('BEGIN');
 
         const jobResult = await client.query(
-            `SELECT client_account_id
+            `SELECT client_account_id,
+                    client_account_id = ANY($2::uuid[]) AS is_affiliated_listing
              FROM jobs
              WHERE job_id = $1 AND deleted_at IS NULL AND status = 'Open'
              FOR UPDATE`,
-            [proposalData.job_id]
+            [proposalData.job_id, proposalData.prohibited_client_account_ids || []]
         );
         if (!jobResult.rows[0]) {
             const error = new Error('Job not found or is not accepting proposals');
             error.statusCode = 404;
             throw error;
         }
-        if (String(jobResult.rows[0].client_account_id) === String(proposalData.freelancer_account_id)) {
-            const error = new Error('An account cannot submit a proposal to its own job');
+        if (jobResult.rows[0].is_affiliated_listing) {
+            const error = new Error('You cannot submit a proposal to a job posted by your account or an active Team.');
             error.statusCode = 409;
             throw error;
         }

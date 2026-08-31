@@ -6,6 +6,7 @@ const { createNotificationServices } = require('../services/NotificationServices
 const {
     resolveMarketplaceActor,
     getAuthorizedActorAccountIds,
+    getAffiliatedAccountIds,
     MarketplaceActorError,
 } = require('../services/MarketplaceActorServices');
 
@@ -23,7 +24,11 @@ async function createJobController(req, res) {
         const accountId = req.user?.account_id;
         if (!accountId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
-        const actor = await resolveMarketplaceActor(accountId, req.body?.acting_team_id || req.body?.team_id);
+        const actor = await resolveMarketplaceActor(
+            accountId,
+            req.body?.acting_team_id || req.body?.team_id,
+            { allowUnverifiedTeam: true }
+        );
         const jobData = {
             ...req.body,
             client_account_id: actor.accountId,
@@ -45,7 +50,8 @@ async function getAllJobsController(req, res) {
         const filters = req.query;
         const accountId = req.user?.account_id || req.user?.accountId || null;
         const actorIds = accountId ? await getAuthorizedActorAccountIds(accountId) : [];
-        const jobs = await JobServices.getAllJobsServices(filters, accountId, actorIds);
+        const affiliatedAccountIds = accountId ? await getAffiliatedAccountIds(accountId) : [];
+        const jobs = await JobServices.getAllJobsServices(filters, accountId, actorIds, affiliatedAccountIds);
         res.status(200).json({ success: true, data: jobs });
     } catch (err) {
         console.error('Error in getAllJobsController:', err);
@@ -90,7 +96,13 @@ async function createProposalController(req, res) {
         if (!accountId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
         const actor = await resolveMarketplaceActor(accountId, req.body?.acting_team_id);
-        const proposalData = { ...req.body, freelancer_account_id: actor.accountId, job_id: jobId };
+        const affiliatedAccountIds = await getAffiliatedAccountIds(accountId);
+        const proposalData = {
+            ...req.body,
+            freelancer_account_id: actor.accountId,
+            prohibited_client_account_ids: affiliatedAccountIds,
+            job_id: jobId,
+        };
         delete proposalData.acting_team_id;
         const proposalId = await JobServices.createProposalServices(proposalData);
         

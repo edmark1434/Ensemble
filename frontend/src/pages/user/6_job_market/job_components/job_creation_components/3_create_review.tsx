@@ -278,9 +278,10 @@ export const CreateReview: React.FC<CreateReviewProps> = ({
           {postingAs === "team" && (
             <div className="pt-2">
               <MarketplaceIdentitySelector
-                label="Select verified team"
+                label="Select team"
                 teamId={selectedTeam}
                 teamsOnly
+                requireTeamVerification={false}
                 onChange={(teamId) => {
                   setSelectedTeam(teamId);
                   if (teamId) clearError("selectedTeam");

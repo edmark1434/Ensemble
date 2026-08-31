@@ -1,31 +1,25 @@
-# Current Task — Team Marketplace Acting Accounts
+# Current Task — Team Marketplace Ownership and Listings
 
-Allow an authenticated user to post jobs and gigs, submit job proposals and gig orders, and manage resulting offers/contracts using either their personal account or a team account they are authorized to manage.
+Fix Team-owned job and gig behavior so active Team members cannot apply to or order their own Team's marketplace posts, while Team-owned posts appear on the selected Team page.
 
 ## Acceptance Criteria
 
-- [x] The browser submits a team ID only; it never chooses or controls the persisted team account ID.
-- [x] The backend resolves the team account and requires an active Owner/Admin membership.
-- [x] Personal and selected team marketplace actors must be verified for create/submit actions.
-- [x] Job and gig listings persist the acting account as their owner while personal behavior remains the default.
-- [x] Job proposals and gig orders persist the acting account as the applicant/client.
-- [x] Users can read and manage listings, proposals, orders, and contracts belonging to any authorized acting account.
-- [x] Self-proposals/self-orders and duplicate active submissions are rejected on the backend.
-- [x] Job offers use the actual client/team account wallet and escrow wallet.
-- [x] Job-offer acceptance transfers from the actual client/team escrow wallet to the actual freelancer/team escrow wallet.
-- [x] Gig-order acceptance transfers from the actual client/team account wallet to the actual freelancer/team escrow wallet.
-- [x] Wallet changes and escrow ledger writes remain inside the existing database transactions.
-- [x] Team-account notifications are visible to authorized Owners/Admins and delivered through team account Socket.IO rooms.
-- [x] Job post, proposal, gig post, and gig order forms expose a shared marketplace identity selector.
-- [x] No schema migration is required because existing marketplace owner columns already reference accounts and team accounts already own account/escrow wallets.
-- [x] Backend syntax checks and the frontend production build pass.
+- [x] A job posted by a Team is recognized as owned for every active member of that Team.
+- [x] A gig posted by a Team is recognized as owned for every active member of that Team.
+- [x] Team members do not see proposal/order actions on their Team's own listings.
+- [x] Backend validation rejects attempts to propose to or order an active Team membership's own listing, including crafted requests.
+- [x] Owner/Admin marketplace-management authority remains separate; ordinary members gain no edit, offer, wallet, or contract authority.
+- [x] The selected Team Job Posts and Gig Posts tabs display posts owned by that Team.
+- [x] Backend syntax checks and frontend production build pass.
 
-Status: Completed August 30, 2026.
+Status: Completed August 31, 2026.
 
 ## Implementation Notes
 
-Added a shared server-side marketplace actor resolver and an authenticated team actor listing endpoint. Team actions accept only a team ID, resolve its account server-side, and enforce active Owner/Admin membership, active account state, and verification. Repository ownership checks now accept the authenticated user's personal account plus authorized team accounts, while create/submit operations persist exactly one resolved acting account. Existing job and gig payment transactions now derive the actual client and freelancer accounts from locked proposal/order rows, so team account wallets and escrow wallets participate without a separate payment implementation. Notification reads and socket connections include authorized team account rooms. The frontend uses one shared identity selector in the four creation/submission flows.
+Added a separate active-Team affiliation lookup for ownership and self-dealing prevention. Existing Owner/Admin actor authorization remains unchanged and continues to govern marketplace mutations. Job and gig list/detail responses now distinguish affiliated ownership from management authority. Repository-level proposal and order creation rejects listings owned by the user's personal account or any Team where the user is an active member.
+
+Added an authenticated Team marketplace-posts endpoint using the existing controller-service-repository architecture. The Team Job Posts and Gig Posts tabs now fetch Team-account listings and render responsive, clickable cards with status, pricing, activity counts, dates, and thumbnails.
 
 ## Verification
 
-Executed Node syntax checks for the affected team, marketplace actor, job, gig, contract, notification, and WebSocket backend files. Executed `npm run build` in `frontend`; TypeScript and Vite production build passed. Vite reported only the existing large-chunk and mixed static/dynamic import warnings.
+Executed Node syntax checks for all affected marketplace actor, job, gig, and Team backend files. Executed `npm run build` in `frontend`; TypeScript and Vite production build passed. Vite reported only existing mixed static/dynamic import and large-chunk warnings. `git diff --check` reported only line-ending conversion warnings and no whitespace errors.

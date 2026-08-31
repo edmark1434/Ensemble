@@ -64,8 +64,26 @@ async function getAuthorizedActorAccountIds(personalAccountId) {
     return actors.map((actor) => actor.account_id);
 }
 
+async function getAffiliatedAccountIds(personalAccountId) {
+    const result = await pool.query(
+        `SELECT $1::uuid AS account_id
+         UNION
+         SELECT t.account_id
+         FROM teams t
+         JOIN users u ON u.account_id = $1
+         JOIN team_members tm ON tm.team_id = t.team_id AND tm.user_id = u.user_id
+         JOIN accounts ta ON ta.account_id = t.account_id
+         WHERE tm.status = 'Active'
+           AND t.deleted_at IS NULL
+           AND ta.deleted_at IS NULL`,
+        [personalAccountId]
+    );
+    return result.rows.map((row) => String(row.account_id));
+}
+
 module.exports = {
     getAuthorizedTeamActor,
     listAuthorizedActors,
     getAuthorizedActorAccountIds,
+    getAffiliatedAccountIds,
 };

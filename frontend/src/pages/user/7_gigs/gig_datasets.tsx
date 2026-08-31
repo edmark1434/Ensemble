@@ -69,6 +69,8 @@ export interface Gig {
   ratingCount: number;
   isSaved: boolean;
   isOwnGig: boolean;
+  canManageGig?: boolean;
+  isPersonalGig?: boolean;
   savesCount?: number;
   ordersCount?: number;
   freelancerAccountId?: string;

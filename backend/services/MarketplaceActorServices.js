@@ -18,7 +18,11 @@ function requirePersonalAccountId(accountId) {
     return value;
 }
 
-async function resolveMarketplaceActor(personalAccountId, teamId, { requireVerified = true } = {}) {
+async function resolveMarketplaceActor(
+    personalAccountId,
+    teamId,
+    { requireVerified = true, allowUnverifiedTeam = false } = {}
+) {
     const personalId = requirePersonalAccountId(personalAccountId);
     const normalizedTeamId = String(teamId || '').trim();
     if (!normalizedTeamId) {
@@ -50,7 +54,7 @@ async function resolveMarketplaceActor(personalAccountId, teamId, { requireVerif
     if (String(actor.account_status).toLowerCase() !== 'active') {
         throw new MarketplaceActorError('The selected team account is not active.', 403, 'TEAM_ACCOUNT_INACTIVE');
     }
-    if (requireVerified && !actor.is_verified) {
+    if (requireVerified && !allowUnverifiedTeam && !actor.is_verified) {
         throw new MarketplaceActorError(
             'Verify the selected team before using it in the marketplace.',
             403,
@@ -77,9 +81,14 @@ async function getAuthorizedActorAccountIds(personalAccountId) {
     return MarketplaceActorRepositories.getAuthorizedActorAccountIds(requirePersonalAccountId(personalAccountId));
 }
 
+async function getAffiliatedAccountIds(personalAccountId) {
+    return MarketplaceActorRepositories.getAffiliatedAccountIds(requirePersonalAccountId(personalAccountId));
+}
+
 module.exports = {
     MarketplaceActorError,
     resolveMarketplaceActor,
     listMarketplaceActors,
     getAuthorizedActorAccountIds,
+    getAffiliatedAccountIds,
 };

@@ -16,6 +16,7 @@ type Props = {
   onChange: (teamId: string) => void;
   label?: string;
   teamsOnly?: boolean;
+  requireTeamVerification?: boolean;
 };
 
 const MarketplaceIdentitySelector: React.FC<Props> = ({
@@ -23,6 +24,7 @@ const MarketplaceIdentitySelector: React.FC<Props> = ({
   onChange,
   label = "Continue as",
   teamsOnly = false,
+  requireTeamVerification = true,
 }) => {
   const [actors, setActors] = useState<MarketplaceActor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,7 +69,9 @@ const MarketplaceIdentitySelector: React.FC<Props> = ({
             {loading
               ? "Loading teams..."
               : teams.length
-                ? "Select a verified team"
+                ? requireTeamVerification
+                  ? "Select a verified team"
+                  : "Select a team"
                 : "No eligible teams available"}
           </option>
         ) : (
@@ -76,8 +80,13 @@ const MarketplaceIdentitySelector: React.FC<Props> = ({
           </option>
         )}
         {teams.map((actor) => (
-          <option key={actor.team_id!} value={actor.team_id!} disabled={!actor.is_verified}>
-            {actor.display_name} — Team{actor.is_verified ? "" : " (verification required)"}
+          <option
+            key={actor.team_id!}
+            value={actor.team_id!}
+            disabled={requireTeamVerification && !actor.is_verified}
+          >
+            {actor.display_name} — Team
+            {requireTeamVerification && !actor.is_verified ? " (verification required)" : ""}
           </option>
         ))}
       </select>

@@ -31,7 +31,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
   const handleViewProfile = () => {
     if (!selectedGig) return;
 
-    if (selectedGig.isOwnGig) {
+    if (selectedGig.isPersonalGig) {
       navigate("/profile");
       return;
     }
@@ -382,7 +382,7 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                 </button>
               </div>
 
-              {selectedGig.isOwnGig ? (
+              {selectedGig.canManageGig ? (
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
@@ -405,6 +405,10 @@ const GigViewDetails: React.FC<GigViewDetailsProps> = ({ selectedGig, onClose, o
                   >
                     <ShoppingCart className="h-4 w-4 text-blue-400" /> Manage Orders
                   </button>
+                </div>
+              ) : selectedGig.isOwnGig ? (
+                <div className="w-full rounded-xl border border-blue-500/20 bg-blue-500/10 py-3 text-center text-xs font-bold text-blue-400">
+                  This service was posted by a Team you belong to
                 </div>
               ) : (
                 <>
