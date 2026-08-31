@@ -46,7 +46,7 @@ export function useCollabDoc(
     let teardownWsProvider: (() => void) | null = null;
     let activeSessionId: number | null = null;
 
-    const doc = new Y.Doc();
+    const doc = new Y.Doc({ gc: false });
     const schema = createCollabSchema(doc);
     const syncGuard = createSyncGuard();
     const localOrigin = userId;

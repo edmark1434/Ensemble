@@ -114,7 +114,6 @@ export function setupMirrorOutFromStateManager(
       prevState = stateManager.getState();
       return;
     }
-    if (syncGuard.isApplyingRemote) return;
 
     const state = stateManager.getState();
 
@@ -136,7 +135,16 @@ export function setupMirrorOutFromStateManager(
       state.size !== prevState.size ||
       state.fps !== prevState.fps;
 
+    // Always advance prevState, even when we're about to bail out below.
+    // The old code returned early (on the isApplyingRemote guard) BEFORE
+    // this assignment ran, so after any remote/undo-driven apply, prevState
+    // stayed pinned to whatever it was before that apply. The next real
+    // local edit then diffed against that stale snapshot instead of the
+    // post-undo one, which is what let a split-after-undo desync between
+    // clients instead of cleanly reconciling.
     prevState = state;
+
+    if (syncGuard.isApplyingRemote) return;
     if (!relevantChanged) return;
 
     schema.doc.transact(() => {

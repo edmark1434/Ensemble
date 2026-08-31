@@ -385,7 +385,7 @@ const Header = ({toggleFullHeight, timelineHeight, stateManager}: {
               </Tooltip>
             )}
 
-            {activeIds.length > 0 && !isLocked && !isTransitionSelected && (
+            {activeIds.length === 1 && !isLocked && !isTransitionSelected && (
               <Tooltip delayDuration={10}>
                 <TooltipTrigger asChild>
                   <Button

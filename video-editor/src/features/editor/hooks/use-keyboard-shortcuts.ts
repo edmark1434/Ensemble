@@ -1,11 +1,13 @@
 import {useEffect, useRef} from "react";
 import { dispatch } from "@designcombo/events";
 import StateManager, {
+  ACTIVE_SPLIT,
   LAYER_DELETE,
   LAYER_SELECT,
-  TIMELINE_SCALE_CHANGED,
-  EDIT_OBJECT,
+  HISTORY_UNDO,
+  HISTORY_REDO, TIMELINE_SCALE_CHANGED, EDIT_OBJECT,
 } from "@designcombo/state";
+import { buildSelectionSnapshot, cloneIntoNewTracks, setClipboard, getClipboard } from "../utils/item-actions";
 import { getCurrentTime } from "../utils/time";
 import useStore from "../store/use-store";
 import {timeMsToUnits} from "@designcombo/timeline";
@@ -14,13 +16,6 @@ import {getFitZoomLevel, getNextZoomLevel, getPreviousZoomLevel} from "@/feature
 import {useTimelineOffsetX} from "@/features/editor/hooks/use-timeline-offset";
 import {TIMELINE_OFFSET_CANVAS_LEFT} from "@/features/editor/constants/constants";
 import {scrollTimelineToFrame} from "@/features/editor/utils/timeline-scroll";
-import {
-  resolveSelection,
-  setClipboard,
-  getClipboard,
-  cloneSelectionInto,
-  splitItemsAtTime,
-} from "../utils/item-actions";
 import type * as Y from "yjs";
 
 export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y.UndoManager) {
@@ -96,36 +91,20 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       if (mod && e.code === "KeyB") {
         e.preventDefault();
         if (!activeIds.length) return;
-
         const time = getCurrentTime();
-        const state = useStore.getState();
 
-        const result = splitItemsAtTime(activeIds, time, {
-          trackItemsMap: state.trackItemsMap,
-          trackItemIds: state.trackItemIds,
-          transitionsMap: state.transitionsMap,
-          transitionIds: state.transitionIds,
-          tracks: state.tracks,
-        });
-        if (!result) return;
+        if (activeIds.length === 1) {
+          dispatch(ACTIVE_SPLIT, { payload: {}, options: { time } });
+          dispatch(LAYER_SELECT, { payload: { trackItemIds: [] } });
+        }
 
-        stateManager.updateState(
-          {
-            trackItemsMap: result.trackItemsMap,
-            trackItemIds: result.trackItemIds,
-            transitionsMap: result.transitionsMap,
-            transitionIds: result.transitionIds,
-            tracks: result.tracks,
-          },
-          { updateHistory: true, kind: "update" }
-        );
+        // group splitting buggy asf
 
-        const untouched = activeIds.filter(
-          (id) => result.trackItemsMap[id] || result.transitionsMap[id]
-        );
-        dispatch(LAYER_SELECT, {
-          payload: { trackItemIds: [...untouched, ...result.newIds] },
-        });
+        // activeIds.forEach((id) => {
+        //   dispatch(LAYER_SELECT, { payload: { trackItemIds: [id] } });
+        //   dispatch(ACTIVE_SPLIT, { payload: {}, options: { time } });
+        // });
+        // dispatch(LAYER_SELECT, { payload: { trackItemIds: [] } });
       }
 
       // select all
@@ -145,10 +124,9 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
       if (mod && e.code === "KeyC") {
         e.preventDefault();
         if (!activeIds.length) return;
-        const { trackItemsMap, transitionsMap } = useStore.getState();
-        const { items, transitions } = resolveSelection(activeIds, trackItemsMap, transitionsMap);
-        if (!items.length) return;
-        setClipboard(items, transitions);
+        const { trackItemsMap, transitionsMap, tracks } = useStore.getState();
+        const snapshot = buildSelectionSnapshot(activeIds, { trackItemsMap, transitionsMap, tracks });
+        if (snapshot.items.length) setClipboard(snapshot);
       }
 
       // duplicate
@@ -156,41 +134,33 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         e.preventDefault();
         if (!activeIds.length) return;
 
-        const state = useStore.getState();
-        const { items, transitions } = resolveSelection(activeIds, state.trackItemsMap, state.transitionsMap);
-        if (!items.length) return;
-
-        const result = cloneSelectionInto({ items, transitions }, null, {
-          trackItemsMap: state.trackItemsMap,
-          trackItemIds: state.trackItemIds,
-          transitionsMap: state.transitionsMap,
-          transitionIds: state.transitionIds,
-          tracks: state.tracks,
-          duration: state.duration,
+        const { trackItemsMap, transitionsMap, tracks, trackItemIds, transitionIds, duration } = useStore.getState();
+        const snapshot = buildSelectionSnapshot(activeIds, { trackItemsMap, transitionsMap, tracks });
+        const result = cloneIntoNewTracks(snapshot, null, {
+          trackItemsMap, trackItemIds, transitionsMap, transitionIds, tracks, duration,
         });
         if (!result) return;
 
         stateManager.updateState(
           {
+            tracks: result.tracks,
             trackItemsMap: result.trackItemsMap,
             trackItemIds: result.trackItemIds,
             transitionsMap: result.transitionsMap,
             transitionIds: result.transitionIds,
-            tracks: result.tracks,
             duration: result.duration,
           },
           { updateHistory: true, kind: "update" }
         );
-        dispatch(LAYER_SELECT, { payload: { trackItemIds: result.newIds } });
       }
 
       // cut
       if (mod && e.code === "KeyX") {
         e.preventDefault();
         if (!activeIds.length) return;
-        const { trackItemsMap, transitionsMap } = useStore.getState();
-        const { items, transitions } = resolveSelection(activeIds, trackItemsMap, transitionsMap);
-        if (items.length) setClipboard(items, transitions);
+        const { trackItemsMap, transitionsMap, tracks } = useStore.getState();
+        const snapshot = buildSelectionSnapshot(activeIds, { trackItemsMap, transitionsMap, tracks });
+        if (snapshot.items.length) setClipboard(snapshot);
         dispatch(LAYER_DELETE);
       }
 
@@ -200,31 +170,24 @@ export function useKeyboardShortcuts(stateManager: StateManager, undoManager?: Y
         const clip = getClipboard();
         if (!clip) return;
 
+        const { trackItemsMap, transitionsMap, tracks, trackItemIds, transitionIds, duration } = useStore.getState();
         const time = getCurrentTime();
-        const state = useStore.getState();
-
-        const result = cloneSelectionInto(clip, time, {
-          trackItemsMap: state.trackItemsMap,
-          trackItemIds: state.trackItemIds,
-          transitionsMap: state.transitionsMap,
-          transitionIds: state.transitionIds,
-          tracks: state.tracks,
-          duration: state.duration,
+        const result = cloneIntoNewTracks(clip, time, {
+          trackItemsMap, trackItemIds, transitionsMap, transitionIds, tracks, duration,
         });
         if (!result) return;
 
         stateManager.updateState(
           {
+            tracks: result.tracks,
             trackItemsMap: result.trackItemsMap,
             trackItemIds: result.trackItemIds,
             transitionsMap: result.transitionsMap,
             transitionIds: result.transitionIds,
-            tracks: result.tracks,
             duration: result.duration,
           },
           { updateHistory: true, kind: "update" }
         );
-        dispatch(LAYER_SELECT, { payload: { trackItemIds: result.newIds } });
       }
 
       // zoom in

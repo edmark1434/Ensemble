@@ -78,7 +78,7 @@ async function compactProject(projectId: number) {
     .select(["yjs_updates.update", "project_yjs_updates.yjs_update_id"])
     .execute();
 
-  const doc = new Y.Doc();
+  const doc = new Y.Doc({ gc: false });
   if (snapshotRow) Y.applyUpdate(doc, snapshotRow.document);
   for (const row of updateRows) Y.applyUpdate(doc, row.update);
 

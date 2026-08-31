@@ -15,7 +15,7 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 }
 
 async function createBlankSnapshot(projectId: number): Promise<Buffer> {
-  const doc = new Y.Doc();
+  const doc = new Y.Doc({ gc: false });
   const bytes = Buffer.from(Y.encodeStateAsUpdate(doc));
   doc.destroy();
 
@@ -60,7 +60,7 @@ export async function GET(
       // snapshot alone is already current, nothing trailing to merge
       documentBytes = snapshot!;
     } else {
-      const doc = new Y.Doc();
+      const doc = new Y.Doc({ gc: false });
       if (snapshot) Y.applyUpdate(doc, snapshot);
       for (const update of updates) Y.applyUpdate(doc, update);
       documentBytes = Buffer.from(Y.encodeStateAsUpdate(doc));
