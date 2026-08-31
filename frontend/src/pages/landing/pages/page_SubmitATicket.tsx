@@ -162,13 +162,14 @@ const PageSubmitATicket: React.FC = () => {
                 Ticket Type
               </label>
               <select
+                className="inbox-scroll-thin"
                 value={ticketType}
                 onChange={(e) => setTicketType(e.target.value)}
                 disabled={loadingTypes || submitting}
                 style={{
                   width: "100%",
-                  background: theme === 'dark' ? "#18181b" : theme === 'dark' ? "#ffffff" : "#111827",
-                  border: "1px solid #1e2130",
+                  background: theme === 'dark' ? "#18181b" : "#ffffff",
+                  border: `1px solid ${theme === 'dark' ? '#27272a' : '#e5e7eb'}`,
                   borderRadius: 10,
                   padding: "14px",
                   color: theme === 'dark' ? '#ffffff' : '#111827',
@@ -176,9 +177,9 @@ const PageSubmitATicket: React.FC = () => {
                 }}
               >
                 {ticketTypeGroups.map((group) => (
-                  <optgroup key={group.label} label={group.label}>
+                  <optgroup key={group.label} label={group.label} style={{ background: theme === 'dark' ? "#18181b" : "#ffffff", color: theme === 'dark' ? '#ffffff' : '#111827' }}>
                     {group.types.map((t) => (
-                      <option key={t} value={t}>
+                      <option key={t} value={t} style={{ background: theme === 'dark' ? "#18181b" : "#ffffff", color: theme === 'dark' ? '#ffffff' : '#111827' }}>
                         {t}
                       </option>
                     ))}
@@ -197,8 +198,8 @@ const PageSubmitATicket: React.FC = () => {
                 onChange={(e) => setSubject(e.target.value)}
                 style={{
                   width: "100%",
-                  background: theme === 'dark' ? "#18181b" : theme === 'dark' ? "#ffffff" : "#111827",
-                  border: "1px solid #1e2130",
+                  background: theme === 'dark' ? "#18181b" : "#ffffff",
+                  border: `1px solid ${theme === 'dark' ? '#27272a' : '#e5e7eb'}`,
                   borderRadius: 10,
                   padding: "14px",
                   color: theme === 'dark' ? '#ffffff' : '#111827',
@@ -217,8 +218,8 @@ const PageSubmitATicket: React.FC = () => {
                 onChange={(e) => setDescription(e.target.value)}
                 style={{
                   width: "100%",
-                  background: theme === 'dark' ? "#18181b" : theme === 'dark' ? "#ffffff" : "#111827",
-                  border: "1px solid #1e2130",
+                  background: theme === 'dark' ? "#18181b" : "#ffffff",
+                  border: `1px solid ${theme === 'dark' ? '#27272a' : '#e5e7eb'}`,
                   borderRadius: 10,
                   padding: "14px",
                   color: theme === 'dark' ? '#ffffff' : '#111827',
@@ -233,17 +234,16 @@ const PageSubmitATicket: React.FC = () => {
               disabled={submitting}
               style={{
                 background: theme === 'dark' ? '#ffffff' : '#111827',
-                color: "#000",
+                color: theme === 'dark' ? '#121214' : '#ffffff',
                 border: "none",
                 borderRadius: 10,
                 padding: "14px",
                 fontWeight: 700,
-                cursor: submitting ? "wait" : "pointer",
-                marginTop: 10,
+                cursor: submitting ? "not-allowed" : "pointer",
                 opacity: submitting ? 0.7 : 1,
               }}
             >
-              {submitting ? "Submitting…" : "Submit Ticket"}
+              {submitting ? "Submitting..." : "Submit Ticket"}
             </button>
           </form>
         )}

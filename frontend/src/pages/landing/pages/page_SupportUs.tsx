@@ -24,12 +24,12 @@ const PageSupportUs: React.FC = () => {
         <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 17, maxW: "520px", margin: "0 auto 48px", lineHeight: 1.6 }}>Ensemble is built by independent creators for creative professionals. Here is how you can help support our ecosystem without financial strain.</p>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 24, textAlign: "left" }}>
-          <div style={{ background: theme === 'dark' ? "#18181b" : theme === 'dark' ? "#ffffff" : "#111827", border: "1px solid #1e2130", padding: 32, borderRadius: 16 }}>
+          <div style={{ background: theme === 'dark' ? "#18181b" : "#ffffff", border: `1px solid ${theme === 'dark' ? '#27272a' : '#e5e7eb'}`, padding: 32, borderRadius: 16 }}>
             <Star size={24} color="#eab308" style={{ marginBottom: 16 }} />
             <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Star the Repository</h3>
             <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 14, lineHeight: 1.5 }}>Help increase our open-source discoverability by dropping a star on RavenLabs development networks.</p>
           </div>
-          <div style={{ background: theme === 'dark' ? "#18181b" : theme === 'dark' ? "#ffffff" : "#111827", border: "1px solid #1e2130", padding: 32, borderRadius: 16 }}>
+          <div style={{ background: theme === 'dark' ? "#18181b" : "#ffffff", border: `1px solid ${theme === 'dark' ? '#27272a' : '#e5e7eb'}`, padding: 32, borderRadius: 16 }}>
             <Share2 size={24} color="#3b82f6" style={{ marginBottom: 16 }} />
             <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Share the Platform</h3>
             <p style={{ color: theme === 'dark' ? "#7a8499" : "#6b7280", fontSize: 14, lineHeight: 1.5 }}>Recommend Ensemble to other video editors, content creators, and remote post-production teams.</p>
