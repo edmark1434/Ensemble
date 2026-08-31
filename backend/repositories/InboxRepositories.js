@@ -486,12 +486,16 @@ async function checkInboxExists(inboxId) {
 
 async function getInboxByAccountId(account_id, conversation_type) {
     try {
+        const accountIds = (Array.isArray(account_id) ? account_id : [account_id])
+            .map((value) => String(value || '').trim())
+            .filter(Boolean);
+        if (!accountIds.length) return [];
         const inboxes = await InboxCollection.aggregate([
             {
                 $match: {
                     members: {
                         $elemMatch: {
-                            account_id: String(account_id),
+                            account_id: { $in: accountIds },
                             ...(conversation_type === 'group'
                                 ? {}
                                 : { status: { $nin: ['left', 'removed'] } }),

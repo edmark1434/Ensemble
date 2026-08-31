@@ -2,9 +2,10 @@ const TeamTaskRepositories = require('../repositories/TeamTaskRepositories');
 const TeamRepositories = require('../repositories/TeamsRepositories');
 const { createNotificationServices } = require('./NotificationServices');
 const { getIo } = require('../lib/WebSocket');
+const { getAccountById } = require('../repositories/AccountRepositories');
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const TASK_STATUSES = new Set(['todo', 'in_progress', 'in_review', 'completed']);
+const TASK_STATUSES = new Set(['todo', 'in_progress', 'in_review', 'overdue', 'completed']);
 const TASK_PRIORITIES = new Set(['low', 'normal', 'high', 'urgent']);
 
 class TeamTaskError extends Error {
@@ -118,12 +119,22 @@ async function emitWorkspaceUpdate(context, action, taskId = null) {
   }
 }
 
+async function actorDisplayName(accountId, fallback) {
+  try {
+    const actor = await getAccountById(accountId);
+    return actor?.display_name || actor?.handle || fallback;
+  } catch (_error) {
+    return fallback;
+  }
+}
+
 async function notifyAssignments(context, accountIds, task) {
   const recipients = [...new Set(accountIds)].filter((accountId) => accountId !== context.actorAccountId);
+  const actorName = await actorDisplayName(context.actorAccountId, 'A Team manager');
   for (const accountId of recipients) {
     try {
       const notification = await createNotificationServices({
-        message: `You were assigned to "${task.title}" for Team ${context.team.display_name}.`,
+        message: `${actorName} assigned you to "${task.title}" for Team ${context.team.display_name}.`,
         is_read: false,
         reference_table: 'team_workspace_tasks',
         reference_prefix: 'TEAM_TASK_ASSIGNED',
@@ -140,6 +151,107 @@ async function notifyAssignments(context, accountIds, task) {
       console.error('Unable to create Team task assignment notification:', error.message);
     }
   }
+}
+
+const STATUS_LABELS = {
+  todo: 'To Do',
+  in_progress: 'In Progress',
+  in_review: 'In Review',
+  overdue: 'Overdue',
+  completed: 'Completed',
+};
+
+async function notifyStatusChange(context, task, previousStatus, nextStatus) {
+  if (!nextStatus || previousStatus === nextStatus) return;
+  let recipients = [];
+  try {
+    recipients = (await TeamTaskRepositories.listTaskNotificationAudience(task.task_id))
+      .filter((accountId) => accountId !== context.actorAccountId);
+  } catch (error) {
+    console.error('Unable to resolve Team task status notification audience:', error.message);
+    return;
+  }
+  const actorName = await actorDisplayName(context.actorAccountId, 'A Team member');
+  for (const accountId of recipients) {
+    try {
+      const notification = await createNotificationServices({
+        message: `${actorName} changed "${task.title}" from ${STATUS_LABELS[previousStatus] || previousStatus} to ${STATUS_LABELS[nextStatus] || nextStatus}.`,
+        is_read: false,
+        reference_table: 'team_workspace_tasks',
+        reference_prefix: 'TEAM_TASK_STATUS_CHANGED',
+        reference_path: `/teams/${context.teamId}/tasks/${context.contractId}`,
+        reference_id: task.task_id,
+        account_id: accountId,
+      });
+      try {
+        getIo().to(String(accountId)).emit('notification', notification);
+      } catch (_error) {
+        // The durable notification remains available after reconnect.
+      }
+    } catch (error) {
+      console.error('Unable to create Team task status notification:', error.message);
+    }
+  }
+}
+
+async function reconcileOverdueTeamTasksServices(limit = 100) {
+  const changedTasks = await TeamTaskRepositories.markOverdueTasks(limit);
+  const pendingTasks = await TeamTaskRepositories.listPendingOverdueNotifications(limit);
+  const pendingByTaskId = new Map(
+    pendingTasks.map((task) => [String(task.task_id), task])
+  );
+  let notifiedTasks = 0;
+
+  for (const task of pendingTasks) {
+    const recipients = await TeamTaskRepositories.listTaskNotificationAudience(task.task_id);
+    let notificationFailed = false;
+    for (const accountId of recipients) {
+      try {
+        const notification = await createNotificationServices({
+          message: `Team task "${task.title}" for ${task.team_name} is overdue. It was due ${new Date(task.due_at).toLocaleString('en-US', { timeZone: 'Asia/Manila' })}.`,
+          is_read: false,
+          reference_table: 'team_workspace_tasks',
+          reference_prefix: 'TEAM_TASK_DUE',
+          reference_path: `/teams/${task.team_id}/tasks/${task.contract_id}`,
+          reference_id: task.task_id,
+          account_id: accountId,
+        });
+        try {
+          getIo().to(String(accountId)).emit('notification', notification);
+        } catch (_error) {
+          // The durable notification remains available after reconnect.
+        }
+      } catch (error) {
+        if (error.code !== '23505') {
+          notificationFailed = true;
+          console.error(`Unable to create overdue Team task notification for ${task.task_id}:`, error.message);
+        }
+      }
+    }
+    if (!notificationFailed) {
+      await TeamTaskRepositories.markOverdueNotificationSent(task.task_id);
+      notifiedTasks += 1;
+    }
+  }
+
+  for (const task of changedTasks) {
+    try {
+      const taskContext = pendingByTaskId.get(String(task.task_id));
+      const audience = await TeamTaskRepositories.listWorkspaceAudience(task.workspace_id);
+      getIo().to(audience.map(String)).emit('teamTaskWorkspaceUpdated', {
+        team_id: taskContext?.team_id,
+        contract_id: taskContext?.contract_id,
+        workspace_id: task.workspace_id,
+        task_id: task.task_id,
+        action: 'task_overdue',
+        updated_at: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('Unable to broadcast overdue Team task update:', error.message);
+    }
+  }
+
+  return { updated: changedTasks.length, notified: notifiedTasks };
 }
 
 async function listWorkspacesServices(teamId, actorAccountId) {
@@ -262,6 +374,7 @@ async function updateTaskServices(teamId, contractId, taskId, actorAccountId, pa
     data.assigneeAccountIds,
     context.actorAccountId
   );
+  await notifyStatusChange(context, task, existing.status, data.status);
   if (data.assigneeAccountIds) {
     await notifyAssignments(
       context,
@@ -292,4 +405,5 @@ module.exports = {
   createTaskServices,
   updateTaskServices,
   deleteTaskServices,
+  reconcileOverdueTeamTasksServices,
 };

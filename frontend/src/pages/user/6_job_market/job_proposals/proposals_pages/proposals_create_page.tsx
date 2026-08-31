@@ -154,7 +154,7 @@ const ProposalsCreatePage: React.FC = () => {
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      await requireVerifiedAccount();
+      if (!actingTeamId) await requireVerifiedAccount();
       if (!id) throw new Error("Job ID is missing.");
       
       const payload = {
@@ -271,6 +271,7 @@ const ProposalsCreatePage: React.FC = () => {
                     teamId={actingTeamId}
                     onChange={setActingTeamId}
                     label="Submit this proposal as"
+                    requireTeamVerification={false}
                   />
                 </div>
                 <ProposalReviewStep

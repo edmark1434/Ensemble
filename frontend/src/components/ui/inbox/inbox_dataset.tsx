@@ -32,6 +32,7 @@ export interface ReadBy {
 
 export interface Inbox {
   _id: string;
+  viewer_account_id?: string | null;
   conversation_name: string;
   conversation_image_key?: string;
   conversation_type: string;

@@ -81,6 +81,9 @@ export const InboxList: React.FC<InboxListProps> = ({
   return (
     <div className="flex-1 overflow-y-auto bg-white dark:bg-dark-surface inbox-scroll-thin">
       {conversations.map((inbox) => {
+        const viewerAccountId = String(
+          inbox.viewer_account_id || currentAccountId || ""
+        );
         const isActive = selectedConversation?._id === inbox._id;
         const name = getConversationName(inbox);
         const avatar = getAvatar(inbox);
@@ -89,7 +92,7 @@ export const InboxList: React.FC<InboxListProps> = ({
         const lastMessage = readableLastMessage
           ? `${
               String(inbox.last_message_sender_id) ===
-              String(currentAccountId)
+              viewerAccountId
                 ? "You"
                 : getAccountName?.(String(inbox.last_message_sender_id)) ||
                   getConversationName(inbox)
@@ -99,7 +102,7 @@ export const InboxList: React.FC<InboxListProps> = ({
         const unreadCount = inbox.unread_count || 0;
         const otherMember = inbox.members?.find(
           (member) =>
-            String(member.account_id) !== String(currentAccountId)
+            String(member.account_id) !== viewerAccountId
         );
         const isOnline = otherMember
           ? Boolean(onlineAccounts[String(otherMember.account_id)])

@@ -295,6 +295,96 @@ async function isTaskAssignee(taskId, accountId) {
   )).rowCount);
 }
 
+async function markOverdueTasks(limit = 100) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
+  return (await pool.query(
+    `WITH due_tasks AS (
+       SELECT task_id
+         FROM team_workspace_tasks
+        WHERE deleted_at IS NULL
+          AND due_at IS NOT NULL
+          AND due_at <= NOW()
+          AND status NOT IN ('overdue', 'completed')
+        ORDER BY due_at, task_id
+        LIMIT $1
+        FOR UPDATE SKIP LOCKED
+     )
+     UPDATE team_workspace_tasks task
+        SET status = 'overdue',
+            completed_at = NULL,
+            overdue_notified_at = NULL,
+            updated_at = NOW()
+       FROM due_tasks
+      WHERE task.task_id = due_tasks.task_id
+      RETURNING task.*`,
+    [safeLimit]
+  )).rows;
+}
+
+async function listPendingOverdueNotifications(limit = 100) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
+  return (await pool.query(
+    `SELECT task.task_id,
+            task.workspace_id,
+            task.title,
+            task.due_at,
+            workspace.team_id,
+            workspace.contract_id,
+            team.display_name AS team_name
+       FROM team_workspace_tasks task
+       JOIN team_contract_workspaces workspace
+         ON workspace.workspace_id = task.workspace_id
+       JOIN teams team ON team.team_id = workspace.team_id
+      WHERE task.deleted_at IS NULL
+        AND task.status = 'overdue'
+        AND task.due_at IS NOT NULL
+        AND task.due_at <= NOW()
+        AND task.overdue_notified_at IS NULL
+      ORDER BY task.due_at, task.task_id
+      LIMIT $1`,
+    [safeLimit]
+  )).rows;
+}
+
+async function listTaskNotificationAudience(taskId) {
+  return (await pool.query(
+    `SELECT DISTINCT audience.account_id
+       FROM (
+         SELECT task.created_by_account_id AS account_id
+           FROM team_workspace_tasks task
+          WHERE task.task_id = $1
+         UNION
+         SELECT assignee.account_id
+           FROM team_workspace_task_assignees assignee
+          WHERE assignee.task_id = $1
+         UNION
+         SELECT users.account_id
+           FROM team_workspace_tasks task
+           JOIN team_contract_workspaces workspace
+             ON workspace.workspace_id = task.workspace_id
+           JOIN team_members member ON member.team_id = workspace.team_id
+           JOIN users ON users.user_id = member.user_id
+          WHERE task.task_id = $1
+            AND member.status = 'Active'
+            AND member.role IN ('Owner', 'Admin')
+       ) audience
+      WHERE audience.account_id IS NOT NULL`,
+    [taskId]
+  )).rows.map((row) => String(row.account_id));
+}
+
+async function markOverdueNotificationSent(taskId) {
+  return (await pool.query(
+    `UPDATE team_workspace_tasks
+        SET overdue_notified_at = NOW()
+      WHERE task_id = $1
+        AND status = 'overdue'
+        AND overdue_notified_at IS NULL
+      RETURNING overdue_notified_at`,
+    [taskId]
+  )).rows[0] || null;
+}
+
 async function validateWorkspaceAssignees(workspaceId, accountIds, client = pool) {
   if (!accountIds.length) return;
   const result = await client.query(
@@ -334,9 +424,19 @@ async function createTask(workspaceId, data, actorAccountId) {
         (workspace_id, title, description, status, priority, starts_at, due_at, sort_order, created_by_account_id, completed_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7,
          COALESCE((SELECT MAX(sort_order) + 1 FROM team_workspace_tasks WHERE workspace_id = $1 AND deleted_at IS NULL), 0),
-         $8, CASE WHEN $4 = 'completed' THEN NOW() END)
+         $8, CASE WHEN $9::boolean THEN NOW() END)
        RETURNING *`,
-      [workspaceId, data.title, data.description, data.status, data.priority, data.startsAt, data.dueAt, actorAccountId]
+      [
+        workspaceId,
+        data.title,
+        data.description,
+        data.status,
+        data.priority,
+        data.startsAt,
+        data.dueAt,
+        actorAccountId,
+        data.status === 'completed',
+      ]
     )).rows[0];
     await replaceTaskAssignees(client, task.task_id, data.assigneeAccountIds, actorAccountId);
     await client.query(
@@ -365,7 +465,11 @@ async function updateTask(workspaceId, taskId, updates, assigneeAccountIds, acto
     values.push(workspaceId, taskId);
     const setClauses = entries.map(([column], index) => `${column} = $${index + 1}`);
     if (updates.status) {
-      setClauses.push(`completed_at = CASE WHEN $${entries.findIndex(([key]) => key === 'status') + 1} = 'completed' THEN COALESCE(completed_at, NOW()) ELSE NULL END`);
+      setClauses.push(
+        updates.status === 'completed'
+          ? 'completed_at = COALESCE(completed_at, NOW())'
+          : 'completed_at = NULL'
+      );
     }
     setClauses.push('updated_at = NOW()');
     const task = (await client.query(
@@ -437,6 +541,10 @@ module.exports = {
   removeWorkspaceMember,
   getTask,
   isTaskAssignee,
+  markOverdueTasks,
+  listPendingOverdueNotifications,
+  listTaskNotificationAudience,
+  markOverdueNotificationSent,
   createTask,
   updateTask,
   deleteTask,

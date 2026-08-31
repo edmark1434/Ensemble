@@ -13,7 +13,7 @@ export type TeamWorkspaceTask = {
   workspace_id: string;
   title: string;
   description?: string | null;
-  status: "todo" | "in_progress" | "in_review" | "completed";
+  status: "todo" | "in_progress" | "in_review" | "overdue" | "completed";
   priority: "low" | "normal" | "high" | "urgent";
   starts_at?: string | null;
   due_at?: string | null;

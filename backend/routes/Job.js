@@ -17,7 +17,6 @@ const {
 
 const checkSession = require('../middleware/CheckSession');
 const requireAuth = require('../middleware/RequireAuth');
-const requireVerifiedAccount = require('../middleware/RequireVerifiedAccount');
 const optionalAuth = require('../middleware/OptionalAuth');
 
 // Terms of service
@@ -25,14 +24,14 @@ router.get('/tos', getTermsOfServiceController);
 
 // Jobs
 router.get('/', optionalAuth, getAllJobsController);
-router.post('/', [checkSession, requireAuth, requireVerifiedAccount], createJobController);
+router.post('/', [checkSession, requireAuth], createJobController);
 router.put('/:jobId', [checkSession, requireAuth], updateJobController);
 router.post('/:jobId/save', [checkSession, requireAuth], toggleJobSaveController);
 router.delete('/:jobId', [checkSession, requireAuth], deleteJobController);
 
 // Proposals
 router.get('/proposals/sent', [checkSession, requireAuth], getSentProposalsController);
-router.post('/:jobId/proposals', [checkSession, requireAuth, requireVerifiedAccount], createProposalController);
+router.post('/:jobId/proposals', [checkSession, requireAuth], createProposalController);
 router.get('/:jobId/proposals', [checkSession, requireAuth], getProposalsByJobController);
 router.get('/proposals/:proposalId', [checkSession, requireAuth], getProposalByIdController);
 router.delete('/proposals/:proposalId', [checkSession, requireAuth], withdrawProposalController);

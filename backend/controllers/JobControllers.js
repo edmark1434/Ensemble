@@ -95,7 +95,11 @@ async function createProposalController(req, res) {
         const { jobId } = req.params;
         if (!accountId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
-        const actor = await resolveMarketplaceActor(accountId, req.body?.acting_team_id);
+        const actor = await resolveMarketplaceActor(
+            accountId,
+            req.body?.acting_team_id,
+            { allowUnverifiedTeam: true }
+        );
         const affiliatedAccountIds = await getAffiliatedAccountIds(accountId);
         const proposalData = {
             ...req.body,
@@ -150,7 +154,16 @@ async function getSentProposalsController(req, res) {
         const accountId = req.user?.account_id;
         if (!accountId) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
-        const actorIds = await getAuthorizedActorAccountIds(accountId);
+        const scope = String(req.query.scope || 'personal').toLowerCase();
+        if (!['personal', 'teams', 'all'].includes(scope)) {
+            return res.status(422).json({ success: false, message: 'Proposal scope must be personal, teams, or all.' });
+        }
+        const authorizedActorIds = await getAuthorizedActorAccountIds(accountId);
+        const actorIds = scope === 'personal'
+            ? [accountId]
+            : scope === 'teams'
+                ? authorizedActorIds.filter((actorId) => String(actorId) !== String(accountId))
+                : authorizedActorIds;
         const proposals = await JobServices.getProposalsByFreelancerServices(actorIds);
         res.status(200).json({ success: true, data: proposals });
     } catch (err) {
