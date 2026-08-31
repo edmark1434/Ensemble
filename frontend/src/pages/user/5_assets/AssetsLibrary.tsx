@@ -9,6 +9,8 @@ import AssetEditorModal from "./AssetEditorModal";
 import AssetMedia from "./AssetMedia";
 import type { AssetPagination, AssetRecord, AssetType } from "./assetTypes";
 import { getAssetPostingEligibility } from "./assetPostingEligibility";
+import useGlobalState from "@/lib/global_state";
+import { GuestLoginModal } from "@/components/ui/GuestLoginModal";
 
 type FilterType = "all" | AssetType;
 type AssetView = "discover" | "mine" | "purchased" | "saved";
@@ -48,6 +50,9 @@ function AssetSkeleton() {
 export default function AssetsLibrary() {
   const navigate = useNavigate();
   const location = useLocation();
+  const user = useGlobalState((state) => state.user);
+  const isGuestMode = useGlobalState((state) => state.isGuestMode);
+  const isGuestView = isGuestMode || !user?.account_id;
   const [assets, setAssets] = useState<AssetRecord[]>([]);
   const [pagination, setPagination] = useState<AssetPagination>({ page: 1, pageSize: 12, total: 0, totalPages: 1 });
   const [page, setPage] = useState(1);
@@ -63,6 +68,17 @@ export default function AssetsLibrary() {
   const [deletingAsset, setDeletingAsset] = useState<AssetRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [engagementPending, setEngagementPending] = useState<Set<string>>(new Set());
+  const [isGuestLoginOpen, setIsGuestLoginOpen] = useState(false);
+  const availableViews: AssetView[] = isGuestView
+    ? ["discover"]
+    : ["discover", "mine", "purchased", "saved"];
+
+  useEffect(() => {
+    if (isGuestView && view !== "discover") {
+      setPage(1);
+      setView("discover");
+    }
+  }, [isGuestView, view]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -97,6 +113,10 @@ export default function AssetsLibrary() {
   }, [loadAssets]);
 
   const openCreate = async () => {
+    if (isGuestView) {
+      setIsGuestLoginOpen(true);
+      return;
+    }
     if (checkingPostEligibility) return;
     setCheckingPostEligibility(true);
     try {
@@ -150,6 +170,10 @@ export default function AssetsLibrary() {
   };
 
   const updateEngagement = async (asset: AssetRecord, kind: "like" | "save") => {
+    if (isGuestView) {
+      setIsGuestLoginOpen(true);
+      return;
+    }
     const key = `${kind}:${asset.market_asset_id}`;
     if (engagementPending.has(key)) return;
     const enabled = kind === "like" ? asset.is_liked : asset.is_saved;
@@ -197,7 +221,7 @@ export default function AssetsLibrary() {
         <section className="mt-7 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-dark-surface dark:shadow-none">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex rounded-xl bg-gray-100 p-1 dark:bg-white/5" role="tablist" aria-label="Asset views">
-              {(["discover", "mine", "purchased", "saved"] as const).map((tab) => (
+              {availableViews.map((tab) => (
                 <button key={tab} type="button" role="tab" aria-selected={view === tab} onClick={() => { setPage(1); setView(tab); }} className={`flex-1 rounded-lg px-5 py-2 text-sm font-semibold capitalize transition lg:flex-none ${view === tab ? "bg-white text-blue-600 shadow-sm dark:bg-blue-600 dark:text-white" : "text-gray-600 hover:text-gray-900 dark:text-zinc-400 dark:hover:text-white"}`}>
                   {tab === "mine" ? "My Assets" : tab === "purchased" ? "Purchased" : tab === "saved" ? "Saved" : "Discover"}
                 </button>
@@ -278,6 +302,12 @@ export default function AssetsLibrary() {
       </main>
 
       <AssetEditorModal open={editorOpen} asset={editingAsset} onClose={() => !deleting && setEditorOpen(false)} onSaved={onSaved} />
+      <GuestLoginModal
+        isOpen={isGuestLoginOpen}
+        onClose={() => setIsGuestLoginOpen(false)}
+        title="Log in to use Asset Library actions"
+        message="Please log in or create an account to upload, like, or save marketplace assets."
+      />
       <ConfirmationModal isOpen={Boolean(deletingAsset)} title="Delete asset?" message={`Delete “${deletingAsset?.name || "this asset"}”? This removes it from the library.`} confirmText={deleting ? "Deleting..." : "Delete asset"} cancelText="Keep asset" onConfirm={() => void confirmDelete()} onCancel={() => !deleting && setDeletingAsset(null)} />
       {deleting && <span className="sr-only"><Loader2 className="animate-spin" /> Deleting asset</span>}
     </div>
